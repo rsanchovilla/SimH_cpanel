@@ -1,3 +1,7 @@
+rem This run.bat file converts source bitmaps for control panels on .jpg files
+rem to be used by SimH Control Panel Definition Files
+rem Using Nconvert v7.00 (http://www.xnview.com)
+
 set conv=NConvert\nconvert.exe
 
 cd ..
