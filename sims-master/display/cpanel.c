@@ -24,6 +24,7 @@
    in this Software without prior written authorization from Robert M Supnik.
 
    27-Jun-17    RSV     First version control panel support (on HP2100 family)
+   10-Nov-17    RSV     control panel support for rcornwell sims IBM 7000 family
 
    These simulator commands controls the control panel
 
@@ -101,6 +102,8 @@
                                  This command must be issued when a panel is 
                                  displayed on GUI window. If not, has no effect.
 
+      SET CPANEL POS=x/y     --> Sets the GUI window position at coord x,y
+
       ATT CPANEL <file>      --> Define the control panel definition file to be used.
                                  File is opened to check it can be read, and then is 
                                  closed, so it can be modified even if attached. It 
@@ -172,6 +175,7 @@ MTAB cp_mod[] = {
     { MTAB_XTD | MTAB_VDV, 5,       NULL,                    "OPTION",       &cp_set_param, NULL, &cp_dev },
     { MTAB_XTD | MTAB_VDV, 6,       NULL,                    "TICKCOUNT",    &cp_set_param, NULL, &cp_dev },
     { MTAB_XTD | MTAB_VDV, 7,       NULL,                    "SCALE",        &cp_set_param, NULL, &cp_dev },
+    { MTAB_XTD | MTAB_VDV, 8,       NULL,                    "POS",          &cp_set_param, NULL, &cp_dev },
     { MTAB_XTD | MTAB_VDV, 0,       NULL,                    "INTERACTIVE",  &cp_interactive, NULL, &cp_dev },
     { 0 }
     };
@@ -2034,27 +2038,6 @@ int SetStateAutoNext(int Id, int NextState, uint32 Duration_msec)
 extern SDL_Window *vid_window;                                 /* window handle */
 extern SDL_Renderer *vid_renderer;
 
-void DoScale(void)
-{
-    int wx, wy, x, y;
-
-    if (cpanel_on == 0) return; // no panel opened
-
-    wx = CP.Control[0].W;
-    wy = CP.Control[0].H;
-    if (vid_window) {
-        SDL_GetWindowPosition(vid_window, &x, &y);
-        sim_os_ms_sleep (200); // this sleep is to asure SDL thread has processed any pending EVENTs
-//        SDL_RenderSetLogicalSize(vid_renderer, 50, 50); // wx * CP.Scale / 100, wy * CP.Scale / 100);
-        SDL_SetWindowSize(vid_window, wx * CP.Scale / 100, wy * CP.Scale / 100);
-        if ((x<0) || (y<0)) {
-            if (x<0) x=20;
-            if (y<0) y=20;
-            SDL_SetWindowPosition(vid_window, x, y);
-        }
-    }
-}
-
 // If Action = 0 -> calls the OnClick event of given single control/control array name
 // If Action = 1 -> Signal with a mark on GUI the clickable area of given single control/control array name
 // If Action = 2 -> printf info on given single control/control array name
@@ -2372,6 +2355,7 @@ void ControlPanel_Refresh(void)
             }
         }
     }
+
     // finalize
     CP.LastRefreshDone = sim_os_msec();
     if (CP_ShowFPS) { // do not use sim_printf to avoid filling the log with this trace
@@ -2608,7 +2592,8 @@ t_stat cp_set_cpanel_on (UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc) { 
 
     DEVICE *dptr = (DEVICE *) desc;
-    int32 num;
+    int32 num, xPos,yPos, xSize, ySize;
+    char *tptr;
     t_stat r;
 
     if (cptr == NULL) return SCPE_ARG;
@@ -2637,7 +2622,7 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc) {
         }
     } else if (value == 5) { // SET OPTION=name|<NONE> 
         if (AddOption((char *) cptr) < 0) {
-            fprintf(stderr, "Cannot set option\r\n", cptr);
+            fprintf(stderr, "Cannot set option\r\n");
         }
     } else if (value == 6) { // SET TICKCOUNT=0|1
         num = (int32) get_uint (cptr, 10, 1, &r);
@@ -2648,7 +2633,24 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc) {
         if (r != SCPE_OK) return r;
         if (num < 10) return SCPE_ARG;
         CP.Scale = num; 
-        DoScale();
+        if (cpanel_on == 0) {
+            fprintf(stderr, "No cpanel open\r\n");
+            return SCPE_OK; // no panel opened
+        }
+        xSize = CP.Control[0].W * CP.Scale / 100;
+        ySize = CP.Control[0].H * CP.Scale / 100;
+        vid_SetWindowSizeAndPos(1, xSize, ySize, 0,0,0);
+    } else if (value == 8) { // SET POS=X/Y
+        xPos = (int) strtotv (cptr, &tptr, 10);
+        if (cptr == tptr) return SCPE_ARG;
+        if (*tptr != '/') return SCPE_ARG;
+        yPos = (int) strtotv (++tptr, &tptr, 10);
+        if (cptr == tptr) return SCPE_ARG;
+        if (cpanel_on == 0) {
+            fprintf(stderr, "No cpanel open\r\n");
+            return SCPE_OK; // no panel opened
+        }
+        vid_SetWindowSizeAndPos(0,0,0, 1,xPos,yPos);
     } else {
         // undefined SET 
         return SCPE_IERR;

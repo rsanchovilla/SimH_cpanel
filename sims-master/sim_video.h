@@ -194,6 +194,7 @@ t_stat vid_show_release_key (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
 t_stat vid_show_video (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
 t_stat vid_show (FILE* st, DEVICE *dptr,  UNIT* uptr, int32 val, CONST char* desc);
 t_stat vid_screenshot (const char *filename);
+t_stat vid_SetWindowSizeAndPos (int SetSizeFlag, int xSize, int ySize, int SetPosFlag, int xPos, int yPos);
 
 extern t_bool vid_active;
 extern uint32 vid_mono_palette[2];

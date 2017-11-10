@@ -270,17 +270,18 @@ static int SDL_SavePNG_RW(SDL_Surface *surface, SDL_RWops *dst, int freedst)
      
  */
 
-#define EVENT_REDRAW     1                              /* redraw event for SDL */
-#define EVENT_CLOSE      2                              /* close event for SDL */
-#define EVENT_CURSOR     3                              /* new cursor for SDL */
-#define EVENT_WARP       4                              /* warp mouse position for SDL */
-#define EVENT_DRAW       5                              /* draw/blit region for SDL */
-#define EVENT_SHOW       6                              /* show SDL capabilities */
-#define EVENT_OPEN       7                              /* vid_open request */
-#define EVENT_EXIT       8                              /* program exit */
-#define EVENT_SCREENSHOT 9                              /* produce screenshot of video window */
-#define EVENT_BEEP      10                              /* audio beep */
-#define MAX_EVENTS      20                              /* max events in queue */
+#define EVENT_REDRAW      1                              /* redraw event for SDL */
+#define EVENT_CLOSE       2                              /* close event for SDL */
+#define EVENT_CURSOR      3                              /* new cursor for SDL */
+#define EVENT_WARP        4                              /* warp mouse position for SDL */
+#define EVENT_DRAW        5                              /* draw/blit region for SDL */
+#define EVENT_SHOW        6                              /* show SDL capabilities */
+#define EVENT_OPEN        7                              /* vid_open request */
+#define EVENT_EXIT        8                              /* program exit */
+#define EVENT_SCREENSHOT  9                              /* produce screenshot of video window */
+#define EVENT_BEEP       10                              /* audio beep */
+#define EVENT_SIZEANDPOS 11                              /* set window size and/or pos */
+#define MAX_EVENTS       20                              /* max events in queue */
 
 typedef struct {
     SIM_KEY_EVENT events[MAX_EVENTS];
@@ -302,6 +303,7 @@ int vid_thread (void* arg);
 int vid_video_events (void);
 void vid_show_video_event (void);
 void vid_screenshot_event (void);
+void vid_SetWindowSizeAndPos_event (void);
 void vid_beep_event (void);
 
 /* 
@@ -428,40 +430,31 @@ while (1) {
     int status = SDL_WaitEvent (&event);
     if (status == 1) {
         if (event.type == SDL_USEREVENT) {
-            if (event.user.code == EVENT_EXIT)
-                break;
-            if (event.user.code == EVENT_OPEN)
+            if (event.user.code == EVENT_EXIT) break;
+            if (event.user.code == EVENT_OPEN) {
                 vid_video_events ();
-            else {
-                if (event.user.code == EVENT_SHOW)
-                    vid_show_video_event ();
-                else {
-                    if (event.user.code == EVENT_SCREENSHOT)
-                        vid_screenshot_event ();
-                    else {
-                        if (event.user.code == EVENT_BEEP)
-                            vid_beep_event ();
-                        else {
-                            if (event.user.code == EVENT_REDRAW)
-                               break; // ignore spurious redraw events here
-                            else {
-                                sim_printf ("main(): Unexpected User event: %d\n", event.user.code);
-							    break;
-							    }
-                            }
-                        }
-                    }
-                }
+            } else if (event.user.code == EVENT_SHOW) {
+                vid_show_video_event ();
+            } else if (event.user.code == EVENT_SCREENSHOT) {
+                vid_screenshot_event ();
+            } else if (event.user.code == EVENT_SIZEANDPOS) {
+                vid_SetWindowSizeAndPos_event ();
+            } else if (event.user.code == EVENT_BEEP) {
+                vid_beep_event ();
+            } else if (event.user.code == EVENT_REDRAW) {
+                 break; // ignore spurious redraw events here
+            } else {
+                 sim_printf ("main(): Unexpected User event: %d\n", event.user.code);
+                 break;
             }
-        else {
+        } else {
 //          sim_printf ("main(): Ignoring unexpected event: %d\n", event.type);
-            }
         }
-    else {
+    } else {
         if (status < 0)
             sim_printf ("main() - ` error: %s\n", SDL_GetError());
-        }
     }
+}
 SDL_WaitThread (vid_main_thread_handle, &status);
 vid_beep_cleanup ();
 SDL_Quit ();
@@ -783,6 +776,7 @@ user_event.user.data2 = NULL;
 if (SDL_PushEvent (&user_event) < 0)
     sim_printf ("%s: vid_refresh() SDL_PushEvent error: %s\n", sim_dname(vid_dev), SDL_GetError());
 }
+
 
 int vid_map_key (int key)
 {
@@ -1771,6 +1765,10 @@ if (0)                        while (SDL_PeepEvents (&event, 1, SDL_GETEVENT, SD
                         vid_screenshot_event ();
                         event.user.code = 0;    /* Mark as done */
                         }
+                    if (event.user.code == EVENT_SIZEANDPOS) {
+                        vid_SetWindowSizeAndPos_event ();
+                        event.user.code = 0;    /* Mark as done */
+                        }
                     if (event.user.code == EVENT_BEEP) {
                         vid_beep_event ();
                         event.user.code = 0;    /* Mark as done */
@@ -2232,6 +2230,67 @@ while (_screenshot_stat == -1)
     SDL_Delay (20);
 return _screenshot_stat;
 }
+
+static int WindowSizeAndPos_InProgress = 0; 
+static int WindowSizeAndPos_SetSizeFlag;
+static int WindowSizeAndPos_xSize;
+static int WindowSizeAndPos_ySize;
+static int WindowSizeAndPos_SetPosFlag;
+static int WindowSizeAndPos_xPos;
+static int WindowSizeAndPos_yPos;
+
+void vid_SetWindowSizeAndPos_event (void)
+{
+ 
+    if (!vid_active) {
+        sim_printf ("No video display is active\n");
+        return;
+    }
+
+    if (WindowSizeAndPos_SetSizeFlag) {
+        WindowSizeAndPos_SetSizeFlag = 0;
+        SDL_SetWindowSize(vid_window, WindowSizeAndPos_xSize, WindowSizeAndPos_ySize);
+        sim_os_ms_sleep (200); // this sleep is to asure SDL thread has processed any pending EVENTs
+    }
+    if (WindowSizeAndPos_SetPosFlag) {
+        WindowSizeAndPos_SetPosFlag = 0;
+        SDL_SetWindowPosition(vid_window, WindowSizeAndPos_xPos, WindowSizeAndPos_yPos);
+        sim_os_ms_sleep (200); // this sleep is to asure SDL thread has processed any pending EVENTs
+    }
+    WindowSizeAndPos_InProgress = 0;
+}
+
+t_stat vid_SetWindowSizeAndPos (int SetSizeFlag, int xSize, int ySize, int SetPosFlag, int xPos, int yPos)
+{
+SDL_Event user_event;
+
+sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "vid_SetWindowSizeAndPos() - Queueing vid_SetWindowSizeAndPos Event\n");
+
+user_event.type = SDL_USEREVENT;
+user_event.user.code = EVENT_SIZEANDPOS;
+user_event.user.data1 = NULL; 
+user_event.user.data2 = NULL; 
+
+WindowSizeAndPos_SetSizeFlag = SetSizeFlag;
+WindowSizeAndPos_xSize = xSize;
+WindowSizeAndPos_ySize = ySize;
+WindowSizeAndPos_SetPosFlag = SetPosFlag;
+WindowSizeAndPos_xPos = xPos;
+WindowSizeAndPos_yPos = yPos;
+WindowSizeAndPos_InProgress = 1;
+
+#if defined (SDL_MAIN_AVAILABLE)
+if (SDL_PushEvent (&user_event) < 0)
+    sim_printf ("%s: vid_refresh() SDL_PushEvent error: %s\n", sim_dname(vid_dev), SDL_GetError());
+#else
+vid_SetWindowSizeAndPos_event ();
+#endif
+while (WindowSizeAndPos_InProgress) SDL_Delay (20);
+
+return SCPE_OK;
+
+}
+
 
 #include <SDL_audio.h>
 #include <math.h>

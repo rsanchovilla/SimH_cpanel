@@ -24,6 +24,7 @@
    in this Software without prior written authorization from Robert M Supnik.
 
    27-Jun-17    RSV     First version control panel support (on HP2100 family)
+   10-Nov-17    RSV     control panel support for rcornwell sims IBM 7000 family
 
    This module implements the following routines to support control panel simulation.
 
