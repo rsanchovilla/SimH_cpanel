@@ -23,11 +23,15 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from Robert M Supnik.
 
-   XX-Aug-17    RSV     Created for IBM 7000 family control panel support
+   10-Nov-17    RSV     Created for IBM 7000 family control panel support
 
    This module implements the following control panels:
 
-   IBM 709 + IBM 766 Data Synchronizer for channels A and B
+   IBM 709  + IBM 766 Data Synchronizer for channels A and B + IBM 729 Magnetic Tapes
+   IBM 704  + IBM 727 Magnetic Tape
+   IBM 7090 + IBM 7617 Data Channel console + IBM 727 Magnetic Tape
+   IBM 7094 with same configuration as above
+   IBM 7094 same as above + IBM 711 Card Reader + IBM 7631 File Control + IBM 7909 Data Channel + IBM 2302 Disk
 
 */
 
@@ -938,19 +942,11 @@ int MagTape_Vacuum_Colums_simulation(int i, int * MT_L_State,  int * MT_R_State,
     }
 	// calculate medium tape in vacumm colum
 	for (nCol=0;nCol<2;nCol++) {
-        if (bIbm727Tape) {
-		    // d=0.0 -> at feed (upper) sensor, d=1.0 at take (lower) sensor
-		    d = ((double) (vacuum_col[i][nCol] - tape_col_feed_sensor)) / (tape_col_take_sensor - tape_col_feed_sensor);
-    		// d=0.0 to 0.6 maps to states 2-18 (max 19 states (0-18) in control image)
-	    	n = (int) (2 + (d / 0.6) * 16);
-		    if (n > 18) {n = 18;} else if (n < 1) n = 0;
-        } else {
-		    // d=0.0 -> at top of col, d=1.0 at max lower position
-		    d = (((double) (vacuum_col[i][nCol])) / tape_col_max);
-            // d=0.0 maps to states 0-44
-	    	n = (int) (d * 44);
-		    if (n > 44) {n = 44;} else if (n < 1) n = 0;
-        }
+	    // d=0.0 -> at top of col, d=1.0 at max lower position
+	    d = (((double) (vacuum_col[i][nCol])) / tape_col_max);
+        // d=0.0 maps to states 0-44
+    	n = (int) (d * 44);
+	    if (n > 44) {n = 44;} else if (n < 1) n = 0;
 		if (nCol == 0) {
 			* MT_L_VacCol = n;
 		} else {
