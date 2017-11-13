@@ -2593,7 +2593,7 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc) {
 
     DEVICE *dptr = (DEVICE *) desc;
     int32 num, xPos,yPos, xSize, ySize;
-    char *tptr;
+    CONST char *tptr;
     t_stat r;
 
     if (cptr == NULL) return SCPE_ARG;
