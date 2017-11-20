@@ -4433,17 +4433,3 @@ fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n");
 return SCPE_OK;
 }
 
-#ifdef USE_SIM_VIDEO
-/* set "test switches"; from display code */
-
-void cpu_set_switches(unsigned long bits)
-{
-/* can set switch registers */
-SR = bits;
-}
-
-unsigned long cpu_get_switches(void)
-{
-return (unsigned long) SR;
-}
-#endif

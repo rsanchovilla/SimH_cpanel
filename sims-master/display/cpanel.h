@@ -62,6 +62,7 @@ typedef struct CP_INTENSITY_COUNT CP_INTENSITY_COUNT;
 #define CP_DF           0x00000001                    // CPANEL debug flags: Definition File processing
 #define CP_REFRESH      0x00000002                    // refresh events
 #define CP_CMDS         0x00000010 
+#define CP_DETAIL       0x00000020
 
 
 struct CP_DEF {

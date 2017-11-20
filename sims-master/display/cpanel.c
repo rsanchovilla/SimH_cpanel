@@ -157,6 +157,7 @@ DEBTAB sim_cp_debug[] = {
   {"CMDS",      CP_CMDS,           "Control Panel Commands"},
   {"REFRESH",   CP_REFRESH,        "GUI Refresh events"},
   {"SDL",       SIM_VID_DBG_VIDEO, "GUI SDL Events processing"},
+  {"DETAIL",    CP_DETAIL,         "devices display events detail"},
   {0}
 };
 
@@ -280,6 +281,33 @@ char SCP_cmd[MAX_SCP_CMDS * MAX_SCP_CMD_LEN];       // stores scp commnads list 
 int  SCP_cmd_count = 0;                             // number of commands in list
 
 int cpanel_TypeId = 0;                              // control panel type id from definition file
+
+// forward declararion for 
+int DoActionByName(char * Name, int Action);
+
+void display_keydown(int k)
+{
+    int i, bMark; 
+
+    // check if ^E (WRU) pressed while GUI has focus
+    if (k == sim_int_char) {
+        // it is! simulate click on close gui window to stop cpu execution
+        cp_stop_flag = 1;     
+    } else if (k == ('T'-'A'+1)) {
+        // Control-T -> toggle mark on GUI all clickable areas
+        bMark = 0;
+        for (i=0; i<CP.ControlItems;i++) if (CP.Control[i].Mark) bMark = 1;
+        if (bMark == 0) {
+            DoActionByName("<ALL>", 1);
+        } else {
+            DoActionByName("<NONE>", 1);
+        }
+    }
+}
+
+void display_keyup(int k)
+{
+}
 
 int upcase(int c)
 {
@@ -665,7 +693,7 @@ int AddJPEGImage(char * ImgName, char * FileName)
     // load whole JPEG image file into buf buffer
     f = sim_fopen(FileName, "rb");
     if (!f) {
-        printf("Error opening the input file %s\n", FileName);
+        fprintf(stderr, "Error opening the input file %s\n", FileName);
         return -1;
     }
     sim_fseek(f, 0, SEEK_END);
@@ -2117,6 +2145,9 @@ int DoActionByName(char * Name, int Action)
                 sim_printf("   WH=%d,%d\r\n", CP.Control[Id].W, CP.Control[Id].H);
             } else {
                 sim_printf("   XYWH=%d,%d,%d,%d\r\n", CP.Control[Id].X, CP.Control[Id].Y, CP.Control[Id].W, CP.Control[Id].H);
+            }
+            if (CP.Control[Id].MaxH > 0) {
+                sim_printf("   Heigth=%d\r\n", CP.Control[Id].MaxH);
             }
             sim_printf("   nStates=%d\r\n", CP.Control[Id].nStates);
             sim_printf("   ;   Current State: %d\r\n", CP.Control[Id].State);

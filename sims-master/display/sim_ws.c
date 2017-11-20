@@ -42,11 +42,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "ws.h"
+
+#ifndef CPANEL
 #include "display.h"
+#endif
 
 #ifndef PIX_SIZE
 #define PIX_SIZE 1
 #endif
+
+#ifdef CPANEL
+// definitions needed by sim_ws.c that are set in display.c (but no need to import the whole module)
+unsigned char display_tablet = 0;
+unsigned char display_lp_sw = 0;
+// also sim_ws.c need functions display_keyup and display_keydown. 
+// But should use the cpanel.c ones, not the display.c ones, 
+extern void display_keydown(int k);
+extern void display_keyup(int k);
+// display.c needs two functions to be defined in cpu.c: cpu_set_switches and cpu_get_switches.
+// these are no longer necesary
+#endif
+
 
 /*
  * light pen location
@@ -134,6 +150,8 @@ map_key(int k)
     return k;
 }
 
+int bControlKeyPressed = 0; // flag to keep the control key state
+
 int
 ws_poll(int *valp, int maxus)
 {
@@ -166,9 +184,19 @@ ws_poll(int *valp, int maxus)
         switch (kev.state) {
             case SIM_KEYPRESS_DOWN:
             case SIM_KEYPRESS_REPEAT:
+                // handle ctrl-key pressed while cpanel GUI has focus
+                bControlKeyPressed |= (kev.key == SIM_KEY_CTRL_L) ? 1 : (kev.key == SIM_KEY_CTRL_R) ? 2 : 0;
+                if (bControlKeyPressed) {
+                    display_keydown(kev.key - SIM_KEY_A + 1);
+                    break;
+                }
                 display_keydown(map_key(kev.key));
                 break;
-            case SIM_KEYPRESS_UP:
+            case SIM_KEYPRESS_UP:            
+                if ((kev.key == SIM_KEY_CTRL_L) || (kev.key == SIM_KEY_CTRL_R)) {
+                    bControlKeyPressed &= (kev.key == SIM_KEY_CTRL_L) ? ~1 : ~2;
+                    break;
+                }
                 display_keyup(map_key(kev.key));
                 break;
             }

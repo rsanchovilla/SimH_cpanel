@@ -151,7 +151,7 @@ static struct {
       int Data, WC, Addr, Loc, Triggers, Flag_1, Flag_2;
    } DS[2];
    // tapes
-   int MT[10], MT_lights[10], MT_head[10], 
+   int MT[10], MT_num[10], MT_chan[10], MT_lights[10], MT_head[10], 
 	   MT_L[10], MT_R[10], MT_L_VacCol[10], MT_R_VacCol[10];
    // dasd
    int DASD_Head[2];
@@ -269,6 +269,8 @@ CP_DEF IBM70X_cp[] = {
     { &IBM70X.DASD_Head[1],                  "DASD_2_Head",                   NULL,     IS_IBM7094_CTSS },
     // tapes
     { &IBM70X.MT[1],                         "MT_1",                          NULL,     0 },
+    { &IBM70X.MT_num[1],                     "MT_1_number",                   NULL,     0 },
+    { &IBM70X.MT_chan[1],                    "MT_1_channel",                  NULL,     0 },
     { &IBM70X.MT_lights[1],                  "MT_1_lights",                   NULL,     0 },
     { &IBM70X.MT_L[1],                       "MT_1_L",                        NULL,     0 },
     { &IBM70X.MT_R[1],                       "MT_1_R",                        NULL,     0 },
@@ -276,6 +278,8 @@ CP_DEF IBM70X_cp[] = {
 	{ &IBM70X.MT_L_VacCol[1],                "MT_1_L_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT_R_VacCol[1],                "MT_1_R_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT[2],                         "MT_2",                          NULL,     0 },
+    { &IBM70X.MT_num[2],                     "MT_2_number",                   NULL,     0 },
+    { &IBM70X.MT_chan[2],                    "MT_2_channel",                  NULL,     0 },
     { &IBM70X.MT_lights[2],                  "MT_2_lights",                   NULL,     0 },
     { &IBM70X.MT_L[2],                       "MT_2_L",                        NULL,     0 },
     { &IBM70X.MT_R[2],                       "MT_2_R",                        NULL,     0 },
@@ -283,6 +287,8 @@ CP_DEF IBM70X_cp[] = {
 	{ &IBM70X.MT_L_VacCol[2],                "MT_2_L_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT_R_VacCol[2],                "MT_2_R_VacCol",                 NULL,     0 },
     { &IBM70X.MT[3],                         "MT_3",                          NULL,     0 },
+    { &IBM70X.MT_chan[3],                    "MT_3_channel",                  NULL,     0 },
+    { &IBM70X.MT_num[3],                     "MT_3_number",                   NULL,     0 },
     { &IBM70X.MT_lights[3],                  "MT_3_lights",                   NULL,     0 },
     { &IBM70X.MT_L[3],                       "MT_3_L",                        NULL,     0 },
     { &IBM70X.MT_R[3],                       "MT_3_R",                        NULL,     0 },
@@ -290,6 +296,8 @@ CP_DEF IBM70X_cp[] = {
 	{ &IBM70X.MT_L_VacCol[3],                "MT_3_L_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT_R_VacCol[3],                "MT_3_R_VacCol",                 NULL,     0 },
     { &IBM70X.MT[4],                         "MT_4",                          NULL,     0 },
+    { &IBM70X.MT_chan[4],                    "MT_4_channel",                  NULL,     0 },
+    { &IBM70X.MT_num[4],                     "MT_4_number",                   NULL,     0 },
     { &IBM70X.MT_lights[4],                  "MT_4_lights",                   NULL,     0 },
     { &IBM70X.MT_L[4],                       "MT_4_L",                        NULL,     0 },
     { &IBM70X.MT_R[4],                       "MT_4_R",                        NULL,     0 },
@@ -297,6 +305,8 @@ CP_DEF IBM70X_cp[] = {
 	{ &IBM70X.MT_L_VacCol[4],                "MT_4_L_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT_R_VacCol[4],                "MT_4_R_VacCol",                 NULL,     0 },
     { &IBM70X.MT[5],                         "MT_5",                          NULL,     0 },
+    { &IBM70X.MT_num[5],                     "MT_5_number",                   NULL,     0 },
+    { &IBM70X.MT_chan[5],                    "MT_5_channel",                  NULL,     0 },
     { &IBM70X.MT_lights[5],                  "MT_5_lights",                   NULL,     0 },
     { &IBM70X.MT_L[5],                       "MT_5_L",                        NULL,     0 },
     { &IBM70X.MT_R[5],                       "MT_5_R",                        NULL,     0 },
@@ -304,6 +314,8 @@ CP_DEF IBM70X_cp[] = {
 	{ &IBM70X.MT_L_VacCol[5],                "MT_5_L_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT_R_VacCol[5],                "MT_5_R_VacCol",                 NULL,     0 },
     { &IBM70X.MT[6],                         "MT_6",                          NULL,     0 },
+    { &IBM70X.MT_chan[6],                    "MT_6_channel",                  NULL,     0 },
+    { &IBM70X.MT_num[6],                     "MT_6_number",                   NULL,     0 },
     { &IBM70X.MT_lights[6],                  "MT_6_lights",                   NULL,     0 },
     { &IBM70X.MT_L[6],                       "MT_6_L",                        NULL,     0 },
     { &IBM70X.MT_R[6],                       "MT_6_R",                        NULL,     0 },
@@ -311,6 +323,8 @@ CP_DEF IBM70X_cp[] = {
 	{ &IBM70X.MT_L_VacCol[6],                "MT_6_L_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT_R_VacCol[6],                "MT_6_R_VacCol",                 NULL,     0 },
     { &IBM70X.MT[7],                         "MT_7",                          NULL,     0 },
+    { &IBM70X.MT_chan[7],                    "MT_7_channel",                  NULL,     0 },
+    { &IBM70X.MT_num[7],                     "MT_7_number",                   NULL,     0 },
     { &IBM70X.MT_lights[7],                  "MT_7_lights",                   NULL,     0 },
     { &IBM70X.MT_L[7],                       "MT_7_L",                        NULL,     0 },
     { &IBM70X.MT_R[7],                       "MT_7_R",                        NULL,     0 },
@@ -318,6 +332,8 @@ CP_DEF IBM70X_cp[] = {
 	{ &IBM70X.MT_L_VacCol[7],                "MT_7_L_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT_R_VacCol[7],                "MT_7_R_VacCol",                 NULL,     0 },
     { &IBM70X.MT[8],                         "MT_8",                          NULL,     0 },
+    { &IBM70X.MT_num[8],                     "MT_8_number",                   NULL,     0 },
+    { &IBM70X.MT_chan[8],                    "MT_8_channel",                  NULL,     0 },
     { &IBM70X.MT_lights[8],                  "MT_8_lights",                   NULL,     0 },
     { &IBM70X.MT_L[8],                       "MT_8_L",                        NULL,     0 },
     { &IBM70X.MT_R[8],                       "MT_8_R",                        NULL,     0 },
@@ -325,6 +341,8 @@ CP_DEF IBM70X_cp[] = {
 	{ &IBM70X.MT_L_VacCol[8],                "MT_8_L_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT_R_VacCol[8],                "MT_8_R_VacCol",                 NULL,     0 },
     { &IBM70X.MT[9],                         "MT_9",                          NULL,     0 },
+    { &IBM70X.MT_num[9],                     "MT_9_number",                   NULL,     0 },
+    { &IBM70X.MT_chan[9],                    "MT_9_channel",                  NULL,     0 },
     { &IBM70X.MT_lights[9],                  "MT_9_lights",                   NULL,     0 },
     { &IBM70X.MT_L[9],                       "MT_9_L",                        NULL,     0 },
     { &IBM70X.MT_R[9],                       "MT_9_R",                        NULL,     0 },
@@ -332,6 +350,8 @@ CP_DEF IBM70X_cp[] = {
 	{ &IBM70X.MT_L_VacCol[9],                "MT_9_L_VacCol",                 NULL,     0 },
 	{ &IBM70X.MT_R_VacCol[9],                "MT_9_R_VacCol",                 NULL,     0 },
     { &IBM70X.MT[0],                         "MT_10",                         NULL,     0 },
+    { &IBM70X.MT_num[0],                     "MT_10_number",                  NULL,     0 },
+    { &IBM70X.MT_chan[0],                    "MT_10_channel",                 NULL,     0 },
     { &IBM70X.MT_lights[0],                  "MT_10_lights",                  NULL,     0 },
     { &IBM70X.MT_L[0],                       "MT_10_L",                       NULL,     0 },
     { &IBM70X.MT_R[0],                       "MT_10_R",                       NULL,     0 },
@@ -349,6 +369,7 @@ double MT_pos_reel_R[10];
 int MT_L_reel_color[10], MT_R_reel_color[10], 
     MT_load_animation[10], // 0 -> Load animation can start it tape file attached, 1-> Load animation in progress, -1 -> Load Animation Done
     MT_rew_animation[10];  // 0 -> Rew animation not in progress and can start if tape command given, 1 -> Rew animation in progress. 
+    MT_unitAtCabinet[10]; // indicated the mta_unit entry (chan+unit) that is shown on cabinet i
 struct {
    int FrameCount;       // indicates the animation's current frame count 
    int Stage;            // stage of animation
@@ -362,45 +383,96 @@ int crd_ncards_in_output_tray; // number of cards readed counted by read animati
 
 
 int bDataChannelVisible;
-int bTapesVisible; 
+int bTapesVisible, bTapeInitCabinets; 
 int bDASDVisible;
 int bCardReadVisible; 
 int bIbm727Tape;
 
 void IBM70X_Init(void)
 {
-    char MT_color_opt[8] = "MTAx";
+    char MT_color_opt[16] = "MTx";
     char c;
-    int i, n1, n2;
+    int i, j, n1, n2, chan, unit;
 
     if (IsOption("OnlyMainCpu")) {
-        bDataChannelVisible = bTapesVisible = bDASDVisible = bCardReadVisible = 0;
+        bDataChannelVisible = bTapesVisible = bTapeInitCabinets = bDASDVisible = bCardReadVisible = 0;
     } else {
-        bTapesVisible = 1;
+        bTapesVisible = 1; bTapeInitCabinets = 0;
         bDataChannelVisible = (cpanel_on != IS_IBM704) ? 1 : 0;
         bDASDVisible = bCardReadVisible = (cpanel_on == IS_IBM7094_CTSS) ? 1 : 0;
     }
     if (bTapesVisible) {
         for (i=0;i<10;i++) {
-            // char MT_color_opt[8] = "MTAx";
-            MT_color_opt[3] = '0' + i;
-            n1 = n2 = 0;
+            // iterate on tape cabinets to define for each of then the tape attached: channel, unit, color of reels
+            MT_color_opt[2] = '0' + i;
+            chan = unit = n1 = n2 = 0;
             if ((IsOption(MT_color_opt)) && (IsOptionParam) && (*IsOptionParam++ == '/')) {
-                c = *IsOptionParam++; 
+                // syntax: option=mt1/b2/YB <- tape cabinet 1 is set to tape unit 2 in channel B, reels color Yellow (Left) and Blue (irght)
+                c = *IsOptionParam++; // get channel
+                if ((c == 0) || (c == ',')) goto end_mtn_opts;
+                if ((c >= 'a') && (c <= 'z')) c = c - 'a' + 'A';
+                if ((c >= 'A') & (c <= 'H')) { 
+                    chan = c + 1 - 'A'; 
+                    if (chan > NUM_DEVS_MT) {
+                        fprintf(stderr, "Invalid set cpanel option=%s: higher channel allowed %c, ussing %c\n", MT_color_opt, NUM_DEVS_MT + 'A'-1, c);
+                        chan = -1; 
+                    }
+                } else {
+                    fprintf(stderr, "Invalid set cpanel option=%s: invalid channel %c\n", MT_color_opt, c);
+                    chan = -1;
+                }
+                c = *IsOptionParam++; // get cabinet number (0-9)
+                if ((c == 0) || (c == ',')) goto end_mtn_opts;
+                if ((c >= '0') & (c <= '9')) { unit = c - '0'; } else {
+                    fprintf(stderr, "Invalid set cpanel option=%s: invalid unit %c (must be 0 to 9)\n", MT_color_opt, c);
+                    chan = -1;
+                }
+                c = *IsOptionParam++; // get second '/' separator
+                if ((c == 0) || (c == ',')) goto end_mtn_opts;
+                if (c != '/') goto end_mtn_opts;
+                c = *IsOptionParam++; // get left reel color
+                if ((c == 0) || (c == ',')) goto end_mtn_opts;
                 if ((c >= 'a') && (c <= 'z')) c = c - 'a' + 'A';
                 if (c == 'Y') {n1 = 1; /* yellow reel */ } else if (c == 'B') {n1 = 2; /* blue/black reel */ }
                 if (c == 'G') {n1 = 1; /* gray reel */ } else if (c == 'D') {n1 = 2; /* dark reel */ }
                 c = *IsOptionParam++; 
+                if ((c == 0) || (c == ',')) goto end_mtn_opts;
                 if ((c >= 'a') && (c <= 'z')) c = c - 'a' + 'A';
                 if (c == 'Y') {n2 = 1; /* yellow reel */ } else if (c == 'B') {n2 = 2; /* blue/black reel */ };
                 if (c == 'G') {n2 = 1; /* gray reel */ } else if (c == 'D') {n2 = 2; /* dark reel */ }
             }
+         end_mtn_opts:
             MT_L_reel_color[i] = n1; 
             MT_R_reel_color[i] = n2; 
             MT_load_animation[i] = 0;
             MT_rew_animation[i] = 0;
             MT_pos_reel_R[i] = 0;
+            if (chan < 0) {
+                MT_unitAtCabinet[i] = -1; // bad configured tape cabinet 
+            } else if (chan == 0) {
+                MT_unitAtCabinet[i] = -2; // this cabined is not defined, use defaults; 
+            } else {
+                MT_unitAtCabinet[i] = (chan - 1) * 10 + unit;
+                if (i>0) for (j=0;j<i;j++) if (MT_unitAtCabinet[j] == MT_unitAtCabinet[i]) {
+                    // this tape already assigned to a previous cabinet, set as bad configured
+                    MT_unitAtCabinet[i] = -1; // bad configured tape cabinet
+                    fprintf(stderr, "Invalid set cpanel option=%s: tape already assigned at cabinet %d\n", MT_color_opt, j);
+                    break;
+                }
+                
+            }
         }
+        // if default unit for cabinet is defined in another cabinet
+        for (i=0;i<10;i++) if ( MT_unitAtCabinet[i] == -2) {
+            for (j=0;j<10;j++) if (MT_unitAtCabinet[j] == i) {
+               // this tape already assigned to a previous cabinet, set as bad configured
+               MT_unitAtCabinet[i] = -1; // bad configured tape cabinet
+               fprintf(stderr, "Tape in cabinet %d already assigned at cabinet %d\n", i, j);
+               break;
+            }
+        }
+        // populate defaults cabined with unit i channel A
+        for (i=0;i<10;i++) if (MT_unitAtCabinet[i] == -2) MT_unitAtCabinet[i] = i;
     }
     if (bDASDVisible) {
         for (i=0;i<2;i++) DASD_wanted_cyl[i] = DASD_current_cyl[i]=0;
@@ -710,7 +782,7 @@ void Data_Channel_Refresh(void)
         decode_ioaddr(ioaddr);
         if (sim_is_running == 0) decode_unit_type = 0; // if CPU halted, all dev are disconnected
         if (decode_unit_type == 1) {                   // tape
-            i = decode_unit_num; if (i == 10) i=0; // MT_10 is mta_unit[0]
+            i = decode_unit_num; if (i == 10) i=0; // unit 10 is [0]
             uptr = &mta_unit[i + 10*(chan-1)];
             if (sim_tape_bot(uptr)) tape_bot = 1;
             if (sim_tape_eot(uptr)) tape_eot = 1;
@@ -813,6 +885,30 @@ void CardReader_Refresh(void)
         }
     }
     SetState(IBM70X.CR_output_tray, n);
+}
+
+
+void MagTape_InitCabinets() 
+{
+    int i, chan, unit; 
+
+    bTapeInitCabinets = 1;
+    for (i=0;i<10;i++) {
+        if (cpanel_on ==  IS_IBM704) { if (i == 0) continue; } // IBM 704 -> only tapes 1->9 displayed
+        if (cpanel_on >= IS_IBM7090) { if (i == 0) continue; } // IBM 709X -> only tapes 1->9 displayed
+        if (MT_unitAtCabinet[i] < 0) { 
+            // no tape in this cabinet
+            SetState(IBM70X.MT_head[i], 11); // r/w tape head wide open
+            SetState(IBM70X.MT_num[i], 10);    // number no lit on tape
+        } else {
+            chan = (MT_unitAtCabinet[i] / 10) + 1;
+            unit = MT_unitAtCabinet[i] % 10;
+            SetState(IBM70X.MT_num[i], unit);    // unit number lit on tape
+            if (chan > 1) {
+                SetState(IBM70X.MT_chan[i], chan);    // show channel letter on tape cabinet near lights if B or more
+            }
+        }
+    }
 }
 
 int TapePos(int n, int m)
@@ -1081,14 +1177,17 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
         MT_animation[i].FrameCount++; 
         if (*MT_State < 2) {
             AnimationStartStage(i, 20);  // rew on regular backwards movement
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d starts Rew/Run Animation (Low speed)\n", i);
         } else if (*MT_State < 3) {
             AnimationStartStage(i, 6);  // rew on low speed
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d starts Rew/Run Animation (Low speed)\n", i);
         } else {
             AnimationStartStage(i, 1); // start rew at high speed: unload -> hi speed rew -> load -> low speed rew
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d starts Rew/Run Animation (Hi speed)\n", i);
         }
     } else {
         MT_animation[i].FrameCount++; 
-    }
+}
     // animation core: set the head, reels, etc to the pos corresponding at the animated elapsed time t_msec_epased
     if ((MT_animation[i].Stage == 1) || (MT_animation[i].Stage == 30)) {
         // unload medium: open head and move reels opposite direction
@@ -1115,6 +1214,7 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
         t_msec_elapsed = AnimElapsedTime1(i); // animation stage time elapsed in msec 
         if (t_msec_elapsed > t_msec_hi_speed_rew_acceleration) {
             AnimationStartStage(i, 3); // accel stage finished -> next stage: full hi speed rew
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - hi speed rew\n", i);
         } else if (t_msec_elapsed > t_msec_hi_speed_rew_acceleration * 1 / 2) {
             *MT_L_State = 24 + TapePos(MT_L_State0 - 2, 24); // start rew
             *MT_R_State = 24 + TapePos(MT_R_State0 - 3, 24); 
@@ -1168,6 +1268,7 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
 
             if (n) {
                 AnimationStartStage(i, 6); // load stage finished -> next stage: low speed rew
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - going to low speed\n", i);
             }
         }
     }
@@ -1183,6 +1284,7 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
         if (AnimElapsedTime2(i, t_msec_for_low_speed_rew)) { 
             if (bUnLoad) {
                 AnimationStartStage(i, 30); // it a rew+unload -> next stage: unload
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - going to unload\n", i);
             } else {
                 bRewFinished = 1; // at last! rew finised. All medium on left reel 
             }
@@ -1199,13 +1301,15 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
                                                   0, 1 /* bTapeSpinning */); 
         if (AnimElapsedTime2(i, t_msec_for_low_speed_rew)) { 
             bRewFinished = 1; // at last! rew finised. All medium on left reel 
-        } else if (mta_unit[i].pos == 0) { 
+        } else if (mta_unit[MT_unitAtCabinet[i]].pos == 0) { 
             // tape at the load point -> end of rew
             bRewFinished = 1;
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - Rew finished, tape at load point\n", i);
         } 
         if ((bRewFinished) && (bUnLoad)) {
             bRewFinished = 0;
             AnimationStartStage(i, 30); // it a rew+unload -> next stage: unload
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - start unload\n", i);
         }
     }
     if (bRewFinished) {
@@ -1215,6 +1319,7 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
         MT_rew_animation[i]=0; // animation done -> not in progress
         MT_animation[i].FrameCount=0;  // init load animation frame counter for next animation
         last_wanted_pos[i] = 0;
+        sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation end\n", i);
     }
 }
 
@@ -1248,6 +1353,7 @@ void MagTape_LoadAnimation(int i, int * MT_L_State, int * MT_R_State, int * MT_h
         if (bStartAnimation) {
             // increment animation frame to show
             MT_animation[i].FrameCount++; 
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d starts Load Animation\n", i);
         } else {
             // freeze this animation in the current frame instead of advancing to next frame
         }
@@ -1304,6 +1410,7 @@ void MagTape_LoadAnimation(int i, int * MT_L_State, int * MT_R_State, int * MT_h
             // done all the animation, mark load animation as done.
             MT_load_animation[i] = -1; 
             MT_animation[i].FrameCount=0;  // init load animation frame counter for next animation
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d Load Animation end\n", i);
             return; 
         }
     }
@@ -1323,7 +1430,7 @@ int get_mt_current_command(int i)
 {
     int mt_cmd;
     UNIT *uptr;
-    uptr = &mta_unit[i];
+    uptr = &mta_unit[MT_unitAtCabinet[i]];
 
     if (uptr->u5 & 004000) return -2;   // #define MT_UNLOAD 004000      /* Unload when rewind done */
     mt_cmd = (uptr->u5 & 037); // #define MT_CMDMSK 0037
@@ -1353,7 +1460,7 @@ int get_mt_current_command(int i)
 
 void MagTape_Refresh(void)
 {
-    int i, n1, ioaddr, density, tape_ready, att, iMT_selected_by_DS;
+    int i, n1, ioaddr, density, tape_ready, att, selected, unit, chan;
     int MT_is;
     int MT_State,  MT_State0, 
 		MT_L_State,  MT_R_State, MT_L_State0_23, MT_R_State0_23, MT_L_State00, MT_R_State00,
@@ -1363,24 +1470,23 @@ void MagTape_Refresh(void)
     t_addr pos, capac; 
     UNIT *uptr;
 
-    ioaddr = (chan_unit[1].u6 & 0377); // u6 = last command executed in channel -> shown tapes for channel A
-    decode_ioaddr(ioaddr);
-    if ((sim_is_running) && (decode_unit_type == 1)) {  
-        i = decode_unit_num; if (i == 10) i=0; // MT_10 is mta_unit[0]
-        iMT_selected_by_DS = i;
-    } else {
-        iMT_selected_by_DS = -1;
-    }
+    if (bTapeInitCabinets == 0) MagTape_InitCabinets();
     // MT_State holds the amount of tape in eache reel. =1 -> all tape on L reel, =23 -> all tape on R reel, =0 -> no tape, reel unmounted
     // MT_L_State/MT_R_State holds the rotational position of reel, the speed ot reel, and the reel's colour
     //    0..23 -> reel rotated 0gr, 15gr, ... 345gr. To be used when reel is not moving
     //   24..47 -> same reel rotated 0gr, 15ge ... but with some spin blur. To be used when reel is moving
     //   48..55 -> reel rotalted 0gr, 45gr, ... whith greater spin blur. To be used when reel is rewinding at fast pace
     //   64..   -> same but with another reel color. There are 3 reels colors.
+    // iterate on visible MT cabinets (1 to 10, numbered 0 to 9)
     for (i=0;i<10;i++) {
         if (cpanel_on ==  IS_IBM704) { if (i == 0) continue; } // IBM 704 -> only tapes 1->9 displayed
         if (cpanel_on >= IS_IBM7090) { if (i == 0) continue; } // IBM 709X -> only tapes 1->9 displayed
-        uptr = &mta_unit[i];
+        // get the channel/unit that is displayed on the MT cabinet
+        if (MT_unitAtCabinet[i] < 0) { 
+            // no tape in this cabinet
+            continue; 
+        }
+        uptr = &mta_unit[MT_unitAtCabinet[i]];
         tape_ready = 1; att = 1; 
         MT_State   = MT_State0   = (int) GetState(IBM70X.MT[i]); 
         MT_L_State = MT_L_State00 = (int) GetState(IBM70X.MT_L[i]);
@@ -1397,6 +1503,7 @@ void MagTape_Refresh(void)
             if (MT_load_animation[i] != -1) {
                 MT_load_animation[i] = -1; 
                 MT_animation[i].FrameCount=0;  // init load animation frame counter for next animation
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d command ends Load Animation in progress\n", i);
             }
         } else if ((att) && (MT_load_animation[i] == 0) && (MT_State0 == 0)) {
             // file attached to unit, no tape commands, no tape on reel, and load animation not done
@@ -1411,6 +1518,7 @@ void MagTape_Refresh(void)
                 MT_rew_animation[i]=0; 
                 MT_animation[i].FrameCount=0;  // clear animation frame counter 
                 last_wanted_pos[i] = 0;
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d command ends Rew Animation in progress\n", i);
             }
         } else if (MT_rew_animation[i] == 0) {
            MT_load_animation[i]=-1;          // rew mark load anim as done
@@ -1430,6 +1538,9 @@ void MagTape_Refresh(void)
         // do what the tape is doing
         if (MT_is == MT_has_no_tape) {
             // tape reel unmounted
+            if (MT_State != 0) {
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d set to no tape\n", i);
+            }
             MT_State = 0;    // no medium on reels
             MT_head = 11;    // r/w tape head wide open
             MT_L_State = MT_L_State00; MT_R_State = MT_R_State00;  // keep reels at pos they had
@@ -1504,15 +1615,24 @@ void MagTape_Refresh(void)
 		SetState(IBM70X.MT_R_VacCol[i], MT_R_VacCol);
         // set tape lights
         density = (MT_DENS (uptr->dynflags)) ? 0 : 1;
+        selected = 0;
+        chan = (MT_unitAtCabinet[i] / 10) + 1;
+        unit = MT_unitAtCabinet[i] % 10;
+        ioaddr = (chan_unit[chan].u6 & 0377); // u6 = last command executed in channel 
+        decode_ioaddr(ioaddr);
+        if ((sim_is_running) && (decode_unit_type == 1)) {  
+            if (decode_unit_num == 10) decode_unit_num=0; // unit 10 is [0]
+            if (decode_unit_num == unit) selected = 1;
+        }
         if (bIbm727Tape) {
             // lights for IBM 727 Magnetic Tape
-            n1 = 1 * ((iMT_selected_by_DS == i) ? 1: 0) + // light_0  ; Select light = tape selected by external source
+            n1 = 1 * (selected) +                         // light_0  ; Select light = tape selected by external source
                  2 * (tape_ready) +                       // light_1  ; Ready light = tape in automatic mode (off when rew)
                  4 * (sim_tape_wrp(uptr) ? 1 : 0) +       // light_2  ; File Protect = tape reel is write protected
                  8 * (sim_tape_eot(uptr) ? 1 : 0);        // light_3  ; Tape Indicator = tape reached end of tape
         } else {
             // lights for IBM 729 Magnetic Tape
-            n1 = 1 * ((iMT_selected_by_DS == i) ? 1: 0) + // light_0  ; Select light = tape selected by external source
+            n1 = 1 * (selected) +                         // light_0  ; Select light = tape selected by external source
                  2 * (tape_ready) +                       // light_1  ; Ready light = tape in automatic mode (off when rew, loading)
                  4 * (density ? 0 : 1) +                  // light_2  ; High Density
                  8 * (density ? 1 : 0) +                  // light_3  ; Low Density
@@ -1675,7 +1795,7 @@ void IBM70X_Refresh(void)
     if (bDataChannelVisible) 
         Data_Channel_Refresh(); 
     // tapes
-    if (bTapesVisible) 
+    if (bTapesVisible)
         MagTape_Refresh();
     // card reader
     if (bCardReadVisible) 
