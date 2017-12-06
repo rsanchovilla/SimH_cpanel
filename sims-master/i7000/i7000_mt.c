@@ -51,7 +51,9 @@
 
 
 /* in u3 is current frame of tape */
-/* in u5 holds the commands */
+/* in u5 is the commands */
+/* in is10 is the SCPE error on command (0 is none) */
+
 #define MT_RDS          1
 #define MT_RDSB         2
 #define MT_WRS          3
@@ -379,11 +381,13 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     if (unit > NUM_UNITS_MT || unit < 0)
         return SCPE_NODEV;
     uptr += unit;
+    uptr->us10 = 0;                        // error on tape flag
     /* If unit disabled return error */
     if (uptr->flags & UNIT_DIS) {
         /*
         fprintf(stderr, "Attempt to access disconnected unit %s%d\n",
                 dptr->name, unit); */
+        uptr->us10 = SCPE_NODEV;                        // error on tape flag
         return SCPE_NODEV;
     }
 
@@ -398,12 +402,14 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         (UNIT_ATT | MTUF_ONLINE)) {
         fprintf(stderr, "Attempt to access offline unit %s%d\n\r",
                 dptr->name, unit);
+        uptr->us10 = SCPE_IOERR;
         return SCPE_IOERR;
     }
     /* Check if drive is ready to recieve a command */
     if ((uptr->u5 & MT_RDY) == 0) {
         /* Return indication if not ready and doing TRS */
         if (cmd == IO_TRS) {
+            uptr->us10 = SCPE_IOERR;
             return SCPE_IOERR;
         } else {
             return SCPE_BUSY;
@@ -455,6 +461,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
             sim_debug(DEBUG_EXP, dptr,
                       "WRS %d attempted on locked tape\n", unit);
             uptr->u5 |= MT_RDY;
+            uptr->us10 = SCPE_IOERR;
             return SCPE_IOERR;
         }
 #ifdef I701
@@ -507,6 +514,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
             sim_debug(DEBUG_EXP, dptr,
                       "WRS %d attempted on locked tape\n", unit);
             uptr->u5 |= MT_RDY;
+            uptr->us10 = SCPE_IOERR;
             return SCPE_IOERR;
         }
         uptr->u5 |= MT_WEF;
@@ -1267,10 +1275,13 @@ t_stat mt_srv(UNIT * uptr)
            sim_activate(uptr, us_to_ticks(16000));
            return SCPE_OK;
         } else {
-           if(uptr->u5 & MT_UNLOAD)
+            if(uptr->u5 & MT_UNLOAD) {
                r = sim_tape_detach(uptr);
-           else
+               sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d Finished (Unload)\n", unit);
+            } else {
                r = sim_tape_rewind(uptr);
+               sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d Finished\n", unit);
+            }
            uptr->u5 &= ~(MT_CMDMSK|MT_UNLOAD);
            uptr->u5 |= MT_RDY;
            uptr->u3 = 0;
