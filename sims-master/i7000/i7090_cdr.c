@@ -93,7 +93,7 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 {
     int                 chan = UNIT_G_CHAN(uptr->flags);
 
-    if ((uptr->flags & UNIT_ATT) != 0 && cmd == IO_RDS) {
+    if (((uptr->flags & UNIT_ATT) != 0) && (cmd == IO_RDS)) {
         int                 u = (uptr - cdr_unit);
 
         /* Start device */
