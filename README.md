@@ -62,7 +62,7 @@ Regular control panel
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/IBM7094_IBSYS_Fortran_IV.zip) to download IBSYS Fortran IV test run.
 
-Control panel with HW modifications done for CTSS
+Control panel with  HW modifications done for CTSS
 
 ![IBM 7094 CTSS](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/i7094_ctss.png)
 
