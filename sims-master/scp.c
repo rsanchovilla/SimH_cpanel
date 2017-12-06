@@ -5950,6 +5950,10 @@ if (!(uptr->flags & UNIT_ATTABLE))                      /* not attachable? */
     return SCPE_NOATT;
 if ((dptr = find_dev_from_unit (uptr)) == NULL)
     return SCPE_NOATT;
+if (uptr->flags & UNIT_ATT) {                          /* already attached? */
+    sim_printf ("%s: unit is already attached to file %s\n", sim_dname (dptr), uptr->filename);
+    return SCPE_ALATT;
+}
 uptr->filename = (char *) calloc (CBUFSIZE, sizeof (char)); /* alloc name buf */
 if (uptr->filename == NULL)
     return SCPE_MEM;
