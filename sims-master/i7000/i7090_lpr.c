@@ -175,10 +175,10 @@ print_line(UNIT * uptr, int chan, int unit)
 
     if (outsel & PRINT_3) {
         if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n\r", 1, 4, uptr->fileref);
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
         if (uptr->flags & ECHO) {
-            sim_putchar('\n');
             sim_putchar('\r');
+            sim_putchar('\n');
         }
         uptr->u5 &= ~LPRSTA_COL72;
         uptr->u4++;
@@ -186,12 +186,12 @@ print_line(UNIT * uptr, int chan, int unit)
 
     if (outsel & PRINT_4) {
         if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n\r\n\r", 1, 6, uptr->fileref);
+            sim_fwrite("\r\n\r\n", 1, 4, uptr->fileref);
         if (uptr->flags & ECHO) {
-            sim_putchar('\n');
             sim_putchar('\r');
             sim_putchar('\n');
             sim_putchar('\r');
+            sim_putchar('\n');
         }
         uptr->u5 &= ~LPRSTA_COL72;
         uptr->u4++;
@@ -233,10 +233,10 @@ print_line(UNIT * uptr, int chan, int unit)
         }
     } else {
         if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n\r", 1, 2, uptr->fileref);
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
         if (uptr->flags & ECHO) {
-            sim_putchar('\n');
             sim_putchar('\r');
+            sim_putchar('\n');
         }
         uptr->u4++;
         uptr->u5 &= ~LPRSTA_COL72;
@@ -281,28 +281,28 @@ print_line(UNIT * uptr, int chan, int unit)
     /* Space printer */
     if (outsel & PRINT_2) {
         if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n\r", 1, 2, uptr->fileref);
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
         if (uptr->flags & ECHO) {
-            sim_putchar('\n');
             sim_putchar('\r');
+            sim_putchar('\n');
         }
         uptr->u4++;
     }
 
     if (outsel & PRINT_1) {
-        while (uptr->u4 < (uint32)uptr->capac) {
+        while (uptr->u4 < (int32)uptr->capac) {
             if (uptr->flags & UNIT_ATT)
-                sim_fwrite("\n\r", 1, 2, uptr->fileref);
+                sim_fwrite("\r\n", 1, 2, uptr->fileref);
             if (uptr->flags & ECHO) {
-                sim_putchar('\n');
                 sim_putchar('\r');
+                sim_putchar('\n');
             }
             uptr->u4++;
         }
     }
 
-    if (uptr->u4 >= (uint32)uptr->capac) {
-       uptr->u4 -= (uint32)uptr->capac;
+    if (uptr->u4 >= (int32)uptr->capac) {
+       uptr->u4 -= (int32)uptr->capac;
        dev_pulse[chan] |= PRINT_I;
     }
 
@@ -326,8 +326,15 @@ uint32 lpr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     }
     /* Check if still active */
     if (uptr->u5 & URCSTA_CMD) {
-        sim_debug(DEBUG_EXP, &lpr_dev, "unit=%d busy\n", u);
-        return SCPE_BUSY;
+        if (sim_activate_time(uptr) == 0) {
+            // Still active but ... nothing is pending -> so reset printer state to avoid infinite wait on busy state
+            uptr->u5 &= ~(URCSTA_WRITE | URCSTA_READ | URCSTA_CMD | LPRSTA_EOR);
+            uptr->u6 = 0;
+        } else {
+            sim_debug(DEBUG_EXP, &lpr_dev, "unit=%d busy\n", u);
+            u = sim_activate_time(uptr);
+            return SCPE_BUSY;
+        }
     }
     /* Ok, issue command if correct */
     if (cmd == IO_WRS || cmd == IO_RDS) {
@@ -627,7 +634,6 @@ void
 lpr_ini(UNIT * uptr, t_bool f)
 {
     int                 u = (uptr - lpr_unit);
-    int                 i;
 
     uptr->u3 = 0;
     uptr->u4 = 0;
