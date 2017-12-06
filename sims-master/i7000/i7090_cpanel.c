@@ -775,7 +775,7 @@ void Data_Channel_Refresh(void)
                     32 * ((cmd[chan] & 4) ? 1:0);
         SetState(IBM70X.DS[i].Triggers, trigger); 
         // tape status
-        tape_eof = tape_err = tape_bot = tape_eot = 0;
+        tape_err = tape_eof = tape_bot = tape_eot = 0;
         n1 = chan_unit[chan].u6; // last command executed in channel
         dcmd   = (n1 >> 8);
         ioaddr = (n1 & 0377);
@@ -784,19 +784,24 @@ void Data_Channel_Refresh(void)
         if (decode_unit_type == 1) {                   // tape
             i = decode_unit_num; if (i == 10) i=0; // unit 10 is [0]
             uptr = &mta_unit[i + 10*(chan-1)];
+            if (uptr->us10) tape_err = 1; 
+            if ((uptr->u5 & 037) == 0) dcmd = 0; // MT_CMDMSK -> last command executed in channel has finished
             if (sim_tape_bot(uptr)) tape_bot = 1;
             if (sim_tape_eot(uptr)) tape_eot = 1;
             tape_eof = 0; // XXX how do I test this?
-            if (chan_test(chan, CHS_ERR)) tape_err = 1; 
             n1 = 0;
             if (dcmd == IO_RDS)     n1 |= (1 << 0);
             if (dcmd == IO_WRS)     n1 |= (1 << 1);
-            if (decode_unit_bcd)    n1 |= (1 << 2);
             if (dcmd == IO_WEF)     n1 |= (1 << 3);
-            if (dcmd == IO_REW)    {n1 |= (1 << 4); tape_bot = 0;} //if rew in progress, bot is not reliable
             if (dcmd == IO_BSR)     n1 |= (1 << 5);
             if (dcmd == IO_BSF)     n1 |= (1 << 6);
-            n1 |= (1 << (7 + decode_unit_num));
+            if (dcmd == IO_REW)     {n1 |= (1 << 4); tape_bot = 0;} // if rew in progress, bot is not reliable
+            if ((n1 == 0) && (tape_err == 0))  {
+                tape_eof = tape_bot = tape_eot = 0; // no dcmd -> clear all lights
+            } else {
+                n1 |= (1 << (7 + decode_unit_num)); // unit selected that executed dcmd command
+                if (decode_unit_bcd)  n1 |= (1 << 2);
+            }
             SetState(IBM70X.DS[chan-1].Flag_1, n1);
         } else {
             // clear tape flags
@@ -887,6 +892,25 @@ void CardReader_Refresh(void)
     SetState(IBM70X.CR_output_tray, n);
 }
 
+void get_MT_cabinet_chan_unit(int i, int * chan, int * unit)
+{
+    if (((cpu_unit.flags >> (16 + 4)) & 0x3) == 0) {    // if (CPU_MODEL == CPU_704) {
+        *chan = 0; // IBM 704 has no channels -> use pseudo channel 0
+    } else {
+        *chan = (MT_unitAtCabinet[i] / 10) + 1;
+    }
+    *unit = MT_unitAtCabinet[i] % 10;
+}       
+
+int get_MT_cabinet_mta_unit(int i)
+{
+    if (((cpu_unit.flags >> (16 + 4)) & 0x3) == 0) {    // if (CPU_MODEL == CPU_704) {
+        // IBM 704 tapes for MT device are defined as units 30..39
+        return 30 + MT_unitAtCabinet[i] % 10;  
+    } else {
+        return MT_unitAtCabinet[i];
+    }
+}
 
 void MagTape_InitCabinets() 
 {
@@ -901,8 +925,7 @@ void MagTape_InitCabinets()
             SetState(IBM70X.MT_head[i], 11); // r/w tape head wide open
             SetState(IBM70X.MT_num[i], 10);    // number no lit on tape
         } else {
-            chan = (MT_unitAtCabinet[i] / 10) + 1;
-            unit = MT_unitAtCabinet[i] % 10;
+            get_MT_cabinet_chan_unit(i, &chan, &unit);
             SetState(IBM70X.MT_num[i], unit);    // unit number lit on tape
             if (chan > 1) {
                 SetState(IBM70X.MT_chan[i], chan);    // show channel letter on tape cabinet near lights if B or more
@@ -1158,6 +1181,8 @@ int AnimElapsedTime2(int i, int t_msec_elapsed)
     return 0;
 }
 
+char MT_unitAtCabinet_str[3];
+
 void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_head,  
                                          int * MT_L_VacCol, int * MT_R_VacCol, int * MT_State,
 						                 int MT_L_State0, int MT_R_State0, 
@@ -1177,13 +1202,13 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
         MT_animation[i].FrameCount++; 
         if (*MT_State < 2) {
             AnimationStartStage(i, 20);  // rew on regular backwards movement
-            sim_debug(CP_DETAIL, &cp_dev, "MT%d starts Rew/Run Animation (Low speed)\n", i);
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) starts Rew/Run Animation (Low speed)\n", i, MT_unitAtCabinet_str);
         } else if (*MT_State < 3) {
             AnimationStartStage(i, 6);  // rew on low speed
-            sim_debug(CP_DETAIL, &cp_dev, "MT%d starts Rew/Run Animation (Low speed)\n", i);
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) starts Rew/Run Animation (Low speed)\n", i, MT_unitAtCabinet_str);
         } else {
             AnimationStartStage(i, 1); // start rew at high speed: unload -> hi speed rew -> load -> low speed rew
-            sim_debug(CP_DETAIL, &cp_dev, "MT%d starts Rew/Run Animation (Hi speed)\n", i);
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) starts Rew/Run Animation (Hi speed)\n", i, MT_unitAtCabinet_str);
         }
     } else {
         MT_animation[i].FrameCount++; 
@@ -1214,7 +1239,7 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
         t_msec_elapsed = AnimElapsedTime1(i); // animation stage time elapsed in msec 
         if (t_msec_elapsed > t_msec_hi_speed_rew_acceleration) {
             AnimationStartStage(i, 3); // accel stage finished -> next stage: full hi speed rew
-            sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - hi speed rew\n", i);
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) Rew/Run Animation - hi speed rew\n", i, MT_unitAtCabinet_str);
         } else if (t_msec_elapsed > t_msec_hi_speed_rew_acceleration * 1 / 2) {
             *MT_L_State = 24 + TapePos(MT_L_State0 - 2, 24); // start rew
             *MT_R_State = 24 + TapePos(MT_R_State0 - 3, 24); 
@@ -1268,7 +1293,7 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
 
             if (n) {
                 AnimationStartStage(i, 6); // load stage finished -> next stage: low speed rew
-                sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - going to low speed\n", i);
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) Rew/Run Animation - going to low speed\n", i, MT_unitAtCabinet_str);
             }
         }
     }
@@ -1284,7 +1309,7 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
         if (AnimElapsedTime2(i, t_msec_for_low_speed_rew)) { 
             if (bUnLoad) {
                 AnimationStartStage(i, 30); // it a rew+unload -> next stage: unload
-                sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - going to unload\n", i);
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) Rew/Run Animation - going to unload\n", i, MT_unitAtCabinet_str);
             } else {
                 bRewFinished = 1; // at last! rew finised. All medium on left reel 
             }
@@ -1301,15 +1326,15 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
                                                   0, 1 /* bTapeSpinning */); 
         if (AnimElapsedTime2(i, t_msec_for_low_speed_rew)) { 
             bRewFinished = 1; // at last! rew finised. All medium on left reel 
-        } else if (mta_unit[MT_unitAtCabinet[i]].pos == 0) { 
+        } else if (mta_unit[get_MT_cabinet_mta_unit(i)].pos == 0) { 
             // tape at the load point -> end of rew
             bRewFinished = 1;
-            sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - Rew finished, tape at load point\n", i);
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) Rew/Run Animation - Rew finished, tape at load point\n", i, MT_unitAtCabinet_str);
         } 
         if ((bRewFinished) && (bUnLoad)) {
             bRewFinished = 0;
             AnimationStartStage(i, 30); // it a rew+unload -> next stage: unload
-            sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation - start unload\n", i);
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) Rew/Run Animation - start unload\n", i, MT_unitAtCabinet_str);
         }
     }
     if (bRewFinished) {
@@ -1319,7 +1344,7 @@ void MagTape_RewAnimation (int i, int * MT_L_State, int * MT_R_State, int * MT_h
         MT_rew_animation[i]=0; // animation done -> not in progress
         MT_animation[i].FrameCount=0;  // init load animation frame counter for next animation
         last_wanted_pos[i] = 0;
-        sim_debug(CP_DETAIL, &cp_dev, "MT%d Rew/Run Animation end\n", i);
+        sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) Rew/Run Animation end\n", i, MT_unitAtCabinet_str);
     }
 }
 
@@ -1353,7 +1378,7 @@ void MagTape_LoadAnimation(int i, int * MT_L_State, int * MT_R_State, int * MT_h
         if (bStartAnimation) {
             // increment animation frame to show
             MT_animation[i].FrameCount++; 
-            sim_debug(CP_DETAIL, &cp_dev, "MT%d starts Load Animation\n", i);
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) starts Load Animation\n", i, MT_unitAtCabinet_str);
         } else {
             // freeze this animation in the current frame instead of advancing to next frame
         }
@@ -1410,7 +1435,7 @@ void MagTape_LoadAnimation(int i, int * MT_L_State, int * MT_R_State, int * MT_h
             // done all the animation, mark load animation as done.
             MT_load_animation[i] = -1; 
             MT_animation[i].FrameCount=0;  // init load animation frame counter for next animation
-            sim_debug(CP_DETAIL, &cp_dev, "MT%d Load Animation end\n", i);
+            sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) Load Animation end\n", i, MT_unitAtCabinet_str);
             return; 
         }
     }
@@ -1430,7 +1455,7 @@ int get_mt_current_command(int i)
 {
     int mt_cmd;
     UNIT *uptr;
-    uptr = &mta_unit[MT_unitAtCabinet[i]];
+    uptr = &mta_unit[get_MT_cabinet_mta_unit(i)];
 
     if (uptr->u5 & 004000) return -2;   // #define MT_UNLOAD 004000      /* Unload when rewind done */
     mt_cmd = (uptr->u5 & 037); // #define MT_CMDMSK 0037
@@ -1484,9 +1509,14 @@ void MagTape_Refresh(void)
         // get the channel/unit that is displayed on the MT cabinet
         if (MT_unitAtCabinet[i] < 0) { 
             // no tape in this cabinet
+            MT_unitAtCabinet_str[0] = '?'; MT_unitAtCabinet_str[1] = 0;
             continue; 
         }
-        uptr = &mta_unit[MT_unitAtCabinet[i]];
+        // set MT_unitAtCabinet_str to be availble for sim_debug detail
+        get_MT_cabinet_chan_unit(i, &chan, &unit);
+        MT_unitAtCabinet_str[0] = 'A' + chan - 1; MT_unitAtCabinet_str[1] = '0' + unit; MT_unitAtCabinet_str[2] = 0;
+        // get current cpanel tape state
+        uptr = &mta_unit[get_MT_cabinet_mta_unit(i)];
         tape_ready = 1; att = 1; 
         MT_State   = MT_State0   = (int) GetState(IBM70X.MT[i]); 
         MT_L_State = MT_L_State00 = (int) GetState(IBM70X.MT_L[i]);
@@ -1503,7 +1533,7 @@ void MagTape_Refresh(void)
             if (MT_load_animation[i] != -1) {
                 MT_load_animation[i] = -1; 
                 MT_animation[i].FrameCount=0;  // init load animation frame counter for next animation
-                sim_debug(CP_DETAIL, &cp_dev, "MT%d command ends Load Animation in progress\n", i);
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) command ends Load Animation in progress\n", i, MT_unitAtCabinet_str);
             }
         } else if ((att) && (MT_load_animation[i] == 0) && (MT_State0 == 0)) {
             // file attached to unit, no tape commands, no tape on reel, and load animation not done
@@ -1518,7 +1548,7 @@ void MagTape_Refresh(void)
                 MT_rew_animation[i]=0; 
                 MT_animation[i].FrameCount=0;  // clear animation frame counter 
                 last_wanted_pos[i] = 0;
-                sim_debug(CP_DETAIL, &cp_dev, "MT%d command ends Rew Animation in progress\n", i);
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) command ends Rew Animation in progress\n", i, MT_unitAtCabinet_str);
             }
         } else if (MT_rew_animation[i] == 0) {
            MT_load_animation[i]=-1;          // rew mark load anim as done
@@ -1539,7 +1569,7 @@ void MagTape_Refresh(void)
         if (MT_is == MT_has_no_tape) {
             // tape reel unmounted
             if (MT_State != 0) {
-                sim_debug(CP_DETAIL, &cp_dev, "MT%d set to no tape\n", i);
+                sim_debug(CP_DETAIL, &cp_dev, "MT%d (%s) set to no tape\n", i, MT_unitAtCabinet_str);
             }
             MT_State = 0;    // no medium on reels
             MT_head = 11;    // r/w tape head wide open
@@ -1574,6 +1604,7 @@ void MagTape_Refresh(void)
                                             (mt_cmd == -2) ? 1 : 0);
             tape_ready = 0; // during rew tape ready light is off (not lit)
             if (MT_rew_animation[i] == 0) { 
+                uptr->u5 &= ~(037); // MT_CMDMSK -> remove any command
                 uptr->u5 |= 16; // MT_LREW;
                 uptr->u3 = 0;
                 sim_cancel(uptr);
@@ -1582,7 +1613,7 @@ void MagTape_Refresh(void)
         } else {
             // calculate how much tape has gone from one reel to the other
             capac = (uptr->capac); 
-            if (capac == 0) capac =2*1000*1000; // use 2Mb as default tape capa
+            if (capac == 0) capac =4*1024*1024; // use 4Mb as default tape capa
             pos = (uptr->u3);
             if (pos > capac) pos = capac;
             MT_State = 1 + (int) ((22 * pos) / capac);
@@ -1616,8 +1647,6 @@ void MagTape_Refresh(void)
         // set tape lights
         density = (MT_DENS (uptr->dynflags)) ? 0 : 1;
         selected = 0;
-        chan = (MT_unitAtCabinet[i] / 10) + 1;
-        unit = MT_unitAtCabinet[i] % 10;
         ioaddr = (chan_unit[chan].u6 & 0377); // u6 = last command executed in channel 
         decode_ioaddr(ioaddr);
         if ((sim_is_running) && (decode_unit_type == 1)) {  
@@ -1663,7 +1692,21 @@ void SetState7090(int CArrayId_K, t_uint64 state, int nBits)
 
 void IBM70X_Refresh(void)
 {
-    int chan, n1, n2, n3, nRW, nCh;
+    int chan, i, n1, n2, n3, nRW, nCh, iochk;
+    int Tape_check[9]; // channel tape check indicator
+    UNIT *uptr;
+
+    for (chan=0;chan<=8;chan++) {     // set tape check indicators
+        Tape_check[chan] = 0;
+        if ((chan == 0) || (chan > NUM_DEVS_MT)) continue;
+        for (i=0;i<10;i++) {
+            uptr = &mta_unit[i + 10*(chan-1)];
+            if (!uptr) continue;
+            if (iocheck == 0) uptr->us10 = 0;
+            if (uptr->us10) Tape_check[chan] = 1;
+        }
+    }
+
 
 	if (Clearing_Main_Mem_Mode > 0) {
 		n1 = (1000 / FPS); // n1=msec time between GUI refresh
@@ -1692,8 +1735,14 @@ void IBM70X_Refresh(void)
     SetState(IBM70X.Light_Q_Overflow, mqoflag);      /* MQ Overflow */
     SetState(IBM70X.Reg_Sense, SL); // sense lights 
     nCh = (cpanel_on < IS_IBM7090) ? 6 : 8;
+
+    if (((cpu_unit.flags >> (16 + 4)) & 0x3) == 0) {    // if (CPU_MODEL == CPU_704) {
+        iochk = 0; // on 704, R/W check goes on on excesive timming for CPY opcode. This is not simulated, so check never occurs
+    } else {
+        iochk = iocheck;
+    }
     if (cpanel_on != IS_IBM704) {
-        SetState(IBM70X.Light_IOCheck, iocheck);
+        SetState(IBM70X.Light_IOCheck, iochk);
         n1 = n2 = n3 = nRW = 0;
         for (chan=nCh;chan>0;chan--) {
             n1 = n1 << 1;
@@ -1704,7 +1753,7 @@ void IBM70X_Refresh(void)
                 nRW = 1;
                 decode_ioaddr(chan_unit[chan].u6 & 0377);
             }
-            if (chan_test(chan, CHS_ERR)) n2 = n2 + 1;
+            if (Tape_check[chan]) n2 = n2 + 1;
             if (chan_irq[chan]) n3 = n3 + 1;
         }
         if (nRW == 0) {
@@ -1726,7 +1775,7 @@ void IBM70X_Refresh(void)
             SetState(IBM70X.Reg_CHN_Command_Trap, n3); 
         }
     } else {
-        SetState(IBM70X.Light_RW_Check, iocheck); // on IBM 704, io check light is RW check
+        SetState(IBM70X.Light_RW_Check, iochk); // on IBM 704, io check light is RW check
         n1 = n2 = nRW = 0; 
         for (chan=0;chan<=nCh;chan++) {
             // inspect chan 0 (pseudo 704 channel) and other chanels for activity
@@ -1734,7 +1783,7 @@ void IBM70X_Refresh(void)
             if (chan_flags[chan] & DEV_SEL) {
                 nRW = 1;
             }
-            if (chan_test(chan, CHS_ERR)) n2 = 1;
+            if (Tape_check[chan]) n2 = 1;
         }
         SetState(IBM70X.Light_RW_Select, nRW); 
         SetState(IBM70X.Reg_CHN_TAP_CHK, n2); 
@@ -1846,9 +1895,11 @@ void IBM70X_OnClick(void)
     int use_core = 0;
 
     if (CP_Click.CId == IBM70X.BTN_Power) {
-       DoSCP("set cpanel off");         // DoSCP stops the cpu to allow command to be executed by scp
-                                        // no more commands can be stacked after set cpanel off because if
-                                        // cpanel is off, pendign scp commands issued by cpanel are not processed
+       // DoSCP("set cpanel off");         
+       // DoSCP stops the cpu to allow command to be executed by scp
+       // is set cpanel off is sent no more commands can be stacked after because if
+       // cpanel is off, pendign scp commands issued by cpanel are not processed
+        DoSCP("bye");
        return;
     }
 
