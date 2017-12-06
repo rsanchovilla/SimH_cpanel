@@ -1178,8 +1178,7 @@ if (vid_mouse_captured) {
         return;
         }
     }
-if (!sim_is_running)
-    return;
+// YYY if (!sim_is_running) return;
 if (SDL_SemWait (vid_key_events.sem) == 0) {
     if (vid_key_events.count < MAX_EVENTS) {
         ev.key = vid_map_key (event->keysym.sym);

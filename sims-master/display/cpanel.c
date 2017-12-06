@@ -281,33 +281,8 @@ char SCP_cmd[MAX_SCP_CMDS * MAX_SCP_CMD_LEN];       // stores scp commnads list 
 int  SCP_cmd_count = 0;                             // number of commands in list
 
 int cpanel_TypeId = 0;                              // control panel type id from definition file
+extern char vid_title[128];
 
-// forward declararion for 
-int DoActionByName(char * Name, int Action);
-
-void display_keydown(int k)
-{
-    int i, bMark; 
-
-    // check if ^E (WRU) pressed while GUI has focus
-    if (k == sim_int_char) {
-        // it is! simulate click on close gui window to stop cpu execution
-        cp_stop_flag = 1;     
-    } else if (k == ('T'-'A'+1)) {
-        // Control-T -> toggle mark on GUI all clickable areas
-        bMark = 0;
-        for (i=0; i<CP.ControlItems;i++) if (CP.Control[i].Mark) bMark = 1;
-        if (bMark == 0) {
-            DoActionByName("<ALL>", 1);
-        } else {
-            DoActionByName("<NONE>", 1);
-        }
-    }
-}
-
-void display_keyup(int k)
-{
-}
 
 int upcase(int c)
 {
@@ -1915,7 +1890,7 @@ void ControlPanel_init(DEVICE *dptr)
         return;
     }
     if (vid_active) {
-        fprintf(stderr, "Cannot display Control Panel. GUI Window already in use\n");
+        fprintf(stderr, "Cannot display Control Panel. GUI Window already in use: %s\n", vid_title);
         return;
     }
     // first control is backgound and sets the control panel size
@@ -1925,6 +1900,7 @@ void ControlPanel_init(DEVICE *dptr)
         fprintf(stderr, "Control Panel GUI window initialization failed\r\n");
         return;
     }
+    sim_debug (CP_REFRESH, cp_dev_ptr, "GUI window created. Title: %s)\n", vid_title);
     cpanel_on = cpanel_TypeId;  
     cpanel_interactive = 0;
     cpanel_interval    = 10;  // activate cpanel refresh on Main instruction fetch/decode loop (t_stat sim_instr (void))
@@ -2070,6 +2046,7 @@ extern SDL_Renderer *vid_renderer;
 // If Action = 1 -> Signal with a mark on GUI the clickable area of given single control/control array name
 // If Action = 2 -> printf info on given single control/control array name
 // If Action = 3 -> set control, state
+// If Action = 4 -> set scale
 int DoActionByName(char * Name, int Action)
 {
     int Id, i, CId0, CId, n, Mark; 
@@ -2209,9 +2186,53 @@ int DoActionByName(char * Name, int Action)
         }
         return 0;
     }
+    if (Action == 4) {
+        int xSize = CP.Control[0].W * CP.Scale / 100;
+        int ySize = CP.Control[0].H * CP.Scale / 100;
+        vid_SetWindowSizeAndPos(1, xSize, ySize, 0,0,0);
+        return 0;
+    }
     return -1;  // unknow action
 }
 
+// check hot keys active when cpanel GUI has focus, or when console has focus during set cpanel interactive execution
+// return 1 if hotkey c processed
+int  CheckHotKeys(char c)
+{
+    int i, bMark; 
+
+    if (c == ('T'-'A'+1)) {
+        // Control-T -> toggle mark on GUI all clickable areas (^T)
+        bMark = 0;
+        for (i=0; i<CP.ControlItems;i++) if (CP.Control[i].Mark) bMark = 1;
+        if (bMark == 0) {
+            DoActionByName("<ALL>", 1);
+        } else {
+            DoActionByName("<NONE>", 1);
+        }
+        return 1;
+    } 
+    if (c == 'Y'-'A'+1) {
+        // Control-Y -> toggle GUI window scale to 100% <-> 50% (^Y)
+        CP.Scale = (CP.Scale == 100) ? 50 : 100;
+        DoActionByName("", 4);
+        return 1;
+    }
+    return 0;
+}
+
+void display_keydown(int k)
+{
+    // check if ^E (WRU) pressed while GUI has focus
+    if (k == sim_int_char) {
+        // it is! simulate click on close gui window to stop cpu execution
+        cp_stop_flag = 1;     
+    } else CheckHotKeys(k);
+}
+
+void display_keyup(int k)
+{
+}
 
 // calls the OnClick event of control/array on top at coords PosX,PosY
 // if KeyPress_KeyRelease = 0 -> process press and release on same onclick call, =1 -> key press, =2 -> key release
@@ -2279,13 +2300,15 @@ int DoClickEvent(int CId)
 }
 int ButtonPressed = 0;
 int Click_PosX, Click_PosY;
+int Refresh_Frames_Count = 0; // frames done counter. At 60 FPS. Wraps after 9942 hours
 
 void ControlPanel_Refresh(void)
 {
-    int xp,yp,ix,iy,n,p,X,Y,W,H,i,State,c,Mark,mc1,mc2,nStates, nStart, MaxH;
+    int xp,yp,ix,iy,n,p,X,Y,W,H,i,State,c,Mark,mc1,mc2,nStates, nStart, MaxH, MarkOfs;
     uint32 *surface = get_surface(&xp,&yp);
     uint32 t0, t1, RefreshInterval;
 
+    Refresh_Frames_Count++;
     // calculate RefreshInterval = wallclock time in msec pased from start on last refresh
     t0 = CP.LastRefreshInit;
     CP.LastRefreshInit = sim_os_msec();
@@ -2306,8 +2329,15 @@ void ControlPanel_Refresh(void)
             CP.Control[i].AutoNext.State = -1;   // disable AutoNext in this control
         }
     }
-    mc1 = surface_rgb_color(255,  0,0); // mark color red
-    mc2 = surface_rgb_color(  0,255,0); // mark color green
+    if ((Refresh_Frames_Count >> 5) & 1) {  // at 60 FPS >> 5 -> 1.8 FPS alternate marks colors
+        mc1 = surface_rgb_color(255,  0,0); // mark color red
+        mc2 = surface_rgb_color(  0,255,0); // mark color green
+        MarkOfs = 0; // mark pixel at 0,0 and 1,1
+    } else {
+        mc1 = surface_rgb_color( 128,255,128); // mark color green
+        mc2 = surface_rgb_color( 255,128,128); // mark color red
+        MarkOfs = 1; // mark pixel at 0,1 and 1,0
+    }
     // itearate on controls and draw the ones that changed / are marked
     for(i=0;i<CP.ControlItems;i++) {
         State = CP.Control[i].State;
@@ -2339,7 +2369,7 @@ void ControlPanel_Refresh(void)
             for (ix=0;ix<W;ix++) {
                 if (ix + X >= xp) break;
                 if ((p >= xp * yp) || (n >= MAX_PIXELS)) break;
-                if ((Mark == 1) && (((ix & 1)==0) && ((iy & 1)==0))) { // draw overlay mark on control ?
+                if ((Mark == 1) && (((ix & 1)==MarkOfs) && ((iy & 1)==0))) { // draw overlay mark on control ?
                     c = mc1;
                 } else if ((Mark == 1) && (((ix & 1)==1) && ((iy & 1)==1))) { 
                     c = mc2;   
@@ -2450,6 +2480,10 @@ t_stat ControlPanel_Refresh_CPU_Running(void)
 void ControlPanel_GetSCP(void)
 {
     t_stat reason; 
+    char c;
+
+    fflush(stdout);   // flush stdout so if user closes sim suring cpanel interacte, the log files are updated 
+    if (sim_log) fflush (sim_log);                          
 
     vid_mouse_read_on_sim_running = TRUE;
     while (1) {
@@ -2458,11 +2492,12 @@ void ControlPanel_GetSCP(void)
             break;
         }
         sim_os_ms_sleep (25);     // this sleep is to let the user press a button
-        sim_poll_kbd();           // poll keyboard to see if ^E (WRU) pressed during set cpanel interactive scp command execution
+        c = sim_poll_kbd() & 0177;           // poll keyboard to see if ^E (WRU) pressed during set cpanel interactive scp command execution
         if (stop_cpu) {           // yes, it is
             stop_cpu = 0;         // clean up
             cp_stop_flag = 1;     // simulate click on close gui window to stop cpu execution
         }
+        CheckHotKeys(c);
     }
     vid_mouse_read_on_sim_running = FALSE;
 }
@@ -2623,7 +2658,7 @@ t_stat cp_set_cpanel_on (UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc) { 
 
     DEVICE *dptr = (DEVICE *) desc;
-    int32 num, xPos,yPos, xSize, ySize;
+    int32 num, xPos,yPos;
     CONST char *tptr;
     t_stat r;
 
@@ -2668,9 +2703,7 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc) {
             fprintf(stderr, "No cpanel open\r\n");
             return SCPE_OK; // no panel opened
         }
-        xSize = CP.Control[0].W * CP.Scale / 100;
-        ySize = CP.Control[0].H * CP.Scale / 100;
-        vid_SetWindowSizeAndPos(1, xSize, ySize, 0,0,0);
+        DoActionByName("", 4);
     } else if (value == 8) { // SET POS=X/Y
         xPos = (int) strtotv (cptr, &tptr, 10);
         if (cptr == tptr) return SCPE_ARG;
@@ -2707,7 +2740,12 @@ t_stat cp_reset (DEVICE *dptr)
     return SCPE_OK;
 }
 
-t_stat cp_interactive(UNIT *uptr, int32 value, CONST char *cptr, void *desc)     { cpanel_interactive = 1; return SCPE_OK; }
+t_stat cp_interactive(UNIT *uptr, int32 value, CONST char *cptr, void *desc)     
+{ 
+    cpanel_interactive = 1; 
+    return SCPE_OK; 
+}
+
 t_stat cp_attach (UNIT *uptr, CONST char *cptr) 
 { 
     if (uptr == NULL)  return SCPE_IERR;
