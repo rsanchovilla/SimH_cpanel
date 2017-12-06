@@ -38,9 +38,13 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7
 
 ## IBM 7090
 
+Compact control panel
+
 ![IBM 7090 Compact](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/i7090_compact.png)
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/IBM7090_Edit_Map_IBSYS.zip) to download IBSYS Edit Map using compact control panel.
+
+Full control panel
 
 ![IBM 7090](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/i7090.png)
 
@@ -52,9 +56,13 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7
 
 ## IBM 7094
 
+Regular control panel
+
 ![IBM 7094](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/i7094.png)
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/IBM7094_IBSYS_Fortran_IV.zip) to download IBSYS Fortran IV test run.
+
+Control panel with HW modifications done for CTSS
 
 ![IBM 7094 CTSS](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/i7094_ctss.png)
 
