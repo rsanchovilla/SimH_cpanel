@@ -1,23 +1,28 @@
 # SimH_cpanel
 
-This is a SimH fork to add computer control panels and support to visual devices
+The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
-It is based on Richard Cornwell own's SimH fork. Currently suppots
+The visuals oovers interactive control panels (lights, switches, buttons) but also
+other devices: tapes, card readers, disk, etc.
+
+It is based on Richard Cornwell own's SimH fork, and is implemented using SimH own SDL based modules. . 
+
+Currently suppots visuals emulation for:
 
 * IBM 704 control panel. Include IBM 727 tapes
 * IBM 709 control panel. Include IBM 729 tapes and IBM 766 Data Synchorinizer
 * IBM 7090/7094 control panel. Include IBM 7617 Data Channel console and IBM 729 tapes
 * IBM 7094 CTSS control panel. Includes HW modifications for CTSS, IBM 711 card punch, 
-       IBM 7909 Data Channel panel, IBM 7631 File Control panel and IBM 2302 Disk 
+  IBM 7909 Data Channel panel, IBM 7631 File Control panel and IBM 2302 Disk 
        
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%207000%20Panels%20Screen%20Shots.png) to preview how control panels looks like.
 
 # Test Run Software Kits
 
 ## Common keys
-Several ready to run sw kits are available to display control panel operation (Windows only)
+Several ready to run sw kits are available to demo control panel operation (Windows only)
 
-Hot keys are available on GUI:
+Hot keys are available when GUI window has the focus:
 * Control E -> Halt
 * Control T -> Toggles mark on clickable areas
 * Control Y -> Toggles size of GUI (half size <-> full size)
@@ -62,7 +67,7 @@ Regular control panel
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/IBM7094_IBSYS_Fortran_IV.zip) to download IBSYS Fortran IV test run.
 
-Control panel with  HW modifications done for CTSS
+Control panel with full HW setup needed to run CTSS
 
 ![IBM 7094 CTSS](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7000/i7094_ctss.png)
 
