@@ -2,7 +2,7 @@
 
 The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
-The visuals oovers interactive control panels (lights, switches, buttons) but also
+The visuals covers interactive control panels (lights, switches, buttons) but also
 other devices: tapes, card readers, disk, etc.
 
 It is based on Richard Cornwell own's SimH fork, and is implemented using SimH own SDL based modules. . 
