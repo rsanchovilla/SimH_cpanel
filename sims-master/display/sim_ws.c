@@ -43,26 +43,17 @@
 #include <stdlib.h>
 #include "ws.h"
 
-#ifndef CPANEL
-#include "display.h"
-#endif
-
 #ifndef PIX_SIZE
 #define PIX_SIZE 1
 #endif
 
-#ifdef CPANEL
-// definitions needed by sim_ws.c that are set in display.c (but no need to import the whole module)
+#ifdef DISPLAY_TYPE
+#include "display.h"
+#else
+// definitions needed by sim_ws.c that are set in display.h (but no need to import the whole module)
 unsigned char display_tablet = 0;
 unsigned char display_lp_sw = 0;
-// also sim_ws.c need functions display_keyup and display_keydown. 
-// But should use the cpanel.c ones, not the display.c ones, 
-extern void display_keydown(int k);
-extern void display_keyup(int k);
-// display.c needs two functions to be defined in cpu.c: cpu_set_switches and cpu_get_switches.
-// these are no longer necesary
 #endif
-
 
 /*
  * light pen location
@@ -88,6 +79,8 @@ typedef struct cursor {
 
 static CURSOR *arrow_cursor;
 static CURSOR *cross_cursor;
+
+unsigned char ws_key_pressed = 0;
 
 
 static  int
@@ -150,6 +143,7 @@ map_key(int k)
     return k;
 }
 
+
 int bControlKeyPressed = 0; // flag to keep the control key state
 
 int
@@ -183,21 +177,25 @@ ws_poll(int *valp, int maxus)
     if (SCPE_OK == vid_poll_kb (&kev)) {
         switch (kev.state) {
             case SIM_KEYPRESS_DOWN:
-            case SIM_KEYPRESS_REPEAT:
-                // handle ctrl-key pressed while cpanel GUI has focus
-                bControlKeyPressed |= (kev.key == SIM_KEY_CTRL_L) ? 1 : (kev.key == SIM_KEY_CTRL_R) ? 2 : 0;
-                if (bControlKeyPressed) {
-                    display_keydown(kev.key - SIM_KEY_A + 1);
-                    break;
+            case SIM_KEYPRESS_REPEAT:             
+                if (kev.key == SIM_KEY_CTRL_L) {bControlKeyPressed |= 1;} else
+                if (kev.key == SIM_KEY_CTRL_R) {bControlKeyPressed |= 2;} 
+                else {
+                    ws_key_pressed = (bControlKeyPressed) ? kev.key - SIM_KEY_A + 1 : map_key(kev.key);
+                    #ifdef DISPLAY_TYPE
+                    display_keydown(ws_key_pressed);
+                    #endif
                 }
-                display_keydown(map_key(kev.key));
                 break;
             case SIM_KEYPRESS_UP:            
-                if ((kev.key == SIM_KEY_CTRL_L) || (kev.key == SIM_KEY_CTRL_R)) {
-                    bControlKeyPressed &= (kev.key == SIM_KEY_CTRL_L) ? ~1 : ~2;
-                    break;
+                if (kev.key == SIM_KEY_CTRL_L) {bControlKeyPressed &= ~1;} else
+                if (kev.key == SIM_KEY_CTRL_R) {bControlKeyPressed &= ~2;} 
+                else {
+                    ws_key_pressed = 0;
+                    #ifdef DISPLAY_TYPE
+                    display_keyup(map_key(kev.key));
+                    #endif
                 }
-                display_keyup(map_key(kev.key));
                 break;
             }
         }
@@ -421,7 +419,7 @@ ws_display_point(int x, int y, void *color)
     else
         surface[y*xpixels + x] = *brush;
 }
-
+  
 void
 ws_display_area(int x1, int y1, int x2, int y2, void *color)
 {

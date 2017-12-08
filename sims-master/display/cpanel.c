@@ -2042,6 +2042,8 @@ int SetStateAutoNext(int Id, int NextState, uint32 Duration_msec)
 extern SDL_Window *vid_window;                                 /* window handle */
 extern SDL_Renderer *vid_renderer;
 
+int Into_Refresh = 0; // flag to avoid recursive call to ControlPanel_Refresh()
+
 // If Action = 0 -> calls the OnClick event of given single control/control array name
 // If Action = 1 -> Signal with a mark on GUI the clickable area of given single control/control array name
 // If Action = 2 -> printf info on given single control/control array name
@@ -2091,7 +2093,7 @@ int DoActionByName(char * Name, int Action)
             }
         }
         CP.FullRedrawNeeded=1; // redraw the whole screen with updated marks
-        if (cpanel_on) {
+        if ((Into_Refresh == 0) && (cpanel_on)) {
             ControlPanel_Refresh();
         }
         return 0;
@@ -2180,13 +2182,14 @@ int DoActionByName(char * Name, int Action)
                 if (CP.Control[CId].nStates > n) CP.Control[CId].Mark = Mark;
             }
         }
-        CP.FullRedrawNeeded=1; // redraw the whole screen with updated atate(s) 
-        if (cpanel_on) {
+        CP.FullRedrawNeeded=1; // redraw the whole screen with updated marks
+        if ((Into_Refresh == 0) && (cpanel_on)) {
             ControlPanel_Refresh();
         }
         return 0;
     }
     if (Action == 4) {
+        // If Action = 4 -> set scale
         int xSize = CP.Control[0].W * CP.Scale / 100;
         int ySize = CP.Control[0].H * CP.Scale / 100;
         vid_SetWindowSizeAndPos(1, xSize, ySize, 0,0,0);
@@ -2197,10 +2200,15 @@ int DoActionByName(char * Name, int Action)
 
 // check hot keys active when cpanel GUI has focus, or when console has focus during set cpanel interactive execution
 // return 1 if hotkey c processed
-int  CheckHotKeys(char c)
+int CheckHotKeys(char c)
 {
     int i, bMark; 
 
+    if (c == sim_int_char) {
+        // ^E (WRU) pressed while GUI has focus
+        cp_stop_flag = 1; 
+        return 1;
+    }
     if (c == ('T'-'A'+1)) {
         // Control-T -> toggle mark on GUI all clickable areas (^T)
         bMark = 0;
@@ -2219,19 +2227,6 @@ int  CheckHotKeys(char c)
         return 1;
     }
     return 0;
-}
-
-void display_keydown(int k)
-{
-    // check if ^E (WRU) pressed while GUI has focus
-    if (k == sim_int_char) {
-        // it is! simulate click on close gui window to stop cpu execution
-        cp_stop_flag = 1;     
-    } else CheckHotKeys(k);
-}
-
-void display_keyup(int k)
-{
 }
 
 // calls the OnClick event of control/array on top at coords PosX,PosY
@@ -2308,6 +2303,7 @@ void ControlPanel_Refresh(void)
     uint32 *surface = get_surface(&xp,&yp);
     uint32 t0, t1, RefreshInterval;
 
+    Into_Refresh = 1;
     Refresh_Frames_Count++;
     // calculate RefreshInterval = wallclock time in msec pased from start on last refresh
     t0 = CP.LastRefreshInit;
@@ -2392,6 +2388,10 @@ void ControlPanel_Refresh(void)
         ws_sync ();
     }
     CP.FullRedrawNeeded=0;
+    // check key pressed
+    if (CheckHotKeys(ws_key_pressed)) {
+        ws_key_pressed = 0; // clear key as it is processed
+    }
     // check if button click (on mouse button release)
     if ((ws_lp_x >= 0) || (ws_lp_y >= 0)) {
         if (ButtonPressed == 0) {
@@ -2423,6 +2423,7 @@ void ControlPanel_Refresh(void)
         printf("refresh duration: %d msec, starting refresh each %d msec (FPS %d) \n",
             CP.LastRefreshDone - CP.LastRefreshInit, RefreshInterval, 1000 / RefreshInterval);
     }
+    Into_Refresh = 0;
 
 }
 

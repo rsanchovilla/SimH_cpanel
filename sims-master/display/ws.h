@@ -62,6 +62,7 @@ extern void display_repaint(void);
  */
 
 extern int ws_lp_x, ws_lp_y;
+extern unsigned char ws_key_pressed;
 
 /*
  * O/S services in theory independent of window system,

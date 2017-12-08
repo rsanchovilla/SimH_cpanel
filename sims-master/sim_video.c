@@ -1178,7 +1178,7 @@ if (vid_mouse_captured) {
         return;
         }
     }
-// YYY if (!sim_is_running) return;
+// if (!sim_is_running) return;
 if (SDL_SemWait (vid_key_events.sem) == 0) {
     if (vid_key_events.count < MAX_EVENTS) {
         ev.key = vid_map_key (event->keysym.sym);
@@ -1680,9 +1680,19 @@ vid_ready = TRUE;
 sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vid_dev, "vid_thread() - Started\n");
 
 while (vid_active) {
-    int status = SDL_WaitEvent (&event);
-    if (status == 1) {
-        switch (event.type) {
+    // instead of int status = SDL_WaitEvent (&event); that is blocking, 
+	// use a timeout of given msec. If no event received, generate a windows refresh
+	// this asures windows is updated on WinXP
+	int status = SDL_WaitEventTimeout (&event, 300);
+	if (status == 0) {
+		// no event -> make a refresh
+		vid_update();
+	} else if (status == 1) {
+		sim_debug (SIM_VID_DBG_VIDEO, vid_dev, 
+			       "SDL event.type %d, vid_active %d, event.user.code %d\r\n", 
+				   event.type, vid_active, event.user.code); 
+
+		switch (event.type) {
 
             case SDL_KEYDOWN:
             case SDL_KEYUP:

@@ -674,7 +674,7 @@ void DASD_Refresh(void)
     sel = (dsk_unit[0].flags & UNIT_SELECT) ? 1 : 0;
     schan = (chan * 2) + sel;
     chk = sense[schan];
-    if ((chk & 0x04)==0) fc_flag[3] |= 2;                 // STAT_SIXBIT 0x00004
+    if ((chk & 0x04)==0) fc_flag[3] |= 2;                 // #define STAT_SIXBIT 0x00004
     if ((chk & 0x10020) == 0x10020) fc_flag[0] |= 4;      // #define EXPT_DSKCHK     0x10020         /* Disk storage error */
     if ((chk & 0x10040) == 0x10040) fc_flag[4] |= 1;      // #define STAT_NOTRDY     0x10040         /* Disk no ready */
     if ((chk & 0x10080) == 0x10080) fc_flag[4] |= 2;      // #define STAT_OFFLINE    0x10080         /* Disk offline */
@@ -894,7 +894,7 @@ void CardReader_Refresh(void)
 
 void get_MT_cabinet_chan_unit(int i, int * chan, int * unit)
 {
-    if (((cpu_unit.flags >> (16 + 4)) & 0x3) == 0) {    // if (CPU_MODEL == CPU_704) {
+    if (((cpu_unit.flags >> (16 + 4)) & 0x3) == 0) {    // #define if (CPU_MODEL == CPU_704) {
         *chan = 0; // IBM 704 has no channels -> use pseudo channel 0
     } else {
         *chan = (MT_unitAtCabinet[i] / 10) + 1;
