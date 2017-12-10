@@ -326,15 +326,9 @@ uint32 lpr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     }
     /* Check if still active */
     if (uptr->u5 & URCSTA_CMD) {
-        if (sim_activate_time(uptr) == 0) {
-            // Still active but ... nothing is pending -> so reset printer state to avoid infinite wait on busy state
-            uptr->u5 &= ~(URCSTA_WRITE | URCSTA_READ | URCSTA_CMD | LPRSTA_EOR);
-            uptr->u6 = 0;
-        } else {
-            sim_debug(DEBUG_EXP, &lpr_dev, "unit=%d busy\n", u);
-            u = sim_activate_time(uptr);
-            return SCPE_BUSY;
-        }
+        sim_debug(DEBUG_EXP, &lpr_dev, "unit=%d busy\n", u);
+        u = sim_activate_time(uptr);
+        return SCPE_BUSY;
     }
     /* Ok, issue command if correct */
     if (cmd == IO_WRS || cmd == IO_RDS) {
@@ -385,6 +379,7 @@ t_stat lpr_srv(UNIT * uptr)
         uptr->u6 = 0;
         chan_clear(chan, DEV_WEOR | DEV_SEL);
         sim_debug(DEBUG_CHAN, &lpr_dev, "unit=%d disconnect\n", u);
+        return SCPE_OK; 
     }
 
     /* If change requested, do that first */
