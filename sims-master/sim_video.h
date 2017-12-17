@@ -186,6 +186,7 @@ t_stat vid_poll_mouse (SIM_MOUSE_EVENT *ev);
 void vid_draw (int32 x, int32 y, int32 w, int32 h, uint32 *buf);
 void vid_beep (void);
 void vid_refresh (void);
+void vid_set_icon(void);
 const char *vid_version (void);
 const char *vid_key_name (int32 key);
 t_stat vid_set_cursor (t_bool visible, uint32 width, uint32 height, uint8 *data, uint8 *mask, uint32 hot_x, uint32 hot_y);

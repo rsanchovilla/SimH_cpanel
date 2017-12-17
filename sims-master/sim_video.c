@@ -1444,6 +1444,36 @@ free (buf);
 event->data1 = NULL;
 }
 
+int   icon_rgb_defined = 0; // flag: when 1 -> icon defined
+int16 icon_r[32*32];        // holds icon bitmap in RGB (0..255, -1 for transparent)
+int16 icon_g[32*32];
+int16 icon_b[32*32];
+
+void vid_set_icon(void)
+{
+    static uint32 icon[32*32] = {0};
+    SDL_Surface *surface; 
+    SDL_Rect r;
+    int x,y,p;
+
+    if (sim_end) {
+        surface = SDL_CreateRGBSurfaceFrom(icon,32,32,32,4*32, 0xFF0000, 0x00FF00, 0x00FF, 0xFF000000 /* alpha channel */);
+    } else {
+        surface = SDL_CreateRGBSurfaceFrom(icon,32,32,32,4*32, 0xFF00, 0xFF0000, 0xFF000000, 0x000000FF /* alpha channel */);
+    }
+    SDL_FillRect(surface, NULL, 0x01010101); // set all pixels to transparent
+    r.h = r.w = 1;
+    for (y=0;y<32;y++) for (x=0;x<32;x++) {
+        r.x = x; r.y = y; p = x+y*32;
+        if (icon_r[p] < 0) continue; // transparent pixel -> skip
+        SDL_FillRect(surface, &r, SDL_MapRGB(surface->format, (uint8) icon_r[p], (uint8) icon_g[p], (uint8) icon_b[p])); // draw pixel
+    }
+
+    SDL_SetWindowIcon(vid_window, surface);
+
+    SDL_FreeSurface(surface);
+}
+
 int vid_video_events (void)
 {
 SDL_Event event;
@@ -1676,6 +1706,8 @@ else
 #endif
 
 vid_ready = TRUE;
+
+if (icon_rgb_defined) vid_set_icon();
 
 sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vid_dev, "vid_thread() - Started\n");
 

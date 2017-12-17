@@ -1818,6 +1818,47 @@ process_tag:
         }
 }
 
+extern int   icon_rgb_defined; // flag: when 1 -> icon defined
+extern int16 icon_r[32*32];    // holds icon bitmap in RGB (0..255, -1 for transparent)
+extern int16 icon_g[32*32];
+extern int16 icon_b[32*32];
+
+void ControlPanel_icon(voind)
+{
+    int i, p, h, w, x0, y0, x1, y1, x, y, r, g, b;
+    int Id; 
+    uint32 col;
+
+    // init icon bitmap to transparent
+    icon_rgb_defined = 0;
+    for (i=0;i<32*32; i++) icon_r[i] = icon_g[i] = icon_b[i] = -1; 
+    // if control defined with name "icon", use if as bitmap image for icon
+    Id = GetByName("icon");
+    if (Id < 0) return;
+    // copy pixels to icon rgb bitmap (max 32 x 32)
+    icon_rgb_defined = 1;
+    h = CP.Control[Id].H; 
+    w = CP.Control[Id].W; 
+    x0 = y0 = 0;
+    if (w < 32) x0 = (32 - w) / 2; // center image
+    if (h < 32) y0 = (32 - h) / 2;
+    for (y=0;y<h;y++) {
+        y1 = y0 + y;
+        if (y1 >= 32) break;
+        for (x=0;x<w;x++) {
+           x1 = x0 + x; 
+           if (x1 >= 32) break;
+           p = CP.Control[Id].iPos_surface + x + y * w;
+           col = CP.surface[p];
+           if (col == 0) continue; // transparent pixel
+           get_surface_rgb_color(col, &r, &g, &b);
+           icon_r[x1+ 32 * y1] = r; 
+           icon_g[x1+ 32 * y1] = g; 
+           icon_b[x1+ 32 * y1] = b; 
+        }
+    }
+}
+
 // bind loaded control panel (or internal one) to SimH variables and event handling routines
 void ControlPanel_Bind(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr) 
 {
@@ -1870,6 +1911,8 @@ void ControlPanel_Bind(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr)
             CP.CArray[*Id - CARRAY_START].OnClick = cp_def[i].CallBack;    
         }
     };
+    // process icon image
+    ControlPanel_icon();
     // call the init routine for the control panel loaded
     cpanel_Press_and_Release = 0; // default no differentiation on key press and key release con control panel
 	// set cpanel_on to the cpanel type loaded before calling init (so Init can perform initialization
