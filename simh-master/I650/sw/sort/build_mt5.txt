@@ -1,0 +1,125 @@
+                                        1            
+                                        1      load a card deck program
+                                        1      (in soap 1 word per card format)
+                                        1      into tape mt5 and make tape                 
+                                        1      bootable using one tape load card
+                                        1              
+                                        1      place at end of deck to load the 
+                                        1      end of data card: it is a load card with 
+                                        1         00 0000 9999      as first word (overpunch on col1)
+                                        1         0  or  1          as second word. 
+                                        1         00 0000 nnnn      transfer word (can be a valid instr)
+                                        1                           will start execution 
+                                        1                           with this instrucction
+                                        1    
+                                        1      if second word is 1 then mt5 will finish loading
+                                        1      and then automatically jump to transfer word 
+                                        1
+                                        1      written by Roberto Sancho
+                                        1      August 2020                   
+                                        1                                                  
+                                               blr 1000  1001 entry
+                                               synreadc  1951                      
+                                               blr 1951  1960 read card area   
+                                               blr 1961  1961       
+                                               regp1977  1986 punch area 
+                                               blr 1100  1160 tape record 
+                                        1                                                  
+                                           1000rwd 8015 c1    rew dest tape
+                                        1                                                  
+                                        1 init values                                                   
+                                        1                                                  
+                                          c1   lddini0        start with 00 payload words per record
+                                               std 1105
+                                               lddinih
+                                               std 1109
+                                               nop      c2
+                                          ini0 rac 0000  9006
+                                          ini50rac 0050  9006
+                                          inih hlt 0000  9999
+                                        1                                                  
+                                        1 fixed part of tape record                                                   
+                                        1                                                  
+                                           1100rtn 8015  9001
+                                           1101nts 9005  9002
+                                           1102nef 9003  9009
+                                           1103hlt 1111  9004  read error on tape. press run to retry
+                                           1104bst 8015  9000
+                                           1105rac 0050  9006
+                                           1106ldd 9009c 9008c
+                                           1107sxc 0002  9008
+                                           1108nzc 9006  9000
+                                           1109hlt 0000  9999  end of read / transfer word
+                                        1                                                  
+                                        1 load program deck until end of deck card read
+                                        1 end of deck card is a load card with +00 0000 9999
+                                        1 as first word                                                   
+                                        1                                                  
+                                          c2   rcd 1961 c2a   read card
+                                           1961ral 1951       get first word read on load card
+                                               sloeodck       is end of deck card
+                                               nzec2a   c4    yes, jmp to c4 to finish tape
+                                          c2a  ral 1951       get first word of card read
+                                               slt 0002       get opcode
+                                               supn69         is std (opcode=69)
+                                               nzuc2    c3    not a ldd card, ignore it and read next card
+                                        1
+                                        1 add card to tape buffer.
+                                        1  
+                                          c3   ral 1105       check if tape buffer is full 
+                                               sloini50
+                                               nzec3c   c3a     if not full goto c3c
+                                          c3a  set 9000       store tape record on ias
+                                               ldi 1100 
+                                               set 9050
+                                               ldi 1150      
+                                               set 9000       write tape record on mt5
+                                               wtn 8015
+                                               ntsc3b
+                                               hlt 0100       write error on tape 8015. press start to retry
+                                               bst 8015 c3a
+                                          c3b  lddini0
+                                               std 1105 c3c   set tape buffer as empty
+                                          c3c  ral 1105       get number of words in tape buf
+                                               alonn2           stored at addr 1105 as rac nnnn instr
+                                               stl 1105       incr 2
+                                               slt 0002             
+                                               ral 8002
+                                               srt 0006       
+                                               rac 8002       irc=nnnn
+                                               ldd 1954       get data word in card read
+                                               std 1109c      store in tape buf 
+                                               ral 1953       get std addr 8000 inst in card read       
+                                               alon1k7        fix inst addr 8000 -> 9007 
+                                               stl 1108c      store std instr in tape buf
+                                               nop 0000 c2    goto read next card
+                                          eodck 00 0000  9999 end of deck word
+                                          n69   00 0000  0069
+                                          nn2   00 0002  0000
+                                          n1k7  00 0000  1007
+                                        1
+                                        1 no more cards. write last tape record
+                                        1  
+                                          c4   ral 1952       get second word from end of deck card
+                                               nze      c4a   jump to c4 if no transfer word
+                                               ldd 1953 c4d   allow jump to transfer word/end of load
+                                          c4a  lddinih  c4d      
+                                          c4d  std 1109 
+                                               ral 1105       get number of words in buffer
+                                               sloini0        
+                                               nzec4b           some words in buffer, goto c4b
+                                               hlt 0101  9999 fatal error: cannot store a 0 program words!
+                                          c4b  set 9000       store last tape record on ias
+                                               ldi 1100       
+                                               set 9050
+					       ldi 1150
+                                               set 9000       write tape record on mt5
+                                               wtn 8015
+                                               ntsc4c
+                                               hlt 0100       write error on tape 8015. press start to retry
+                                               bst 8015 c4b
+                                          c4c  wtm 8015
+                                               rwd 8015
+                                               hlt 0000 c1    
+                                        1
+     

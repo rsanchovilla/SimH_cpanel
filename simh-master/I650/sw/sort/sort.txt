@@ -1,0 +1,1105 @@
+                                        1            
+                                        1      sort tape                                        
+                                        1      card to tape                                            
+                                        1      tape to card 
+                                        1      transcribe
+                                        1              
+                                        1      written by Roberto Sancho
+                                        1      August 2020                   
+                                        1                                                  
+                                               blr 1000  1005 entry points
+                                               synsmode  1010 sort mode                     
+                                               syncw1    1011 control word 1
+                                               syncw2    1012 control word 2
+                                               syncw3    1013 control word 3
+                                               syncw4    1014 control word 4
+                                               blr 1951  1960 read card area   
+                                               blr 1961  1961 load card jump area      
+                                               regp1977  1999 punch area 
+                                               blr 1300  1304 for ntot array                                 
+                                               blr 1400  1404 for nr array  
+                                               blr 1100  1160 tape record 1                               
+                                               blr 1200  1260 tape record 2
+                                           1160 00 0000  0001 trail word of tape record to assure rec1
+                                           1260 00 0000  0002   is gt rec2 even if the 60 words are equal
+                                               synntot   1300 array of total number of 
+                                               synntot1  1301   total number of recs stored on tape a to d        
+                                               synntot2  1302   
+                                               synnr     1400 array of total number of recs remaining to be read on block
+                                               blr 0000  0749 region for sort in memory with ramac used when smode=1
+                                               blr 0900  0904 for ccw arry
+                                        1
+                                        1  process control card              
+                                        1                
+                                        1  a control card indicates the opertion to do 
+                                        1  the function to perform (0-5) is set in word 1
+                                        1  the number of words in tape record is set in word 2
+                                        1  words 3-6 contains the rest of parameters for each function 
+                                        1  comment cards (first word is zero/blank) are skipped              
+                                        1                
+                                        1                 | word1 | word2 | word3 | word4 | word5 | word6 
+                                        1  comment          0       comment comment comment comment 
+                                        1  sort             1       rwsz    cw1     cw2     cw3     cw4
+                                        1  card to tape     2       rwsz    0       tap d   ncrd
+                                        1  tape to card     3       rwsz    tap s   0       ncrd
+                                        1  transcribe       4       rwsz    tap s   tad d   ntot
+                                        1  rewind           5       0       tap s   
+                                        1                
+                                        1  rwsz   = number of words of record in tape
+                                        1  tap s  = source tape (0=mt0=8010, 1=mt1=8011, 2=mt2, etc)             
+                                        1  tap d  = destination tape 
+                                        1  ncrd   = number of cards read/punches per tape record
+                                        1  ntot   = number of records to copy (=0 to copy until end of file)
+                                        1  cw1..4 = sort control word
+                                        1           cw1      range 1..rwsz. 
+                                        1           cw2..3   zero means not used
+                                        1                
+                                        1                
+                                           1000rcd 1961  1961  read control card
+                                           1961ldd 1951        process load card as normal ones
+                                               rac 8001        irc=function code
+                                               ldd 1952        rwsz - size of record on tape
+                                               stdrwsz
+                                               ldd 1953
+                                               stdtaps
+                                               stdcw1 
+                                               ldd 1954
+                                               stdcw2 
+                                               stdtapd
+                                               ldd 1955
+                                               stdcw3 
+                                               ldd 1956
+                                               stdcw4    1000c goto 1000+function code
+                                        1                
+                                        1                
+                                        1  card to tape  
+                                        1            
+                                        1  start at addr 1002
+                                        1
+                                        1  read a deck and store on tape 
+                                        1  use tape on tapd variable (1=mt1=8011, 2=mt2=8012)
+                                        1  write records on tape of rwsz words
+                                        1  read cw3 cards for each record
+                                        1  last card whould have first word as +0 0000 9999
+                                        1  this adds a end of file mark on tape and end 
+                                        1  program with hlt 0000 (tape is not rew); 
+                                        1  distributor will contains the number of records
+                                        1  writo to tape.
+                                        1  press run to process next control card
+                                        1  program hlt 9999 on write error, press run 
+                                        1  to retry         
+                                        1                
+                                               synfias   1200 first ias word of tape record
+                                        1                
+                                           1002raltapd
+                                               alon8k10       
+                                               raa 8002       ira=801x=destination tape
+                                               rwd 0000a      rew dest tape
+                                               stuntot        ntot=0
+                                               ldd      clias clear ias
+                                               set 9000
+                                               sti 0050       clear drum band 0050-0099 will read card here
+                                               ral      c2t5  if rcd reads a load card, will jump 
+                                               nop 0000 c2lc  to 0050, and from there to c2lc
+                                          c2t5 stl 0050       
+                                               raln9k60       acclo=9060
+                                               slorwsz        
+                                               stlfias        fias=9060-rsw=first ias word of tape rec
+                                        1                     new tape record loop start
+                                               lddcw3         
+                                               rab 8001       irb=cw3=num of cards per tape record
+                                               lddfias        
+                                               rac 8001 c2tr  irc=fias=first ias word of tape rec
+                                        1                     read card and check end of deck
+                                          c2tr rcd 0050 c2t0  read card 
+                                          c2lc ral 0051       get first word read on load card
+                                               sloeodck       check if is end of deck card
+                                               nzec2t0          no, process card as it normal card
+                                               wtm 0000a        yes, write eof
+                                               lddntot        dist=number of records in tape
+                                               hlt 0000  1000 tape to card finished.
+                                          eodck 00 0000  9999 end of deck word
+                                        1                     check previous tape write ok
+                                          c2t0 ntsc2t1
+                                               hlt 9999       write error. press run to retry 
+                                               bst 0000a
+                                               ldd 0000c      set ias timing ring
+                                               wtn 0000ac2t0
+                                        1                     copy card data to ias
+                                          c2t1 ldd 0000c      set ias timing ring
+                                               ldi 0051       copy card data to ias
+                                               sxb 0001
+                                               nzb      c2t2  check if more cards to read in this record
+                                               axc 0008 c2tr    yes, inc irc for next card
+                                        1                     write tape rec
+                                          c2t2 lddfias        
+                                               rac 8001       irc=fias=first ias word of tape rec
+                                               ldd 0000c      set ias
+                                               wtn 0000a      write rec to tape 
+                                               ralntot
+                                               alon1
+                                               stlntot        incr ntot number of records writed
+                                               lddcw3         
+                                               rab 8001 c2tr  irb=cw3=num of cards per tape record
+                                        1                
+                                        1  tape to card
+                                        1            
+                                        1  start at addr 1003
+                                        1
+                                        1  read tape and punch records on cards
+                                        1  use tape on taps variable (1=mt1=8011, 2=mt2=8012)
+                                        1  read records on tape of rwsz words until tape mark
+                                        1  punch cw3 cards for each record.
+                                        1  tape is not rew. hit run process next control card
+                                        1  on program end, distributor will contains the number 
+                                        1  of records read from tape.
+                                        1  program hlt 9999 on read error. press run to retry               
+                                        1                
+                                           1003raltaps
+                                               alon8k10       
+                                               raa 8002       ira=801x=source tape
+                                               raln9k60       acclo=9060
+                                               slorwsz        
+                                               stlfias        fias=9060-rsw=first ias word of tape rec
+                                               stuntot        ntot=0
+                                        1                     new tape record loop start
+                                               lddcw3         
+                                               rab 8001       irb=cw3=num of cards per tape record
+                                               lddfias        
+                                               rac 8001       irc=fias=first ias word of tape rec
+                                               ldd 0000c
+                                               rtn 0000at2c1  read tape record
+                                        1
+                                          t2c0 lddcw3         
+                                               rab 8001       irb=cw3=num of cards per tape record
+                                               lddfias        
+                                               rac 8001 t2cr  irc=fias=first ias word of tape rec
+                                        1                     read record and check end of file
+                                          t2cr ldd 0000c
+                                               rtn 0000a      read tape record
+                                               ralntot        incr ntot=number of records read
+                                               alon1
+                                               stlntot
+                                               pch 1977 t2c1  punch last previous card
+                                          t2c1 ntst2c2        if not eof goto t2c2
+                                               neft2c3        if error goto c2t3
+                                               lddntot
+                                               hlt 0000  1000 tape read finished. 
+                                          t2c3 hlt 9999       read error. press run to retry
+                                               bst 0000a
+                                               ldd 0000c 
+                                               rtn 0000at2c1  
+                                        1                     copy data to punch area
+                                          t2c2 ldd 0000c      set ias timing ring
+                                               sti 1977       copy card data from ias
+                                               sxb 0001
+                                               nzb      t2c0  check if more cards to punch in this record
+                                               axc 0008         yes, inc irc for next card
+                                               pch 1977 t2c2  punch card
+                                        1                
+                                        1  transcribe
+                                        1            
+                                        1  start at addr 1004
+                                        1
+                                        1  read source tape and copy its records to destination tape
+                                        1  source tape on taps variable (1=mt1=8011, 2=mt2=8012)
+                                        1  destination tape on tapd variable 
+                                        1  read records on tape of rwsz words 
+                                        1  read records until tape mark or cw3 words read (if >0)
+                                        1  write tape mark on destination taper. tapes are not rew. 
+                                        1  program hlt 9999 on read error. press run to retry               
+                                        1  on progr termination, distributor=00000nnnnn, 
+                                        1  where nn=number of records copied
+                                        1                
+                                           1004raltapd
+                                               alon8k10       
+                                               rab 8002       irb=801x=destination tape
+                                               ralcw3         cw3 = recs to transcribe (=0 copy recs up to end of file)
+                                               stlntot        set ntot = rec remaining to be transcribed
+                                               stunrun  tra0  nrun=0 
+                                          tra0 stuntot1       ntot1=0  = recs transcribed
+                                               raltaps
+                                               alon8k10       
+                                               raa 8002       ira=801x=source tape
+                                               raln9k60       acclo=9060
+                                               slorwsz        
+                                               rac 8002 ta0   irc=first ias word of tape rec
+                                        1                     read record 
+                                          ta0  ldd 0000c
+                                               rtn 0000ata1   read tape record
+                                          ta1  ntstb0         if not eof goto tb0
+                                               nefta3   tra2  if error goto ta3
+                                          tra2 raunrun        end of file/end of records
+                                               srt 0002       dist=rr000nnnnn rr=number of runs, nn=number of records sorted
+                                               alontot1 
+                                               ldd 8002 
+                                               wtm 0000b      write tape mark on dest tape
+                                               hlt 0000  1000 transcribe finished. 
+                                          ta3  hlt 9999       read error. press run to retry
+                                               bst 0000ata0 
+                                        1                     write record 
+                                          tb0  ldd 0000c
+                                               wtn 0000btb1   write tape record
+                                          tb1  ntstb2         if not eof goto ta0
+                                               hlt 9999       read error. press run to retry
+                                               bst 0000btb0 
+                                          tb2  ralntot1       incr record transcribed count
+                                               alon1
+                                               stlntot1
+                                               ralntot        dec record remaining count
+                                               slon1
+                                               stlntot
+                                               nzeta0   tra2      
+                                          tra1 raln8k10       start of sort final transcribe
+                                               alon1
+                                               rab 8002 tra0  transfer as final step from sort
+                                        1                
+                                        1  rewind
+                                        1            
+                                        1  start at addr 1005
+                                        1
+                                        1  rewinds tape on taps variable (1=mt1=8011, 2=mt2=8012)
+                                        1  then process next control card
+                                        1                
+                                        1                
+                                           1005raltaps
+                                               alon8k10       
+                                               raa 8002       ira=801x=source tape
+                                               rwd 0000a 1000 rewind and continue to perform next control card
+                                        1                
+                                        1  sort
+                                        1              
+                                        1  start at addr 1001
+                                        1
+                                        1  sort tape mt0 (8010). Should have at least numericar 2 
+                                        1  records followed by a tape mark (as end of file). 
+                                        1  Should not have label. result on mt1 (8011) with   
+                                        1  sorted records + tape mark at the end 
+                                        1  uses mt2, mt3 and mt4 as work tapes 
+                                        1  smode variable holds sort mode 0=use only tapes, 1=use tapes and ramac
+                                        1  tape record size (in words) defined in paramter rwsz (defaults to 8w)
+                                        1  records can be 1 up to 60 numeric words
+                                        1  sort first file of tape mt0. rewind mt0 before start, 
+                                        1  the advance 1 record on each run sort does
+                                        1  when sort finishes, it rew mt0 again
+                                        1  on progr termination, distributor=rr000nnnnn, 
+                                        1  where rr=number of runs, nn=number of records sorted
+                                        1                
+                                           1001rwd 8010       rew source tape
+                                               rwd 8011       rew tape a (at addr 8010)
+                                               rwd 8012 s1    rew tape b (at addr 8011)
+                                        1
+                                        1   parameters
+                                        1
+                                          smode 00 0000  0000 sort mode defaults zero
+                                          rwsz  00 0000  0008 tape records has 8 words 
+                                          cw1   00 0000  0001 control word (range 1..rwsz)
+                                          cw2   00 0000  0002 control word (0 means not used)
+                                          cw3   00 0000  0000 control word (0 means not used)  
+                                          cw4   00 0000  0000 control word (0 means not used)
+                                        1
+                                        1   variables
+                                        1
+                                          n     00 0000  0000 
+                                          nblk  00 0000  0000 number of recs in the block in this run
+                                          taps  00 0000  0000 tape source (1=a=8011, 2=b=8012, 3=c=8013, 4=d=8014)
+                                          tapd  00 0000  0001 tape destination
+                                          nrun  00 0000  0000 number of runs done to sort mt0
+                                               synrec1   0100 rec1 from tape
+                                               synrec1b  0150 
+                                               synrec2   0200 rec1 from tape
+                                               synrec2b  0250 
+                                          ntot  00 0000  0000
+                                        1
+                                        1   constants
+                                        1
+                                          n1    00 0000  0001
+                                          n2    00 0000  0002
+                                          n3    00 0000  0003
+                                          n4    00 0000  0004
+                                          n51   00 0000  0051
+                                          n60   00 0000  0060
+                                          n8k10 00 0000  8010
+                                          n9k60 00 0000  9060
+                                        1
+                                        1   sort initial setup
+                                        1
+                                          s1   ldd      rini  init rset (lead accup=0)
+                                               stunrun        nrun=number of runs=0
+                                               raa 0004 s1a  
+                                          s1a  stuntot a      init to 0 the count of total number  
+                                               nza      s1b     of records in tape 8010 to 8014
+                                               sxa 0001 s1a     (tapes a to d) in ntot array
+                                          s1b  ralrwsz        fix lib/sti if rwsz <= 50 
+                                               slon51
+                                               bmi      s1c   jump if more than one drum band needed
+                                               ralra11       set to use only one band because rwsz <= 50
+                                               stlra1a
+                                               ralra21
+                                               stlra2a
+                                               ralra31
+                                               stlra3a
+                                               ralra41
+                                               stlra4a  s1d
+                                          s1c  ralra12       set to use two bands because rwsz > 50
+                                               stlra1a
+                                               ralra22
+                                               stlra2a
+                                               ralra32
+                                               stlra3a
+                                               ralra42
+                                               stlra4a  s1d
+                                          ra11 ldirec1  rias  
+                                          ra12 ldirec1  ra1b  
+                                          ra21 ldirec2  rias  
+                                          ra22 ldirec2  ra2b  
+                                          ra31 stirec1  rias  
+                                          ra32 stirec1  ra3b  
+                                          ra41 stirec2  rias  
+                                          ra42 stirec2  ra4b  
+                                          s1d  ralcp1        setup control word1
+                                               slt 0006
+                                               ral 8002
+                                               aupcw1
+                                               supn1 
+                                               bmis1der
+                                               srt 0006
+                                               alorac0
+                                               stlcp1  
+                                               ralcp2        setup control word2
+                                               slt 0006
+                                               ral 8002
+                                               aupcw2
+                                               supn1 
+                                               bmi      s1d2
+                                               aupn1
+                                               aupn60   s1d2
+                                          s1d2 srt 0006
+                                               alorac0
+                                               stlcp2 
+                                               ralcp3        setup control word3
+                                               slt 0006
+                                               ral 8002
+                                               aupcw3
+                                               supn1 
+                                               bmi      s1d3
+                                               aupn1
+                                               aupn60   s1d3
+                                          s1d3 srt 0006
+                                               alorac0
+                                               stlcp3 
+                                               ralcp4        setup control word4
+                                               slt 0006
+                                               ral 8002
+                                               aupcw4
+                                               supn1 
+                                               bmi      s1d4
+                                               aupn1
+                                               aupn60   s1d4
+                                          s1d4 srt 0006
+                                               alorac0
+                                               stlcp4         initial setup finished. goto phase a
+                                               ralsmode       check smode. if =0 use tape (phase a(tap)), 
+                                               nzeramac s2    if =1 use tape+ramac (phase a(ramac)
+                                          rac0 rac 0000  0000 control word offest
+                                          s1derhlt 0101  9999 faltal error: control words should be in range 1-60       
+                                        1
+                                        1   sub 1: rset - record size set
+                                        1          set the ias to acomodate the tape record
+                                        1          based on rwsz parameter 
+                                        1
+                                          rset stdrset2 rset1 save return addr
+                                          rset1set 0000  0000 fixed on initial setup
+                                          rset2 00 0000  0000 return from sub
+                                          rset0set 9060 rset2
+                                          rini stdrset2       save ret addr
+                                               rslrwsz        init rset routine
+                                               slt 0004       now acclo = - rec size (in DA)
+                                               alorset0       adjust set 90xx to the size of
+                                               stlrset1 rset2 tape record size into the rset routine 
+                                        1
+                                        1   phase a(tap). split source tape 8010 on tapes a-b (8011-8012)
+                                        1                 use only tapes
+                                        1
+                                          s2   raa 0000 s2i   ira is 0/1 to signal write to tape a/b 
+                                          s2i  ldd      rset  set tape rec size on ias
+                                               rtn 8010       read rec from source tape 
+                                               ntss2a         if read rec goto s2a
+                                               nef      s2x   if eof goto s2x    
+                                               hlt 0102       read error on source tape 8010. press run to retry
+                                               bst 8010 s2i
+                                          s2a  ldd      rset  write to tape a/b depending on ira=0 or 1
+                                               nzas2b2  s2b1
+                                          s2b1 wtn 8011       write to tape a
+                                               ntss2c
+                                               hlt 0103       write error on tape a (8011). press run to retry
+                                               bst 8011 s2a
+                                          s2b2 wtn 8012       write to tape b
+                                               ntss2c
+                                               hlt 0104       write error on tape b (8012). press run to retry
+                                               bst 8012 s2a
+                                          s2c  ralntot1a      incr num recs on ntot1/2 depending on ira=0 or 1
+                                               alon1
+                                               stlntot1a
+                                               nzas2d1  s2d2
+                                          s2d1 sxa 0001 s2i   toggle ira 0/1 to 1/0 then
+                                          s2d2 axa 0001 s2i   process next source tape rec                                                
+                                          s2x  raln1
+                                               stlnblk  s2x2  nblk = 1 = number of recs in a block 
+                                          s2x2 rwd 8010       split finished rewind tapes
+                                               rwd 8011
+                                               rwd 8012
+                                               ralntot1       store on ntot the 
+                                               alontot2       total number of recs to 
+                                               stlntot        sort on source tape
+                                               slon2          check if 2 or more recs to sort
+                                               bmi      s3    source tape split finished. goto phase b
+                                               lddntot
+                                               hlt 0105  9999 fatal error. source tape has less than 2 records to sort (num of rec in dist)
+                                        1
+                                        1   phase b. main sort program. do runs alternating tapes a-b and c-d until finished
+                                        1
+                                          s3   raln1
+                                               stltaps        tap s = 1 = sort start reading from tape a/b pair (the initial split=
+                                               stunrun        nrun = 0
+                                               raln3
+                                               stltapd  s3a   tap d = 3 = sort start writing to tape c/d pair
+                                          s3a  raltaps        set ira and irb with pair of tapes based on tap s
+                                               slon3            if tap s = 1 or 2 then
+                                               bmi      s3b        ira = 1, irb = 2
+                                               raa 0001         else if tap s = 3 or 4 then 
+                                               rab 0002 s3c        ira = 3, irb = 4
+                                          s3b  raa 0003
+                                               rab 0004 s3c
+                                          s3c  ldd      rwtap rewind work tapes to start the run
+                                               rtc 8010       advance 1 rec on source tape to notify end of run
+                                               ralnrun        incr count of runs done
+                                               alon1
+                                               stlnrun
+                                               ldd      s4    do the run 
+                                               ralnblk        if nblk=0 then 
+                                               nze      s5      sort terminated, no more runs required 
+                                               alonblk
+                                               stlnblk        nblk=nblk x 2. duplicate block size
+                                               raltaps        set tap s and tap d with on tap s
+                                               slon3            if tap s = 1 or 2 then
+                                               bmi      s3d        tap s = 3, tap d = 1
+                                               raln3            else if tap s = 3 or 4 then 
+                                               stltaps             tap s = 1, tap d = 3
+                                               raln1            this excahnges the tape pair a-b with
+                                               stltapd  s3a     pair c-d as source/destination tape pair
+                                          s3d  raln1
+                                               stltaps
+                                               raln3
+                                               stltapd  s3a
+                                        1
+                                        1   phase c. make a run to sort based en nblk records groups 
+                                        1            from ira/b tapes to tapd destiation tape
+                                        1
+                                          s4   stds4ex  s4i   store return addr  
+                                          s4i  ralnblk        initial number of recs to read (the size of block)
+                                               stlnr   a      store nr(ira) = recs remaining to read for source tape a 
+                                               stlnr   b      store recs remaining to read for source tape b
+                                               ralnblk        if total number of rec left on tape a ntot(ira)
+                                               slontot a        if less that block size, then set nr(ira) to 
+                                               bmis4a           the recs remaing on tape
+                                               stdnr   as4a
+                                          s4a  ralnblk
+                                               slontot b
+                                               bmis4b
+                                               stdnr   bs4b
+                                          s4b  ralnr   a       check if tape a or b has no recs left to 
+                                               nze      s4b1   be read nr(ira/b)
+                                               ralnr   b
+                                               nzes4c   s4b1
+                                          s4b1 ral 8005        acc=ira
+                                               ldd      dumpt  dump remaining recs on tape a to destination tape
+                                               ral 8006        acc=irb
+                                               ldds4ex  dumpt  dump remaining recs on tape b to destination tape
+                                          s4ex nop 0000        exit routine 
+                                          s4c  ral 8005
+                                               ldd      rdtap  read rec from acclo tape (tape a) 
+                                               ldd      iasr1  copy rec from ias to rec1 area
+                                               ral 8006
+                                               ldd      rdtap  read rec from tape b 
+                                               ldds4e   iasr2  copy rec from ias to rec1 area
+                                          s4e  ldd      cmp    compare rec1 and rec2. result on acc
+                                               bmi      s4f
+                                               ldd      r1ias  rec1 is lowest: copy rec1 to ias
+                                               ldd      wrtap  write lowerst rec (rec1) in ias to tapd tape
+                                               ralnr   a       acclo=nr(ira)=number of recs remaining to be read 
+                                               nze      s4e1   on source tape ira. if recs remaining to  
+                                               ral 8005          be read > 0 then 
+                                               ldd      rdtap    read new rec from same tape ira
+                                               ldd      iasr1    copy rec from ias to rec1 area
+                                               nop 0000 s4e      then goto to compare again recs a and b                                               
+                                          s4e1 ldd      r2ias  else if no recs remains on tape ira then
+                                               ldd      wrtap    write rec2 (from tap irb) to tapd 
+                                               ral 8006 s4g      and flush rest of tape irb     
+                                          s4f  ldd      r2ias  rec2 is lowest: copy rec2 to ias
+                                               ldd      wrtap  write lowest rec (rec2) in ias to tapd tape
+                                               ralnr   b       acclo=nr(irb)=number of recs remaining to be read 
+                                               nze      s4f1   on source tape irb. if recs remaining to  
+                                               ral 8006          be read > 0 then 
+                                               ldd      rdtap    read new rec from same tape irb
+                                               ldd      iasr2    copy rec from ias to rec2 area
+                                               nop 0000 s4e      then goto to compare again recs a and b                                               
+                                          s4f1 ldd      r1ias  else if no recs remains on tape irb then
+                                               ldd      wrtap    write rec1 (from tap ira) to tapd 
+                                               ral 8005 s4g      and flush rest of tape ira     
+                                          s4g  ldd      dumpt  dump remaining recs to destination tape
+                                               lddtapd         check if destination has all tape 8010 recs 
+                                               rac 8001        irc = tapd
+                                               ralntot          
+                                               slontot c       check if ntotr(tapD) = ntotr(0) total numbers 
+                                               nzes4k            of recs to sort from source 8010 tape
+                                               stlnblk  s4ex     yes, same number of recs! signal it making nblk=0, and exit
+                                          s4k0  00 0000  3412  
+                                          s4k  lddtapd         exchange destination tape pair c-d 
+                                               rac 8001          if tapd=1 then tapd=2
+                                               raus4k0           if tapd=2 then tapd=1
+                                               srt 0000c         if tapd=3 then tapd=4
+                                               ral 8002          if tapd=4 then tapd=3
+                                               slt 0001 
+                                               stutapd  s4i    then process next block
+                                        1
+                                        1   sub 2: dumpt
+                                        1          dump remaining block recs from tape in acclo (1 to 4 for 8011 to 8014)
+                                        1          to destination tape tapd (1 to 4)
+                                        1
+                                          dumptstddumex        save return addr
+                                               stldumps du1    save dump source tape
+                                          du1  rac 8002        irc=dump s
+                                               ralnr   c       acc=nr(dump s)=number of recs remaining on block on source tape
+                                               nze      dumex  if no remaining recs then exit sub
+                                               raldumps
+                                               ldd      rdtap  read source rec
+                                               ldd      wrtap  write on dest
+                                               raldumps du1
+                                          dumex 00 0000  0000  return from sub
+                                          dumps 00 0000  0000  dump source tape
+                                        1
+                                        1   sub 3: rdtap
+                                        1          read rec from tape in acclo (1 to 4 for 8011 to 8014)
+                                        1          decrement array nr and ntot for this tape
+                                        1
+                                          rdtapstdrdtex       save return addr
+                                               stlrds   rd1   save rdtap source tape
+                                          rd1  ldd      rset
+                                               raln8k10
+                                               alords
+                                               rac 8002       irc=801X source tape
+                                               rtn 0000c      read rec from rds tape
+                                               lddrds        
+                                               rac 8001       irc=rds
+                                               ralnr   c      dec(nr(rds))
+                                               stlrdn1 
+                                               slon1
+                                               stlnr   c
+                                               ralntot c      dec(ntot(rds))
+                                               stlrdn2
+                                               slon1
+                                               stlntot c 
+                                               ntsrdtex       read finished ok, exit sub
+                                               ralrdn1        read error: undo dec's, load acclo with tape
+                                               stlnr   c
+                                               ralrdn2
+                                               stlntot c
+                                               ralrds
+                                               nef      rd2
+                                               hlt 0106       read error on tape (acclo=801X). press run to retry
+                                               raln8k10
+                                               alords
+                                               rac 8002
+                                               bst 0000crd1
+                                          rd2  hlt 0107  9999 fatal error on tape (acclo=801X). unexpected end of file
+                                          rdtex 00 0000  0000 return from sub
+                                          rds   00 0000  0000 rdtap source tape
+                                          rdn1  00 0000  0000
+                                          rdn2  00 0000  0000
+                                        1
+                                        1   sub 4: wrtap
+                                        1          write rec to tape in tapd (1 to 4 for 8011 to 8014)
+                                        1          increment array ntot for this tape
+                                        1
+                                          wrtapstdwrtex wr1   save return addr
+                                          wr1  ldd      rset
+                                               raln8k10
+                                               alotapd
+                                               rac 8002       irc=801X destination tape
+                                               wtn 0000c      write rec to tapd tape
+                                               lddtapd        
+                                               rac 8001       irc=tapd
+                                               ralntot c      inc(ntot(wrd))
+                                               stlrdn1
+                                               alon1
+                                               stlntot c
+                                               ntswrtex       write finished ok, exit sub
+                                               ralrdn1
+                                               stlntot c
+                                               raltapd
+                                               hlt 0108       write error on tape (acclo=801X). press run to retry
+                                               raln8k10
+                                               alotapd
+                                               rac 8002
+                                               bst 0000cwr1
+                                          wrtex 00 0000  0000 return from sub
+                                        1
+                                        1   sub 5: r1ias iasr1   r2ias iasr2
+                                        1          copy rec1/2 from drum/ias to ias/drum
+                                        1
+                                          r1iasstdrias  ra1z  save return addr 
+                                          ra1z lddra1a  rset
+                                          ra1a ldirec1  ra1b  copy drum to ias
+                                          ra1b ldirec1b rias
+                                          r2iasstdrias  ra2z  save return addr 
+                                          ra2z lddra2a  rset
+                                          ra2a ldirec2  ra2b  copy drum to ias
+                                          ra2b ldirec2b rias
+                                          iasr1stdrias  ra3z  save return addr 
+                                          ra3z lddra3a  rset
+                                          ra3a stirec1  ra3b  copy drum to ias
+                                          ra3b stirec1b rias
+                                          iasr2stdrias  ra4z  save return addr 
+                                          ra4z lddra4a  rset
+                                          ra4a stirec2  ra4b  copy drum to ias
+                                          ra4b stirec2b rias
+                                          rias  00 0000  0000 return from sub
+                                        1
+                                        1   sub 6: cmp
+                                        1          compare rec1/2 using control rec definition
+                                        1          result in acc
+                                        1
+                                          cmp  stdcmpex cp1   save return addr 
+                                          cp1  rac 0000       control word 1 offest
+                                               ralrec1 c      get control word1 from rec1
+                                               slorec2 c      get control word1 from rec2
+                                               nzecmpex cp2   exit if different contents
+                                          cp2  rac 0000       control word 2 offest
+                                               ralrec1 c      get control word2 from rec1
+                                               slorec2 c      get control word2 from rec2
+                                               nzecmpex cp3   exit if different contents
+                                          cp3  rac 0000       control word 3 offest
+                                               ralrec1 c      get control word3 from rec1
+                                               slorec2 c      get control word3 from rec2
+                                               nzecmpex cp4   exit if different contents
+                                          cp4  rac 0000       control word 4 offest
+                                               ralrec1 c      get control word4 from rec1
+                                               slorec2 ccmpex 
+                                          cmpex 00 0000  0000 return from sub
+                                        1
+                                        1   sub 7: rwtap
+                                        1          rewind work tapes 8011-8014 (tap a b c d)
+                                        1
+                                          rwtaprwd 8011 rwtp2      
+                                          rwtp2rwd 8012
+                                               rwd 8013
+                                               rwd 8014  8001
+                                        1
+                                        1   phase d. if necessary, dump last destination tape to tape 8011
+                                        1
+                                          s5   rwd 8010       rew source tape (advanced 1 reg on each run)
+                                               raltapd        check if is destination tape 8011
+                                               slon1          
+                                               nze      s5x     yes, jump to add end of file tape mark
+                                               ldd      rwtap rewind work tapes 
+                                               lddtapd        source tape comes from tapd (last destination)
+                                               stdtaps  tra1  goto transcribe
+                                          s5x  ldd      rwtp2 rewind work tapes except 8010
+                                               lddntot        
+                                               stdntot1       
+                                               raln8k10       irb=8011 (det tape)
+                                               alon1          goto transfer routine to write end of file mark
+                                               rab 8002 tra2
+                                        1
+                                        1   phase a(ramac). split source tape 8010 on tapes a-b (8011-8012)
+                                        1                   using ramac to sort data in blocks of 200 records
+                                        1
+                                        1
+                                        1 tables for in mem sort
+                                        1
+                                          tabiv 00 0000  0150 words interval between tables: 50*3
+                                          tabsz 00 0000  0143 in memory sort table size: can hold up to 48*3-1 recs
+                                          tabls 00 0000  0147 table last addr= (50*3-2)-1
+                                               equtccw   0000 table for complemented control word data of rec
+                                               equtccw2  0150 table for complemented control word data 2 of rec
+                                               equtccw3  0300 table for complemented control word data 3 of rec
+                                               equtccw4  0450 table for complemented control word data 4 of rec
+                                               equtloc   0600 table for location of rec on ramac. contains -1 if entry to skip
+                                          tstrt 00 0000 tccw  in ia is the addr where tables starts
+                                               synccw1   0900 9-complemented control word 1 data
+                                               synccw2   0901 9-complemented control word 2 data
+                                               synccw3   0902 9-complemented control word 3 data
+                                               synccw4   0903 9-complemented control word 4 data
+                                        1
+                                        1 constants
+                                        1
+                                          n0    00 0000  0000
+                                          n10   00 0000  0010
+                                          n50   00 0000  0050
+                                          n100  00 0000  0050
+                                          n9all 99 9999  9999
+                                        1
+                                        1 variables
+                                        1
+                                          loc   00 0000  0000 current ramac location                                               
+                                          locc  00 0000  0000 ramac location count
+                                          tfirs 00 0000  0010
+                                          tlast 00 0000  0010
+                                          ccw   00 0000  0000 complemented data in control word
+                                          thit  00 0000  0000 index where to insert record
+                                          nrec  00 0000  0000 number of recs left to be stored in mem  
+                                          nfree 00 0000  0000 index (0..tabls) of next entry free in tccw tables
+                                        1
+                                          ramacraln0          init variables
+                                               stlloc
+                                               stltapd        tapd=0 ->8011 is destination, =1 ->8012 is destination tape
+                                               stltaps        taps=0. will be set to 1 to signal end of 8010 tape
+                                               stlntot
+                                               stlntot1
+                                               stlntot2 
+                                               lddram0  rami  init gtcw routine
+                                          ram0 ldd      rast  sort records using ramac, save them to tapd
+                                               raltapd        incr ntot1 or ntot2 depending
+                                               raa 8002       on value of tapd. ntot1/2 holds
+                                               ralntot1a      number of recs on each tape
+                                               alonblk        nblk holds number of records sorted
+                                               stlntot1a
+                                               raltaps        check if end of source tape (taps set to 1 if eof)
+                                               nzeram1          yes, end of tape reached, goto ram1
+                                               raln1          exchange destination tape 
+                                               slotapd        toggles tapd between 0 and 1
+                                               stltapd  ram0  continue ramac sort 
+                                          ram1 ralntot2       check if tape 8012 used or not
+                                               nzeram2          goto ram2 if tape 8012 used
+                                               lddntot1       tape 8012 not used
+                                               stdntot  s5x   terminate sort as all is now sorted in 8011
+                                          ram2 ralntot1       prepare to go to next sort phase
+                                               alontot2
+                                               stdntot        ntot=ntot1+ntot2
+                                               lddtabsz       nblk=max num recs sorted by ramac
+                                               stdnblk  s2x2
+                                        1
+                                        1   sub 8: rami
+                                        1          init gtcw data routine
+                                        1          gtcw
+                                        1          load control word data into cwd1..4 variables
+                                        1
+                                          rami stdgtex        save exit word
+                                               ralcw1
+                                               nzer1mi1
+                                               ralgtc1c r2mi1
+                                          r1mi1slon1
+                                               slt 0004
+                                               alogtc1a r2mi1
+                                          r2mi1stlgtcw1
+                                               ralcw2
+                                               nzer1mi2
+                                               ralgtc2c r2mi2
+                                          r1mi2slon1
+                                               slt 0004
+                                               alogtc2a r2mi2
+                                          r2mi2stlgtcw2
+                                               ralcw3
+                                               nzer1mi3
+                                               ralgtc3c r2mi3
+                                          r1mi3slon1
+                                               slt 0004
+                                               alogtc3a r2mi3
+                                          r2mi3stlgtcw3
+                                               ralcw4
+                                               nzer1mi4
+                                               ralgtc4c r2mi4
+                                          r1mi4slon1
+                                               slt 0004
+                                               alogtc4a r2mi4
+                                          r2mi4stlgtcw4 gtex
+                                        1
+                                          gtcw stdgtex 
+                                               raln9all gtcw1
+                                          gtcw1 00 0000  0000
+                                          gtc1aslo 9000 gtc1b
+                                          gtc1cnop 0000 gtc1b
+                                          gtc1bstlccw1 
+                                               raln9all gtcw2
+                                          gtcw2 00 0000  0000
+                                          gtc2aslo 9000 gtc2b
+                                          gtc2cnop 0000 gtc2b
+                                          gtc2bstlccw2 
+                                               raln9all gtcw3
+                                          gtcw3 00 0000  0000
+                                          gtc3aslo 9000 gtc3b
+                                          gtc3cnop 0000 gtc3b
+                                          gtc3bstlccw3 
+                                               raln9all gtcw4
+                                          gtcw4 00 0000  0000
+                                          gtc4aslo 9000 gtc4b
+                                          gtc4cnop 0000 gtc4b
+                                          gtc4bstlccw4  gtex
+                                          gtex  00  0000 0000 
+                                        1
+                                        1   sub 9: rasds
+                                        1          seek next free disk location
+                                        1          store the location on loc variable
+                                        1
+                                          rasdsstdrasx        save exit word
+                                               raulocc        locc counts 1..143 ramac locations used
+                                               aupn1          now transfor this locc to a ramac disk and
+                                               stulocc        track location. instead of using
+                                               srt 0001       first 143 tracks (1 disk and half), we
+                                               sturatmp       distribute these locations so we have
+                                               ral 8002       a nice animation of arm running accross
+                                               srt 0007       discs
+                                               stlloc         loc=100 x (locc digit 1)
+                                               ralratmp
+                                               slt 0003
+                                               alo 8002
+                                               alo 8001       acclo=3000 x (locc digits 3-2)
+                                               aloloc
+                                               stlloc         save in loc the ramac location
+                                               sds 9000 rasx                                          
+                                          rasx  00 0000  0000 exit word
+                                          ratmp 00 0000  0000 temp
+                                        1
+                                        1   sub 10: rawds
+                                        1          write on ramac loc
+                                        1
+                                          rawdsstdrasx        save exit word
+                                               lddloc
+                                               wds 9000 rasx                                          
+                                        1
+                                        1   sub 11: clias
+                                        1          clear ias. Set 9000-9060 to zero
+                                        1
+                                          cliasstdrasx        save exit word
+                                               rau 8005       acclo=0, accup=ira (save ira)
+                                               lddcli90       
+                                               std 9000       
+                                               lddcli91
+                                               std 9001
+                                               lddcli92
+                                               std 9002
+                                               lddcli93
+                                               std 9003  9000
+                                          cli90raa 0056  9001
+                                          cli91sxa 0001  9002
+                                          cli92stl 9004a 9003
+                                          cli93nza 9001  
+                                               stl 9000
+                                               stl 9001 
+                                               stl 9002
+                                               stl 9003 
+                                               raa 8003 rasx  restore ira and return
+                                        1
+                                        1   sub 12: rast
+                                        1           sort tabsz records using ramac, save them to tapd tape
+                                        1           if end of file on source tape, set taps to 1
+                                          rast stdrax         save exit word
+                                               ldd      clias set to zero ias addr 9010-9060 
+                                               raa 0700 ras4  5 tables (tccw1..4 + tloc each of 150 words) / 50 = 15
+                                          ras4 set 9010       set all these tables to zero
+                                               sti 0000a
+                                               sxa 0050
+                                               bma      ras4
+                                               rsln1          acclo=-1
+                                               stl 0648       mark these addr as not used
+                                               stl 0649       beacause tlu skips them
+                                               stl 0698
+                                               stl 0699
+                                               stl 0748
+                                               stl 0749
+                                               raln0          
+                                               stlnblk        nblk=0=number of read regs
+                                               stllocc        init ramac location count
+                                               stlnfree       init next free entry in tables
+                                               lddtabsz       init nrec (num of records left to be read)                                             
+                                               stdnrec  rasi  with mem table size
+                                          rasi ldd      rset  set tape rec size on ias
+                                               rtn 8010       read rec from source tape 
+                                               lddras1  rasds seek disk location (while tape is being read)
+                                          ras1 ntsras2        if read rec ok goto ras2
+                                               nef      rasx0 if eof goto exit
+                                               hlt 0102       read error on source tape 8010. press run to retry
+                                               bst 8010 
+                                               ldd      rset  
+                                               rtn 8010 ras1  
+                                          rasx0lddn1          signal end of file by setting
+                                               stdtaps  rasf  taps=1 then goto write recs back to tape
+                                          ras2 ralnblk        incr nblk as one rec has been 
+                                               alon1            readed from tape
+                                               stlnblk    
+                                               ldd      gtcw  get 9-complemented control word data
+                                               ldd      rawds save rec on disk
+                                               ldd      radd  add rec to mem tables in its ordered position     
+                                               ralnrec        dec nrec=num of records left to be read
+                                               slon1          if zero goto flush in mem tables back to tape
+                                               stlnrec
+                                               nzerasi  rasf
+                                          rasf ralnblk        flush ordered rec in mem from ramac back to tape
+                                               nze      rax   if no rec to write to tape, return
+                                               ralnfree       
+                                               raa 8002       
+                                               sxa 0001       ira=next free index in table - 1
+                                               raltapd
+                                               alon8k10
+                                               alon1
+                                               rac 8002 raf1  irc=dest tape=8011 or 8012
+                                          raf1 raltloc a      loop on tloc table using ira. 
+                                               bmiraf3        if tloc[ira]<0 skip this table entry (is addr 48 or 49 not used)
+                                               sds 9000       seek data in ramac disk 
+                                               rds 9000 raf2  read disk
+                                          raf2 ldd      rset  set tape rec size on ias
+                                               wtn 0000c      write to tape
+                                               ntsraf3
+                                               ldd 8007
+                                               hlt 0104       write error on tape (add in dist). press to retry
+                                               bst 0000craf2   
+                                          raf3 sxa 0001       decr ira index on tloc
+                                               bmarax   raf1  if recs pending to write to disk, then loop again
+                                          rax   00 0000  0000 exit word
+                                        1
+                                        1   sub 11: radd add record in ias to mem tables in its ordered position
+                                        1
+                                          radd stdradx        save exit word
+                                               raa 0000       loop on cw1[ira] and tcw[irc]
+                                               raltstrt       get start of tables addr
+                                               stltfirs       table first addr (0000, 0200, etc)
+                                               rac 8002       addr of tccw table
+                                               alotabls       
+                                               stltlast rad1  table last addr  (0197, 0397, etc)
+                                        1 locate in irc the ordered pos of record
+                                          rad1 ralcw1  a      get the control word num on ira
+                                               nze      cwins end of search, inset rec at current irc
+                                               ralccw1 a      get 9-complemented control word data
+                                               stlccw 
+                                               lddtlast
+                                               rab 8001       irb=contents of tlast=addr of last entry on table                                                
+                                               stl 0000b      store ccw at end of table as sentinel
+                                               raun0
+                                               lddccw         acc=0; dist=ccw
+                                               tlu 0000c      search dist in table irc
+                                               alo       8002
+                                               rac 0000       now irc=addr found where data is >= dist, ie cw1 <= data
+                                               sxb 0000c      check if irb=irc
+                                               nzb      cwgt  if equal -> ccw >= any entry of table -> put at the end of table
+                                               ral 0000c      get value found by tlu
+                                               sloccw         check if data found = ccw
+                                               nzecwins       if data found <> ccw -> insert ccw at irc position in table
+                                               axa 0001       inc ira to process next control world 
+                                               sxa 0004
+                                               nza      cwins go to cwins if all control words processed
+                                               axa 0004
+                                               axc 0150       next ccw table        
+                                               raltfirs       incr ira, tfirs, tlast whith
+                                               alotabiv       table size (+150 words) 
+                                               stltfirs
+                                               raltlast
+                                               alotabiv
+                                               stltlast rad1  process next control word
+                                        1 insert rec on irc position on tables
+                                          cwinsldd      gtfre get on ira index of first free entry  
+                                               ral 8007       acclo=irc=addr in table where to insert
+                                               slotfirs      
+                                               stlthit        thit=index where to insert record data
+                                               raa 8002       ira=thit 
+                                               slon50         go to insert routine depending on thit
+                                               bmii047        if thit in range 000..047 -> i047
+                                               slon50                          050..097 -> i097
+                                               bmii097  i147                   100..147 -> i147
+                                        1 save rec ccw on table index ira
+                                          cwsv ralccw1
+                                               stdtccw a 
+                                               ralccw2
+                                               stdtccw2a 
+                                               ralccw3
+                                               stdtccw3a 
+                                               ralccw4
+                                               stdtccw4a 
+                                               lddloc
+                                               stdtloc aradx
+                                        1 save rec ccw at last free entry of table 
+                                          cwgt ldd      gtfre get on ira index of first free entry
+                                               nop 0000 cwsv  save ccw data in this entry
+                                        1 locate next free entry on ira (also uses irb)
+                                          gtfrestdgtfex
+                                               ralnfree
+                                               raa 8002       ira=nfree
+                                               rab 8002 gtf1  locate next free entry
+                                          gtf1 axb 0001
+                                               raltloc b      skip non used entries
+                                               bmigtf1
+                                               ral 8006       acclo=irb=new free entry
+                                               stlnfree gtfex
+                                          gtfex 00 0000  0000 exit word
+                                          radx  00 0000  0000 exit word
+                                        1 insert at ira 000..047
+                                          i047 ralnfree       
+                                               axa 0600 i4s1   
+                                          i4s1 set 9000
+                                               ldi 0000a      drum thit.. -> ias 9000
+                                               set 9000
+                                               sti 0001a      ias 9000 -> drum thit+1  
+                                               sxa 0150
+                                               bma      i4s1
+                                               slon50
+                                               bmii4s4
+                                               slon50
+                                               raa 0600 i4s2
+                                          i4s2 ldd 0048a
+                                               std 9000    
+                                               set 9001   
+                                               ldi 0050a
+                                               set 9000
+                                               sti 0050a
+                                               bmii4s3     
+                                               ldd 9048
+                                               std 9000
+                                               set 9001   
+                                               ldi 0100a
+                                               set 9000
+                                               sti 0100ai4s3
+                                          i4s3 sxa 0150
+                                               bmai4s4  i4s2
+                                          i4s4 rsln1
+                                               stl 0648       mark these addr as not used
+                                               stl 0698       beacause tlu skips them
+                                               stl 0748 
+                                               lddthit
+                                               raa 8001 cwsv  ira=thit, save rec on ira
+                                        1 insert at ira 050..097
+                                          i097 ralnfree       
+                                               axa 0600 i9s1   
+                                          i9s1 set 9000
+                                               ldi 0000a      drum thit.. -> ias 9000
+                                               set 9000
+                                               sti 0001a      ias 9000 -> drum thit+1  
+                                               sxa 0150
+                                               bma      i9s1
+                                               slon100
+                                               bmii9s4
+                                               raa 0600 i9s2
+                                          i9s2 ldd 0098a
+                                               std 9000
+                                               set 9001   
+                                               ldi 0100a
+                                               set 9000
+                                               sti 0100a
+                                               sxa 0150
+                                               bmai9s4  i9s2
+                                          i9s4 rsln1
+                                               stl 0698       
+                                               stl 0748 
+                                               lddthit
+                                               raa 8001 cwsv  ira=thit, save rec on ira
+                                        1 insert at ira 100..147
+                                          i147 axa 0600 i1s1   
+                                          i1s1 set 9000
+                                               ldi 0000a      drum thit.. -> ias 9000
+                                               set 9000
+                                               sti 0001a      ias 9000 -> drum thit+1  
+                                               sxa 0150
+                                               bma      i1s1
+                                               rsln1
+                                               stl 0748 
+                                               lddthit
+                                               raa 8001 cwsv  ira=thit, save rec on ira
