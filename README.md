@@ -50,11 +50,11 @@ Press power button to quit the simulator.
 
 ## IBM 650 
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM 650.zip) to download all the test run.
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM_650.zip) to download all the test run.
 
 Once uncompressed, you will find several ready to run .bat files: 
 
-* execute 'run CPanel IBM 650 FORTRANSIT graph.bat' batch file to run a sample FORTRANSIT program
+* execute `run CPanel IBM 650 FORTRANSIT graph.bat` batch file to run a sample FORTRANSIT program
  
   ![IBM 650 FORTRANSIT](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/i650_fortansit.png)
 
