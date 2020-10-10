@@ -68,7 +68,7 @@ Once uncompressed, you will find several ready to run .bat files:
 
 * execute `run CPanel IBM 650 SuperSoap.bat` to demo a SuperSoap assembly
 
-* execute `run CPanel IBM 650 Test All (long run).bat` for a long run of demos (SOAP, Regional Assembler, Bell Interpretive4 System, Floating Decimal System, Super Soap, IT and FORTRANSIT)
+* execute `run CPanel IBM 650 Test All (long run).bat` for a long run of demos (SOAP, Regional Assembler, Bell Interpretive System, Floating Decimal System, Super Soap, IT and FORTRANSIT)
 
 ## IBM 700/7000 
 ### IBM 704 
