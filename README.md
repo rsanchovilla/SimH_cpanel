@@ -50,7 +50,7 @@ Press power button to quit the simulator.
 
 ## IBM 650 
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM_650.zip) to download all the test run.
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650.zip) to download all the test run.
 
 Once uncompressed, you will find several ready to run .bat files: 
 
@@ -58,17 +58,17 @@ Once uncompressed, you will find several ready to run .bat files:
  
   ![IBM 650 FORTRANSIT](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/i650_fortansit.png)
 
-* execute 'run CPanel IBM 650 SORT 1 (only Tape).bat' to demo a tape sort
+* execute `run CPanel IBM 650 SORT 1 (only Tape).bat` to demo a tape sort
 
   ![IBM 650 SORT TAPE](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/i650_sort1.png)
 
-* execute 'run CPanel IBM 650 SORT 2 (Tape+Ramac).bat' to demo a tape + RAMAC sorting
+* execute `run CPanel IBM 650 SORT 2 (Tape+Ramac).bat` to demo a tape + RAMAC sorting
 
   ![IBM 650 SORT TAPE+RAMAC](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/i650_sort2.png)
 
-* execute 'run CPanel IBM 650 SuperSoap.bat' to demo a SuperSoap assembly
+* execute `run CPanel IBM 650 SuperSoap.bat` to demo a SuperSoap assembly
 
-* execute 'run CPanel IBM 650 Test All (long run).bat' for a long run of demos (SOAP, Regional Assembler, Bell Interpretive4 System, Floating Decimal System, Super Soap, IT and FORTRANSIT)
+* execute `run CPanel IBM 650 Test All (long run).bat` for a long run of demos (SOAP, Regional Assembler, Bell Interpretive4 System, Floating Decimal System, Super Soap, IT and FORTRANSIT)
 
 ## IBM 700/7000 
 ### IBM 704 
