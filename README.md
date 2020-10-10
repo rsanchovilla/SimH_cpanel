@@ -9,7 +9,7 @@ The visuals covers interactive control panels (lights, switches, buttons) but al
 other devices: tapes, card readers, disk, etc.
 
 i7000 work is based on Richard Cornwell own's SimH fork, and is implemented using SimH own SDL based modules. 
-i650 work is base on my own i650 SimH simulator
+i650 work is based on my own i650 SimH simulator
 
 Currently suppots visuals emulation for:
 
