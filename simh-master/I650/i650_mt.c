@@ -397,7 +397,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, int * total_msec, uint16 fast)
     int32               recsize = 1; 
 
     *total_msec=0;   // time in msec for TCI (IL_Tape) interlock
-    total_msec2 = 0; // extra time in msec to terminate command (with without interlock) so tape become ready again
+    total_msec2 = 0; // extra time in msec to terminate command (without interlock) so tape become ready again
     
     /* Make sure valid drive number */
     if ((unit > 5) || (unit < 0)) return STOP_ADDR;
@@ -411,8 +411,8 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, int * total_msec, uint16 fast)
         sim_debug(DEBUG_EXP, dptr, "Tape %d: command %02d attempted on disabled tape\n", unit, cmd);
         LastTapeSignal = MT_IND_DIS;
         // not stated in manual: what happends if command to non existant tape?
-        // what the simulator do: stops the cpu, lit the tape checking light on control unit
-        // do not do uptr->u5 |= MT_IND; to turn on indicator light on tape cabinet, as unit is disabled
+        // what the simulator do: stops the cpu, lit the tape checking light on control unit.
+        // Do not do uptr->u5 |= MT_IND to turn on indicator light on tape cabinet, as unit is disabled
         StopIOError = 2; // lit tape checking light on control unit
         return SCPE_OK;
     }
@@ -462,7 +462,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, int * total_msec, uint16 fast)
             StopIOError = 2; // lit tape checking light, but do not stop prog execution (do not return STOP_IO)
             LastTapeSignal = MT_IND_EOT;
             uptr->u5 |= MT_IND; 
-        } else if (r == MTSE_RECE) {
+        } else if ((r == MTSE_RECE) || (r == MTSE_INVRL)) {
             // record header contains error flag
             sim_debug(DEBUG_EXP, dptr, "Tape unit %d: longitudinal or vertical check error\n", unit);
             StopIOError = 2; // lit tape checking light
@@ -602,8 +602,6 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, int * total_msec, uint16 fast)
         sim_debug(DEBUG_CMD, dptr, "Tape unit %d: aprox rewind time (%d sec)\n", unit, total_msec2 / 1000);
         // set extended info. 
         mt_info[unit].recsize=u3;              // on rewind cmd, recsize holds the ammount of tape medium on L reel at begginning of command
-        // RWD reset speed measurement, beacuse RWD can block the program exec (e.g. a RTN instr after a
-        // rewind -> will wait until tape ready at end of rewind)
         break;
     default:
         sim_debug(DEBUG_EXP, dptr, "Tape %d: unknown command %02d\n", unit, cmd);
@@ -728,8 +726,12 @@ t_stat mt_attach(UNIT * uptr, CONST char *file)
 
 t_stat mt_detach(UNIT * uptr)
 {
+    DEVICE             *dptr = find_dev_from_unit(uptr);
+    int                 unit = (uptr - dptr->units);
+
     uptr->u3 = 0;
     uptr->u5 = 0;
+    mt_info[unit].numrec = 0;
     sim_cancel(uptr); // cancel any pending command
     return sim_tape_detach(uptr);
 }

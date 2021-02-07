@@ -57,7 +57,7 @@ DEVICE             *sim_devices[] = {
 
 DIB  cdr_dib = { 3, &cdr_cmd, NULL };
 DIB  cdp_dib = { 3, &cdp_cmd, NULL };
-DIB  mt_dib  = { 5, &mt_cmd, &mt_ini };
+DIB  mt_dib  = { 6, &mt_cmd, &mt_ini };
 DIB  dsk_dib = { 4, &mt_cmd, &dsk_ini };
 
 /* Simulator stop codes */

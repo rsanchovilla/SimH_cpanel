@@ -1,3 +1,4 @@
+/* Signal rendering thread we'd like to exit */
 /* sim_video.c: Bitmap video output
 
    Copyright (c) 2011-2013, Matt Burke
@@ -348,11 +349,33 @@ struct {
 
 void vid_SetWindowSizeAndPos_event (void);
 
+int window_drag_flag=0; // support for drag control panel window
+int window_drag_x, window_drag_y;
+void vid_update_cursor (SDL_Cursor *cursor, t_bool visible); 
+void vid_refresh_ex (uint32 * surf, int ww, int hh); 
+
+uint32 * last_redraw_surface; 
+int last_redraw_surface_xpixels; 
+int last_redraw_surface_ypixels; 
+int tooltip_visible = 0;
+int tooltip_hide_requested = 0;
+int tooltip_x_pos, tooltip_y_pos; 
+SDL_Renderer *tooltip_renderer;
+SDL_Window *tooltip_window;    
+SDL_Texture *tooltip_texture;
+int tooltip_width = 200;
+int tooltip_height = 150;
+uint32 tooltip_windowID; 
+void vid_update_tooltip(void); 
+void ShowTooltipAtMousePos(int x_pos, int y_pos);
+
 #else
 #define sim_debug_cp(...) if (0) printf (__VA_ARGS__)
 static const char *usereventtypes[1];
 
 #endif
+
+
 #define MAX_EVENTS      20                              /* max events in queue */
 
 typedef struct {
@@ -480,7 +503,7 @@ while (1) {
             }
         else {
 #if defined(CPANEL)
-                            sim_debug_cp ("main(): Ignoring unexpected event: %d\n", event.type);
+          sim_debug_cp ("main(): Ignoring unexpected event: %d\n", event.type);
 #else 
           sim_printf ("main(): Ignoring unexpected event: %d\n", event.type);
 #endif
@@ -688,7 +711,7 @@ if (vid_active) {
         SDL_DestroySemaphore(vid_key_events.sem);
         vid_key_events.sem = NULL;
         }
-    //YYY vid_controllers_cleanup ();
+    //vid_controllers_cleanup ();
     }
 return SCPE_OK;
 }
@@ -761,7 +784,7 @@ SDL_LockMutex (vid_draw_mutex);                         /* Synchronize to check 
 if (vid_dst_last                                     && /* As yet unprocessed draw rectangle? */
     (vid_dst_last->x == x) && (vid_dst_last->y == y) && /* AND identical position? */
     (vid_dst_last->w == w) && (vid_dst_last->h == h)) { /* AND identical dimensions? */
-    memcpy (vid_data_last, buf, w*h*sizeof(*buf));      /* Replace region contents */
+    if (buf) memcpy (vid_data_last, buf, w*h*sizeof(*buf));      /* Replace region contents */
     SDL_UnlockMutex (vid_draw_mutex);                   /* Done */
     return;
     }
@@ -776,13 +799,17 @@ vid_dst->x = x;
 vid_dst->y = y;
 vid_dst->w = w;
 vid_dst->h = h;
-vid_data = (uint32 *)malloc (w*h*sizeof(*buf));
-if (!vid_data) {
-    sim_printf ("%s: vid_draw() memory allocation error\n", vid_dname(vid_dev));
-    free (vid_dst);
-    return;
+if (buf) {
+    vid_data = (uint32 *)malloc (w*h*sizeof(*buf));
+    if (!vid_data) {
+        sim_printf ("%s: vid_draw() memory allocation error\n", vid_dname(vid_dev));
+        free (vid_dst);
+        return;
     }
-memcpy (vid_data, buf, w*h*sizeof(*buf));
+    memcpy (vid_data, buf, w*h*sizeof(*buf));
+} else {
+    vid_data = NULL; 
+}
 user_event.type = SDL_USEREVENT;
 user_event.user.code = EVENT_DRAW;
 user_event.user.data1 = (void *)vid_dst;
@@ -1352,6 +1379,8 @@ if (!vid_cursor_visible)
     return;
 sim_debug (SIM_VID_DBG_MOUSE, vid_dev, "Mouse Move Event: pos:(%d,%d) rel:(%d,%d) buttons:(%d,%d,%d)\n", 
            event->x, event->y, event->xrel, event->yrel, (event->state & SDL_BUTTON(SDL_BUTTON_LEFT)) ? 1 : 0, (event->state & SDL_BUTTON(SDL_BUTTON_MIDDLE)) ? 1 : 0, (event->state & SDL_BUTTON(SDL_BUTTON_RIGHT)) ? 1 : 0);
+
+
 while (SDL_PeepEvents (&dummy_event, 1, SDL_GETEVENT, SDL_MOUSEMOTION, SDL_MOUSEMOTION)) {
     /* Coalesce motion activity to avoid thrashing */
     event->xrel += dev->xrel;
@@ -1362,6 +1391,39 @@ while (SDL_PeepEvents (&dummy_event, 1, SDL_GETEVENT, SDL_MOUSEMOTION, SDL_MOUSE
     sim_debug (SIM_VID_DBG_MOUSE, vid_dev, "Mouse Move Event: Additional Event Coalesced:pos:(%d,%d) rel:(%d,%d) buttons:(%d,%d,%d)\n", 
         dev->x, dev->y, dev->xrel, dev->yrel, (dev->state & SDL_BUTTON(SDL_BUTTON_LEFT)) ? 1 : 0, (dev->state & SDL_BUTTON(SDL_BUTTON_MIDDLE)) ? 1 : 0, (dev->state & SDL_BUTTON(SDL_BUTTON_RIGHT)) ? 1 : 0);
     };
+
+#if defined(CPANEL)
+if (event->state & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+    // mouse left button pressed while moving the mouse -> drag window
+    if (window_drag_flag==0) {
+        // start cpanel window move by dragging the mouse
+        window_drag_flag=1;
+        window_drag_x=event->x; window_drag_y=event->y; 
+    } else {
+        int x,y, dx, dy;
+        dx = event->x - window_drag_x; dy = event->y - window_drag_y; 
+        SDL_GetWindowPosition(vid_window, &x, &y); 
+        x += dx; y += dy; 
+        window_drag_x=event->x - dx; window_drag_y=event->y - dy; 
+        SDL_SetWindowPosition(vid_window, x, y);
+        // if tooltip visible, reques hiding it because cpanel window has been 
+        // moved or resized
+        if (tooltip_visible) tooltip_hide_requested=1;     
+    }
+} else {
+    // mouse left button not pressed
+    if (window_drag_flag) {
+    // terminate cpanel window move by dragging the mouse
+    }
+    window_drag_flag=0;
+}
+if (event->state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+    // mouse right button pressed while moving the mouse -> show tooltip
+    ShowTooltipAtMousePos(event->x, event->y);
+}
+
+#endif
+
 if (SDL_SemWait (vid_mouse_events.sem) == 0) {
     if (!vid_mouse_captured) {
         event->xrel = (event->x - vid_cursor_x);
@@ -1406,6 +1468,7 @@ if (SDL_SemWait (vid_mouse_events.sem) == 0) {
     if (SDL_SemPost (vid_mouse_events.sem))
         sim_printf ("%s: vid_mouse_move(): SDL_SemPost error: %s\n", vid_dname(vid_dev), SDL_GetError());
     }
+
 }
 
 void vid_mouse_button (SDL_MouseButtonEvent *event)
@@ -1467,26 +1530,186 @@ if (SDL_SemWait (vid_mouse_events.sem) == 0) {
     if (SDL_SemPost (vid_mouse_events.sem))
         sim_printf ("%s: Mouse Button Event: SDL_SemPost error: %s\n", vid_dname(vid_dev), SDL_GetError());
     }
+
+#if defined(CPANEL)
+    if (ev.b3_state) {
+        // mouse right button pressed ->show tooltip window
+        ShowTooltipAtMousePos(ev.x_pos, ev.y_pos); 
+    }
+#endif
 }
 
 void vid_update (void)
 {
-SDL_Rect vid_dst;
-
-vid_dst.x = 0;
-vid_dst.y = 0;
-vid_dst.w = vid_width;
-vid_dst.h = vid_height;
-
 sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "Video Update Event: \n");
+
 if (sim_deb)
     fflush (sim_deb);
+
 if (SDL_RenderClear (vid_renderer))
     sim_printf ("%s: Video Update Event: SDL_RenderClear error: %s\n", vid_dname(vid_dev), SDL_GetError());
 if (SDL_RenderCopy (vid_renderer, vid_texture, NULL, NULL))
-    sim_printf ("%s: Video Update Event: SDL_RenderCopy error: %s\n", vid_dname(vid_dev), SDL_GetError());
+     sim_printf ("%s: Video Update Event: SDL_RenderCopy error: %s\n", vid_dname(vid_dev), SDL_GetError());
+
 SDL_RenderPresent (vid_renderer);
 }
+
+#if defined(CPANEL)
+void vid_refresh_ex (uint32 * surf, int ww, int hh)
+{
+SDL_Event user_event;
+
+sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "vid_refresh() - Queueing Refresh Event\n");
+
+user_event.type = SDL_USEREVENT;
+user_event.user.code = EVENT_REDRAW;
+user_event.user.data1 = (void *) surf;
+user_event.user.data2 = (void *) ((ww & 0x7FFF) + ((hh & 0x7FFF) << 16));
+
+if (SDL_PushEvent (&user_event) < 0)
+    sim_printf ("%s: vid_refresh() SDL_PushEvent error: %s\n", vid_dname(vid_dev), SDL_GetError());
+}
+
+
+void vid_update_ex (SDL_UserEvent *event)
+{
+// SDL_Rect *vid_dst = (SDL_Rect *)event->data1;
+// uint32 *buf = (uint32 *)event->data2;
+
+    // if no args, call regular vid_update
+    if (event->data1 == NULL) {
+        vid_update();
+        return; 
+    }
+    {
+        uint32 * surface =  (uint32 *) event->data1;
+        uint32 n = (uint32) event->data2;
+        int xpixels, ypixels;
+
+        xpixels = n & 0x7FFF; 
+        ypixels = (n >> 16) & 0x7FFF; 
+
+        if (xpixels == 0) return; // missing surface update rect list -> exit without updatating
+        if (SDL_UpdateTexture(vid_texture, NULL, surface, xpixels*sizeof(*surface)))
+             sim_printf ("%s: vid_draw_region() - SDL_UpdateTexture error: %s\n", vid_dname(vid_dev), SDL_GetError());
+
+        last_redraw_surface = surface; 
+        last_redraw_surface_xpixels = xpixels; 
+        last_redraw_surface_ypixels = ypixels; 
+
+        vid_update();
+        if (tooltip_visible) {
+            vid_update_tooltip(); 
+        }
+    }
+}
+
+// tooltip is visible, update its contents to keep it sync with main window
+void vid_update_tooltip(void)
+{
+    uint32 * surface; 
+    int x,y,n; 
+    uint32 c; 
+
+    if (tooltip_visible == 0) return; // safety
+    if (last_redraw_surface == NULL) return; //safety
+    if (last_redraw_surface_xpixels == 0) return; //safety
+
+    // fill in the tooltip pixels to be shown from last redraw surface  pixels data
+    n=tooltip_width*tooltip_height*sizeof(*surface);
+    surface = (uint32 *)malloc(n);
+    if (surface == NULL) return; 
+    memset(surface, 0, n); 
+    for (y=0;y<tooltip_height;y++) {
+        if (y+tooltip_y_pos >= last_redraw_surface_ypixels) break; 
+        for (x=0;x<tooltip_width;x++) {
+            if (x+tooltip_x_pos >= last_redraw_surface_xpixels) break; 
+            c = last_redraw_surface[x+tooltip_x_pos + (y+tooltip_y_pos)*last_redraw_surface_xpixels];
+            surface[x+y*tooltip_width]=c; 
+        }
+    }
+    // draw a 3 pixel wide white border 
+    for (x=0;x<tooltip_width;x++) surface[x+0*tooltip_width]=surface[x+(tooltip_height-1)*tooltip_width]=0xFFffFFff; 
+    for (x=1;x<tooltip_width-1;x++) surface[x+1*tooltip_width]=surface[x+(tooltip_height-2)*tooltip_width]=0xFFffFFff; 
+    for (x=2;x<tooltip_width-2;x++) surface[x+2*tooltip_width]=surface[x+(tooltip_height-3)*tooltip_width]=0xFFffFFff; 
+    for (y=0;y<tooltip_height;y++) surface[0+y*tooltip_width]=surface[(tooltip_width-1)+y*tooltip_width]=0xFFffFFff; 
+    for (y=1;y<tooltip_height-1;y++) surface[1+y*tooltip_width]=surface[(tooltip_width-2)+y*tooltip_width]=0xFFffFFff; 
+    for (y=2;y<tooltip_height-2;y++) surface[2+y*tooltip_width]=surface[(tooltip_width-3)+y*tooltip_width]=0xFFffFFff; 
+    
+    
+    if (SDL_UpdateTexture(tooltip_texture, NULL, surface, tooltip_width*sizeof(*surface)))
+        sim_printf ("%s: vid_draw_region() - SDL_UpdateTexture error: %s\n", vid_dname(vid_dev), SDL_GetError());
+
+    if (SDL_RenderClear (tooltip_renderer))
+        sim_printf ("%s: Video Update Event: SDL_RenderClear error: %s\n", vid_dname(vid_dev), SDL_GetError());
+     if (SDL_RenderCopy (tooltip_renderer, tooltip_texture, NULL, NULL))
+        sim_printf ("%s: Video Update Event: SDL_RenderCopy error: %s\n", vid_dname(vid_dev), SDL_GetError());
+
+     SDL_RenderPresent (tooltip_renderer);
+
+    free(surface);
+
+}
+
+void CheckIfHideTooltip(SDL_Event * event)
+{
+    int hide=0;
+    if (tooltip_visible==0) return; 
+    if (tooltip_hide_requested == 1) {
+        // hide tooltip because requested to do so
+        hide=1; tooltip_hide_requested=0;
+    } else if (((SDL_GetWindowFlags(vid_window) & SDL_WINDOW_INPUT_FOCUS)==0) && ((SDL_GetWindowFlags(tooltip_window) & SDL_WINDOW_INPUT_FOCUS)==0)) {
+        // hide tooltip because another window has the focus
+        hide=1; 
+    } else if ((event->type==SDL_WINDOWEVENT) && 
+        (event->window.event == SDL_WINDOWEVENT_ENTER) && 
+        (event->window.windowID==tooltip_windowID)) {
+        // hide tooltip because mouse over the tooltip window
+        hide=1; 
+    } else if ((event->type==SDL_WINDOWEVENT) && 
+        ((event->window.event == SDL_WINDOWEVENT_SIZE_CHANGED) || 
+         (event->window.event == SDL_WINDOWEVENT_RESIZED) || 
+         (event->window.event == SDL_WINDOWEVENT_MINIMIZED) || 
+         (event->window.event == SDL_WINDOWEVENT_RESTORED) || 
+         (event->window.event == SDL_WINDOWEVENT_HIDDEN) || 
+         (event->window.event == SDL_WINDOWEVENT_MOVED)  )&& 
+        ((event->window.windowID==tooltip_windowID) || (event->window.windowID==vid_windowID))) {
+        // hide tooltip because tooltip window/capenl window has been moved/resized/hidden
+        hide=1; 
+    }
+
+    if (hide) {
+        SDL_HideWindow(tooltip_window);
+        tooltip_visible=0;
+    }
+}
+
+// show tooltip popup window that holds the contents of cpanel window
+// under the mouse at 100% scale
+void ShowTooltipAtMousePos(int x_pos, int y_pos)
+{
+    int x,y,w,h; 
+
+    // x_pos, y_pos is the position of mouse, relative to cpanel window scalled. Convert to unscaled position
+    // relative to last redraw surface (the tooltip image will be taken from this). The pos of
+    // mouse will be the center of tooltip image
+    SDL_GetWindowSize(vid_window, &w, &h); 
+    if (w==0) w=1; if (h==0) h=1; // safety
+    tooltip_x_pos = last_redraw_surface_xpixels * x_pos / w - tooltip_width / 2; if (tooltip_x_pos < 0) tooltip_x_pos=0;
+    tooltip_y_pos = last_redraw_surface_ypixels * y_pos / h - tooltip_height / 2; if (tooltip_y_pos < 0) tooltip_y_pos=0; 
+    // render what you want on that tooltip (SDL_RenderClear, SDL_RenderCopy, SDL_RenderPresent) & hide it with SDL_HideWindow
+    tooltip_visible=1; 
+    tooltip_hide_requested = 0;
+    vid_update_tooltip(); 
+    // showing the tooltip at pos relative to masin cpanel gui window
+    SDL_GetWindowPosition(vid_window, &x, &y);
+    x+=x_pos; y+=y_pos; 
+    SDL_SetWindowPosition(tooltip_window, x+15, y+25);
+    SDL_ShowWindow(tooltip_window);
+    SDL_RaiseWindow(vid_window);
+}
+
+#endif
 
 void vid_update_cursor (SDL_Cursor *cursor, t_bool visible)
 {
@@ -1539,11 +1762,13 @@ if (vid_dst == vid_dst_last) {
     }
 SDL_UnlockMutex (vid_draw_mutex);
 
-if (SDL_UpdateTexture(vid_texture, vid_dst, buf, vid_dst->w*sizeof(*buf)))
-    sim_printf ("%s: vid_draw_region() - SDL_UpdateTexture error: %s\n", vid_dname(vid_dev), SDL_GetError());
+if (buf) {
+    if (SDL_UpdateTexture(vid_texture, vid_dst, buf, vid_dst->w*sizeof(*buf)))
+        sim_printf ("%s: vid_draw_region() - SDL_UpdateTexture error: %s\n", vid_dname(vid_dev), SDL_GetError());
+    free (buf);
+}
+free (vid_dst); 
 
-free (vid_dst);
-free (buf);
 event->data1 = NULL;
 }
 
@@ -1730,6 +1955,38 @@ vid_ready = TRUE;
 
 #if defined(CPANEL)
 if (icon_rgb_defined) vid_set_icon();
+    tooltip_visible=0;
+    last_redraw_surface = NULL;
+    last_redraw_surface_xpixels = 0;
+    SDL_CreateWindowAndRenderer (tooltip_width, tooltip_height, SDL_WINDOW_BORDERLESS |
+        SDL_WINDOW_ALWAYS_ON_TOP, &tooltip_window, &tooltip_renderer);
+    if ((tooltip_window == NULL) || (tooltip_renderer == NULL)) {
+       sim_printf ("%s: Error Creating Tooltip Video Window: %s\n", vid_dname(vid_dev), SDL_GetError());
+       SDL_DestroyRenderer(vid_renderer); vid_renderer = NULL;
+       SDL_DestroyWindow(vid_window);     vid_window = NULL;
+       SDL_DestroyTexture(vid_texture);   vid_texture = NULL;
+       SDL_Quit ();
+       return 0;
+    }
+    SDL_HideWindow(tooltip_window);
+    SDL_SetRenderDrawColor (tooltip_renderer, 0, 0, 0, 255);
+
+    tooltip_texture = SDL_CreateTexture (tooltip_renderer,
+                                 SDL_PIXELFORMAT_ARGB8888,
+                                 SDL_TEXTUREACCESS_STREAMING,
+                                 tooltip_width, tooltip_height);
+    if (tooltip_texture == NULL) {
+       sim_printf ("%s: Error Creating Tooltip Texture: %s\n", vid_dname(vid_dev), SDL_GetError());
+       SDL_DestroyRenderer(vid_renderer);     vid_renderer = NULL;
+       SDL_DestroyWindow(vid_window);         vid_window = NULL;
+       SDL_DestroyTexture(vid_texture);       vid_texture = NULL;
+       SDL_DestroyRenderer(tooltip_renderer); tooltip_renderer = NULL;
+       SDL_DestroyWindow(tooltip_window);     tooltip_window = NULL;
+       SDL_Quit ();
+       return 0;
+    }
+    tooltip_windowID = SDL_GetWindowID (tooltip_window);
+    SDL_RaiseWindow(vid_window);
 #endif
 
 sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vid_dev, "vid_thread() - Started\n");
@@ -1743,7 +2000,7 @@ while (vid_active) {
     status = SDL_WaitEvent (&event); 
 
     if (event.type==SDL_WINDOWEVENT) {
-         sim_debug_cp ("vid_thread: SDL_WaitEvent: status %d, WINDOWSEVENT, %s (event.window.code %d)\n", 
+        sim_debug_cp ("vid_thread: SDL_WaitEvent: status %d, WINDOWSEVENT, %s (event.window.code %d)\n", 
                        status, windoweventtypes[event.window.event], event.window.event);
     } else if (event.type==SDL_USEREVENT) {
          sim_debug_cp ("vid_thread: SDL_WaitEvent: status %d, USEREVENT, %s (event.user.code %d)\n", 
@@ -1754,8 +2011,12 @@ while (vid_active) {
     }
 
     if (status == 1) {
+#if defined(CPANEL)
+        if (tooltip_visible) {
+            CheckIfHideTooltip(&event);  
+        }
+#endif
         switch (event.type) {
-
             case SDL_KEYDOWN:
             case SDL_KEYUP:
                 vid_key (&event.key);
@@ -1799,6 +2060,12 @@ while (vid_active) {
                         case SDL_WINDOWEVENT_EXPOSED:
                             vid_update ();
                             break;
+#if defined(CPANEL)
+                        case SDL_WINDOWEVENT_CLOSE:
+                            if (vid_quit_callback)
+                                vid_quit_callback ();
+                            break;
+#endif
                         }
                     }
                 break;
@@ -1814,7 +2081,11 @@ while (vid_active) {
                 /*              it notice vid_active has changed */
                 while (vid_active && event.user.code) {
                     if (event.user.code == EVENT_REDRAW) {
+#if defined(CPANEL)
+                        vid_update_ex ((SDL_UserEvent*)&event);
+#else
                         vid_update ();
+#endif
                         event.user.code = 0;    /* Mark as done */
 if (0)                        while (SDL_PeepEvents (&event, 1, SDL_GETEVENT, SDL_USEREVENT, SDL_USEREVENT)) {
                             if (event.user.code == EVENT_REDRAW) {
@@ -1890,6 +2161,11 @@ if (vid_cursor) {
     SDL_FreeCursor (vid_cursor);
     vid_cursor = NULL;
     }
+#if defined(CPANEL)
+SDL_DestroyTexture(tooltip_texture);     tooltip_texture = NULL;
+SDL_DestroyRenderer(tooltip_renderer);   tooltip_renderer = NULL;
+SDL_DestroyWindow(tooltip_window);       tooltip_window = NULL;
+#endif
 SDL_DestroyTexture(vid_texture);
 vid_texture = NULL;
 SDL_DestroyRenderer(vid_renderer);
@@ -2330,16 +2606,27 @@ void vid_SetWindowSizeAndPos_event (void)
     } else if (WindowSizeAndPos.Mode==2) {
         sim_debug_cp("SDL_SetWindowSize x=%d, y=%d \n", WindowSizeAndPos.x, WindowSizeAndPos.y);
         SDL_SetWindowSize(vid_window, WindowSizeAndPos.x, WindowSizeAndPos.y);
+    } else if (WindowSizeAndPos.Mode==3) {
+        int x,y; 
+        sim_debug_cp("SDL_SetWindowPositionRelative dx=%d, dy=%d \n", WindowSizeAndPos.x, WindowSizeAndPos.y);
+        SDL_GetWindowPosition(vid_window, &x, &y); 
+        x += WindowSizeAndPos.x; y += WindowSizeAndPos.y; 
+        SDL_SetWindowPosition(vid_window, x, y);
     }
     WindowSizeAndPos.InProgress = 0;
     WindowSizeAndPos.Mode=0;
+
+    // if tooltip visible, reques hiding it because cpanel window has been 
+    // moved or resized
+    if (tooltip_visible) tooltip_hide_requested=1; 
 }
 
+// Mode: 0=none, 1=set pos, 2=set size, 3=move x,y (eg -3, +4 -> move window 3 pixels left, 4 down)
 t_stat vid_SetWindowSizeAndPos (int Mode, int x, int y)
 {
 SDL_Event user_event;
 
-if ((!vid_active) || (!vid_window)) return; 
+if ((!vid_active) || (!vid_window)) return SCPE_OK; 
 
 sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "vid_SetWindowSizeAndPos() - Queueing vid_SetWindowSizeAndPos Event\n");
 
@@ -2348,7 +2635,7 @@ user_event.user.code = EVENT_SIZEANDPOS;
 user_event.user.data1 = NULL; 
 user_event.user.data2 = NULL; 
 
-WindowSizeAndPos.Mode=Mode; // 0=none, 1=set pos, 2=set size
+WindowSizeAndPos.Mode=Mode; // 0=none, 1=set pos, 2=set size, 3=move x,y (eg -3, +4 -> move window 3 pixels les, 4 down)
 WindowSizeAndPos.x = x;
 WindowSizeAndPos.y = y;
 WindowSizeAndPos.InProgress = 1;
@@ -2395,7 +2682,10 @@ void vid_set_icon(void)
     SDL_FreeSurface(surface);
 }
 
-// nCursor=1 -> set arrow cursor, =2 -> hand cursor, =0 -> slashed circle
+// nCursor=1 -> set arrow cursor, 
+//        =2 -> hand cursor, 
+//        =3 -> Four pointed arrow pointing north, south, east, and west
+//        =0 -> slashed circle
 void vid_set_system_cursor (int nCursor)
 {
 static int current_system_cursor = -1; 
@@ -2407,8 +2697,9 @@ if ((!vid_active) || (!vid_window)) return;
 if (current_system_cursor == nCursor) return;
 current_system_cursor = nCursor;
 
-cursor = SDL_CreateSystemCursor( (nCursor==1) ? SDL_SYSTEM_CURSOR_ARROW : 
+cursor = SDL_CreateSystemCursor( (nCursor==1) ? SDL_SYSTEM_CURSOR_ARROW: 
                                  (nCursor==2) ? SDL_SYSTEM_CURSOR_HAND : 
+                                 (nCursor==3) ? SDL_SYSTEM_CURSOR_SIZEALL : 
                                  SDL_SYSTEM_CURSOR_NO);
 
 user_event.type = SDL_USEREVENT;

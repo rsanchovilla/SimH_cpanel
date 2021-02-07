@@ -1188,7 +1188,7 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
         }
     }
 
-    // uint16 data->image[] array that holds the actual punched rows on card
+    // uint16 image[] array that holds the actual punched rows on card
     // using this codification:
     //
     //  Row Name    value in image[]    comments

@@ -133,10 +133,9 @@ static struct {
    int ReadStacker, ReadDeck, PunchStacker, OutputDeck;
    // IBM 355 RAMAC
    int ArmRunArea, Arm, ArmWires, ArmWireRunArea;
-   int VerticalBarGuide1, VerticalBarGuide2, DiskStackMoire;
+   int VerticalBarGuide1, VerticalBarGuide2, DiskStackMoire, ArmShadow, ArmWiresShadow, MovingHeadBarShadow;
    // IBM 727 Magnetic Tape
    int MT_InfoPanel; 
-   int MT_reel; 
    int MT[6], MT_num[6], MT_lights[6], MT_head[6];
    int MT_L[6], MT_R[6], MT_L_VacCol[6], MT_R_VacCol[6];
    int MT_VacColumn, MT_VacColMedium; 
@@ -238,9 +237,11 @@ CP_DEF IBM650_cp[] = {
     { &IBM650.VerticalBarGuide1,      "VerticalBarGuide1",                 NULL,                   0, "ibm355/1"  },
     { &IBM650.VerticalBarGuide2,      "VerticalBarGuide2",                 NULL,                   0, "ibm355/1"  },
     { &IBM650.DiskStackMoire,         "DiskStackMoire",                    NULL,                   0, "ibm355/1"  },
+    { &IBM650.ArmShadow,              "ArmShadow",                         NULL,                   0, "ibm355/1"  },
+    { &IBM650.ArmWiresShadow,         "ArmWiresShadow",                    NULL,                   0, "ibm355/1"  },
+    { &IBM650.MovingHeadBarShadow,    "MovingHeadBarShadow",               NULL,                   0, "ibm355/1"  },    
     // IBM 727
     { &IBM650.MT_InfoPanel,           "MT_InfoPanel",                      NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_reel,                "MT_reel",                           NULL,                   0, "ibm727/1"  },
     { &IBM650.MT[0],                  "MT_0",                              NULL,                   0, "ibm727/1"  },
     { &IBM650.MT_num[0],              "MT_0_number",                       NULL,                   0, "ibm727/1"  },
     { &IBM650.MT_lights[0],           "MT_0_lights",                       NULL,                   0, "ibm727/1"  },
@@ -1044,21 +1045,23 @@ void Refresh_Ramac(void)
     // state images are shown in loop state 0,1,2 then 2,1,0 again
     // this animation is tracked with real time clock, so if fast mode is set (^F), the read/write arm will 
     // move faster, but the spinning (i.e. the moire effect) remains the same and it is not accelerated
-    // IBM 355 disk spins at 1200 RPM, this is one revolution each 500 msec. So the moire effect should cycle
-    // each 500 msec
+    // IBM 355 disk spins at 1200 RPM, this is one revolution each 50 msec. 
+    // To look goog the moire effect should cycle each 500 msec (10 times slower)
     if (Tm0Moire==0) {
         Tm0Moire = Refresh_tnow; // start moire sequence
     } else {
-        int NumStates=6;  // moire states x 2 (x2 because going 0..2 and then 2..0);
+        int CPMoireStates=5;  // moire states 0..4 defined in contol panel .ini fule
         int msec=500;     // total msec time for moire cycling
+        int NumStates;
+        NumStates=CPMoireStates * 2 -2;  // moire states 0..4 then 3..1
         n = (int) (Refresh_tnow-Tm0Moire); // number of msec elapsed from start of animation
         if ((n<0) || (n>1000000)) n=1000000;
         n = (NumStates * n) / msec;  
         if (n>=NumStates) {
             SetState(IBM650.DiskStackMoire,0);
-            Tm0Moire=0; // reset moire
+            Tm0Moire=Refresh_tnow; // reset moire sequence
         } else {
-            if (n >= (NumStates / 2)) n=NumStates-1-n; // to make flow 0..2 then 2..0
+            if (n > (NumStates / 2)) n=NumStates-n; // to make flow 0..4 then 3..1
             SetState(IBM650.DiskStackMoire,n);
         }
     }
@@ -1082,6 +1085,31 @@ void Refresh_Ramac(void)
     //  - Copy State 0 (background) to state 1 (state displayed)
     CopyControlImage(IBM650.ArmRunArea, 0,       0, 0, 0, 0,    // FromCId, FromState, x0, y0, w, h, 
                      IBM650.ArmRunArea, 1,       0, 0);         // ToCId, ToState,     x1, y1
+
+    //  - Draw the Arm shadow (depending on track accesed) on Run Area at appropriate 
+    //    vertical position (depending on disk accesed)
+    CopyControlImage(IBM650.ArmShadow, 0,      100, 0, 0, 0,    // FromCId, FromState, x0, y0, w, h, 
+                     IBM650.ArmRunArea, 1,     210, yRamacArm+100); // ToCId, ToState,     x1, y1
+
+    //  - Draw the Arm wires shadow (depending on track accesed) on Run Area at appropriate 
+    //    vertical position (depending on disk accesed)
+    CopyControlImage(IBM650.ArmWiresShadow, 0,   0, 30+(25-nWire)*5, 0, 0,    // FromCId, FromState, x0, y0, w, h, 
+                     IBM650.ArmRunArea, 1,     120, yRamacArm+100); // ToCId, ToState,     x1, y1
+
+    //  - Draw the Arm Moving head bar that enters into disks. Carefully crafted so that the
+    //    shadow is only draw over metalic rectangular box
+    ww=107-nRamacArm*4; 
+    hh=510-yRamacArm; 
+    if (nRamacArm < 8) {
+        x0=32-nRamacArm*4; ww-=x0;
+    } else x0=0; 
+    if (yRamacArm < 178) {
+        y0=178-yRamacArm;
+    } else y0=0;
+    if (ww >= 0) {
+        CopyControlImage(IBM650.MovingHeadBarShadow, 0,  x0+0, y0+50, ww, hh,    // FromCId, FromState, x0, y0, w, h, 
+                         IBM650.ArmRunArea, 1,     x0+10+nRamacArm*4, y0+yRamacArm+85); // ToCId, ToState,     x1, y1
+    }
 
     //  - Draw the appropiate Arm Wires background image (depending on disk accesed) on Run Area at appropriate 
     //    vertical position (depending on disk accesed)
@@ -1158,10 +1186,6 @@ void Refresh_Ramac(void)
 #define     MT_is_rewinding     2
 #define     MT_is_using_tape    3
 
-void mt_reels_mov(int unit, int cmd, 
-                  int * L_VacColMedium_h, int * R_VacColMedium_h, 
-                  int * MT_L_Rot, int * MT_R_Rot,
-                  int * MT_Reel_Amount, int * MT_head);
 
 int PARAM_Reel_Diameter  =   267;  // reel diameter in mm
 int PARAM_RPM            =  1140;  // reel forward/backwards motor revolutions per minute
@@ -1185,6 +1209,11 @@ int PARAM_HiSpeedRwdSpeed =  500;  // High Speed rewind at 500 inches/sec
 #define     MT_anim_step_HiRew      2             // High Speed Rewind animation step 
 #define     MT_anim_finished       99             // this is the final step that signals the animation sequence has finished
 
+void mt_reels_mov(int unit, int cmd, 
+                  int * L_VacColMedium_h, int * R_VacColMedium_h, 
+                  int * MT_L_Rot, int * MT_R_Rot,
+                  int * MT_Reel_Amount, int * MT_head);
+
 // execute animation step. return 1 if animation terminated
 int mt_do_animation_seq(int unit, 
                   int * L_VacColMedium_h, int * R_VacColMedium_h, 
@@ -1207,7 +1236,7 @@ int mt_do_animation_seq(int unit,
         hint = mtcab[unit].seq[nseq].hint;  
         if (hint == MT_anim_finished) return 1; // exit beacuse end of sequence
         if ((hint == MT_anim_step_nop) && (time < 0)) {
-            // set corrent values for this point of sequence, do nothing
+            // set current values for this point of sequence, do nothing
             // already done incremental step. Just keep current state values
             *MT_Reel_Amount = (int) GetState(IBM650.MT[unit]); 
             *MT_L_Rot = (int) GetState(IBM650.MT_L[unit]) % 64; // keeps blur
@@ -1388,7 +1417,7 @@ int mt_do_animation_seq(int unit,
     return 0;
 }
 
-// dump to console te current animation
+// dump to console the current animation
 void mt_dump_animation_seq(int unit)
 {
     int i; 
@@ -1664,6 +1693,7 @@ void mt_set_rew_seq(int unit)
     int msec, time, bHi, u3_dec; 
 
     MT_Reel_Amount = 3 + (int) (20 * (u3 / (mt_unit[unit].u4*1000.0))); 
+    if (MT_Reel_Amount > 23) MT_Reel_Amount = 23;
     MT_head        = 1;    // head closed
 
     mtcab[unit].nseq=0;                 // init sequence
@@ -2118,8 +2148,8 @@ void Refresh_MagTape(void)
             SetState(IBM650.MT_R[unit], 64);                           
             SetState(IBM650.MT_lights[unit], 0);   // lights off
             SetState(IBM650.MT_head[unit], 11);    // r/w tape head wide open
-            SetState(IBM650.MT_L_VacCol[unit], 0); // no magnetic medium on reels
-            SetState(IBM650.MT_R_VacCol[unit], 0); // no magnetic medium on reels
+            SetState(IBM650.MT_L_VacCol[unit], 0); // no magnetic medium on vacuum col
+            SetState(IBM650.MT_R_VacCol[unit], 0); // no magnetic medium on vacuum col
             continue; 
         } 
         // unit enabled
@@ -2131,7 +2161,7 @@ void Refresh_MagTape(void)
         if (mt_info[unit].justattached) {  // 1 -> just attached -> should read reel tape options, if any 
             // read reel color options, if any. reel color options are processed each time a tape file is attached to MT device, so
             // reel color options must be set before the attach scp command
-            char MT_color_opt[16] = "MTx";
+            char MT_cab_opt[16] = "MTx";
             char c, cmode;
 
             memset (&mtcab[unit], 0, sizeof (mtcab[0]) );
@@ -2139,24 +2169,24 @@ void Refresh_MagTape(void)
             mtcab[unit].reel[1].color = 1; /* Right reel defaults to white */
             cmode = ' ';
 
-            MT_color_opt[2] = '0' + unit;
-            if ((IsOption(MT_color_opt)) && (IsOptionParam) && (*IsOptionParam++ == '/')) {
+            MT_cab_opt[2] = '0' + unit;
+            if ((IsOption(MT_cab_opt)) && (IsOptionParam) && (*IsOptionParam++ == '/')) {
                 // syntax: option=mt1/WG <- tape 1 is set have reels color White(Left) and Gray (right). 
                 //                          the third possible color is D (dark gray)                
                 c = *IsOptionParam++; // get left reel color
-                if ((c >= 'a') && (c <= 'z')) c = c - 'a' + 'A';
+                c = sim_toupper(c);
                 mtcab[unit].reel[0].color = (c == 'G') ? 1 /* gray reel */ : (c == 'D') ? 2 /* dark grey reel */ : 0; /* else defaults to white */
                 c = *IsOptionParam++; 
-                if ((c >= 'a') && (c <= 'z')) c = c - 'a' + 'A';
+                c = sim_toupper(c);
                 mtcab[unit].reel[1].color = (c == 'G') ? 1 /* gray reel */ : (c == 'D') ? 2 /* dark grey reel */ : 0; /* else defaults to white */
                 c = *IsOptionParam++; 
                 if (c == '*') {
                     c = *IsOptionParam++; 
-                    if ((c >= 'a') && (c <= 'z')) c = c - 'a' + 'A'; 
+                    c = sim_toupper(c);
                     if ((c == 'R') || (c == 'F') || (c == 'B')) {
                         cmode = c; // load animation will be Forward/backwards all reel, or *R
                     }
-                }
+                }                
             }
             // reel color set. 
             mt_info[unit].justattached=0;
@@ -2168,7 +2198,7 @@ void Refresh_MagTape(void)
             // ... signal the load animation can begin
             mtcab[unit].mt_is = MT_is_loading_tape; 
             if (cmode != 'R') {
-                // normal load animation, *F or *R 
+                // normal load animation, *F or *B 
                  mt_set_load_seq(unit, cmode);
             } else {
                 // *R rewind animation 
@@ -2178,14 +2208,14 @@ void Refresh_MagTape(void)
             }
         }
         // tape is about to be painted on cpanel
-        // MT state holds the amount of tape in eache reel. 
+        // MT state holds the amount of tape medium in each reel. 
         //   =1  -> all tape on L reel, 
         //   =23 -> all tape on R reel, 
         //   =0  -> no tape, reel unmounted
         // MT_L/MT_R state holds the rotational position of reel, the speed ot reel, and the reel's colour
         //    0..23 -> reel rotated 0gr, 15gr, ... 345gr. To be used when reel is not moving
-        //   24..47 -> same reel rotated 0gr, 15ge ... but with some spin blur. To be used when reel is moving
-        //   48..55 -> reel rotalted 0gr, 45gr, ... whith greater spin blur. To be used when reel is rewinding at fast pace
+        //   24..47 -> same reel rotated 0gr, 15gr ... but with some spin blur. To be used when reel is moving
+        //   48..55 -> reel rotated 0gr, 45gr, ... whith greater spin blur. To be used when reel is rewinding at fast pace
         //   64..   -> same but with another reel color. There are 3 reels colors.
         // MT_head holds the position of r/w head
         //   =0  -> no head image
@@ -2333,7 +2363,7 @@ void lpt_print_line(int y0, char * sLin)
         c = sLin[nChar++];
         if (c < ' ') break;         // end of string to print
         // locate the code (the state on CharSet control) correcponfing to char to print
-        if ((c>='a') && (c<='z')) c = c - 'a' + 'A'; // ignore case
+        c = sim_toupper(c);
         ic = -1; 
         for (i=0;sCharSet[i];i++) if (c==sCharSet[i]) {ic = i; break;};
         if (ic>=0) {
@@ -2541,8 +2571,10 @@ void Refresh_ShowInfo(void)
             c = ' ';
             if ((mt_unit[i].flags & UNIT_DIS) || ((mt_unit[i].flags & UNIT_ATT) == 0)) {
                 n = 0;
-            } else if (mtcab[i].mt_is == MT_is_rewinding) {
-                // if rewinding the ammount of tape medium used is in variable recsize, not in u3
+            } else if ((mtcab[i].mt_is == MT_is_rewinding) || 
+                       ((mtcab[i].mt_is == MT_is_loading_tape) && (mtcab[i].rew_u3 > 0))) {
+                // if rewinding then the ammount of tape medium used is in variable recsize, not in u3
+                // if loading tape AND rew_u3 > 0 then the tpe is shounf a nice rew animation started with *R
                 n = mtcab[i].rew_u3; 
                 c = 'R';
             } else {

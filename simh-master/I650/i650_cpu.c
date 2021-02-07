@@ -180,6 +180,7 @@ struct {
     int WordTimeObjectivePerSec;  // calculated: value of WordTimeCountPerSec to achieve
     // speed measurement for scp/debug
     uint32 start_tm0;             // sim_os_msec() when run starts
+    uint32 end_tm0;               // sim_os_msec() when run ends
     t_int64 InstrCount;           // full intructions executed count (=0 on start of run)
     t_int64 GlobalWordTimeCount0; // count of word times already executed when run starts
     // measurement for speed control
@@ -1786,19 +1787,24 @@ int Measure_CpuSpeed(int Mode)
         CpuSpeed.measurement.tm0                 = tnow;
         CpuSpeed.measurement.WordTime0           = GlobalWordTimeCount;
         CpuSpeed.measurement.WordTimeCountPerSec = 0;
+        CpuSpeed.WordTimeCount=0;
     }
     return 0;
 }
 
 // speed measurement for scp/debug. mesaures the speed achieved during the 
 // whole run (entering and leaving sim_instr())
-void Measure_run_CpuSpeed(t_int64 * elapsed, int * WTS, int * IPS, char * sBuf)
+// if Mode = 1, save sim_os_msec() as end of run, use it for measurement 
+//         = 0, use save value of sim_os_msec()
+void Measure_run_CpuSpeed(t_int64 * elapsed, int * WTS, int * IPS, char * sBuf, int Mode)
 {
-    *elapsed = sim_os_msec() - CpuSpeed.start_tm0;
+    if (Mode==1) CpuSpeed.end_tm0 = sim_os_msec(); 
+
+    *elapsed = CpuSpeed.end_tm0 - CpuSpeed.start_tm0;
     if ((*elapsed < 1) || (CpuSpeed.InstrCount < 2) || (CpuSpeed.start_tm0 == 0)) {
         // if run elapsed <1 msec or less thatn 2 instruction executed
         // then there are no data measured
-        *elapsed = 0;
+        *elapsed = 0; 
         return; 
     }
     // WordTimes per second achieved
@@ -1852,6 +1858,7 @@ int Control_CpuSpeed(int bFastMode)
         sim_os_ms_sleep(15);
         if (nMaxWaitLoop-- <0) {
             bTooFast=1; 
+            CpuSpeed.WordTimeCount = CpuSpeed.WordTimeMax; // so next call to control_speed will wait again
             break; 
         }
     }
@@ -1946,9 +1953,9 @@ int Symbolic_Trace(uint32 Symbolic_Trace_tm0, char * Symbolic_Buffer, char * sTr
             len = len * 10 + c - '0';
         }
         if (len==0) sprintf(buf, "len=0"); else
-            if ((addr<4000) || ((addr>=9000) && (addr<9060))) {
-                trace=2;
-            } else sprintf(buf, "invalid addr=%d", addr);
+        if ((addr<4000) || ((addr>=9000) && (addr<9060))) {
+            trace=2;
+        } else sprintf(buf, "invalid addr=%d", addr);
     }
     if (trace) {
         int hh,mm,ss;
@@ -2445,13 +2452,14 @@ t_stat sim_instr(void)
         int WTS, IPS;
         char sBuf[80];
 
-        Measure_run_CpuSpeed(&elapsed, &WTS, &IPS, sBuf);
+        Measure_run_CpuSpeed(&elapsed, &WTS, &IPS, sBuf, 1);
         if (elapsed > 0) {
             sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: %d WordTimes per second\n", WTS);
-            sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: Speed is x%0.1f relative to original hardware\n", 
+            sim_debug(DEBUG_DETAIL, &cpu_dev, "Speed is x%0.1f relative to original hardware\n", 
                                                  WTS / 10416.0);  // real hw speed: 10416 word times per second
+            sim_debug(DEBUG_DETAIL, &cpu_dev, "Instructions executed: %.0f\n", 1.0 * CpuSpeed.InstrCount);
             sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: %d Instructions per second (IPS) achieved\n", IPS);
-            sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: run elapsed %s\n", sBuf);
+            sim_debug(DEBUG_DETAIL, &cpu_dev, "Run elapsed %s\n", sBuf);
         }
     }
      
@@ -2623,7 +2631,7 @@ t_stat cpu_show_speed(FILE *st, UNIT *uptr, int32 value, CONST void *desc)
             CpuSpeed.WordTimeMax * 1000 / CpuSpeed.msec);
     }
 
-    Measure_run_CpuSpeed(&elapsed, &WTS, &IPS, sBuf);
+    Measure_run_CpuSpeed(&elapsed, &WTS, &IPS, sBuf, 0);
     if (elapsed == 0) {
         fprintf (st, "Measured speed: no data\n");
     } else {

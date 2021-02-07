@@ -225,10 +225,11 @@ extern int (*vid_display_kb_event_process)(SIM_KEY_EVENT *kev);
 
 #if defined(CPANEL)
 
-extern t_stat vid_SetWindowSizeAndPos (int Mode, int x, int y);
+extern t_stat vid_SetWindowSizeAndPos (int Mode, int x, int y); // Mode=1 -> set pos, =2 -> set size, =3 -> move relative (eg x=-3, y=+4 -> move window 3 pixels left, 4 down)
 extern void vid_set_icon(void);
 extern int icon_rgb_defined;
-extern void vid_set_system_cursor (int nCursor);
+extern void vid_set_system_cursor (int nCursor); // nCursor=0 -> slashed circle, =1 -> set arrow cursor, =2 -> hand cursor, =3 -> Four pointed arrow pointing north, south, east, and west
+extern void vid_refresh_ex (uint32 * surf, int ww, int hh); 
 
 #endif
 
