@@ -1,0 +1,661 @@
+                                                             Conversion program
+                                                             
+                                                             Transaction Sort program
+                                                             by Roberto Sancho Nov 2020
+                                                             from specs at page 55 in book "PERT summary report phase 2"
+                                                             
+                                                             tapes input:
+                                                                           09 program
+                                                                           02/03 converted transactions tape created in Run02
+                                                                   output:
+                                                                           01 sorted/merged transaction file
+                                                                   temporary:
+                                                                           04-07 work tape (only for sort)
+                                                             
+                                                                   on line print:
+                                                                              label of input tape(s) 
+                                                                              label of output tape and total number of sorted/merged transactions 
+                                                             
+                                                             stops: IC: 01991 (00 61 0000 0000 1991) -> unrecoverable read error
+                                                                    IC: 01905 (00 61 0000 0000 1905) -> unrecoverable write error
+                                                             
+                                                                    IC: 00001 (00 61 0000 0000 0000) -> finished ok. 
+                                                             
+                                                             Switch 74 set to off      -> sort predecessors on tape 03
+                                                                              transfer -> sort successors on tape 02
+                                                             
+                                                             Switch 75 set to off      -> sort predecessors/successors on tape 03/02
+                                                                              transfer -> merge tape 02 03 to tape 01
+                                                             
+                                                             
+                                                             Input tape tape transaction record (as written by Run02) for tape 02 successors
+                                                             
+                                                             w1 = A RS PR 0 PPPPPPPPP 0      A=card code PPP=predecessor code, RS=Res.Rate, PR=Pref.Rate
+                                                             w2 
+                                                             w3 
+                                                             w4 = 55 00 00 SSSSSSSSS R       R=report code
+                                                             w5 = TE
+                                                             w6 = SIGMA
+                                                             w7 = SCHEDL 000000 TSTS         TSTS=Schedulled completition time, SCHEDL=Schedulled date (format mm dd yy)
+                                                             
+                                                             Input tape transaction record (as written by Run02) for tape 03 predecessors
+                                                             
+                                                             w1 = A RS PR 0 PPPPPPPPP 0      A=card code PPP=predecessor code, RS=Res.Rate, PR=Pref.Rate
+                                                             w2 = TE
+                                                             w3 = SIGMA
+                                                             w4 = 66 xx xx SSSSSSSSS R       R=report code
+                                                             w5
+                                                             w6
+                                                             w7 = SCHEDL xx xxxx TSTS        TSTS=Schedulled completition time, SCHEDL=Schedulled date (format mm dd yy)
+                                                             
+                                                             in input tape transaction are grouped in blocks. Max 28 transaction (7 words each)
+                                                             per block -> max block size = 7*28=196 words
+                                                             
+                                                           
+                                                                                          init
+                                                             
+0008 00 57 0000 0000 0000   0008        57                                           Clear M4 M6 M8
+0009 09 98 0000 0000 0000            09 98                                           rewind tape 09 program
+0010 00 75 0000 0000 0012               75                               LINIA00
+0011 00 60 0000 0000 0030               TR                               PHASE-A     procedeed to sort
+0012 02 98 0000 0000 0000   LINIA00  02 98                                           rewind tape 02
+0013 03 98 0000 0000 0000            03 98                                           rewind tape 03 
+0014 00 80 1708 0002 0000               80       ZERO        0002
+0015 00 80 0000 0003 0000               80                   0003
+0016 00 80 0000 0004 0000               80                   0004
+0017 00 80 0000 0005 0000               80                   0005
+0018 00 80 0000 0006 0000               80                   0006
+0019 02 94 1701 1701 0000            02 94       TEMP1       TEMP1       0000        read tape 02 label
+0020 00 68 0020 0000 1991               68       *                       REREAD      if tape check Call Re-read
+0021 00 80 1701 0001 0000               80       TEMP1       0001                    print input label for tape 2
+0022 00 81 1708 0007 0000               81       ZERO        0007                    print
+0023 03 94 1701 1701 0000            03 94       TEMP1       TEMP1       0000        read tape 03 label
+0024 00 68 0024 0000 1991               68       *                       REREAD      if tape check Call Re-read
+0025 00 80 1701 0001 0000               80       TEMP1       0001                    print input label for tape 3
+0026 00 81 1708 0007 0000               81       ZERO        0007                    print
+0027 01 90 1705 1705 0000            01 90       MT1LBLM     MT1LBLM                 write label for merged tape in MT1
+0028 08 60 0028 0000 1992            08 60       *                       CHKWRT      Check write
+0029 00 60 0000 0000 0149               TR                               PHASE-BM    procedeed to merge
+                                      
+0030 00 74 0000 0000 0035   PHASE-A     74                               LINIA02     if Sw74 set to transfer, goto chk label for tape 02 (successors)
+0031 03 98 0000 0000 0000            03 98                                           rewind tape 03 
+0032 03 94 1701 1701 0000            03 94       TEMP1       TEMP1       0000        read tape 03 label
+0033 00 68 0033 0000 1991               68       *                       REREAD      if tape check Call Re-read
+0034 00 60 1704 1702 0039               TR       MT3LBL      TEMP2       LINIA03     set the expected label in temp2
+0035 02 98 0000 0000 0000   LINIA02  02 98                                           rewind tape 02
+0036 02 94 1701 1701 0000            02 94       TEMP1       TEMP1       0000        read tape 02 label
+0037 00 68 0037 0000 1991               68       *                       REREAD      if tape check Call Re-read
+0038 00 60 1703 1702 0039               TR       MT2LBL      TEMP2       LINIA03     set the expected label in temp2
+0039 00 80 1701 0001 0000   LINIA03     80       TEMP1       0001                    print input label 
+0040 00 80 1708 0002 0000               80       ZERO        0002
+0041 00 80 0000 0003 0000               80                   0003
+0042 00 80 0000 0004 0000               80                   0004
+0043 00 80 0000 0005 0000               80                   0005
+0044 00 80 0000 0006 0000               80                   0006
+0045 00 81 0000 0007 0000               81                   0007                    print
+0046 00 70 1701 1702 0048               TR EQ    TEMP1       TEMP2       INIAOK      check if label is the expected one
+0047 00 61 0000 0000 0000               STOP                                         stop because tape label does not match the expected one
+0048 00 60 1708 1672 0000   INIAOK      TR       ZERO        NTBL                    Init reorder table
+0049 00 60 1708 1405 0000               TR       ZERO        NW-OUTB                 Init number of words into output buffer
+0050 00 60 1717 1608 0000               TR       MT4         OUTTAP                  Init to start writting to MT4
+0051 00 60 1718 1609 0000               TR       MT5         OUTTAP2                 and then to MT5
+0052 00 60 1708 1677 0000               TR       ZERO        NTBLOCK                 init total number of saved blocks to MT4/MT5
+0053 00 60 1708 1676 0000               TR       ZERO        TRCOUNT                 Init count of transactions
+0054 00 60 1708 1679 0000               TR       ZERO        NBTAPA                  Init number of blocks on work tapes to zero 
+0055 00 60 1708 1680 0000               TR       ZERO        NBTAPB
+0056 00 60 1708 1681 0000               TR       ZERO        NBTAPC                  
+0057 00 60 1708 1682 0000               TR       ZERO        NBTAPD
+0058 00 60 1728 0147 0000               TR       NOP-OP      LSVOUTOK                process input transactions 
+0059 04 98 0000 0000 0000            04 98                                           rewind MT4 work tape
+0060 05 98 0000 0000 0000            05 98                                           rewinf MT5 work tape
+0061 01 98 0000 0000 0000            01 98                                           rewinf MT1 result sorted tape
+                                      
+                                                                                               phase a (Split) read tape, 
+                                                                                                               sort each transactions block in memory
+                                                                                                               write to alternate tapes MT4/MT5
+                                      
+                                                                                               read block from input tape
+                                      
+0062 00 74 0000 0000 0066   RB-INBUF    74                               LSPL1       if Sw74 set to transfer, goto read input block buffer from tape 02 (successors)
+0063 03 94 1001 0000 0000            03 94       INBUF       0000                    read input block buffer 
+0064 00 68 0064 0000 1991               68       *                       REREAD      if tape check Call Re-read
+0065 00 60 0000 0000 0068               TR                               LSPL2
+0066 02 94 1001 0000 0000   LSPL1    02 94       INBUF       0000                    read input block buffer  
+0067 00 68 0067 0000 1991               68       *                       REREAD      if tape check Call Re-read
+0068 00 67 0000 0000 0079   LSPL2       67                               EOFIN       if end of file transfer to end of input transactions       
+0069 00 60 0000 1701 0000               TR                   TEMP1                   Temp1=start of block xx xx aaaa bbbb xxxx
+0070 04 42 0000 1722 1702            04 MASK                 FIELD-S     TEMP2       Temp2=bbbb=02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+0071 08 42 1701 1721 0000            08 MASK     TEMP1       FIELD-R                 REG1=02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa 
+0072 00 41 1702 0000 0000               SUB      TEMP2             
+0073 00 40 0000 1709 1201               ADD                  ONE         BL-INBUF    BL-INBUF=Block Len from Input Transaction=bbbb-aaaa+1
+0074 00 41 1713 0000 0000               SUB      N196                                check Block Len from Input Transaction
+0075 00 63 0077 0077 0000               TR SGN   LSPL3       LSPL3                   transfer if 196 or less
+0076 00 61 0000 0000 0000               STOP                                         stop because input transaction in tape 02 or 03 too big (max 196w, that holds 28 transactions of 7w
+0077 00 60 1708 1203 0000   LSPL3       TR       ZERO        NW-INBUF                NW-INBUF=Number of words already processed from Input Transaction block
+0078 00 60 0000 0000 0085               TR                               RR-INBUF    goto process first transaction record in block
+                                      
+                                                                                               end of split phase
+                                      
+0079 00 74 0000 0000 0082   EOFIN       74                               LEOFI1      if Sw74 set to transfer, goto rew tape 02 (successors)
+0080 03 98 0000 0000 0000            03 98                                           rewind tape 03
+0081 00 60 0000 0000 0083               TR                               LEOFI2
+0082 02 98 0000 0000 0000   LEOFI1   02 98                                           rewind tape 02
+0083 00 60 0084 0147 0120   LEOFI2      TR       LEOFI3      LSVOUTOK    PO-OUTB     flush output buffer and then ...
+0084 00 60 0000 0000 0155   LEOFI3      TR                               PHASE-B     end of phase a split, goto phase b sort
+                                      
+                                                                                               read transaction record from from input tape block 
+                                      
+0085 00 41 1201 1203 0000   RR-INBUF    SUB      BL-INBUF    NW-INBUF                REG1=words left to be read in input transact block. 
+0086 00 63 0088 0062 0000               TR SGN   LRR1        RB-INBUF                If no words left, go to read next block
+0087 00 61 0000 0000 0000               STOP                                         Safety: stop because overflowing block rec
+0088 96 60 1203 0000 0000   LRR1     96 TR       NW-INBUF                            Shift num words read into field S
+0089 00 40 1405 0000 0000               ADD      NW-OUTB                             add num words writen into field T
+0090 00 40 1727 0000 0091               ADD      SETM-OP                 LRR2        set instr to ...
+0091 00 00 0000 0000 0000   LRR2        00       0000        0000        0000        ... clear modif and set M6=NW-INBUF, M8=NW-OUTBUF
+0092 00 60 7001 5686 0000   LRR3        TR       INBUF   +M6 W1      +M4             copy from input tranasction block to rec w1..w7
+0093 00 60 0000 9205 0000               TR                   OUTBUF  +M8             copy to output transaction block
+0094 00 50 0000 0001 0001               50       0000        0001        0001        ... incr M6, M8 
+0095 00 58 0001 0007 0092               58       0001        0007        LRR3        ... incr M4, loop
+0096 00 40 1203 1711 1203               ADD      NW-INBUF    N7          NW-INBUF    Number of words read from block += 7
+                                      
+                                                                                               get transaction successor/predecessor code 
+                                      
+0097 00 60 1689 0000 0000               TR       W4                                  REG1=successor code
+0098 00 74 1686 0000 0000               74       W1                                  if Sw74 set to transfer, get code for predecessor
+0099 00 42 0000 1725 1673               MASK                 TR-FIELD    CODE        extract code as control word for sort
+0100 00 40 1676 1709 1676               ADD      TRCOUNT     ONE         TRCOUNT     incr total count of transactions to sort
+                                                  
+                                                                                               add transaction code at ordered position in TBL            
+                                      
+0101 00 57 0000 0000 0000               57                                           Clear M4 M6 M8
+0102 00 70 1672 1708 0113               TR EQ    NTBL        ZERO        LRRS4       if TBL empty, goto to set first entry
+0103 00 41 0000 1709 0000               SUB                  ONE
+0104 96 60 0000 0000 0000            96 TR                                           REG1=0..0 NTBL-1 0000
+0105 00 40 1727 0000 0106               ADD      SETM-OP                 LRRS2       set instr to ...
+0106 00 00 0000 0000 0000   LRRS2       00       0000        0000        0000        ... clear modif and set M6 with NTBL-1 value
+0107 00 60 7641 7642 0000   LRRS3       TR       TBLPTR  +M6 TBLPTR1 +M6             copy TBLPTR to next entry (make room for insertion)
+0108 00 60 7612 7613 0000               TR       TBLCODE +M6 TBLCODE1+M6             read TBLCODE pointed by M6, copy on next pos
+0109 00 41 1673 0000 0000               SUB      CODE                                compare current tbl code with code to insert
+0110 00 63 0112 0112 0000               TR SGN   LRRS1       LRRS1                  
+0111 06 58 9999 9999 0107            06 58       9999        9999        LRRS3       ... decr M6, loop
+0112 00 50 0000 0001 0000   LRRS1       50       0000        0001                    ... incr M6
+                                      
+                                                                                               add transaction data 
+                                      
+0113 00 60 1673 7612 0000   LRRS4       TR       CODE        TBLCODE +M6             add transaction code to table ...
+0114 00 60 1405 7641 0000               TR       NW-OUTB     TBLPTR  +M6             ... in its ordered position            
+0115 00 40 0000 1711 1405               ADD                  N7          NW-OUTB     incr number of words used in output buffer
+0116 00 40 1672 1709 1672               ADD      NTBL        ONE         NTBL        incr num of entries in TBL
+0117 00 41 1712 0000 0000               SUB      N28                                 check if NTBL is <= 28. 
+0118 00 63 0085 0120 0000               TR SGN   RR-INBUF    PO-OUTB                 if NTBL<28 read next transaction, if =28 write to tape
+0119 00 61 0000 0000 0000               STOP                                         safety: stop because NTBL >24
+                                      
+                                                                                               prepare ordered output buffer 
+                                      
+0120 00 57 0000 0000 0000   PO-OUTB     57                                           Clear M4 M6 M8
+0121 00 70 1672 1708 0147               TR EQ    NTBL        ZERO        LSVOUTOK    nothing to save in putput buf
+0122 92 60 7641 0000 0000   LP01     92 TR       TBLPTR  +M6                         get start of transac into outbuf, shift to field R 
+0123 00 40 0131 0000 0124               ADD      TRO12-OP                LPO2        set intr ...
+0124 00 00 0000 0000 0000   LPO2        00       0000                                ... (OUTBUF + (TBPLPTR)) -> (OUTBUF2)
+0125 00 50 0000 0000 0001               50       0000        0000        0001        incr M8 (points to OUTBUF2)
+0126 00 58 0001 0007 0124               58       0001        0007        LPO2        loop on M4. copy tr from OUTBUF to OUTBUF2
+0127 00 41 1672 1709 1672               SUB      NTBL        ONE         NTBL        decr NTBL
+0128 00 70 1708 0000 0133               TR EQ    ZERO                    SV-OUTB
+0129 00 51 0000 0001 0000               51       0000        0001                    incr M6, clear M4
+0130 00 60 0000 0000 0122               TR                               LP01
+0131 00 60 5205 9406 0000   TRO12-OP    TR       OUTBUF  +M4 OUTBUF2 +M8 0000
+                                                                                               write output buffer to tape OUTTAP (MT4/MT5)
+                                      
+0132 00 90 1406 1406 0000   SVOU2-OP 00 90       OUTBUF2     OUTBUF2     0000
+                                      
+0133 96 60 1405 1701 0000   SV-OUTB  96 TR       NW-OUTB     TEMP1                   put number of words to save in field S
+0134 00 70 1708 0000 0147               TR EQ    ZERO                    LSVOUTOK    No words to save      
+0135 00 41 1701 1724 0000               SUB      TEMP1       ONE-S                   decrement words to save      
+0136 00 40 0132 0000 0000               ADD      SVOU2-OP                            set instr ...
+0137 00 40 1608 0000 0138               ADD      OUTTAP                  LSVOUT1     ... to save block 
+0138 00 00 0000 0000 0000   LSVOUT1     00       0000        0000        0000        ... in tape OUTTAP
+0139 08 60 0139 0000 1992            08 60       *                       CHKWRT      Check write
+0140 00 60 1708 1405 0000               TR       ZERO        NW-OUTB                 clear number of words in block buf
+0141 00 60 1708 1672 0000               TR       ZERO        NTBL                    clear num of entries in TBL. not necessary, but here for safety
+0142 08 60 0142 0000 1789            08 60       *                       INCNBTAP    increment number of blocks in outtap
+0143 00 60 1609 1701 0000               TR       OUTTAP2     TEMP1                   swap outtap <-> outtap2
+0144 00 60 1608 1609 0000               TR       OUTTAP      OUTTAP2
+0145 00 60 1701 1608 0000               TR       TEMP1       OUTTAP 
+0146 00 40 1677 1709 1677               ADD      NTBLOCK     ONE         NTBLOCK     incr number of total blocks saved to split tapes
+0147 00 60 0000 0000 0000   LSVOUTOK    NOP
+0148 00 60 0000 0000 0085               TR                               RR-INBUF    goto process next input transaction
+                                      
+                                                                                               phase b (merge) read tape A and B, 
+                                                                                                               sort merge seuences of n blocks to alternate output tapes C/D
+0149 00 41 1708 1709 1683   PHASE-BM    SUB      ZERO        ONE         NSEQ        init sequence os already sorted blocks to maxint
+0150 00 60 0000 0000 0000               TR                   
+0151 00 60 1715 1606 0000               TR       MT2         INTAP                   init input tapes A/B = MT2/3 
+0152 00 60 1716 1607 0000               TR       MT3         INTAP2
+0153 00 60 1714 1608 0000               TR       MT1         OUTTAP                  init output tape C = MT1
+0154 00 60 0000 0000 0166               TR                               LBSEQ0      go on 
+                                      
+                                                                                               phase b (sort) read tape A and B, 
+                                                                                                              sort merge seuences of n blocks to alternate output tapes C/D
+                                      
+0155 00 72 1677 1708 0157   PHASE-B     TR NEQ   NTBLOCK     ZERO        LINIB01     if nothing to sort, ...
+0156 00 61 0000 0000 0000               STOP                                         stop because nothing to sort
+0157 00 72 1677 1709 0159   LINIB01     TR NEQ   NTBLOCK     ONE         LINIB02     if only one block to sort ...
+0158 00 60 1609 1610 0241               TR       OUTTAP2     SRCTAP      PHASE-C     ... copy last write tape to MT1 (as block has already been sorted in mem)
+0159 00 60 1709 1683 0000   LINIB02     TR       ONE         NSEQ                    init sequence of already sorted blocks
+0160 00 60 1717 1606 0000               TR       MT4         INTAP                   init input tapes A/B = MT4/5 
+0161 00 60 1718 1607 0000               TR       MT5         INTAP2
+0162 00 60 1719 1608 0000               TR       MT6         OUTTAP                  init output tapes C/D = MT6/7
+0163 00 60 1720 1609 0000               TR       MT7         OUTTAP2
+0164 04 98 0000 0000 0000            04 98                                           rewind tape 04 and 05
+0165 05 98 0000 0000 0000            05 98
+                                      
+0166 00 60 1708 1201 0000   LBSEQ0      TR       ZERO        BL-INBUF                init to force read first block of input tape
+0167 00 60 1708 1202 0000               TR       ZERO        BL2INBUF 
+                                 
+                                 ;           nop                                          **echo LBSEQ0
+                                  
+0168 00 60 1708 1405 0000               TR       ZERO        NW-OUTB                 Init output buffer as empty 
+0169 00 60 1708 1676 0000               TR       ZERO        TRCOUNT                 Init count of transactions
+0170 00 60 1708 1678 0000               TR       ZERO        NBLOCK                  init block number to write to tape
+0171 00 57 0000 0000 0000               57       0000        0000        0000        use tape INTAP
+0172 08 60 0172 0000 1729            08 60       *                       READ-TR     call read transaction
+0173 00 57 0000 0000 0001               57       0000        0000        0001        use tape INTAP2
+0174 08 60 0174 0000 1729            08 60       *                       READ-TR     call read transaction
+0175 00 60 0000 0000 0000   LBSEQ1      NOP
+                                 
+                                 ;           nop                                          **echo LBSEQ1
+                                 ;           tr       code1                               **echo code1:
+                                 ;           tr       code2                               **echo code2:
+                                 
+0176 00 70 1674 1708 0187               TR EQ    CODE1       ZERO        LBDUMP2     if code1 = 0 then dump tape 2
+0177 00 70 1675 1708 0180               TR EQ    CODE2       ZERO        LBDUMP1     if code2 = 0 then dump tape 1
+0178 00 41 1675 1674 0000               SUB      CODE2       CODE1                   if code2 >= code1 then write code1
+0179 00 63 0194 0194 0200               TR SGN   LBWR1       LBWR1       LBWR2       else write code2
+0180 00 60 0000 0000 0000   LBDUMP1     NOP
+                                 
+                                 ;           nop                                          **echo LBDUMP1
+                                 ;           tr       code1                               **echo code1:
+                                 
+0181 00 70 1674 1708 0206               TR EQ    CODE1       ZERO        LBSTERM     tape 1 dumped, goto sequence terminated
+0182 00 57 0000 0000 0000               57       0000        0000        0000        use INBUF
+0183 08 60 0183 0000 1801            08 60       *                       WRITE-TR    call write transaction
+0184 00 57 0000 0000 0000               57       0000        0000        0000        use tape INTAP
+0185 08 60 0185 0000 1729            08 60       *                       READ-TR     call read transaction
+0186 00 60 0000 0000 0180               TR                               LBDUMP1
+0187 00 60 0000 0000 0000   LBDUMP2     NOP
+                                 
+                                 ;           nop                                          **echo LBDUMP2
+                                 ;           tr       code2                               **echo code2:
+                                 
+0188 00 70 1675 1708 0206               TR EQ    CODE2       ZERO        LBSTERM     tape 2 dumped, goto sequence terminated
+0189 00 57 0000 0000 0001               57       0000        0000        0001        use INBUF2
+0190 08 60 0190 0000 1801            08 60       *                       WRITE-TR    call write transaction
+0191 00 57 0000 0000 0001               57       0000        0000        0001        use tape INTAP2
+0192 08 60 0192 0000 1729            08 60       *                       READ-TR     call read transaction
+0193 00 60 0000 0000 0187               TR                               LBDUMP2
+0194 00 60 0000 0000 0000   LBWR1       NOP
+                                 
+                                 ;           nop                                          **echo LBWR1
+                                 
+0195 00 57 0000 0000 0000               57       0000        0000        0000        write code1
+0196 08 60 0196 0000 1801            08 60       *                       WRITE-TR    call write transaction
+0197 00 57 0000 0000 0000               57       0000        0000        0000        read next code1
+0198 08 60 0198 0000 1729            08 60       *                       READ-TR     call read transaction
+0199 00 60 0000 0000 0175               TR                               LBSEQ1
+0200 00 60 0000 0000 0000   LBWR2       NOP
+                                 
+                                 ;           nop                                          **echo LBWR2
+                                 
+0201 00 57 0000 0000 0001               57       0000        0000        0001        write code2
+0202 08 60 0202 0000 1801            08 60       *                       WRITE-TR    call write transaction
+0203 00 57 0000 0000 0001               57       0000        0000        0001        read next code2
+0204 08 60 0204 0000 1729            08 60       *                       READ-TR     call read transaction
+0205 00 60 0000 0000 0175               TR                               LBSEQ1
+0206 00 60 0000 0000 0000   LBSTERM     NOP
+                                 
+                                 ;           nop                                          **echo LBSTERM
+                                 
+0207 00 57 0000 0000 9999               57       0000        0000        9999
+0208 08 60 0208 0000 1801            08 60       *                       WRITE-TR    flush outbuf to tape
+0209 00 70 1608 1714 0275               TR EQ    OUTTAP      MT1         EOFTM       if writing to tape 1, exit to eotm
+0210 00 60 1606 1610 0000               TR       INTAP       SRCTAP                  get number of blocks remaining to be read
+0211 08 60 0211 0000 1795            08 60       *                       GETNBTAP    in input tape
+0212 00 60 1701 1702 0000               TR       TEMP1       TEMP2
+0213 00 60 1607 1610 0000               TR       INTAP2      SRCTAP                  
+0214 08 60 0214 0000 1795            08 60       *                       GETNBTAP    in input tape 2
+0215 00 40 1701 1702 0000               ADD      TEMP1       TEMP2                   
+0216 00 70 0000 1708 0220               TR EQ                ZERO        LBSWAP      if all blocks read in input tapes, goto swap in/out tapes
+0217 00 60 1608 1701 0000               TR       OUTTAP      TEMP1                   swap output tapes
+0218 00 60 1609 1608 0000               TR       OUTTAP2     OUTTAP
+0219 00 60 1701 1609 0166               TR       TEMP1       OUTTAP2     LBSEQ0
+0220 00 60 0000 0000 0000   LBSWAP      NOP
+                                 
+                                 ;           nop                                          **echo LBSWAP
+                                 
+0221 04 98 0000 0000 0000            04 98                                           rewind work tapes
+0222 05 98 0000 0000 0000            05 98
+0223 06 98 0000 0000 0000            06 98
+0224 07 98 0000 0000 0000            07 98
+0225 00 60 1608 1610 0000               TR       OUTTAP      SRCTAP                  
+0226 08 60 0226 0000 1795            08 60       *                       GETNBTAP    get blocks in output tape
+0227 00 70 1701 1708 0240               TR EQ    TEMP1       ZERO        LBOK2       if = 0 goto output tape 2 has all the sorted transactions
+0228 00 60 1609 1610 0000               TR       OUTTAP2     SRCTAP                  
+0229 08 60 0229 0000 1795            08 60       *                       GETNBTAP    get blocks in output tape
+0230 00 70 1701 1708 0239               TR EQ    TEMP1       ZERO        LBOK1       if = 0 goto output tape 1 has all the sorted transactions
+0231 00 60 1606 1701 0000               TR       INTAP       TEMP1                   swap input and output tapes
+0232 00 60 1607 1702 0000               TR       INTAP2      TEMP2                   
+0233 00 60 1608 1606 0000               TR       OUTTAP      INTAP
+0234 00 60 1609 1607 0000               TR       OUTTAP2     INTAP2
+0235 00 60 1701 1608 0000               TR       TEMP1       OUTTAP
+0236 00 60 1702 1609 0000               TR       TEMP2       OUTTAP2
+0237 00 40 1683 1683 1683               ADD      NSEQ        NSEQ        NSEQ        double sequence size = number of blocks processed at once  
+0238 00 60 0000 0000 0166               TR                               LBSEQ0      contine      
+0239 00 60 1608 1610 0241   LBOK1       TR       OUTTAP      SRCTAP      PHASE-C     output tape 1 has the sorted records 
+0240 00 60 1609 1610 0241   LBOK2       TR       OUTTAP2     SRCTAP      PHASE-C     output tape 2 has the sorted records                                                         phase c (transcribe) copy tape SRC to MT1, with label
+                                         
+0241 00 40 0268 1610 0242   PHASE-C     ADD      RWINT-OP    SRCTAP      RW-INT      set inst ...  
+0242 00 00 0000 0000 0000   RW-INT      00                                           ... to rewind SRC tape
+0243 00 60 1707 1701 0000               TR       MT3LBLS     TEMP1                   set temp1 with output tape label
+0244 00 74 1706 1701 0000               74       MT2LBLS     TEMP1                   if Sw74 set to transfer, goto set label for tape 02 (successors)
+0245 01 90 1701 1701 0000            01 90       TEMP1       TEMP1                   write label for sorted tape in MT1
+0246 08 60 0246 0000 1992            08 60       *                       CHKWRT      Check write
+0247 00 80 1701 0001 0000               80       TEMP1       0001                    print output tape label 
+0248 00 80 1676 0002 0000               80       TRCOUNT     0002                    print number of sorted transactions in output tape
+0249 00 80 1708 0003 0000               80       ZERO        0003
+0250 00 80 0000 0004 0000               80                   0004
+0251 00 80 0000 0005 0000               80                   0005
+0252 00 80 0000 0006 0000               80                   0006
+0253 00 81 0000 0007 0000               81                   0007                    print
+0254 00 40 0269 1610 0255               ADD      LDINT-OP    SRCTAP      RB-INT      set inst ...  
+0255 00 00 0000 0000 0000   RB-INT      00                                           ... to read SRC tape
+0256 00 68 0256 0000 1991               68       *                       REREAD      if tape check Call Re-read
+0257 00 60 0000 1701 0000               TR                   TEMP1                   Temp1=start of block xx xx aaaa bbbb xxxx
+0258 04 42 0000 1722 1702            04 MASK                 FIELD-S     TEMP2       Temp2=bbbb=02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+0259 08 42 1701 1721 0000            08 MASK     TEMP1       FIELD-R                 REG1=02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa 
+0260 00 41 1702 0000 1201               SUB      TEMP2                   BL-INBUF    BL-INBUF=Block Len from Input tape to transcribe=bbbb-aaaa
+0261 96 60 1201 0000 0000            96 TR       BL-INBUF                            REG1= 0..0 LEN 0000
+0262 00 40 0270 0000 0263               ADD      SVINT-OP                WB-INT      set instr ...
+0263 00 00 0000 0000 0000   WB-INT      00                                           ... to write to MT01 for same len as readed
+0264 08 60 0264 0000 1992            08 60       *                       CHKWRT      Check write
+0265 00 41 1677 1709 1677               SUB      NTBLOCK     ONE         NTBLOCK     decr number of saved blocks
+0266 00 63 0255 0271 0000               TR SGN   RB-INT      EOFT  
+0267 00 61 0000 0000 0000               STOP                                         Safety: stop because bumber of blocks saved negative
+                                      
+0268 00 98 0000 0000 0000   RWINT-OP 00 98       0000        0000        0000
+0269 00 94 1001 0000 0000   LDINT-OP 00 94       INBUF       0000        0000
+0270 01 90 1001 1001 0000   SVINT-OP 01 90       INBUF       INBUF
+                                      
+0271 01 90 0000 0000 0000   EOFT     01 90       0000        0000        0000        write end of tape 01 
+0272 08 60 0272 0000 1992            08 60       *                       CHKWRT      Check write
+0273 01 98 0000 0000 0000            01 98                                           rewing tape 01 sorted data   
+0274 00 60 1726 0001 0001   END         TR       STOP-OP     0001        0001        set stop in 0001, transfer to 0001: sucessfull program end                             
+                                      
+0275 00 80 1705 0001 0000   EOFTM       80       MT1LBLM     0001                    print mt1 output tape label 
+0276 00 80 1676 0002 0000               80       TRCOUNT     0002                    print total number of merge transactions in output tape
+0277 00 80 1708 0003 0000               80       ZERO        0003
+0278 00 80 0000 0004 0000               80                   0004
+0279 00 80 0000 0005 0000               80                   0005
+0280 00 80 0000 0006 0000               80                   0006
+0281 00 81 0000 0007 0000               81                   0007                    print
+0282 00 60 0000 0000 0271               TR                               EOFT        goto add end of tape and terminate
+                                      
+                                      
+1000 00 00 0000 0000 0000   1000                                                     variables
+                                      
+                                      
+1001 00 00 0000 0000 0000   INBUF       RES      200                                 block read from input tape 02 or 03
+                                      
+1201 00 00 0000 0000 0000   BL-INBUF                                                 block length
+1202 00 00 0000 0000 0000   BL2INBUF                                                 block length for inbuf2 
+1203 00 00 0000 0000 0000   NW-INBUF                                                 Number of words read from block
+1204 00 00 0000 0000 0000   NW2INBUF                                                 Number of words read from block in inbuf 2
+                                      
+1205 00 00 0000 0000 0000   OUTBUF      RES      200                                 block to write in tape 04 or 05 (unordered)
+1405 00 00 0000 0000 0000   NW-OUTB                                                  Number of words in block to write
+                                      
+1406 00 00 0000 0000 0000   OUTBUF2     RES      200                                 block to write in tape 04 or 05 (ordered)
+                                      
+1606 00 00 0000 0000 0000   INTAP                                                    input tape for pahse B 
+1607 00 00 0000 0000 0000   INTAP2
+1608 00 00 0000 0000 0000   OUTTAP                                                   output tape = 0n 0..0 
+1609 00 00 0000 0000 0000   OUTTAP2                                                  alternate output tape 
+1610 00 00 0000 0000 0000   SRCTAP                                                   source tape for phase-d transcribe file to mt1
+                                      
+                                 INBUF2      EQU      OUTBUF2
+                                      
+1612 00 00 0000 0000 0000   TBLCODE     RES      0029                                sort buffer to reorder transaction: holds ordered transac pred/succ code 
+1641 00 00 0000 0000 0000   TBLPTR      RES      0029                                points to data in INBUF
+                                 TBLCODE1    EQU      TBLCODE     0001                    TBLCODE1=TBLCODE+1
+                                 TBLPTR1     EQU      TBLPTR      0001                    TBLPTR1=TBLPTR+1
+1672 00 00 0000 0000 0000   NTBL                                                     Number of entries in TBL
+                                      
+1673 00 00 0000 0000 0000   CODE                                                     predecessor/succesor code as control word for sort
+1674 00 00 0000 0000 0000   CODE1
+1675 00 00 0000 0000 0000   CODE2
+                                      
+1676 00 00 0000 0000 0000   TRCOUNT                                                  count of transactions to sort
+1677 00 00 0000 0000 0000   NTBLOCK                                                  total number of blocks with data to sort
+1678 00 00 0000 0000 0000   NBLOCK                                                   current block number saved on tape
+                                      
+1679 00 00 0000 0000 0000   NBTAPA                                                   total number of blocks on tapes
+1680 00 00 0000 0000 0000   NBTAPB                                                   during phase B
+1681 00 00 0000 0000 0000   NBTAPC
+1682 00 00 0000 0000 0000   NBTAPD
+                                      
+1683 00 00 0000 0000 0000   NSEQ
+1684 00 00 0000 0000 0000   NSEQIN
+1685 00 00 0000 0000 0000   NSEQIN2
+                                      
+1686 00 00 0000 0000 0000   W1                                                       input transaction record                                                   
+1687 00 00 0000 0000 0000   W2
+1688 00 00 0000 0000 0000   W3
+1689 00 00 0000 0000 0000   W4
+1690 00 00 0000 0000 0000   W5
+1691 00 00 0000 0000 0000   W6
+1692 00 00 0000 0000 0000   W7
+                                      
+                                 ww1         EQU      W1
+1694 00 00 0000 0000 0000   ww2         RES      0007
+                                      
+1701 00 00 0000 0000 0000   TEMP1
+1702 00 00 0000 0000 0000   TEMP2
+                                      
+1703 39 02 0055 0000 0000   MT2LBL   39 02       0055        0000        0000        input tape label for transaction successors
+1704 39 02 0066 0000 0000   MT3LBL   39 02       0066        0000        0000        input tape label for transaction predecessors
+                                      
+1705 39 05 0000 0000 0000   MT1LBLM  39 05       0000        0000        0000        output merged transaction tape
+1706 39 04 0055 0000 0000   MT2LBLS  39 04       0055        0000        0000        output sorted tape label for transaction successors
+1707 39 03 0066 0000 0000   MT3LBLS  39 03       0066        0000        0000        output sorted tape label for transaction predecessors
+                                      
+1708 00 00 0000 0000 0000   ZERO     00 00       0000        0000        0000
+1709 00 00 0000 0000 0001   ONE      00 00       0000        0000        0001
+1710 00 00 0000 0000 0006   N6       00 00       0000        0000        0006
+1711 00 00 0000 0000 0007   N7       00 00       0000        0000        0007
+1712 00 00 0000 0000 0028   N28      00 00       0000        0000        0028
+1713 00 00 0000 0000 0196   N196     00 00       0000        0000        0196
+                                      
+1714 01 00 0000 0000 0000   MT1      01 
+1715 02 00 0000 0000 0000   MT2      02 
+1716 03 00 0000 0000 0000   MT3      03
+1717 04 00 0000 0000 0000   MT4      04 
+1718 05 00 0000 0000 0000   MT5      05
+1719 06 00 0000 0000 0000   MT6      06 
+1720 07 00 0000 0000 0000   MT7      07
+                                      
+1721 00 00 1111 0000 0000   FIELD-R  00 00       1111        0000        0000
+1722 00 00 0000 1111 0000   FIELD-S  00 00       0000        1111        0000  
+1723 00 00 0000 0000 1111   FIELD-T  00 00       0000        0000        1111
+1724 00 00 0000 0001 0000   ONE-S    00 00       0000        0001        0000
+1725 00 00 0011 1111 1110   TR-FIELD 00 00       0011        1111        1110               
+                                      
+1726 00 61 0000 0000 0000   STOP-OP  00 61       0000        0000        0000        stop opcode
+1727 00 57 0000 0000 0000   SETM-OP  00 57       0000        0000        0000        clear M468 and set M468 opcode
+1728 00 60 0000 0000 0000   NOP-OP   00 60       0000        0000        0000        
+                                      
+                                                                                               read transaction from input tape
+                                                                                               if M8=0000 use INTAP as input
+                                                                                                    =0001     INTAP2 etc 
+                                                                                               if BL-INBUF=0 -> force read a new block
+                                                                                                  and init BL-INBUF/NW-INBUF/NSEQIN
+                                                                                               use INBUF/W1|INBUF2/W2
+                                                                                               set CODE1|CODE2 with code for read transaction, zero if no data
+                                      
+1729 00 40 1996 0000 1788   READ-TR     ADD      MK-TR60                 LRRINEX     set and save exit routine
+1730 00 72 9201 1708 1763               TR NEQ   BL-INBUF+M8 ZERO        RR-TR       if BL-INBUF not zero, goto read record, else continue to read first block
+                                                  
+                                                                                               read block                                                         
+                                                                                               
+1731 00 60 1683 9684 0000               TR       NSEQ        NSEQIN  +M8             init max number of block allowed in this sequence
+1732 00 70 9684 1708 1762   RB-TR       TR EQ    NSEQIN  +M8 ZERO        LRBINND     if no blocks in sequence remaining to be read, return No Data      
+1733 00 63 0000 0000 1740               TR SGN                           LRBIN3      if negative, do not check BSEQIN, do not decr NBTAPA..D
+1734 10 60 9606 0000 0000            10 TR       INTAP   +M8                         REG1=number of current output tape 4..7 in field S  
+1735 00 40 1758 0000 1736               ADD      SETM6IOP                LRBIN0      set instr to ...
+1736 00 00 0000 0000 0000   LRBIN0      00                                           ... set M6=tapeindex 0..3   
+1737 00 70 7679 1708 1762               TR EQ    NBTAPA  +M6 ZERO        LRBINND     if no more blocks in tape remaining to be read, return no data         
+1738 00 41 9684 1709 9684               SUB      NSEQIN  +M8 ONE         NSEQIN  +M8 ok, read to read new input block. decr  num of blocks in seq pending to be read
+1739 00 41 7679 1709 7679               SUB      NBTAPA  +M6 ONE         NBTAPA  +M6 decr  num of blocks in tape pending to be read
+1740 00 40 9754 9606 1741   LRBIN3      ADD      RBIN1-OP+M8 INTAP   +M8 LRBIN1      set instr to ...
+1741 00 00 0000 0000 0000   LRBIN1      00                                           ... read from INTAP/INPAT2 to INBUF/INBUF2
+1742 00 68 1742 0000 1991               68       *                       REREAD      if tape check Call Re-read
+1743 00 67 0000 0000 1762               67                               LRBINND     if end of file return no data
+1744 00 60 0000 1701 0000               TR                   TEMP1                   Temp1=start of block xx xx aaaa bbbb xxxx
+1745 04 42 0000 1722 1702            04 MASK                 FIELD-S     TEMP2       Temp2=bbbb=02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+1746 08 42 1701 1721 0000            08 MASK     TEMP1       FIELD-R                 REG1=02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa 
+1747 00 41 1702 0000 0000               SUB      TEMP2             
+1748 00 40 0000 1709 9201               ADD                  ONE         BL-INBUF+M8 BL-INBUF=Block Len from Input Transaction=bbbb-aaaa+1
+1749 00 41 1713 0000 0000               SUB      N196                                check Block Len from Input Transaction
+1750 00 63 1752 1752 0000               TR SGN   LRBIN2      LRBIN2                  transfer if 196 or less
+1751 00 61 0000 0000 0000               STOP                                         stop because input block too big (max 196w, that holds 28 transactions of 7w
+1752 00 60 1708 9203 0000   LRBIN2      TR       ZERO        NW-INBUF+M8             NW-INBUF=Number of words already processed from Input Transaction block
+1753 00 60 0000 0000 1763               TR                               RR-TR       goto process first transaction record in block
+                                      
+1754 00 94 1001 0000 0000   RBIN1-OP 00 94       INBUF       0000
+1755 00 94 1406 0000 0000   RBIN2-OP 00 94       INBUF2      0000
+1756 00 60 7001 5686 0000   RBIN3-OP    TR       INBUF   +M6 WW1     +M4
+1757 00 60 7406 5694 0000   RBIN4-OP    TR       INBUF2  +M6 WW2     +M4
+1758 00 51 9999 9996 0000   SETM6IOP    51       9999        9996        0000        
+1759 00 53 0000 0000 0000   SETM46OP    53       0000        0000        0000        
+1760 00 58 0000 0000 1778   CKPPM4OP    58       0000        0000        LRRIN5
+1761 00 58 0000 0003 1778   CKSSM4OP    58       0000        0003        LRRIN5
+                                      
+1762 00 60 1708 9674 1788   LRBINND     TR       ZERO        CODE1   +M8 LRRINEX     return no data
+                                      
+                                                                                               read transaction record from from input tape block 
+                                                  
+1763 00 41 9201 9203 0000   RR-TR       SUB      BL-INBUF+M8 NW-INBUF+M8             REG1=words left to be read in input transact block. 
+1764 00 63 1766 1732 0000               TR SGN   LRRIN1      RB-TR                   If no words left, go to read next block
+1765 00 61 0000 0000 0000               STOP                                         Safety: stop because overflowing block rec
+1766 96 60 9203 0000 0000   LRRIN1   96 TR       NW-INBUF+M8                         Shift num words read into field S
+1767 00 40 1759 0000 1768               ADD      SETM46OP                LRRIN2      set instr to ...
+1768 00 00 0000 0000 0000   LRRIN2      00                                           ... set M6=(NW-INBUF+M8), M4=0000
+1769 00 60 1760 1776 0000               TR       CKPPM4OP    LRRIN4                  ... save w1 or w4 to TEMP1
+1770 00 70 9606 1715 1774               TR EQ    INTAP   +M8 MT2         LRRIN6      if reading MT2 then use successor code
+1771 00 60 1761 1776 0000               TR       CKSSM4OP    LRRIN4                  set instr to save w1 to TEMP1 (for predecessors, QQ=66)            
+1772 00 70 9606 1716 1774               TR EQ    INTAP   +M8 MT3         LRRIN6      if reading MT3 then use predecessor code
+1773 00 74 1760 1776 0000               74       CKPPM4OP    LRRIN4                  ... save w1 or w4 to TEMP1
+1774 00 60 9756 1775 0000   LRRIN6      TR       RBIN3-OP+M8 LRRIN3                  set instr to ...  
+1775 00 00 0000 0000 0000   LRRIN3      00                                           ... copy from input to rec w1..w7
+1776 00 58 0000 0000 1778   LRRIN4      58       0000        0000        LRRIN5      if M4<>w with code goto LRRIN5
+1777 00 60 0000 1701 0000               TR                   TEMP1                    word with predecessor/successor code -> TEMP1
+1778 00 58 0000 0003 1780   LRRIN5      58       0000        0003        LRRIN7      if M4<>w4/ww4 with card code goto LRRIN7
+1779 00 60 0000 1702 0000               TR                   TEMP2                    word with 55/66 -> TEMP2
+1780 00 50 0000 0001 0000   LRRIN7      50       0000        0001                    ... incr M6
+1781 00 58 0001 0007 1775               58       0001        0007        LRRIN3      ... incr M4, loop
+1782 00 40 9203 1711 9203               ADD      NW-INBUF+M8 N7          NW-INBUF+M8 Number of words read from block += 7
+1783 00 42 1701 1725 1701               MASK     TEMP1       TR-FIELD    TEMP1       extract predecessor or successor code
+1784 15 60 1702 0000 0000            15 TR       TEMP2                               REG1=5 if successor, 6 if predecessor
+1785 00 41 1710 0000 0000               SUB      N6                                  REG1=1 if successor, 0 if predecessor
+1786 00 40 1701 0000 1701               ADD      TEMP1                   TEMP1       if transac is successor, last (unused) digit in code set to 1 so allways succ code > predecessor code
+1787 00 60 1701 9674 0000               TR       TEMP1       CODE1   +M8             set code result in CODE1 or CODE2 dependiong on M8=0 or =1
+1788 00 00 0000 0000 0000   LRRINEX     00                                           exit routine
+                                      
+                                                                                               increment number of blocks already write in outtap    
+                                      
+1789 00 40 1996 0000 1794   INCNBTAP    ADD      MK-TR60                 LINCNBEX    
+                                      
+1790 10 60 1608 0000 0000            10 TR       OUTTAP                              REG1=number of current output tape 4..7 in field R
+1791 00 40 1758 0000 1792               ADD      SETM6IOP                LINCNBT1    set instr to ...
+1792 00 00 0000 0000 0000   LINCNBT1    00                                           ... set M6=tapeindex 0..3 
+1793 00 40 7679 1709 7679               ADD      NBTAPA  +M6 ONE         NBTAPA  +M6
+1794 00 00 0000 0000 0000   LINCNBEX    00                                           return to caller
+                                      
+                                                                                               get number of blocks already write in srctap    
+                                      
+1795 00 40 1996 0000 1800   GETNBTAP    ADD      MK-TR60                 LGETNBEX    
+                                      
+1796 10 60 1610 0000 0000            10 TR       SRCTAP                              REG1=number of tape 4..7 in field R
+1797 00 40 1758 0000 1798               ADD      SETM6IOP                LGETNBT1    set instr to ...
+1798 00 00 0000 0000 0000   LGETNBT1    00                                           ... set M4=tapeindex 0..3 
+1799 00 60 7679 1701 0000               TR       NBTAPA  +M6 TEMP1
+1800 00 00 0000 0000 0000   LGETNBEX    00                                           return to caller
+                                      
+                                                                                               add transaction to outbuf, write to outtap when full
+                                                                                               if M8=9999 -> A flush outbuf to tape
+                                                                                               if M8=0000 -> add trabasction from WW1
+                                                                                               if M8=0001 -> add trabasction from WW2
+                                      
+1801 00 40 1996 0000 1835   WRITE-TR    ADD      MK-TR60                 LWROUEX     set and save exit routine
+1802 00 60 1728 1816 0000               TR       NOP-OP      LWB2        
+1803 08 58 0000 9999 1821            08 58       0000        9999        WR-TR       goto wr-tr if M8<>9999
+1804 00 60 1835 1816 1805               TR       LWROUEX     LWB2        WB-TR       goto flush block to tape and exit
+                                      
+1805 00 40 1678 1709 1678   WB-TR       ADD      NBLOCK      ONE         NBLOCK      incr block number
+                                 
+                                 ;           nop                                          **echo write_tape
+                                 ;           nop                                          **m1205-14
+                                 
+1806 96 60 1405 0000 0000            96 TR       NW-OUTB                             put number of words to save in field S
+1807 00 41 0000 1724 0000               SUB                  ONE-S
+1808 00 40 1818 0000 0000               ADD      SVOUT-OP                            set instr ...
+1809 00 40 1678 0000 0000               ADD      NBLOCK                              ... with nblock block number
+1810 00 40 1608 0000 1811               ADD      OUTTAP                  LWB1        ... with save mem addr 
+1811 00 00 0000 0000 0000   LWB1        00       0000        0000        0000        ... in tape OUTTAP
+1812 08 60 1812 0000 1992            08 60       *                       CHKWRT      Check write
+1813 00 70 1608 1714 1815               TR EQ    OUTTAP      MT1         LWB3        if writing to tape 1 do not incr number of blocks in outtap
+1814 08 60 1814 0000 1789            08 60       *                       INCNBTAP    increment number of blocks in outtap
+1815 00 60 1708 1405 0000   LWB3        TR       ZERO        NW-OUTB                 clear number of words in block buf
+1816 00 60 0000 0000 0000   LWB2        NOP            
+1817 00 60 0000 0000 1826               TR                               LWR1        goto add transaction data to outbuf
+                                      
+1818 00 90 1205 1205 0000   SVOUT-OP 00 90       OUTBUF      OUTBUF      0000
+1819 00 60 5686 7205 0000   SVOU3-OP    TR       WW1     +M4 OUTBUF  +M6
+1820 00 60 5694 7205 0000   SVOU4-OP    TR       WW2     +M4 OUTBUF  +M6
+                                      
+1821 00 41 1713 1405 0000   WR-TR       SUB      N196        NW-OUTB
+1822 00 70 0000 1708 1805               TR EQ                ZERO        WB-TR       outbuf full, write block
+1823 00 41 0000 1711 0000               SUB                  N7
+1824 00 63 1826 1826 0000               TR SGN   LWR1        LWR1 
+1825 00 61 0000 0000 0000               STOP                                         safety: overflow outbuf       
+1826 00 60 9819 1830 0000   LWR1        TR       SVOU3-OP+M8 LWR3
+1827 96 60 1405 0000 0000            96 TR       NW-OUTB                             Shift num words in outbuf into field S
+1828 00 40 1727 0000 1829               ADD      SETM-OP                 LWR2        set instr to ...
+1829 00 00 0000 0000 0000   LWR2        00       0000        0000        0000        ... clear modif and set M6 value
+1830 00 60 5686 7205 0000   LWR3        TR       WW1     +M4 OUTBUF  +M6             copy from w1..7 to outbuf
+                                      
+                                 ;           58       0000        0003        aaa1
+                                 ;           nop                                          **echo write_code:
+                                 ;aaa1       nop
+                                      
+1831 00 50 0000 0001 0000               50       0000        0001        0000        ... incr M6 
+1832 00 58 0001 0007 1830               58       0001        0007        LWR3        ... incr M4, loop
+1833 00 40 1405 1711 1405               ADD      NW-OUTB     N7          NW-OUTB     Number of words in block += 7
+1834 00 40 1676 1709 1676               ADD      TRCOUNT     ONE         TRCOUNT     incr count of transactions write
+1835 00 00 0000 0000 0000   LWROUEX     00
+                                      
+                                      
+                                                 
+                                      
+1990 00 00 0000 0000 0000   1990                                                     Library
+                                      
+                                                                                               Re-read routine. if error persist then stop 
+                                                                    
+1991 00 61 0000 0000 1991   REREAD      STOP                             REREAD      if read error, stop    
+                                      
+                                                                                               Check write routine. 
+                                      
+1992 00 40 1996 0000 1994   CHKWRT      ADD      MK-TR60                 LCHKEX      set and save exit transfer
+1993 00 68 0000 0000 1995               68                               LCHK1       if tape check goto lchk1
+1994 00 00 0000 0000 0000   LCHKEX      00                                           if no tape chek, return to caller
+1995 00 61 0000 0000 1995   LCHK1       STOP                             LCHK1       if write error, stop 
+1996 00 59 9999 9140 0001   MK-TR60  00 59       9999        9140        0001   
+                                           

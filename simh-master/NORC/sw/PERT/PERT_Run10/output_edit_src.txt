@@ -1,0 +1,278 @@
+                            Output edit program
+                            
+                            Event Sort program
+                            by Roberto Sancho Dec 2020
+                            from specs at page 72 in book "PERT summary report phase 2"
+                            
+                            tapes input:
+                                          09 program 
+                                          03 event tape created in Run09/08/07/06
+                                  output:
+                                          01 sorted event file
+                            
+                                  on line print:
+                                             label of input tape(s) 
+                                             label of output tape and total number of events 
+                            
+                            stops: IC: 01901 (00 61 0000 0000 1901) -> unrecoverable read error
+                                   IC: 01905 (00 61 0000 0000 1905) -> unrecoverable write error
+                            
+                                   IC: 00001 (00 61 0000 0000 0000) -> finished ok. 
+                            
+                            
+                            Input tape event record (as written by Run09/08)                            
+
+                            w1 = NNN S P1 TLTE SCHEDL   NNN=msg len=7+3*num pred+3*num succ, SCHEDL=Schedulled date (mm dd yy), TLTE=slack TL-TE (weeks foramt NNN.N), S=TSTS sign (1 if negative), P1=probability (TL >= TS >= TE)
+                            w2 = 0000 P2 EEEEEEEEE R    EEE=event code, R=report code, P2=probability (TE >= TS)
+                            w3 = Event TE               Expected time (float)
+                            w4 = Sigma for TE           (float)
+                            w5 = Event TL               Latest Allowable time (float)
+                            w6 = Sigma for TL           (float)
+                            w7 = TSTS TTTT RS PR AA BB  AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time, RS=Resource Code (=Res.rate), PR=Spec Code (=Pref.Rate)
+                            w8 = 00 xxxx SSSSSSSSS x    Predecessor/Successor w1 = event code (comes from transac w4)
+                            w9 =                        Predecessor/Successor w2 = Transaction TE Expected time (float)
+                            w10 =                       Predecessor/Successor w3 = Transaction Sigma (float) 
+                            ... 
+
+                            (w8 w9 w10 ) repeated AA + BB times
+                            depending on how much AA BB pred/successors
+                            
+                            in input tape events are grouped in blocks. Max 200 words each
+
+                            output tape record (as written by Run10)                            
+
+                            w1 = 0 EEEEEEEEE R STETE    EEE=event code, R=report code, STETE=TE Expected time format NNN.N with sign in S (1=negative)
+                            w2 = STLTL STLTE 0 STSTS    STLTL=TL Latest Allowable time format NNN.N with sign in S, STLTE = TL-TS, STSTS=TSTS with sign
+                            w3 = 00 P1 SCHEDL 000000    SCHEDL=Schedulled date (mm dd yy), P1=probability (TL >= TS >= TE)
+                            W4 = 0000 0000 0000 0000
+
+
+                            
+LABEL--- PP OPCODE-- RRRR---- MM SSSS---- MM TTTT---- MM COMMENT
+                          
+                                                         init
+                            
+0008        57                                           Clear M4 M6 M8
+         09 98                                           rewind tape 09 program
+         03 98                                           rewind tape 03 
+         03 94       TEMP1       TEMP1       0000        read tape 03 label
+            68       *                       REREAD      if tape check Call Re-read
+            TR       MT3LBL      TEMP2                   set the expected label in temp2
+            80       TEMP1       0001                    print input label 
+            80       ZERO        0002
+            80                   0003
+            80                   0004
+            80                   0005
+            80                   0006
+            81                   0007                    print
+            TR EQ    TEMP1       TEMP2       INIAOK      check if label is the expected one
+            STOP                                         stop because tape label does not match the expected one
+
+INIAOK   01 98                                           rewind MT1 result tape
+            TR       ZERO        NW-OUTB
+            TR       ZERO        EVCOUNT
+                                                              read block                                                         
+                                                              
+RB-EV    03 94       INBUF                               read from tape 3 at addr INBUF
+            68       *                       REREAD      if tape check Call Re-read
+            67                               EOFT        if end of file goto ...
+            TR                   TEMP1                   Temp1=start of block xx xx aaaa bbbb xxxx
+         04 MASK                 FIELD-S     TEMP2       Temp2=bbbb=02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+         08 MASK     TEMP1       FIELD-R                 REG1=02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa 
+            SUB      TEMP2             
+            ADD                  ONE         BL-INBUF    BL-INBUF=Block Len from Input event block=bbbb-aaaa+1
+            SUB      N200                                check Block Len from Input block 
+            TR SGN   LRBIN2      LRBIN2                  transfer if 200 or less
+            STOP                                         stop because input block too big (max 200w)
+LRBIN2      TR       ZERO        NW-INBUF                NW-INBUF=Number of words already processed from Input block
+    
+                                                              read event record from input tape block 
+                 
+RR-EV       SUB      BL-INBUF    NW-INBUF                REG1=words left to be read in input transact block. 
+            TR SGN   LRRIN1      RB-EV                   If no words left, go to read next block
+            STOP                                         Safety: stop because overflowing block rec
+LRRIN1   96 TR       NW-INBUF                            Shift num words read into field S
+            ADD      SETM46OP                LRRIN2      set instr to ...
+LRRIN2      00                                           ... set M6=(NW-INBUF), M4=0000
+            TR       INBUF   +M6 WW1
+         13 TR                   LEN                     get event length
+            SUB      LEN         N7                      check event len is 7..200
+            TR SGN   LRRIN4
+            STOP                                         because event len < 7
+LRRIN4      SUB      LEN         N200                    check event size <= 200
+            TR SGN               LRRIN5      LRRIN5
+            STOP                                         safety: stop because event has more that 200 words
+LRRIN5      50       0001        0001                    incr M4, M6
+LRRIN8      TR       INBUF   +M6 WW1     +M4             copy from input buf to rec ww1..ww7
+            50       0000        0001                    incr M6           
+         04 58       0001        0007        LRRIN8      loop, incr M4, if M4<>7 goto LRRIN8
+            ADD      NW-INBUF    LEN         NW-INBUF    Number of words read from block += LEN
+           
+                                                              extract data from event
+
+            MASK     WW2         FCODER      CODER       code+report code
+
+            TR       WW3                                 TE Expected time (float)
+         11 34       F1                                  FMUL Special x float 1 -> back to NNN.N fixed format 1 decimal, with sign in digit 14)
+            MASK                 FIELD-T     TE          keep NNN.N, discard rest
+            TR       WW3                                 if TE is negative
+            TR SGN   LTE1        LTE1                    then
+            ADD      TE          ONE-S       TE          add sign
+LTE1        NOP
+    
+            TR       WW5                                 TL Latest Allowable time (float)
+         11 34       F1                                  FMUL Special x float 1 -> back to NNN.N fixed format 1 decimal, with sign in digit 14)
+            MASK                 FIELD-T     TL          keep NNN.N, discard rest
+            TR       WW5                                 if TL is negative
+            TR SGN   LTL1        LTL1                    then
+            ADD      TL          ONE-S       TL          add sign
+LTL1        NOP
+
+         50 FSUB     WW5         WW3         TEMP1       TL - TE
+         11 34       F1                                  FMUL Special x float 1 -> back to NNN.N fixed format 1 decimal, with sign in digit 14)
+            MASK                 FIELD-T     TLTE        keep NNN.N, discard rest
+            TR       TEMP1                               if is negative
+            TR SGN   LTLTE1      LTLTE1                  then
+            ADD      TLTE        ONE-S       TLTE        add sign
+LTLTE1      NOP
+
+         06 TR       WW1                                 get sign of TSTS 
+            MASK                 ONE-S       TEMP1       and put masked it on its position 
+         12 TR       WW7                                 get TSTS as NNN.N 
+            ADD                  TEMP1       TSTS        add sign
+            
+            MASK     WW1         FSCHED      SCHEDL      get schedulle date
+         10 MASK     WW1         FIELD-P1    P1          get probability 
+
+                                                              shift to its position in record
+
+         95 TR       CODER       CODER
+         89 TR       TL          TL
+         94 TR       TLTE        TLTE
+         88 TR       P1          P1
+         94 TR       SCHEDL      SCHEDL
+                                                              compose output record            
+            ADD      CODER       TE          WW1
+            ADD      TL          TLTE
+            ADD                  TSTS        WW2
+            ADD      P1          SCHEDL      WW3
+            TR       ZERO        WW4                     
+                                                              write output record
+
+            ADD      NW-OUTB     N4                      check if enough room in outbuf for event
+            SUB      N200        
+            TR SGN   LWR1        LWR1        LWR0
+            STOP                                         stop because outbuf overflow
+
+                                                         outbuf full -> write block
+
+LWR0     01 91       OUTBUF      OUTBUF2                 write out buf
+         08 60       *                       CHKWRT      Check write
+            TR       ZERO        NW-OUTB
+
+LWR1     96 TR       NW-OUTB                             set instr to ...
+            ADD      SETM-OP                 LWR2        ... set M6 value to NW-OUTB
+LWR2        00       0000        0000        0000        clear M4, set M6 to NW-OUTB
+LWR3        TR       WW1     +M4 OUTBUF  +M6             copy from ww1 .. to outbuf         
+            50       0000        0001        0000        ... incr M6 
+         04 58       0001        0004        LWR3        ... incr M4, loop
+            ADD      NW-OUTB     N4          NW-OUTB     Number of words in block += LEN
+            ADD      EVCOUNT     ONE         EVCOUNT     incr number of event in output tape
+            TR                               RR-EV       goto process next event
+
+EOFT-OP  01 91       OUTBUF      OUTBUF
+
+EOFT     96 TR       NW-OUTB                             set instr to ...
+            TR EQ                ZERO        EOFT2 
+            SUB                  ONE-S
+            ADD      EOFT-OP                 EOFT1       ... flush outbuf
+EOFT1       00                                           write to tape
+         08 60       *                       CHKWRT      Check write
+EOFT2    01 91       0000        0000                    write end of file
+         08 60       *                       CHKWRT      Check write
+         01 98                                           rewing tape 01 sorted data   
+            80       MT1LBLS     0001                    print output tape label 
+            80       EVCOUNT     0002                    print number of sorted transactions in output tape
+            80       ZERO        0003
+            80                   0004
+            80                   0005
+            80                   0006
+            81                   0007                    print
+END         TR       STOP-OP     0001        0001        set stop in 0001, transfer to 0001: sucessfull program end                             
+
+1000                                                     variables
+     
+     
+INBUF       RES      200                                 block read from input tape 02 or 03
+
+BL-INBUF                                                 block length
+NW-INBUF                                                 Number of words read from block
+
+OUTBUF      RES      200                                 block to write in tape 04 or 05 (unordered)
+OUTBUF2     EQU      OUTBUF      199
+NW-OUTB                                                  Number of words in block to write
+
+
+LEN                                                      event length
+
+EVCOUNT
+
+WW1         
+WW2
+WW3
+WW4
+WW5
+WW6
+WW7
+
+CODER
+TE
+TL
+P1
+TLTE
+TSTS
+SCHEDL
+
+TEMP1
+TEMP2
+     
+MT3LBL   39 09       0000        0000        0000        input tape label for computed event tape
+MT1LBLS  39 10       0000        0000        0000        output event sorted tape label 
+     
+ZERO     00 00       0000        0000        0000
+ONE      00 00       0000        0000        0001
+N2       00 00       0000        0000        0002
+N4       00 00       0000        0000        0004
+N7       00 00       0000        0000        0007
+N200     00 00       0000        0000        0200
+F1       00 01                                           Float 1.0
+     
+    
+FIELD-R  00 00       1111        0000        0000
+FIELD-S  00 00       0000        1111        0000  
+FIELD-T  00 00       0000        0000        1111
+ONE-S    00 00       0000        0001        0000
+FCODER   00 00       0011        1111        1111
+FSCHED   00 00       0000        0011        1111
+FIELD-P1 00 00       1100        0000        0000
+     
+STOP-OP  00 61       0000        0000        0000        stop opcode
+SETM-OP  00 57       0000        0000        0000        clear M468 and set M468 opcode
+NOP-OP   00 60       0000        0000        0000        
+SETM46OP 00 53       0000        0000        0000        
+
+
+1990                                                     Library
+     
+                                                              Re-read routine. if error persist then stop 
+                                   
+REREAD      STOP                             REREAD      if read error, stop    
+     
+                                                              Check write routine. 
+     
+CHKWRT      ADD      MK-TR60                 LCHKEX      set and save exit transfer
+            68                               LCHK1       if tape check goto lchk1
+LCHKEX      00                                           if no tape chek, return to caller
+LCHK1       STOP                             LCHK1       if write error, stop 
+MK-TR60  00 59       9999        9140        0001   
+          

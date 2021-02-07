@@ -1,0 +1,233 @@
+
+                            Print event program
+                            reads active event tape and prints its contents
+                            by Roberto Sancho Nov 2020
+
+                            tapes input:
+                                          09 program
+                                          01 active event tape created in Run 06
+                                  output
+                                          02 tansactions to print on ctc
+                                  on line print:
+                                             (only 4 words filled with data)
+                                             label of input tape(s) 
+                                             nnnn 00000 00 00 | NNN xxx xxxx SCHEDL | xxxxxx  EEEEEEEEE R | TSTS TTTT RS PR AA BB
+                                             nnnn 00000 01 00 | 00 xxxx PPPPPPPPP x | TE                  | Sigma
+                                             nnnn 00000 02 00 | 00 xxxx PPPPPPPPP x | TE                  | Sigma
+                                             nnnn 00000 00 01 | 00 xxxx SSSSSSSSS x | TE                  | Sigma
+                                             nnnn 00000 00 02 | 00 xxxx SSSSSSSSS x | TE                  | Sigma
+
+                                             nnnn=number of event
+
+                            stops: IC: 01693 (00 61 0000 0000 1696) -> unrecoverable read error
+                                   IC: 01718 (00 61 1721 0000 1727) -> unrecoverable write error
+
+                                   IC: 00001 (00 61 0000 0000 0000) -> finished ok. 
+
+                            Switch 74 set to off      -> output is printed on online printer 1
+                                             transfer -> output is written in tape 2
+
+                            Input tape tape event record (as written by Run06) 
+
+                            w1 = NNN xxx xxxx SCHEDL    NNN=event len=7+3*num pred+3*num succ, SCHEDL=Schedulled date (format mm dd yy)
+                            w2 = xxxxxx  EEEEEEEEE R    EEE=event code, report code      
+                            w3 = 
+                            w4 = 
+                            w5 = 
+                            w6 = 
+                            w7 = TSTS TTTT RS PR AA BB  AA=num of predecesors  BB=num of successors  
+                                                        TTTT=completition date (if event completed, else 0000), 
+                                                        TSTS=Schedulled completition time, 
+                                                        RS=Resource Code (=Res.rate), PR=Spec Code (=Pref.Rate)
+                            w8 = 00 xxxx SSSSSSSSS x    Successor w1 = event code predecessor/successor
+                            w9 =                        Successor w2 = TE
+                            w10 =                       Successor w3 = Sigma
+          
+                                                        (w8 w9 w10) repeated AA + BB times
+                                                        depending on how much AA BB pred/successors
+
+
+                            in input tape event are grouped in blocks, max 200 words
+ 
+LABEL--- PP OPCODE-- RRRR---- MM SSSS---- MM TTTT---- MM COMMENT
+
+
+                                                         init
+
+0008        57                                           Clear M4 M6 M8
+         09 98                                           rewind tape 09 program
+            TR       ZERO        EVCOUNT
+         01 94       TEMP1       TEMP1       0000        read tape 01 label
+            68       *                       REREAD      if tape check Call Re-read
+            80       TEMP1       0001                    print label for tape 1
+            80       ZERO        0002
+            80                   0003
+            80                   0004
+            80                   0005
+            80                   0006
+            81       ZERO        0007                    print
+
+                                                         read block from input tape
+
+RB-INBUF 01 94       INBUF       0000                    read input block buffer  
+            68       *                       REREAD      if tape check Call Re-read
+            67                               END         if end of file transfer to end of input 
+            TR                   TEMP1                   Temp1=start of block xx xx aaaa bbbb xxxx
+         04 MASK                 FIELD-S     TEMP2       Temp2=bbbb=02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+         08 MASK     TEMP1       FIELD-R                 REG1=02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa 
+            SUB      TEMP2             
+            ADD                  ONE         BL-INBUF    BL-INBUF=Block Len from Input Transaction=bbbb-aaaa+1
+            SUB      N200                                check Block Len from Input Transaction
+            TR SGN   LSPL3       LSPL3                   transfer if 200 or less
+            STOP                                         stop because event block in tape is too big (max 200w)
+LSPL3       TR       ZERO        NW-INBUF                NW-INBUF=Number of words already processed from Input Transaction block
+            TR                               RR-INBUF    goto process first event record in block
+                                                         end of split phase
+
+                                                         read event record from from input tape block 
+
+RR-INBUF    SUB      BL-INBUF    NW-INBUF                REG1=words left to be read in input event block. 
+            TR SGN   LRR1        RB-INBUF                If no words left, go to read next block
+            STOP                                         Safety: stop because overflowing block rec
+LRR1     96 TR       NW-INBUF                            Shift num words read into field S
+            ADD      SETM-OP                 LRR2        set instr to ...
+LRR2        00       0000        0000        0000        ... clear modif and set M6=NW-INBUF, M8=NW-OUTBUF
+LRR3        TR       INBUF   +M6 W1      +M4             copy from input tranasction block to rec w1..w7
+            50       0000        0001        0000        ... incr M6
+            58       0001        0007        LRR3        ... incr M4, loop
+            ADD      NW-INBUF    N7          NW-INBUF    Number of words read from block += 7
+
+                                                         get event data 
+            
+            ADD      EVCOUNT     ONE         EVCOUNT     incr total count of events
+            TR       ZERO        CODE1
+            TR       ZERO        CODE2
+            TR       ZERO        CODE3
+
+            TR       W1          CODE1                   first word of event | NNN xxx xxxx SCHEDL   |
+            TR       W2          CODE2                                       | xxxxxx  EEEEEEEEE R   |
+            TR       W7          CODE3                                       | TSTS TTTT RS PR AA BB |
+         88 TR       EVCOUNT     CODE                    number of event     | nnnn 0000 0000 0000   |
+         08 60       *                       PRINT
+                                                         get predecessors if any
+             
+         02 MASK     W7          AA-FIELD    NPRED       get number of predecessors
+LPRED1      TR EQ                ZERO        LPRED9      if no predecessors, continue
+            TR       INBUF   +M6 CODE1                   get predecessor acivity data 
+            TR       INBUF2  +M6 CODE2
+            TR       INBUF3  +M6 CODE3
+            ADD      CODE        N100        CODE        incr num of predecessors
+         08 60       *                       PRINT
+            ADD      NW-INBUF    N3          NW-INBUF    Number of words read from block += 3
+            50       0000        0003        0000        incr M6 += 3
+            SUB      NPRED       ONE         NPRED
+            TR                               LPRED1
+LPRED9      MASK     CODE        NN-FIELD    CODE        clear code: nnnn 0..0
+
+                                                         get successors if any
+             
+            MASK     W7          BB-FIELD    NSUCC       get number of successors
+LSUCC1      TR EQ                ZERO        LSUCC9      if no successors, continue
+            TR       INBUF   +M6 CODE1                   get successors acivity data 
+            TR       INBUF2  +M6 CODE2
+            TR       INBUF3  +M6 CODE3
+            ADD      CODE        ONE         CODE        incr num of successors
+         08 60       *                       PRINT
+            ADD      NW-INBUF    N3          NW-INBUF    Number of words read from block += 3
+            50       0000        0003        0000        incr M6 += 3
+            SUB      NSUCC       ONE         NSUCC
+            TR                               LSUCC1
+LSUCC9      MASK     CODE        NN-FIELD    CODE        clear code: nnnn 0..0
+            TR                               RR-INBUF
+
+END-TAP  02 91       0000        0000                    write end of tape   
+         08 60       *                       CHKWRT      Call check Write
+            TR       STOP-OP     0001        0001        set stop in 0001, transfer to 0001: sucessfull program end                             
+
+END         74                               END-TAP     if switch 74 set to transfer, goto save to output tape
+            TR       STOP-OP     0001        0001        set stop in 0001, transfer to 0001: sucessfull program end                             
+
+                                                         print event data
+
+PRINT       ADD      MK-TR60                 LPRTEX      set and save exit transfer
+            80       CODE        0001
+            80       CODE1       0002
+            80       CODE2       0003
+            80       CODE3       0004
+            80       ZERO        0005
+            80                   0006
+            74                               SAVE-TAP    if switch 74 set to transfer, goto save to output tape
+            81                   0007
+LPRTEX      00                                           return to caller
+
+SAVE-TAP 02 91       0001        0004                    write to tape
+         08 60       *                       CHKWRT      Call check Write
+            TR                               LPRTEX      
+
+
+1000                                                     variables
+
+INBUF       RES      200                                 block read from input tape 02 or 03
+INBUF2      EQU      INBUF       0001 
+INBUF3      EQU      INBUF       0002 
+
+BL-INBUF                                                 block length
+NW-INBUF                                                 Number of words read from block
+
+CODE                                                     predecessor/succesor code as control word for sort
+CODE1
+CODE2
+CODE3
+
+NPRED                           
+NSUCC
+
+EVCOUNT                                                  count of event
+
+W1                                                       input event record                                                   
+W2
+W3
+W4
+W5
+W6
+W7
+
+TEMP1
+TEMP2
+
+ZERO     00 00       0000        0000        0000
+ONE      00 00       0000        0000        0001
+N3       00 00       0000        0000        0003
+N7       00 00       0000        0000        0007
+N100     00 00       0000        0000        0100
+N200     00 00       0000        0000        0200
+
+FIELD-R  00 00       1111        0000        0000
+FIELD-S  00 00       0000        1111        0000  
+FIELD-T  00 00       0000        0000        1111
+ONE-S    00 00       0000        0001        0000
+TR-FIELD 00 00       0011        1111        1110               
+AA-FIELD 00 00       0000        0000        1100
+BB-FIELD 00 00       0000        0000        0011
+NN-FIELD 11 11       0000        0000        0000
+
+STOP-OP  00 61       0000        0000        0000        stop opcode
+SETM-OP  00 57       0000        0000        0000        clear M468 and set M468 opcode
+NOP-OP   00 60       0000        0000        0000        
+
+
+
+1990                                                     Library
+
+                                                         Re-read routine. if error persist then stop 
+                              
+REREAD      STOP                             REREAD      if read error, stop    
+
+                                                         Check write routine. 
+
+CHKWRT      ADD      MK-TR60                 LCHKEX      set and save exit transfer
+            68                               LCHK1       if tape check goto lchk1
+LCHKEX      00                                           if no tape chek, return to caller
+LCHK1       STOP                             LCHK1       if write error, stop 
+MK-TR60  00 59       9999        9140        0001   
+     

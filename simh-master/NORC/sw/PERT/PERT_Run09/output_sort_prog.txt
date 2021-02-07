@@ -1,0 +1,506 @@
+                                                             Output sort program
+                                                             
+                                                             Event Sort program
+                                                             by Roberto Sancho Nov 2020
+                                                             from specs at page 72 in book "PERT summary report phase 2"
+                                                             
+                                                             tapes input:
+                                                                           09 program 
+                                                                           03 event tape created in Run08
+                                                                   output:
+                                                                           01 sorted event file
+                                                                   temporary:
+                                                                           04-07 work tape (only for sort)
+                                                             
+                                                                   on line print:
+                                                                              label of input tape(s) 
+                                                                              label of output tape and total number of sorted events 
+                                                             
+                                                             stops: IC: 01901 (00 61 0000 0000 1901) -> unrecoverable read error
+                                                                    IC: 01905 (00 61 0000 0000 1905) -> unrecoverable write error
+                                                             
+                                                                    IC: 00001 (00 61 0000 0000 0000) -> finished ok. 
+                                                             
+                                                             
+                                                             Input tape tape event record (as written by Run08)                            
+                                 
+                                                             w1 = NNN S P1 TLTE SCHEDL   NNN=msg len=7+3*num pred+3*num succ, SCHEDL=Schedulled date (mm dd yy), TLTE=slack TL-TE (weeks foramt NNN.N), S=TSTS sign (1 if negative), P1=probability (TL >= TS >= TE)
+                                                             w2 = 0000 P2 EEEEEEEEE R    EEE=event code, R=report code, P2=probability (TE >= TS)
+                                                             w3 = Event TE               Expected time (float)
+                                                             w4 = Sigma for TE           (float)
+                                                             w5 = Event TL               Latest Allowable time (float)
+                                                             w6 = Sigma for TL           (float)
+                                                             w7 = TSTS TTTT RS PR AA BB  AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time, RS=Resource Code (=Res.rate), PR=Spec Code (=Pref.Rate)
+                                                             w8 = 00 xxxx SSSSSSSSS x    Predecessor/Successor w1 = event code (comes from transac w4)
+                                                             w9 =                        Predecessor/Successor w2 = Transaction TE Expected time (float)
+                                                             w10 =                       Predecessor/Successor w3 = Transaction Sigma (float) 
+                                                             ... 
+                                 
+                                                             (w8 w9 w10 ) repeated AA + BB times
+                                                             depending on how much AA BB pred/successors
+                                                             
+                                                             in input tape events are grouped in blocks. Max 200 words each
+                                                             
+                                                           
+                                                                                          init
+                                                             
+0008 00 57 0000 0000 0000   0008        57                                           Clear M4 M6 M8
+0009 09 98 0000 0000 0000            09 98                                           rewind tape 09 program
+0010 03 98 0000 0000 0000            03 98                                           rewind tape 03 
+0011 03 94 1523 1523 0000            03 94       TEMP1       TEMP1       0000        read tape 03 label
+0012 00 68 0012 0000 1991               68       *                       REREAD      if tape check Call Re-read
+0013 00 60 1525 1524 0000               TR       MT3LBL      TEMP2                   set the expected label in temp2
+0014 00 80 1523 0001 0000               80       TEMP1       0001                    print input label 
+0015 00 80 1527 0002 0000               80       ZERO        0002
+0016 00 80 0000 0003 0000               80                   0003
+0017 00 80 0000 0004 0000               80                   0004
+0018 00 80 0000 0005 0000               80                   0005
+0019 00 80 0000 0006 0000               80                   0006
+0020 00 81 0000 0007 0000               81                   0007                    print
+0021 00 70 1523 1524 0023               TR EQ    TEMP1       TEMP2       INIAOK      check if label is the expected one
+0022 00 61 0000 0000 0000               STOP                                         stop because tape label does not match the expected one
+                                 
+0023 00 60 1535 1108 0000   INIAOK      TR       MT4         OUTTAP                  Init to start writting to MT4
+0024 00 60 1536 1109 0000               TR       MT5         OUTTAP2                 and then to MT5
+0025 04 98 0000 0000 0000            04 98                                           rewind MT4 work tape
+0026 05 98 0000 0000 0000            05 98                                           rewind MT5 work tape
+0027 01 98 0000 0000 0000            01 98                                           rewind MT1 result sorted tape
+0028 00 60 0000 0000 0029               TR                               PHASE-A
+                                      
+                                                                                               phase a (Split) read input tape MT3, 
+                                                                                                               write 1 event per block to alternate tapes MT4/MT5
+                                         
+0029 00 60 0000 0000 0000   PHASE-A     NOP
+0030 00 60 1534 1106 0000               TR       MT3         INTAP                   init input tapes A = MT3
+0031 00 60 1527 1111 0000               TR       ZERO        EOFTAP                  mark tape A as not reached end of file
+0032 00 60 1527 0901 0000               TR       ZERO        BL-INBUF                init to force read first block of input tape
+0033 00 60 1535 1108 0000               TR       MT4         OUTTAP                  init output tapes C/D = MT4/5
+0034 00 60 1536 1109 0000               TR       MT5         OUTTAP2
+0035 00 60 1527 1105 0000               TR       ZERO        NW-OUTB                 Init output buffer as empty 
+0036 00 60 1527 1113 0000               TR       ZERO        WOUTTAP                 number of written events
+                                 
+0037 00 60 1528 1120 0000   LA0         TR       ONE         NSEQIN                  init max number of events allowed to be read 
+0038 00 57 0000 0000 0000               57       0000        0000        0000        use tape INTAP tape number
+0039 08 60 0039 0000 1547            08 60       *                       READ-EV     call read event
+0040 00 70 1117 1527 0049               TR EQ    CODE1       ZERO        EOFIN       if eof (=code zero) terminate phase a
+0041 00 57 0000 0000 0000               57       0000        0000        0000        use INBUF
+0042 08 60 0042 0000 1604            08 60       *                       WRITE-EV    call write event
+0043 00 57 0000 0000 9999               57       0000        0000        9999
+0044 08 60 0044 0000 1604            08 60       *                       WRITE-EV    flush outbuf to tape
+0045 00 60 1108 1523 0000               TR       OUTTAP      TEMP1                   swap output tapes
+0046 00 60 1109 1108 0000               TR       OUTTAP2     OUTTAP                  
+0047 00 60 1523 1109 0000               TR       TEMP1       OUTTAP2    
+0048 00 60 0000 0000 0037               TR                               LA0         
+                                                                                               end of phase-a
+                                      
+0049 04 90 0000 0000 0000   EOFIN    04 90                                           write end of tape in tape 04
+0050 08 60 0050 0000 1992            08 60       *                       CHKWRT      Check write
+0051 05 90 0000 0000 0000            05 90                                           write end of tape in tape 05
+0052 08 60 0052 0000 1992            08 60       *                       CHKWRT      Check write
+0053 00 60 0000 0000 0054               TR                               PHASE-B     end of phase a split, goto phase b sort
+                                                
+                                                                                               phase b (sort) read tape A and B, 
+                                                                                                              sort merge seuences of n events to alternate output tapes C/D
+                                      
+0054 00 60 1528 1119 0000   PHASE-B     TR       ONE         NSEQ                    init sequence of already sorted events
+0055 00 60 1535 1106 0000               TR       MT4         INTAP                   init input tapes A/B = MT4/5 
+0056 00 60 1536 1107 0000               TR       MT5         INTAP2
+0057 00 60 1537 1108 0000               TR       MT6         OUTTAP                  init output tapes C/D = MT6/7
+0058 00 60 1538 1109 0000               TR       MT7         OUTTAP2
+0059 00 60 1527 1105 0000               TR       ZERO        NW-OUTB                 Init output buffer as empty 
+0060 04 98 0000 0000 0000   LBSEQ00  04 98                                           rewind work tapes
+0061 05 98 0000 0000 0000            05 98
+0062 06 98 0000 0000 0000            06 98
+0063 07 98 0000 0000 0000            07 98
+0064 00 60 1527 1111 0000               TR       ZERO        EOFTAP                  mark tape A/B as not reached end of file
+0065 00 60 1527 1112 0000               TR       ZERO        EOFTAP2
+0066 00 60 1527 1113 0000               TR       ZERO        WOUTTAP                 mark nothing writen yet into tape C/D 
+0067 00 60 1527 1114 0000               TR       ZERO        WOUTTAP2    
+0068 00 60 1527 0901 0000               TR       ZERO        BL-INBUF                init to force read first block of input tape
+0069 00 60 1527 0902 0000               TR       ZERO        BL2INBUF           
+0070 00 60 0000 0000 0071               TR                               LBSEQ0
+                                 
+0071 00 60 1119 1120 0000   LBSEQ0      TR       NSEQ        NSEQIN                  init max number of events allowed to be read in this sequence
+0072 00 60 1119 1121 0000               TR       NSEQ        NSEQIN2
+0073 00 72 1105 1527 0075               TR NEQ   NW-OUTB     ZERO        LBSEQ0E     check if out buf is empty    
+                                 ;           nop                                          **echo LBSEQ0
+0074 00 60 0000 0000 0076               TR                               LBSEQ0B
+                                 
+0075 00 61 0000 0000 0000   LBSEQ0E     STOP                                         safety. stop because out buf not empty -> has not been flushed 
+                                 
+0076 00 57 0000 0000 0000   LBSEQ0B     57       0000        0000        0000        use tape INTAP tape number
+0077 08 60 0077 0000 1547            08 60       *                       READ-EV     call read event
+0078 00 57 0000 0000 0001               57       0000        0000        0001        use tape INTAP2 tape number
+0079 08 60 0079 0000 1547            08 60       *                       READ-EV     call read event
+                                 
+0080 00 60 0000 0000 0000   LBSEQ1      NOP
+                                 
+                                 ;           nop                                          **echo LBSEQ1
+                                 ;           tr       code1                               
+                                 ;           nop                                          **echo code1:
+                                 ;           tr       code2                               
+                                 ;           nop                                          **echo code2:
+                                 
+0081 00 70 1117 1527 0092               TR EQ    CODE1       ZERO        LBDUMP2     if code1 = 0 then dump tape 2
+0082 00 70 1118 1527 0085               TR EQ    CODE2       ZERO        LBDUMP1     if code2 = 0 then dump tape 1
+0083 00 41 1118 1117 0000               SUB      CODE2       CODE1                   if code2 >= code1 then write code1
+0084 00 63 0099 0099 0105               TR SGN   LBWR1       LBWR1       LBWR2       else write code2
+0085 00 60 0000 0000 0000   LBDUMP1     NOP
+                                 
+                                 ;           tr       code1                               **echo LBDUMP1
+                                 ;           nop                                          **echo code1:
+                                 
+0086 00 70 1117 1527 0111               TR EQ    CODE1       ZERO        LBSTERM     tape 1 dumped, goto sequence terminated
+0087 00 57 0000 0000 0000               57       0000        0000        0000        use INBUF
+                                 
+                                 ;           nop                                          **echo write_CODE:
+                                 
+0088 08 60 0088 0000 1604            08 60       *                       WRITE-EV    call write event
+0089 00 57 0000 0000 0000               57       0000        0000        0000        use tape INTAP
+0090 08 60 0090 0000 1547            08 60       *                       READ-EV     call read event
+0091 00 60 0000 0000 0085               TR                               LBDUMP1
+0092 00 60 0000 0000 0000   LBDUMP2     NOP
+                                 
+                                 
+                                 ;           tr       code2                               **echo LBDUMP2
+                                 ;           nop                                          **echo code2:
+                                 
+0093 00 70 1118 1527 0111               TR EQ    CODE2       ZERO        LBSTERM     tape 2 dumped, goto sequence terminated
+0094 00 57 0000 0000 0001               57       0000        0000        0001        use INBUF2
+0095 08 60 0095 0000 1604            08 60       *                       WRITE-EV    call write event
+0096 00 57 0000 0000 0001               57       0000        0000        0001        use tape INTAP2
+0097 08 60 0097 0000 1547            08 60       *                       READ-EV     call read event
+0098 00 60 0000 0000 0092               TR                               LBDUMP2
+0099 00 60 0000 0000 0000   LBWR1       NOP
+                                 
+                                 ;           nop                                          **echo LBWR1
+                                 
+0100 00 57 0000 0000 0000               57       0000        0000        0000        write code1
+0101 08 60 0101 0000 1604            08 60       *                       WRITE-EV    call write event
+0102 00 57 0000 0000 0000               57       0000        0000        0000        read next code1
+0103 08 60 0103 0000 1547            08 60       *                       READ-EV     call read event
+0104 00 60 0000 0000 0080               TR                               LBSEQ1
+0105 00 60 0000 0000 0000   LBWR2       NOP
+                                 
+                                 ;           nop                                          **echo LBWR2
+                                 
+0106 00 57 0000 0000 0001               57       0000        0000        0001        write code2
+0107 08 60 0107 0000 1604            08 60       *                       WRITE-EV    call write event
+0108 00 57 0000 0000 0001               57       0000        0000        0001        read next code2
+0109 08 60 0109 0000 1547            08 60       *                       READ-EV     call read event
+0110 00 60 0000 0000 0080               TR                               LBSEQ1
+0111 00 60 0000 0000 0000   LBSTERM     NOP
+                                 
+                                 ;           nop                                          **echo LBSTERM
+                                 
+0112 00 57 0000 0000 9999               57       0000        0000        9999
+0113 08 60 0113 0000 1604            08 60       *                       WRITE-EV    flush outbuf to tape
+0114 00 40 1111 1112 0000               ADD      EOFTAP      EOFTAP2                   
+0115 00 70 0000 1529 0122               TR EQ                N2          LBSWAP      if all blocks read from input tapes, goto swap in/out tapes
+                                 
+                                                                                          end of sequence but no end of tapes
+                                 
+0116 00 60 1108 1523 0000               TR       OUTTAP      TEMP1                   swap output tapes
+0117 00 60 1109 1108 0000               TR       OUTTAP2     OUTTAP                  
+0118 00 60 1523 1109 0000               TR       TEMP1       OUTTAP2        
+0119 00 60 1113 1523 0000               TR       WOUTTAP     TEMP1                   swap number of events in out tapes
+0120 00 60 1114 1113 0000               TR       WOUTTAP2    WOUTTAP                  and continue
+0121 00 60 1523 1114 0071               TR       TEMP1       WOUTTAP2     LBSEQ0
+                                 
+0122 00 60 0000 0000 0000   LBSWAP      NOP
+                                 ;           nop                                          **echo LBSWAP
+0123 00 60 1108 1110 0000               TR       OUTTAP      SRCTAP
+0124 08 60 0124 0000 1645            08 60       *                       WR-EOT      write eot on output tape
+0125 00 60 1109 1110 0000               TR       OUTTAP2     SRCTAP
+0126 08 60 0126 0000 1645            08 60       *                       WR-EOT      write eot on output tape 2
+0127 00 70 1113 1527 0138               TR EQ    WOUTTAP     ZERO        LBOK2       if nothing in tape 1 goto output tape 2 has all the sorted events
+0128 00 70 1114 1527 0137               TR EQ    WOUTTAP2    ZERO        LBOK1       if nothing in tape 1 goto output tape 1 has all the sorted events
+0129 00 60 1106 1523 0000               TR       INTAP       TEMP1                   swap input and output tapes
+0130 00 60 1107 1524 0000               TR       INTAP2      TEMP2                   
+0131 00 60 1108 1106 0000               TR       OUTTAP      INTAP
+0132 00 60 1109 1107 0000               TR       OUTTAP2     INTAP2
+0133 00 60 1523 1108 0000               TR       TEMP1       OUTTAP
+0134 00 60 1524 1109 0000               TR       TEMP2       OUTTAP2
+0135 00 40 1119 1119 1119               ADD      NSEQ        NSEQ        NSEQ        double sequence size = number of events processed at once  
+0136 00 60 0000 0000 0060               TR                               LBSEQ00     contine      
+0137 00 60 1108 1110 0139   LBOK1       TR       OUTTAP      SRCTAP      PHASE-C     output tape 1 has the sorted records 
+0138 00 60 1109 1110 0139   LBOK2       TR       OUTTAP2     SRCTAP      PHASE-C     output tape 2 has the sorted records                                                         
+                                 
+                                                                                               phase c (transcribe) copy tape SRC to MT1, with label
+                                         
+0139 00 40 0167 1110 0140   PHASE-C     ADD      RWINT-OP    SRCTAP      RW-INT      set inst ...  
+0140 00 00 0000 0000 0000   RW-INT      00                                           ... to rewind SRC tape
+0141 01 90 1526 1526 0000            01 90       MT1LBLS     MT1LBLS                 write label for sorted tape in MT1
+0142 08 60 0142 0000 1992            08 60       *                       CHKWRT      Check write
+0143 00 40 1113 1114 1523               ADD      WOUTTAP     WOUTTAP2    TEMP1       Now TEMP1 has the total sorted events
+0144 00 60 1528 1122 0000               TR       ONE         NBLOCK                  init block number
+0145 00 80 1526 0001 0000               80       MT1LBLS     0001                    print output tape label 
+0146 00 80 1523 0002 0000               80       TEMP1       0002                    print number of sorted transactions in output tape
+0147 00 80 1527 0003 0000               80       ZERO        0003
+0148 00 80 0000 0004 0000               80                   0004
+0149 00 80 0000 0005 0000               80                   0005
+0150 00 80 0000 0006 0000               80                   0006
+0151 00 81 0000 0007 0000               81                   0007                    print
+0152 00 40 0168 1110 0153               ADD      LDINT-OP    SRCTAP      RB-INT      set inst ...  
+0153 00 00 0000 0000 0000   RB-INT      00                                           ... to read SRC tape
+0154 00 68 0154 0000 1991               68       *                       REREAD      if tape check Call Re-read
+0155 00 67 0000 0000 0170               67                               EOFT        if end of file, transcribe finished
+0156 00 60 0000 1523 0000               TR                   TEMP1                   Temp1=start of block xx xx aaaa bbbb xxxx
+0157 04 42 0000 1540 1524            04 MASK                 FIELD-S     TEMP2       Temp2=bbbb=02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+0158 08 42 1523 1539 0000            08 MASK     TEMP1       FIELD-R                 REG1=02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa 
+0159 00 41 1524 0000 0901               SUB      TEMP2                   BL-INBUF    BL-INBUF=Block Len from Input tape to transcribe=bbbb-aaaa
+0160 96 60 0901 0000 0000            96 TR       BL-INBUF                            set instr ...
+0161 00 40 1122 0000 0000               ADD      NBLOCK                              ... to write to MT01 
+0162 00 40 0169 0000 0163               ADD      SVINT-OP                WB-INT      ... for same len as read
+0163 00 00 0000 0000 0000   WB-INT      00                                           ... and blocki nblock
+0164 08 60 0164 0000 1992            08 60       *                       CHKWRT      Check write
+0165 00 40 1122 1528 1122               ADD      NBLOCK      ONE         NBLOCK      increment block number 
+0166 00 60 0000 0000 0153               TR                               RB-INT      
+                                      
+0167 00 98 0000 0000 0000   RWINT-OP 00 98       0000        0000        0000
+0168 00 94 0501 0000 0000   LDINT-OP 00 94       INBUF       0000        0000
+0169 01 90 0501 0501 0000   SVINT-OP 01 90       INBUF       INBUF       0000
+                                      
+0170 01 90 0000 0000 0000   EOFT     01 90       0000        0000        0000        write end of tape 01 
+0171 08 60 0171 0000 1992            08 60       *                       CHKWRT      Check write
+0172 01 98 0000 0000 0000            01 98                                           rewing tape 01 sorted data   
+0173 00 60 1544 0001 0001   END         TR       STOP-OP     0001        0001        set stop in 0001, transfer to 0001: sucessfull program end                             
+                                      
+                                 
+                                 
+0500 00 00 0000 0000 0000   500                                                      variables
+                                      
+                                      
+0501 00 00 0000 0000 0000   INBUF       RES      200                                 block read from input tape 02 or 03
+0701 00 00 0000 0000 0000   INBUF2      RES      200
+                                 
+0901 00 00 0000 0000 0000   BL-INBUF                                                 block length
+0902 00 00 0000 0000 0000   BL2INBUF                                                 block length for inbuf2 
+0903 00 00 0000 0000 0000   NW-INBUF                                                 Number of words read from block
+0904 00 00 0000 0000 0000   NW2INBUF                                                 Number of words read from block in inbuf 2
+                                 
+0905 00 00 0000 0000 0000   OUTBUF      RES      200                                 block to write in tape 04 or 05 (unordered)
+1105 00 00 0000 0000 0000   NW-OUTB                                                  Number of words in block to write
+                                 
+                                 
+1106 00 00 0000 0000 0000   INTAP                                                    input tape for phase B 
+1107 00 00 0000 0000 0000   INTAP2
+1108 00 00 0000 0000 0000   OUTTAP                                                   output tape = 0n 0..0 
+1109 00 00 0000 0000 0000   OUTTAP2                                                  alternate output tape 
+1110 00 00 0000 0000 0000   SRCTAP                                                   source tape for phase-c transcribe file to mt1
+1111 00 00 0000 0000 0000   EOFTAP                                                   flag indicates if reached end of file on input tape A
+1112 00 00 0000 0000 0000   EOFTAP2                                                   
+1113 00 00 0000 0000 0000   WOUTTAP                                                  number of events in output tape 
+1114 00 00 0000 0000 0000   WOUTTAP2
+                                 
+1115 00 00 0000 0000 0000   LEN                                                      event length
+1116 00 00 0000 0000 0000   CODE                                                     event code as control word for sort
+1117 00 00 0000 0000 0000   CODE1                                                    event code read from input tape A
+1118 00 00 0000 0000 0000   CODE2
+                                 
+1119 00 00 0000 0000 0000   NSEQ                                                     number of events in sequence 
+1120 00 00 0000 0000 0000   NSEQIN
+1121 00 00 0000 0000 0000   NSEQIN2
+                                 
+1122 00 00 0000 0000 0000   NBLOCK                                                   number of block on final mt1 sorted tape
+                                 
+1123 00 00 0000 0000 0000   WW1         RES      200
+1323 00 00 0000 0000 0000   WW2         RES      200
+                                 
+1523 00 00 0000 0000 0000   TEMP1
+1524 00 00 0000 0000 0000   TEMP2
+                                      
+1525 39 08 0000 0000 0000   MT3LBL   39 08       0000        0000        0000        input tape label for computed event tape
+1526 39 09 0000 0000 0000   MT1LBLS  39 09       0000        0000        0000        output event sorted tape label 
+                                      
+1527 00 00 0000 0000 0000   ZERO     00 00       0000        0000        0000
+1528 00 00 0000 0000 0001   ONE      00 00       0000        0000        0001
+1529 00 00 0000 0000 0002   N2       00 00       0000        0000        0002
+1530 00 00 0000 0000 0002   N7       00 00       0000        0000        0002
+1531 00 00 0000 0000 0200   N200     00 00       0000        0000        0200
+                                      
+1532 01 00 0000 0000 0000   MT1      01 
+1533 02 00 0000 0000 0000   MT2      02 
+1534 03 00 0000 0000 0000   MT3      03
+1535 04 00 0000 0000 0000   MT4      04 
+1536 05 00 0000 0000 0000   MT5      05
+1537 06 00 0000 0000 0000   MT6      06 
+1538 07 00 0000 0000 0000   MT7      07
+                                      
+1539 00 00 1111 0000 0000   FIELD-R  00 00       1111        0000        0000
+1540 00 00 0000 1111 0000   FIELD-S  00 00       0000        1111        0000  
+1541 00 00 0000 0000 1111   FIELD-T  00 00       0000        0000        1111
+1542 00 00 0000 0001 0000   ONE-S    00 00       0000        0001        0000
+1543 00 00 0011 1111 1110   CODFIELD 00 00       0011        1111        1110               
+                                      
+1544 00 61 0000 0000 0000   STOP-OP  00 61       0000        0000        0000        stop opcode
+1545 00 57 0000 0000 0000   SETM-OP  00 57       0000        0000        0000        clear M468 and set M468 opcode
+1546 00 60 0000 0000 0000   NOP-OP   00 60       0000        0000        0000        
+                                 
+                                                                                               read event from input tape
+                                                                                               if M8=0000 use INTAP as input
+                                                                                                    =0001     INTAP2 etc 
+                                                                                               if BL-INBUF=0 -> force read a new block
+                                                                                                  and init BL-INBUF/NW-INBUF/NSEQIN
+                                                                                               use INBUF/WW1|INBUF2/WW2
+                                                                                               set CODE1|CODE2 with code for read event, 
+                                                                                                  zero if no data beacause reached end of 
+                                                                                                  seq, or end of tape (if so, set EOFTAP/2)
+                                      
+1547 00 40 1996 0000 1603   READ-EV     ADD      MK-TR60                 LRRINEX     set and save exit routine
+1548 00 70 9120 1527 1573               TR EQ    NSEQIN  +M8 ZERO        LRBINND     if no blocks in sequence remaining to be read, return No Data      
+1549 00 72 9111 1527 1573               TR NEQ   EOFTAP  +M8 ZERO        LRBINND     if tape reached end of file mark, return No Data      
+1550 00 41 9120 1528 9120               SUB      NSEQIN  +M8 ONE         NSEQIN  +M8 ok, read to read new input event. decr 
+1551 00 72 8901 1527 1574               TR NEQ   BL-INBUF+M8 ZERO        RR-EV       if BL-INBUF not zero, goto read record, else continue to read first block
+                                                  
+                                                                                               read block                                                         
+                                                                                               
+1552 00 40 9568 9106 1553   RB-EV       ADD      RBIN1-OP+M8 INTAP   +M8 LRBIN1      set instr to ...
+1553 00 00 0000 0000 0000   LRBIN1      00                                           ... read from INTAP/INPAT2 to INBUF/INBUF2
+1554 00 68 1554 0000 1991               68       *                       REREAD      if tape check Call Re-read
+1555 00 67 0000 0000 1566               67                               LRBIN4      if end of file goto ...
+1556 00 60 0000 1523 0000               TR                   TEMP1                   Temp1=start of block xx xx aaaa bbbb xxxx
+1557 04 42 0000 1540 1524            04 MASK                 FIELD-S     TEMP2       Temp2=bbbb=02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+1558 08 42 1523 1539 0000            08 MASK     TEMP1       FIELD-R                 REG1=02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa 
+1559 00 41 1524 0000 0000               SUB      TEMP2             
+1560 00 40 0000 1528 8901               ADD                  ONE         BL-INBUF+M8 BL-INBUF=Block Len from Input event block=bbbb-aaaa+1
+1561 00 41 1531 0000 0000               SUB      N200                                check Block Len from Input block 
+1562 00 63 1564 1564 0000               TR SGN   LRBIN2      LRBIN2                  transfer if 200 or less
+1563 00 61 0000 0000 0000               STOP                                         stop because input block too big (max 200w)
+1564 00 60 1527 8903 0000   LRBIN2      TR       ZERO        NW-INBUF+M8             NW-INBUF=Number of words already processed from Input block
+1565 00 60 0000 0000 1574               TR                               RR-EV       goto process first event record in block
+1566 00 60 1528 9111 0000   LRBIN4      TR       ONE         EOFTAP  +M8             set end of file flag
+1567 00 60 0000 0000 1573               TR                               LRBINND     then return no data
+                                 
+                                 
+1568 00 94 0501 0000 0000   RBIN1-OP 00 94       INBUF       0000
+1569 00 94 0701 0000 0000   RBIN2-OP 00 94       INBUF2      0000
+1570 00 60 6501 5123 0000   RBIN3-OP    TR       INBUF   +M6 WW1     +M4
+1571 00 60 6701 5323 0000   RBIN4-OP    TR       INBUF2  +M6 WW2     +M4
+1572 00 53 0000 0000 0000   SETM46OP    53       0000        0000        0000        
+                                      
+1573 00 60 1527 9117 1603   LRBINND     TR       ZERO        CODE1   +M8 LRRINEX     return no data
+                                      
+                                                                                               read event record from from input tape block 
+                                                  
+1574 00 41 8901 8903 0000   RR-EV       SUB      BL-INBUF+M8 NW-INBUF+M8             REG1=words left to be read in input transact block. 
+1575 00 63 1577 1552 0000               TR SGN   LRRIN1      RB-EV                   If no words left, go to read next block
+1576 00 61 0000 0000 0000               STOP                                         Safety: stop because overflowing block rec
+1577 96 60 8903 0000 0000   LRRIN1   96 TR       NW-INBUF+M8                         Shift num words read into field S
+1578 00 40 1572 0000 1579               ADD      SETM46OP                LRRIN2      set instr to ...
+1579 00 00 0000 0000 0000   LRRIN2      00                                           ... set M6=(NW-INBUF+M8), M4=0000
+1580 00 60 9570 1583 0000               TR       RBIN3-OP+M8 LRRIN3                  set instr to ... 
+1581 00 60 0000 1592 0000               TR                   LRRIN6                  ... 
+1582 00 60 0000 1598 0000               TR                   LRRIN8                  ... 
+1583 00 00 0000 0000 0000   LRRIN3      00                                           ... copy from input buf to rec ww1/2..
+1584 13 60 0000 1115 0000            13 TR                   LEN                     get event length
+1585 00 41 1115 1530 0000               SUB      LEN         N7                      check event len is 7..200
+1586 00 63 1588 0000 0000               TR SGN   LRRIN4
+1587 00 61 0000 0000 0000               STOP                                         because event len < 7
+1588 00 41 1115 1531 0000   LRRIN4      SUB      LEN         N200                    check event size <= 200
+1589 00 63 0000 1591 1591               TR SGN               LRRIN5      LRRIN5
+1590 00 61 0000 0000 0000               STOP                                         safety: stop because event has more that 200 words
+1591 00 50 0001 0001 0000   LRRIN5      50       0001        0001                    incr M4, M6
+1592 00 00 0000 0000 0000   LRRIN6      00                                           copy from input buf to rec ww1/2..
+1593 00 42 0000 1543 9117               MASK                 CODFIELD    CODE1   +M8 get event code
+1594 00 72 0000 1527 1596               TR NEQ               ZERO        LRRIN7      check if event code read is zero
+1595 00 61 0000 0000 0000               STOP                                         stop because event code is zero
+1596 00 50 0001 0001 0000   LRRIN7      50       0001        0001                    incr M4, M6
+1597 00 41 1115 1529 1523               SUB      LEN         N2          TEMP1            
+1598 00 00 0000 0000 0000   LRRIN8      00                                           copy from input buf to rec ww1/2..
+1599 00 50 0001 0001 0000               50       0001        0001                    incr M4, M6           
+1600 00 41 1523 1528 1523               SUB      TEMP1       ONE         TEMP1       decr remaining len
+1601 00 72 0000 1527 1598               TR NEQ               ZERO        LRRIN8      loop if event not yet copied
+1602 00 40 8903 1115 8903               ADD      NW-INBUF+M8 LEN         NW-INBUF+M8 Number of words read from block += LEN
+1603 00 00 0000 0000 0000   LRRINEX     00                                           exit routine
+                                 
+                                                                                               add event to outbuf, write to outtap when full
+                                                                                               if M8=9999 -> A flush outbuf to tape
+                                                                                               if M8=0000 -> add trabasction from WW1
+                                                                                               if M8=0001 -> add trabasction from WW2
+                                      
+1604 00 40 1996 0000 1644   WRITE-EV    ADD      MK-TR60                 LWROUEX     set and save exit routine
+1605 00 60 1546 1616 0000               TR       NOP-OP      LWB2        
+1606 08 58 0000 9999 1623            08 58       0000        9999        WR-EV       goto write event if M8<>9999
+                                 
+                                 ;           tr       outtap
+                                 ;           nop                                          **echo WRITE_TAPE:
+                                 
+1607 00 60 1644 1616 1608               TR       LWROUEX     LWB2        WB-EV       goto flush block to tape and then exit
+                                      
+                                                                                          write output event block on tape
+                                 
+1608 96 60 1105 0000 0000   WB-EV    96 TR       NW-OUTB                             put in REG1 field S ... 
+1609 00 70 0000 1527 1616               TR EQ                ZERO        LWB2        if outbuf empty, skip tape write
+1610 00 41 0000 1542 0000               SUB                  ONE-S                   ... number of words to save 
+1611 00 40 1618 0000 0000               ADD      SVOUT-OP                            set instr ...
+1612 00 40 1108 0000 1613               ADD      OUTTAP                  LWB1        ... with save mem addr 
+1613 00 00 0000 0000 0000   LWB1        00       0000        0000        0000        ... in tape OUTTAP
+                                 ;           nop                                          **echo save_tape
+1614 08 60 1614 0000 1992            08 60       *                       CHKWRT      Check write
+1615 00 60 1527 1105 0000   LWB3        TR       ZERO        NW-OUTB                 clear number of words in block buf
+1616 00 60 0000 0000 0000   LWB2        NOP            
+1617 00 60 0000 0000 1634               TR                               LWR1        goto add event data to outbuf
+                                      
+1618 00 90 0905 0905 0000   SVOUT-OP 00 90       OUTBUF      OUTBUF      0000
+1619 00 60 5123 6905 0000   SVOU3-OP    TR       WW1     +M4 OUTBUF  +M6
+1620 00 60 5323 6905 0000   SVOU4-OP    TR       WW2     +M4 OUTBUF  +M6
+1621 13 60 1123 1115 0000   SVOU5-OP 13 TR       WW1         LEN  
+1622 13 60 1323 1115 0000   SVOU6-OP 13 TR       WW2         LEN  
+                                 
+                                                                                          write output event rec on outbuf
+                                 
+1623 00 60 0000 0000 0000   WR-EV       NOP
+                                 
+                                 ;           tr       code1   +m8
+                                 ;           nop                                          **echo WRITE_EVENT:
+                                 
+1624 00 60 9621 1625 0000               TR       SVOU5-OP+M8 LWR0                    set instr to ... 
+1625 00 00 0000 0000 0000   LWR0        00                                           ... get event LEN 
+1626 00 70 0000 1527 1630               TR EQ                ZERO        LWR0A       check if len zero
+1627 00 41 0000 1531 0000               SUB                  N200                    check event size <= 200
+1628 00 63 0000 1631 1631               TR SGN               LWR1B       LWR1B
+1629 00 61 0000 0000 0000               STOP                                         safety: stop because event has more that 200 words
+1630 00 61 0000 0000 0000   LWR0A       STOP                                         safety: stop because event has zero words        
+1631 00 40 1105 1115 0000   LWR1B       ADD      NW-OUTB     LEN                     check if enough room in outbuf for event
+1632 00 41 1531 0000 0000               SUB      N200        
+1633 00 63 0000 0000 1608               TR SGN                           WB-EV       no room -> write block
+1634 00 60 9619 1639 0000   LWR1        TR       SVOU3-OP+M8 LWR3                    set source event rec instr
+1635 96 60 1105 0000 0000            96 TR       NW-OUTB                             set instr to ...
+1636 00 40 1115 0000 0000               ADD      LEN                                 ... set M8 value to LEN
+1637 00 40 1545 0000 1638               ADD      SETM-OP                 LWR2        ... set M6 value to NW-OUTB
+1638 00 00 0000 0000 0000   LWR2        00       0000        0000        0000        clear M4, set M6 to NW-OUTB, M8 to LEN
+1639 00 60 5123 6905 0000   LWR3        TR       WW1     +M4 OUTBUF  +M6             copy from ww1/2.. to outbuf         
+1640 00 50 0001 0001 0000               50       0001        0001        0000        ... incr M4, M6 
+1641 08 58 9999 0000 1639            08 58       9999        0000        LWR3        ... decr M8, loop
+1642 00 40 1105 1115 1105               ADD      NW-OUTB     LEN         NW-OUTB     Number of words in block += LEN
+1643 00 40 1113 1528 1113               ADD      WOUTTAP     ONE         WOUTTAP     incr number of event in output tape
+1644 00 00 0000 0000 0000   LWROUEX     00
+                                 
+                                                                                               write end of tape to SRCTAP
+                                 
+1645 00 40 1996 0000 1649   WR-EOT      ADD      MK-TR60                 LWREOTEX    set and save exit routine
+1646 00 40 1650 1110 1647               ADD      SVEOT-OP    SRCTAP      LWEOT1      set instr ...
+1647 00 00 0000 0000 0000   LWEOT1      00                                           ... to write end of tape
+1648 08 60 1648 0000 1992            08 60       *                       CHKWRT      Check write
+1649 00 00 0000 0000 0000   LWREOTEX    00
+                                 
+                                 
+1650 00 90 0000 0000 0000   SVEOT-OP 00 90       0000        0000        0000
+                                 
+                                 
+                                 
+1990 00 00 0000 0000 0000   1990                                                     Library
+                                      
+                                                                                               Re-read routine. if error persist then stop 
+                                                                    
+1991 00 61 0000 0000 1991   REREAD      STOP                             REREAD      if read error, stop    
+                                      
+                                                                                               Check write routine. 
+                                      
+1992 00 40 1996 0000 1994   CHKWRT      ADD      MK-TR60                 LCHKEX      set and save exit transfer
+1993 00 68 0000 0000 1995               68                               LCHK1       if tape check goto lchk1
+1994 00 00 0000 0000 0000   LCHKEX      00                                           if no tape chek, return to caller
+1995 00 61 0000 0000 1995   LCHK1       STOP                             LCHK1       if write error, stop 
+1996 00 59 9999 9140 0001   MK-TR60  00 59       9999        9140        0001   
+                                           

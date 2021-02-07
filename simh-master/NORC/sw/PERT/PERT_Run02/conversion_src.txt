@@ -1,0 +1,435 @@
+
+                            Conversion program
+                            by Roberto Sancho Nov 2020
+                            from specs at page 55 in book "PERT summary report phase 2"
+                            TSTS calculation using SCHEDL date as input from specs at
+                            page 88 (input conversion)
+
+                            addr input
+                                  1900 = 0 .. 0 MMDDYY  today *now* date in MM (month) DD (day) YY (year format)
+
+
+                            tapes input:
+                                          09 program
+                                          01 transactions tape created from cards in CTC
+                                  output:
+                                          02 converted successors transaction file 
+                                          03 converted predecessors transaction file 
+
+                                  on line print:
+                                             error register controls 
+                                             label of output tapes and total number of transactions in each one
+
+                            stops: IC: 00010 (00 61 0000 0000 0088) -> ready to run conversion. Set addr 1900
+                                                                       and press start to execute program. 
+                                   IC: 01901 (00 61 0000 0000 1901) -> unrecoverable read error
+                                   IC: 01905 (00 61 0000 0000 1905) -> unrecoverable write error
+
+                                   IC: 00001 (00 61 0000 0000 0000) -> finished ok. 
+
+                            Switch 74 set to off      -> create new output transaction tapes 02 03
+                                                         (add label, add data)
+                                             transfer -> append to output tapes from current position
+                                                         (just add data)
+                            Switch 75 set to off      -> terminates output transaction tapes 02 03
+                                                         (add end of file mark, rew)
+                                             transfer -> do not terminate tape, more transac can be added
+
+
+                            Input tape transaction record (as written by Run01, read by this program)
+
+                            w1 = A RS PR 0 PPPPPPPPP 0      A=card code PPP=predecessor code, RS=Res.Rate, PR=Pref.Rate
+                            w2 = 000000 SSSSSSSSS R         SSS=successor code, R=report code
+                            w3 = AAAA MMMM BBBB TSTS        AAAA=Optimistic est, MMMM=Most likely, BBBB=pessimistic estimation, TSTS=Schedulled completition time
+                            w4 = SCHEDL 00 0000 0000        SCHEDL=Schedulled date (format mm dd yy)
+
+                            output tape transaction record (as written by Run02) for tape 02 successors
+
+                            w1 = A RS PR 0 PPPPPPPPP 0      A=card code PPP=predecessor code, RS=Res.Rate, PR=Pref.Rate
+                            w2 
+                            w3 
+                            w4 = 55 00 00 SSSSSSSSS R       R=report code
+                            w5 = TE                         TE=Expected time
+                            w6 = SIGMA                      variance
+                            w7 = SCHEDL 000000 TSTS         TSTS=Schedulled completition time, SCHEDL=Schedulled date (format mm dd yy)
+
+                            output tape transaction record (as written by Run02) for tape 03 predecessors
+
+                            w1 = A RS PR 0 PPPPPPPPP 0      A=card code PPP=predecessor code, RS=Res.Rate, PR=Pref.Rate
+                            w2 = TE
+                            w3 = SIGNA
+                            w4 = 66 xx xx SSSSSSSSS R       R=report code
+                            w5 
+                            w6 
+                            w7 = SCHEDL xx xxxx TSTS        TSTS=Schedulled completition time, SCHEDL=Schedulled date (format mm dd yy)
+
+                            in output tape transaction are grouped in blocks. Max 28 transaction (7 words each)
+                            per block -> max block size = 7*28=196 words
+
+LABEL--- PP OPCODE-- RRRR---- MM SSSS---- MM TTTT---- MM COMMENT
+
+
+0008        57                                           Clear M4 M6 M8
+         09 98                                           rewind tape 09 program
+            61                                           stop to allow enter current date at addr 1900 from console
+
+            TR       NOP-OP      LSVSSOK                 set to normal operation
+            TR       NOP-OP      LSVPPOK                 set to normal operation
+            74                               RB-IN-TR    if Sw74 set to transfer, skip init output 02 03
+         02 91       MT2LBL      MT2LBL      0000        write tape 02 label
+         08 60       *                       CHKWRT      Check write
+         03 91       MT3LBL      MT3LBL      0000        write tape 03 label
+         08 60       *                       CHKWRT      Check write
+            TR       ZERO        SSCOUNT                 Init count of successor transactions
+            TR       ZERO        PPCOUNT                 Init count of predecessor transactions
+                             
+                                                         read next transaction block to process from tape 01 (Input transactions from CTC)
+
+RB-IN-TR    51                                           Clear M4
+LRB1        TR       ZERO        IN-TRANS+M4             Clear Block Buffer for Input transactions from CTC before loading it from tape
+            58       0001        0200        LRB1        loop
+         01 94       IN-TRANS                            Read Tape 01 to IN-TRANS Input transactions from CTC
+            68       *                       REREAD      if tape check Call Re-read
+            67                               EOFIN       if end of file transfer to end of input transactions       
+            TR                   TEMP1                   Temp1=start of block xx xx aaaa bbbb xxxx
+         04 MASK                 FIELD-S     TEMP2       Temp2=bbbb=02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+         08 MASK     TEMP1       FIELD-R                 REG1=02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa 
+            SUB      TEMP2             
+            ADD                  ONE         BL-IN-TR    BL-IN-TR=Block Len from Input Transaction=bbbb-aaaa+1
+            TR       ZERO        NW-IN-TR    RR-IN-TR    NW-IN-TR=Number of words already processed from Input Transaction block from CTC, goto process first transaction record in block
+
+                                                         end of transaction input file, terminate program
+
+EOFIN       TR       LEOF1       LSVSSOK     SAVESS      flush succ trans block to tape 02   
+LEOF3       TR       LEOF2       LSVPPOK     SAVEPP      flush pred trans block to tape 03
+LEOF4       75                               LEOF5       if Sw75 set to transfer, skip write eof to output tapes
+         02 91       0000        0000        0000        write end of file in tape 02
+         08 60       *                       CHKWRT      Check write
+         03 91       0000        0000        0000        write end of file in tape 03
+         08 60       *                       CHKWRT      Check write
+         01 98                                           rewind tape 01
+         02 98                                           rewind tape 02
+         03 98                                           rewind tape 03
+            80       MT2LBL      0001                    print MT2 label (successor)
+            80       SSCOUNT     0002                    print total number of transactions
+            80       ZERO        0003
+            80                   0004
+            80                   0005
+            80                   0006
+            81                   0007                    print
+            80       MT3LBL      0001                    print MT3 label (predecessor)
+            80       PPCOUNT     0002                    print total number of transactions
+            80       ZERO        0003
+            80                   0004
+            80                   0005
+            80                   0006
+            81                   0007                    print
+LEOF5       TR       STOP-OP     0001        0001        set stop in 0001, transfer to 0001: sucessfull program end
+LEOF1       TR                               LEOF3
+LEOF2       TR                               LEOF4
+                                                         read next transaction rec to process from block
+                                                         and store it in transac rec w1..w4
+
+RR-IN-TR    SUB      BL-IN-TR    NW-IN-TR                REG1=words left to be read in input transact block. 
+            TR SGN   LRR1        RB-IN-TR                If no words left, go to read next block
+            STOP                                         Safety: stop because overflowing block rec
+LRR1     96 TR       NW-IN-TR                            Shift num words read into field S
+            ADD      SETM-OP                 LRR2        set instr to ...
+LRR2        00       0000        0000        0000        ... clear modif and set M6 with NW-IN-TR value
+LRR3        TR       IN-TRANS+M6 W1      +M4             copy from input tranasction block to rec w1..w4
+            50       0000        0001        0000        ... incr M6 
+            58       0001        0004        LRR3        ... incr M4, loop
+            ADD      NW-IN-TR    N4          NW-IN-TR    Number of words read in block += 4
+            ADD      W1          W2
+            TR EQ                ZERO        RR-IN-TR    if blank transaction, skip and read next one
+
+                                                         decode transaction recod read from ctc
+                                                         and extract its fields
+
+         12 TR       W3          A                       A=optimistic estimation (a)
+         08 MASK     W3          FIELD-R     M           M=most likelly estimation (m)
+         04 MASK     W3          FIELD-S     B           B=most pessimistic estimation (b)
+            MASK     W3          FIELD-T                 TS=completition or schedulle date
+            ADD                  W4          TW7         result transac rec = tw7 = SCHEDL xx xxxx TSTS        TSTS=Schedulled completition time, SCHEDL=Schedulled date (format mm dd yy)
+            TR       W1          TW1                     Tw1 = A RS PR 0 PPPPPPPPP 0      A=card code PPP=predecessor code, RS=Res.Rate, PR=Pref.Rate
+            TR       W2          TW4                     w4 = QQ xx xx SSSSSSSSS R       QQ=55 add succesor to event, 66=add predecessor to event, R=report code
+
+                                                         check A <= M <= B
+            SUB      M           A
+            TR SGN                           REJECT      Reject transaction because  A <= M <= B not met
+            SUB      B           M
+            TR SGN                           REJECT      Reject transaction because  A <= M <= B not met
+            ADD      A           E11         A           convert fixed 1 decimal position to float format
+            ADD      B           E11         B           convert fixed 1 decimal position to float format
+            ADD      M           E11         M           convert fixed 1 decimal position to float format
+         15 TR       W1                                  REG1=card code
+            TR EQ                ZERO        REJECT      reject because card code is zero (must be 1..5)   
+            MASK     TW1         TR-FIELD                get predecessor code
+            TR NEQ               ZERO        LRR4
+            MASK     TW4         TR-FIELD                get succesor code
+            TR NEQ               ZERO        LRR4
+            TR                               REJECT      reject because card code predecessor and successor are both zero
+LRR4        TR                               CALC
+
+                                                         Reject transaction 
+
+REJECT      80       W1          0001 
+            80       W2          0002 
+            80       W3          0003
+            80       W4          0004 
+            80       ZERO        0005
+            80                   0006
+            83                   0007                    Print special rejected tr words w1..w4
+            TR                               RR-IN-TR    if rejected transaction, skip and read next one       
+
+                                                         calc TE (Expected time) and Sigma (variance)
+
+CALC     50 FADD     A           B                       TE = K1 * M + K2 * (A+B)
+         50 FMUL                 K2          TEMP1
+         50 FMUL     M           K1
+         50 FADD                 TEMP1       TE         
+         50 FSUB     B           A                       SIGMA = (( B-A ) / K3)^2
+         50 FDIV                 K3 
+         50 FMUL                             SIGMA      
+
+                                                         check SIGMA < 100, 
+         50 FSUB     SIGMA       F100
+            TR SGN                           LCHKSOK
+            80       W1          0001 
+            80       W2          0002 
+            80       W3          0003
+            80       W4          0004 
+            80       SIGMA       0005
+            80       ZERO        0006
+            81                   0007                    Print big sigma transaction but continue
+LCHKSOK     NOP
+
+                                                         if possible, conver SCHEDL date MM DD YY
+                                                         to elapsed weeks NNN.N counting uppon NOWMDY
+                                                         parameter *now* time
+
+            TR EQ    NOWMDY      ZERO        SCHOK       if not date for now, skip sched conversion to weeks
+         10 TR       TW7         MMDDYY                  SCHEDL -> MMDDYY, tw7 = SCHEDL xx xxxx TSTS        TSTS=Schedulled completition time, SCHEDL=Schedulled date (format mm dd yy)
+         08 60       *                       DAT2DAYS    call convert date to number of days
+            TR EQ    DAYS        ZERO        SCHOK       no date
+            TR       DAYS        TEMP1                   sched date converted to days
+            TR       NOWMDY      MMDDYY 
+         08 60       *                       DAT2DAYS    call convert date to number of days
+            TR EQ    DAYS        ZERO        SCHOK       no date
+            SUB      TEMP1       DAYS        DAYS        days elapsed for completition date
+            63                   SCHOK       SCHOK
+            ADD      E11         DAYS                    convert to float
+         50 FDIV                 F07                     div by 0.7 to convert to number of weeks x10
+         11 34       F1                      TSTS        FMUL Special x float 1 -> back to NNN.N fixed format 1 decimal, with sign in digit 14)
+            MASK     TSTS        FIELD-T     TSTS
+         04 TR       TW7
+         96 TR       TW7
+            ADD      TW7         TSTS        TW7         put TSTS in TW7
+SCHOK       NOP
+                                                         prepare transaction for Successors tape
+             
+            ADD      E55         TW4         TW4
+            TR       ZERO        TW2
+            TR       ZERO        TW3
+            TR       TE          TW5
+            TR       SIGMA       TW6
+            SUB      N196        NW-SS-TR    TEMP1
+            TR EQ                ZERO        SAVESS
+            SUB      TEMP1       N7
+            TR SGN   ADDSS       ADDSS
+            STOP                                         Safety: stop because overflowing block rec
+
+                                                         save block buf to successor tranasc tape 02
+
+SAVESS   96 TR       NW-SS-TR    TEMP1                   put number of words used in field S
+            TR EQ    ZERO                    LSVSSOK     No words to save      
+            SUB      TEMP1       ONE-S                   decrement words to save      
+            ADD      SVSS-OP                 LSVSS1      set instr ...
+LSVSS1      00       0000        0000        0000        ... to save block in tape 02
+         08 60       *                       CHKWRT      Check write
+            TR       ZERO        NW-SS-TR                clear number of words in block buf
+LSVSSOK     NOP
+                                                         add transaction to save successor transac block for tape 02
+
+ADDSS       MASK     TW1         TR-FIELD                get predecessor code
+            TR EQ    ZERO                    LAS9        if is zero -> no predecessor -> skip
+            ADD      SSCOUNT     ONE         SSCOUNT     incr count of successor transactions
+         96 TR       NW-SS-TR                            Shift num words read into field S
+            ADD      SETM-OP                 LAS2        set instr to ...
+LAS2        00       0000        0000        0000        ... clear modif and set M6 value
+LAS3        TR       TW1     +M4 SS-TRANS+M6             copy from tw1..7 to successor tranasction block 
+            50       0000        0001        0000        ... incr M6 
+            58       0001        0007        LAS3        ... incr M4, loop
+            ADD      NW-SS-TR    N7          NW-SS-TR    Number of words in block += 7
+LAS9        NOP
+                                                         prepare transaction for predecessor tape
+            
+            ADD      E11         TW4         TW4
+            TR       TE          TW2
+            TR       SIGMA       TW3
+            TR       ZERO        TW5
+            TR       ZERO        TW6
+            SUB      N196        NW-PP-TR    TEMP1
+            TR EQ                ZERO        SAVEPP
+            SUB      TEMP1       N7
+            TR SGN   ADDPP       ADDPP
+            STOP                                         Safety: stop because overflowing block rec
+
+SAVEPP   96 TR       NW-PP-TR    TEMP1                   put number of words used in field S
+            TR EQ    ZERO                    LSVPPOK     No words to save      
+            SUB      TEMP1       ONE-S                   decrement words to save      
+            ADD      SVPP-OP                 LSVPP1      set instr ...
+LSVPP1      00       0000        0000        0000        ... to save block in tape 02
+         08 60       *                       CHKWRT      Check write
+            TR       ZERO        NW-PP-TR                clear number of words in block buf
+LSVPPOK     NOP
+                                                         add transaction to save predecessor transac block for tape 02
+
+ADDPP       MASK     TW4         TR-FIELD                get successor code
+            TR EQ    ZERO                    LAP9        if is zero -> no successor -> skip
+            ADD      PPCOUNT     ONE         PPCOUNT     incr count of predecessor transactions
+         96 TR       NW-PP-TR                            Shift num words read into field S
+            ADD      SETM-OP                 LAP2        set instr to ...
+LAP2        00       0000        0000        0000        ... clear modif and set M6 value
+LAP3        TR       TW1     +M4 PP-TRANS+M6             copy from tw1..7 to predecessor transaction block 
+            50       0000        0001        0000        ... incr M6 
+            58       0001        0007        LAP3        ... incr M4, loop
+            ADD      NW-PP-TR    N7          NW-PP-TR    Number of words in block += 7
+LAP9        NOP
+
+            TR                               RR-IN-TR    continue to process next input transact
+
+
+1000                                                     variables
+
+IN-TRANS    RES      0200                                Block Buffer for Input transactions from CTC
+BL-IN-TR                                                 Block Len from Input Transaction=bbbb-aaaa+1
+NW-IN-TR                                                 Number of words already processed from Input Transaction block from CTC
+
+SS-TRANS    RES      0196                                Block Buffer for succesor transactions output to tape 02
+NW-SS-TR                                                 Number of words already used in buffer
+
+PP-TRANS    RES      0196                                Block Buffer for predecessor transactions output to tape 02
+NW-PP-TR                                                 Number of words already used in buffer
+
+TEMP1
+TEMP2
+
+A
+B
+M
+TE
+SIGMA
+SCHEDL
+TSTS
+
+W1                                                       input transaction record                                                   
+W2
+W3
+W4
+
+TW1                                                      output transaction record
+TW2
+TW3
+TW4
+TW5
+TW6
+TW7
+
+MMDDYY                                                   date in format month-day-year (as 0..0 MMDDYY)
+YEAR
+MONTH
+DAYS                                                     number of days elapsed from 1/1/1950
+
+K1       99 06       6666        6666        6667        K1=0.6666...
+K2       99 01       6666        6666        6667        K2=0.1666...
+K3       00 06       0000        0000        0000        K3=6.0
+
+ZERO     00 00       0000        0000        0000
+ONE      00 00       0000        0000        0001
+N4       00 00       0000        0000        0004
+N7       00 00       0000        0000        0007
+N50      00 00       0000        0000        0050
+N196     00 00       0000        0000        0196
+N365     00 00       0000        0000        0365
+E55      55 
+
+E11      11 00       0000        0000        0000        Exp 11 to convert fix 1 decimal to float
+F100     02 01                                           Float 100.0
+F07      99 07                                           Float 0.7
+F1       00 01                                           Float 1.0
+FIELD-R  00 00       1111        0000        0000
+FIELD-S  00 00       0000        1111        0000  
+FIELD-T  00 00       0000        0000        1111
+ONE-S    00 00       0000        0001        0000
+TR-FIELD 00 00       0011        1111        1110               
+FIELD-NN 00 00       0000        0000        0011        
+
+MT2LBL   39 02       0055        0000        0000
+MT3LBL   39 02       0066        0000        0000
+
+SSCOUNT                                                  count of successor transactions
+PPCOUNT                                                  count of predecessor transactions
+
+STOP-OP  00 61       0000        0000        0000        stop opcode
+SETM-OP  00 57       0000        0000        0000        clear M468 and set M468 opcode
+SVSS-OP  02 90       SS-TRANS    SS-TRANS    0000  
+SVPP-OP  03 90       PP-TRANS    PP-TRANS    0000  
+NOP-OP   00 60       0000        0000        0000
+GNDAY-OP 00 60       *           0000        0000
+         00 00       0000        0000        0000        number of days elapsed on previous months of year for january
+         00 00       0000        0000        0031        for feb
+         00 00       0000        0000        0059        for march
+         00 00       0000        0000        0090
+         00 00       0000        0000        0120
+         00 00       0000        0000        0151
+         00 00       0000        0000        0181
+         00 00       0000        0000        0212
+         00 00       0000        0000        0243
+         00 00       0000        0000        0273
+         00 00       0000        0000        0304
+         00 00       0000        0000        0334        for dec
+
+
+NOWMDY      EQU      1900          
+1900                                                     0 .. 0 MMDDYY  today date in MM (month) DD (day) YY (year format)
+
+
+
+1910                                                     Library
+
+                                                         Re-read routine. if error persist then stop 
+                              
+REREAD      STOP                             REREAD      if read error, stop    
+
+                                                         Check write routine. 
+
+CHKWRT      ADD      MK-TR60                 LCHKEX      set and save exit transfer
+            68                               LCHK1       if tape check goto lchk1
+LCHKEX      00                                           if no tape chek, return to caller
+LCHK1       STOP                             LCHK1       if write error, stop 
+MK-TR60  00 59       9999        9140        0001   
+
+                                                         Convert day-month-year to days routine. 
+                                                         input in MMDDYY, result in DAYS
+
+DAT2DAYS    ADD      MK-TR60                 LDAEX       set and save exit transfer
+         04 MASK     MMDDYY      FIELD-S     MONTH       extract date components             
+         02 MASK     MMDDYY      FIELD-T     DAYS         from input var
+            MASK     MMDDYY      FIELD-NN    YEAR           
+         92 TR       MONTH                               get number of days ealpsed on year on day 1 of month
+            ADD      GNDAY-OP                LDA1
+LDA1        00       0000        0000        00000        
+            ADD      DAYS                    DAYS        days = days elapsed in year
+            SUB      YEAR        N50         YEAR        year = year - 50
+LDA2        63                   LDAEX       LDA3
+            ADD      DAYS        N365        DAYS        incr days for each year
+            SUB      YEAR        ONE         YEAR
+            TR                               LDA2
+LDA3        TR       ZERO        DAYS        LDAEX       if year < 0 return 0 days
+LDAEX       00       0000                                exit word
+
+
+
+
+                       

@@ -1,0 +1,816 @@
+
+                            Run 07
+                            sequence program at page 75 in book "PERT summary report phase 2"
+                            Note: even if on top of scanned page the listing is labeled "computation"
+                                  in fact it is the "sequence" program. Compute and sequence listings
+                                  are reversed
+
+                            addr input
+                                  1629 = 0 .. 0 NNNN where NNNN = NNN.N = week number (1 decimal) of *now* week. Now = today date
+                                  1631 = expected input tape week NNNN (fixed NNN.N) 
+
+                            tapes input:
+                                          09 program 
+                                          01 input active event file
+                                  output:
+                                          03 sequenced event file 
+                                          unknown event code        
+
+                                  temporary:
+                                          02, 04, 05, 06 work tape
+
+                                  on line print:
+                                          input tape label 
+                                          output tape label     number of events in tape
+
+
+                            stops: IC: 01721 (00 61 0000 0000 1722) -> unrecoverable read error
+                                   IC: 01737 (00 61 1721 0000 1737) -> unrecoverable write error
+
+                                   IC: 00010 (00 61 0000 0000 0088) -> ready to run sequence. Press start to execute program. 
+                                                                       Will print 
+                                                                       3906 0..0  input new active event file label tape 01 from run 06
+
+                                   IC: 00013 (00 61 0000 0000 0000) -> wrong input event tape 01
+                                                                       tape should have a label "39 06 0000 0000 NNNN"
+
+                                   IC: 00030 (00 61 0000 0000 0000) -> input block overflow for tape 1
+                                   IC: 00120 (00 61 0000 0000 0000) -> input block overflow for tape 2
+                                   IC: 00143 (00 61 0000 0000 0000) -> input block overflow for input tape 1/3/5
+                                   IC: 00190 (00 61 0000 0000 0000) -> saving again same event to tape 5
+                                   IC: 00233 (00 61 0000 0000 0000) -> tape 2 successor points to tape 1 event, but event on tape 2 not a predecessor of tape 1 event 
+                                   IC: 00251 (00 61 0000 0000 0000) -> found more predecessors than AA in w7 
+                                   IC: 00252 (00 61 0000 0000 0000) -> found more successors than BB in w7 
+                                   IC: 00379 (00 61 0000 0000 0000) -> ???
+                                   IC: 00382 (00 61 0000 0000 0000) -> stop because event code not found on input tape(s) 
+
+                                   IC: 00001 (00 61 0000 0000 0000) -> finished ok. 
+
+
+NNNN PP QQ RRRR SSSS TTTT 
+
+0008 01 94 1602 1602 0000   read tape 01 (1602 input tape 01 label)    
+0009 08 68 0009 0000 1713   if tape check, call 1713 reread   
+0010 00 61 0000 0000 0088   stop, then goto 0088 (print label), then continue to 0011
+0011 00 40 1631 1697 1631   set (1631 input tape 01 label) = 3906 0..0 + input tape week NNNN = expected input tape label
+0012 00 70 1602 0000 0014   if tape 01 label match goto 0014
+0013 00 61 0000 0000 0000   stop because wrong input tape label (expected 39 06 0..0 NNNN)
+0014 00 40 1710 1697 0000   const 00 01 0..0 + const 39 06 0..0 -> 39 07 0..0 new output label 
+0015 00 40 1629 0000 1629   add 39 07 0..0 to week now -> (1629 output tape label with week info)  
+0016 03 91 1629 1629 0000   write tape 03 label -> output tape 39 07 0000 0000 NNNN with NNN.N = week now
+0017 08 60 0017 0000 1730   call 1730 check write
+0018 00 57 0000 0000 0000   clear M4 M6 M8
+
+                            read next input tape 01 event block
+
+0019 01 94 0397 0000 0001   read input tape 01 -> (0397) record 0001   
+0020 08 68 0020 0000 1713   if tape check, call 1713 reread   
+0021 00 67 0000 0000 0086   if end of file goto 0086
+0022 00 60 0000 1603 0000   REG1 -> (1603) = Start of block   
+0023 04 42 0000 1637 1604   Mask and shift start of block: bbbb -> (1604)        01 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+0024 08 42 1603 1638 0000   Mask and shift start of block: aaaa -> (REG1)        01 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa
+0025 00 41 1604 0000 1605   (1604) - REG2 -> (1605)
+0026 00 40 1639 0000 1605          + 1 -> (1605)                                 1605=total number of words in input tape 01 event block
+0027 00 52 0000 0000 0000   clear M6
+
+                            read next event rec 
+                            check if tape input block exhausted
+
+0028 00 41 1605 1606 0000   (1605 number of words in block) - (1606 number of words already read) -> REG1
+0029 00 63 0035 0031 0000   if >0 goto 0035, =0 goto 0031 (if all events from event block processed)
+0030 00 61 0000 0000 0000   stop because input block overflow
+
+                            tape 1 input event block processed
+
+0031 00 60 1658 0050 0000   restore instr 0050
+0032 00 40 0019 1639 0019   (0019) + 1 -> (0019) incr number of block to read from input tape 01
+0033 00 60 1640 1606 0000   clear (1606 number of words already processed from block read from input tape 01)
+0034 00 60 1645 0036 0019   restore instr 0036, goto 0019 to read next tape 1 event block
+
+                            start processing next event from event block
+                            copy from event block to event buf if event has no predecessors 
+                            M6 index on input block
+
+0035 13 60 6397 1607 0000   (M6 + 0397 input event block) -> (1607) = NNN=event len=7+3*num pred+3*num succ 
+0036 00 60 0403 1608 0000   (0403 = event w7) -> (1608)
+0037 02 42 1608 1642 1609   Mask (event w7) with 0..0 1100 Shift 2 Right         1609=num of predecesors
+0038 00 42 1608 1643 1610   Mask (event w7) with 0..0 11                         1610=num of successors
+0039 00 72 1609 1640 0044   if num predecessors w7 <> zero goto 0044
+0040 00 60 1646 0054 0000   predecessor=0 -> set 0054 as nop to save event in tape 2
+0041 00 70 1610 1640 0044   if num successors w7 = zero goto 0044
+0042 00 60 0000 0000 0045   goto 0045
+0043 00 60 0000 0000 0198   
+0044 00 60 1647 0054 0000   set 0054 as goto read next event, so event is not saved on tape 2
+0045 96 60 1607 0000 0000   (1607 event rec len NNN) -> REG1   
+0046 00 40 0050 0000 0050   set end of loop to NNN                               
+0047 00 54 0000 0000 0000   clear M8                                     
+0048 00 60 6397 8598 0000   (M6 + 0397 input event block) -> (M8 + 0598 event rec): copy event
+0049 00 50 0000 0000 0001   incr M8
+0050 06 58 0001 0000 0048   loop, incr M6, if M6 <> rec len NNN goto 0048
+0051 00 40 1607 1606 1606   (1606 words processed from input tape 01 block) += (1607 event rec len NNN) 
+0052 92 60 1607 0000 0000   set instr 0036 ...
+0053 00 40 0036 0000 0036   ... to incr 0403 addr with num of processed words
+0054 00 60 0000 0000 0028   nop if no predecessors / goto 0028 if event has predecessors
+0055 00 40 1611 1607 0000   (1611 num of words in output block) + (1607 event rec len NNN) -> REG1
+0056 00 41 1650 0000 0000   const 200 - REG1
+0057 00 63 0000 0060 0059   if =0 goto 0060, if <0 goto 0059
+0058 00 60 1647 0069 0062   enough room in out block for event: set exit to read next event rec, goto 0062 
+0059 00 60 0058 0079 0070   
+0060 00 60 1647 0079 0000   
+0061 00 60 1646 0069 0062   
+0062 00 51 0000 0000 0000   clear M4
+0063 96 60 1607 0000 0000   set instr 0068 
+0064 00 40 1649 0000 0068   ... to loop if M4<>(1607 event rec len NNN)
+0065 00 60 4598 0798 0000   (M4 + 0598 event rec) -> (0798 event output block)
+0066 00 40 0065 1648 0065   incr S
+0067 00 40 1611 1639 1611   incr (1611 num of words in output block)
+0068 00 00 0000 0000 0000   loop M4, incr M4, if M4<>(1607 event rec len NNN) goto 0065
+0069 00 00 0000 0000 0000   exit: goto 0028 read next event rec
+
+                            write events without predecessors on tape 02 (=starting sequence events)
+
+0070 96 60 1611 0000 0000   set instr ...
+0071 00 41 0000 1648 0000   ... to write on tape 02 0798 0798+(1611 num of words in output block)-1 
+0072 00 40 1652 0000 0073   ... and block 1000
+0073 00 00 0000 0000 0000   write on tape 02 0798 0798+(1611 num of words in output block)-1
+0074 08 60 0074 0000 1730   call 1730 check write
+0075 00 60 0000 0000 0000   nop
+0076 00 60 1651 0065 0000   restore instr 0065
+0077 00 40 1652 1639 1652   incr block number on tape write
+0078 00 60 1640 1611 0000   clear (1611 num of words in output block)
+0079 00 00 0000 0000 0000   nop
+
+                            tape 2 contains start of sequence events. 
+                            prepare to process non-seq-start events from tape 1
+
+0080 01 98 0000 0000 0000   rewind input tape 01
+0081 02 91 0000 0000 0000   write end of file on tape 02 (starting sequence events)
+0082 02 98 0000 0000 0000   rewind input tape 02
+0083 00 57 0000 0000 0000   clear M4 M6 M8
+0084 00 40 1681 1652 1652   set tape write instr to use tape 04
+0085 00 60 1640 1606 0095   clear (1606 number of words already processed from block read from input tape 01), goto 0095
+
+                            end of event input file tape 1
+
+0086 00 70 1611 1640 0080   if (1611 num of words in output block)=zero goto 0080
+0087 00 60 1646 0079 0070   set instr 0079 as nop, goto 0070
+
+                            print tape 1 label
+
+0088 00 80 1602 0001 0000   print input tape 01 label as read from tape   
+0089 00 80 1631 0002 0000   print expected input tape 01 label = 3906 0..0 + input tape week NNNN  
+0090 00 80 1629 0003 0000   print output tape label with week info
+0091 00 80 1640 0004 0000   print zero
+0092 00 80 0000 0005 0000   print zero 
+0093 00 80 0000 0006 0000   print zero 
+0094 00 83 0000 0007 0011   print special, goto 0011 
+
+                            process non-start-of-sequence events 
+                            read event block from input tape 02 
+
+0095 02 94 0397 0000 0000   read input tape 02 -> (0397 input event block tape 2) 
+0096 08 68 0096 0000 1713   if tape check, call 1713 reread   
+0097 00 67 0000 0000 0311   if end of file goto 0311
+0098 00 60 0000 1603 0000   REG1 -> (1603) = Start of block   
+0099 04 42 0000 1637 1604   Mask and shift start of block: bbbb -> (1604)        02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+0100 08 42 1603 1638 0000   Mask and shift start of block: aaaa -> (REG1)        02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa
+0101 00 41 1604 0000 1605   (1604) - REG2 -> (1605)
+0102 00 40 1639 0000 1605          + 1 -> (1605)                                 1605=total number of words in input tape 02 event block
+0103 00 51 0000 0000 0000   Clear M4
+0104 00 60 0000 0000 0000   nop / clear 1630, goto 0118
+
+                            read event block from input tape 01
+
+0105 01 94 0999 0000 0001   read input tape 01 -> (0999 input event block tape 01) 
+0106 08 68 0106 0000 1713   if tape check, call 1713 reread   
+0107 00 67 1653 1634 0348   if end of file, 01 0..0 -> (1634 eof on this tape number), goto 0348
+0108 00 60 0000 1613 0000   REG1 -> (1613) = Start of block   
+0109 00 40 0105 1639 0105   incr block num on tape 01 read
+0110 00 60 1653 1621 0000   01 0..0 -> (1621 current input tape)
+
+                            get length of input block read from tape
+
+0111 04 42 1613 1637 1604   Mask and shift start of block: bbbb -> (1604)       
+0112 08 42 1613 1638 0000   Mask and shift start of block: aaaa -> (REG1)        
+0113 00 41 1604 0000 1614   (1604) - REG2 -> (1614)
+0114 00 40 1639 0000 1614          + 1 -> (1614)                                 1614=total number of words in input tape 01 event block
+0115 00 52 0000 0000 0000   Clear M6
+0116 00 60 1646 0140 0000   set 0140 as nop
+0117 00 60 0000 0000 0000   nop
+
+                            read event from tape 2 input block 
+                            check if tape 2 input block exhausted
+
+0118 00 41 1605 1606 0000   (1605 number of words in tape 2 block) - (1606 number of words already read from tape 2) -> REG1
+0119 00 63 0124 0121 0000   if >0 goto 0124, =0 goto 0121 (if all events from event block processed)
+0120 00 61 0000 0000 0000   stop because tape 2 input block overflow
+
+                            tape 2 input event block processed
+
+0121 00 60 1640 1606 0000   clear (1606 number of words already processed from block read from input tape 02)
+0122 00 60 1645 0124 0000   restore instr 0124
+0123 00 60 1656 0104 0095   set instr 0104 (clear 1630 goto 0118), goto read next tape 02 block
+
+                            start processing next event from event tape 2 input block 
+
+0124 00 60 0403 1608 0000   (0403 tape 2 event block w7) -> (1608 event rec w7) w7 = TSTS TTTT RS PR AA BB  AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time, RS=Resource Code (=Res.rate), PR=Spec Code (=Pref.Rate)  
+0125 13 60 4397 1607 0000   (M4 + 0397 event block tape 2) -> (1607 event rec len = value NNN from w1) 
+0126 02 42 1608 1642 1609   Mask (event w7) with 0..0 1100 Shift 2 Right         1609=num of predecesors
+0127 00 42 1608 1643 1610   Mask (event w7) with 0..0 11                         1610=num of successors
+0128 00 72 1640 1609 0131   if num predecessors w7 <> zero goto 0131
+0129 00 72 1610 1640 0131   if num successors w7 <> zero goto 0131
+0130 00 60 1699 0140 0133   
+0131 00 72 1610 1640 0133   if num successors w7 <> zero goto 0133
+0132 00 60 1693 0140 0133   ???
+0133 96 34 1609 1644 1609   mult (1609) x 3  
+0134 96 34 1610 1644 1610   mult (1610) x 3
+0135 00 42 1609 1711 1609   (1609 = number of words used by predecessors)
+0136 00 42 1610 1711 1610   (1610 = number of words used by successors)
+0137 92 60 1607 0000 0000   set instr 0124 ...
+0138 00 40 0124 0000 0124   ... to access next event rec in block
+0139 00 40 1607 1606 1606   (1606 words processed from input tape 02 block) += (1607 event rec len NNN) 
+0140 00 60 0000 0000 0000   nop
+
+                            read event from tape 1 input block 
+                            check if tape 1 input block exhausted
+
+0141 00 41 1614 1615 0000   (1614 words in tape 01 block) - (1615 words already processed) -> REG1
+0142 00 63 0149 0144 0000   if >0 goto 0149, if =0 goto 0144
+0143 00 61 0000 0000 0000   stop because tape 1 input block overflow
+
+                            tape 1 input event block processed
+
+0144 00 60 1640 1615 0000   clear (1614 words in tape 01 block)
+0145 00 60 1659 0149 0000   restore instr 0149
+0146 00 60 1657 0117 0000   ???
+0147 00 60 1660 0167 0000   restore instr 0167
+0148 00 60 0000 0000 0105   goto read event block from input tape 01
+
+                            start processing next event from event tape 1 input block 
+                            M6 index on tape 1 input block at addr 0999, event rec at 0598
+                            M4 index on tape 2 input block at addr 0397
+   
+0149 00 60 1005 1616 0000   (1005 input tape 1 w7) -> (1616 tape 1 event rec w7 = xxxx xxxx xxxx AABB)   
+0150 13 60 6999 1619 0000   (M6 + 0999 input event block tape 01) -> (1619 tape 1 event rec len (= value NNN from w1= NNN xxx xxxx SCHEDL)
+0151 02 42 1616 1642 1617   Mask (event w7) with 0..0 1100 Shift 2 Right         1617=num of predecesors tape 1 event
+0152 00 42 1616 1643 1618   Mask (event w7) with 0..0 11                         1618=num of successors tape 1 event
+0153 00 72 1617 1640 0156   if num predecessors <> 0 goto 0156                   
+0154 00 60 0155 0169 0156   set to skip this event from tape 1 because has no predecessors (so the event is on tape 2)
+0155 00 60 1646 0169 0141   skip this event, restore instr 0169 to not skip events, goto 0141 to read next tape 1 event
+0156 96 34 1617 1644 1617   mult (1609) x 3  
+0157 96 34 1618 1644 1618   mult (1609) x 3  
+0158 92 60 1619 0000 0000   set instr 0149 ...
+0159 00 40 0149 0000 0149   ... to access next event in tape 1 input block   
+0160 00 42 1617 1711 1617   (1617 = number of words used by predecessors on tape 1)   
+0161 00 42 1618 1711 1618   (1618 = number of words used by successors on tape 1)   
+0162 00 40 1619 1615 1615   (1615 words processed from tape 01 block) += (1619 event len tape 01)
+
+                            copy M6+0999 input event block tape 01 to 0598 event rec
+
+0163 96 60 1619 0000 0000   set end of loop on M6 ...
+0164 00 40 0167 0000 0167   ... to (1619 event len tape 01)
+0165 00 60 6999 0598 0000   (M6 + 0999 input event block tape 01) -> (0598 event rec) event rec = tape 01
+0166 00 40 0165 1648 0165   incr S
+0167 06 58 0001 0000 0165   loop, incr M6, if M6 <> (1619 event len tape 01) goto 0165
+0168 00 60 1661 0165 0000   restore instr 0165
+0169 00 60 0000 0000 0000   nop / set to nop and goto 0141 read next event on tape 1
+
+                            compare event codes
+                            from tape 1: current event code (at M6+0999, event rec at 0598)
+                            from tape 2: current event rec, the first successor code (at M4+0397)
+  
+0170 92 60 1609 0000 0000   (words used by predecessors on tape 2 event) -> field S
+0171 00 40 1672 0000 0000   + 7 in field S (now points to first succesor)
+0172 00 40 1694 0000 0174   set instr 0174 as ... 
+0173 00 42 0599 1655 1620   Mask (0599 event rec w2) to get event rec code -> (1620 event code from tape 1)
+0174 00 00 0000 0000 0000   Mask (M4 + 0404) to get event code from first successor on event rec on tape 2
+0175 00 41 0000 1620 0000   compare both event codes
+0176 00 63 0000 0178 0207   if =0 goto 0178, if <0 goto 0207
+
+0177 00 60 0197 0196 0179   ???, goto 0179
+
+                            event codes equal, succesor for tape 2 event found in tape 1
+
+0178 00 60 1640 1635 0227   clear (1635 of times input tape rewinded when scanning for an event), goto 0227
+
+                            event found in tape 1 is not successor for tape 2 event 
+
+0179 00 40 1611 1619 0000   (1611 num of word in output block) + (1619 event rec len NNN) -> REG1
+0180 00 41 1650 0000 0000   200 - REG1                                     check if room in output buf
+0181 00 63 0185 0182 0183   if >0 goto 0185, =0 goto 182, <0 goto 0183
+0182 00 60 0196 0206 0184   
+0183 00 60 1700 0206 0198   
+0184 00 60 0043 0196 0000  
+
+                            copy 0598 event rec from tape 1 to 1200 event output block for tape 5
+ 
+0185 00 54 0000 0000 0000   clear M8
+0186 96 60 1619 0000 0000   set instr 0194 to ...
+0187 00 40 1662 0000 0194   ... loop on M8 up to (1619 event rec len NNN from tape 1) 
+0188 00 42 0599 1655 0000   mask (0599 event w2 from tape 1) to get event code
+0189 00 72 1636 0000 0191   if <> (1636 last event saved in tape 5) goto 0191
+0190 00 61 0000 0000 0000   stop becuase saving again same event to tape 5
+0191 00 60 8598 1200 0000   (M8+0598 event rec from tape 1) -> (1200 tape 5 event output block)
+0192 00 40 0191 1648 0191   incr_s
+0193 00 40 1639 1611 1611   incr (1611 num of word in output block)
+0194 00 00 0000 0000 0000   loop, incr M8, if M8<>(1619 event rec len NNN from tape 1) goto 0191
+0195 00 42 0599 1655 1636   mask (0599 event w2 from tape 1) to get event code -> (1636 last event saved in tape 5)    
+0196 00 00 0000 0000 0000   nop / set nop in 0140, goto 0118 read event from tape 2 input block 
+0197 00 60 0000 0000 0141   
+
+                            write (1200 event output block) to tape 05
+
+0198 96 60 1611 0000 0000   set instr ...
+0199 00 41 0000 1648 0000   ... to write on tape 05 1200 1200+(1611 num of words in output block)-1 
+0200 00 40 1664 0000 0201   ... and block 0500 using 1664
+0201 00 00 0000 0000 0000   write on tape 05 1200 1200+(1611 num of words in output block)-1 
+0202 08 60 0202 0000 1730   call 1730 check write
+0203 00 40 1664 1639 1664   incr block number on write tape instr
+0204 00 60 1640 1611 0000   clear (1611 num of words in event output block)
+0205 00 60 1663 0191 0000   restore instr 0191
+0206 00 00 0000 0000 0000   goto 0210 switch output tape
+
+                            event codes not the same
+
+0207 00 72 1653 1621 0373   if (1621 current input tape) <> 01 0..0 goto 0373
+0208 00 60 1704 0148 0000   ???
+0209 00 60 0177 0169 0177   ???, goto 0177 
+
+                            switch output tape 5<->6
+                            set to rewind write eof to tape 5, rewind, switch to tape 6
+
+0210 00 42 0201 1653 0000   get tape number 0N 0..0 from 0201 tape write instr
+0211 00 72 1666 0000 0218   if tape number <> 05 0..0 goto 0218
+0212 00 40 1664 1653 1664   set tape write instr to tape 06 
+0213 00 60 1701 0338 0000   set tape read instr to tape 05
+0214 00 40 1683 1666 0223   set instr 0223 to write end of file to tape 05
+0215 00 40 1684 1666 0224   set instr 0224 to rewind tape 05
+0216 00 40 1684 1666 0343   set instr 0343 to rewind tape 05
+0217 00 60 0000 0000 0223   goto 0223
+0218 00 41 1664 1653 1664   set tape write instr to tape 05 
+0219 00 40 1653 1701 0338   set tape read instr to tape 06
+0220 00 40 1683 1688 0223   set instr 0223 to write end of file to tape 06
+0221 00 40 1684 1688 0224   set instr 0224 to rewind tape 06
+0222 00 40 1684 1688 0343   set instr 0343 to rewind tape 06
+
+                            close output tape, read next tape 1 block to process
+
+0223 00 00 0000 0000 0000   write end of file to tape   
+0224 00 00 0000 0000 0000   rewind tape
+0225 00 60 1689 0148 0000   set read from tape 2/4 instead of tape 1
+0226 00 60 1640 1636 0144   clear (1636 last event saved in tape 5), goto 0144 tape 1 input event block processed
+
+                            found: tape 2 current event successor = event rec code (from tape 1) 
+                            check if tape 1 event rec predecessor list contains tape 2 current event code
+
+0227 00 42 0605 1655 1620   mask (0605 event rec from tape 1) w8) to get first predecessor event code -> (1620)
+0228 00 42 4398 1655 0000   mask (M4 + 0398 event block tape 2) to get event code
+0229 00 70 1620 0000 0234   if pred on tape 1 same as event rec tape 2 goto 0234
+0230 00 40 1644 0227 0227   incr field_R on instr 0227 to read next predecessor on list
+0231 00 40 1707 1624 1624   incr (1624 number of words scanned on predecessor list)
+0232 00 72 0000 1617 0227   if <> (1617 num of words used by predecessor list) goto 0227: loop because precessor list not finished, go to scan next predecessor 
+0233 00 61 0000 0000 0000   stop because tape 2 successor -> tape 1 event, but event on tape 2 not a predecessor of tape 1 event 
+   
+                            checked: tape 2 successor -> tape 1 event. 
+                            Now Update number of predecessors found (AF) on tape 1 event rec at 0598
+  
+0234 00 60 1640 1624 0000   clear (1624 number of words scanned on predecessor list)
+0235 00 60 1669 0227 0000   restore instr 0227 
+0236 00 40 0599 1653 0599   incr AF in (0599 w2) event rec from tape 1
+0237 14 60 0000 1632 0000   AF -> (1632 number of predecessors found on tape 2 for tape 1's event in event rec)
+0238 02 42 0604 1642 0000   mask (0604 event rec w7 from tape 1) to get AA num of predecessors
+0239 00 41 0000 1632 0000   set REG1 = AA-AF = num of predecessors not in tape 2 
+0240 00 63 0000 0282 0251   if =0 goto 0282 (AA=AF -> all predecessors on tape 2), if <0 goto 0251 (stop)
+0241 00 60 0177 0250 0000   ???: not all predecessors of tape 1 event found yet
+0242 00 60 1667 0272 0000   ???
+
+                            Now Update number of successors found (BF) on tape 2 event rec at M4+0397
+                            then copy event rec at M4+0397 to tape 03 output buffer at 01401 
+
+0243 02 60 1653 0000 0000   0001 0..0 -> REG1
+0244 00 40 4398 0000 4398   incr (M4+0398 tape 2 input block w2) num BF of successors found
+0245 12 42 4398 1671 1632   mask (M4+0398 tape 2 input block w2) to get BF -> (1632 num of successors found)
+0246 00 42 4403 1643 0000   mask (M4+0403 tape 2 input block w7) to get BB 
+0247 00 41 0000 1632 0000   set REG1 = BB-BF = num of successors not found
+0248 00 63 0000 0253 0252   if =0 goto 0253 (BB=BF -> all successors found), if <0 goto 0252 (stop)   
+0249 00 40 1672 1644 1672   (1672) = +3 to point to next successor
+0250 00 00 0000 0000 0000   goto 0141 read event from tape 1 input block
+0251 00 61 0000 0000 0000   stop because found more predecessors than AA in w7 
+0252 00 61 0000 0000 0000   stop because found more successors than BB in w7    
+0253 92 60 1698 1672 0000   restore pointer (1672) to +7 to point to first successor again for next event rec to be processed
+0254 88 42 4403 1643 0000   mask (M4+0403 tape 2 input block w7) to get BB num of successors
+0255 00 41 4398 0000 4398   remove it from (M4+0398 tape 2 input block w2) 
+0256 00 40 1625 1607 0000   (1625 num of word in output block for tape 03) + (1607 event rec len NNN (comes from tape 2) -> REG1 
+0257 00 41 1650 0000 0000   200 - REG1                             check if room on output block 
+0258 00 63 0000 0260 0261   if =0 goto 0260, if <0 goto 0261       for event rec thant comes from tape 2
+0259 00 60 1646 0271 0262   set instr 0271 to nop. goto 0262 (enough room, save to tape 3 and continue)       
+0260 00 60 1678 0271 0262   
+0261 00 60 0259 0281 0273   
+0262 00 54 0000 0000 0000   clear M8
+0263 00 40 1612 1639 1612   incr (1612 num of events on result tape 3)
+0264 96 60 1607 0000 0000   set instr 0270 to ...
+0265 00 40 1674 0000 0270   ... loop on M8 up to (1607 event rec len NNN from tape 2)
+0266 00 60 4397 1401 0000   (M4+0397 input block tape 2) -> (1401 tape 3 event output block)
+0267 00 40 0266 1648 0266   incr_S
+0268 00 40 1625 1639 1625   incr (1625 num of word in output block for tape 03)
+0269 00 50 0001 0000 0000   incr M4
+0270 00 00 0000 0000 0000   loop, incr M8, if M8<>(1607 event rec len NNN from tape 2) goto 0266
+0271 00 00 0000 0000 0000   nop (if enough room on tape 3) / 
+0272 00 00 0000 0000 0000   set 0140 to nop, goto 0118 process next event in tape 2
+
+                            write 1401 event output block to tape 03
+
+0273 96 60 1625 0000 0000   set instr ...        
+0274 00 41 0000 1648 0000   ... to write on tape 03 1401 1401+(1625 num of words in output block for tape 03)-1 
+0275 00 40 1677 0000 0276   ... and block 1000
+0276 00 00 0000 0000 0000   write on tape 03 1401 1401+(1625 num of words in output block for tape 03)-1 
+0277 08 60 0277 0000 1730   call 1730 check write   
+0278 00 40 1677 1639 1677   incr block number on write tape instr
+0279 00 60 1640 1625 0000   clear (1625 num of words in event output block for tape 03)
+0280 00 60 1673 0266 0000   restore instr 0266
+0281 00 00 0000 0000 0000   goto 0366
+
+0282 00 60 0197 0250 0000   ???
+0283 00 60 1699 0272 0000   set exit after writing to tape 3 to process next event from tape 2
+0284 88 42 0604 1642 0000   mask (0604 event rec w7 from tape 1) to get AA num of predecessors   
+0285 00 41 0599 0000 0599   remove it from (0599 w2)
+0286 00 40 1619 1626 0000   (1619 event rec from tape 1 len NNN) + (1626 num of words in event output block) -> REG1  check if enough room
+0287 00 41 1650 0000 0000   200 - REG1                                             on output block for
+0288 00 63 0000 0290 0292   if =0 goto 0290, if <0 goto 0292                       tape 1 event rec
+0289 00 60 1646 0300 0293   set 0300 as nop, goto 0293
+0290 00 60 0301 0310 0000
+0291 00 60 1682 0300 0293   
+0292 00 60 0289 0310 0302   
+
+                            copy 0598 event rec from tape 1 to 0798 event output block
+
+0293 00 54 0000 0000 0000   clear M8 
+0294 96 60 1619 0000 0000   set instr 0299 to ... 
+0295 00 40 1679 0000 0299   ... loop on M8 up to (1619 event rec len NNN from tape 1)
+0296 00 60 8598 0798 0000   (M8+0598 event rec from tape 1) -> (0798 event output block)
+0297 00 40 0296 1648 0296   incr_S
+0298 00 40 1626 1639 1626   incr (1626 num of words in event output block)
+0299 00 00 0000 0000 0000   loop, incr M8, if M8<>(1619 event rec len NNN from tape 1) goto 0296
+0300 00 00 0000 0000 0000   nop
+0301 00 60 0000 0000 0243   goto 0243
+
+                            write 0798 event output block to tape 04
+
+0302 96 60 1626 0000 0000   set instr ...  
+0303 00 41 0000 1648 0000   ... to write on tape 04 0798 0798+(1626 num of words in event output block)-1 
+0304 00 40 1652 0000 0305   ... and block 1001
+0305 00 00 0000 0000 0000   write on tape 04 0798 0798+(1626 num of words in event output block)-1 
+0306 08 60 0306 0000 1730   call 1730 check write
+0307 00 40 1652 1639 1652   incr block number on write tape instr
+0308 00 60 1640 1626 0000   clear (1626 num of words in event output block)
+0309 00 60 1680 0296 0000   restore instr 0296
+0310 00 00 0000 0000 0000   
+
+                            reached end of file on input tape 2,
+                            flush event output block at addr 0798 to tape 4
+
+0311 00 70 1626 1640 0313   if (1626 num of words in event output block at addr 0798) = zero goto 0313 
+0312 00 60 1686 0310 0302   set 0310 to goto 0313, then goto 0302 to write 0798 event output block to tape 04
+
+                            switch input tape
+                            set to write end of file and rewind tapes 02 and 04
+                         
+0313 00 40 1630 1653 1630   (1630) += 01 0..0  
+0314 00 72 1681 0000 0316   if <> 02 0..0 goto 0316
+0315 00 60 0000 0000 0395   goto 0395 flush output block to tape 03
+0316 00 42 0095 1653 0000   get tape number 0N 0..0 from 0095 tape read instr
+0317 00 72 1681 0000 0325   if tape number <> 02 0..0 goto 0325
+0318 00 40 0095 1681 0095   set tape read instr to tape 04
+0319 00 41 1652 1681 1652   set tape write instr to tape 02
+0320 00 40 1685 1683 0332   set instr 0332 to write end of file to tape 04
+0321 00 40 1681 1684 0333   set instr 0333 to rewind tape 02
+0322 00 40 1685 1684 0334   set instr 0334 to rewind tape 04
+0323 00 40 1681 1683 0335   set instr 0335 to write end of file to tape 02
+0324 00 60 0333 0336 0332   set instr 0336 to rewind tape 02, goto 0332 
+0325 00 41 0095 1681 0095   set tape read instr to tape 02    
+0326 00 40 1652 1681 1652   set tape write instr to tape 04
+0327 00 40 1683 1681 0332   set instr 0332 to write end of file to tape 02
+0328 00 40 1684 1685 0333   set instr 0333 to rewind tape 04
+0329 00 40 1684 1681 0334   set instr 0334 to rewind tape 02
+0330 00 40 1683 1685 0335   set instr 0335 to write end of file to tape 04
+0331 00 60 0333 0336 0332   set instr 0336 to rewind tape 04, goto 0332 
+
+                            write eof and rewind, then goto read next tape 1 block to process
+  
+0332 00 00 0000 0000 0000   write eof on conjugate input tape
+0333 00 00 0000 0000 0000   rewind input tape
+0334 00 00 0000 0000 0000   rewind conjugate input tape
+0335 00 00 0000 0000 0000   write eof on input tape
+0336 00 00 0000 0000 0000   rewind input tape
+0337 00 60 0000 0000 0121   goto 0121
+
+                            read event block from current input tape 2/4
+
+0338 00 00 0000 0000 0000   read input tape 5 at addr 0999
+0339 08 68 0339 0000 1713   if tape check, call 1713 reread   
+0340 00 67 1688 1628 0343   if end of file, 06 0..0 -> (1628), goto 0343
+0341 00 60 0000 1613 0000   REG1 -> (1613 Saved start of block just read from tape 01/05)
+0342 00 60 1666 1621 0111   05 0..0 -> (1621 current input tape), goto 0111 read event from input tape 
+
+0343 00 00 0000 0000 0000   rewind current input tape
+0344 00 60 1685 1634 0000   040..0 -> (1634 eof on this tape number)
+0345 00 60 1691 0148 0144   ???
+0346 00 00 0000 0000 0000
+0347 00 00 0000 0000 0000   
+
+                            reached end of file on input tape 1
+
+0348 00 60 1708 0105 0381   ???
+
+                            all done. close tape 3, rewind tapes, terminate ok
+
+0349 03 91 0000 0000 0000   write end of file on tape 3
+0350 01 98 0000 0000 0000   rewind tape 1
+0351 02 98 0000 0000 0000   rewind tape 2   
+0352 03 98 0000 0000 0000   rewind tape 3
+0353 04 98 0000 0000 0000   rewind tape 4   
+0354 05 98 0000 0000 0000   rewind tape 5
+0355 06 98 0000 0000 0000   rewind tape 6   
+0356 09 98 0000 0000 0000   rewind tape 9 program 
+0357 00 60 0013 0001 0001   set stop instr on addr 0001, goto 0001: run finished ok, no errors
+0358 00 00 0000 0000 0000
+
+                            flush output block to tape 5/6, then switch output tape
+
+0359 00 70 1611 1640 0210   if (1611 num of word in output block) = zero goto 0210 switch output tape
+0360 00 60 1712 0206 0198   set exit for 0198 routine to 0210, goto 0198 write output buf to tape 
+
+                            process end of file on input tape (third part)
+
+0361 00 72 1628 1688 0365   if (1628) <> 060..0 goto 0365
+
+                            process end of file on input tape (second part)
+
+0362 00 60 1640 1628 0000   clear (1628)
+0363 00 60 1646 0169 0000   ???
+0364 00 60 1689 0148 0359   ???, goto 0359
+0365 00 60 1706 0345 0338   ???, goto 0338
+
+                            print run result  
+
+0366 00 80 1629 0001 0000   print (1629 output tape label with week info)
+0367 00 80 1640 0002 0000   print zero
+0368 00 80 0000 0003 0000   print zero
+0369 00 80 0000 0004 0000   print zero
+0370 00 80 0000 0005 0000   print zero
+0371 00 80 0000 0006 0000   print zero
+0372 00 83 1612 0007 0349   print (1612 num of events on result tape 3), goto 0349
+
+                            
+
+0373 00 60 1668 0148 0000   ???
+0374 00 60 0177 0169 0177   ???, goto 0177
+
+0375 00 59 0000 0000 0000     
+0376 04 42 0000 1637 0380   
+0377 00 41 1650 0000 0000   
+0378 00 63 0165 0000 0000
+0379 00 61 0000 0000 0000   
+0380 00 00 0000 0000 0000   
+
+                            process end of file on input tape 
+
+0381 00 72 1634 1640 0383   if (1634 eof on this tape number) <> zero goto 0383
+0382 00 61 0000 0000 0000   stop because event code not found on input tape(s) 
+0383 00 40 1635 1639 1635   incr (1635 of times input tape rewinded when scanning for an event)
+0384 00 41 1707 0000 0000   3 - (1635 of times input tape rewinded when scanning for an event) -> REG1
+0385 00 63 0362 0362 0000   if >=0 goto 0362
+0386 00 60 0174 0387 0000   set inst ...
+0387 00 00 0000 0000 0000   ... to get successor event code being searched
+0388 00 80 0000 0001 0000   successor event code not found -> (0001)
+0389 00 80 1629 0007 0000   (1629 output tape label with week info) -> (0007)
+0390 00 80 1612 0002 0000   (1612 num of events on result tape 3) -> (0002)
+0391 00 80 1620 0003 0000   (1620 event code)  where the undef successor is -> (0003)
+0392 00 80 1640 0004 0000   zero -> (0004)
+0393 00 80 0000 0005 0000   zero -> (0005)
+0394 00 81 0000 0006 0382   print, the goto stop
+
+                            flush output block to tape 03 
+
+0395 00 70 1625 1640 0366   if (1625 num of words in output block for tape 03) = zero goto 0366
+0396 00 60 1709 0281 0273   set exit for 0273 routine to 0366, goto 0273 write output block to tape 03
+
+                            variables
+
+0397                        input event block w1 = NNN xxx xxxx SCHEDL    NNN=msg len=7+3*num pred+3*num succ, SCHEDL=Schedulled date (format mm dd yy)
+0398                        w2                   = AFBFxx  EEEEEEEEE R    EEE=event code, report code, AF=num of predecessors found, BF=num of successors found      
+0399                        w3
+0400                        w4
+0401                        w5
+0402                        w6
+0403                        w7                   = TSTS TTTT RS PR AA BB  AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time, RS=Resource Code (=Res.rate), PR=Spec Code (=Pref.Rate) 
+
+0404
+
+0598                        event record w1
+0599                        w2
+0600                        w3
+0601                        w4
+0602                        w5
+0603                        w6
+0604                        w7
+
+0798                        event output block
+
+0999                        input event block tape 01 w1
+1000                        w2
+1001                        w3
+1002                        w4
+1003                        w5
+1004                        w6
+1005                        w7
+
+1200                        tape 5 event output block
+
+1401                        tape 3 event output block
+
+1602                        input tape 01 label as read from tape
+
+1603                        Saved start of block just read from tape
+1604                        temp for calcultaion of read block len from tape
+1605                        total number of words in block read from input tape 
+1606                        number of words already processed from block read from input tape 
+1607                        event rec len (= value NNN from w1= NNN xxx xxxx SCHEDL    NNN=msg len=7+3*num pred+3*num succ) 
+1608                        event rec w7 = xxxx xxxx xxxx AABB, AA=num of predecessors, BB=num of event successors
+1609                        num of predecesors
+1610                        num of successors
+1611                        num of word in output block
+1612                        num of events on result tape 3
+1613                        Saved start of block just read from tape 01
+1614                        total number of words in input tape 01 event block
+1615                        number of words already processed from block read from input tape 01
+1616                        event rec w7 = xxxx xxxx xxxx AABB for tape 01
+1617                        num of predecesors for tape 01 / number of words used by 
+1618                        num of successors for tape 01 / number of words used by 
+1619                        event rec len (= value NNN from w1= NNN xxx xxxx SCHEDL) on tape 01
+1620                        event code from tape 01
+1621                        current input tape
+
+1624                        number of words scanned on predecessor list 
+1625                        num of words in output block for tape 03 at addr 1401
+1626                        num of words in event output block at addr 0798
+
+1628                        ???
+
+1629                        output tape label with week info
+1630                        ???
+
+1631                        input tape 01 label = 3906 0..0 + input tape week NNNN  
+1632                        number of predecessors/successors found on tape 2
+1634                        eof on this tape number
+1635                        number of times input tape rewinded when scanning for an event
+
+1636                        last event saved in tape 5
+
+                            constants
+
+1637 00 00 0000 1111 0000   mask field S
+1638 00 00 1111 0000 0000   mask field R
+1639 00 00 0000 0000 0001   constant one
+1640 00 00 0000 0000 0000   constant zero
+1641 00 00 0000 0000 0004   
+1642 00 00 0000 0000 1100   mask AA num of predecessors from event w7
+1643 00 00 0000 0000 0011   mask BB num of successors from event w7
+1644 00 00 0003 0000 0000   field R = 3
+1645 00 60 0403 1608 0000   restore instr 0036 and 0124
+1646 00 60 0000 0000 0000   nop
+1647 00 60 0000 0000 0028   exit to read next event
+1648 00 00 0000 0001 0000   incr field S   
+1649 04 58 0001 0000 0065   loop on M4
+1650 00 00 0000 0000 0200   contant 200
+1651 00 60 4598 0798 0000   restore instr 0065
+1652 02 91 0798 0798 1000   write on output tape instr
+1653 01 00 0000 0000 0000   constant 01 0..0
+1654 00 00 1000 0000 0000
+1655 00 00 0011 1111 1110   mask event code 
+1656 00 60 1640 1630 0118   exit to read event from tape 2 input block
+1657 00 60 1646 0169 0141   exit to read event from tape 1 input block 
+1658 06 58 0001 0000 0048   restore instr 0050
+1659 00 60 1005 1616 0000   restore instr 0149
+1660 06 58 0001 0000 0165   restore instr 0167
+1661 00 60 6999 0598 0000   restore instr 0165
+1662 08 58 0001 0000 0191   loop on M8
+1663 00 60 8598 1200 0000   restore instr 0191
+1664 05 91 1200 1200 0500   write on tape 5 instr
+1665 00 60 0000 0000 0179   
+1666 05 00 0000 0000 0000   constant 05 0..0
+1667 00 60 1699 0196 0179   exit to event found in tape 1 is not successor for tape 2 event 
+1668 00 60 0000 0000 0361   exit to process end of file on input tape (third part)
+1669 00 42 0605 1655 1620   restore instr 0227 
+1670 00 00 0001 0000 0000
+1671 00 11 0000 0000 0000   mask BF 
+1672 00 00 0007 0000 0000   successor list pointer
+1673 00 60 4397 1401 0000   restore instr 0266
+1674 08 58 0001 0000 0266   loop on M8
+1675 00 60 1657 0196 0185   
+1676 00 60 1696 0196 0338   
+1677 03 91 1401 1401 1000   write on tape 3 instr
+1678 00 60 0272 0281 0273   exit to write 1401 event output block to tape 03
+1679 08 58 0001 0000 0296   loop on M8 
+1680 00 60 8598 0798 0000   restore instr 0296
+1681 02 00 0000 0000 0000   constant 02 0..0
+1682 00 60 0000 0000 0302   set exit to write 0798 event output block to tape 04
+1683 00 91 0000 0000 0000   write end of file instr
+1684 00 98 0000 0000 0000   rewind instr
+1685 04 00 0000 0000 0000   constant 04 0..0
+1686 00 60 0000 0000 0313   exit to switch input tape
+1687 00 60 0000 0000 0170   
+1688 06 00 0000 0000 0000   constant 06 0..0
+1689 00 60 0000 0000 0338   exit to read event block from current input tape 2/4
+1690 00 95 0000 0000 0000
+1691 00 60 1640 1628 0105   exit to read event block from input tape 01
+1692 00 40 0167 0000 0167   
+1693 00 60 1699 0272 0256   exit to ???
+1694 00 42 4397 1655 0000   mask successor event code
+1695 00 50 0000 0000 0000   
+1696 00 60 0000 0000 0346   exit to ???
+1697 39 06 0000 0000 0000   Input tape 01 label 39 06 0..0
+1698 00 00 0000 0000 0007   constant 7
+1699 00 60 1646 0140 0118   exit to read event from tape 2 input block 
+1700 00 60 0000 0000 0185   exit to copy 0598 event rec from tape 1 to 1200 event output block for tape 5
+1701 05 94 0999 0000 0000   read tape 5 instr
+1702 00 60 1703 0206 0198
+1703 00 60 0000 0000 0197   
+1704 00 60 0000 0000 0359   exit to flush output block to tape 5/6, then switch output tape
+1705 00 60 1691 0148 0144   exit to tape 1 input event block processed 
+1706 00 60 1705 0345 0361   exit to process end of file on input tape (third part)
+1707 00 00 0000 0000 0003   constant 3
+1708 00 60 0000 0000 0383   
+1709 00 60 0000 0000 0366   
+1710 00 01 0000 0000 0000
+1711 00 00 0000 0000 1111   
+1712 00 60 0000 0000 0210   
+
+                            Re-read routine. if error persist then stop 
+
+1713 00 40 1728 0000 1720   Re-read routine: save exit transfer in (1720 EXIT_ReRead)   
+1714 92 60 0000 0000 0000   set inst ...
+1715 00 40 1729 0000 1716   ... to get tape instr to redo in (1716)   
+1716 00 00 0000 0000 0000   ... get tape instr to redo, store it in (1718), goto 1722   
+1717 00 00 0000 0000 0000   
+1718 00 00 0000 0000 0000   tape instr to redo
+1719 00 00 0000 0000 0000   
+1720 00 00 0000 0000 0000   EXIT_ReRead   
+1721 00 61 0000 0000 1722   
+
+; xxx change xxx 1722 12 60 1718 1717 0000    do not retry. if read error, just stop
+
+1722 00 60 0000 0000 1721
+1723 88 42 1728 0000 0000   
+1724 00 40 1727 0000 1716   
+1725 00 60 1726 1719 1716   
+1726 00 68 1721 1719 1717
+1727 88 40 1717 1728 1717   
+1728 00 59 9999 9132 0001   MK_TR68=offset to Make Transfer 00 60 from 08 68    
+1729 00 59 9998 1718 1722   MK_TAP   
+
+                            Check write routine. 
+
+1730 00 40 1749 0000 1742   Check write routine: save exit transfer in (1742 EXIT_CheckWrite)
+1731 91 60 0000 0000 0000   
+1732 01 40 1750 0000 1734   
+1733 00 60 1753 1744 0000   
+1734 00 00 0000 0000 0000
+
+; xxx change xxx 1735 00 68 0000 0000 0000 chage to not retry, just stop if tape  
+;                1736 12 42 1747 1731 0000 signal on write  
+;                1737 88 40 1752 0000 1738   
+
+1735 00 68 0000 0000 1737   if tape signal on write goto 1737
+1736 00 60 0000 0000 1742   go to exit word
+1737 00 61 0000 0000 1737   stop
+
+1738 00 00 0000 0000 0000
+1739 00 41 1738 1751 1740   
+1740 00 00 0000 0000 0000   
+1741 00 68 0000 0000 1744   
+1742 00 00 0000 0000 0000   EXIT_CheckWrite
+1743 00 61 1747 0000 1753   
+1744 00 00 0000 0000 0000   
+1745 00 40 1747 1752 1746   
+1746 00 00 0000 0000 0000
+1747 00 00 0000 0000 0000   tape instr to redo   
+1748 00 60 1743 1744 1735   
+1749 00 59 9999 9140 0001   MK_TR60=offset to Make Transfer 00 60 from 08 60   
+1750 05 99 9981 7470 0000
+1751 00 01 0000 0000 0000   
+1752 00 02 0000 0030 0097   
+1753 00 60 1738 1744 1744   
+
+; xxx change xxx in original code instr 0340 if end of file, 06 0..0 -> (1628), goto 0343   
+;                swap input tapes to continue seach for event code, but does not check
+;                if tape already searched, and enters in an infinite loop. 
+;                Maybe it is a bug in original code. Maybe is a 
+;                side effect of a typo in code scanning ... who knows
+;                anyway this patch allows to check code not found and avoid infinite loop
+;  
+
+0340 00 67 1688 1628 1760   if end of file, 06 0..0 -> (1628), goto 1760
+1760 00 40 1635 1639 1635   incr (1635 of times input tape rewinded when scanning for an event)
+1761 00 41 1707 0000 0000   3 - (1635 of times input tape rewinded when scanning for an event) -> REG1
+1762 00 63 0343 0343 0386   if >=0 goto 0343, else goto 0386

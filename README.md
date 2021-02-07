@@ -1,7 +1,7 @@
 # SimH_cpanel
 
 
-**NEW!: IBM 650 Control Panels**
+**NEW!: IBM NORC Control Panels**
 
 The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
@@ -9,11 +9,17 @@ The visuals covers interactive control panels (lights, switches, buttons) but al
 other devices: tapes, card readers, disk, etc.
 
 i7000 work is based on Richard Cornwell own's SimH fork, and is implemented using SimH own SDL based modules. 
-i650 work is based on my own i650 SimH simulator
+i650 and NORC work is based on my own SimH simulators
 
-Currently suppots visuals emulation for:
+Currently supports visuals emulation for:
 
-* IBM 650 Magnetic Drum Data Processing machine. 
+* IBM NORC Naval Ordnance Research Calculator. 
+  * panels for tapes, printer, indicator panel and main console
+
+  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20NORC%20Panels%20Screen%20Shots.png) to preview control panels.
+   Source code in simh-master folder
+
+* IBM 650 Magnetic Drum Data Processing machine (UPDATED 2021). 
   * IBM 727 tapes, IBM 533 card read punch, and IBM 355 RAMAC Disk Storage
   * panels for IBM 653 Storage Unit and IBM 652 Control Unit
 
@@ -44,9 +50,23 @@ Hot keys are available when GUI window has the focus:
 * **+** (plus) and **-** (minus) keys -> Zoom In/Zoom Out
 * Control I -> Toggle info panel 
 * Control F -> Fast mode: while pressed, accelerates cpu to max speed
+* Mouse:
+  * Click on control panel image and drag mouse to move the window
+  * Right click mouse to show a tooltip with image at 100% scale
 
 Press power button to quit the simulator.
 (On i7000 control panels, only ^E, ^Y and ^T available)
+
+## IBM NORC
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/NORC/NORC.zip) to download all the test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM NORC PERT.bat` batch file to run a sample PERT processing
+* execute `run CPanel IBM NORC tape demo.bat` to demo tape rewind and forwards read
+ 
+  ![IBM NORC PERT](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/NORC/NORC.png)
 
 ## IBM 650 
 

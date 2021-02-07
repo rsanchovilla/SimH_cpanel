@@ -1,0 +1,1246 @@
+
+                            Run 08
+                            Compute program at page 69 in book "PERT summary report phase 2"
+                            Note: even if on top of scanned page the listing is labeled "senquence"
+                                  in fact it is the "compute" program. Compute and sequence listings
+                                  are reversed
+
+                            addr input
+                                  1686 = 0 .. 0 NNNN where NNNN = NNN.N = week number (1 decimal) of *now* week. Now = today date
+                                  1687 = expected input tape week NNNN (fixed NNN.N) 
+                                  1688 = TSTS=Schedulled completition time to be used as TL of 
+                                         last event (float format) (if sw76 set to transfer)
+
+
+                            tapes input:
+                                          09 program 
+                                          03 input active event file
+                                  output:
+                                          01 sequenced event file         
+
+                                  temporary:
+                                          02, 04 work tape
+
+                                  on line print:
+
+                            stops: IC: 01939 (00 61 0000 0000 1940) -> unrecoverable read error
+                                   IC: 01955 (00 61 1721 0000 1955) -> unrecoverable write error
+
+                                   IC: 00010 (00 61 0000 0000 0615) -> ready to run computing. Press start to execute program. 
+                                                                       Will print 
+                                                                       3907 0..0  input event file label tape 03 from run 07
+
+                                   IC: 00014 (00 61 0000 0000 0000) -> tape 02 not empty
+                                   IC: 00018 (00 61 0000 0000 0000) -> wrong input label in tape 03 
+                                                                       tape should have a label "39 07 0000 0000 NNNN"
+
+                                   IC: 00035 (00 61 0000 0000 0000) -> input event rec overflow
+                                   IC: 00105 (00 61 0000 0000 0000) -> successor list overflow
+                                   IC: 00152 (00 61 0000 0000 0000) -> output buffer overflow
+                                   IC: 00186 (00 61 0000 0000 0000) -> output event block underflow during scanning for predecessor
+                                   IC: 00232 (00 61 0000 0000 0000) -> predecessor list overflow
+                                   IC: 00251 (00 61 0000 0000 0000) -> end of file not written on tape 4 / block not found in tape 4
+                                   IC: 00283 (00 61 0000 0000 0000) -> end of file not written to tape 2
+                                   IC: 00299 (00 61 0000 0000 0000) -> input event block buf overflow
+                                   IC: 00309 (00 61 0000 0000 0000) -> event not found in read event block buffer
+                                   IC: 00464 (00 61 0000 0000 0000) -> output event block underflow during scanning successor
+                                   IC: 00487 (00 61 0000 0000 0000) -> successor list overflow
+                                   IC: 00641 (00 61 0000 0000 0000) -> ???
+                                   IC: 01992 (00 61 0000 0000 1991) -> ???
+
+                                   IC: 00001 (00 61 0000 0000 0000) -> finished ok. 
+
+                            Set TL = Latest Allowable time  
+
+                            Switch 75 set to transfer -> set TL on last event equal to TS of last event
+                                             off         use check sw76
+
+                            Switch 76 set to transfer -> set TL on last event equal to TS entered manually in (1688)
+                                             off         set TL on last event equal to TE of last event
+
+
+NNNN PP QQ RRRR SSSS TTTT 
+
+0008 03 94 0650 0650 0000   read input tape 03, 1 word in (0650)
+0009 08 68 0009 0000 1931   if tape check, call 1931 reread
+0010 00 61 0000 0000 0615   stop, then goto 0615 (print label), then continue to 0011
+0011 02 91 0000 0000 0000   write eof in tape 02
+0012 08 60 0012 0000 1948   call 1948 check write
+0013 00 67 0000 0000 0015   if end of file, goto 0015, check tape is empty
+0014 00 61 0000 0000 0000   stop because tape 02 not empty
+0015 00 57 0000 0000 0000   clear M4 M6 M8
+0016 00 40 1729 1687 1687   set (1687 input tape 03 label) = 3907 0..0 + input tape week NNNN = expected input label
+0017 00 70 0650 0000 0019   if (650 tape 03 label read from tape) match goto 0019
+0018 00 61 0000 0000 0000   stop because wrong input tape label (expected 39 07 0..0 NNNN)
+0019 00 40 1748 1729 1729   const 00 01 0..0 + const 39 07 0..0 -> 39 08 0..0 new output label
+0020 00 40 1686 0000 1686   add 39 08 0..0 to week now -> (1686 output tape label with week info)
+0021 01 91 1686 1686 0000   write tape 01 label -> output tape 39 08 0000 0000 NNNN with NNN.N = week now
+0022 08 60 0022 0000 1948   call 1948 check write
+
+                            read next input tape 03 event block
+
+0023 03 94 0684 0000 1000   read input tape 03 -> (0684) record 1000
+0024 08 68 0024 0000 1931   if tape check, call 1931 reread
+0025 00 67 0000 0000 0265   if end of file goto 0265
+0026 00 60 0000 1689 0000   REG1 -> (1689) = Start of block                      
+0027 04 42 1689 1730 1690   Mask and shift start of block: bbbb -> (1690)        02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+0028 08 42 1689 1731 0000   Mask and shift start of block: aaaa -> (REG1)        02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa
+0029 00 41 1690 0000 1691   (1690) - REG2 -> (1691)
+0030 00 40 1732 0000 1691          + 1 -> (1691)                                 1691=total number of words in input tape 03 event block
+0031 00 51 0000 0000 0000   clear M4
+0032 00 40 0023 1732 0023   (0023) += incr number of block to read from input tape 03
+
+                            start processing next event from event block
+                            read next tape block if needed
+
+0033 00 41 1691 1692 0000   (1691 number of words in block) - (1692 number of words already read) -> REG1
+0034 00 63 0039 0136 0000   if >0 goto 0039, =0 goto 0136 (if all events from event block processed)
+0035 00 61 0000 0000 0000   stop because input event rec overflow
+0036 00 60 1733 1692 0000   clear 1692 number of words already read
+0037 00 60 1743 0052 0000   reset inst 0052
+0038 00 60 0000 0000 0023   goto read input tape 03 block 
+
+                            copy from event block 0684 to event record 0885
+
+0039 13 60 4684 1696 0000   (M4 + 0684 input event block) -> (1696) = NNN=event len=7+3*num pred+3*num succ
+0040 02 42 4690 1734 1694   Mask (event w7) with 0..0 1100 Shift 2 Right         1694=num of predecesors
+0041 00 42 4690 1735 1695   Mask (event w7) with 0..0 11                         1695=num of successors
+0042 00 70 1694 1733 0044   if (1694 num of predecesors) = zero goto 0044        transfer if no predecessors
+0043 00 60 1770 0079 0045   set instr (0079) to skip if some predecessors
+0044 00 60 1744 0079 0000   set instr (0079) to nop if no predecessors
+0045 96 34 1694 1747 1694   mult (1694) x 3
+0046 96 34 1695 1747 1695   mult (1695) x 3
+0047 00 42 1694 1746 1694   (1694 = number of words used by predecessors)
+0048 00 42 1695 1746 1695   (1695 = number of words used by successors)
+0049 00 40 1692 1696 1692   (1692 number of words already read) += (1696 event len)
+0050 00 60 4684 0885 0000   (M4 + 0684 event block) -> (0885 event rec)          copy 7w to event rec
+0051 00 40 0050 1737 0050   incr_s                                               at 0885..0891
+0052 04 58 0001 0007 0050   loop, incr M4, if M4<>7 goto 0050
+0053 00 60 1738 0050 0000   restore instr 0050 
+
+                            copy predecessors from event block to 
+                            event record predecessor list at 0892
+
+0054 00 72 1694 1733 0056   if (1694 words used in predecessors) <> zero goto 0056
+0055 00 60 0000 0000 0064   no predecessors to copy
+0056 96 60 1694 0062 0000   set loop M4 instr ... 
+0057 00 42 0052 1730 0000   ... with end of loop = 7 + words used in predecessors
+0058 00 40 0062 0000 0062   ...
+0059 00 40 1739 0000 0062   ...
+0060 00 60 4684 0892 0000   (M4 + 0684 event block) -> (0892 event rec w8 = w1 first predecessor)
+0061 00 40 0060 1737 0060   incr_s
+0062 00 00 0000 0000 0000   loop, incr M4, if M4<>7+words used in predecessors goto 60
+0063 00 60 1740 0060 0000   restore instr 0060
+
+                            copy successors from event block to 
+                            event record successor list at 0988
+
+0064 00 72 1695 1733 0066   if (1695 words used in successors) <> zero goto 0066
+0065 00 60 0000 0000 0077   no successors to copy
+0066 00 59 0000 0000 0000   get in REG1 value of 00 M4 M6 M8
+0067 04 42 0000 1731 0073   shift M4 to field S
+0068 96 60 1695 0000 0000   set loop M4 instr ... 
+0069 00 40 0073 0000 0073   ... with end of loop = 7 + words used in predecessors + words used in successors
+0070 00 40 1741 0000 0073   ...
+0071 00 60 4684 0988 0000   (M4 + 0684 event block) -> (0988 event rec w1 first successor)
+0072 00 40 0071 1737 0071   incr_s
+0073 00 00 0000 0000 0000   loop, incr M4, if M4<> ... goto 71
+0074 00 60 1742 0071 0000   restore instr 0071
+0075 00 60 1733 0887 0000   clear 0887 event w3
+0076 00 60 1733 0888 0000   clear 0888 event w4
+
+                            event rec copy done. check if event has predecessors
+
+0077 96 60 1696 0000 0000   (1696 total event rec len) -> REG1 
+0078 00 40 0052 0000 0052   add to M4 loop in 0052 so loop will address next event rec in event block
+0079 00 00 0000 0000 0000   nop (if no predecessors) / goto 0175 (if some predecessors)
+
+                            event rec has no predecessors so it is initial event in sequence
+                            calc time elapsed from completition date
+                            1699 = Number of weeks *now* - TTTT, float
+
+0080 08 42 0891 1731 0000   mask (0891 event rec w7) field R: get TTTT in REG1       w7= TSTS TTTT RS PR AA BB  AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time, RS=Resource Code (=Res.rate), PR=Spec Code (=Pref.Rate)
+0081 00 40 1745 0000 1697   add 11 0..0 -> (1697 event TTTT value completition date) -> convert ot float
+0082 00 42 1686 1746 0000   Mask (1686 output tape label = 39 08 0.. NNNN) with field T -> week number for *now* date
+0083 00 40 1745 0000 1698   add 11 0..0 -> (1698) convert *now* week number to float
+0084 50 22 0000 1697 1699   FSUB (REG1) - (1697) -> (1699 Number of weeks *now* - TTTT, float)
+
+                            update TE and SIGMA in all successor events if TE is non zero
+
+0085 00 60 0989 1700 0000   (0989 first event successor TE value) -> (1700 successor TE value)
+0086 00 70 1700 1733 0097   if (1700 TE value) = zero goto 0097, if no TE do not update
+
+                            event succesor New_TE = (TE - (*now* - TTTT)), min value of New TE = 1.0
+   
+0087 50 22 1700 1699 1701   FSUB (1700 TE value) - (1699 Number of week *now* - TTTT) -> (1701)
+0088 50 22 0000 1748 0000   FSUB (REG1) - 1.0 float                  if (1701) < 1.0 float then 
+0089 00 63 0092 0092 0000   if >=0 goto 0092                            set (1701 = 1.0)   
+0090 00 60 1748 1701 0092   (1.0 float) -> (1701) 
+0091 00 00 0000 0000 0000
+0092 50 26 1701 1700 1702   FDIV (TE-weeks elapsed)/TE -> (1702)
+0093 00 60 1701 0989 0000   (TE-weeks elapsed) -> (0989 first event successor TE value): TE=TE - weeks elapsed, TE min 1.0
+
+                            event successor New_SIGMA = SIGMA * (TE - (*now* - TTTT)) / TE
+                            
+0094 00 60 0990 1700 0000   (0990 first event successor SIGMA value) -> (1700)
+0095 50 24 1702 0000 1701   FMUL (1702) * SIGMA -> (1701)
+0096 00 60 0000 0990 0000   REG1 -> (0990 first event successor SIGMA value)
+
+                            proceed to next succesor  
+
+0097 00 40 0085 1747 0085   (field_S 0085) += 3   incr to process next successor in event
+0098 00 40 0093 1749 0093   (field_R 0093) += 3
+0099 00 40 0094 1747 0094   (field_S 0094) += 3
+0100 00 40 0096 1749 0096   (field_R 0096) += 3
+0101 04 60 1749 0000 0000   const 3 -> REG1 
+0102 00 40 1703 0000 1703   (1703 pointer to current successor in event list) += 3
+0103 00 41 1695 0000 0000   (1695 = number of words used by successors) - (1703)
+0104 00 63 0085 0106 0000   if >0 goto 0085, if =0 goto 0106         goto 0085 to process next successor, goto 0106 when all successors processed
+0105 00 61 0000 0000 0000   stop because successor list overflow
+0106 00 60 1733 1703 0000   clear (1703 pointer to event list)
+0107 00 60 1750 0085 0000   restore instr 0085
+0108 00 60 1751 0093 0000   restore instr 0093   
+0109 00 60 1752 0094 0000   restore instr 0094
+0110 00 60 1753 0096 0000   restore instr 0096
+0111 00 60 1733 1700 0112   clear (1700), goto process event
+
+                            process event
+                            copy event rec (7 words) from 0885..0891 -> M6+0653..0659
+
+0112 00 54 0000 0000 0000   clear M8
+0113 00 60 1764 6652 0000   (event code mask) -> (M6 + 0652)
+0114 00 40 1704 1732 1704   incr (1704 number of word in output rec buf)
+0115 00 60 8885 6653 0000   (M8 + 0885 event rec) -> (M6 + 0653)  
+0116 00 50 0000 0001 0000   incr M6                               
+0117 08 58 0001 0007 0115   incr M8, if M8<>7 goto 0115
+
+                            copy event predecessors ((1694) words) from 0885.. -> 0666..
+
+0118 00 54 0000 0000 0000   clear M8
+0119 96 60 1694 0000 0000   (1694 num of words in predecessor list in event) -> REG1 field S
+0120 00 40 1756 0000 0124   set end of loop for M8 at instr 0124
+0121 00 70 1694 1733 0125   if (1694 num of words in predecessor list in event) = zero goto 0125
+0122 00 60 8892 6653 0000   (M8 + 0892 event rec predecessor list) -> (M6 + 0653) (M6 has not been reset, so starts at M6=7)
+0123 00 50 0000 0001 0000   incr M6
+0124 00 00 0000 0000 0000   incr M8, if M8 <> (1694) goto 0122
+
+                            copy event successors ((1695) words) from 0885.. -> 0666..
+
+0125 00 54 0000 0000 0000   clear M8
+0126 96 60 1695 0000 0000   (1695 num of words in successor list in event) -> REG1 field S
+0127 00 40 1758 0000 0132   set end of loop for M8 at instr 0132
+0128 00 72 1695 1733 0130   if (1694 num of words in predecessor list in event) <> zero goto 0130
+0129 00 60 0000 0000 0133   goto 0133
+0130 00 60 8988 6653 0000   (M8+0988 event rec successor list) -> (M6+0653)
+0131 00 50 0000 0001 0000   incr M6
+0132 00 00 0000 0000 0000   incr M8, if M8 <> (1695) goto 0130
+0133 00 50 0000 0001 0000   incr M6
+0134 00 40 1696 1704 1704   (1704 number of word in output rec buf) += (1696 = NNN = event msg len)
+0135 00 60 0000 0000 0146   goto 0146
+
+                            tape 3 input event block processed, write events in tape 02 
+                            and continue to next input tape 03 event block
+
+0136 96 60 1704 0000 0000   (1704 number of word in output rec buf) -> REG1 field S
+0137 00 41 0000 1737 0000   decr 1 field S
+0138 00 40 1760 0000 0139   set instr ...
+0139 00 00 0000 0000 0000   ... to write to tape 02 0652 0652+(1704 number of word in output rec buf)-1 
+0140 08 60 0140 0000 1948   call 1948 check write
+0141 00 40 1760 1732 1760   incr block number on tape write
+0142 00 60 1733 1704 0000   clear (1704 number of word in output rec buf)
+0143 00 52 0000 0000 0000   clear M6
+0144 00 60 0000 0000 0036   goto 0036, process next event
+0145 00 60 0000 0000 0000
+
+                            check if output buf is full                             
+
+0146 00 40 1705 1749 1705   (1705 num of word in output buf) += 0..0 0003 0000
+0147 00 41 1763 1705 0000   0..0 0600 0000 - (1705 num of word in output buf) -> REG1 = room remaining on output buf (has 600 words size)
+0148 00 63 0156 0155 0152   if >0 goto 0156, =0 goto 0155, <0 goto 0152 (stop)
+0149 00 60 1733 1705 0000   
+0150 00 40 1768 1767 0168
+0151 00 60 1766 0157 0153
+0152 00 61 0000 0000 0000   stop because output buffer overflow
+0153 00 60 1836 0164 0000
+0154 00 60 1767 0166 0033
+
+                            select out buf event rec to write to
+
+0155 00 60 1769 0170 0157   set exit on 0170, goto 0157
+0156 00 60 1765 0170 0000   set exit on 0170
+0157 00 42 0886 1764 1084   Mask (0886 rec event w2) with event_code -> (1084 output event code ww1)
+0158 04 60 1749 0000 0000   const 3 -> REG1 
+0159 00 40 0157 0000 0157   incr instr 0157 field T (1084 addr) + 3 (1084, 1087, 1090, ...)
+
+                            set output event rec
+                            1084 ww1 = S TTT2 x EEEEEEEEE x   where EEE  = event code
+                                                                    TTT2 = (*now* - TTTT), S = sign (0=positive, 1=negative)
+                            1085 ww2 = event rec w3
+                            1086 ww3 = event rec w4
+
+0160 11 34 1699 1748 1699   FMUL Special (1699 Number of weeks *now* - TTTT) x float 1 -> (1699 back to NNN.N fixed format 1 decimal, with sign in digit 14)
+0161 89 42 0000 1746 1726   mask field T -> (1726 (*now* - TTTT) to now NNN.N fixed format 1 decimal) 0 NNNN 0..0
+0162 98 42 1699 1825 0000   Mask (1699 Number of weeks *now* - TTTT) with sign -> REG1
+0163 00 40 1726 0000 0000   add (1726 weeks elapsed from completition to now NNN.N fixed format 1 decimal) 0 NNNN 0..0
+0164 00 40 1084 0000 1084   add event code -> (1084) ww1=S TTT2 x EEEEEEEEE x
+0165 00 40 0164 0566 0164   incr instr 0163 addr 1084 field R (not S) and T (incr addr 1084)
+0166 00 60 0887 1085 0000   (event rec w3) -> (1085)
+0167 00 40 0166 1749 0166   incr instr 0166 field S
+0168 00 60 0888 1086 0000   (event rec w4) -> (1086)
+0169 00 40 0168 1749 0168   incr instr 0168 field S
+0170 00 00 0000 0000 0000   transfer 0033 to process next event (if size available in out buf) / set inst 0174 to goto 0149 (if buf full)
+
+                            flush output event block buffer 1084..1683 to tape 4
+
+0171 04 91 1084 1683 0001   write tape 4 1084 1683 output event block
+0172 08 60 0172 0000 1948   call 1948 check write
+0173 00 40 0171 1732 0171   incr number of block to write in instr 0171
+0174 00 00 0000 0000 0000   
+
+                            event rec has predecessors so it is NOT initial event in sequence
+                            scan output events in output block 
+                            1084 ww1 = S TTT2 x EEEEEEEEE x   where EEE  = event code
+                                                                    TTT2 = (*now* - TTTT), S = sign (0=positive, 1=negative)
+                            1085 ww2 = event rec w3 = accumulator for TE value
+                            1086 ww3 = event rec w4 = accumulator for SIGMA value
+
+                            search current output event 1084 in read predecessor list 0892..
+
+0175 96 60 1694 0000 0000   (1694 num of words in predecessor list in event) -> REG1 field S
+0176 00 40 1772 0000 0181   set end of loop for M8 at instr 0181      
+0177 00 54 0000 0000 0000   clear M8                                  
+0178 00 42 1084 1764 1706   mask (1084) with event_code -> (1706 output rec ww1 event code EEEE)
+0179 00 42 8892 1764 1707   mask (M8+0892 event first predecessor) with event_code -> (1707 current event predecessor code)
+0180 00 70 1706 1707 0187   if event codes equal goto 0187 (predecessor found in output event block)
+0181 00 00 0000 0000 0000   loop, incr M8+3, if M8 <> (1694) goto 0179
+
+                            not found, select next event in output buf
+
+0182 00 40 0178 1747 0178   set instr 0178 to read next output event 1084+3
+0183 00 40 1700 1749 1700   (1700 words already scanned in output event block)+=3 -> REG1
+0184 00 41 1763 0000 0000   600 - REG1 -> REG1 = words remaining to be scanned in output event block
+0185 00 63 0175 0241 0000   if >0 goto 0175, =0 goto 0241
+0186 00 61 0000 0000 0000   stop because output event block underflow during scanning for predecessor
+
+                            current event's predecessor found in output block
+                            correct predecessor found in output block TE (ww2) and SIGMA (ww3) values 
+                            on predecessor list, calculate event adjusted TE and SIGMA TE
+                            
+0187 04 42 0178 1731 0000   mask (0178) with field R -> REG1 = 0..0 NNNN 0000 = addr in output block
+0188 00 40 1737 0000 1699   incr field S -> (1699 addr of precessor found TE)
+0189 00 59 0000 0000 0000   get M4 M6 M8 to REG1     
+0190 92 42 0000 1746 0000   set REG1 = 0000 M8 0..0
+0191 00 40 1773 0000 0000   set instr 0218 to ... 
+0192 00 40 1699 0000 0218   ... FADD (M8+0893 predecessor TE) + (addr of predecessor TE) -> (1701)
+0193 00 42 0178 1731 1726   mask (0178) with field R -> (1726 = 0..0 NNNN 0000 = addr in output block of predecessor found (event code))
+0194 00 40 1837 0000 0195   set instr to ...   
+0195 00 00 0000 0000 0000   ... 11 mask (addr in output block) with 011110..0 -> (1728 TTT2 value, no sign)
+0196 00 70 1728 1733 0218   if (1728 output rec ww1 event TTT2 value, no sign) = zero goto 0218
+0197 00 40 1745 0000 1728   convert TTT2 to float - > (1728)
+0198 00 40 1726 1841 0199   set instr to ...
+0199 00 00 0000 0000 0000   ... mask (addr in output block of found predecessor (event code)) to get sign
+0200 00 40 1728 0000 1728   add sign to (1728 TTT2 as float)
+0201 00 42 0218 1731 0091   mask (instr 0218) with field R -> (0091 addr 0893.. of predecessor TE in current event predecessor list)
+0202 00 40 1842 0000 0203   set instr to ...
+0203 00 00 0000 0000 0000   ... if (predecessor TE) = 0 goto 0218
+0204 00 40 0091 1843 0205   set instr to ...
+0205 00 00 0000 0000 0000   ... FSUB (predecessor TE) - (1728 output rec ww1 event TTT2 float with sign) -> (1701 New_TE)
+0206 50 22 0000 1748 0000   FSUB - 1.0
+0207 00 63 0209 0209 0000   if >=0 goto 0209
+0208 00 60 1748 1701 0000   1.0 -> (1701): predecessor TE accumulation set to 1.0 si was <0
+0209 04 60 0091 0091 0000   (0091 addr 0893.. of predecessor TE in current event predecessor list) in field S
+0210 00 40 1844 0091 0211   set instr to ...
+0211 00 00 0000 0000 0000   ... FDIV (New_TE ) / (addr 0893.. of predecessor TE in current event predecessor list) -> (1702)
+0212 00 40 1845 0091 0213   set instr to ...
+0213 00 00 0000 0000 0000   ... FMUL (1702) * (addr 0894.. of predecessor SIGMA in current event predecessor list) -> (1702 New_Sigma)
+0214 00 40 1846 0091 0216   set instr 0216 to ...
+0215 00 40 1847 0091 0217   set instr 0217 to ...
+0216 00 00 0000 0000 0000   (1701 New_TE) -> (0893.. predecessor TE)
+0217 00 00 0000 0000 0000   (1702 New_Sigma) -> (0893.. predecessor sigma)
+0218 00 00 0000 0000 0000   FADD (M8+0893 predecessor TE) + (0893 .. predecessor TE) -> (1701)  
+0219 00 40 0218 1768 0000   incr field R and S in prev instr
+0220 00 40 1732 0000 0221   set instr to ...
+0221 00 00 0000 0000 0000   ... FADD (M8+0894 predecessor TE) + (1086 output event ww3 accum sigma) -> (1702)  
+0222 50 22 1701 1708 0000   FSUB (1701) - (1708) -> REG1
+0223 00 63 0000 0226 0228   if =0 goto 0226, if <0 goto 0228
+0224 00 60 1701 1708 0000   (1701 New_TE) -> (1708 New_Te adjusted)
+0225 00 60 1702 1709 0228   (1702 New_Sigma) -> (1709 New Sigma adjusted), goto 0228
+0226 50 22 1702 1709 0000
+0227 00 63 0224 0000 0000
+0228 00 40 1749 1703 1703   (1703 pointer to current predecessor word in event list. ranges from 0..(1694) += 3 
+0229 04 60 1703 0000 0000   shift right 4 to set pointer as integer -> REG1
+0230 00 41 1694 0000 0000   (1694 num of words in predecessor list in event) -= REG1 -> REG1 = number of words left to be processed in predecessor list  
+0231 00 63 0182 0233 0000   if >0 goto 0182 (process next predecessor), =0 goto 0233 (no more predecessors)
+0232 00 61 0000 0000 0000   stop because predecessor list overflow
+
+                            calculation done. cleanup for next event
+                            store adjusted TE and SIGMA in event w3 and w4 words
+
+0233 00 60 1733 1703 0000   clear (1703 pointer to event list)
+0234 00 60 1774 0178 0000   restore instr 0178
+0235 00 60 1733 1700 0000   clear (1700)
+0236 00 60 1708 0887 0000   (1708 New_Te adjusted) -> (0887 event rec w3)
+0237 00 60 1709 0888 0000   (1709 New Sigma adjusted) -> (0888 event rec w4)
+0238 00 60 1733 1708 0000   clear (1708)
+0239 00 60 0000 1709 0000   clear (1709)
+0240 00 60 0000 0000 0112   goto 0112 process next event
+
+                            flush current output event block buffer to tape 4 (on first call)
+                            load previous event block buffer saved on tape 4
+
+0241 00 74 0000 0000 0000   if Sw74 transfer continue / goto 0248
+0242 00 42 0171 1746 1710   mask (0171 read tape 4) with field T -> (1710 last read block in tape 4)
+0243 00 40 0254 1710 0260   (0254 read tape 4) + 1 ->  (0260)
+0244 00 41 1710 1732 0000   (1710 last read block in tape 4) - 1 -> REG1
+0245 00 40 0249 0000 0252   set instr 0252 to search tape 4 for block REG1 
+0246 00 60 1775 0174 0000   ???
+0247 00 60 1794 0241 0171   set exit on next line, goto 0171 flush output event block buffer 1084..1683 to tape 4
+0248 04 91 0000 0000 0000   write end of file on tape 04
+0249 04 95 0000 0000 0000   read backwards tape 4 with R=S=0 -> read but do not store in CRT -> skip backwards record
+0250 00 67 0000 0000 0252   if end of file goto 0252
+0251 00 61 0000 0000 0000   stop because end of file not correcty written on tape 4 / block not found in tape 4
+0252 00 00 0000 0000 0000   read backwards tape 4
+0253 00 67 0000 0000 0251   if end of file goto 0251 (stop)
+0254 04 94 1084 0000 0000   read tape 4 at 1084 output event block buffer
+0255 08 68 0255 0000 1931   if tape check, call 1931 reread
+0256 00 67 0000 0000 0251   if end of file goto 0251 (stop)
+0257 00 41 0252 1732 0252   decr block number on tape read backwards instr 0252
+0258 00 60 1795 0240 0000   ???
+0259 00 60 1796 0241 0175   ???, exit
+
+0260 00 00 0000 0000 0000
+0261 08 68 0261 0000 1931   if tape check, call 1931 reread
+0262 00 67 0000 0000 0251 
+0263 00 60 1744 0241 0000
+0264 00 60 1797 0240 0112
+
+                            input tape 01 terminated. TE Sigma calculation done
+                            now prepare to calculate TL Sigma calculation
+
+0265 00 40 1777 1777 0000   constant 0000 0002 0000 0000 -> REG1
+0266 00 40 1767 0000 1767   set instr 0168 to ...
+0267 00 40 1767 1768 0168   ... (0890 event rec w6) -> (1086 ww3 sigma)
+0268 00 60 1807 1765 0000   ???
+0269 00 60 1808 0258 0000   ???
+0270 00 60 1767 0166 0000   ???
+0271 00 60 1757 0154 0000   ???
+0272 00 60 1733 1705 0000   clear (1705)
+0273 00 60 1848 0160 0000   ???
+0274 00 60 1744 0153 0000   ???
+0275 00 60 1809 0259 0000   ???
+0276 00 60 1810 0264 0000   ???
+0277 00 60 1778 0157 0000   ???
+0278 00 42 0139 1746 0000   Mask (0139 write to 02 tape instr) to get block number
+0279 00 40 0287 0000 0287   add block number to instr 0287 tape 02 read
+0280 02 91 0000 0000 0000   write end of tape to tape 02
+0281 02 95 0000 0000 0000   read tape 02 backwards (read the just written eot)
+0282 00 67 0000 0000 0284   check eot has been writen
+0283 00 61 0000 0000 0000   stop if eof not written to tape 02
+0284 03 98 0000 0000 0000   rewind tape 03
+0285 04 98 0000 0000 0000   rewind tape 04
+0286 00 57 0000 0000 0000   clear M4 M6 M8
+0287 02 95 0884 0000 0000   read tape 02 backwards xxx ... 0884
+0288 08 68 0288 0000 1931   if tape check, call 1931 reread
+0289 00 67 0000 0000 0622   if end of file goto 0622
+0290 00 60 0000 1689 0000   REG1 -> (1689) = Start of block                      
+0291 04 42 0000 1730 1690   Mask and shift start of block: bbbb -> (1690)        02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+0292 00 41 0287 1732 0287   incr block num of read from tape at addr 0287
+0293 08 42 1689 1731 0000   Mask and shift start of block: aaaa -> (REG1)        02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa
+0294 00 41 1690 0000 1691   (1690) - REG2 -> (1691)
+0295 00 40 1691 1732 1691          + 1 -> (1691 total number of words in input tape 02 event block)
+0296 00 60 0000 0000 0000
+
+                            start processing next event from event block
+                            read next tape block if needed
+
+0297 00 41 1691 1692 0000   (1691 number of words in input block) - (1692 number of words already read) -> REG1 
+0298 00 63 0303 0444 0000   if >0 goto 0303, =0 goto 0444 (if all events from event block processed) 
+0299 00 61 0000 0000 0000   stop because input event block buf overflow
+0300 00 60 1733 1692 0000   clear (1692 number of words already processed from block), comes here from 0444 after flushing out buf to tape 01
+0301 00 60 1781 0306 0000   restore instr 0306
+0302 00 60 1771 0304 0287   restore instr 0304, goto 0287 to read next tape block 
+
+                            start processing next event from event block (from tape 02)
+                            search block buffer from end up to start (0884..0684), looking
+                            for Event_Mask (0000 0011 1111 1110) that signals start of event 
+
+0303 00 54 0000 0000 0000   clear M8
+0304 96 60 1691 0000 0000   (1691 number of words in block) -> REG1
+0305 00 40 1776 0000 0308   set loop M8 instr ... with end of loop = (1691 number of words in block)   
+0306 00 70 0884 1764 0310   if (0884 end of read event block buffer) = Event Mask Code goto 0310
+0307 00 41 0306 1777 0306   decr_R
+0308 00 00 0000 0000 0000   loop, incr M8, if M8<>(number of words in block) goto 0306
+0309 00 61 0000 0000 0000   stop because event not found in read event block buffer
+0310 00 42 0306 1731 0000   get in field R the addr of event rec start 
+0311 00 40 0000 1777 1711   incr field R -> (1711 addr of event rec word 1)
+0312 00 41 0306 1777 0306   incr field R in instr 0306, to allow locate next event
+0313 00 60 1761 0304 0000   set inst 0304 to skip loop init in 0305
+0314 00 60 0000 0000 0000   
+
+                            event rec found, calc size, housekeeping to find next rec
+
+0315 00 40 1711 1779 0000   incr field R + 6 -> REG1=addr of event rec word 7
+0316 00 40 1780 0000 0317   set instr to ...
+0317 00 00 0000 0000 0000   ... (addr of event rec word 7) -> (1693 event rec word 7)
+0318 02 42 1693 1734 1694   mask (1693 event rec word 7) with 0..0 1100 -> (1694 num of predecesors in event rec)
+0319 00 42 1693 1735 1695   mask (1693 event rec word 7) with 0..0 0011 -> (1695 num of successors in event rec)
+0320 96 34 1694 1747 0000   FMUL x 3
+0321 00 42 0000 1746 1694   (1694 = num of words in predecessor list in event = 3x num of predecesors in event rec)
+0322 96 34 1695 1747 0000   FMUL x3
+0323 00 42 0000 1746 1695   (1695 = num of words in successors list in event = 3x num of successors in event rec)
+0324 00 60 1736 1696 0000   7 -> (1696 event rec len)
+0325 00 40 1694 1695 0000   + words un predecessors + words in successors
+0326 00 40 1696 0000 1696   -> (1696 event rec len)
+0327 00 40 1692 0000 1692   add it to (1692 number of words already processed from block read)
+0328 00 40 1732 1692 1692   add one to (1692 number of words already processed from block read)
+0329 96 40 1696 1732 0000   REG1 field S = 1 + (1696 event rec len)
+0330 00 41 0308 0000 0308   decr REG1 from loop end value for M8 at 0308
+
+                            copy event from event block buf to event rec
+                            copy fixed part 7w, predecessors, successors
+
+0331 00 51 0000 0000 0000   clear M4
+0332 00 40 1782 1711 0333   set instr to ...
+0333 00 60 4000 0885 0000   (M4 + 1711 addr of event rec word 1) -> (0885 event rec)
+0334 00 40 0333 1737 0333   incr_S  
+0335 04 58 0001 0007 0333   loop, incr M4, if M4<>0007 goto 0333
+0336 00 42 0333 1731 0000   get field_r from 0333 = last source addr from block rec -> REG1 (in form M4 +nnnn)
+0337 00 40 1783 0000 0343   set instr for transfer (M4 + addr in block event buf) -> (0892 event rec predecessors)
+0338 96 60 1694 0345 0000   (1694 num of words in predecessor list in event) in field s -> (0345) 
+0339 00 42 0335 1730 0000   get field s from (0335) -> end loop for M4 in 0335
+0340 00 40 0345 0000 0000   add: (0335) field S now is 7 + (1694 num of words in predecessor list in event)
+0341 00 40 1784 0000 0345   set inst loop, incr M4, if M4<>7 + (1694 num of words in predecessor list in event) goto 0342
+0342 00 70 1694 1733 0346   if (1694 num of words in predecessor list in event) = 0 goto 0346
+0343 00 00 0000 0000 0000   (M4 + addr in block event buf) -> (0892 event rec predecessors)
+0344 00 40 0343 1737 0343   incr_S
+0345 00 00 0000 0000 0000   loop, incr M4, if M4<>7 + (1694 num of words in predecessor list in event) goto 0342
+0346 00 42 0343 1731 0000   get field_r from 0343 = last source addr from block rec -> REG1 (in form M4 +nnnn)
+0347 00 40 1786 0000 0353   set instr for transfer (M4 + addr in block event buf) -> (0988 event rec successors)
+0348 96 60 1695 0355 0000   (1695 num of words in successor list in event) in field s -> (0355) 
+0349 00 42 0345 1730 0000   get field s from (0345) -> end loop for M4 in 0345
+0350 00 40 0355 0000 0000   add: (0355) field S now is 7 + (1694 num of words in predecessor list in event) + (1695 num of words in successor list in event)
+0351 00 40 1787 0000 0355   set inst loop, incr M4, if M4<>7+(1694 num of words in predecessor list in event) + (1695 num of words in successor list in event) goto 0352 
+0352 00 70 1695 1733 0356   if (1695 num of words in successors list in event) = 0 goto 0356 
+0353 00 00 0000 0000 0000   (M4 + addr in block event buf) -> (0988 event rec successors)
+0354 00 40 0353 1737 0353   incr_s
+0355 00 00 0000 0000 0000   loop, incr M4, if M4<>7+(1694 num of words in predecessor list in event) + (1695 num of words in successor list in event) goto 0352 
+0356 00 72 1695 1733 0453   if (1695 num of words in successors list in event) <> 0 goto 0453
+
+                            determine the TL of last event to be used
+                            if      sw75 set to transfer -> set TL on last event equal to TSTS of last event, 
+                            else if sw76 set to transfer -> set TL on last event equal to TSTS entered manually in (1688)
+                            else                            set TL on last event equal to TE of last event
+                            store in (1712 TL of last event to be used)
+    
+0357 00 75 0000 0000 0360   if Sw75 transfer to 0360: use TSTS Schedulled completition time from event rec w7
+0358 00 76 0000 0000 0364   if Sw76 transfer to 0364  use TSTS as given float value in (1688)
+0359 00 60 0000 0000 0367
+0360 00 60 0000 0000 0000   nop
+0361 12 60 0891 0000 0000   (0891 event rec w7 = TSTS TTTT RS PR AA BB): get TSTS in REG1, TSTS=Schedulled completition time
+0362 00 40 1745 0000 1712   add 11 0..0 -> convert ot float
+0363 00 60 1788 0360 0368   set 0360 inst to goto 0368, goto 0368: this makes setting (1712) only first time   
+0364 00 60 0000 0000 0000   
+0365 00 60 1688 1712 0000   set (1712 float TSTS) from a given param (in prog load TSTS=Schedulled completition time to be used) to the program
+0366 00 60 1788 0364 0368   set 0360 inst to goto 0368, goto 0368: this makes setting (1712) only first time   
+0367 00 60 0887 1712 0000   set (1712 float TSTS) from (0887 w3 of event rec = TE of event) 
+0368 00 60 0000 0000 0000   nop
+0369 00 60 1712 0889 0000   (1712 TL of last event) -> (0889 event rec w5 TL value)   
+0370 00 60 1733 0890 0000   clear (0890 event rec w6 sigma TL)
+0371 00 60 1789 0367 0373   set 0367 inst to goto 0372, goto 0373: this makes setting (1712) only first time   
+0372 00 60 1712 0889 0000   (1712 TL of last event to be used) -> (0889 event rec w5 TL value)   
+
+                            update (1697 TLTE = TL-TE value) in event w1 
+
+0373 02 60 1731 0000 0000   reg1=0000 0011 1100 0000 
+0374 00 42 0885 0000 0000   Mask (0885 event w1) with reg1 
+0375 00 41 0885 0000 0885   set field TLTE to zero in (0885 event w1)
+0376 50 22 0889 0887 1697   FSUB (0889 event rec w5 TL) - (0887 event rec w3 TE) -> (1697 TLTE = TL-TE value (float))
+0377 50 28 0000 1733 0000   FSUB abs |REG1| - |zero| -> get the absulute value -> REG1
+0378 50 22 1790 0000 0000   FSUB  0.05 - REG1
+0379 00 63 0384 0000 0000   if >0 goto 0384 (set report code to 9 because TL - TE < 0.5)
+0380 50 22 1697 1733 0000   FSUB (1697 TLTE) - zero: normalize
+0381 00 63 0000 0000 0632   if <0 goto 0632
+0382 50 22 1685 1697 0000
+0383 00 63 0000 0000 0632
+0384 01 60 0886 0000 0000   (0886 event w2 w2= xxxxxx EEEEEEEEE R, EEE=event code, R report code) -> REG1  
+0385 99 60 0000 0886 0000   clear R report code, store back to (0886 event w2)
+0386 00 40 0886 1791 0886   set report code to 9
+0387 00 60 0000 0000 0389   goto 0389
+0388 00 00 0000 0000 0000
+0389 00 42 1697 1825 0000   mask (1697 TLTE = TL-TE value) sign digit 
+0390 00 72 1825 0000 0393   if <>negative goto 0393
+0391 50 30 1697 1833 1697   FADD spe (1697 TLTE = TL-TE value) + (-0.05)
+0392 00 60 1748 1726 0395   1.0 -> (1726 (*now* - TTTT)), goto 0395
+
+                            store (1697 TLTE = TL-TE value) in event w1 
+
+0393 00 60 1733 1726 0000   clear (1726)
+0394 50 30 1697 1790 1697   FADD spe (1697 TLTE = TL-TE value) + 0.05 -> (1697)
+0395 00 34 1792 1697 1697   FMUL Spe (0.1e-11) x (1697 TLTE = TL-TE value) -> (1697 TLTE = TL-TE value): convert float to int, rounding up (for this the +0.05)
+0396 94 60 0000 0000 0000   shift to set as 000000 TLTE 000000
+0397 00 40 0885 0000 0885   + (0885 event w1)  -> (0885 event w1 = NNN xxx TLTE SCHEDL) 
+
+
+0398 12 60 0891 0000 0000   get TSTS from (0891 event rec w7 = TSTS TTTT RS PR AA BB  AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time, RS=Resource Code, PR=Spec Code)
+0399 00 72 1733 0000 0497   if <> 0 goto 0497
+0400 00 60 0000 0000 0401   goto 0401
+
+                            store calculated event in read event block 0684..0884, starting from end of
+                            buffer and filling it upwards
+
+                            copy last successor to 0884..0882 (end of read event buf)
+
+0401 00 54 0000 0000 0000   clear M8
+0402 92 41 1695 1732 0000   set instr 0408 to ...
+0403 00 40 1793 0000 0408   ... (0988 event first precedessor - 1 - (1695 num of words in successor list in event) - 1) -> (0884): get TL from last successor
+0404 00 72 1695 1733 0406   if (1695 num of words in successor list in event) <> 0 goto 0406
+0405 00 60 0000 0000 0411   goto 0411 (no successors)
+0406 96 60 1695 0000 0000
+0407 00 40 1798 0000 0410 
+0408 00 00 0000 0000 0000   (0988 event first precedessor - 1 - (1695 num of words in successor list in event) - 1) -> (0884): get TL from last successor
+0409 00 41 0408 1768 0408
+0410 00 00 0000 0000 0000
+
+                            copy last predecessor of event 0894..0892 to 0884..0882 (end of read event buf)
+
+0411 00 54 0000 0000 0000   clear M8
+0412 92 41 1694 1732 0000   set instr 0420 to ...
+0413 00 40 1799 0000 0420   ... (0892 event first predecessor + (1694 num of words in predecessors list in event) - 1) -> REG1: get sigma of last predecessor of event
+0414 00 42 0408 1730 0000   mask (0408) to get field S -> REG1 (starts with (0884 end of read event block buffer))
+0415 00 40 0420 0000 0420   set instr 0420 to store to this addr
+0416 00 72 1694 1733 0418   if (1694 num of words in predecessor list in event) <> 0 goto 0418
+0417 00 60 0000 0000 0423   goto 0432 (no predecessors)
+0418 96 60 1694 0000 0000   (1694 num of words in predecessor list in event) -> field S
+0419 00 40 1800 0000 0422   set instr 0422 to loop, incr M8, if M8<>(1694 num of words in predecessor list in event) goto 0420
+0420 00 00 0000 0000 0000   (0892 event first predecessor + (1694 num of words in predecessors list in event) - 1) -> (0884 end of read event block buffer): get sigma TE of last predecessor of event, store at end of block buf
+0421 00 41 0420 1768 0420   decr field R and S in prev instr
+0422 00 00 0000 0000 0000   loop, incr M8, if M8<>(1694 num of words in predecessor list in event) goto 0420
+
+                            copy event 7w 0891..0885 to 0881.. 
+
+0423 00 54 0000 0000 0000   clear M8
+0424 00 42 0420 1730 0000   set instr 0426 to ...
+0425 00 40 1801 0000 0426   ... (0891 event rec w7) -> (field R of instr 0420 = 0881 position on end of read event buf)
+0426 00 00 0000 0000 0000   (0891 event rec w7) -> (0881 position on end of read event buf)
+0427 00 41 0426 1768 0426   decr field R and S in prev instr
+0428 08 58 0001 0007 0426   loop, incr M8, if M8<>7 goto 0426
+
+                            event stored in read event block 0684..0884
+
+0429 00 40 1727 1732 1727   incr (1727 number of events stored in output tape)
+0430 00 42 0426 1730 0000   mask (0426) to get last addr used in event block, that marks start of block usage
+0431 96 40 1759 0000 0439   +8 -> (0439)
+0432 00 40 1834 0000 0438   set instr 0438 to ...
+0433 08 42 0000 1731 0000   ...
+0434 00 40 0438 0000 0438   ... mask event code for first successor/predecessor 
+0435 00 40 0439 1835 0439   set instr 0439 ...
+0436 08 42 0000 1731 0000   ...
+0437 00 40 0439 0000 0439   ... (pred/succ event code) -> (1726)
+0438 00 00 0000 0000 0000   mask (succ/pred event code) with event code, store back at same addr
+0439 00 00 0000 0000 0000   add (1726 (*now* - TTTT) as 0 NNNN 0..0) to (succ/pred event code)
+0440 00 40 1696 1704 1704   (1704 number of word in output rec buf) += (1696 event rec len)
+0441 96 60 1696 0000 0000   (1696 event rec len NNN) -> REG1
+0442 00 41 1793 0000 1793   sub (1793 (0988)->(0884)) to (1793 (0988)->(0884-NNN))
+0443 00 60 0000 0000 0146   goto 0146 check if output buf is full
+
+                            all input events processed, flush out buf to tape 01 and finish
+
+0444 92 41 1704 1732 0000   (1704 number of word in output rec buf) - 1 -> field R
+0445 00 41 1802 0000 0446   set instr to write buf on tape 01 ...
+0446 00 00 0000 0000 0000   ... 01 91 0884-REG1 0884
+0447 08 60 0447 0000 1948   call 1948 check write
+0448 00 40 1802 1732 1802   incr block number on write tape instr
+0449 96 60 1704 0000 0000   (number of word in output rec buf) - 1 -> field S   
+0450 00 40 1793 0000 1793   reset end of buffer pointer in (1793 (0988) -> (0884)
+0451 00 60 1733 1704 0000   clear (1704 number of word in output rec buf)
+0452 00 60 0000 0000 0300   transfer 0300
+
+                            search current output event 1084 in read successor list 0988..
+    
+0453 96 60 1695 0000 0000   set inst 0495 to ...
+0454 00 40 1803 0000 0459   ... loop, incr M6+3, if M6<>(1695 num of words in successor list) goto 0457
+0455 00 52 0000 0000 0000   clear M6
+0456 00 42 1084 1764 1706   mask (1084 output event block ww1) to get event code -> (1706 output event rec ww1 event code EEEE)   
+0457 00 42 6988 1764 1707   mask (M6+0988 w1 event rec first successor) to get event code -> (1707 event rec for successor)
+0458 00 70 1706 0000 0465   if codes equal goto 0465
+0459 00 00 0000 0000 0000   loop, incr M6+3, if M6<>(1695 num of words in successor list) goto 0457
+
+                            not found, select next event in output buf
+
+0460 00 40 0456 1747 0456   set instr 0456 to read next output event 1084+3
+0461 00 40 1700 1749 1700   (1700 words already scanned in output event block)+=3 -> REG1
+0462 00 41 1763 0000 0000   600 - REG1 -> REG1 = words remaining to be scanned in output event block
+0463 00 63 0453 0241 0000   if >0 goto 0453, =0 goto 0241
+0464 00 61 0000 0000 0000   stop because output event block underflow during scanning successor
+
+                            ouput block event is in current event's succesor successor list
+                            calculate event adjusted TL and SIGMA
+
+0465 00 42 0456 1731 0000   mask (0456) to get field R (1084 output event block addr)
+0466 00 40 1777 0000 1699   +1 -> (1699 addr in output block of found successor (TL value))
+0467 00 59 0000 0000 0000   get 00 M4 M6 M8 to REG1
+0468 00 42 0000 1730 1711   set REG1 = 0..0 M6 0000 -> (1711)
+0469 00 40 1804 0000 0000   set instr to ...
+0470 00 40 1699 0000 0471   ... 
+0471 00 00 0000 0000 0000   ... FSUB (addr in output block of found successor (TL value)) - (0989 successot TL) -> (1701 New_TL)
+0472 00 40 1711 1805 0475   set instr 0475 to ...
+0473 00 40 1699 1777 0000   ...
+0474 00 40 0475 0000 0475   ...
+0475 00 00 0000 0000 0000   ... FADD (addr in output block of found successor+1 (Sigma TL value)) + (0990 successor sigma TL) -> (1702 New_Sigma )   
+0476 00 60 1744 0476 0479   set to nop, goto 0479 
+0477 50 22 1701 1708 0000   
+0478 00 63 0483 0481 0479   
+0479 00 60 1701 1708 0000   (1701 New_TL) -> (1708)
+0480 00 60 1702 1709 0483   (1702 New_Sigma_TL) -> (1709), goto 0483
+0481 50 22 1702 1709 0000
+0482 00 63 0479 0000 0000
+0483 00 40 1749 1703 1703   (1703 pointer to current successor word in event list) += 3
+0484 04 60 1703 0000 0000   shift right 4 to set pointer as integer -> REG1
+0485 00 41 1695 0000 0000   (1695 num of words in successor list in event) -= REG1 -> REG1 = number of words left to be processed in successor list  
+0486 00 63 0460 0488 0000   if >0 goto 0460 (process next successor), =0 goto 0488 (no more successor)
+0487 00 61 0000 0000 0000   stop because successor list overflow
+
+                            calculation done. cleanup for next event
+                            store adjusted TL and SIGMA in event w5 and w6 words
+
+0488 00 60 1733 1703 0000   clear (1703 pointer to event list)
+0489 00 60 1774 0456 0000   restore instr 0456
+0490 00 60 1733 1700 0000   clear (1700)
+0491 00 60 1708 0889 0000   (1708 New_TL adjusted) -> (0889 event rec w5)
+0492 00 60 1709 0890 0000   (1709 New Sigma adjusted) -> (0890 event rec w6)
+0493 00 60 1733 1708 0000   clear (1708)
+0494 00 60 0000 1709 0000   clear (1709)
+0495 00 60 1806 0474 0000   ???
+0496 00 60 0000 0000 0373   goto 0373 update (1697 TLTE = TL-TE value) in event w1 
+
+                            store TSTS value in event
+                            calculate probability
+
+0497 12 60 0891 1713 0000   (0891 event rec w7) -> (1713 TSTS value from event rec w7)
+0498 99 42 0885 1748 0000   mask (event w1) with 0001 0..0 (get sign)
+0499 00 40 1713 0000 1713   add sign to (1713 TSTS value from event rec w7)
+0500 00 40 1745 0000 1713   +110..0 to convert to float
+0501 50 22 0000 1684 1713   FSUB - (1684) ??? -> (1713 TSTS value from event rec w7 in float)
+0502 96 60 0891 0000 0000   clear TSTS value ...
+0503 04 60 0000 0891 0000   ... in (0891 event rec w7 = TSTS TTTT RS PR AA BB)   
+0504 00 42 0885 1748 0000   clear digit 000 1 0..0 from
+0505 00 41 0885 0000 0885   ...  (0885 event rec w1 = NNN Z xx xxxx SCHEDL  Z=TS Sign
+0506 00 42 1713 1825 0000   Mask (1713 TSTS value from event rec w7 float) to get sign D14
+0507 00 72 0000 1825 0511   if sign<>1 goto 0511
+0508 00 40 0885 1748 0885
+0509 50 30 1713 1833 1687
+0510 00 60 0000 0000 0512
+0511 50 30 1713 1790 1687   FADD spe (1713 TSTS value from event rec w7 float) + 0.05 -> 
+0512 00 34 1792 1687 1687   FMUL spe x 1e-11 (1687 expected input tape week float) -> (1687) convert to fixed NNN.N
+0513 88 60 1687 0000 0000   REG1 = NNNN 0..0 this is the TSTS value
+0514 00 40 0891 0000 0891   put TSTS in (0891 event rec w7 TSTS TTTT RS PR AA BB  AA=num of predecesors  BB=num of successors  TTTT=completition date, TSTS=Schedulled completition time)
+0515 00 60 1744 0561 0000   (nop) -> 0561
+0516 00 72 0890 1733 0518   if (0890 event rec w6) <> 0 goto 0518
+0517 00 60 1748 1714 0520
+0518 00 60 0519 0000 1972   call 1972 (param 1714 0520 0000 0890 = RSLT RRRR xxxx PPP1)
+0519 17 14 0520 0000 0890   Param RSLT=(1714 addr to store result) RRRR=return addr 0520, PPP1=0890 param value addr=event rec w6 sigma TL
+0520 50 22 1713 0889 0000   FSUB (1713 TSTS value) - (0889 event TL value) -> REG1
+0521 50 26 0000 1714 1715   FDIV REG1 / (1714) -> (1715)
+0522 50 28 1812 1715 0000   FSUB Abs |4.0|-|(1715)| -> REG1
+0523 00 63 0526 0000 0000   if >0 goto 0526
+0524 00 42 1715 1825 0000   mask (1715) to get sign
+0525 00 40 1813 0000 1715   3.99 with the sign -> (1715)
+0526 00 42 1715 1825 0000   mask (1715) to get sign
+0527 00 72 0000 1825 0530   if <>negative goto 0530 
+0528 50 20 1826 1715 1715
+0529 00 60 1829 0560 0532   1829?
+0530 50 20 1814 1715 1715   FADD 0.005 + (1715) -> (1715)
+0531 00 60 1828 0560 0000   set instr 0560 to FADD (0.5) + 0000 -> (1724)
+0532 00 34 1815 1715 0000   FMUL Spe 1x10^-10 x (1715) -> REG1 = convert to integer
+0533 00 40 1818 0000 1716   YYY
+0534 50 26 0000 1790 0000
+0535 00 34 1816 0000 1717
+0536 96 40 1817 0000 1718
+0537 96 40 0000 1737 1719
+0538 00 40 0000 1777 1720
+0539 00 40 1819 1717 0000
+0540 50 24 0000 1790 1721
+0541 50 22 1716 0000 0000
+0542 50 26 0000 1790 1722
+0543 00 40 1718 1820 0000
+0544 00 40 1719 0000 0549
+0545 00 40 1718 1824 0551
+0546 00 40 1719 1821 0555
+0547 00 40 1720 1820 0556
+0548 00 40 1718 1823 0557
+0549 00 00 0000 0000 0000
+0550 50 24 1722 0000 0000
+0551 00 00 0000 0000 0000
+0552 50 22 1722 1748 0000
+0553 50 24 1722 0000 0000
+0554 50 24 0000 1830 1723
+0555 00 00 0000 0000 0000
+0556 00 00 0000 0000 0000
+0557 01715 0000 0000 0000
+0558 50 24 1723 0000 0000
+0559 50 20 0388 0000 1724
+0560 00 00 0000 0000 0000   FADD (0.5) + REG1 -> (1724)
+0561 00 00 0000 0000 0000   goto 0585
+0562 00 60 1831 0561 0000
+0563 00 40 0559 1732 0559
+0564 00 72 0888 1733 0567   if (0888 event rev w4 sigma te) <> zero goto 0567
+0565 00 60 1748 1714 0569   1.0 -> (1714), goto 0569 
+0566 00 00 0003 0000 0003
+0567 00 60 0568 0000 1972
+0568 17 14 0569 0000 0888
+0569 50 22 1713 0887 0000     
+0570 50 26 0000 1714 1715
+0571 50 28 1812 1715 0000
+0572 00 63 0575 0000 0000   if >0 goto 0575   
+0573 00 42 1715 1825 0000
+0574 00 40 1813 0000 1715
+0575 00 42 1715 1825 0000   mask (1715) to get sign
+0576 00 72 1825 0000 0580   if <>negative goto 0580  
+0577 00 40 1829 1732 0560
+0578 50 20 1826 1715 1715
+0579 00 60 0000 0000 0582
+0580 00 40 1828 1732 0560   
+0581 50 20 1814 1715 1715
+0582 00 34 1715 1815 1716
+0583 00 40 1818 0000 1716
+0584 00 60 0000 0000 0534   goto 0534
+0585 00 41 0559 1732 0559   
+0586 50 24 1724 1725 1715
+0587 50 28 1748 1715 0000
+0588 00 63 0590 0000 0000   if >0 goto 0590
+0589 00 60 1785 1715 0000
+0590 00 42 1715 1825 0000
+0591 00 70 1825 0000 0594
+0592 50 20 1715 1814 1715
+0593 00 60 0000 0000 0595
+0594 50 20 1715 1826 1715
+0595 00 34 1815 0000 1715
+0596 00 42 0885 0598 0885
+0597 00 60 0000 0000 0599
+0598 11 11 0011 1111 1111
+0599 90 42 1715 1735 0000
+0600 00 40 0885 0000 0885
+0601 00 42 1725 1825 0000
+0602 00 70 1825 0000 0605
+0603 50 20 1814 1725 1725
+0604 00 60 0000 0000 0606
+0605 50 20 1725 1826 1725
+0606 50 28 1748 1725 0000
+0607 00 63 0609 0000 0000
+0608 00 60 1785 1725 0000
+0609 00 34 1815 1725 1725
+0610 94 60 0886 0000 0000
+0611 06 60 0000 0886 0000
+0612 90 42 1725 1735 0000
+0613 00 40 0886 0000 0886
+0614 00 60 0000 0000 0400   goto 0400
+
+                            print tape 3 label
+
+0615 00 80 0650 0001 0000   (0650 input tape 03 label as read from tape) -> (0001)
+0616 00 80 1687 0002 0000   (1687 input tape label requiered) -> (0002) = 39 07 0000 0000 NNNN
+0617 00 80 1686 0003 0000   (1686 output tape label with week info) -> (0003)
+0618 00 80 1688 0004 0000   (in prog load TSTS=Schedulled completition time to be used) -> (0004)
+0619 00 80 1684 0005 0000   (1684) -> (0005)
+0620 00 80 1685 0006 0000   (1685) -> (0006)
+0621 00 83 1733 0007 0011   print special, goto 0011 
+
+                            process terminated ok. signal it on printer
+                            write end of tape marks, rewind
+
+0622 00 70 1704 1733 0630   if (1704 number of word in output rec buf)=0 goto 0630
+0623 00 60 1832 0447 0444
+0624 01 91 0000 0000 0000   write end of file mark in tape 01
+0625 01 98 0000 0000 0000   rewind tape 01
+0626 02 91 0000 0000 0000   write end of file mark in tape 02
+0627 04 91 0000 0000 0000   write end of file mark in tape 04
+0628 09 98 0000 0000 0000   rewind tape 09 (program)
+0629 00 60 0018 0001 0001   set stop at 0001 and transfer to it to signal termination ok
+0630 00 60 1838 0615 0000   set instr to print in (1686 project week now) in 0001 
+0631 00 60 1839 0621 0615   set instr to print in (1727 number of events stored in output tape) in 0007, print 0615, then goto 0624 
+
+
+
+0632 00 42 0886 1732 0000   mask (0886 w2 = xxxxxx  EEEEEEEEE R, EEE=event code, report code) with one -> get report code
+0633 00 72 1791 0000 0387   if report code <>9 goto 0387
+0634 01 60 0886 0000 0000   clear report code 9 on (0886 event rec w2)
+0635 99 60 0000 0886 0387   goto 0387
+
+0636 00 59 0000 0000 0000
+0637 04 42 0000 1731 0008
+0638 00 42 0052 1730 0000
+0639 00 41 0000 0008 0000
+0640 00 63 0050 0000 0000
+0641 00 61 0000 0000 0000
+0642 00 59 0000 0000 0000
+0643 04 42 0000 1731 0008
+0644 00 42 0062 1730 0000
+0645 00 41 0000 0008 0000
+0646 00 63 0060 0641 0641
+0647 00 59 0000 0000 0000
+0648 04 42 0000 1731 0008
+0649 00 00 0000 0000 0000
+
+                            variables
+                          
+0650 00 00 0000 0000 0000   tape 03 label as read from tape
+
+0653                        event record: 7w + 3x predecessors, + 3x successors
+
+0684                        read event block buffer from tape 02/03 (200 words)
+0884                        end of read event block buffer 
+
+0885                        event rec w1 = NNN xxx xxxx SCHEDL    NNN=msg len=7+3*num pred+3*num succ, SCHEDL=Schedulled date (format mm dd yy)
+0886                        w2           = xxxxxx  EEEEEEEEE R    EEE=event code, report code      
+0887                        w3           = TE value (float)
+0888                        w4           = SIGMA TE value (float)
+0889                        w5           = TL value
+0890                        w6           = SIGMA TL
+0891                        w7           = TSTS TTTT RS PR AA BB  AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time, RS=Resource Code (=Res.rate), PR=Spec Code (=Pref.Rate)
+
+0892                        w1 event rec first predeccessor = 00 xxxx PPPPPPPPP x    PPPP = event code 
+0893                        predecessor TE value
+0894                        predecessor Sigma TE value
+                            ...room for 31 more predecessors
+
+0988                        w1 event rec first successor 00 xxxx SSSSSSSSS x    SSSS = event code
+0989                        successor TL value
+0990                        successor Sigma TL value
+                            ...room for 31 more successors
+
+1084                        output event block ww1 = S TTT2 x EEEEEEEEE x   s=sign of TTT2, TTT2=(*now* - TTTT), EEEE=event code
+1085                        ww2 = accumulator for TE
+1086                        ww3 = accumulator for SIGMA
+                            ... next event ww1 .. room for 199 more event records x3 = 600 words total
+
+1684                        ???
+1685                        ???
+1686                        in prog load = NNNN (fixed NNN.N) = project week now. On execution: output tape label with week info)
+1687                        in prog load expected input tape week NNNN (fixed NNN.N) 
+1688                        in prog load TSTS=Schedulled completition time to be used (float format) (if sw76 set to transfer)
+
+1689                        Saved start of block just read from tape
+1690                        temp for calcultaion of read block len from tape
+1691                        total number of words in block read from input tape 3/2
+1692                        number of words already processed from block read from input tape 3/2
+
+1694                        num of predecesors in event rec/num of words in predecessor list in event
+1695                        num of successors in event rec/num of words in successor list in event
+1696                        event rec len (= value NNN from w1= NNN xxx xxxx SCHEDL    NNN=msg len=7+3*num pred+3*num succ)
+1697                        current event TTTT completition date value (nnn.n in float format) / 1697 TLTE = TL-TE value (float)
+1698                        *now* week number (nnn.n in float format). 
+1699                        Number of weeks *now* - TTTT (nnn.n in float format) / addr in output block of found precessor/successor (TE/TL value)
+1700
+
+1703                        pointer to current successor word in event list. ranges from 0..(1695)
+1704                        number of word in output rec buf
+1705                        num of word in output buf (as 0000 0000 NNNN 0000)
+1706                        output event rec ww1 event code EEEE                     
+1707                        current event predecessor/successor code
+1708                        New TE adjusted 
+1709                        New Sigma adjusted 
+
+1711                        addr of event rec word 1
+1712                        TL of last event to be used
+1713                        TSTS value from w7 rec event
+
+1726                        (*now* - TTTT) as 0 NNNN 0..0 (fixed format one decimal) / addr in output block of found predecessor (event code)
+1728                        output rec ww1 event TTT2 value, no sign
+1727                        number of events stored in output tape
+
+                            constants
+
+1729 39 07 0000 0000 0000   will be set to output tape label 39 08 0..0
+1730 00 00 0000 1111 0000   mask field S
+1731 00 00 1111 0000 0000   mask field R
+1732 00 00 0000 0000 0001   one
+1733 00 00 0000 0000 0000   zero
+1734 00 00 0000 0000 1100   mask AA num of predecessors from event w7
+1735 00 00 0000 0000 0011   mask BB num of successors from event w7
+1736 00 00 0000 0000 0007   constant 7
+1737 00 00 0000 0001 0000   incr S field
+1738 00 60 4684 0885 0000
+1739 04 58 0001 0000 0060
+1740 00 60 4684 0892 0000
+1741 04 58 0001 0000 0071
+1742 00 60 4684 0988 0000
+1743 04 58 0001 0007 0050
+1744 00 60 0000 0000 0000   nop
+1745 11 00 0000 0000 0000
+1746 00 00 0000 0000 1111   mask field T
+1747 00 00 0003 0000 0000
+1748 00 01 0000 0000 0000   const 00 01 0..0
+1749 00 00 0000 0003 0000
+1750 00 60 0989 1700 0000
+1751 00 60 1701 0989 0000
+1752 00 60 0990 1700 0000
+1753 00 60 0000 0990 0000
+1754 00 00 0000 0000 0200
+1755 00 60 0000 0000 0149
+1756 08 58 0001 0000 0122
+1757 00 60 1767 0166 0297
+1758 08 58 0001 0000 0130
+1759 00 00 0000 0008 0000
+1760 02 91 0652 0652 0001
+1761 00 60 0000 0000 0306
+1762 00 60 1744 0144 0000
+1763 00 00 0000 0600 0000
+1764 00 00 0011 1111 1110   mask event code
+1765 00 60 0000 0000 0033
+1766 00 42 0886 1764 1084
+1767 00 60 0887 1085 0000
+1768 00 00 0001 0001 0000
+1769 00 60 1755 0174 0000
+1770 00 60 0000 0000 0175
+1771 96 60 1691 0000 0000
+1772 08 58 0003 0000 0179
+1773 50 20 0893 0000 1701
+1774 00 42 1084 1764 1706
+1775 00 60 0000 0000 0241
+1776 08 58 0001 0000 0306
+1777 00 00 0001 0000 0000
+1778 00 42 0886 1764 1084
+1779 00 00 0006 0000 0000
+1780 00 60 0000 1693 0000
+1781 00 70 0884 1764 0310
+1782 00 60 4000 0885 0000 
+1783 00 60 0000 0892 0000
+1784 04 58 0001 0000 0342
+1785 99 09 9000 0000 0000
+1786 00 60 0000 0988 0000
+1787 04 58 0001 0000 0352
+1788 00 60 0000 0000 0368
+1789 00 60 0000 0000 0372
+1790 98 05 0000 0000 0000
+1791 00 00 0000 0000 0009
+1792 89 01 0000 0000 0000
+1793 00 60 0988 0884 0000
+1794 00 60 0000 0000 0248
+1795 00 60 0000 0000 0260
+1796 00 60 0000 0000 0252
+1797 00 60 0000 0000 0112
+1798 08 58 0001 0000 0408
+1799 00 60 0892 0000 0000
+1800 08 58 0001 0000 0420
+1801 00 60 0891 0000 0000
+1802 01 91 0884 0884 0001
+1803 06 58 0003 0000 0457
+1804 50 22 0000 0989 1701
+1805 50 20 0000 0990 1702
+1806 00 60 1744 0476 0479
+1807 00 60 0000 0000 0297
+1808 00 60 1795 0496 0000
+1809 00 60 1796 0241 0453
+1810 00 60 1811 0496 0398
+1811 00 60 0000 0000 0373
+1812 00 04 0000 0000 0000
+1813 00 03 9900 0000 0000
+1814 97 05 0000 0000 0000
+1815 90 01 0000 0000 0000
+1816 88 01 0000 0000 0000
+1817 00 00 0000 0000 1849
+1818 10 00 0000 0000 0000
+1819 12 00 0000 0000 0000
+1820 50 22 0000 0000 0000
+1821 50 24 0000 1822 0000
+1822 00 02 0000 0000 0000
+1823 50 20 0000 0000 0000
+1824 50 20 0000 0000 0388
+1825 00 10 0000 0000 0000
+1826 97 15 0000 0000 0000
+1827 99 15 0000 0000 0000
+1828 50 20 1830 0000 1724
+1829 50 20 1827 0000 1724
+1830 99 05 0000 0000 0000
+1831 00 60 0000 0000 0585
+1832 00 60 0000 0000 0630
+1833 98 15 0000 0000 0000
+1834 00 42 0000 1764 0000
+1835 00 40 0000 1726 0000
+1836 00 40 1084 0000 1084
+1837 11 42 0000 1840 1728
+1838 00 80 1686 0001 0000
+1839 00 83 1727 0007 0624
+1840 01 11 1000 0000 0000
+1841 02 42 0000 1818 0000
+
+; xxx possible bug xxx original code is 00 70 1733 0000 0218. This is used to set an inst by
+;                      adding an addr in field R. Changed order to get a 0000 field R
+1842 00 70 0000 1733 0218
+
+1843 50 22 0000 1728 1701
+1844 50 26 1701 0000 1702
+1845 50 24 1702 0001 1702
+1846 00 60 1701 0000 0000
+1847 00 60 1702 0001 0000
+1848 00 60 0000 0000 0166
+1849 00 00 0000 0000 0000
+1850 99 00 1994 0000 0000
+1851 99 00 3983 0000 0000
+1852 99 00 5962 0000 0000
+1853 99 00 7926 0000 0000
+1854 99 00 9871 0000 0000
+1855 99 01 1791 0000 0000
+1856 99 01 3683 0000 0000
+1857 99 01 5542 0000 0000
+1858 99 01 7364 0000 0000
+1859 99 01 9146 0000 0000
+1860 99 02 0884 0000 0000
+1861 99 02 2575 0000 0000
+1862 99 02 4215 0000 0000
+1863 99 02 5804 0000 0000
+1864 99 03 0114 0000 0000
+1865 99 02 8814 0000 0000
+1866 99 03 0234 0000 0000
+1867 99 03 1594 0000 0000
+1868 99 03 2894 0000 0000
+1869 99 03 4134 0000 0000
+1870 99 03 5314 0000 0000
+1871 99 03 6430 0000 0000  ?
+1872 99 03 7493 0000 0000
+1873 99 03 8493 0000 0000
+1874 99 03 9435 0000 0000
+1875 99 04 0320 0000 0000
+1876 99 04 1149 0000 0000
+1877 99 04 1924 0000 0000
+1878 99 04 2647 0000 0000
+1879 99 04 3319 0000 0000
+1880 99 04 3943 0000 0000
+1881 99 04 4520 0000 0000
+1882 99 04 5053 0000 0000
+1883 99 04 5543 0000 0000
+1884 99 04 5994 0000 0000
+1885 99 04 6407 0000 0000
+1886 99 04 6784 0000 0000
+1887 99 04 7128 0000 0000
+1888 99 04 7441 0000 0000
+1889 99 04 7725 0000 0000
+1890 99 04 7982 0000 0000
+1891 99 04 8214 0000 0000
+1892 99 04 8422 0000 0000
+1893 99 04 8610 0000 0000
+1894 99 04 8778 0000 0000
+1895 99 04 8928 0000 0000
+1896 99 04 9061 0000 0000
+1897 99 04 9180 0000 0000
+1898 99 04 9286 0000 0000
+1899 99 04 9379 0000 0000
+1900 99 04 9461 0000 0000
+1901 99 04 9534 0000 0000
+1902 99 04 9598 0000 0000
+1903 99 04 9653 0000 0000
+1904 99 04 9702 0000 0000
+1905 99 04 9744 0000 0000
+1906 99 04 9781 0000 0000
+1907 99 04 9813 0000 0000
+1908 99 04 9841 0000 0000
+1909 99 04 9865 0000 0000
+1910 99 04 9886 0000 0000
+1911 99 04 9903 0000 0000
+1912 99 04 9918 0000 0000
+1913 99 04 9391 0000 0000
+1914 99 04 9942 0000 0000
+1915 99 04 9952 0000 0000
+1916 99 04 9960 0000 0000
+1917 99 04 9966 0000 0000
+1918 99 04 9972 0000 0000
+1919 99 04 9977 0000 0000
+1920 99 04 9981 0000 0000
+1921 99 04 9984 0000 0000
+1922 99 04 9987 0000 0000
+1923 99 04 9989 0000 0000
+1924 99 04 9991 0000 0000
+1925 99 04 9993 0000 0000
+1926 99 04 9994 0000 0000
+1927 99 04 9995 0000 0000
+1928 99 04 9996 0000 0000
+1929 99 05 0000 0000 0000
+1930 99 05 0000 0000 0000
+
+                            Re-read routine. if error persist then stop 
+
+1931 00 40 1946 0000 1938   Re-read routine: save exit transfer in (1938 EXIT_ReRead)
+1932 92 60 0000 0000 0000   set inst ...
+1933 00 40 1947 0000 1934   ... to get tape instr to redo in (1934)
+1934 00 00 0000 0000 0000   ... get tape instr to redo, store it in (1936), goto 1940
+1935 00 00 0000 0000 0000
+1936 00 00 0000 0000 0000   tape instr to redo
+1937 00 00 0000 0000 0000
+1938 00 00 0000 0000 0000   EXIT_ReREad
+1939 00 61 0000 0000 1940
+
+; xxx change xxx 1940 12 60 1936 1935 0000    do not retry. if read error, just stop
+
+1940 00 60 0000 0000 1939
+1941 88 42 1946 0000 0000
+1942 00 40 1945 0000 1934
+1943 00 60 1944 1937 1934
+1944 00 68 1939 1937 1935
+1945 88 40 1935 1946 1935
+1946 00 59 9999 9132 0001   MK_TR68=offset to Make Transfer 00 60 from 08 68 
+1947 00 59 9998 1936 1940   MK_TAP
+
+                            Check write routine. 
+
+1948 00 40 1967 0000 1960   Check write routine: save exit transfer in (1960 EXIT_CheckWrite)
+1949 91 60 0000 0000 0000
+1950 01 40 1968 0000 1952
+1951 00 60 1971 1962 0000
+1952 00 00 0000 0000 0000
+
+; xxx change xxx 1953 00 68 0000 0000 0000 chage to not retry, just stop if tape
+;                1954 12 42 1965 1949 0000 signal on write
+;                1955 88 40 1970 0000 1956
+
+1953 00 68 0000 0000 1955   if tape signal on write goto 1955
+1954 00 60 0000 0000 1960   go to exit word
+1955 00 61 0000 0000 1955   stop
+
+1956 00 00 0000 0000 0000
+1957 00 41 1956 1969 1958
+1958 00 00 0000 0000 0000
+1959 00 68 0000 0000 1962
+1960 00 00 0000 0000 0000   EXIT_CheckWrite
+1961 00 61 1965 0000 1971
+1962 00 00 0000 0000 0000
+1963 00 40 1965 1970 1964
+1964 00 00 0000 0000 0000
+1965 00 00 0000 0000 0000   tape instr to redo
+1966 00 60 1961 1962 1953
+1967 00 59 9999 9140 0001   MK_TR60=offset to Make Transfer 00 60 from 08 60
+1968 05 99 9981 9650 0000
+1969 00 01 0000 0000 0000
+1970 00 02 0000 0030 0097
+1971 00 60 1956 1962 1962
+
+                            call
+                            param RSLT RRRR xxxx PPP1
+                                  RSLT=addr where to store result
+                                  RRRR=return address
+
+1972 00 60 0000 1997 0000   REG1=param RSLT RRRR xxxx xxxx -> (1997)
+1973 08 60 0000 0000 0000   set instr to store result at RSLT addr, return to RRRR
+1974 00 40 1993 0000 1991   ... (1997) -> (RSLT), transfer to RRRR
+1975 92 60 1997 0000 0000   set inst to 
+1976 00 40 1994 0000 1978   ... FADD REG1 + (PPP1) 
+1977 16 60 0000 1997 0000   clear (1997)
+1978 00 00 0000 0000 0000   FADD REG1 + (PPP1) -> (1978)  
+1979 00 63 0000 1991 1992   if =0 goto 1991, if <0 goto 1992
+1980 00 40 1996 0000 0000
+1981 03 60 0000 0000 0000
+1982 11 34 1995 0000 0000
+1983 86 60 0000 0000 0000
+1984 00 40 1996 0000 0000
+1985 00 40 1997 0000 1997
+1986 50 36 1978 0000 0000
+1987 50 32 0000 1997 0000
+1988 50 34 1995 0000 0000
+1989 50 20 1997 0000 0000
+1990 00 72 0000 1997 1985
+1991 00 00 0000 0000 0000   (1997) -> (RSLT), transfer to RRRR
+1992 00 61 0000 0000 1991
+1993 00 60 1997 0000 0000
+1994 50 20 0000 0000 1978
+1995 99 05 0000 0000 0000
+1996 67 01 0000 0000 0000
+1997 00 00 0000 0000 0000   parameter on call

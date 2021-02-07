@@ -1,0 +1,1196 @@
+
+                            Run 06
+                            Update program at page 59 in book "PERT summary report phase 2"
+
+
+                            tapes input:
+                                          09 program 
+                                          02 transaction file 
+                                          03 active event file
+                                  output:
+                                          01 new active event file         
+                                  on line print:
+                                             error register controls 
+
+                            stops: IC: 01695 (00 61 0000 0000 1696) -> unrecoverable read error
+                                   IC: 01717 (00 61 1721 0000 1727) -> unrecoverable write error
+
+                                   IC: 00012 (00 61 0000 0000 0088) -> ready to run update. Press start to execute program. 
+                                                                       Will print 
+                                                                       5905 0..0  input transaction file label tape 02
+                                                                       3909 0..0  input event file label tape 03
+                                                                       3906 0..0  output active event file label tape 01 
+                                   IC: 00015 (00 61 0000 0000 0000) -> wrong transaction tape label, press start to process anyway
+                                                                       tape should have a label "39 05 0000 0000 0000"
+                                   IC: 00026 (00 61 0000 0000 0000) -> wrong event tape label, press start to process anyway
+                                                                       tape should have a label "39 09 0000 0000 0000"
+                                   IC: 00059 (00 61 0000 0000 0000) -> transac record incomplete 
+                                   IC: 00073 (00 61 0000 0000 0000) -> transaction rec w4 should be 550..0 or 660..0
+                                   IC: 00098 (00 61 0000 0000 0000) -> event record incomplete 
+                                   IC: 00375 (00 61 0000 0000 0000) -> because words used by predecessor becomes negative. Internal error
+                                   IC: 00427 (00 61 0000 0000 0000) -> trying to insert a successor event code (1658) that already exists
+                                   IC: 00438 (00 61 0000 0000 0000) -> because words used by successors becomes negative. Internal error
+                                   IC: 00467 (00 61 0000 0000 0000) -> because too much successors
+                                   IC: 00477 (00 61 0000 0000 0000) -> predecessor already exists
+                                   IC: 00488 (00 61 0000 0000 0000) -> words used by predecessor becomes negative. Internal error
+                                   IC: 00518 (00 61 0000 0000 0000) -> too much predecessors
+                                   IC: 00593 (00 61 0000 0000 0000) -> words used by predecessor/successor list becomes negative. Internal error
+
+                                   IC: 00001 (00 61 0000 0000 0000) -> finished ok. 
+
+                            Switch 74 set to off      -> update active event tape 03
+                                             transfer -> generate a new active event tape from transactions, without
+                                                         using active event tape 03 
+
+                            what happends when input tape reaches end of file
+
+                                if transaction tape 02 reaches end of file before event tape 03, then
+                                all remaining events in tape 03 are dumped to new event tape 01
+
+                                tape event tape 03 reaches end of file before transaction tape 02, then
+                                remaing transactions in tape 02 will generate new events on event tape 01.
+                                this is buggy, so a trailing event with max possible code 999-999-999
+                                is placed on tape.
+
+                            what is different from doc stated in PERT Phase 2 pdf: the program does ...
+
+                            - No completed events tape generated. Instead Completed events are printed
+                            - No file history tape is generated
+                            - There is no count of processed transactions / processed events
+
+                            - allways sets completition date in event when a predecessor is set as
+                              completed with transaction card code 3, event if more predecessors 
+                              remains incompleted in event
+
+
+NNNN PP QQ RRRR SSSS TTTT 
+
+0051 09 96 0008 1727 0001   verify tape 09 forward block 0001 addr 0008-1727 <- this indicates the loading addr of prog in tape  
+0052 00 68 0000 0000 0006   if tape check transfer to 0006                     
+0053 00 60 0000 0000 0009   transfer to 0009                                   
+0054 00 00 0000 0000 0000                                                      
+0055 00 61 0000 0000 0001   stop at 0001
+0056 00 00 0000 0000 3951                                                     
+
+                            Note: block saved in tape is 02 91 0051 1770 0001 
+                                  this is tape 02, block 0001, addr 0051 to 1770
+                                  but this is loaded at addr 0008-1727 (43 words lower addr)
+                                  this is infered by the fact that there is a tape verify on
+                                  addr 0051 for tape 09 (program) for addr 0008-1727
+                                  prog starts at addr 0009
+                                  
+0008 00 60 0000 0000 0000   nop
+
+0009 00 54 0000 0000 0000   Clear M8 then add R S T to M4 M6 M8                          
+0010 02 94 1031 1031 0000   Read tape 02 to (1031 tape 02 label trasaction file)
+0011 08 68 0011 0000 1687   if tape check, call 1687 Re-read
+0012 00 61 0000 0000 0088   Stop because ready to run update. Press start to execute program. goto 0088 to print then cont to 0013
+0013 00 40 1553 1578 1578   (1553) + (1578) -> (1578) -> REG1      1578= current tape 02 label: 5905 0000 0000 nnnn
+0014 00 70 1031 0000 0016   if REG1 = (1031 tape 02 label trasaction file) transfer to 0016      
+0015 00 61 0000 0000 0000   stop because wrong event tape label 
+0016 00 60 1553 0008 0000   (1553) -> (0008)
+0017 00 40 1578 1583 1578   (1583) + (1578) -> (1578) -> REG1      1578=label for new event file tape 01
+0018 01 91 1578 1578 0000   write output (1578) tape 01            save label on tape output 01
+0019 08 60 0019 0000 1704   Call 1704 check Write
+
+                            Start of processing 
+
+0020 00 74 0000 0000 0027   if Sw74 in "transfer" goto 0027
+0021 03 94 1032 1032 0000   Read tape 03 to (1032 tape 03 label active event file)
+0022 08 68 0022 0000 1687   if tape check Call 1687 Re-read
+0023 00 40 1579 1552 1579   (1579) + (1552) -> (1579) -> REG1
+0024 00 60 0000 0000 0000   nop
+0025 00 70 1579 1032 0027   if (1579)=(1032 tape 03 label active event file) transfer to 0027        
+0026 00 61 0000 0000 0000   stop because wrong transaction tape label
+
+                            print special: print input event tape label and putput tape label to be generated
+
+0027 00 80 1032 0001 0000   wait prt, (1032 tape 03 label active event file) -> (0001)
+0028 00 80 1578 0002 0000   wait prt, (1578) -> (0002)                           output active event file label
+0029 00 80 1588 0003 0000   wait prt, (1588 ZERO) -> (0003) -> REG1              clear 
+0030 00 80 0000 0004 0000   wait prt, REG1   -> (0004)                           clear
+0031 00 80 0000 0005 0000   wait prt, REG1   -> (0005)                           clear
+0032 00 80 0000 0006 0000   wait prt, REG1   -> (0006)                           clear 
+0033 00 83 0000 0007 0000   REG1 -> (0007), print special                        clear
+
+                            read next transaction block to process from tape 02
+
+0034 02 94 0629 0000 0001   read block tape 02 at (0629 Transaction block read from tape)
+0035 08 68 0035 0000 1687   if tape check Call 1687 Re-read
+0036 00 67 0000 0000 0599   if end of file transfer to end of transactions       transaction tape terminated, goto 0599 to flush out reg to tape, and end prog
+0037 00 60 0000 1554 0000   REG1 -> (1554 tape read start of block word)                     
+0038 04 42 0000 1585 1555   Mask and shift start of block: bbbb -> (1555)        02 90 aaaa bbbb nnnn maked with 0000 0000 1111 0000 -> 0000 0000 bbbb 0000, then shift 4 right to get 0..0 bbbb
+0039 08 42 1554 1586 0000   Mask and shift start of block: aaaa -> (REG1)        02 90 aaaa bbbb nnnn maked with 0000 1111 0000 0000 -> 0000 aaaa 0000 0000, then shift 8 right to get 0..0 aaaa
+0040 00 41 1555 0000 1556   (1555) - REG2 -> (1556 words in transac block)
+0041 00 40 1587 0000 1556          + 1 -> (1556 words in transac block)                                 
+0042 00 40 0034 1587 0034   (0034) + 1 -> (0034)                                 incr block num to read in transaction tape 
+0043 00 51 0000 0000 0000   Clear M4 then add R S T to M4 M6 M8                  read first transac from block at addr Index M4
+0044 00 60 0000 0000 0000   nop
+0045 00 74 0000 0000 0057   if Sw74 is Transfer, skip read event tape, go to process next transaction
+
+                            read next event block
+
+0046 03 94 0830 0000 0001   read tape 03 block 0001 at (0830 event block read from tape)
+0047 08 68 0047 0000 1687   if tape check Call 1687 Re-read
+0048 00 67 0000 0000 0607   if EOF transfer to 0607
+0049 00 60 0000 1558 0000   REG1->(1558  tape read start of block word)
+0050 04 42 0000 1585 1555   Mask and shift start of block: bbbb -> (1555)        
+0051 08 42 1558 1586 0000   Mask and shift start of block: aaaa -> (REG1)
+0052 00 41 1555 0000 1559   (1555) - REG2 -> (1559 words in event block)
+0053 00 40 1587 0000 1559          + 1 -> (1559 words in event block) 
+0054 00 52 0000 0000 0000   Clear M6 then add R S T to M4 M6 M8                  read first event from block at addr Index M6
+0055 00 40 0046 1587 0046   (0046) + 1 -> (0046)                                 incr block num to read in event tape                              
+0056 00 60 0000 0000 0000   nop 
+
+                            start processing next transaction from transaction block 
+                            already read from tape 02. copy from transac block to 
+                            transac rec  
+
+0057 00 41 1556 1557 0000   (1556 words in transac block) - (1557 words read from transac block) -> REG1 = words left to be read in transac block
+0058 00 63 0063 0060 0000   TR >0 to 0063, =0 to 0060                            
+0059 00 61 0000 0000 0000   stop because transac record incomplete               safety: if run out words in transac block
+0060 00 60 1669 0065 0000   (1669)->(0065)                                       
+0061 00 60 1588 1557 0000   clear (1557 words read from transac block)
+0062 00 60 1589 0044 0034   (1589)->(0044), transfert 0034                       read new transact block, but do not read next event
+0063 00 60 4629 1033 0000   (M4 + 0629 Transac_Block) -> (1033 Transac_rec w1)    M4=index on transac record from transaction block
+0064 00 40 0063 1590 0063   (0063) + (1590 INCR_S) -> (0063)                     incr 1033 addr in prev inst
+0065 04 58 0001 0007 0063   inc M4, if M4 <> 0007 goto 0063 (loop NEXT)          copy transac rec 0629+M4 -> 1033..1039 1033 Transac_rec
+0066 96 60 1591 0000 0000   7 left shift 4 -> REG1                               REG1=0..07 0000
+0067 00 40 0065 0000 0065   (0065) + REG1 -> (0065)                              set M4 loop final value += 7 
+0068 00 60 1592 0063 0000   (1592) -> (0063)                                     reset instr 0063 to its inital value
+0069 00 40 1557 1591 1557   (1557 words read from transac block) += 7            
+
+                            process transac rec
+
+0070 00 42 1036 1593 1560   mask (1036 transact rec w4) with 550..0 -> (1560 55 0..0 add succesor to event, 66 0..0=add predecessor to event rec)
+0071 00 70 1593 0000 0074   if = 55 0..0 then goto to 0074                       if w4=550..0 -> update a succesor
+0072 00 70 1560 1594 0081   if = 66 0..0 goto to 0081                            if w4=660..0 -> update predecessor
+0073 00 61 0000 0000 0000   stop because transaction rec w4 is not 550..0 or 660..0
+0074 00 60 1607 0146 0000   (1607) -> (0146) for transac event code use 1033 w1
+0075 00 60 1614 0254 0000   (1614) -> (0254) on card code 2 processing: set to update successor activity of event
+0076 00 60 1614 0291 0000   (1614) -> (0291) on card code 5 processing: set to delete successor activity of event
+0077 00 60 0341 0329 0000   (0341) -> (0329) on card code 4 processing: set to ignore transaction, just goto 0057 to process next one
+0078 00 60 1680 0422 0000   (1680) -> (0422) set to insert successor on card code=1                                     
+0079 00 60 1666 0414 0000   (1666) -> (0414)
+0080 00 60 1668 0342 0521   (1668) -> (0342), transfer to 0521 (there, if Sw74 off, transfer to 0095)
+0081 00 60 1608 0146 0000   (1608) -> (0146) for transac event code use 1036 w4
+0082 00 60 1633 0254 0000   (1633) -> (0254) on card code 2 processing: set to update predecessor activity of event
+0083 00 60 1635 0291 0000   (1635) -> (0291) on card code 5 processing: set to delete predecessor activity of event
+0084 00 60 1614 0329 0000   (1614) -> (0329) on card code 4 processing: set to process transaction
+0085 00 60 1656 0422 0000   (1656) -> (0422) set to insert predecessor on card code=1
+0086 00 60 1614 0414 0000   (1614) -> (0414)
+0087 00 60 1614 0342 0551   (1614) -> (0342), transfer to 0551 (there, if Sw74 off, transfer to 0095)
+
+                            print transaction tape being processed
+
+0088 00 80 1553 0007 0000   wait prt, (1553) -> (0007)                     
+0089 00 80 1031 0001 0000   wait prt, (1031 tape 02 label trasaction file) -> (0001)                
+0090 00 80 1588 0003 0000   wait prt, (1588 ZERO) -> (0003)           clear
+0091 00 80 0000 0004 0000   wait prt, REG1 -> (0004)                  clear
+0092 00 80 0000 0005 0000   wait prt, REG1 -> (0005)                  clear
+0093 00 80 1557 0006 0000   wait prt, (1557 words read from transac block) -> (0006)
+0094 00 81 1588 0002 0013   (1588 ZERO) -> (0002), print, transfer 0013    clear
+0095 00 60 0000 0000 0000   nop
+
+                            get next event rec from event block
+
+0096 00 41 1559 1561 0000   (1559 words in event block)-(1561 words read from event block) -> REG1 = words left ot be read in event block
+0097 00 63 0102 0099 0000   if >0 goto 0102, =0 goto 0099
+0098 00 61 0000 0000 0000   stop because event record incomplete      safety: if run out event record
+0099 00 60 1588 1561 0000   clear (1561 words read from event block) because event block fully processed
+0100 00 60 1595 0056 0000   (1595) -> (0056)
+0101 00 60 1601 0124 0046   (1601) -> (0124), transfer to 0046        goto read next event block from tape
+
+                            read event rec from event block
+
+0102 00 60 1588 1563 0000   clear (1563 num of predecessors)     
+0103 00 60 1588 1564 0000   clear (1564 num of successors)
+0104 00 60 6836 1562 0000   (0836 + M6) -> (1562)                     event rec w7
+0105 02 42 1562 1582 1563   Mask (1562) with 0..0 1111 Shift 2 Right -> (1563 num of predecesors)
+0106 00 42 1562 1596 1564   Mask (1562) with 0..0 0011 -> (1564 num of successors)
+0107 00 40 1563 1597 0000   (1563 num of predecesors) + (1597 EXP12) -> REG1 convert integer to float
+0108 50 24 1598 0000 0000   Float (1598 Float 3.0) x REG1 -> REG1      x 3.0    
+0109 00 34 1599 0000 1563   Spe Float (1599 = Float 10^-12) x REG1 -> (1563 words used by predecessors)
+0110 00 40 1564 1597 0000   (1564 num of successors) + (1597 EXP12) -> REG1                       
+0111 50 24 1598 0000 0000   Float (1598 = Float 3.0) x REG1 -> REG1             Now (1963) = (1563) x 3
+0112 00 34 1599 0000 1564   Spe Float (1599 0 Float 10^-12) x REG1 -> (1564 words used by successors)
+0113 00 60 1591 1565 0000   7 -> (1565 num of words in event rec)  initial size in words of event rec     
+0114 00 72 1563 1588 0116   if (1563 words used by predecessors)<>0 goto 0116                    
+
+; xxx possible bug xxx on original code the instruction 0115 00 60 1670 0130 0118   (1670) -> (0130), transfer 0118 ... set to skip copy precessesors
+;                      skips checking for no successors. This makes run06 to not work if event read from tape
+;                      and NO successors and NO precedeccors. fixed to check presence of pred and successors
+;
+0115 00 60 1670 0130 0000   (1670) -> (0130), transfer 0118 ... set to skip copy precessesors
+0116 00 72 1564 1588 0118   if (1564 words used by successors)<>0 goto 0118 
+0117 00 60 1671 0138 0000   (1671) -> (0138)                                     ... set to tr 0138 to 0141, goto 0118
+0118 00 40 1563 1564 0000   (1563 words used by predecessors) + (1564 words used by successors) -> REG1
+0119 00 40 1565 0000 1565   (1565 num of words in event rec) += REG1 = (7+pred*3+succ*3) 
+0120 00 59 0000 0000 0000   REG1 = 0000 M4 M6 M8 
+0121 00 42 0000 1585 1575   Mask REG1 with 0..0 1111 0000 -> (1575 saved M6 value)    
+
+                            copy event block M6+0830 -> 1041..1047 (event record fixed part)
+
+0122 00 60 6830 1041 0000   (M6 + 0830 Event_Block) -> (1041 event rec w1)  
+0123 00 40 0122 1590 0122   incr 1041 addr in prev instr
+0124 06 58 0001 0007 0122   inc M6, if M6 <> 0007 goto 0122 (loop NEXT)   copy event rec 0830+M6 -> 1041..1047
+0125 00 60 1600 0122 0000   (1600) -> (0122)                              restore instr 0122 to its inital value
+
+                            copy event block M6+0830 -> 1048..1048 + num predecessors * 3
+
+0126 00 42 0124 1585 0132   Mask (0124) with 0..0 1111 0000 -> (0132)     =0..0 0007 0000 = mask to get end of loop value 0000 0000 nnnn 0000
+0127 96 60 1563 0000 0000   (1563 words used by predecessors) shift left 4 -> REG1                  
+0128 00 40 0132 0000 0000   (0132) + REG1 -> REG1                         new end of loop value = previous end of loop + predecessors  words
+0129 00 40 1602 0000 0132   (1602) + REG1 -> (0132)                       set (0132) as 00 58 0001 (0132+1563) 0130 - end of loop value nnnn+(1563 words used by predecessors) 0000
+0130 00 60 6830 1048 0000   (M6 + 0830 Event_Block) -> (1048 predecessors list) copy event predecessors
+0131 00 40 0130 1590 0130   (0130) + (1590 INCR_S) -> (0130)
+0132 00 00 0000 0000 0000   inc M6, if M6 <> NNNN goto 0138 (loop NEXT)   
+0133 00 60 1603 0130 0000   (1603) -> (0130)                              restore line 0130
+
+                            copy event block M6+0830 -> 1148..1148 + num successors * 3
+
+0134 00 42 0132 1585 0140   Mask (0132) with 0..0 1111 0000 -> (0140)     get previous loop end value
+0135 96 60 1564 0000 0000   (1564 words used by successors) -> REG1   
+0136 00 40 0140 0000 0000   (0140) + REG1 -> REG1                         new end of loop value = previous end of loop + successors words
+0137 00 40 1604 0000 0140   (1604) + REG1 -> (0140)                       set end of loop value
+0138 00 60 6830 1148 0000   (M6 + 0830 Event_Block) -> (1148 successor list) M6=index on event block
+0139 00 40 0138 1590 0138   incr 1148 addr in prev instr
+0140 00 00 0000 0000 0000   inc M6, if M6 <> NNNN goto 0138 (loop NEXT)   copy transac rec 0830+M6 -> 1148..1154
+0141 00 60 1605 0138 0000   (1605) -> (0138)                              reset instr 0138 to its initial value
+
+                            update words read from event block
+
+0142 96 60 1565 0000 0000   (1565 num of words in event rec) Shift Left 4 -> REG1                   
+0143 00 40 0124 0000 0124   (0124) + REG1
+0144 00 40 1561 1565 1561   (1561 words read from event block) += (1565 num of words in event rec)
+
+                            compare trasaction predecessor event code (in transaction rec) 
+                            with event code (in event rec). 
+                            if transac event larger goto process next event
+
+0145 15 60 1033 1569 0000   (1033 w1 transac rec) Shift Right 15 -> (1569 leftmost digit of transac rec w1=card code) 
+0146 00 42 1033 1606 1568   mask (transac w1) to get event code -> (1568 transac rec predecessor code PPP) is the event where successor is to be inserted
+                            (transac w4) mask ....                             transac successor event code SSS is the event where predecessor is to be inserted
+0147 00 42 1042 1606 1567   mask (1042 event rec w2) to get event code -> (1567 event rec event code EEE)
+0148 00 70 1568 1567 0150   if (1568 transac rec code)=(1567 event code) goto 0150                if transac predecessor code PPP = event code EEE goto 0150 -> update event routine             
+
+; xxx change xxx in original code instr 0149 acts as allways transac rec is greater thant event rec. 
+;                the case transac rec < event rec is not processed. 
+;                PERT Phase 2 doc p.56 describes the case on transaction code is less than event file code
+;                but this is not implemented in original code as stated in dic
+;                corrected so it works as stated in manual. Seems to be a missing path to be applied
+;                because most of the code is there, just some little omissions and different address     
+;
+;                0149 00 60 1637 0224 0163   (1637 do not save event to tape, then get next event)->(0224), transfer to 0163              transac event > event code. set to not flush out rec to tape, goto save event rec in output buf, 
+;                0150 00 41 1568 1567 0000   (1568 transac rec predecessor code) - (1567 event code) -> REG1                       diff between event codes (1568=transac, 1567=event)
+;                0151 00 63 0152 0235 0411   TR >0 goto 0152, =0 goto 0235, <0 goto 0411
+;                0152 00 70 1587 1569 0161   if 1=(1569 card code) then transfer 0161      
+
+0149 00 60 1637 0224 0000   (1637 do not save event to tape, then get next event)->(0224)
+0150 00 41 1568 1567 0000   (1568 transac cod) - (1567 event cod) -> REG1                  diff between event codes (1568=transac, 1567=event)
+0151 00 63 0163 0235 0411   TR >0 goto 0163, =0 goto 0235, <0 goto 0411
+0152 00 60 0000 0000 0000   not used                      
+
+                            reject transaction record: print erroneous transaction 
+  
+0153 00 80 1033 0001 0000   wait prt, (1033 Transac_rec w1)->(0001)                      Print out 7 words 
+0154 00 80 1034 0002 0000   wait prt, (1034 w2)->(0002)                      from transaction record
+0155 00 80 1035 0003 0000   wait prt, (1035 w3)->(0003)
+0156 00 80 1036 0004 0000   wait prt, (1036 w4)->(0004)
+0157 00 80 1037 0005 0000   wait prt, (1037 w5)->(0005)
+0158 00 80 1038 0006 0000   wait prt, (1038 w6)->(0006)
+0159 00 83 1039 0007 0000   (1039 w7)->(0007), print special
+0160 00 60 1638 0095 0057   (1638)->(0095), go to process next transaction
+
+0161 00 60 1637 0224 0163   (1637 do not save event to tape, then get next event)->(0224), transfer 0163
+
+0162 00 60 0000 0000 0000   nop
+
+                            save event rec in output buf 
+                            
+0163 00 60 1591 1565 0000   constant 7 -> (1565 num of words in event rec)
+0164 00 40 1563 1564 0000   (1563 words used by predecessors) + (1564 words used by successors) -> REG1
+0165 00 40 1565 0000 1565   (1565 num of words in event rec) += REG1  = (7+pred*3+succ*3) 
+0166 00 40 1570 1565 0000   (1570 words used in out event buffer) + (1565 num of words in event rec) -> REG1 = total size of new event rec, 1570=words used in out buffer to write on tape 01 new active event file
+0167 00 41 1609 0000 0000   (1609) - REG1 -> REG1                         reg1=200-reg1=size left in out mem buffer 
+0168 00 63 0172 0169 0171   TR >=0 goto 0172, =0 goto 0169, <= goto 0171
+0169 00 60 0224 0234 0000   (0224) -> (0234)                              out rec full
+0170 00 60 1610 0224 0172   (1610 save event to tape) -> (0224), transfer to 0172            
+0171 00 60 1611 0234 0225   (1611) -> (0234), goto write output buf to tape 01 new active event tape
+0172 00 54 0000 0000 0000   Clear M8 then add R S T to M4 M6 M8                          
+0173 97 60 1041 0000 0000   (1041 event rec w1) Shift left 3 -> REG1                   
+0174 03 60 0000 1041 0000   REG1 Shift right 3 -> (1041 event rec w1) = 000X..X
+0175 02 42 1047 1582 0000   Mask (1047 event rec w7) with 0..01111, shift right 2        reg1=AA, event rec w7=xx xx TTTT xxxx AABB, AA=num of predecesors, BB=num of successors               
+0176 88 34 1623 0000 0000   Float (1623 THREE) x REG1
+0177 87 60 0000 0000 0000   Reg1 Shift Left 13                             
+0178 00 40 1041 0000 1041   (1041 event rec w1) += REG1
+0179 00 42 1047 1596 0000   Mask (1047 event rec w7) with 0..01111
+0180 88 34 1623 0000 0000   Float (1623 three) x REG1
+0181 87 60 0000 0000 0000   Reg1 Shift Left 13
+0182 00 40 1041 0000 1041   (1041 event rec w1) += REG1                   = NNN0..0 where NNN=3*num pred + 3*num succ
+0183 87 60 1591 0000 0000   7 Shift Left 13 -> REG1
+0184 00 40 1041 0000 1041   (1041 event rec w1) += REG1                   = NNN rest of event w1 = msg lenght= 7 + 3*num pred + 3*num succ
+0185 13 60 0000 1565 0000   REG1 -> (1565 num of words in event rec)      = NNN=message length
+0186 00 60 1041 9348 0000   (1041 event rec w1) -> (M8 + 1348 event out block)
+0187 00 40 0186 1612 0186   incr 1348 at prev instr
+0188 00 60 0000 0000 0000   nop                                            
+0189 08 58 0001 0007 0186   inc M8, if M8 <> 0007 goto 0186 (loop NEXT)   copy out buf -> 1348..1354
+0190 00 60 1613 0186 0000   (1613) -> (0186)                              restore 086 to its initial value 
+0191 00 60 1614 0172 0000   (1614) -> (0172)                              set 0172 to nop (do not clear M8 anymore)
+0192 00 72 1563 1588 0194   if (1563 words used by predecessors) <> zero goto 0194        
+0193 00 60 0000 0000 0203   transfer 203
+0194 00 42 0189 1585 0202   
+0195 96 60 1563 0000 0000   (1563 words used by predecessors) Shift left 4 -> REG1
+0196 00 40 1616 0000 0000   (1616) + REG1 -> REG1
+0197 00 40 0202 0000 0202   (0202) + REG1 -> (0202)
+0198 00 60 1048 9348 0000   (1048 predecessors list) -> (M8 + 1348 event out block)
+0199 00 40 0198 1612 0198   (0198) + (1612) -> (0198) 
+0200 00 70 9348 1593 0588   if (M8 + 1348 event out block) = (1593 = 550..0) transfer 0588 skip deleted activity 
+0201 00 40 1577 1587 1577   (1577) + 1 -> (1577)
+0202 00 00 0000 0000 0000   
+0203 00 60 1617 0198 0000   (1617) -> (0198)                              restore 0198 instr
+0204 00 60 1588 1577 0000   (1588 ZERO) -> (1577)
+0205 00 72 1564 1588 0207   if (1564 words used by successors) <> zero goto 0207
+0206 00 60 0000 0000 0217   transfer 0217
+0207 00 59 0000 0000 0000   
+0208 96 42 0000 1582 0216   
+0209 96 60 1564 0000 0000   (1564 words used by successors) Shift left 4 -> REG1
+0210 00 40 1618 0000 0000   (1618) + REG1
+0211 00 40 0216 0000 0216   (0216) + REG1 -> (0216)
+0212 00 60 1148 9348 0000   (1148 successor list) -> (M8 + 1348 event out block)
+0213 00 40 0212 1612 0212   (0212) + (1612) -> (0212)
+0214 00 70 9348 1593 0594   if (M8+1348 event out block)=550..0 transfer 0594            if =550..0 it is a deleted entry in list. do not copy to out buf
+0215 00 40 1577 1587 1577   (1577) + 1 -> (1577)
+0216 00 00 0000 0000 0000   
+0217 00 60 1619 0212 0000   (1619) -> (0212)                              restore 0212 instr
+0218 00 60 1588 1577 0000   (1588 ZERO) -> (1577)
+0219 96 60 1565 0000 0000   (1565 num of words in event rec) Shift Left 4 -> REG1                   
+0220 00 40 0189 0000 0189   (0189) + REG1 -> (0189)
+0221 00 60 1588 1563 0000   clear (1563 words used by predecessors)
+0222 00 60 1588 1564 0000   clear (1564 words used by successors)
+0223 00 40 1570 1565 1570   (1570 words used in out event buffer) += (1565 num of words in event rec)
+0224 00 00 0000 0000 0000   exit if no write to tape
+
+                            write output buf to tape 01 new active event tape
+
+0225 96 60 1570 0000 0000   (1570 words used in out event buffer) Shift Left 4 -> REG1
+0226 00 41 0000 1590 1570   REG1 - (1590  INCR_S) -> (1570 last word to write as NNNN 0000)    
+0227 00 40 1620 0000 0228   (1620) + REG1 -> (0228)            last word to write in tape in 0208 instr 
+0228 00 00 0000 0000 0000   01 91 1348 NNNN 0001               write to tape 01 from addr 1348=output buffer
+0229 08 60 0229 0000 1704   Call 1704 check Write 
+0230 00 40 1620 1587 1620   (1620) + 1 -> (1620)               inc block number for next tape write
+0231 00 60 1621 0189 0000   (1621) -> (0189)                   restore inst 0189 to its initival value
+0232 00 60 1615 0172 0000   (1615) -> (0172)                   restore clear M8 on 0172: M8=write output buffer index
+0233 00 60 1588 1570 0000   clear (1570 words used in out event buffer)
+0234 00 00 0000 0000 0000   transfer 0070                      this is the continue to next transaction record usual end
+
+                            update event rec with card code from transac rec
+
+0235 00 70 1569 1587 0422   if (1569 card code)=1 goto 0422         card code 1 -> new activity 
+0236 00 70 1569 1622 0254   if (1569 card code)=2 goto 0254         card code 2 -> re-estimate
+0237 00 70 1569 1623 0342   if (1569 card code)=3 goto 0342         card code 3 -> completed
+0238 00 70 1569 1624 0329   if (1569 card code)=4 goto 0329         card code 4 -> change static data
+0239 00 70 1569 1625 0291   if (1569 card code)=5 goto 0291         card code 5 -> delete activity
+
+                            reject transaction invalid card code 
+
+0240 00 80 1578 0001 0000   wait prt, (1578)->(0001)           Print out input transact label
+0241 00 80 1584 0002 0000   wait prt, (1584) -> (0002)         1584= constant 11 11 1111 1100 0000
+0242 94 80 1553 0003 0000   wait prt, (1553) -> (0003)  
+0243 00 80 1588 0004 0000   wait prt zero (blank)
+0244 00 80 0000 0005 0000   wait prt zero (blank)
+0245 00 80 0000 0006 0000   wait prt zero (blank)
+0246 00 81 0000 0007 0153   goto reject transaction record: print erroneous transaction 
+
+                            print completed event
+
+0247 00 80 1578 0001 0000   wait prt, (1578)->(0001)           1578=label for new event file tape 01
+0248 00 80 1568 0002 0000   wait prt, (1568 transac rec code completed) -> (0002)
+0249 00 80 1043 0003 0000   wait prt, (1043 event rec w3)->(0003)           
+0250 00 80 1044 0004 0000   wait prt, (1044 event rec w4)->(0004)           
+0251 00 80 1045 0005 0000   wait prt, (1045 event rec w5)->(0005)           
+0252 00 80 1046 0006 0000   wait prt, (1046 event rec w6)->(0006)           
+0253 00 81 1036 0007 0377   (1036 Transaction record word 4), print, goto 0377
+
+                            card code 2: update activity: existing successor activity code
+                            in event rec gets a re-estimated time values
+
+0254 00 00 0000 0000 0000   nop
+0255 00 42 1036 1606 1568   mask (1036 transac rec w4) to get event code -> (1568 transac rec sucessor code SSS)
+0256 00 42 1148 1606 0000   mask (1148 successor list w1) to get event code
+0257 00 70 1568 0000 0263   if (1568 transac SSS code)=(event successors w1) goto 0263
+0258 00 40 0256 1626 0256   incr_R + 3 in instr 0256 to select next successor in event list
+0259 00 40 1571 1623 1571   (1571 current word selected in successor list) += 3 
+0260 00 41 1564 0000 0000   (1564 words used by successors) - (current word) -> REG1
+0261 00 63 0256 0000 0000   TR >0 goto 256 (read next successor beacuase not at end of list), =0 or <0 cont 
+0262 00 60 1683 0410 0404   Succesor to update not found, goto print rejected transaction
+0263 00 42 1036 1593 0000   Mask (1036 transac w4) with 550..0
+0264 00 41 1036 0000 1036   remove 550..0 from (1036 transac w4)
+0265 04 42 0256 1586 0000   Mask (0256) with 0000 1111 0000 0000 to get current pos in successor list 
+0266 00 40 1590 0000 0000   inc_s (to get next pos in list) 
+0267 00 40 1628 0000 0268   set copy (1037 transac w5) to (pos in list) ... to update value in list
+0268 00 00 0000 0000 0000   ... and exec it
+0269 00 40 0268 1629 0270   inc_r inc_s
+0270 00 00 0000 0000 0000   copy (1038 transac w6) to (pos in list+1) to update 
+0271 00 60 1630 0256 0000   restore inst 0256
+0272 00 60 1588 1571 0000   clear (1571 current word selected in successor list)
+0273 00 60 1638 0095 0057   goto 0057
+
+                            card code 2: update activity: existing predecessor activity code
+                            in event rec gets a re-estimated time values
+
+0274 00 42 1033 1606 1568   mask (transac rec w1) to get event code -> (1568 transac rec predecessor code PPP)
+0275 00 42 1048 1606 0000   mask (1048 predecessors list w1) to get event code
+0276 00 70 1568 0000 0282   if (1568 transac PPP code)=(event predecessors w1) goto 0282
+0277 00 40 0275 1626 0275   incr_R + 3 in instr 0275 to select next predecessor in event list
+0278 00 40 1623 1571 1571   (1571 current word selected in predecessor list) += 3 
+0279 00 41 1563 0000 0000   (1563 words used by predecessors) - (current word) -> REG1
+0280 00 63 0275 0000 0000   TR >0 goto 275 (read next predecessor because not at end of list), =0 or <0 cont 
+0281 00 60 1684 0410 0404   Predecessor to update not found, goto print rejected transaction
+0282 04 42 0275 1586 0000   Mask (0275) with 0000 1111 0000 0000
+0283 00 40 1590 0000 0000   inc_s (to get next pos in list) 
+0284 00 40 1631 0000 0285   set copy (1034 transac w2) to (pos in list) ... to update value in list
+0285 00 00 0000 0000 0000   ... and exec it
+0286 00 40 0285 1629 0287   inc_r inc_s
+0287 00 00 0000 0000 0000   copy (1035 transac w3) to (pos in list) ... to update value in list
+0288 00 60 1632 0275 0000   restore instr 0275
+0289 00 60 1588 1571 0000   clear (1571 current word selected in predecessor list)
+0290 00 60 1638 0095 0057   goto 0057
+
+                            card code 5: delete successor activity from event rec
+
+0291 00 00 0000 0000 0000   nop
+0292 00 42 1036 1606 1568   mask (1036 transac rec w4) to get event code -> (1568 transac rec predecessor code PPP)
+0293 00 42 1148 1606 0000   mask (1148 successor list) to get event code
+0294 00 70 1568 0000 0300   if (1568 transac PPP code)=(event successors w1) goto 0300
+0295 00 40 0293 1626 0293   (0293) += 3 current word selected in successor list
+0296 00 40 1571 1623 1571   (1571 current word selected in successor list) += 3 -> REG1
+0297 00 41 1564 0000 0000   (1564 words used by successors) - REG1
+0298 00 63 0293 0000 0000   TR >0 goto 0293 (read next successor because not at end of list), =0 or <0 cont 
+0299 00 60 1685 0410 0404   successor to delete not found, goto print rejected transaction
+0300 04 42 0293 1586 0000   Mask (0293) with 0000 1111 0000 0000, shift right 4 
+0301 00 40 1634 0000 0302   set 0302 as ...
+0302 00 00 0000 0000 0000   copy (55 0..0) to (pos in list) to mark as deleted
+0303 00 40 0302 1590 0304   incr_s
+0304 00 00 0000 0000 0000   copy (55 0..0) to (pos in list+1) to mark as deleted
+0305 00 40 0304 1590 0306   incr_s
+0306 00 00 0000 0000 0000   copy (55 0..0) to (pos in list+2) to mark as deleted
+0307 00 41 1047 1587 1047   (1047 event rec w7) xx xx xxxx xxxx AABB, decr BB (AA=num of predecesors  BB=num of successors)   
+0308 00 60 1630 0293 0000   restore instr 0293
+0309 00 60 1588 1571 0290   clear (1571 current word selected in successor list), goto 0290
+
+                            card code 5: delete predecessor activity from event rec
+
+0310 00 42 1033 1606 1568   mask (transac rec w1) to get event code -> (1568 transac rec predecessor code PPP)
+0311 00 42 1048 1606 0000   Mask (1048 predecessors list w1) to get event code
+0312 00 70 1568 0000 0318   if (1568 transac PPP code)=(event predecessor w1) goto 0318
+0313 00 40 0311 1626 0311   (0311) += 3 current word selected in predecessor list
+0314 00 40 1571 1623 1571   (1571 current word selected in predecessor list) += 3 -> REG1
+0315 00 41 1563 0000 0000   (1563 words used by predecessors) - REG1
+0316 00 63 0311 0000 0000   TR >0 goto 0311 (read next predecessor because not at end of list), =0 or <0 cont    
+0317 00 60 1686 0410 0404   predecessor to delete not found, goto print rejected transaction  
+0318 98 60 1587 0000 0000   100 -> REG1
+0319 00 41 1047 0000 1047   (1047 event rec w7) xx xx xxxx xxxx AABB, decr AA (AA=num of predecesors  BB=num of successors)   
+0320 04 42 0311 1586 0000   Mask (0311) with 0000 1111 0000 0000, shift right 4 
+0321 00 40 1634 0000 0322   set 0322 as ...
+0322 00 00 0000 0000 0000   copy (55 0..0) to (pos in list) to mark as deleted
+0323 00 40 0322 1590 0324   incr_s
+0324 00 00 0000 0000 0000   copy (55 0..0) to (pos in list+1) to mark as deleted
+0325 00 40 0324 1590 0326   incr_s
+0326 00 00 0000 0000 0000   copy (55 0..0) to (pos in list+2) to mark as deleted
+0327 00 60 1632 0311 0000   restore instr 0311
+0328 00 60 1588 1571 0290   clear (1571 current word selected in predecessor list), goto 0290
+
+                            card code 4: change static data in event
+                            set R=report code 
+                                TSTS=Schedulled completition time
+                                SCHEDL=Schedulled date (format mm dd yy)
+
+0329 00 00 0000 0000 0000   nop
+0330 01 60 1042 0000 0000   (1042 event rec word 2) -> REG1                event w2= xxxxxx  EEEEEEEEE x, EEE=event code      
+0331 99 60 0000 1042 0000   Now (1042 = xxxxxx  EEEEEEEEE 0)
+0332 00 42 1036 1587 0000   Mask (1036 transac rec w4) rightmost digit     transac w4 = QQ xx xx SSSSSSSSS R
+0333 00 40 1042 0000 1042   Set this digit as report code in (1042 event rec w2)      event w2= xxxxxx  EEEEEEEEE R
+0334 96 60 1047 0000 0000   (1047 event rec word 7) -> REG1                event w7 = SCHEDL xx xxxx TSTS        TSTS=Schedulled completition time, SCHEDL=Schedulled date (format mm dd yy)
+0335 04 60 0000 1047 0000   Now (1047 = 0000 TTTT xxxx AA BB)
+0336 88 42 1039 1582 0000   Mask (1039 transac rec w7) with field T, then shift left 12
+0337 00 40 1047 0000 1047   Set field T in (1047 event rec w7)             event w7= TSTS TTTT xxxx AA BB         AA=num of predecesors  BB=num of successors  TTTT=completition date
+0338 00 42 1041 1584 1041   Mask (1041 event rec word 1) with 1..1 1100 0000 -> REG1
+0339 10 42 1039 1580 0000   Mask (1039 transac rec w7) to get 6 leftmost digits (the schedulled date)
+0340 00 40 1041 0000 1041   set these digits as 6 rightmost digits ot event w1= NNN xxx xxxx SCHEDL    NNN=msg len=7+3*num pred+3*num succ, SCHEDL=Schedulled date (format mm dd yy)
+0341 00 60 0000 0000 0057   go to process next transaction
+
+                            card code 3: activity completed: overwrite activity in event predecessor list
+                            with value 550..0 to mark it as deleted. Will not be copied to output buffer
+                            the value TSTS of w7 of transaction card will be copied to event rec TTTT value
+                            if predecessors remaining = 0 then the completed event is printed
+                            remaining activities in event are allways printed
+
+0342 00 00 0000 0000 0000   goto 384 (if activity completed is a successor) / nop if completed is a predecessor
+0343 00 42 1033 1606 1568   mask (1033 transac w1) to get event code -> (1568 transac rec code PPP)
+0344 00 42 1048 1606 0000   mask (1048 predecessors list) to get event code
+0345 00 70 1568 0000 0351   if (1568 transac PPP code)=(event predecessor w1) goto 0351
+0346 00 40 0344 1626 0344   incr_R + 3 in instr 0344 to select next predecessor in event list
+0347 00 40 1571 1623 1571   (1571 current word selected in successor list) += 3 
+0348 00 41 1563 0000 0000   (1563 words used by predecessors) - (current word) -> REG1
+0349 00 63 0344 0000 0000   TR >0 goto 344 (read next successor because not at end of list), =0 or <0 cont 
+0350 00 60 1632 0344 0403   restore instr 0344, predecessor to delete not found, goto print rejected transaction  
+0351 04 42 0344 1586 0000   Mask (0385) with 0000 1111 0000 0000 to get current pos in predecessor list 
+0352 00 40 1634 0000 0353   set up to ...                          to mark a predecessor list entry 
+0353 00 00 0000 0000 0000   .. store at this addr value 55 0..0    as deleted, overwrite its 3 words 
+0354 00 40 0353 1590 0355   incr_s of prev instr                   with 550..0 value
+0355 00 00 0000 0000 0000   .. store at addr+1 value 55 0..0
+0356 00 40 0355 1590 0357   incr_s of prev instr
+0357 00 00 0000 0000 0000   .. store at addr+2 value 55 0..0 
+0358 98 60 1587 0000 0000   REG1=100
+0359 00 41 1047 0000 1047   (1047 event rec w7) xx xx xxxx xxxx AABB, decr AA (AA=num of predecesors  BB=num of successors)   
+0360 00 60 1632 0344 0365   restore inst 0344, goto 0365 
+
+                            xxx possible bug: in PERT Phase 2 p.56 states that completition date is inserted in
+                                               event only if predecessor index is zero, and the event will be
+                                               read out in completed event tape. The program does not implement
+                                               this funcionality. No completed event tape exists, completition date 
+                                               is allways set in event regardless of predecessor index
+0361 06 60 1041 0000 0000
+0362 94 60 0000 1041 0000
+0363 10 42 1039 1580 0000
+0364 00 40 1041 0000 1041
+0365 96 60 1586 0000 0000   REG1=1111 0000 0000 0000
+0366 00 42 1047 0000 1576   Mask (1047 event rec w7) with 1111 0..0 -> (1576 TSTS Schedulled completition time)
+0367 92 60 1047 0000 0000   (1047 event rec w7) Shift left 8 -> REG1                         clear completition
+0368 08 60 0000 1047 0000   REG1 Shift right 8 -> (1047 event rec w7) = 0000 0000 xxxx AABB  date in w7
+0369 92 42 1039 1582 0000   Mask (1039 transac rec w7) with 0..0 1111, shift left 8 -> 0000 TTTT 0000 0000
+0370 00 60 0000 0000 0000   nop
+0371 00 40 1047 0000 1047   (1047 event rec w7) -> 0000 TTTT xxxx AABBB
+0372 00 40 1576 0000 1047   restore left 4 digits in (1047 event rec w7) = TSTS TTTT xxxx AABBB
+0373 00 41 1563 1623 0000   (1563 words used by predecessors) - 3 -> REG1
+0374 00 63 0376 0247 0000   TR >0 goto 0376, =0 goto 0247, <0 cont. If =0 goto print completed event, then goto 0377
+0375 00 61 0000 0000 0000   stop because words used by predecessor becomes negative. Internal error
+0376 00 60 1588 1571 0290   cleat (1571 current word selected in successor list), goto 0290
+
+                            print remaining activities in event
+
+0377 90 80 1041 0003 0000   wait prt, (1041 event rec w1) Shift right 10
+0378 00 80 1047 0002 0000   wait prt, (1047 event rec w7) = xx xx TTTT xxxx AABB, AA=num of predecesors, BB=num of successors, TTTT=completition date (if event completed, else 0000)                 
+0379 00 80 1578 0001 0000   wait prt, (1578 output new event file label)
+0380 00 80 1588 0004 0000   wait prt, zero -> (0004)
+0381 00 80 0000 0005 0000   wait prt, zero -> (0005)
+0382 00 80 0000 0006 0000   wait prt, zero -> (0006)
+0383 00 83 0000 0007 0376   print, goto 0376
+
+                            card code 3: activity completed: overwrite activity in event successors list
+                            with value 550..0 to mark it as deleted. Will not be copied to output buffer
+
+0384 00 42 1036 1606 1568   mask (1036 transac w4) to get event code -> (1568 transac rec code SSS)
+0385 00 42 1148 1606 0000   mask (1148 successor list) to get event code
+0386 00 70 1568 0000 0392   if (1568 transac SSS code)=(event successors w1) goto 0392
+0387 00 40 0385 1626 0385   incr_R + 3 in instr 0385 to select next successor in event list
+0388 00 40 1571 1623 1571   (1571 current word selected in successor list) += 3 
+0389 00 41 1564 0000 0000   (1564 words used by successors) - (current word) -> REG1
+0390 00 63 0385 0391 0391   TR >0 goto 385 (read next successor because not at end of list), =0 or <0 cont 
+0391 00 60 1630 0385 0402   Succesor to delete not found, goto print rejected transaction  
+0392 04 42 0385 1586 0000   Mask (0385) with 0000 1111 0000 0000 to get current pos in successor list 
+0393 00 40 1634 0000 0394   set up to ...                          to mark a successor list entry 
+0394 00 00 0000 0000 0000   .. store at this addr value 55 0..0    as deleted, overwrite its 3 words 
+0395 00 40 0394 1590 0396   incr_s of prev instr                   with 550..0 value
+0396 00 00 0000 0000 0000   .. store at addr+1 value 55 0..0
+0397 00 40 0396 1590 0398   incr_s of prev instr
+0398 00 00 0000 0000 0000   .. store at addr+2 value 55 0..0 
+0399 00 60 1630 0385 0000   restore inst 0385
+0400 00 41 1047 1587 1047   (1047 event rec w7) xx xx xxxx xxxx AABB, decr BB (AA=num of predecesors  BB=num of successors)   
+0401 00 60 1588 1571 0290   clear (1571 current word selected in successor list), goto 0290
+0402 00 60 1681 0410 0404   setup for code 3 - predecessor reject transaction
+0403 00 60 1682 0410 0000   setup for code 3 - successor reject transaction
+
+                            reject update (card code 2/3) transaction 
+
+0404 00 80 1578 0001 0000   wait prt, (output new event file label)->(0001)   
+0405 00 80 1567 0002 0000   wait prt, (1567 event rec event code EEE that is being updated) -> (0002)
+0406 00 80 1568 0003 0000   wait prt, (1568 succesor code to be updated not found in successor list of event EEE) -> (0003)
+0407 00 80 1588 0004 0000   wait prt, zero -> (0004)
+0408 00 80 1569 0005 0000   wait prt, (1569 card code) -> (0005)
+0409 00 80 1571 0006 0000   wait prt, (1571 current word in precedessor/successor list)
+0410 00 00 0000 0000 0000   print, (1564 number of words in list = num successors/predecessors * 3), goto 0271/288
+
+                            unread last event, prepare to create new event 
+
+0411 00 72 1587 1569 0153   if (1569 card code)<>1 transfer 0153    reject transaction
+0412 96 60 1565 0000 0000   (1565 num of words in event rec) -> REG1 shift left 4
+0413 00 41 0124 0000 0124   reset (0124) to the addr starting event (unread event)
+0414 00 00 0000 0000 0000   nop if predecessor/goto 0418 if successor
+0415 00 41 1561 1565 1561   (1561 words read from event block) -= (1565 num of words in event rec)
+0416 00 60 1665 0095 0000   set to restore M6 value before read next event
+0417 00 60 0000 0000 0558   goto 0558 to create new event with predecessor and additional fields
+
+; xxx change xxx original original code points to different addr that seems an unpatched previous
+;                version. This is fixed
+;
+;                0415 00 41 1650 1623 0095     
+;                0416 00 60 1664 0587 0000
+;                0417 00 60 1588 1563 0553
+;                0418 00 60 1667 0095 0000   set to create new event from transaction   
+;                0419 00 60 1664 0547 0000   set to restore M6 value before when going to 0057 to process next transaction
+;                0420 00 60 1563 1564 0526   (1563 num of predecesors) -> (1564 num of successors), goto 0526
+
+0418 00 41 1561 1565 1561   (1561 words read from event block) -= (1565 num of words in event rec)
+0419 00 60 1665 0095 0000   set to restore M6 value before read next event
+0420 00 60 0000 0000 0531   goto 0531 to create new event with successor
+
+0421 00 60 1678 0453 0439
+
+
+                            card code 1: new activity: new successor or predecessor activity code
+                            and associated activity time estimates are added to the event rec
+                            ordered by event code
+
+0422 00 60 0000 0000 0000   if (1564 words used by successors)=0 goto 0421 (when adding succesor) 
+                            transfer to 0471 (when adding predecessor)
+0423 00 42 1036 1606 1568   mask (1036 transac w4) to get event code -> (1568 transac event code)
+0424 00 42 1148 1606 1562   mask (1148 successor list) to get event code       1562=successor event code
+0425 00 41 1568 0000 0000   (1568 event code in transac w4) - (event code in event rec successor w1) -> REG1
+0426 00 63 0428 0000 0439   TR >0 goto 0428, =0 cont, <0 goto 0439 cont if same event code
+0427 00 61 0000 0000 0000   stop because trying to insert a successor event code (1658) that already exists
+0428 00 40 0424 1626 0424   (0424) += 3 current word selected in successor list
+0429 00 40 1623 1571 1571   (1571 current word selected in successor list) += 3 
+0430 00 60 1148 1248 0000   (1148 successor list w1) -> (1248)           if current code in successor list
+0431 00 40 0430 1629 0432   incr_R incr_S                                 at 1148 if < to code to insert, then
+0432 00 00 0000 0000 0000   (1149 event successor w1) -> (1249)           copy current successor activity from 
+0433 00 40 0432 1629 0434   incr_R incr_S                                 to 1248+ list
+0434 00 00 0000 0000 0000   (1150 event successor w1) -> (1250)
+0435 00 40 0434 1629 0430   incr_R incr_S -> set at 0430
+0436 00 41 1564 1571 0000   (1564 words used by successors) - (1571 current word selected in successor list) -> REG1
+0437 00 63 0424 0454 0000   TR >0 goto 0424, =0 goto 0454, <0 cont        if =0 add successor at list's end. if >0 search in next list item
+0438 00 61 0000 0000 0000   stop because words used by successors becomes negative. Internal error
+
+                            add successor to successor even list
+
+0439 00 60 0000 0000 0000   nop   
+0440 00 42 1036 1593 0000   Mask (1036 transac rec w4) with (550..0)
+0441 00 41 1036 0000 1036   set 2 leftmost digits to 00 on (1036 transac rec w4)
+0442 00 42 0430 1585 0000   Mask (0430) with 0..0 1111 0000 -> 0..0 1248 0000
+0443 00 40 1639 0000 0444   set
+0444 00 00 0000 0000 0000   transfer (trans w4 1036) -> (1248)
+0445 00 40 0444 1629 0446   inc_R inc_s previous instr
+0446 00 00 0000 0000 0000   transfer (trans w5 1037) -> (1249) 
+0447 00 40 0446 1629 0448   inc_R inc_s previous instr
+0448 00 00 0000 0000 0000   transfer (trans w6 1038) -> (1250) 
+0449 04 60 1626 0000 0000   30000 -> REG1
+0450 00 40 0430 0000 0430   incr S by 3 in instr 0430 
+0451 00 60 1587 1574 0000   const 1 -> (1574)
+0452 00 40 1047 1587 1047   (1047 event rec w7) -= BB            w7 = xx xx xxxx xxxx AABB, AA=num of predecesors, BB=num of successors 
+0453 00 60 1640 0439 0428   
+0454 00 60 1614 0439 0000   
+0455 00 70 1587 1574 0457   const 1 -> (1574), transfer 0457
+0456 00 60 1655 0453 0440
+0457 00 40 1564 1623 1564   (1564 words used by successors) += 3
+0458 00 60 1641 0430 0000   restore instr 0430 to its initial value 
+0459 00 60 1588 1571 0000   clear (1571 current word selected in successor list)
+0460 00 42 0424 1582 0000   Mask (0424) with 0..01111 -> 1562
+0461 00 40 1630 0000 0424
+0462 00 60 1248 1148 0000   (1248 trans w4..w6) -> (1148..1150) event succesor w1..w3 in list
+0463 00 40 0462 1629 0462   inc_R inc_s previous instr
+0464 00 40 1571 1587 1571   inc (1571 current word selected in successor list)
+0465 00 41 1564 0000 0000   REG1 = (1564 num words used by successors) - (1571 current word selected in successor list) -> REG1 = num of succ words left to transfer
+0466 00 63 0462 0468 0000   TR >0 goto 0462, =0 goto 0468, 
+0467 00 61 0000 0000 0000   stop because too much successors
+0468 00 60 1642 0462 0000   restore instr 0462 to its initial value    
+0469 00 60 1588 1571 0000   clear (1571 current word selected in successor list)
+0470 00 60 1588 1574 0290   clear 1574. goto 0290 (from there go to process next transaction)
+
+                            add predecessor to predecessor even list
+
+0471 00 72 1563 1588 0473   if (1563 words used by predecessors)<>0 goto 0473 
+0472 00 60 1679 0504 0489   (1679) -> (0504), transfer 0489
+0473 00 42 1033 1606 1568
+0474 00 42 1048 1606 1562
+0475 00 41 1568 0000 0000    
+0476 00 63 0478 0000 0489
+0477 00 61 0000 0000 0000   stop because predecessor already exists
+0478 00 40 0474 1626 0474
+0479 00 40 1623 1571 1571
+0480 00 60 1048 1248 0000
+0481 00 40 0480 1629 0482
+0482 00 00 0000 0000 0000
+0483 00 40 0482 1629 0484
+0484 00 00 0000 0000 0000
+0485 00 40 0484 1629 0480 
+0486 00 41 1563 1571 0000
+0487 00 63 0474 0505 0000
+0488 00 61 0000 0000 0000   stop because words used by predecessor becomes negative. Internal error
+0489 00 60 0000 0000 0000   nop
+0490 04 42 0480 1585 0000   Mask (0480) with 0..0 1111 0000 -> 0..0 1248 0000
+0491 00 40 1658 0000 0492   
+0492 00 00 0000 0000 0000   Mask (1033 transac w1) with 0..0 111111111 0 -> get transac PPP predecessor code and store it in (1248)
+0493 96 42 0492 1582 0000   Mask prev instr to store PPP in (1248)
+0494 00 40 1657 0000 0000   store (1034 transac w2) in (1249)
+0495 00 40 1590 0000 0496   store (1035 transac w3) in (1250)
+0496 00 00 0000 0000 0000
+0497 00 40 0496 1629 0498
+0498 00 00 0000 0000 0000
+0499 04 60 1626 0000 0000    
+0500 00 40 0480 0000 0480
+0501 00 60 1587 1574 0000   1 -> (1574)  
+0502 98 60 1587 0000 0000   100 -> REG1
+0503 00 40 1047 0000 1047   (1047 event rec w7) -= AA xx            w7 = xx xx xxxx xxxx AABB, AA=num of predecesors, BB=num of successors 
+0504 00 60 1659 0489 0478   
+0505 00 60 1614 0489 0000
+0506 00 70 1587 1574 0508
+0507 00 60 1661 0504 0490
+0508 00 40 1563 1623 1563         
+0509 00 60 1588 1571 0000
+0510 00 60 1662 0480 0000
+0511 00 42 0474 1582 0000
+0512 00 40 1632 0000 0474
+0513 00 60 1248 1048 0000
+0514 00 40 0513 1629 0513
+0515 00 40 1571 1587 1571
+0516 00 41 1563 0000 0000
+0517 00 63 0513 0519 0000   TR >0 goto 0513, =0 goto 0519, 
+0518 00 61 0000 0000 0000   stop because too much predecessors
+0519 00 60 1673 0513 0000
+0520 00 60 1588 1571 0470
+
+0521 00 74 1033 1042 0523   if Sw74 in "transfer" then (1033 Transac_rec w1)->(1042 event rec w2), goto 0523
+0522 00 60 0000 0000 0095   goto 0095
+
+                            create new event + succesor activity using transaction info
+
+0523 00 42 0521 1585 0000   Mask (0521) with 0..0 1111 0000
+0524 00 41 0521 0000 0521   remove the "1042" from instr 0521
+0525 00 40 0521 1623 0521   +3 -> instr 0521 will transfer to 0526
+0526 00 42 1033 1606 1568   Mask (1033 transact rec w1) to get predecessor code -> (1568 transac rec predecessor code)
+0527 00 42 1042 1606 1567   Mask (1042 event rec w2) to get predecessor code -> (1567 event rec event code)
+0528 15 60 1033 1569 0000   get card code from transac w1 -> (1569 card code)
+0529 00 72 1587 0000 0153   if (card code)<>1 goto 0153                            reject transaction if card code not 1
+0530 00 72 1568 1567 0545   if (1567 event code) <> (1568 transac pred code) goto 0545       to flush event rec if not the one we are creating from transac
+0531 00 60 1568 1042 0000   (1568 transac rec predecessor code) -> (1042 event rec w2) 
+0532 00 42 1036 1593 0000   mask (1036 transac rec w4) with 550..0 
+0533 00 41 1036 0000 1036   remove 2 leftmost digits from (1036 transac w4)
+0534 00 60 1036 1148 0000   (1036 transac rec w4) -> (1148 successor list w1)
+0535 00 40 0534 1629 0536   incr_s incr_t
+0536 00 00 0000 0000 0000   (transac rec w5) -> (1149 event successors)
+0537 00 40 0536 1629 0538   incr_s incr_t
+0538 00 00 0000 0000 0000   (transac rec w6) -> (1150 event successors) 
+
+; xxx change xxx original code adds successor to event instead of
+;                init blank event and setting the first and only successor.
+;                corrected to do so using new routine at addr 1800
+;
+;                0539 00 42 0538 1585 0000   get (0538) field S
+;                0540 00 40 1590 0000 0000   add 10000 -> reg1 = 0..0 1151 0000
+;                0541 00 40 1639 0000 0534   set 0534 to (transac rec w4) -> (1151 event successors) 
+;                0542 00 40 1564 1623 1564   (1564 words used by successors) += 3
+;                0543 00 40 1047 1587 1047   incr (1047 event rec w7)
+;                0544 00 60 0000 0000 0057   go to process next transaction
+
+0539 00 60 1588 1041 0000   clear (1041 event rec w1)
+0540 00 60 1588 1047 0000   clear (1047 event rec w7)
+0541 00 60 1588 1048 0000   clear (1048 predecesor list) make sure no predecessors, to save successor if any
+0542 00 60 0000 0000 1800   setup number of words in created event
+0543 00 00 0000 0000 0000   not used
+0544 00 00 0000 0000 0000   not used
+
+0545 00 60 1646 0573 0000   set to save event and return to 0531
+0546 00 60 1649 0534 0000
+0547 00 60 1645 0224 0163   goto save event rec in output buf 
+
+                            dump out buf to new event tape 01, and finish tape 01
+
+0548 00 70 1570 1588 0619   if (1570 words used in out event buffer)=0 goto 0619
+0549 00 40 1653 1587 0234   
+0550 00 60 0000 0000 0225   goto 0225 write output buf to tape 01 new active event tape
+
+                            check if create new event + predecessor activity using transaction info
+
+0551 00 74 0000 0000 0553   if Sw74 in "transfer" goto 0553
+0552 00 60 0000 0000 0095   goto 0095: no, do not create new event. Return back tu update exiting event
+
+                            create new event + predecessor activity + additional fields using 
+                            transaction info: PR RS and TSTS
+
+0553 00 42 1036 1606 1568   Mask (1036 transact rec w4) to get successor code -> (1568 transac rec successor code)
+0554 00 42 1042 1606 1567   Mask (1042 event rec w2) to get predecessor code -> (1567 event rec event code)
+0555 15 60 1033 1569 0000   get card code from transac w1 -> (1569 card code)
+0556 00 72 1587 0000 0153   if (card code)<>1 goto 0153                            reject transaction if card code not 1
+0557 00 72 1568 1567 0585   if (1567 event code) <> (1568 transac succ code) goto 0585       to flush event rec if not the one we are creating from transac  
+0558 00 42 1036 1593 0000   mask (1036 transac rec w4) with 550..0  
+0559 00 41 1036 0000 1042   remove 2 leftmost digits from (1036 transac w4) ->  (1042 event rec w2) 
+0560 10 42 1039 1580 1041   mask (1039 transac w7) with 111111 0..0 -> (1041 event rec w1)     transac w7 = SCHEDL xx xxxx TSTS        TSTS=Schedulled completition time, SCHEDL=Schedulled date (format mm dd yy)
+0561 00 60 1588 1043 0000   clear (1043 event rec w3)
+0562 00 60 0000 1044 0000   clear (1044 event rec w4)
+0563 00 60 0000 1045 0000   clear (1045 event rec w5
+0564 00 60 0000 1046 0000   clear (1046 event rec w6)
+
+; xxx change xxx original code adds predeccessor and fields to event instead of
+;                init blank event, setting the first and only succcessor, and setting fields
+;                corrected to do so
+;
+;                0565 96 60 1047 0000 0000   (1047 event rec w7) shift left 4 -> REG1              
+;                0566 04 60 0000 1047 0000   REG1 -> (1047 event rec w7) clear 4 leftmost digits in event w7
+
+0565 00 60 0000 1047 0000   clear (1047 event rec w7)
+0566 00 60 0000 0000 0000   nop
+
+0567 88 42 1039 1582 0000   mask (1039 transac w7) with 0..0 1111     tranasc w7 = SCHEDL xx xxxx TSTS        TSTS=Schedulled completition time, SCHEDL=Schedulled date (format mm dd yy)
+0568 00 40 1047 0000 1047   set (1047 event rec w7) with TSTS         event w7= TSTS TTTT xxxx AA BB   AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time                
+0569 07 42 1033 1643 0000   Mask (1033 transac w1) shift right 7      transac w1 = A RS 00 0 PPPPPPPPP 0    A=card code, PPP=predecessor code, RS=Res.Rate
+0570 00 40 1047 0000 1047   set (1047 event rec w7) with RS           event w7= TSTS TTTT RS xx AA BB   AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time                
+0571 07 42 1033 1644 0000   Mask (1033 transac w1) shift right 7      transac w1 = A RS PR 0 PPPPPPPPP 0    A=card code, PPP=predecessor code, RS=Res.Rate
+0572 00 40 1047 0000 1047   set (1047 event rec w7) with PR           event w7= TSTS TTTT RS PR AA BB   AA=num of predecesors  BB=num of successors  TTTT=completition date (if event completed, else 0000), TSTS=Schedulled completition time                
+0573 00 42 1033 1606 1048   Mask (1033 transac w1) witn event code -> (1048 predecessors list)
+0574 96 42 0573 1582 0000   Mask (0573) to get field T, shift right 4 (to field R)
+0575 00 40 1590 0000 0000   incr_S
+0576 00 40 1631 0000 0577   set to ...
+0577 00 00 0000 0000 0000   ... (1034 transac w2) -> (1049 event predecessor list w2)  
+0578 00 40 0577 1629 0579   set to 
+0579 00 00 0000 0000 0000   ... (1035 transac w3) -> (1050 event predecessor list w3)  
+
+; xxx change xxx original code adds predeccessor and fields to event instead of
+;                init blank event, setting the first and only predecessor, and setting fields.
+;                corrected to do so using new routine at addr 1800
+;
+;                0580 00 40 0573 1623 0573   (0573) += 3
+;                0581 98 60 1587 0000 0000   100 -> REG1
+;                0582 00 40 1047 0000 1047   set (1047 event rec w7) with AA=1
+;                0583 00 40 1563 1623 1563   (words used by predecessors= += 3
+;                0584 00 60 0000 0000 0057   go to process next transaction
+
+0580 00 60 1588 1148 0000   clear (1148 successor list) make sure no successors, to save predecessor if any
+0581 00 60 0000 0000 1800   setup number of words in created event
+0582 00 00 0000 0000 0000   not used
+0583 00 00 0000 0000 0000   not used
+0584 00 00 0000 0000 0000   not used
+
+                            xxx new routine xxx
+                            calculate len of new created event
+
+1800 87 60 1591 0000 0000   7 Shift Left 13 -> REG1 = 007 0..0
+1801 00 40 1041 0000 1041   set 007 as msg len in event w1 
+1802 00 60 1588 1563 0000   clear (1563 words used by predecessors)
+1803 00 60 1588 1564 0000   clear (1564 words used by successors)
+1804 00 60 1591 1565 0000   7 -> (1565 num of words in event rec) 
+1805 00 70 1048 1588 1812   if no predecessor goto 1812
+1806 98 60 1587 0000 0000   100 -> REG1
+1807 00 40 1047 0000 1047   set (1047 event rec w7) with AA=1 (one predecessor)
+1808 00 40 1623 1565 1565   (1565 num of words in event rec) += 3
+1809 87 60 1623 0000 0000   3 Shift Left 13 -> REG1 = 003 0..0
+1810 00 40 1041 0000 1041   add to msg len in event w1 
+1811 00 60 1623 1563 0000   3 -> (1563 words used by predecessors) 
+1812 00 70 1148 1588 1819   if no successors goto 1819
+1813 00 60 1587 0000 0000   1 -> REG1
+1814 00 40 1047 0000 1047   set (1047 event rec w7) with BB=1 (one successor)
+1815 00 40 1623 1565 1565   (1565 num of words in event rec) += 3
+1816 87 60 1623 0000 0000   3 Shift Left 13 -> REG1 = 003 0..0
+1817 00 40 1041 0000 1041   add to msg len in event w1 
+1818 00 60 1623 1564 0000   3 -> (1564 words used by predecessors) 
+1819 00 60 0000 0000 0057   go to process next transaction
+
+
+0585 00 60 1649 0534 0000   set to save event and return to 0558
+0586 00 60 1646 0573 0000
+0587 00 60 1650 0224 0163   goto save event rec in output buf 
+
+                            skip deleted entry in event predecessor list when copying event to out buffer
+
+0588 00 40 0198 1674 0198   incr_r in (0198)
+0589 00 41 0202 1675 0202   incr_s in (0202) 
+0590 00 41 1563 1623 1563   (1563 words used by predecessors) -= 3
+0591 00 41 0000 1577 0000   REG1 - (1577) check if list is finished
+0592 00 63 0198 0203 0000   TR >0 goto 0198, =0 goto 0203, <0 cont
+0593 00 61 0000 0000 0000   stop because words used by predecessor/successor list becomes negative. Internal error
+
+                            skip deleted entry in event successor list when copying event to out buffer
+
+0594 00 40 0212 1674 0212   incr_R + 2 in (0212) to skip the rest of the 3w entry      
+0595 00 41 0216 1675 0216   decr end of list addr in loop instr (0216) 
+0596 00 41 1564 1623 1564   (1564 words used by successors) -=3
+0597 00 41 0000 1577 0000   REG1 - (1577) check if list is finished
+0598 00 63 0212 0217 0593   TR >0 goto 212, =0 goto 217, <0 goto 0593  reload transaction vars then process next transaction
+
+                            Transaction tape 02 reached end of file
+
+0599 00 74 1676 0550 0548   if Sw74 in "transfer" goto 0548
+0600 00 70 1572 1623 0616   if (1572 Last tape number with EOF)=3 transfer 0616
+0601 00 60 1622 1572 1830   const 2 -> (1572 Last tape number with EOF)
+
+; xxx changed xxx call this patch to ensure M6 is restored to its saved value
+;
+1830 00 72 0095 1665 0602   if no restore M6 pending, return 
+1831 00 40 1663 1575 1832   set inst with (1575 Saved M6 value)
+1832 00 00 0000 0000 0000   Clear M6 then add R S T to M4 M6 M8           restore M6 to its saved value
+1833 00 60 0000 0000 0602   return
+
+0602 00 60 1637 0057 0000   
+0603 00 60 1614 1638 0000   
+0604 00 60 0161 0151 0000
+0605 00 72 1570 1588 0163   if (1570 words used in out event buffer)<>0 goto 0163                        
+0606 00 60 0000 0000 0096   goto get next event rec from event block
+
+                            Event tape 03 reached enf of file
+
+0607 00 70 1572 1622 0616   if (1572 Last tape number with EOF)=2 transfer 0616                
+0608 00 60 1623 1572 0000   3 -> (1572 Last tape number with EOF)
+0609 00 60 1614 0552 0000   set 0552 as nop
+0610 00 60 1672 0522 0000   set 0522 as goto 0526 
+0611 00 60 1677 0234 0000   set 0234 as goto 0020: set goto process next transaction rec after whiting out rec in new event active file
+0612 00 60 1033 1042 0000   (1033 transac rec w1) -> (1042 event rec w2) 
+0613 00 60 1588 1563 0000   clear (1563 words used by predecessors)
+0614 00 60 1588 1564 0000   clear (1564 words used by successors)
+0615 00 60 1588 1047 0225   clear (1047 event rec w7), goto write output buf to tape 01 new active event tape
+0616 00 70 1570 1588 0618   if (1570 words used in out event buffer)=0 goto 0618
+0617 00 60 0000 0000 0627   goto 0627                                     check sw74, goto 0549
+0618 03 98 0000 0000 0000   rewind tape 03
+
+                            finish output tape 01
+
+0619 01 91 0000 0000 0000   write end of file in tape 01
+0620 02 98 0000 0000 0000   rewind tape 02
+0621 01 98 0000 0000 0000   rewind tape 01
+0622 09 98 0000 0000 0000   rewind tape 09 program
+0623 00 60 0518 0001 0001   set stop in 0001, transfer to 0001            sucessfull program end
+
+                            restore M6, goto read event rec from event block
+
+0624 00 40 1663 1575 0625   set 0625 with (1575 Saved M6 value)
+0625 00 00 0000 0000 0000   Clear M6 then add R S T to M4 M6 M8           restore M6 to its saved value
+; 0626 00 60 0000 0000 0102   goto read event rec from event block
+0626 00 60 0000 0000 0145   goto process transaction
+
+0627 00 74 1676 0550 0549   if Sw74 in "transfer" goto 0549
+0628 00 60 0000 0000 0549   goto 0549
+
+
+                            variables
+
+0629                        transaction block read from tape
+
+0830                        event block read from tape
+
+1031                        tape 02 label trasaction file 
+1032                        tape 03 label active event file 
+
+1033                        transaction record word 1
+1034                        transaction record word 2
+1035                        transaction record word 3
+1036                        transaction record word 4
+1037                        transaction record word 5
+1038                        transaction record word 6
+1039                        transaction record word 7
+
+1041                        event record word 1
+1042                        event record word 2
+1043                        event record word 3
+1044                        event record word 4
+1045                        event record word 5
+1046                        event record word 6
+1047                        event record word 7
+
+1048                        event predecessors list. Each entry has 3w. w1 is pred code, w2-w3 are time data
+
+1148                        event successors list. Each entry has 3w. w1 is pred code, w2-w3 are time data
+
+1348                        output buffer for new event block
+
+1554                        transaction start of block word (tape 02)
+1555                        temp
+1556                        total number of words in transaction block
+1557                        number of words read in transac block
+1558                        event start of block word (tape 03)
+1559                        total number of words in event block
+1560                        55 0..0 add succesor to event, 66 0..0=add predecessor to event rec
+1561                        number of words already read in event block
+1562                        temp
+1563                        num of predecesors/words used by predecessors
+1564                        num of successors/words used by successors
+1565                        num of words in event rec (7+pred*3+succ*3) / message len
+
+1567                        event code (from event rec w1 0000 00EE EEEE EEE0)
+1568                        predecessor code (from transac rec w1 0000 00PP PPPP PPP0)
+1569                        leftmost digit of transac rec w1=card code=transaction code. 
+1570                        words used in out event buffer (to write on tape 01 new active event file)
+1571                        current word selected in successor/predecessor list
+1572                        Last tape number with EOF (02 or 03)
+
+1575                        Saved M6 value
+1576                        TSTS=Schedulled completition time from w7 at event record
+1577 00 00 0000 0000 0000
+
+                            constants 
+  
+1578 39 05 0000 0000 0000   input transact label/output new event file label
+1579 39 09 0000 0000 0000   input event file label
+1580 11 11 1100 0000 0000
+1581 00 00 0011 1111 0000
+1582 00 00 0000 0000 1111
+1583 00 01 0000 0000 0000
+1584 11 11 1111 1100 0000
+1585 00 00 0000 1111 0000
+1586 00 00 1111 0000 0000
+1587 00 00 0000 0000 0001   ONE constant = 1
+1588 00 00 0000 0000 0000   ZERO constant = 0
+1589 00 60 0000 0000 0063
+1590 00 00 0000 0001 0000   INCR_S constantent
+1591 00 00 0000 0000 0007   constant integer = 7
+1592 00 60 4629 1033 0000
+1593 55 00 0000 0000 0000   prececessor or succesor
+1594 66 00 0000 0000 0000   event updating
+1595 00 60 0000 0000 0102
+1596 00 00 0000 0000 0011
+1597 12 00 0000 0000 0000   EXP12 constant 120..0 
+1598 00 03 0000 0000 0000   constant Float = 3.0
+1599 88 01 0000 0000 0000   constant Float = 1 x 10^-12
+1600 00 60 6830 1041 0000   
+1601 06 58 0001 0007 0122
+1602 06 58 0001 0000 0130
+1603 00 60 6830 1048 0000
+1604 06 58 0001 0000 0138   constant: inc M6, if M6 <> NNNN goto 0138 (loop NEXT) 
+1605 00 60 6830 1148 0000
+1606 00 00 0011 1111 1110
+1607 00 42 1033 1606 1568 
+1608 00 42 1036 1606 1568
+1609 00 00 0000 0000 0200   constant integer = 200
+1610 00 60 0000 0000 0225
+1611 00 60 0000 0000 0172 
+1612 00 00 0001 0000 0000
+1613 00 60 1041 9348 0000
+1614 00 60 0000 0000 0000
+1615 00 54 0000 0000 0000 
+1616 08 58 0001 0000 0198
+1617 00 60 1048 9348 0000
+1618 08 58 0001 0000 0212
+1619 00 60 1148 9348 0000
+1620 01 91 1348 1348 0001   write to tape output instr
+1621 08 58 0001 0007 0186
+1622 00 00 0000 0000 0002   constant integer = 2
+1623 00 00 0000 0000 0003   constant integer = 3
+1624 00 00 0000 0000 0004   constant integer = 4
+1625 00 00 0000 0000 0005   constant integer = 5
+1626 00 00 0003 0000 0000   constant incr_R by 3
+1627 00 42 1248 1606 0000
+1628 00 60 1037 0000 0000
+1629 00 00 0001 0001 0000
+1630 00 42 1148 1606 0000 
+1631 00 60 1034 0000 0000
+1632 00 42 1048 1606 0000
+1633 00 60 0000 0000 0274
+1634 00 60 1593 0000 0000
+1635 00 60 0000 0000 0310
+1636 00 60 1568 1573 0000
+1637 00 60 0000 0000 0096
+1638 00 60 0000 0000 0145
+1639 00 60 1036 0000 0000
+1640 00 60 0000 0000 0428
+1641 00 60 1148 1248 0000
+1642 00 60 1248 1148 0000
+1643 01 10 0000 0000 0000
+1644 00 01 1000 0000 0000
+1645 00 60 1588 1047 0531
+1646 00 42 1033 1606 1048
+1647 00 60 0000 0000 0203
+1648 00 60 0000 0000 0217
+1649 00 60 1036 1148 0000
+1650 00 60 1588 1047 0558
+1651 00 60 1645 0224 0000
+1652 00 60 1650 0224 0548
+1653 00 60 0000 0000 0618
+1654 00 60 1640 0439 0428
+1655 00 60 1654 0453 0457
+1656 00 60 0000 0000 0471
+1657 00 60 1034 0000 0000
+1658 00 42 1033 1606 0000
+1659 00 60 0000 0000 0478
+1660 00 60 1659 0489 0478
+1661 00 60 1660 0504 0508
+1662 00 60 1048 1248 0000
+1663 00 52 0000 0000 0000 
+
+; xxx change xxx related to change in routine at addr 0411
+;                1664 00 60 1665 0224 0548 
+;
+1664 00 00 0000 0000 0000   not used 
+
+1665 00 60 0000 0000 0624
+1666 00 60 0000 0000 0418
+1667 00 60 0000 0000 0526
+1668 00 60 0000 0000 0384
+1669 04 58 0001 0007 0063
+1670 00 60 0000 0000 0133
+1671 00 60 0000 0000 0141
+1672 00 60 0000 0000 0526
+1673 00 60 1248 1048 0000
+1674 00 00 0002 0000 0000
+1675 00 00 0000 0003 0000
+1676 00 60 1614 0224 0163
+1677 00 60 0000 0000 0070
+1678 00 60 1654 0453 0000
+1679 00 60 1660 0504 0000
+1680 00 70 1564 1588 0421
+1681 00 81 1564 0007 0401
+1682 00 81 1563 0007 0376
+1683 00 81 1564 0007 0271
+1684 00 81 1563 0007 0288
+1685 00 81 1564 0007 0308
+1686 00 81 1563 0007 0327
+          
+                            Re-read routine. if error persist then stop at 1693
+                              
+1687 00 40 1702 0000 1694   Re-read routine: save exit transfer in 1694 (1702 MK_TR68) + REG1 -> (1694 EXIT_1687)   Call: Save exit transfer
+1688 92 60 0000 0000 0000   set (1692) = tape instr to redo ...         REG1 shift left 8
+1689 00 40 1703 0000 1690   ... then ...                                trans(1703 MK_TAP) + REG1 -> (1690) calc addr of tape instr to redo
+1690 00 00 0000 0000 0000   ... transfer to 1696                        save tape instr to redo, transfer to 1696   (00 60 caller-1 1692 1696)
+1691 00 00 0000 0000 0000   
+1692 00 00 0000 0000 0000   tape instr to redo                          e.g. 02 94 ...
+1693 00 00 0000 0000 0000   transfer if tape check                      STOP here if unrecoverable read error
+1694 00 00 0000 0000 0000   EXIT_1687=Exit from routine =               00 60 0000 caller+1
+1695 00 61 0000 0000 1696   Stop, then transfer 1696
+1696 12 60 1692 1691 0000   (1692) Shift Right 12 -> (1691)             get tape inst PP 94
+
+; xxx change xxx 1697 88 42 1702 0000 0000   inc QQ, shift to get PP QQ 0000 0000 0000   set inst PP 95 0000 0000 0000
+;                1698 00 40 1701 0000 1690   (1701) + REG1, transfer 1690
+;                1699 00 60 1700 1693 1690   (1700) -> (1693), transfer 1690
+
+1697 00 40 1702 0000 0000   add 1 to get PP 95 (read backwards)
+1698 88 60 0000 1691 0000   set PP 95 0000 0000 0000 inst in 1691
+1699 00 60 1700 1693 1691   set tape check in 1693, transfer to reread
+
+1700 00 68 1695 1693 1691    if tape check (1695)->(1693), transfer 1690
+1701 88 40 1691 1702 1691   (1691) Shift Left 12 -> (1702), transfer 1691
+1702 00 59 9999 9132 0001   MK_TR68=offset to Make Transfer 00 60 from 08 68 
+1703 00 59 9998 1692 1696   MK_TAP= offset to get the instr just above call (the tape instruction)
+          
+                            Check write routine. 
+                              
+1704 00 40 1723 0000 1716   (1723 MK_TR60) + REG1 -> (1716 EXIT_1716)   Call: Save exit transfer
+1705 92 60 0000 0000 0000   REG1 shift left 8 (on listing was 1705 91 60 0000 0000 0000   REG1 shift left 9)
+1706 01 40 1724 0000 1708   prepare instr to get tape instr to redo     (00 60 caller-1 1721 0000)
+;                          XXX POSSIBLE BUG XXX    1707 00 60 1727 1718 0000   
+1707 00 60 1717 1718 1715   
+1708 00 00 0000 0000 0000   save get tape instr to redo                 (00 60 caller-1 1721 0000)
+1709 00 68 0000 0000 0000   reset tape check condition
+;                          XXX POSSIBLE BUG XXX    1710 12 42 1721 1705 0000   
+1710 04 42 1721 1726 0000   
+;                          XXX POSSIBLE BUG XXX    1711 88 60 1726 0000 1712
+1711 96 60 0000 1712 1712
+1712 00 00 0000 0000 0000
+;                          XXX POSSIBLE BUG XXX    1713 00 41 1712 1725 1714
+1713 00 60 1721 1714 0000
+1714 00 00 0000 0000 0000
+1715 00 68 0000 0000 1718   if write ok cont to exit from routine. If tape check transfer to 1718 to redo write
+1716 00 00 0000 0000 0000   EXIT_1716=Exit from routine =               00 60 0000 caller+1
+
+1717 00 61 1721 0000 1727 
+1718 00 00 0000 0000 0000
+
+1719 00 40 1721 1726 1720
+1720 00 00 0000 0000 0000
+1721 00 00 0000 0000 0000   
+;                          XXX POSSIBLE BUG XXX   1722 00 60 1717 1718 1709
+1722 00 60 1717 1718 1708
+1723 00 59 9999 9140 0001   MK_TR60=offset to Make Transfer 00 60 from 08 60 (on listing was 1724 05 99 9981?7210?0000)
+1724 05 99 9981 7210 0000
+1725 00 01 0000 0000 0000
+1726 00 02 0000 0030 0097
+
+1727 00 60 1712 1718 1718
+
+                       
