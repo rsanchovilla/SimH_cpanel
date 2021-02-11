@@ -2164,6 +2164,38 @@ t_stat sim_instr(void)
             }
             DrumAddr = (DrumAddr+n) % 50;
             GlobalWordTimeCount += n;
+
+            #if defined(CPANEL)
+            if ((cpanel_on) && (CpuSpeed_Acceleration == -1)) {
+                // if Key Control-F (^F, Ctrl F) being pressed and punched card processing ongoing
+                // then wait wall clock msec time to avoid processing read cards too fast
+                extern int nCardInReadHopper; 
+                static int nCardInReadHopper0 = 0; 
+                static uint32 nCardInReadHopperTm0 = 0; 
+                int msec; 
+
+                if (nCardInReadHopper==0) {
+                    // no cards in read hopper, clear delay timestamp
+                    nCardInReadHopperTm0 = 0;
+                } else {
+                    // if cards in read hopper, init delay timestamp
+                    if (nCardInReadHopperTm0==0) {
+                        nCardInReadHopperTm0 = sim_os_msec();
+                        continue; 
+                    } 
+                    // time to process one card in fast mode
+                    msec=2; // 2 msec per card -> 500 cards per sec -> 2000 cards needs 4 sec
+                    if (sim_os_msec() - nCardInReadHopperTm0 < msec) continue; 
+                    // card processed, reset when card gone
+                    if (nCardInReadHopper!=nCardInReadHopper0) {
+                        nCardInReadHopper0=nCardInReadHopper; 
+                        nCardInReadHopperTm0=0;
+                    }
+                }
+            }
+            #endif
+
+
         } else {
             // simulate the rotating drum: incr current drum position
             DrumAddr = (DrumAddr+1) % 50;

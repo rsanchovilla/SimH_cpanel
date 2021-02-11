@@ -222,6 +222,8 @@ int dsk_set_mov_seq(int unit,int arm)
     //
 
     int cmd, i, d1, d2, dy, di, tr, msec, time;
+    static int ArmVertAccel[] = {40,25,15,10};
+    static int ArmVertDecel[] = {30,20,10};
 
     cmd = Arm[unit][arm].cmd;
     nseq = 0;
@@ -249,7 +251,7 @@ int dsk_set_mov_seq(int unit,int arm)
                 }
             }
             // now arm is outside disk stack, can move up and down
-            msec=200; // msec needed to setup vertical arm movement 
+            msec=100; // msec needed to setup vertical arm movement 
             add_seq(unit, arm, msec, 0,
                     Arm[unit][arm].current_disk, -1);
             // move out up/down on disk stack up to destination disk
@@ -263,7 +265,7 @@ int dsk_set_mov_seq(int unit,int arm)
                 di=di+dy;
             }
             // stop motion and select destination disk (not physical disk)
-            msec=200; // msec needed to stop vertical arm movement 
+            msec=150; // msec needed to stop vertical arm movement 
             add_seq(unit, arm, msec, 0, 
                     Arm[unit][arm].dest_disk, -1);
         }
@@ -419,7 +421,7 @@ t_stat dsk_srv(UNIT * uptr)
     int                 time, msec, arm, cmd, nseq, hint;
     t_int64             InitTime, nWordTimes; 
     int                 bSequenceInProgress=0; 
-    int                 bFastMode; 
+    int                 bFastMode, n; 
 
     // init IBM 652 Control Unit internal registers
     bFastMode = 0;

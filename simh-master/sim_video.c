@@ -2590,6 +2590,7 @@ return _screenshot_stat;
 
 void vid_SetWindowSizeAndPos_event (void)
 {
+    int x,y,w,h,set_x, set_y; 
  
     if (!vid_active) {
         sim_printf ("No video display is active\n");
@@ -2605,7 +2606,24 @@ void vid_SetWindowSizeAndPos_event (void)
         SDL_SetWindowPosition(vid_window, WindowSizeAndPos.x, WindowSizeAndPos.y);
     } else if (WindowSizeAndPos.Mode==2) {
         sim_debug_cp("SDL_SetWindowSize x=%d, y=%d \n", WindowSizeAndPos.x, WindowSizeAndPos.y);
+        // get current windows pos and size
+        SDL_GetWindowPosition(vid_window, &x, &y);
+        SDL_GetWindowSize(vid_window, &w, &h);
+        set_x=set_y=0;
+        // apply new windows size
         SDL_SetWindowSize(vid_window, WindowSizeAndPos.x, WindowSizeAndPos.y);
+        // When changing size, the windows grows/shrink but upper left corner remains at same position
+        // it this leads to windows not visible then move the windows position so the 
+        // windows grows/shrink but wisible windows corner remains at same position
+        if ((x<0) && (x+WindowSizeAndPos.x < 16)) {
+            x = (x+w-WindowSizeAndPos.x); set_x=1; 
+        }
+        if ((y<0) && (y+WindowSizeAndPos.y < 16)) {
+            y = (y+h-WindowSizeAndPos.y); set_y=1; 
+        }
+        if ((set_x) || (set_y)) {
+            SDL_SetWindowPosition(vid_window, x, y);
+        }
     } else if (WindowSizeAndPos.Mode==3) {
         int x,y; 
         sim_debug_cp("SDL_SetWindowPositionRelative dx=%d, dy=%d \n", WindowSizeAndPos.x, WindowSizeAndPos.y);

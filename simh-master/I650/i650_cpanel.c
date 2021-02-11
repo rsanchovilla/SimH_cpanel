@@ -317,6 +317,7 @@ int hInputDeck                 = 0; // height of dynamically calculated input ca
 int hOutputDeck                = 0; // height of dynamically calculated output card deck
 // for ramac
 int nRamacArm, yRamacArm       = 0; // dynamic calculated ramac arm position
+int vRamacArm, vvRamacArm      = 0; // dynamic calculated ramac arm vertical motion speed
 uint32 Tm0Moire                = 0; // start of ramac disk stack rotation moire effect
 // for main cpu
 int CpuSpeed_Acceleration_save = 0; // save value during HotKey ^F Max Speed
@@ -389,7 +390,7 @@ void IBM650_Init(void)
     CSWDisplayArm  = 0;
     
     hInputDeck = hOutputDeck = 0;
-    nRamacArm = yRamacArm = 0; 
+    nRamacArm = yRamacArm = vRamacArm = vRamacArm = 0; 
 
     if (IsOption("ShowInfo")) {
         bShowInfo=1;
@@ -1075,6 +1076,39 @@ void Refresh_Ramac(void)
     y = ((y1-y0) * dsk / 50) + y0;          // dsk ranges from 0..49
     n = (30 * (tr+1)) / 101;                // arms ranges from track -1 (out of disk) ..99)
 
+    if (n>0) {
+        // arm into disk surface, so there is no vertical/horizontal oscilation possible
+        vRamacArm=vvRamacArm=0; 
+    } if (yRamacArm == y) {
+        // arm stopped. check vertical oscillation
+        if (vvRamacArm>0) {
+            vvRamacArm--; 
+            if (vRamacArm==2) vRamacArm=-1; else
+            if (vRamacArm==-2) vRamacArm=1; else vRamacArm=-vRamacArm;
+        } else {
+           vRamacArm=0;
+        }
+        if (vvRamacArm<0) {
+            vvRamacArm++; 
+            if (vvRamacArm & 1) n=32; // oscilate horizontalli
+        }
+    } else {
+        // arm is running up or down
+        if (yRamacArm > y) vRamacArm=2;   // incr vertical motion speed to the top of disk  
+        if (yRamacArm < y) vRamacArm=-2;  // incr vertical motion speed to the bottom of disk  
+        vvRamacArm=3; // number of vertical oscilations to do when arm stops
+    }
+    switch(vRamacArm) {
+        case  2: n=34; break; // going up fast
+        case  1: n=33; break; 
+        case -1: n=31; break; 
+        case -2: n=30; break; // going down fast
+    }
+    if ((n==0) && (nRamacArm>0) && (nRamacArm < 30) && (yRamacArm == y)) {
+        // if arm is outside disk, but comming from inside, set to oscilate horizontally
+        vvRamacArm=-3;
+    }
+
     if ((yRamacArm == y) && (nRamacArm == n)) return;  // arm already at the correct pos, no need to update dynamic image 
 
     yRamacArm = y;  // if something wrong, arm painted outside area
@@ -1098,17 +1132,18 @@ void Refresh_Ramac(void)
 
     //  - Draw the Arm Moving head bar that enters into disks. Carefully crafted so that the
     //    shadow is only draw over metalic rectangular box
-    ww=107-nRamacArm*4; 
+    n= (nRamacArm >= 30) ? 0:nRamacArm; 
+    ww=107-n*4; 
     hh=510-yRamacArm; 
-    if (nRamacArm < 8) {
-        x0=32-nRamacArm*4; ww-=x0;
+    if ( n < 8) {
+        x0=32-n*4; ww-=x0;
     } else x0=0; 
     if (yRamacArm < 178) {
         y0=178-yRamacArm;
     } else y0=0;
     if (ww >= 0) {
         CopyControlImage(IBM650.MovingHeadBarShadow, 0,  x0+0, y0+50, ww, hh,    // FromCId, FromState, x0, y0, w, h, 
-                         IBM650.ArmRunArea, 1,     x0+10+nRamacArm*4, y0+yRamacArm+85); // ToCId, ToState,     x1, y1
+                         IBM650.ArmRunArea, 1,     x0+10+n*4, y0+yRamacArm+85); // ToCId, ToState,     x1, y1
     }
 
     //  - Draw the appropiate Arm Wires background image (depending on disk accesed) on Run Area at appropriate 
