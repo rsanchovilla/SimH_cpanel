@@ -9,12 +9,13 @@ The visuals covers interactive control panels (lights, switches, buttons) but al
 other devices: tapes, card readers, disk, etc.
 
 i7000 work is based on Richard Cornwell own's SimH fork, and is implemented using SimH own SDL based modules. 
-i650 and NORC work is based on my own SimH simulators
+i701, i650 and NORC work is based on my own SimH simulators
 
 Currently supports visuals emulation for:
 
 * IBM 701 Electronic Data Processing Machine (NEW JUL/2021)
-  * panels for tapes, main console, card read, card punch and printer
+  * IBM 726 tapes, IBM 711 card reader, IBM 721 card punch, IBM 716 printer
+  * Main console (as in 1953), Early console model (as in Early 1952)
 
   Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20701%20Panels%20Screen%20Shots.png) to preview control panels.
    Source code in simh-master folder
@@ -26,7 +27,7 @@ Currently supports visuals emulation for:
    Source code in simh-master folder
 
 * IBM 650 Magnetic Drum Data Processing machine (UPDATED JUL/2021). 
-  * IBM 727 tapes, IBM 533 card read punch, and IBM 355 RAMAC Disk Storage
+  * IBM 727 tapes, IBM 533 card read punch, and IBM 355 RAMAC disk storage
   * panels for IBM 653 Storage Unit and IBM 652 Control Unit
 
   Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20650%20Panels%20Screen%20Shots.png) to preview control panels.
@@ -36,10 +37,10 @@ Currently supports visuals emulation for:
 * IBM 7000 Series  
   * IBM 704 and 709 control panel. 
   * IBM 727 and 729 tapes
-  * IBM 766 Data Synchorinizer
+  * IBM 766 data synchorinizer
   * IBM 7090/7094 control panel. 
-  * IBM 7617 Data Channel console and IBM 729 tapes
-  * IBM 711 card punch, IBM 7909 Data Channel panel, IBM 7631 File Control panel and IBM 2302 Disk 
+  * IBM 7617 Data channel console and IBM 729 tapes
+  * IBM 711 card punch, IBM 7909 data channel panel, IBM 7631 file control panel and IBM 2302 disk 
        
    Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%207000%20Panels%20Screen%20Shots.png) to preview how control panels.
    Source code in sims-master folder
@@ -69,7 +70,7 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i7
 
 Once uncompressed, you will find several ready to run .bat files: 
 
-* execute `run CPanel IBM 701 demo.bat` batch file to demo computer and its equipement demo
+* execute `run CPanel IBM 701 demo.bat` batch file to demo computer control panel and its i/o equipement 
 * execute `run IBM 701 NAA SpeedEx Assembler (1953).bat` batch file to assemble and run a sample program 
 * execute `run IBM 701 NR9003 Assembly (1952).bat` batch file to assemble and run a sample program with Nathaniel Rochester Symbolic Assembler
 * execute `run IBM 701 SO2 Regional Assembler (1952).bat` batch file to assemble and run a sample program with William F. McClelland Assembler  
