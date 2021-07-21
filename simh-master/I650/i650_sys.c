@@ -74,22 +74,27 @@ const char         *sim_stop_messages[] = {
     0
 };
 
-static t_stat ibm650_deck_cmd(int32 arg, CONST char *buf);
-static t_stat ibm650_exdep_cmd (int32 flag, CONST char *cptr);
+static t_stat deck_cmd(int32 arg, CONST char *buf);
+static t_stat i650_exdep_cmd (int32 flag, CONST char *cptr);
 #if defined(CPANEL)
-extern t_stat ibm650_set_csw_btn_cmd(int32 flag, CONST char *cptr); // defined in i650_cpanel.c
+extern t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr); // defined in i650_cpanel.c
+
+#define HLP_STEP        "*Commands Running_A_Simulated_Program STEP"
 #endif
 
 static CTAB aux_cmds [] = {
 /*    Name         Action Routine     Argument   Help String */
 /*    ----------   -----------------  ---------  ----------- */
-    { "CARDDECK",  &ibm650_deck_cmd,         0,  "Card Deck Operations: Join/Split/Print\n"    },
-    { "DEPOSIT",   &ibm650_exdep_cmd,     EX_D,  "*Commands Examining_and_Changing_State",    NULL, NULL },
-    { "EXAMINE",   &ibm650_exdep_cmd,     EX_E,  "*Commands Examining_and_Changing_State",    NULL, NULL },
 #if defined(CPANEL)
-    { "SWITCH",    &ibm650_set_csw_btn_cmd,  1,  "Set switch on Control Panel",               },
-    { "DEPRESS",   &ibm650_set_csw_btn_cmd,  0,  "Press button on Control Panel",             },
-    { "PRESS",     &ibm650_set_csw_btn_cmd,  0,  "Press button on Control Panel",             },
+    { "STEP",       &run_cmd,         RU_STEP,   HLP_STEP,       NULL, &run_cmd_message },
+#endif
+    { "CARDDECK",  &deck_cmd,         0,  "Card Deck Operations: Join/Split/Print\n"    },
+    { "DEPOSIT",   &i650_exdep_cmd,   EX_D,  "*Commands Examining_and_Changing_State",    NULL, NULL },
+    { "EXAMINE",   &i650_exdep_cmd,   EX_E,  "*Commands Examining_and_Changing_State",    NULL, NULL },
+#if defined(CPANEL)
+    { "SWITCH",    &set_csw_btn_cmd,  1,  "Set switch on Control Panel",               },
+    { "DEPRESS",   &set_csw_btn_cmd,  0,  "Press button on Control Panel",             },
+    { "PRESS",     &set_csw_btn_cmd,  0,  "Press button on Control Panel",             },
 #endif
     { NULL }
     };
@@ -652,7 +657,7 @@ int Shift_Digits(t_int64 * d, int nDigits)
                         default format for card files is AUTO, this allow to intermix source decks
                         with different formats. To set the format for carddeck operations use
 
-                           set cpr0 -format xxxx
+                           set cdr0 -format xxxx
                         
                         this will apply to all operations, both on reading and writing deck files
 
@@ -705,9 +710,9 @@ int Shift_Digits(t_int64 * d, int nDigits)
 
    carddeck echolast    echo on console last n cards already read that are in the take hopper
 
-                        carddeck echolasty <count> <dev> 
+                        carddeck echolast <count> <dev> 
 
-                        <count>  number of cards to display (upo to 10)
+                        <count>  number of cards to display (up to 10)
 
                         <dev>    should be cdr1 to cdr3. Unit for Take hopper
 
@@ -752,7 +757,7 @@ int add_to_deck(uint16 * image, Deck * DeckImage)
         DeckImage->csize=100;
         DeckImage->p = (uint16 *) malloc((size_t)(DeckImage->csize * 80 * sizeof(*DeckImage->p)));
         if (!DeckImage->p) {
-            sim_printf ("deck_load() memory allocation error\n");
+            sim_messagef (SCPE_IERR, "deck_load() memory allocation error\n");
             return 0;
         }
     } else {
@@ -762,7 +767,7 @@ int add_to_deck(uint16 * image, Deck * DeckImage)
             NewDeckImage = (uint16 *) realloc(DeckImage->p, (size_t) (DeckImage->csize * 80 * sizeof(*DeckImage->p)));
             if (!NewDeckImage) {
                 deck_free(DeckImage);
-                sim_printf ("deck_load() memory reallocation error\n");
+                sim_messagef (SCPE_IERR, "deck_load() memory reallocation error\n");
                 return 0;
             }
             DeckImage->p=NewDeckImage; 
@@ -784,12 +789,15 @@ t_stat deck_load(CONST char *fn, Deck * DeckImage)
     UNIT *              uptr = &cdr_unit[0];
     uint16 image[80];    
     t_stat              r, r2;
+    int32 sv_sim_switches = sim_switches; 
 
     // set flags for read only
     uptr->flags |= UNIT_RO; 
 
     // attach file to cdr unit 0
+    sim_switches |= SWMASK ('Q');
     r = (cdr_dev.attach)(uptr, fn);
+    sim_switches = sv_sim_switches; 
     if (r != SCPE_OK) {
         deck_free(DeckImage);
         return r;
@@ -817,7 +825,9 @@ t_stat deck_load(CONST char *fn, Deck * DeckImage)
     }
 
     // deattach file from cdr unit 0
+    sim_switches |= SWMASK ('Q');
     r2 = (cdr_dev.detach)(uptr);
+    sim_switches = sv_sim_switches; 
     if (r == SCPE_OK) r = r2; 
     if (r != SCPE_OK) {
         deck_free(DeckImage);
@@ -834,6 +844,7 @@ t_stat deck_save(CONST char *fn, Deck * DeckImage, int card, int nCards)
     UNIT *              uptr = &cdr_unit[0];
     t_stat              r;
     int nc;
+    int32 sv_sim_switches = sim_switches; 
 
     if (nCards < 0) nCards=DeckImage->nCards;
     if (card + nCards > DeckImage->nCards) {
@@ -845,7 +856,9 @@ t_stat deck_save(CONST char *fn, Deck * DeckImage, int card, int nCards)
     sim_switches |= SWMASK ('N');
 
     // attach file to cdr unit 0
+    sim_switches |= SWMASK ('Q');
     r = (cdr_dev.attach)(uptr, fn);
+    sim_switches = sv_sim_switches; 
     if (r != SCPE_OK) return r;
 
     // write cards to file
@@ -855,7 +868,9 @@ t_stat deck_save(CONST char *fn, Deck * DeckImage, int card, int nCards)
     }
 
     // deattach file from cdr unit 0
+    sim_switches |= SWMASK ('Q');
     (cdr_dev.detach)(uptr);
+    sim_switches = sv_sim_switches; 
 
     return r;
 }
@@ -1038,7 +1053,7 @@ static t_stat deck_split_cmd(CONST char *cptr)
             }
         }
         if ((r == SCPE_OK) && ((sim_switches & SWMASK ('Q')) == 0)) {
-           sim_messagef (SCPE_OK, "Deck with 5 words-per-card splitted %d/%d cards\n", 
+           sim_printf ("Deck with 5 words-per-card splitted %d/%d cards\n", 
                DeckImage1.nCards, DeckImage2.nCards);
         }
         deck_free(&DeckImage);
@@ -1095,7 +1110,7 @@ static t_stat deck_split_cmd(CONST char *cptr)
             }
         }
         if ((r == SCPE_OK) && ((sim_switches & SWMASK ('Q')) == 0)) {
-           sim_messagef (SCPE_OK, "Deck with 5 words-per-card splitted %d/%d cards\n", 
+           sim_printf ("Deck with 5 words-per-card splitted %d/%d cards\n", 
                DeckImage1.nCards, DeckImage2.nCards);
         }
         deck_free(&DeckImage);
@@ -1114,7 +1129,7 @@ static t_stat deck_split_cmd(CONST char *cptr)
         if (r != SCPE_OK) sim_messagef (r, "Cannot write destination deck (%s)\n", fn0);
     }
     if ((r == SCPE_OK) && ((sim_switches & SWMASK ('Q')) == 0)) {
-        sim_messagef (SCPE_OK, "Deck splitted to %d/%d cards\n", nCards1, DeckImage.nCards-nCards1);
+        sim_printf ("Deck splitted to %d/%d cards\n", nCards1, DeckImage.nCards-nCards1);
     }
     deck_free(&DeckImage);
         
@@ -1168,14 +1183,14 @@ static t_stat deck_join_cmd(CONST char *cptr)
         nDeck++;
 
         if ((sim_switches & SWMASK ('Q')) == 0) {
-            sim_messagef (SCPE_OK, "Source Deck %d has %d cards (%s)\n", nDeck, DeckImage.nCards - nCards0, fnSrc);
+            sim_printf ("Source Deck %d has %d cards (%s)\n", nDeck, DeckImage.nCards - nCards0, fnSrc);
         }
     }
     r = deck_save(fnDest, &DeckImage, 0, -1);
     if (r != SCPE_OK) {
         sim_messagef (r, "Cannot write destination deck (%s)\n", fnDest);
     } else if ((sim_switches & SWMASK ('Q')) == 0) {
-        sim_messagef (SCPE_OK, "Destination Deck has %d cards (%s)\n", DeckImage.nCards, fnDest);
+        sim_printf ("Destination Deck has %d cards (%s)\n", DeckImage.nCards, fnDest);
     }
     deck_free(&DeckImage);
   
@@ -1202,7 +1217,7 @@ static t_stat deck_print_cmd(CONST char *cptr)
 
     deck_print_echo(&DeckImage, 1,1);
     if ((sim_switches & SWMASK ('Q')) == 0) {
-        sim_messagef (SCPE_OK, "Printed Deck with %d cards (%s)\n", DeckImage.nCards, fn);
+        sim_printf ("Printed Deck with %d cards (%s)\n", DeckImage.nCards, fn);
     }
     deck_free(&DeckImage);
     return SCPE_OK;
@@ -1244,31 +1259,32 @@ static t_stat deck_echolast_cmd(CONST char *cptr)
 
     // get last nCards cards, so
     // first card to echo is count ones before last one
-    nh = ReadStakerLast[ncdr] - (nCards-1);                 
+    nh = MAX_CARDS_IN_READ_STAKER_HOPPER + ReadStakerLast[ncdr] - (nCards-1);                 
     nh = nh % MAX_CARDS_IN_READ_STAKER_HOPPER;
     nc=0; 
     deck_init(&DeckImage);
     while(nc<nCards) {
         // copy card form read hopper buf to deck image
         ic = (ncdr * MAX_CARDS_IN_READ_STAKER_HOPPER + nh) * 80;
-        if (!add_to_deck(&ReadStaker[ic], &DeckImage)); {
+        if (!add_to_deck(&ReadStaker[ic], &DeckImage)) {
             return SCPE_IERR;
         }
         // get previous read card
         nh = (nh + 1) % MAX_CARDS_IN_READ_STAKER_HOPPER;
+        nc++;
     }
 
     deck_print_echo(&DeckImage, 0,1);
 
     if ((sim_switches & SWMASK ('Q')) == 0) {
-        sim_messagef (SCPE_OK, "Last %d cards from Read take Hopper\n", nCards);
+        sim_printf ("Last %d cards from Read take Hopper\n", nCards);
     }
     
     deck_free(&DeckImage);
     return SCPE_OK;
 }
 
-static t_stat ibm650_deck_cmd(int32 arg, CONST char *buf)
+static t_stat deck_cmd(int32 arg, CONST char *buf)
 {
     char gbuf[4*CBUFSIZE];
     const char *cptr;
@@ -1301,13 +1317,18 @@ extern FILE    *sim_ofile ;
 // intercept    examine/deposit AR   and   examine deposit HALF
 // DEP AR nnn   -> will reset half cycle to I-cycle, so next GO will execute the opcode at give AR register
 // EX  HALF     -> will display 0|1 (I|D-Cycle)
-t_stat ibm650_exdep_cmd (int32 flag, CONST char *cptr)
+t_stat i650_exdep_cmd (int32 flag, CONST char *cptr)
 {
     char gbuf[CBUFSIZE];
     CONST char *tptr = NULL;
     FILE *ofile;
+    const char * cptr2; 
 
-    get_glyph (cptr, gbuf, 0);                       // get param    
+    cptr2 = get_glyph (cptr, gbuf, 0);                       // get param    
+    while (gbuf[0]=='-') {
+        cptr2 = get_glyph (cptr2, gbuf, 0);                  // skip any option -Switch
+    }
+
     if (flag==EX_D) {
         if ((strlen(gbuf) == 2) && (strncmp(gbuf, "AR", 2)==0) && (CSWHalfCycle==0)) {
             // deposit ar -> if CSWHalfCycle=0 then reset half cycle to I-cycle, so next GO will execute the opcode at give AR register

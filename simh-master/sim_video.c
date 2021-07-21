@@ -24,6 +24,10 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from the author.
 
+   Jun-2021     RSV     Added support for incremental updates based on
+                        rectangle list to greatly reduce CPU usage and
+                        allow scale down with antialiasing
+                        (identified & isolated with ifdef's)
    Jun-2020     RSV     Some additions & changes for Control Panel support
                         (identified & isolated with ifdef's)
    08-Nov-2013  MB      Added globals for current mouse status
@@ -343,8 +347,9 @@ static const char *usereventtypes[12] = {"(None)",
                                           "SCREENSHOT","BEEP","SIZEANDPOS" };
 struct {
     int x,y; 
-    int Mode; // 0=none, 1=set pos, 2=set size
+    int Mode; // 0=none, 1=set pos, 2=set size, 3=set pos relative, 4=set window title
     int InProgress; 
+    int ResizeFlag; 
 } WindowSizeAndPos; 
 
 void vid_SetWindowSizeAndPos_event (void);
@@ -352,7 +357,9 @@ void vid_SetWindowSizeAndPos_event (void);
 int window_drag_flag=0; // support for drag control panel window
 int window_drag_x, window_drag_y;
 void vid_update_cursor (SDL_Cursor *cursor, t_bool visible); 
-void vid_refresh_ex (uint32 * surf, int ww, int hh); 
+void vid_refresh_ex (uint32 * surf, uint32 * surf_scale);
+int vid_frames_count = 0;
+int vid_refresh_in_progress = 0; 
 
 uint32 * last_redraw_surface; 
 int last_redraw_surface_xpixels; 
@@ -471,6 +478,7 @@ if (vid_main_thread_handle == NULL) {
 sim_os_set_thread_priority (PRIORITY_ABOVE_NORMAL);
 
 vid_beep_setup (400, 660);
+memset(&event, 0, sizeof(SDL_Event));
 
 while (1) {
     int status = SDL_WaitEvent (&event);
@@ -1541,13 +1549,15 @@ if (SDL_SemWait (vid_mouse_events.sem) == 0) {
 
 void vid_update (void)
 {
+
 sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "Video Update Event: \n");
 
 if (sim_deb)
     fflush (sim_deb);
 
 if (SDL_RenderClear (vid_renderer))
-    sim_printf ("%s: Video Update Event: SDL_RenderClear error: %s\n", vid_dname(vid_dev), SDL_GetError());
+   sim_printf ("%s: Video Update Event: SDL_RenderClear error: %s\n", vid_dname(vid_dev), SDL_GetError());
+
 if (SDL_RenderCopy (vid_renderer, vid_texture, NULL, NULL))
      sim_printf ("%s: Video Update Event: SDL_RenderCopy error: %s\n", vid_dname(vid_dev), SDL_GetError());
 
@@ -1555,7 +1565,124 @@ SDL_RenderPresent (vid_renderer);
 }
 
 #if defined(CPANEL)
-void vid_refresh_ex (uint32 * surf, int ww, int hh)
+
+// incremental update based on rectanble list
+void vid_update_rectlist (uint32 * surf, uint32 * surf_scale) 
+{
+    int n,x,y,p, pitch; 
+    SDL_Rect rect1, rect2; 
+    int scale;
+    int xpixels = vid_width; 
+    int ypixels = vid_height; 
+    int bFullUpdate = 0;
+
+pitch=xpixels*sizeof(*surf);
+scale=RectList.Scale; 
+if (RectList.Count<1) {
+    // if no rectanegle list, update full texture
+    RectList.Count=1; 
+    RectList.x[0] = 0;       RectList.y[0] = 0;
+    RectList.w[0] = xpixels; RectList.h[0] = ypixels;
+    bFullUpdate = 1; // update the full GUI window
+}
+
+// copy only data from suftace to texture for the suplied rectangle list
+if (scale <= 50) {
+    // if scale < 50, do antialiasing
+    int x0, y0, x1, y1, xlen, ylen, len, npx, b0, b1, b2, b3, p; 
+    union {
+        uint32 b32; 
+        uint8 b8[4];
+    } col; 
+    static int num = 0;
+    if (scale <= 10) len=10; else 
+    if (scale < 13) len=8; else 
+    if (scale <= 20) len=5; else 
+    if (scale <= 25) len=4; else 
+    if (scale <= 33) len=3; else len=2; 
+    npx=len*len; 
+    for (n=0; n<RectList.Count; n++) {
+        x0=RectList.x[n];        y0=RectList.y[n]; 
+        x1=RectList.w[n]+x0;     y1=RectList.h[n]+y0; 
+        x0=(x0/len)*len;         y0=(y0/len)*len; 
+        x1=((x1+len-1)/len)*len; y1=((y1+len-1)/len)*len; 
+        if (x1 > xpixels) x1=xpixels;
+        if (y1 > ypixels) y1=ypixels;
+        for(y=y0;y<y1;) {
+            for (x=x0;x<x1;) {
+                b0=b1=b2=b3=0;
+                for(ylen=0;ylen<len;ylen++) {
+                    if (y + ylen >= ypixels) break;
+                    p = x + xpixels * (y + ylen);
+                    for(xlen=0;xlen<len;xlen++) {
+                       if (x + xlen >= xpixels) break;
+                       // col=surf[x + xlen + xpixels * (y + ylen)];
+                       col.b32=surf[p++];
+                       b0 += col.b8[0]; 
+                       b1 += col.b8[1]; 
+                       b2 += col.b8[2]; 
+                       b3 += col.b8[3]; 
+                    }
+                }
+                col.b8[0]=b0 / npx; 
+                col.b8[1]=b1 / npx; 
+                col.b8[2]=b2 / npx; 
+                col.b8[3]=b3 / npx; 
+                for(ylen=0;ylen<len;ylen++) {
+                    if (y + ylen >= ypixels) break;
+                    p = x + xpixels * (y + ylen);
+                    for(xlen=0;xlen<len;xlen++) {
+                       if (x + xlen >= xpixels) break;
+                       surf_scale[p++]=col.b32;
+                    }
+                }
+                x += len; 
+            }
+            y += len; 
+        }
+        rect1.x=x0; rect1.y=y0; rect1.w=x1-x0; rect1.h=y1-y0; 
+        p=x0 + xpixels * y0; 
+        if (SDL_UpdateTexture(vid_texture, &rect1, &surf_scale[p], pitch))
+             sim_printf ("%s: vid_draw_region() - SDL_UpdateTexture error: %s\n", vid_dname(vid_dev), SDL_GetError());
+    }    
+} else {
+    for (n=0; n<RectList.Count; n++) {
+        x=RectList.x[n]; y=RectList.y[n]; p=x + xpixels * y; 
+        rect1.x=x; rect1.y=y; rect1.w=RectList.w[n]; rect1.h=RectList.h[n]; 
+        if (SDL_UpdateTexture(vid_texture, &rect1, &surf[p], pitch))
+             sim_printf ("%s: vid_draw_region() - SDL_UpdateTexture error: %s\n", vid_dname(vid_dev), SDL_GetError());
+    }
+}
+
+if (bFullUpdate) {
+    // update full renderer
+    if (SDL_RenderClear (vid_renderer))
+        sim_printf ("%s: Video Update Event: SDL_RenderClear error: %s\n", vid_dname(vid_dev), SDL_GetError());
+
+    if (SDL_RenderCopy (vid_renderer, vid_texture, NULL, NULL))
+        sim_printf ("%s: Video Update Event: SDL_RenderCopy error: %s\n", vid_dname(vid_dev), SDL_GetError());
+} else {
+    // copy each texture rectangle to renderer aplying scale factor
+    int len=(int) (0.99 + 100.0/scale); 
+    for (n=0; n<RectList.Count; n++) {
+        rect1.x=RectList.x[n]; rect1.y=RectList.y[n]; rect1.w=RectList.w[n]; rect1.h=RectList.h[n]; 
+
+        if (rect1.x + rect1.w + len < xpixels) rect1.w += len; 
+        if (rect1.y + rect1.h + len < ypixels) rect1.h += len; 
+        rect2.x=rect1.x * scale / 100; 
+        rect2.y=rect1.y * scale / 100; 
+        rect2.w=rect1.w * scale / 100; 
+        rect2.h=rect1.h * scale / 100; 
+
+        if (SDL_RenderCopy (vid_renderer, vid_texture, &rect1, &rect2))
+             sim_printf ("%s: Video Update Event: SDL_RenderCopy error: %s\n", vid_dname(vid_dev), SDL_GetError());
+    }
+}
+SDL_RenderPresent (vid_renderer);
+
+}
+
+void vid_refresh_ex (uint32 * surf, uint32 * surf_scale)
 {
 SDL_Event user_event;
 
@@ -1564,7 +1691,9 @@ sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "vid_refresh() - Queueing Refresh Event\n
 user_event.type = SDL_USEREVENT;
 user_event.user.code = EVENT_REDRAW;
 user_event.user.data1 = (void *) surf;
-user_event.user.data2 = (void *) ((ww & 0x7FFF) + ((hh & 0x7FFF) << 16));
+user_event.user.data2 = (void *) surf_scale;
+
+vid_refresh_in_progress=1; 
 
 if (SDL_PushEvent (&user_event) < 0)
     sim_printf ("%s: vid_refresh() SDL_PushEvent error: %s\n", vid_dname(vid_dev), SDL_GetError());
@@ -1573,8 +1702,6 @@ if (SDL_PushEvent (&user_event) < 0)
 
 void vid_update_ex (SDL_UserEvent *event)
 {
-// SDL_Rect *vid_dst = (SDL_Rect *)event->data1;
-// uint32 *buf = (uint32 *)event->data2;
 
     // if no args, call regular vid_update
     if (event->data1 == NULL) {
@@ -1582,26 +1709,35 @@ void vid_update_ex (SDL_UserEvent *event)
         return; 
     }
     {
-        uint32 * surface =  (uint32 *) event->data1;
-        uint32 n = (uint32) event->data2;
-        int xpixels, ypixels;
-
-        xpixels = n & 0x7FFF; 
-        ypixels = (n >> 16) & 0x7FFF; 
-
-        if (xpixels == 0) return; // missing surface update rect list -> exit without updatating
-        if (SDL_UpdateTexture(vid_texture, NULL, surface, xpixels*sizeof(*surface)))
-             sim_printf ("%s: vid_draw_region() - SDL_UpdateTexture error: %s\n", vid_dname(vid_dev), SDL_GetError());
+        uint32 * surface       =  (uint32 *) event->data1;
+        uint32 * surface_scale =  (uint32 *) event->data2;
+        int xpixels = vid_width; 
+        int ypixels = vid_height;
+        int bUseRectList; 
 
         last_redraw_surface = surface; 
         last_redraw_surface_xpixels = xpixels; 
         last_redraw_surface_ypixels = ypixels; 
 
-        vid_update();
+        bUseRectList = (RectList.Count < 1) ? 0:1; 
+        if (WindowSizeAndPos.ResizeFlag) {  // if just resized window
+            WindowSizeAndPos.ResizeFlag=0;  // do a full update
+            bUseRectList=0; 
+        }
+        if (bUseRectList) {
+            // do an incremental update based on rectangles modified
+            vid_update_rectlist(surface, surface_scale);
+        } else {
+            // create a full rectangle to update
+            RectList.Count=-1; 
+            vid_update_rectlist(surface, surface_scale);
+        }
         if (tooltip_visible) {
             vid_update_tooltip(); 
         }
     }
+    vid_frames_count++; 
+    vid_refresh_in_progress=0; 
 }
 
 // tooltip is visible, update its contents to keep it sync with main window
@@ -1954,7 +2090,9 @@ else
 vid_ready = TRUE;
 
 #if defined(CPANEL)
-if (icon_rgb_defined) vid_set_icon();
+    memset(&RectList, 0, sizeof(RectList)); 
+    memset(&WindowSizeAndPos, 0, sizeof(WindowSizeAndPos)); 
+    if (icon_rgb_defined) vid_set_icon();
     tooltip_visible=0;
     last_redraw_surface = NULL;
     last_redraw_surface_xpixels = 0;
@@ -2128,6 +2266,7 @@ if (0)                        while (SDL_PeepEvents (&event, 1, SDL_GETEVENT, SD
                     if (event.user.code == EVENT_SIZEANDPOS) {
                         vid_SetWindowSizeAndPos_event ();
                         event.user.code = 0;    /* Mark as done */
+                        event.user.data1 = NULL;
                         }
 #endif
                     if (event.user.code == EVENT_BEEP) {
@@ -2588,6 +2727,36 @@ return _screenshot_stat;
 
 #if defined(CPANEL)
 
+
+void vid_set_title(char * title)
+{
+SDL_Event user_event;
+
+if ((!vid_active) || (!vid_window)) return; 
+
+sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "vid_set_title() - Queueing vid_set_title Event\n");
+
+user_event.type = SDL_USEREVENT;
+user_event.user.code = EVENT_SIZEANDPOS;
+user_event.user.data1 = NULL; 
+user_event.user.data2 = NULL; 
+
+strncpy(vid_title, title, sizeof(vid_title)-1);
+WindowSizeAndPos.Mode=4; // 4=set title
+WindowSizeAndPos.x = 0;
+WindowSizeAndPos.y = 0;
+WindowSizeAndPos.InProgress = 1;
+
+#if defined (SDL_MAIN_AVAILABLE)
+if (SDL_PushEvent (&user_event) < 0)
+    sim_printf ("%s: vid_refresh() SDL_PushEvent error: %s\n", sim_dname(vid_dev), SDL_GetError());
+#else
+vid_SetWindowSizeAndPos_event ();
+#endif
+while (WindowSizeAndPos.InProgress) SDL_Delay (20);
+
+}
+
 void vid_SetWindowSizeAndPos_event (void)
 {
     int x,y,w,h,set_x, set_y; 
@@ -2602,9 +2771,11 @@ void vid_SetWindowSizeAndPos_event (void)
     }
 
     if (WindowSizeAndPos.Mode==1) {
+        // Set windows position
         sim_debug_cp("SDL_SetWindowPosition x=%d, y=%d \n", WindowSizeAndPos.x, WindowSizeAndPos.y);
         SDL_SetWindowPosition(vid_window, WindowSizeAndPos.x, WindowSizeAndPos.y);
     } else if (WindowSizeAndPos.Mode==2) {
+        // set windows size
         sim_debug_cp("SDL_SetWindowSize x=%d, y=%d \n", WindowSizeAndPos.x, WindowSizeAndPos.y);
         // get current windows pos and size
         SDL_GetWindowPosition(vid_window, &x, &y);
@@ -2624,17 +2795,22 @@ void vid_SetWindowSizeAndPos_event (void)
         if ((set_x) || (set_y)) {
             SDL_SetWindowPosition(vid_window, x, y);
         }
+        WindowSizeAndPos.ResizeFlag=1; 
     } else if (WindowSizeAndPos.Mode==3) {
+        // set position relative to current pos
         int x,y; 
         sim_debug_cp("SDL_SetWindowPositionRelative dx=%d, dy=%d \n", WindowSizeAndPos.x, WindowSizeAndPos.y);
         SDL_GetWindowPosition(vid_window, &x, &y); 
         x += WindowSizeAndPos.x; y += WindowSizeAndPos.y; 
         SDL_SetWindowPosition(vid_window, x, y);
+    } else if (WindowSizeAndPos.Mode==4) {
+        // set windows title
+        SDL_SetWindowTitle(vid_window, vid_title);
     }
     WindowSizeAndPos.InProgress = 0;
     WindowSizeAndPos.Mode=0;
 
-    // if tooltip visible, reques hiding it because cpanel window has been 
+    // if tooltip visible, request hiding it because cpanel window has been 
     // moved or resized
     if (tooltip_visible) tooltip_hide_requested=1; 
 }

@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   ROBERTO SANCHO BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -531,6 +531,7 @@ int CpuSpeed_Acceleration_save = 0; // save value during HotKey ^F Max Speed
 int bShowInfo                  = 0; // flag to show info for ^I 
 uint32 ShowInfoTm0             = 0; // last sim_os_msec() of ShowInfo display
 int InstrExec0                 = 0; // instr executed on ShowInfoTm0
+int FramesCount0               = 0; // num of frames on ShowInfoTm0
 
 // for tape cabinet
 #define MT_anim_sequence_len   500        // max number of animation sequence steps for tape
@@ -544,7 +545,7 @@ struct mtcabrec {                         // mtcab[0..5].reel[0..1] is arecord t
        double rpm;                        // reel current revolutions per second (0=stopped, <0=backwards)
        int ang;                           // reel current angular position (but NOT normalizaed to 0..360 degrees! normalize before using)
        int motor;                         // reel motor operation in progress (-1=accelerate backwards, 0=decelerate, 1=accelerate forward)
-       int n;                             // vale of reel control state n 
+       int n;                             // val of reel control state n 
        int tm0;                           // timestamp when reel motor start accelerating/decelerating (in sim_os_msec time). =0 when motor stoped
        double rpm0;                       // revolutions per second (0=stopped, <0=backwards) when reel motor start accelerating/decelerating 
        int ang0;                          // reel angular position (0..360 degrees) when reel motor start accelerating/decelerating
@@ -1203,7 +1204,7 @@ int PARAM_DecelTime      =   115;  // decel time in msec. the stop clutch must s
                                    // get used. Lower values makes jerky spins with thigh 
                                    // oscilation of tape loop in vacuum columns. Higher values
                                    // makes smother spins, with more ample oscilations of tape loop
-int PARAM_HeadOpenTime   =  1700;  // time needed by r/w tape head to fully open or close
+int PARAM_HeadOpenTime   =  1000;  // time in msec needed by r/w tape head to fully open or close
 int PARAM_TakeMotor_RPM  =    40;  // take motor revolutions per minute
 
 
@@ -1317,10 +1318,10 @@ int mt_do_animation_seq(int unit,
             if (u3) {
                 if (mtcab[unit].seq[nseq].R_VacCol_inc==0) {
                     // update mtcab[unit].rew_u3 to signal progress of rewind
-                    p = 100 - 100*m / msec; 
-                    if (p>100) p=100; if (p<0) p=0; // m=0..100 is % of time of step remaining
+                    p = 1000 - 1000*m / msec; 
+                    if (p>1000) p=1000; if (p<0) p=0; // m=0..1000 is % x10 of time of step remaining
                     // calculate rew_u3 = how much medium has been rew 
-                    mtcab[unit].rew_u3 = u3 * p / 100;
+                    mtcab[unit].rew_u3 = (int) (((t_int64) (u3)) * ((t_int64) (p)) / 1000);
                     *MT_Reel_Amount = 1 + (int) (23 * (mtcab[unit].rew_u3 / (mt_unit[unit].u4*1000.0))); 
                     if (*MT_Reel_Amount > 24) *MT_Reel_Amount = 24;
                 } else {
@@ -1398,15 +1399,14 @@ void AddSeq(int unit, int msec, int hint,
 void mt_add_load_seq(int unit)
 {
     int MT_Reel_Amount,  MT_head_actuator; // state of controls at end of of redraw
-    int i, L_h, R_h, L_inc_h, R_inc_h, nHead, msec, ang_inc, r1, r2;
+    int i, L_h, R_h, L_inc_h, R_inc_h, msec, ang_inc, r1, r2;
 
     MT_Reel_Amount   = 1;    // all tape medium on L tape
     MT_head_actuator = 19;   // head full open
 
-    // user needs needs 1800 msec to move head actuator from right to left to close the r/w head
+    // user needs needs time to move head actuator from right to left to close the r/w head
     // prepare animation sequence each given msec
-    msec=33;                                   // time for animation step 
-    nHead   = PARAM_HeadOpenTime / msec;      // number of steps in animation of head closing
+    msec= PARAM_HeadOpenTime / MT_head_actuator; // time for animation step 
     for(i=0;;i++) {
         AddSeq(unit, msec, MT_anim_step_inc, 
                 0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
@@ -1539,10 +1539,9 @@ void mt_set_rew_seq(int unit)
     mtcab[unit].nseq_tm0=Refresh_tnow;  // when animation starts
 
     mtcab[unit].rew_u3 = u3; // amount on tape medium (inch x1000) in reel R that should be rewinded
-                             // original mt_info[].u3 is set to 0 on OP_RWD command start in mt_cmd()
-    time= u3 / PARAM_RWSpeed;   // rew total time in msec
+                             // original mt_unit[].u3 is set to 0 on OP_RWD command start in mt_cmd()
+    msec = u3 / PARAM_RWSpeed;              // time to rewind tape in msec
 
-    msec = u3 / PARAM_RWSpeed;              // time to read remaining of tape. 
     AddSeq(unit, msec, MT_anim_step_rw,  u3 /* update recsize */,0,0,0,0, 
                                          -1 /* read backwards */); 
 
@@ -1597,7 +1596,7 @@ void mt_reels_mov(int unit, int cmd,
     }
 
     // calc percent 0..100 of reel full
-    p = (int) ((mt_unit[unit].u3 / (mt_unit[unit].u4*1000.0))*100); // r=0 -> reel L full, p=100 -> reel R rull
+    p = (int) ((mt_unit[unit].u3 / (mt_unit[unit].u4*1000.0))*100); // r=0 -> reel L full, p=100 -> reel R full
     if (p>100) p=100;
 
     // calc radius of reel based on how much tape medium stored is in it 
@@ -1845,12 +1844,11 @@ void mt_VacColSetDynamicState(int VacColMedium_h, int * VacColMedium_h0, int CId
         *VacColMedium_h0 = VacColMedium_h; 
     }
 
-    // calculate h
-    // control has upper sensor on y=30, lower sensor on y=100, 
-    // even if colum control is 151 pixels heigh, only visible a height of 114
+    // tape medium control is 243 pixels height
+    // on vac col y=93 -> upper sensor, y=153 -> lower sensor (y=0 -> top) 
     h= (243-153) + ((153-93) * (VacColMedium_h-PARAM_VacCol_h_Low) / (PARAM_VacCol_h_Hi-PARAM_VacCol_h_Low));
     if (h<0) h=0; 
-    // h is vertical position of tape loop base, converto to y coord
+    // h is vertical position of tape loop base, convert to y coord
     // y=243 <-> VacColMedium_h = 0 (medium outside vac col)
     // y=153 <-> VacColMedium_h = PARAM_VacCol_h_Low (medium over upper sensor)
     // y=93 <-> VacColMedium_h = PARAM_VacCol_h_Hi  (medium over lower sensor)
@@ -1940,7 +1938,7 @@ void Refresh_MagTape(void)
         if ((uptr->flags & UNIT_DIS) || ((uptr->flags & UNIT_ATT) == 0)) {
             if (GetState(NORC.MT[unit])==0) continue; 
             SetState(NORC.MT[unit], 0);          // no magnetic medium on reels
-            SetState(NORC.MT_head[unit], 0);     // head closed
+            SetState(NORC.MT_head[unit], 0);     // head transparent (seen as closed)
             SetState(NORC.MT_L[unit], 0);          
             SetState(NORC.MT_R[unit], 0);    
             mtcab[unit].L_VacColMedium_h0=0;
@@ -2012,7 +2010,8 @@ void Refresh_MagTape(void)
         //   12..13 -> same reel rotated 0gr, 90gr ... but with some spin blur. To be used when reel is moving
         //   14..15 -> reel rotalted 0gr, 90gr, ... whith greater spin blur. To be used when reel is rewinding at fast pace
         // MT_head holds the position of r/w head
-        //   =1  -> head open closed, prepared to manualy remove tape medium
+        //   =0  -> transparent (so head closed)
+        //   =1  -> head open, prepared to manualy remove tape medium
         //   =12 -> closed head, prepared to read or write tape medium
         // MT_head actuator holds the position of handle actuator to open/close r/w head 
         //   =0  -> actuator on left (head closed)
@@ -2090,7 +2089,7 @@ void Refresh_MagTape(void)
         if ((MT_Reel_Amount0 != MT_Reel_Amount) || 
             (MT_L_Rot0 != MT_L_Rot) || (MT_R_Rot0 != MT_R_Rot) || 
             (MT_head0 != MT_head) || (MT_head_actuator0 != MT_head_actuator)) {
-            // if some state has changed, redraww all controls
+            // if some state has changed, redraw all controls
             cpanel_ControlRedrawNeeded = 1;
             SetState(NORC.MT[unit], MT_Reel_Amount);
             cpanel_ControlRedrawNeeded = 1;
@@ -2365,24 +2364,29 @@ void Refresh_ShowInfo(void)
 {
     char buf[300];
     int TickCountPerSec; 
-    int InstrExecPerSec, n; 
+    int InstrExecPerSec, n, fps; 
     uint32 msec; 
 
     // set dynamic contents of CtrlInfoPanel and MT_InfoPanel
 
     if (bShowInfo>1) {
-        TickCountPerSec =  InstrExecPerSec =  0;
+        TickCountPerSec =  InstrExecPerSec = fps = 0;
     } else {
         TickCountPerSec =  Measure_CpuSpeed(1); 
-        InstrExecPerSec =  0;
+        InstrExecPerSec = fps = 0;
         msec = Refresh_tnow - ShowInfoTm0; 
         if ((msec > 0) && (msec < 1000)) {
             n = Measure_CpuSpeed(2)- InstrExec0;
             if (n<0) n=0;
             InstrExecPerSec = n * 1000 / msec;
+            n = vid_frames_count - FramesCount0;
+            fps             = n * 1000 / msec;
+            if (fps>60) fps=60;
+            if (fps<0) fps=0;
         }
         ShowInfoTm0 = Refresh_tnow;
         InstrExec0  = Measure_CpuSpeed(2); 
+        FramesCount0 = vid_frames_count; 
     }
 
     // Info show:
@@ -2414,7 +2418,7 @@ void Refresh_ShowInfo(void)
             msec=n / 1000; 
         }
         sprintf(buf, "FPS: %d STALL: %s (%d)\n", 
-            cpanel_measured_fps, 
+            fps, 
             (Console_Stall == 1) ? "WAIT PRT READY"      : // Print instr stalled because printer cycle not finished
             (Console_Stall == 2) ? "TAPE WAIT PRT READY" : // Tape instr stalled because printer cycle not finished
             (Console_Stall == 3) ? "TAPE UNIT NOT RDY"   : // Tape instr stalled because tape unit not ready
@@ -2422,17 +2426,17 @@ void Refresh_ShowInfo(void)
              msec);
     } else if (Console_TMOV) {
         sprintf(buf, "FPS: %d Cpu Speed: x%0.2f TMOV: %d\n", 
-            cpanel_measured_fps, 
+            fps, 
             TickCountPerSec / 1000000.0,  Console_TMOV / 1000);
     } else if (PRT==0) {
         n=sim_activate_time(&lp_unit[1]) + sim_activate_time(&lp_unit[2]);
         msec=n / 1000; 
         sprintf(buf, "FPS: %d Cpu Speed: x%0.2f PRT: %d\n", 
-            cpanel_measured_fps, 
+            fps, 
             TickCountPerSec / 1000000.0, msec);
     } else {
         sprintf(buf, "FPS: %d Cpu Speed: x%0.2f (%d IPS)\n", 
-            cpanel_measured_fps, 
+            fps, 
             TickCountPerSec / 1000000.0,  InstrExecPerSec);
     }
 
@@ -2450,7 +2454,7 @@ void Refresh_ShowInfo(void)
             } else if ((mtcab[i].mt_is == MT_is_rewinding) || 
                        ((mtcab[i].mt_is == MT_is_loading_tape) && (mtcab[i].rew_u3 > 0))) {
                 // if rewinding then the ammount of tape medium used is in variable recsize, not in u3
-                // if loading tape AND rew_u3 > 0 then the tpe is shounf a nice rew animation started with *R
+                // if loading tape AND rew_u3 > 0 then the tape is showing a nice rew animation started with *R
                 // if rewinding the ammount of tape medium used is in variable recsize, not in u3
                 n = mtcab[i].rew_u3; 
                 c = 'R';

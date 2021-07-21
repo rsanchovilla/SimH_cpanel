@@ -1,0 +1,883 @@
+                           
+                                                             SO2 Assembly
+                             
+                                                             RAL Regional Assembler languaje
+                                                             (Regional Programming) 
+                           
+                                                             Applied Science Departement
+                                                             New York
+                           
+                                                             Original code (lost) by 
+                                                             William F. McClelland July 1952 
+                           
+                                                             Rewritten by Roberto Sancho May 2021
+                                                             using description doc at 102663096-05-01-acc.pdf, page 76
+                                                             from Computer History Museum collection
+                                                             and program coding sheet at page 15 of 
+                                                             Los Alamos Computing 1940-1950 from
+                                                             https://fas.org/sgp/othergov/doe/lanl/docs1/LA-6943-H.pdf
+                                                             To do the binary punching I borrowed BP05 program
+                                                             
+                           
+                                                             To be assembled with Ibm701Assembler.exe cross-assembler
+                           
+                           
+                           
+                           
+                                      HEAD      SO2
+                                      ORG       200          
+                           
+                                      HEAD      00F          MAIN PROGRAM
+                           
+OCT
+0310 +12 1353              START    + R ADD     D4096        SET LAST ADDR AVAILABLE FOR FILE
+0311 +14 1330                       + STORE     FILELAST     X 
+0312 +12 1354                       + R ADD     ZERO         RESET 
+0313 +14 1323                       + STORE     OUTCOUNT     ... NUMBER OF WORDS IN OUTPUT BINARY CARD 
+0314 +14 1366                       + STORE     ORG0FLAG     ... ORG 0 FLAG
+                           
+0315 +12 1355                       + R ADD     MINUS1       INIT CURRENT LOC AND
+0316 +14 1331                       + STORE     CARDADDR     X
+0317 +12 1330                       + R ADD     FILELAST     RESET FILE AS EMPTY
+0320 +05 1343                       + SUB       TWO
+0321 +14 1327                       + STORE     FILEAD       ADD REGION 00R TO FILE
+0322 +15 0324                       + STORE A   INIFIL       FOR ABSOLUTE ADDRESSES
+0323 +12 1362                       + R ADD     REG00R
+0324 -14 0000              INIFIL   - STORE     /   /
+0325 +12 1402                       + R ADD     FILESTRT     SET FIRST ADDR OF FILE
+0326 +11 1343                       + ADD       TWO          AS EVEN ADDR
+0327 +27 0023                       + A RIGHT   0019         X
+0330 +26 0023                       + A LEFT    0019         X
+0331 +14 1326                       + STORE     FILETOP      RESET ADDR OF HEAD TO FILE
+                           
+                                                             INIT READ CARD
+                           
+0332 +32 4004                RDCARD + WRITE     2052         INSURE THAT MQ NOT IN USE            
+0333 +30 4000                RDCRD2 + READ      2048         PREPARE TO READ CARD                 
+0334 +12 1354                       + R ADD     ZERO         CLEAR ...
+0335 +14 1312                       + STORE     CTYPE        ... CARD TYPE
+0336 +14 1314                       + STORE     RLOC         ... LOCATION REGION
+0337 +14 1315                       + STORE     ILOC         ... LOCATION INDEX
+0340 +14 1320                       + STORE     RADDR        ... ADDRESS REGION
+0341 +14 1321                       + STORE     IADDR        ... ADDRESS INDEX
+0342 +14 1316                       + STORE     SIGN         ... OPCODE SIGN
+0343 +14 1317                       + STORE     OPCODE       ... ACTUAL OPERATION CODE
+0344 +14 1322                       + STORE     OPADDR       ... ACTUAL OPERATION ADDRESS
+0345 +12 1401                       + R ADD     CDBUFAD      RESET TO INITIAL COPY LOOP ADDRESS     
+0346 +15 0347                       + STORE A   RDROW        X
+                           
+                                                             READ CARD IN CDBUF
+                             
+0347 -37 0000                RDROW  - COPY      /   /        COPY WORD                
+0350 +01 0353                       + TR        LRD1         X  
+0351 +01 0356                       + TR        EOF          PROCESS END OF FILE
+0352 +01 0362                       + TR        DECODE       END OF CARD, PROCEED TO DECODE CARD
+0353 +11 1343                LRD1   + ADD       TWO          INCR CDBUF ADDR
+0354 +15 0347                       + STORE A   RDROW        X
+0355 +01 0347                       + TR        RDROW        GO TO READ NEXT ROW
+                           
+0356 +12 0356                EOF    + R ADD     *            FLUSH CURRENT OUTPUT 
+0357 +01 0713                       + TR        PRTCARD      BINARY CARD    
+0360 +00 0002                         DEF       2            AND TERMINATE ASSEMBLING
+0361 +00 0000              FINISH   + STOP      0000         STOP NO ERRORS
+                           
+                                                             DECODE SOURCE CARD READ
+                                                             LOAD OPCODE OPADDR SLOC SADDR ETC VARS
+                                                             AND TRANSFER TO APPROPRIATE
+                                                             HANDLING ROUTINES                          
+                           
+0362 +12 1401              DECODE   + R ADD     CDBUFAD      GET CARD IMAGE WORD 32
+0363 +11 1360                       + ADD       D32          WILL BE NEGATIVE IF
+0364 +15 0365                       + STORE A   LAR0A        CARD TYPE IS ONE
+0365 +12 0000              LAR0A    + R ADD     /   /        
+0366 +03 0371                       + TR +      LAR0B
+0367 +12 1344                       + R ADD     ONE
+0370 +14 1312                       + STORE     CTYPE 
+0371 +12 1353              LAR0B    + R ADD     D4096        SET FIRST CARD COL TO PROCESS
+0372 +05 1344                       + SUB       ONE
+0373 +15 0556                       + STORE A   NCOL         
+0374 +12 0374                       + R ADD     *            CALL ROUTINE GETREG
+0375 +01 0637                       + TR        GETREG       TO GET REGIONAL LOCATION
+0376 -14 1314                       - STORE     RLOC         SAVE REG LOC (FULL WORD) .*echo RLoc:f
+0377 +12 0377                       + R ADD     *            CALL ROUTINE GETCHRS
+0400 +01 0526                       + TR        GETCHRS      TO GET JUST ONE 
+0401 -30 0000                         DEF       *700000      CHAR/DIGIT/BLANK FOR SIGN
+0402 +26 0022                       + A LEFT    0018         RESULT TO 18B IN ACC       
+0403 +04 0413                       + TR 0      L0P          CAN BE BLANK (AS PLUS) .*echo sign:
+0404 +05 1346                       + SUB       KY11         CAN BE (-) MINUS PUNCH ON ROW X(11) 
+0405 +04 0411                       + TR 0      L0N          CAN BE (+) PLUS PUNCH ON ROW Y(12) HIPUNCH
+0406 +05 1345                       + SUB       TEN          IF COLUMN NOT PUNCHED INTERPRETED
+0407 +04 0413                       + TR 0      L0P          AS PLUS. ANY OTHER PUNCH IN INVALID
+0410 +00 0002                       + STOP      0002         STOP BECAUSE INVALID OPCODE SIGN (MUST BE + OR - )
+0411 +12 1344                   L0N + R ADD     ONE          SIGN ZERO MEANS OPCODE POSITIVE
+0412 +14 1316                       + STORE     SIGN         SIGN ONE MEANS OPCODE NEGATIVE
+0413 +12 0413                   L0P + R ADD     *            CALL ROUTINE GETCHRS
+0414 +01 0526                       + TR        GETCHRS      TO GET DECIMAL OPCODE
+0415 +11 0000                         DEF       *110000      2 DECIMAL DIGIT
+0416 +26 0022                       + A LEFT    00018        STORE In OPCODE      
+0417 +14 1317                       + STORE     OPCODE       THEN .*echo OpCode:        
+0420 +12 0420                       + R ADD     *            CALL ROUTINE GETREG
+0421 +01 0637                       + TR        GETREG       TO GET REGIONAL ADDRESS
+0422 -14 1320                       - STORE     RADDR        SAVE REG ADDR (FULL WORD) .*echo RAddr:f
+                           
+0423 +12 1312                       + R ADD     CTYPE        PROCESS CARD TYPE
+0424 +04 0475                       + TR 0      ADDINST      TR TO DECODE TYPE 0 CARDS
+0425 +05 1344                       + SUB       ONE          CHECK IF CARD TYPE
+0426 +04 0430                       + TR 0      ADDREG       TR TO DECODE TYPE 1 CARDS
+0427 +00 0003                       + STOP      0003         STOP BECAUSE CARD TYPE INVALID. MUST BE 0 OR 1
+                           
+                                                             DECODE CONTROL CARD
+                                                             CARD TYPE 1
+                           
+0430 +12 0430              ADDREG   + R ADD     *            FLUSH TO CARD 
+0431 +01 0713                       + TR        PRTCARD      INSTR ALREADY 
+0432 +00 0002                         DEF       2            ASSEMBLED IF ANY 
+0433 +12 1315                       + R ADD     ILOC         DECODE CONTROL CARD
+0434 +04 0436                       + TR 0      LAR1         LOCATION INDEX SHOULD 
+0435 +00 0004                       + STOP      0004         BE ZERO IN CONTROL CARD
+0436 -17 1314              LAR1     - LOAD MQ   RLOC         CHECK IF CAN RESOLVE RLOC
+0437 +12 0437                       + R ADD     *            IF SO THE REGION HAS 
+0440 +01 0655                       + TR        RESOLVE      ALREADY BEEN DEFINED
+0441 +05 1355                       + SUB       MINUS1       SO STOP WITH ERROR
+0442 +04 0444                       + TR 0      LAR2
+0443 +00 0005                       + STOP      0005         STOP BECAUSE REGION ALREADY DEFINED
+0444 -17 1320              LAR2     - LOAD MQ   RADDR        RESOLVE REGIONAL 
+0445 +12 0445                       + R ADD     *            ADDRESS (RADDR FULLWORD)
+0446 +01 0655                       + TR        RESOLVE      THIS IS THE ORIGIN OF NEW REGION
+0447 +14 1315                       + STORE     ILOC         STORE IT AT ILOC 
+0450 +03 0452                       + TR +      LAR3         IF CANNOT RESOLVE REGIONAL ADDRESS 
+0451 +00 0006                       + STOP      0006         STOP BECAUSE UNDEF ORIGIN IN CONTROL CARD
+0452 +12 1327              LAR3     + R ADD     FILEAD       DECR FILE ADDRESS POINTER 
+0453 +05 1343                       + SUB       TWO          TO MAKE ROOM FOR NEW REGION DEFINED
+0454 +05 1326                       + SUB       FILETOP      CHECK IF OVERFLOWS 
+0455 +03 0457                       + TR +      LAROK        TR IF HAS ROOM
+0456 +00 0007                       + STOP      0007         STOP BECAUSE FILE FULL
+0457 +11 1326              LAROK    + ADD       FILETOP      UPDATE FILE ADDRESs POINTER
+0460 +14 1327                       + STORE     FILEAD       FILEAD IN ACC .*echo filead:
+0461 +15 0463                       + STORE A   LARFIL       SET ADDR TO STORE REGION 
+0462 -12 1314                       - R ADD     RLOC         CODE AND BASEINTO FILE  
+0463 -14 0000              LARFIL   - STORE     /   /        STORE NEW REGION CODE AND BASE
+0464 -05 1364                       - SUB       ORG0REG      CHECK IF REGION OOF 
+0465 +04 0467                       + TR 0      LAR4         HAS ORIGIN 0000. 
+0466 +01 0471                       + TR        LAR5
+0467 +12 1344              LAR4     + R ADD     ONE          IF SO, SET ORG0FLAG TO ONE
+0470 +14 1366                       + STORE     ORG0FLAG
+0471 +12 0471              LAR5     + R ADD     *            PRINT CONTROL CARD
+0472 +01 0713                       + TR        PRTCARD        
+0473 +00 0000                         DEF       0            
+0474 +01 0332                       + TR        RDCARD       NEXT INPUT CARD
+                           
+                                                             DECODE INSTRUCTION CARD
+                                                             CARD TYPE 0
+                           
+0475 -17 1314              ADDINST  - LOAD MQ   RLOC         DECODE INSTRUCTION CARD
+0476 +12 0476                       + R ADD     *            CARD TYPE 0
+0477 +01 0655                       + TR        RESOLVE      RESOLVE LOCATION 
+0500 +14 1313                       + STORE     CURLOC       IF CANNOT BE RESOLVED .*echo CurLoc:
+0501 +03 0503                       + TR +      LAI1         THEN
+0502 +00 0010                       + STOP      0008         STOP BECAUSE LOC REGION CANNOT BE RESOLVED
+0503 -17 1320              LAI1     - LOAD MQ   RADDR        RESOLVE ADDRESS 
+0504 +12 0504                       + R ADD     *            IF CANNOT BE RESOLVED
+0505 +01 0655                       + TR        RESOLVE      THEN 
+0506 +14 1322                       + STORE     OPADDR       .*echo OpAddr:
+0507 +03 0511                       + TR +      LAI2
+0510 +00 0011                       + STOP      0009         STOP BECAUSE ADDR REGION CANNOT BE RESOLVED
+                           
+0511 +12 1317              LAI2     + R ADD     OPCODE
+0512 +26 0014                       + A LEFT    0012
+0513 +11 1322                       + ADD       OPADDR
+0514 +14 1317                       + STORE     OPCODE
+0515 +12 1316                       + R ADD     SIGN
+0516 +04 0521                       + TR 0      LAI3
+0517 +06 1317                       + R SUB     OPCODE
+0520 +14 1317                       + STORE     OPCODE
+0521 +10 0000              LAI3     + NOOP      0000
+                                    
+                           
+0522 +12 0522                       + R ADD     *            PRINT CURRENT INSTRUCTION
+0523 +01 0713                       + TR        PRTCARD      CARD, AND ADD INSTR TO 
+0524 +00 0001                         DEF       1            OUTPUT BINARY CARD
+                           
+0525 +01 0332                       + TR        RDCARD       PROCEED WITH NEXT INOUT CARD
+                           
+                                      HEAD      03F          GETCHRS ROUTINE
+                           
+                                                             ROUTINES TO READ CARD
+                                                             GETCHRS RETURNS IN ACC A 36BIT VALUE 
+                                                             GIVEN A FORMAT PARAMETER
+                           
+0526 +11 1343               GETCHRS + ADD       TWO          GET CHARS FROM CARD USING FORMAT PARAM
+0527 +15 0535                       + STORE A   LGC0         SET FIRST PARAM ADDR 
+0530 +11 1344                       + ADD       ONE          X 
+0531 +15 0635                       + STORE A   GETCHEX      SET ROUTINE EXIT
+0532 +12 1354                       + R ADD     ZERO         DEFAULT NO BLANKS ALLOWED
+0533 +14 0636                       + STORE     BLKALWD      X
+0534 -14 1372                       - STORE     RESULT       RESET RESULT
+0535 +12 0000                  LGC0 + R ADD     /   /        READ FIRST ROUTINE PARAM
+0536 +14 1370                       + STORE     FORMAT       IS THE FORMAT OF CHARS TO GET
+0537 +03 0544                       + TR +      LGCH         IF FORMAT IS NEGATIVE
+0540 +06 1370                       + R SUB     FORMAT       THEN RESET FORMAT SIGN 
+0541 +14 1370                       + STORE     FORMAT       AND SIGNAL BLANK CHARS ARE ALLOWED
+0542 +12 1344                       + R ADD     ONE          X
+0543 +14 0636                       + STORE     BLKALWD      X
+0544 +12 1376                  LGCH + R ADD     K9AD         RESET TO INITAL ROW 9 VALUE 
+0545 +15 0563                       + STORE A   LK           X
+0546 +12 1354                       + R ADD     ZERO         RESET COLUMN CHAR
+0547 +14 1371                       + STORE     CHAR         X
+0550 +12 1401                       + R ADD     CDBUFAD      RESET TO CARD ADDRESS INITAL ADDR
+0551 +15 0555                       + STORE A   LGCROW       X
+0552 +12 0556                       + R ADD     NCOL         SELECT NEXT CARD COLUMN 
+0553 +11 1344                       + ADD       ONE          X
+0554 +15 0556                       + STORE A   NCOL         X 
+0555 -17 0000                LGCROW - LOAD MQ   /   /        READ ROWS LOOP
+0556 +24 0000                  NCOL + L LEFT    /   /        SHIFT TO GET NCOL BIT
+0557 +12 1354                       + R ADD     ZERO         FROM ROW
+0560 +24 0001                       + L LEFT    0001         X
+0561 +04 0565                       + TR 0      LGCNXT       IF NO PUNCH TR PROCESS TO NEXT COL
+0562 +12 1371                       + R ADD     CHAR         HAS PUNCH, SO ADD K ROW VALUE
+0563 +11 0000                    LK + ADD       /   /        TO CHAR
+0564 +14 1371                       + STORE     CHAR         X
+0565 +12 0555                LGCNXT + R ADD     LGCROW       SELECT NEXT LEFT ROW
+0566 +05 1341                       + SUB       FOUR         X
+0567 +14 0555                       + STORE     LGCROW       X
+0570 +12 0563                       + R ADD     LK           SELECT NEXT K VALUE
+0571 +11 1344                       + ADD       ONE          X
+0572 +15 0563                       + STORE A   LK           X
+0573 +05 1377                       + SUB       K12AD        CHECK IF END OF ROWS
+0574 +03 0576                       + TR +      LGC1         YES, CHAR READ
+0575 +01 0555                       + TR        LGCROW       NO, LOOP FOR MORE ROWS
+0576 +12 0636                  LGC1 + R ADD     BLKALWD      CHECK IF BLANK CHAR ALLOWED
+0577 +04 0602                       + TR 0      LGC1A        NOT ALLOWED, TR TO NORMAL DECODING (0 value = zero, no blank allowed)
+0600 +12 1371                       + R ADD     CHAR         BLANK ALLOWED (O value is CHAR TEN, Blank char is CHAR ZERO)
+0601 +01 0607                       + TR        LGC2
+0602 +12 1371                 LGC1A + R ADD     CHAR         IF CHAR IS PUNCH AT ROW 0 (TEN)
+0603 +04 0633                       + TR 0      LGCERR       SET IT TO ZERO, ERROR STOP (BLANK CHAR)
+0604 +05 1345                       + SUB       TEN          X
+0605 +04 0607                       + TR 0      LGC2         X
+0606 +11 1345                       + ADD       TEN          X
+0607 +14 1371                  LGC2 + STORE     CHAR         X .*echo char:
+0610 +12 1354                       + R ADD     ZERO         GET LEFTMOST OCTAL DIGIT FROM FORMAT
+0611 +17 1370                       + LOAD MQ   FORMAT       1=DEC, 2=OCT, 3=ALPHA
+0612 +24 0003                       + L LEFT    0003         X
+0613 +16 1370                       + STORE MQ  FORMAT       X  
+0614 +26 0021                       + A LEFT    0017         X
+0615 +05 1344                       + SUB       ONE          NOW 0=DEC, 1=OCTAL, 3=ALPHA
+0616 +11 1400                       + ADD       MBASEAD      SET MBASE TO 10,8,40 DEPENDING 
+0617 +15 0621                       + STORE A   LMPY         ON FORMAT
+0620 -17 1372                       - LOAD MQ   RESULT       RESULT (36B) = RESULT (36B) * MBASE (18B)
+0621 +20 0000                  LMPY + MPY       /   /                 +
+0622 -24 0021                       - L LEFT    00017                CHAR (18B)  
+0623 -14 1372                       - STORE     RESULT       X
+0624 +12 1371                       + R ADD     CHAR         X
+0625 +27 0022                       + A RIGHT   0018         X 
+0626 -11 1372                       - ADD       RESULT       X
+0627 -14 1372                       - STORE     RESULT       X 
+0630 +12 1370                       + R ADD     FORMAT       IF NO MORE FORMAT
+0631 +04 0634                       + TR 0      LGCFIN       DIGITS THEN FINISH ROUTINE
+0632 +01 0544                       + TR        LGCH         ELSE PROCESS NEXT COLUMN CHAR         
+0633 +00 0001                LGCERR + STOP      0001         STOP BECAUSE INVALID FORMAT IN INPUT CARD
+0634 -12 1372                LGCFIN - R ADD     RESULT       RETURN RESULT
+0635 +01 0000               GETCHEX + TR        /   /        ROUTINE EXIT .*echo result:f
+0636 +00 0000               BLKALWD   DEF       0            BLANK ALLOWED FLAG LOCAL VARIABLE
+                            
+                                      HEAD      04F          GETREG ROUTINE                                 
+                           
+0637 +11 1343               GETREG  + ADD       TWO          GET 3 CHARS REGION FROM CARD + INDEX
+0640 +15 0654                       + STORE A   GTREGEX      SET ROUTINE EXIT
+0641 +12 0641                       + R ADD     *            CALL ROUTINE GETCHARS
+0642 +01 0526                       + TR        GETCHRS      TO GET REGIONAL CODE
+0643 +11 3000                         DEF       *113000      7 CHARS: 2 x DEC DIGIT + 1 x ALPHA CHAR 
+0644 +26 0022                       + A LEFT    0018         SET REGIONAL CODE IN LEFT 18B IN ACC       
+0645 +14 1324                       + STORE     LHWORD       STOTE REGIONAL CODE IN LHWORD
+0646 +12 0646                       + R ADD     *            CALL ROUTINE GETCHRS
+0647 +01 0526                       + TR        GETCHRS      TO GET 4 DIGITS 
+0650 +11 1100                         DEF       *111100      DECIMAL VALUE
+0651 +26 0022                       + A LEFT    0018         RESULT TO 18B IN ACC       
+0652 +14 1325                       + STORE     RHWORD       STOTE REGIONAL INDEX IN RHWORD
+0653 -12 1324                       - R ADD     LHWORD
+0654 +01 0000               GTREGEX + TR        /   /        ROUTINE EXIT
+                           
+                                      HEAD      05F          RESOLVE ROUTINE
+                           
+                                                             RESOLVE REGIONAL ADDRESS IN MQ
+                                                             RETURN IN ACC ACTUAL ADDR OR
+                                                             MINUS1 IF CANNOT BE RESOLVED
+                           
+0655 +11 1343              RESOLVE  + ADD       TWO          RESOLVE REGIONAL ADDRESS IN MQ
+0656 +15 0711                       + STORE A   RSLVEX       RETURN IN ACC ACTUAL ADDR OR
+0657 -16 1372                       - STORE MQ  RESULT       MINUS1 IF CANNOT BE RESOLVED
+                           
+0660 +12 1330                       + R ADD     FILELAST     SEARCH REG CODE FROM
+0661 +15 0712                       + STORE A   RLOOPEND     FILEAD TO FILELAST
+0662 +12 1327                       + R ADD     FILEAD
+0663 +15 0664                       + STORE A   RSLV1
+0664 +12 0000              RSLV1    + R ADD     /   /
+0665 +05 1372                       + SUB       RESULT
+0666 +04 0676                       + TR 0      RSLVFND
+0667 +12 0664                       + R ADD     RSLV1
+0670 +11 1343                       + ADD       TWO
+0671 +15 0664                       + STORE A   RSLV1
+0672 +12 0664                       + R ADD     RSLV1
+0673 +05 0712                       + SUB       RLOOPEND
+0674 +04 0710                       + TR 0      RSLVNF
+0675 +01 0664                       + TR        RSLV1
+0676 +12 0664              RSLVFND  + R ADD     RSLV1        FOUND, GET REG ORIGIN
+0677 +15 0700                       + STORE A   RSLV2
+0700 -12 0000              RSLV2    - R ADD     /   /        SAVE AS     
+0701 -14 1332                       - STORE     LASTFND      LAST FOUND .*echo FoundReg:f
+0702 -11 1372                       - ADD       RESULT       APPLY ORIGIN TO REG ADDR
+0703 +25 0014                       + L RIGHT   0012         RETURN ACTUAL ADDR
+0704 +12 1354                       + R ADD     ZERO
+0705 +24 0014                       + L LEFT    0012
+0706 +26 0022                       + A LEFT    0018
+0707 +01 0711                       + TR        RSLVEX       IN LEFT ACC
+0710 +12 1355              RSLVNF   + R ADD     MINUS1       NOT FOUND, RETURN -1
+0711 +01 0000              RSLVEX   + TR        /   /        EXIT ROUTINE .*echo ActualAddr:
+0712 +12 0000              RLOOPEND + R ADD     0000         LOOP END VALUE
+                           
+                                      HEAD      06F          PRINT PUNCH CARD ROUTINE
+                           
+                                                             PRINT CARD
+                                                             IF PARAM IS ZERO IS A NON INSTRUCTION
+                                                             IF PARAM IS ONE IS AN INSTRUCTION, ALSO
+                                                             ADD THE INSTRUCTION TO THE PUNCH OUTPUT BUFFER
+                                                             IF PARAM IS TWO FLUSH AND PUNCH OUTPUT BINARY CARD
+                           
+0713 +11 1343              PRTCARD  + ADD       TWO
+0714 +15 0717                       + STORE A   PRTPARAM
+0715 +11 1344                       + ADD       ONE
+0716 +15 1136                       + STORE A   PRTCDEX
+0717 +12 0000              PRTPARAM + R ADD     /   /
+0720 +14 1231                       + STORE     PMODE        X .*echo Print_Mode:
+0721 +05 1343                       + SUB       TWO
+0722 +04 1062                       + TR 0      FLUSH
+                           
+0723 +12 1231              PR3      + R ADD     PMODE
+0724 +05 1344                       + SUB       ONE
+0725 +04 0727                       + TR 0      PROPCODE     
+0726 +01 0764                       + TR        PRINT  
+                           
+0727 +12 1344              PROPCODE + R ADD     ONE          ADD ACTUAL OPCODE AND OPADDR TO CARD IMAGE
+0730 +26 0015                       + A LEFT    0013         X
+0731 -14 1374                       - STORE     PROW         X .*echo Print_SetOpCode
+0732 +12 1317                       + R ADD     OPCODE       PRINT ACTUAL CURLOC OPCODE
+0733 +14 1325                       + STORE     RHWORD
+0734 +12 1313                       + R ADD     CURLOC       X
+0735 +14 1324                       + STORE     LHWORD
+0736 -12 1324                       - R ADD     LHWORD
+0737 +25 0036                       + L RIGHT   0030         SHIFT INTO MQ .*echo opcode:fo  
+0740 +12 1354              PROP2    + R ADD     ZERO
+0741 +24 0003                       + L LEFT    0003         X
+0742 +26 0022                       + A LEFT    0018         X
+0743 +14 1371                       + STORE     CHAR         X .*echo Print_char:
+0744 +12 1334                       + R ADD     NINE
+0745 +05 1371                       + SUB       CHAR
+0746 +26 0002                       + A LEFT    0002
+0747 +11 1344                       + ADD       ONE
+0750 +11 1401                       + ADD       CDBUFAD
+0751 +15 0754                       + STORE A   PROP3
+0752 +15 0755                       + STORE A   PROP4
+0753 +12 1374                       + R ADD     PROW
+0754 +11 0000              PROP3    + ADD       /   /
+0755 +14 0000              PROP4    + STORE     /   /
+0756 +12 1374                       + R ADD     PROW
+0757 +27 0001                       + A RIGHT   0001
+0760 +14 1374                       + STORE     PROW
+0761 +27 0026                       + A RIGHT   0022
+0762 +04 0764                       + TR 0      PRINT
+0763 +01 0740                       + TR        PROP2
+                                    
+0764 +32 1000              PRINT    + WRITE     0512         PREPARE TO WRITE CBUF ON PRINTER
+0765 +12 1401                       + R ADD     CDBUFAD      RESET TO INITIAL COPY LOOP ADDRESS     
+0766 +15 0772                       + STORE A   PRCDROW      FOR CARD BUFFER
+0767 +12 0772                       + R ADD     PRCDROW      X .*echo Print
+0770 +05 1356                       + SUB       D48          X 
+0771 +14 1230                       + STORE     PLOOPEND     X
+0772 -37 0000               PRCDROW - COPY      /   /        COPY WORD TO PRINTER
+0773 +12 0772                       + R ADD     PRCDROW      X
+0774 +05 1343                       + SUB       TWO          INCR CDBUF ADDR
+0775 +15 0772                       + STORE A   PRCDROW      X
+0776 +05 1230                       + SUB       PLOOPEND     CHECK FOR END
+0777 +04 1001                       + TR 0      PRTEND       
+1000 +01 0772                       + TR        PRCDROW 
+1001 +12 1231              PRTEND   + R ADD     PMODE
+1002 +04 1136                       + TR 0      PRTCDEX      IF MODE ZERO EXIT ROUTINE
+                           
+                                      HEAD      07F          ADD INSTR TO PUNCH BUFFER
+                           
+1003 +12 1331              PUNCH    + R ADD     CARDADDR     ADD INSTR TO PUNCH BUFFER
+1004 +03 1007                       + TR +      PH0          IF CARD EMPTY, INIT 
+1005 +12 1313                       + R ADD     CURLOC       CARD BASE ADDR
+1006 +14 1331                       + STORE     CARDADDR
+                           
+1007 +12 1313              PH0      + R ADD     CURLOC       CHECK IF THERE IS A GAP
+1010 +05 1331                       + SUB       CARDADDR     BETWEEN THIS INSTR AND
+1011 +05 1323                       + SUB       OUTCOUNT     PREVIOUS ONE
+1012 +04 1044                       + TR 0      PHADD        TR IF NO GAP
+1013 +03 1015                       + TR +      PHGAP        TR IF POSITIVE GAP
+1014 +00 0012                       + STOP      0010         STOP BECAUSE NEGATIVE GAP WITH PREVIOUS INSTRUCTION 
+                           
+1015 +14 1371              PHGAP    + STORE     CHAR         NUMBER OF HWORDS OF GAP
+1016 +14 1372                       + STORE     RESULT
+1017 +12 1323                       + R ADD     OUTCOUNT
+1020 +11 1326                       + ADD       FILETOP          
+1021 +15 1030                       + STORE A   PHGAP1
+1022 +05 1327                       + SUB       FILEAD       CHECK IF ROOM AVAILABLE
+1023 +11 1343                       + ADD       TWO          GUARD
+1024 +03 1026                       + TR +      PHFULL1      TR IF NO ROOM 
+1025 +01 1027                       + TR        PHGAP0
+1026 +00 0013              PHFULL1  + STOP      0011         STOP BECAUSE GAP BETWEEN REGIONS TOO BIG
+                           
+1027 +12 1354              PHGAP0   + R ADD     ZERO
+1030 +14 0000              PHGAP1   + STORE     /   /
+1031 +12 1371                       + R ADD     CHAR
+1032 +05 1344                       + SUB       ONE
+1033 +04 1041                       + TR 0      PHGAP2
+1034 +14 1371                       + STORE     CHAR
+1035 +12 1030                       + R ADD     PHGAP1
+1036 +11 1344                       + ADD       ONE
+1037 +15 1030                       + STORE A   PHGAP1
+1040 +01 1027                       + TR        PHGAP0
+1041 +12 1323              PHGAP2   + R ADD     OUTCOUNT
+1042 +11 1372                       + ADD       RESULT
+1043 +14 1323                       + STORE     OUTCOUNT
+                           
+1044 +12 1323              PHADD    + R ADD     OUTCOUNT     ADD INSTR TO PUNCH BUFFER
+1045 +11 1326                       + ADD       FILETOP      .*echo PunchOutCount:
+1046 +15 1055                       + STORE A   PHADD1
+1047 +05 1327                       + SUB       FILEAD       CHECK IF ROOM AVAILABLE
+1050 +11 1343                       + ADD       TWO          GUARD
+1051 +03 1053                       + TR +      PHFULL2      TR IF NO ROOM 
+1052 +01 1054                       + TR        PHADD0
+1053 +00 0014              PHFULL2  + STOP      0012         STOP BECAUSE ASSEMBLED PROG TOO BIG
+                           
+1054 +12 1317              PHADD0   + R ADD     OPCODE       ADD INSTRUCTION 
+1055 +14 0000              PHADD1   + STORE     /   /        TO FILE
+1056 +12 1323                       + R ADD     OUTCOUNT
+1057 +11 1344                       + ADD       ONE
+1060 +14 1323                       + STORE     OUTCOUNT
+1061 +01 1136                       + TR        PRTCDEX
+                           
+                                      HEAD      08F          FLUSH OUTPUT BUF TO PUNCHED CARD
+                           
+1062 +12 1323              FLUSH    + R ADD     OUTCOUNT     FLUSH OUTPUT BUF TO PUNCHED CARD
+1063 +04 1136                       + TR 0      PRTCDEX      NOTHING TO FLUSH, JUST EXIT
+                           
+1064 +12 1366                       + R ADD     ORG0FLAG     
+1065 +04 1067                       + TR 0      PHBP05       PUNCH CARDS TO BE LOADED WITH SL05
+1066 +01 1104                       + TR        PHBIN        PUNCH RAW BINARY CARDS
+                           
+1067 +12 1323              PHBP05   + R ADD     OUTCOUNT     
+1070 +11 1344                       + ADD       ONE          MAKE WORDS TO PUNCH
+1071 +27 0023                       + A RIGHT   0019         WITH BP05 EVEN BEFORE
+1072 +26 0023                       + A LEFT    0019         STORING THEM IN V
+1073 +14 1224                       + STORE     V
+1074 +12 1326                       + R ADD     FILETOP 
+1075 +14 1223                       + STORE     R
+1076 +12 1331                       + R ADD     CARDADDR
+1077 +05 1343                       + SUB       TWO
+1100 +14 1225                       + STORE     R1
+1101 +12 1101                       + R ADD     *
+1102 +01 1137                       + TR        BP05
+1103 +01 1131                       + TR        FLDONE
+                           
+1104 +12 1326              PHBIN    + R ADD     FILETOP
+1105 +15 1117                       + STORE A   PHBIN1
+1106 +12 1117                       + R ADD     PHBIN1
+1107 +05 1323                       + SUB       OUTCOUNT
+1110 +05 1344                       + SUB       ONE
+1111 +27 0023                       + A RIGHT   0019
+1112 +26 0023                       + A LEFT    0019
+1113 +14 1230                       + STORE     PLOOPEND
+1114 +32 2000                       + WRITE     1024         PREPARE TO PUNCH CARD                 
+1115 +12 1361              PHBIN0A  + R ADD     D24
+1116 +14 1371              PHBIN0B  + STORE     CHAR
+1117 -37 0000              PHBIN1   - COPY      /   /
+1120 +12 1117                       + R ADD     PHBIN1
+1121 +05 1343                       + SUB       TWO
+1122 +15 1117                       + STORE A   PHBIN1
+1123 +05 1230                       + SUB       PLOOPEND
+1124 +04 1131                       + TR 0      FLDONE       EXIT PUNCH WORD LOOP
+1125 +12 1371                       + R ADD     CHAR
+1126 +05 1344                       + SUB       ONE
+1127 +04 1115                       + TR 0      PHBIN0A
+1130 +01 1116                       + TR        PHBIN0B
+                                    
+                           
+1131 +32 4004              FLDONE   + WRITE     2052
+1132 +12 1355                       + R ADD     MINUS1
+1133 +14 1331                       + STORE     CARDADDR
+1134 +12 1354                       + R ADD     ZERO
+1135 +14 1323                       + STORE     OUTCOUNT
+1136 +01 0000              PRTCDEX  + TR        /   /
+                           
+                                      HEAD      85F          ADD INSTR TO PUNCH BUFFER
+                           
+1137 +11 1343              BP05     + ADD       TWO
+1140 +15 1214                       + STORE A   BP05EX
+1141 +12 1223                       + R ADD     R                                               
+1142 +15 1153                       + STORE A   RDHWORD      Initialize ADD sequence, COPY         
+1143 +15 1177                       + STORE A   CPFWORD        sequence, COPY index, and           
+1144 +11 1224                       + ADD       V            ADD index                           
+1145 +15 1215                       + STORE A   CPFWEND                                               
+1146 +15 1216                       + STORE A   RDHWEND                                               
+1147 +06 1225                       + R SUB     R1                                               
+1150 +05 1224                       + SUB       V            Add half word count and loading       
+1151 +27 0021                       + A RIGHT   0017           address to check sum  
+1152 -14 1226                       - STORE     CHKSUM         
+1153 +12 0000              RDHWORD  + R ADD     [  ]                                               
+1154 +14 1223                       + STORE     R                                               
+1155 -06 1222                       - R SUB     RFULLW                                               
+1156 +26 0001                       + A LEFT    0001         
+1157 -11 1226                       - ADD       CHKSUM       ADD sequence for computing
+1160 -14 1226                       - STORE     CHKSUM         card check sum
+1161 +06 1153                       + R SUB     RDHWORD                                               
+1162 +05 1344                       + SUB       ONE
+1163 +15 1153                       + STORE A   RDHWORD         
+1164 +11 1216                       + ADD       RDHWEND         
+1165 +03 1153                       + TR +      RDHWORD         
+1166 +32 2000                       + WRITE     1024         Select card punch
+1167 -37 1226                       - COPY      CHKSUM       Punch nine left                       
+1170 -37 1224              CPV      - COPY      V            Punch nine right                      
+1171 +12 1177                       + R ADD     CPFWORD      initialize end of card index 
+1172 +05 1357                       + SUB       D44         
+1173 +15 1217              CPLOOP0  + STORE A   CPEND                                               
+1174 +12 1177              CPLOOP   + R ADD     CPFWORD                                               
+1175 +05 1215                       + SUB       CPFWEND                                               
+1176 +04 1214                       + TR 0      BP05EX   
+1177 -37 0000              CPFWORD  - COPY      [  ]                                               
+1200 +12 1177                       + R ADD     CPFWORD      COPY sequence                         
+1201 +05 1343                       + SUB       TWO                                               
+1202 +15 1177                       + STORE A   CPFWORD                                               
+1203 +05 1217                       + SUB       CPEND                                               
+1204 +03 1174                       + TR +      CPLOOP         
+1205 +12 1177                       + R ADD     CPFWORD      Coincidence test for end of card
+1206 +05 1215                       + SUB       CPFWEND       and end of COPY conditions
+1207 +04 1214                       + TR 0      BP05EX   
+1210 +32 2000                       + WRITE     1024         Select card punch
+1211 +12 1217                       + R ADD     CPEND        Set up end of card index
+1212 +11 1220                       + ADD       CPD48
+1213 +02 1173                       + TR OV     CPLOOP0      Continue punching
+1214 +01 0000              BP05EX   + TR        /   /        End of punching
+                           
+1215 -37 0000              CPFWEND  - COPY      0000         LOOP END FOR COPY DATA TO CARD PUNCH 
+1216 +12 0000              RDHWEND  + R ADD     0000         LOOP END FOR READ DATA TO COMPUTE CHKSUM
+1217 -37 0000              CPEND    - COPY      0000         COPY END LOOP   addr 28
+1220 -37 0060              CPD48    - COPY      0048
+                                     
+                                      ORG       EVEN
+                           
+1222 +00 0000              RFULLW     DEF       0
+1223 +00 0000              R          DEF       0            START OF BLOCK TO PUNCH (MUST BE EVEN)
+1224 +00 0000              V          DEF       0            NUMBER OF HALF WORDS TO PUNCH (MUST BE EVEN)
+1225 +00 0000              R1         DEF       0            ADDR WHERE WILL BE RESTORED BY SL05 (=R-2)
+1226 +00 0000              CHKSUM     RES       2
+                           
+                           
+1230 +00 0000              PLOOPEND   DEF       0
+1231 +00 0000              PMODE      DEF       0
+                           
+                                      ORG       EVEN
+                                      HEAD      00C          CARD IMAGE BUFFER
+                           
+1232 +00 0000              CDBUF      RES       48           CARD BUFFER: 48 HALF WORDS
+                           
+                                      HEAD      00E          ERASABLE RESULTS
+                           
+1312 +00 0000              CTYPE      RES       1            CARD TYPE
+1313 +00 0000              CURLOC     RES       1            CURRENT INSTR LOCATION
+1314 +00 0000              RLOC       RES       1            LOCATION REGION
+1315 +00 0000              ILOC       RES       1            LOCATION INDEX
+                           
+1316 +00 0000              SIGN       RES       1            OPCODE SIGN
+1317 +00 0000              OPCODE     RES       1            OPERATION CODE 
+1320 +00 0000              RADDR      RES       1            ADDRESS REGION
+1321 +00 0000              IADDR      RES       1            ADDRESS INDEX
+1322 +00 0000              OPADDR     RES       1            ACTUAL OPERATION ADDRESS 
+1323 +00 0000              OUTCOUNT   RES       1            NUMBER OF INSTR ASSEMBLED
+                           
+1324 +00 0000              LHWORD     RES       1            TO CONVERT FROM/TO HALF 
+1325 +00 0000              RHWORD     RES       1            WORD TO/FROM FULLWORD
+                           
+1326 +00 0000              FILETOP    RES       1            START OF SYMBOL TABLE
+1327 +00 0000              FILEAD     RES       1            ADDR OF START OF FILE
+1330 +00 0000              FILELAST   RES       1            LAST ADDR AVAILABLE FOR FILE
+1331 +00 0000              CARDADDR   RES       1            SET FIRST ADDR OF DATA IN CARD WHEN PUNCHING SL05 BIN CARD FORMAT 
+                           
+1332 +00 0000              LASTFND    RES       2            LAST FOUND REGION
+                           
+                                                             FILE MEMORY MAP
+                                                                          <- Full Word ->
+                                                                          +--------------+
+                                                             FILETOP  --> |inst 1| inst 2| assembled instructions 
+                                                                          |inst 3| inst 4| 
+                                                                           ...
+                                                                                 |
+                                                                                 v
+                           
+                                                                                 ^
+                                                                                 |
+                           
+                                                             FILEAD   --> |reg    |base  | region NNA, actual location for region
+                                                                          |reg    |base  | 
+                                                                           ...
+                                                                          |reg    |base  | 
+                                                                          |reg    |base  | 
+                                                             FILELAST ->  end of mem location 4096
+                           
+                                      ORG       EVEN
+                                      HEAD      00B          PROGRAM CONSTANTS
+                           
+1334 +00 0011                  NINE   DEF       9            VALUE OF ROW 9
+1335 +00 0010                 EIGHT   DEF       8
+1336 +00 0007                 SEVEN   DEF       7
+1337 +00 0006                   SIX   DEF       6
+1340 +00 0005                         DEF       5
+1341 +00 0004                  FOUR   DEF       4
+1342 +00 0003                 THREE   DEF       3
+1343 +00 0002                   TWO   DEF       2
+1344 +00 0001                   ONE   DEF       1            VALUE OF ROW 1
+1345 +00 0012                   TEN   DEF       10           VALUE OF ROW 0(TEN)
+1346 +00 0024                  KY11   DEF       20           VALUE OF ROW X(11)
+1347 +00 0036                  KY12   DEF       30           VALUE OF ROW Y(12) HIGH PUNCH
+                           
+1350 +00 0012                 MBASE   DEF       10           MULTIPLIER BASE DEPENDING ON CHAR 
+1351 +00 0010                         DEF       8            FORMAT DECIMAL, OCTAL, ALPHA
+1352 +00 0144                 D100    DEF       100
+1353 +01 0000                D4096    DEF       4096
+                           
+1354 +00 0000                 ZERO    DEF       0       
+1355 -00 0001               MINUS1    DEF       *400001
+1356 +00 0060                  D48    DEF       48
+1357 +00 0054                  D44    DEF       44
+1360 +00 0040                  D32    DEF       32
+1361 +00 0030                  D24    DEF       24
+                           
+1362 +00 0035              REG00R     DEF       29           REGION 00R
+1363 +00 0000                         DEF       0
+                           
+1364 +00 0044              ORG0REG    DEF       36           REGION 00F
+1365 +00 0000                         DEF        0           INDEX 0000
+                           
+                                      HEAD      01E          ERASABLE RESULTS
+                           
+1366 +00 0000              ORG0FLAG   RES       1
+1367 +00 0000                  VOID   RES       1
+                           
+1370 +00 0000                FORMAT   RES       1            FORMAT OF CHARS TO READ
+1371 +00 0000                CHAR     RES       1            CURRENT COLUMN CHAR
+1372 +00 0000                RESULT   RES       2            GETCHRS RESULT VALUE
+1374 +00 0000                PROW     RES       2            ROW TO BE SENT TO PRINTER
+                           
+                           
+                                      HEAD      01F          INSTRUCTIONAL CONSTANTS
+                           
+1376 +00 1334                  K9AD + STOP      NINE         ADDR OF START OF ROW K VALUES (ROW 9)
+1377 +11 1350                 K12AD + ADD       MBASE        ADDR OF END ROW K VALUES (ROW 12 Y) + 1
+1400 +00 1350               MBASEAD + STOP      MBASE        ADDR OF MBASE TABLE
+1401 +00 1232               CDBUFAD + STOP      CDBUF        ADDR OF CARD BUFFER
+                           
+1402 +00 1402              FILESTRT + STOP      FILESTRT     FILE START ADDR. MUST BE LAST LINE OF PROGRAM
+                           
+                                                             Usage:
+                                  
+                                                             The purpose of SO2 is to accept one programs in regional programming
+                                                             form and to combine them into one program in actual form. 
+                                                             The regional program is presented with one instruction punched to 
+                                                             a card, and the calculator produces the program on binary cards.
+                                                             The calculator also produces a printed program which contains
+                                                             the original regional program, the new actual program (in octonary) 
+                                                             and the comments which were associated with the original program.
+                                  
+                                                             Occupies all of electrostatic memory except addresses 0000 to 0307 octal
+                                                             (0 to 199 decimal)
+                                  
+                                                             intruction location and address must be given in regional form. 
+                                                             Operation parts are to be given in decimal, + OR - sign allowed
+                                  
+                                                             A regional address is 7-characters. The first part is the 
+                                                             regional code (2 decimal digits and 1 one letter A-H or J-R) 
+                           
+                                                             The regional code indicates the region to be used. Its base addess
+                                                             (its origin) is set in a control card
+                           
+                                                             The regional index is a 4-digit decimal number that indicates the 
+                                                             offset in the region. For example:
+                           
+                                                                      Origin of 00F region set to decimal 1000
+                           
+                                                                      Regional Address   00F 0120   is translated to 
+                                                                      Actual Address     1120       (result of 1000+0120)
+                                                                      
+                                                             if actual address is equal or greater than 4096, a modulo 4096
+                                                             is used.
+                                  
+                                                             Each region used should have its origin defined with a control card
+                                                             The only exception is region 00R that is already defined, and 
+                                                             has an origin of 0000. Thus using region 00R allows to specify abosulte
+                                                             address
+                                  
+                                                             The regional source program cards must be placed in the 
+                                                             following order:
+                                  
+                                                                1) Control cards
+                                                                2) Instruction cards
+                                  
+                                                             If region 00F gets as origin address 0000, the punched cards 
+                                                             resulting from assembly will be binary cards with 48 instructions 
+                                                             per card. 
+                           
+                                                             In this case, all instruction will be punched in sequence. If there
+                                                             are gaps between regions, the gap will be filled with zeroes
+                                                             and punched on the output binary cards. 
+                           
+                                                             If origin for region 00F is other than 0000, the punched cards will 
+                                                             be in a format suitable to be loaded with SL05. The program origin
+                                                             must be 0050 decimal or higher (SL05 cannot load at lower locations).
+                           
+                                                             when defining a region origin, the 00R region can be used to 
+                                                             set and absolute location, or another region code and index
+                                                             can be used to set the origin relative to another already defined
+                                                             region.
+                                                             
+                                                             If there are gaps between regions, the gap will be filled with
+                                                             zeroes. 
+                           
+                                                             Normally, all origin cards are placed on the beginning of deck.
+                                                             But it is possible to place an origin card in at any point of
+                                                             source deck. When processing the origin card, the assebler will
+                                                             flush the current binary output pending to be punched (if any)
+                                                             ans the start a new binary output card sequence. This is the 
+                                                             way to have gaps between regions but not filled with zeroes.
+                                                             It is also the way to assemble programs that are too big to 
+                                                             fit in memory
+                           
+                                                             Note that the assembler will stop on negative gaps (current 
+                                                             instruction being assebled ocupies a location at a lower address
+                                                             than the previous gap)
+                                                             
+                                                             Program Loading:
+                                                                1) Place the SL05 loader in the card hopper.
+                                                                2) Place the SO2 regional assembler binary cards deck
+                                                                3) Place the regional source program deck to be assembled 
+                                                                   in the hopper on top of SO2.
+                                                                3) Press the card reader START until it is READY.
+                                                                4) Printer READY with SO2 plugboard.
+                                                                5) Card Punch READY with binary cards.
+                                                                6) Preset RESET AND CLEAR MEMORY.
+                                                                7) Press LOAD.
+                                                                8) When the Card Reader stops with SELECT, press the Card
+                                                                   Reader START.
+                                  
+                                                                   The calculator will automatically figure out the actual 
+                                                                   program, print it, and punch it on binary cards
+                           
+                                                                   On print out, the input card are reproduced. The assembled
+                                                                   absolute code (in octionary) is inserted before comments
+                           
+                                                                   only printer, card reader and punch are needed. No tapes 
+                                                                   or drum are used during assembly
+                                  
+                                  
+                                                             Normal Stops:
+                                                                STOP 0000  End of assembly, no errors
+                                  
+                                                             Error stops:
+                                                                STOP 0001  Stop because invalid format in input card
+                                                                STOP 0002  Stop because opcode sign must be + or - or blank
+                                                                STOP 0003  Stop because card type invalid. Must be 0 or 1
+                                                                STOP 0004  Stop because location index in control card must be zero
+                                                                STOP 0005  Stop because region already defined
+                                                                STOP 0006  Stop because undefined origin in control card
+                                                                STOP 0007  Stop because file full (too many control cards)
+                                                                STOP 0008  Stop because instruction location region not found
+                                                                STOP 0009  Stop because instruction address region not found
+                                                                STOP 0010  Stop because negative gap with previous instructions
+                                                                STOP 0011  Stop because gap between regions too big 
+                                                                STOP 0012  Stop because program too big 
+                                                                       
+                                                             Source card format:
+                                  
+                                                               column  1-8     should be blank
+                                                                       9       card type: one digit 0 or 1
+                                                                       10-12   location region code
+                                                                       13-16   location region index  
+                                                                       17      sign of instruction (row 11 punch for -, 
+                                                                               row 12 for +, blank column for +)
+                                                                       18-19   operation part of instruction (decimal)
+                                                                       20-22   address region code
+                                                                       23-26   address region index  
+                                                                       27-44   Blank
+                                                                       45-64   Comment
+                                                                       65-72   comment continuation (typically opcode name)
+                                                                       
+                           
+                                                               Column:
+                                                               .          9 10 13  17 20 23             45
+                                                               .           vv  v   v  v  v              v
+                                                               .     ------------------------------------------------------+ 
+                                                               .   /       tlociiiisOPadriiii           Comment            |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  +--------------------------------------------------------+
+                           
+                                                               
+                                                                    card type 0: Intruction
+                                                                                  
+                                                                                 Regions used should be defined in a 
+                                                                                 previous card. Only exception is region 
+                                                                                 00R that is allways defined 
+                           
+                                                                    card type 1: Control Card
+                           
+                                                                                 define region loc based on 
+                                                                                 region adr and index iiii
+                           
+                                                             Punched binary cards format (when 00F region origin not 0000):
+                                  
+                                                                - in row 9: 
+                                                                      A & B = checksum
+                                                                      C     = Number of instructions on this card
+                                                                      D     = first address of this card
+                                                                - in rows 8 to 0, X and Y: up to 44 instructions
+                                  
+                                                               .     ------------------------------------------------------+
+                                                               .   /   |            |            |  ...       | instr 44   |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |  instr 5   |  ...       |            |            |
+                                                               .  |    |  instr 1   |  instr 2   |  instr 3   |  instr 4   |
+                                                               .  |    +------------+------------+------------+------------+
+                                                               .  |    |     A      |     B      |      C     |     D      |
+                                                               .  +----+------------+------------+------------+------------+
+                           
+                           
+                                                             Punched binary cards format (when 00F origin is 0000):
+                                         
+                                                               .     ------------------------------------------------------+
+                                                               .   /   |            |            |  ...       | instr 48   |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |  instr 5   |  ...       |            |            |
+                                                               .  |    |  instr 1   |  instr 2   |  instr 3   |  instr 4   |
+                                                               .  +----+------------+------------+------------+------------+
+                           
+                                                             

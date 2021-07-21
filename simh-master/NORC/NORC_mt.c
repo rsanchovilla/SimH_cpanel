@@ -864,7 +864,7 @@ t_stat mt_set_len (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 
 t_stat mt_show_len (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-    fprintf (st, "length %d foot", uptr->u4 * 1400 / 16800);
+    fprintf (st, "length %d feet", uptr->u4 * 1400 / 16800);
     return SCPE_OK;
 }
 

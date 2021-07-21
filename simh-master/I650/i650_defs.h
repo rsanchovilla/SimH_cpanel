@@ -212,7 +212,7 @@ extern REG         cpu_reg[];
 
 extern const char *cpu_description(DEVICE *dptr);
 
-/* Opcodes */
+// Instruction Opcodes (total: 97 opcodes)
 // Instructions on Basic machine 
 #define OP_AABL    17  // Add absolute to lower accumulator 
 #define OP_AL      15  // Add to lower accumulator 

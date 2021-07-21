@@ -1,0 +1,522 @@
+                                  Punch Binary Data cards Program
+  
+                                  (c) April 2021 by Roberto Sancho
+
+                                  Written to allow the creation of binary punched cards
+                                  with data to be loaded in memory. 
+                                  Based on NAA SpeedEx code
+                                   
+                                  To be used to load data necessary for mnemonics
+                                  definition on NAA SpeedEx assembler
+
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+           HEAD      NAA          Generate NAA Assembler source  
+           HEAD      01000
+
+                                  Set up initial contidition
+           ORG       0040  
+
+START    + R ADD     0036         PROGRAM LOCATION MINUS FILE LOCATIO      (*0044)=addr of program origin set by naa assembler part 1
+         + SUB       0039         X                                        (*0047)=last file addr-> first assembled prog instr 
+         + ADD       D4096        ADD 4096
+         + ADD       ONE          ADD ONE TO CARRY IF ODD
+         + A RIGHT   0019         FORCE LOW ORDER BIT TO ZERO         
+         + A LEFT    0019         X                                   
+         + STORE     DATAAD       ORIGIN DATA STORAGE                      
+         + R ADD     ZERO         CLEAR INFORMATION AREA             
+         - STORE     0036         X                                  
+         - STORE     0038         X                     
+         + STORE     WRDATLOC     INIT CARD WRITE DATA LOCATION (ZERO = NO LOC)
+         + STORE     WRDATCNT     INIT CARD WRITE DATA HALF WORDS
+         
+  
+                                  Read card and convert to binary
+           HEAD      02000
+            
+  RDCARD + WRITE     2052         INSURE THAT MQ NOT IN USE            
+  RDCRD2 + READ      2048         PREPARE TO READ CARD                 
+         + R ADD     ZERO         CLEAR CARD CONVERSION COUNTERS      (0602..0610)=0    
+  L02040 - STORE     T00050       X                                    
+         - STORE     T00052       X                                    
+         - STORE     T00054       X                                    
+  L02070 - STORE     T00056       X
+         + R ADD     CDBUFA       RESET TO INITIAL COPY LOOP ADDRESS     
+         + STORE A   RDROW        WITH START OF CARD IMAGE BUFFER ADDRESS 
+         + STORE A   LDROW        X                                    
+         + R ADD     INITRAD1     RESET TRANSFER ADDRESS               
+         + STORE A   L08180       X                                    
+         + SENSE     0064         TURN OFF SENSE LIGHS                
+  
+  RDROW  - COPY      /   /        COPY LEFT WORD                 copy 0520|4           -3- -7-                         
+  LDROW  - R SUB     /   /        TEST SIGN OF WORD JUST COPIED  acc=-370 000  XXXXxxxx.OO OOO .... | ..................      
+         + TR +      END          END OF FILE IF PLUS                                  
+  
+         + R ADD     RDROW        LEFT COPY ADDRESS              acc=-37 0520                   
+         + STORE A   L05010       ALTER LQ ADDRESS                     
+         + SUB       TWO  
+         + STORE A   L04RWD       ALTER RIGHT WORD COPY ADDRESS        
+  L04RWD - COPY      /   /        COPY RIGHT WORD                copy 0522                 
+         + SUB       TWO          X                              acc=-37 0524                                 
+         + STORE A   RDROW        ALTER LEFT WORD COPY ADDRESS   
+         + STORE A   LDROW        X                                    
+         + R SUB     L02040       RESET ADDRESSES IN CARD        acc=+store 0602      
+         + STORE A   L08160       CONVERSION LOOP                   
+         + STORE A   L08170       X                                    
+         + ADD       ONE          X                              acc=+store 0603                               
+         + STORE A   L08190       X                                    
+         + STORE A   L08200       X                                    
+  L05010 - LOAD MQ   /   /        SPACE LEFT ROW IMAGE           load mq 0520 get  left row mq=370 000     
+         + L LEFT    0005         X .*echo ROW_IMAGE:Q           acc=37, mq=0      inserted one bit        
+         + A LEFT    0001         X                              acc=76            -3- -7- v new bit inserted 
+         + L RIGHT   0006         X                              mq=370000 000000  .OO OOO x .... | ..................          
+         + R ADD     L04RWD       TEST FOR ZERO ROW              acc=-37 0522                   
+         + SUB       ROW0RAD      X                              sub-770566 -> acc=44           
+         + TR 0      L08120       X                              exit to 0152 if instr 0121 has addr 0566
+  
+  L08040 + TR OV     L08050       RESET OVERFLOW INDICATOR       convert MQ=binary b1 b2 b3 b4 b5            
+  L08050 + R ADD     EIGHT        X .*echo MQ_to_convert:Q       SET END OF GROUP INDICATOR     to acc= decimal +11111: a 1 if bit n=1, a 0 if bit=0
+  L08060 + L LEFT    0001         DIGIT INTO ACCUMULATOR         
+         - TR OV     L08150       LOOP END IF LAST DIGIT                     
+         - STORE     T00048       CONVERSION TO BINARY           
+         + A LEFT    0002         X                              
+         - ADD       T00048       X                              
+         + TR        L08060       RETURN FOR NEXT DIGIT    
+  
+  L08120 + R ADD     SKPDSUM      ALTER TRANSFER FORK ADDRESS                
+         + STORE A   L08180       X                                          
+         + TR        L08040       RETURN TO CONVERSION                       
+  
+  L08150 + A LEFT    0018         POSITION CONVERTED GROUP                   Acc=+11111|0        
+  L08160 + ADD       /   /        ADD SINGLE SUM CONVERSION CNTRS            add 0602|4
+  L08170 + STORE     /   /        X                                          store 0602|4=+11111
+  L08180 + TR        /   /        AVOID DBLE SUMS IF ROW 0 THRU 12           tr 0161
+  L08190 + ADD       /   /        ADD DOUBLE SUM CONVERSION CNTRS            add 0603|5         
+  L08200 + STORE     /   /        X                                          store 0603|5
+  L08210 + R SUB     L08170       ALTER SINGLE SUM ADDRESSES                 acc=-14 0602            
+         + SUB       TWO          X                                          acc=-14 0604
+         + STORE A   L08160       X                                          
+         + STORE A   L08170       X                                          
+         + SUB       ONE          ALTER DOUBLE SUM ADDRESSES                 acc=-14 0605|7|11
+         + STORE A   L08190       X                                          
+         + STORE A   L08200       X                                          
+         + SUB       L02070       LOOP END TEST                              acc-(-14 610)
+         - TR +      L08040       CONVERT NEXT GROUP                                         
+  
+         + R ADD     LDROW        TEST FOR END OF CARD                       
+         + SUB       LDROWEND     X                                         
+         + TR +      RDROW        X                                          
+  
+                                  Is punch pattern correct?
+   
+         + R ADD     T00050       ADD SINGLE SUM CONVERSION CNTRS            
+         + TR 0      RDCARD
+         + SUB       CVTST        SUBTRACT CONVERSION TEST SUM               
+         - TR 0      GETDAT       TRANSFER IF CORRECT                      
+  
+                                  No, punched pattern not correct
+                                  STOP light 2
+   
+         + SENSE     0066         PUNCH PATTERN ERROR STOP                   
+         + STOP      RDCARD       X                                          
+  
+                                  Yes, punched pattern correct
+                                  Obtain actual location and data
+           HEAD      05000
+   
+  GETDAT + R ADD     ZERO         CLEAR HIGH ORDER OF CONVERTED     
+         + STORE     T00050       LOC CODE ADDR
+         + STORE     T00052       X                                 
+         + STORE     T00054       X                                         
+         - LOAD MQ   T00050       OBTAIN LOC AS DIVIDEND              mq=loc on right halfword = 0|loc
+         - DIV       TENFW        DIVIDE BY TEN                       div by full word 0362 0363 = 0|10
+         - STORE MQ  T00050       STORE. T00051 HOLDS LOCATION
+
+         + R ADD     ZERO         CLEAR ACCUMULATOR                   clear remainder in acc, MQ=cod/10   
+         - LOAD MQ   T00052       OBTAIN CODE AS DIVIDEND             mq= 0|D0+1 = 0|xbsn where x=D or A, b=0 or 8, s=space or S, n=0..9 most significant digit of data value
+         - DIV       TENFW        DIVIDE BY TEN                       div by full word 0362 0363 = 0|10
+         - STORE     0002         LOC 0003 HOLDS 6TH DIGIT OF DATA
+         + R ADD     ZERO         CLEAR ACCUMULATOR                   clear remainder in acc, MQ=cod/10   
+         - DIV       TENFW        DIVIDE BY TEN                          
+         - STORE     0004         GET DIGIT FOR SIGN
+         + R ADD     T00040       IF ROW X NOT SET THEN SIGN DATA IS POSITIVE
+         + STORE     SIGN         AND SIGN IS ZEROE, NON ZERO IF DATA IS NEGATIVE
+         + R ADD     ZERO         CLEAR ACCUMULATOR                   clear remainder in acc, MQ=cod/100   
+         - DIV       TENFW        DIVIDE BY TEN                          
+         - STORE     0004         BASE WILL BE ZERO IF 
+         + R ADD     0005         BASE IS DECIMAL OR
+         + STORE     BASE         NON ZERO IF BASE IS OCTAL
+         + R ADD     ZERO         CLEAR ACCUMULATOR                   clear remainder in acc, MQ=cod/1000   
+         - DIV       TENFW        DIVIDE BY TEN                          
+         - STORE     0004         GET DIGIT FOR ADDRESS MODE
+         + R ADD     0005         AMODE IS ZERO IF MODE IS A (ABSOLUTE)
+         + SUB       ONE          OR NON ZERO IF MODE IS D
+         + STORE     AMODE        (DATA RELATIVE)
+ 
+         - LOAD MQ   D100K        ADD 6TH DIGIT OF DATA       
+         - MPY       0002         X
+         - L LEFT    0035         AND STORE THE RESULTING DATA
+         - ADD       T00054       IN T00054-55 
+         - STORE     T00054       X
+
+         + R ADD     BASE         CHECK BASE. IF ZERO (BASE IS DECIMAL) 
+         + TR 0      GETDAT2      THEN SKIP OCTAL CONVERSION
+
+         - LOAD MQ   T00054       CONVERT DATA TO OCTAL
+         + R ADD     *            X
+         + TR        MQ2OCT       X 
+         - STORE MQ  T00054       X
+
+         + R ADD     AMODE        CHECK ADDRESS MODE. IF ZERO (ABSOLUTE LOC)
+         + TR 0      GETDAT1      CONVERT ALSO LOC TO OCTAL
+         + TR        GETDAT2
+
+ GETDAT1 - LOAD MQ   T00050       CONVERT LOCATION TO OCTAL
+         + R ADD     *            X
+         + TR        MQ2OCT       X
+         - STORE MQ  T00050       X 
+
+
+ GETDAT2 + R ADD     SIGN         CHECK SIGN OF DATA. IF ZERO (DATA SIGN
+         + TR 0      GETDAT3      IS POSITIVE) SKIP SETTING DATA AS NEGATIVE
+
+         + R SUB     ZERO         X
+         + SUB AB    T00055       X
+         + STORE     T00055       X
+
+ GETDAT3 + R ADD     AMODE        CHECK ADDRESS MODE. IF ZERO (ABSOLUTE LOC)
+         + TR 0      GETDAT4      SKIP SETTING LOCATION AS RELATIVE TO DATA ADDRESS
+
+         + R ADD     T00051       X
+         + ADD       DATAAD       X
+         + STORE     T00051       X
+
+ GETDAT4 + TR        PRDATA       TRANFER TO PRINT LOC-DATA (T00051 T00055)
+
+                                  Convert MQ to octal (6 digits) subroutine
+           HEAD      08000
+         
+ MQ2OCT  + ADD       TWO
+         + STORE A   MQ2OCEX      STORE EXIT ADDRESS
+         + R ADD     ZERO         CLEAR ACCUMULATOR                   
+         - STORE     0002         CLEAR RESULT IN 0002-3
+         + STORE     0001         INIT DIGIT COUNTER IN 0001
+NXOCTDIG + R ADD     ZERO         X
+         - DIV       TENFW        DIV BY TEN TO GET 
+         - STORE     0004         LAST DIGIT IN 0004-5
+         + R ADD     0005         CHECK IT IS NOT 8 OR 9
+         + SUB       EIGHT        X
+         + TR +      ERROCT       BAD OCTAL DIGIT
+         - R ADD     0004         SHIFT OCTAL DIGIT TO
+         - A LEFT    0015         POS N 0 0 0 0 0
+         - STORE     0004         X
+         - R ADD     0002         SHIFT RESULT TO RIGHT
+         - A RIGHT   0003         ONE OCTAL DIGIT AND
+         - ADD       0004         ADD NEW DIGIT
+         - STORE     0002         X
+         + R ADD     0001         INCR DIGIT COUNT
+         + ADD       ONE          X
+         + STORE     0001         X
+         + SUB       SIX          TEST IF 6 DIGITS PROCESSED
+         + TR 0      MQ2OCTEN
+         + TR        NXOCTDIG     GO TO PROCESS NEXT OCTAL DIGIT
+MQ2OCTEN - LOAD MQ   0002         LOAD RESULT BACK IN MQ
+MQ2OCEX  + TR        0            EXIT ADDRESS. RETURN TO CALLER         
+
+                                  Bad code
+                                  STOP light 3
+  
+ ERROCT  + SENSE     0067         ERROR INDICATION BAD OCTAL 
+         + STOP      RDCARD       DIGIT 8 OR 9                                      
+
+                                  Print location and data if to print                                
+           HEAD      10000
+                                                                                                 
+  PRDATA + SENSE     0073         SKIPS IF NO PRINTING DESIRED
+         - TR        L31320       PRINTING DESIRED
+         + TR        PRDATEND     NO PRINTING DESIRED
+  L31320 + WRITE     0512         PREPARE TO WRITE PRINTER             
+         + R ADD     TWO          COLUMN INDICATOR                    
+         - STORE     T00052       X                                   
+         + R ADD     T00055       DATA
+         + TR +      L33040       AVOID PICKING SELECTOR IF PLUS      
+         + SENSE     0518         PICK FOR MINUS                      
+  L33040 + L RIGHT   0035         SHIFT TO MQ                          
+         + R ADD     T00051       ACTUAL LOCATION                     
+         + A RIGHT   0017         X                                   
+         + L RIGHT   0013         SHIFT INTO MQ
+  L33080 + L LEFT    0003         BEGIN CONVERSION LOOP               
+         + A LEFT    0020         FOUR TIMES DIGITS EQUIV TO ADDR      
+         + ADD       ROW0LAD      ADD CARD IMAGE BASE                 
+         + STORE A   L33160       CORRECT ROW IMAGE ADDRESS        
+         + STORE A   L33170       X                                   
+         - R ADD     T00052       ALTER COLUMN INDICATOR               
+         + A RIGHT   0001         X                                   
+         - STORE     T00052       X                                   
+  L33160 - ADD       /   /        ADD CORRECT ROW IMAGE
+  L33170 - STORE     /   /        STORE IN CORRECT ROW IMAGE           
+         + A LEFT    0027         TEST FOR END OF CONVERSION           
+         + TR 0      L33080       REMAIN IN LOOP IF ZERO
+         + R ADD     CDBUFA       SET UP FIRST COPY ADDRESS            
+         + STORE A   L35030       X                                   
+  L35030 - COPY      /   /        COPY WORD                           
+         + R ADD     L35030       ALTER COPY ADDRESS                  
+         + SUB       TWO          X                                   
+         + STORE A   L35030       X                                   
+         + SUB       CPROWEND     TEST FOR END OF LOOP                
+         + TR +      L35030       REMAIN IN LOOP                      
+PRDATEND + TR        WRDATA       TRANSFER TO WRITE DATA ON PUNCHED CARD 
+                                                                                                
+                                  Add location and data to punched card image in mem
+           HEAD      12000
+
+  WRDATA + R ADD     WRDATCNT     CHECK IF PUNCHED CARD IS EMPTY
+         + TR 0      PH0          YES, EMPTY
+         + TR        PH1          NO, ALREADY SOME DATA
+
+     PH0 + R ADD     T00051       GET LOCATION OF DATA 
+         + STORE     WRDATLOC     AND SAVE IT AS PUNCHED CARD LOC 
+         + L RIGHT   0019         CHECK IF IS EVEN
+         + R ADD     ZERO         X
+         + L LEFT    0001         X
+         + TR 0      PHOK         OK, IS EVEN
+                              
+         + SENSE     0067         OUTPUT BINARY CARD CANNOT 
+         + SENSE     0068         START AT ODD LOCATION
+         + STOP      PHEXIT       STOP LIGHT 3 AND 4
+
+    PHOK + R ADD     ONE
+         + STORE     WRDATCNT     ONE HWORD IN PUNCHED CARD
+         + R ADD     T00055       GET DATA
+         + STORE     PHBUF        SAVE IT AS FIRTS DATA IN PUNCHED CARD
+         + TR        PHEXIT       X
+
+ PHTWICE + SENSE     0068         ERROR: SAME LOC USED TWICE
+         + STOP      PHEXIT       STOP LIGHT 4
+
+     PH1 + R ADD     WRDATLOC     CHECK IF ADDING DATA TWICE AT SAME LOC
+         + SUB       T00051       DATA LOC
+         + TR 0      PHTWICE      X
+         + R ADD     WRDATLOC     CHECK IF DATA TO ADD AT LOC IS JUST AT
+         + ADD       WRDATCNT     NEXT FREE LOCATION OF ALREADY PRESENT WORDS
+         + SUB       T00051       IN PUNCHED CARD
+         + TR 0      PH3          YES, JUST ADD DATA TO PUNCHED CARD
+         
+     PH2 + R ADD     *            NO, FLUSH CURRENT PUNCHED CARD
+         + TR        FLUSH        X
+         + TR        PH0          THEN INIT A NEW FRESH PUNCHED CARD
+
+     PH3 + R ADD     PHBUFAD      SET UP STORE IN PUNCHED
+         + ADD       WRDATCNT     CARD IMAGE TO STORE 
+         + STORE A   PHADD        WRDATCNT HALF WORDS
+         + R ADD     T00055       GET HALF WORD DATA TO BE 
+   PHADD + STORE     /   /        STORED IN PUNCHED CARD
+         + R ADD     WRDATCNT     INCR NUMBER
+         + ADD       ONE          OF DATA HWORDS IN PUNCHED CADR
+         + STORE     WRDATCNT     IF FULL (44 HWORDS)
+         + SUB       D44          FLUSH THE CARD
+         + TR 0      PHFULL       X
+         + TR        PHEXIT       X
+  PHFULL + R ADD     *            X
+         + TR        FLUSH        X
+  PHEXIT + TR        RDCARD       X
+
+                                  flush punched card data to binary cards
+           HEAD      15000
+
+ FLUSH   + ADD       TWO
+         + STORE A   FLUSHEX      STORE EXIT ADDRESS
+         + R ADD     PHBUFAD      INIT START OF DATA TO PUNCH
+         + STORE A   L40290       X                                   
+         + STORE A   L40300       X      
+         + ADD       WRDATCNT     STORE ZERO AFTER KAST HALF WORD
+         + STORE A   FLADD        IN PUNCH BUFFER 
+         + R ADD     ZERO         X
+   FLADD + STORE     /   /        X
+         + R ADD     WRDATCNT     HALF WORD COUNT FOR 
+         + STORE     T00053       FIRST CARD                       
+         + ADD       ONE          ADD ONE TO CARRY IF ODD
+         + L RIGHT   0019         FORCE LOW ORDER BIT TO ZERO
+         + A LEFT    0030         FULLWORDS TO LEFT                                   
+         + ADD       WRDATLOC     ADD DATA ADDRESS 
+         - STORE     CDBUF        X                                   
+         - STORE     T00002       START CK SUM                        
+         + WRITE     1024         PREPARE TO PUNCH                    
+         - COPY      CDBUF        COPY 9 LEFT ROW                     
+         + R SUB     L40290       SETUP TEST LOOP WORD
+         + ADD       T00053       X                                   
+         + STORE     T00052       X                                   
+  L40280 - R ADD     T00002       PARTIAL CK SUM                      
+  L40290 - COPY      /   /        COPY WORD                           
+  L40300 - ADD       /   /        ADD TO CK SUM                       
+         - STORE     T00002       X                                   
+         + R ADD     L40290       ALTER LOOP ADDRESSES                
+         + SUB       TWO          X                                   
+         + STORE A   L40290       X                                   
+         + STORE A   L40300       X                                   
+         + ADD       T00052       TEST FOR END OF LOOP                
+         + TR +      L40280       REMAIN IN LOOP IF PLUS              
+         - COPY      T00002       COPY CK SUM                         
+  L40400 + R ADD     ZERO         SET PUNCHED CARD AS 
+         + STORE     WRDATCNT     EMPTY 
+ FLUSHEX + TR        /   /        RETURN FROM SUBROUTINE
+        
+                                  Input card deck terminated. 
+                                  flush punched card deck and stop                          
+           HEAD      20000
+         
+     END + R ADD     WRDATCNT     CHECK IF PUNCHED CARD IS EMPTY
+         + TR 0      END1         YES, EMPTY
+         + R ADD     *            NO, THERE ARE SOME WORDS PENDING TO BE PUNCHED
+         + TR        FLUSH        SO FLUSH PUNCHED CARD
+    END1 + STOP      0006         PROGRAM FINISH                      
+
+                                  PROG CONSTANTS
+   
+INITRAD1 + STOP      L08190       INITIAL TRANSFER ADDR FOR DOUBLE SUM ADDITION INSTRUCTION            
+ SKPDSUM + STOP      L08210       AVOID DOUBLE SUM TRANSFER ADDR              
+  CDBUFA + STOP      CDBUF        9 LEFT ROW IMAGE ADDRESS                  
+ ROW0LAD - STOP      T00036       0 LEFT ROW IMAGE ADDRESS                   
+ ROW0RAD - COPY      T00038       0 RIGHT ROW IMAGE ADDRESS                   
+LDROWEND - R SUB     T00048       END OF CARD ROW READ LOOP BECAUSE END OF CARD IMAGE 
+CPROWEND - COPY      T00048       END OF CARD ROW COPY LOOP BECAUSE END OF CARD IMAGE 
+    DATA + STOP      D4096        BASE OF DATA REGION                         
+ PHBUFAD + STOP      PHBUF        FIRST PUNCHED CARD DATA HWORD
+                      
+                                  DATA REGION
+
+           ORG       EVEN         START DATA REGION ON EVEN ADDR
+
+ZERO       DEF             0 
+ONE        DEF             1
+
+TWO        DEF             2
+D44        DEF            44
+
+D100K      DEF             0
+           DEF        100000
+
+SIX        DEF             6
+CVTST      DEF       *025546      Conversion test sum (=11110 dec)
+
+EIGHT      DEF             8 
+D4096      DEF          4096
+
+TENFW      DEF             0
+TEN        DEF            10 
+
+
+           ORG       EVEN         START TEMP REGION ON EVEN ADDR
+
+CDBUF      RES             2      Card Image
+T00002     RES             2
+T00004     RES            32
+T00036     RES             2
+T00038     RES             2
+T00040     RES             4
+T00044     RES             4
+T00048     DEF             0
+T00049     DEF             0
+
+T00050     DEF             0 
+T00051     DEF             0      location of data (bin value, but not converted to octal yet)
+T00052     DEF             0
+T00053     DEF             0
+T00054     DEF             0
+T00055     DEF             0
+T00056     DEF             0
+T00057     DEF             0
+
+DATAAD     DEF             0      data address for previous program assembly
+SIGN       DEF             0      =0 if data >0, !=0 if data negative
+BASE       DEF             0      =0 if decimal, !=0 if octal
+AMODE      DEF             0      =0 if loc is absolute, !=0 if loc is data relative
+ 
+WRDATLOC   DEF             0      LOCATION OF DATA IN PUNCHED CARD 
+WRDATCNT   DEF             0      NUMBER OF WORDS IN PUNCHED CARD BUFFER PHBUF 
+PHBUF      RES            46      BUFFER OF DATA TO BE PUNCHED
+
+
+                                  Usage:
+
+                                  Used to generate data cards after running NAA SpeedEx Assembler
+                                  Generates binary cards that stores BBBBBB halfword values 
+                                  at LLLL location
+
+                                  Input Card Deck:
+                                     a) Self Loading Card
+                                     b) Program Binary Cards
+                                     c) Input Data Cards 
+
+                                  Operation: 
+                                     - Select load from card 
+                                     - set address to 0000
+                                     - press load button
+
+                                  Output:
+                                     Binary Cards with data from input cards
+
+   
+                                  Normal Stops:
+                                  - STOP At IC 0325 on termination (card reader end of file)
+
+                                  Error stops:
+                                  - STOP At IC 0123 if input card punch pattern not correct (also set light 2)
+                                  - STOP At IC 0207 if digit 8 or 9 in octal number (also set light 3)
+                                  - STOP At IC 0253 output card cannot start odd location  (also set light 3 and 4)
+                                  - STOP At IC 0260 same loc used twice (also set light 4)
+
+
+                                  Input card:
+
+                                    Column:
+                                            10   15  18                       46
+                                             v    v  v                        v
+                                      ------------------------------------------------------+ 
+                                    /        LLLL RE BBBBBB                   Comment       |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   +--------------------------------------------------------+
+
+                                  where: LLLL   = index/location
+                                         RE     = Select Data region or Absolute location, Octal or decimal
+                                         BBBBBB = halfword value
+
+                                         LLLL D0 BBBBBB
+                                              A8-     B
+
+                                               if LLLL are all blanck -> skip card
+                                               else 4 digits must be provided for LLLL
+
+                                         RE values
+
+                                                D  -> this card defines a halfword BBBBBB 
+                                                      to be stored on previous 
+                                                      NAA assembled program data region
+                                                      index number LLLL (always decimal)
+
+                                                D8 -> value BBBBBB is an octal number
+                                                D0 ->                 a decimal number
+
+                                                A  -> this card defines a halfword BBBBBB to be 
+                                                      stored at absolute location LLLL
+                                                A8 -> both LLLL and BBBBBB are octal 
+                                                A0 ->                      are decimal 
+
+                                         BBBBBB value: blank digits are interpreted as zero
+                                         a minus sign can appear any place: -123456, or -2 or 45-
+                          
+                                           
+
+
+

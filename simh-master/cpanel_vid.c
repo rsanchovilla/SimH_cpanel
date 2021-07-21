@@ -39,7 +39,8 @@
 
 struct cpvidrec cpvid;   
 int xpixels, ypixels;
-uint32 *surface = NULL;
+uint32 *surface = NULL;       // main control panel surface. This is the whole 100% scale panel
+uint32 *surface_scale = NULL; // control panel surface anti-aliased to current scale. 
 
 // decompose a surface uint32 to its rr,gg,bb components. return alpha channel
 int get_surface_rgb_color(uint32 color, int *r_Color, int *g_Color, int *b_Color)
@@ -162,6 +163,7 @@ int cpvid_init(const char *name, int xp, int yp, void *dptr)
     xpixels = xp;
     ypixels = yp;
     surface = (uint32 *)realloc (surface, xpixels*ypixels*sizeof(*surface));
+    surface_scale = (uint32 *)malloc (xpixels*ypixels*sizeof(*surface));
     if (!surface) return 0;
     ret = (0 == vid_open ((DEVICE *)dptr, name, xp, yp, 0));
     return ret;
@@ -176,7 +178,9 @@ void cpvid_shutdown(void)
     vid_close();
     while (vid_window) SDL_Delay (20);
     if (surface) free(surface);
+    if (surface_scale) free(surface_scale);
     surface = NULL;
+    surface_scale = NULL;
 }
 
 
@@ -186,6 +190,8 @@ int cpvid_sync(int checkredraw)
     int i, count, ndraw;
 
     if (checkredraw) {
+        // check refresh in progress
+        if (vid_refresh_in_progress) return 0;
         // check if DRAW/REDRAW events in SQL queue; if so do not redraw
         count = SDL_PeepEvents(&events[0], 20, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
         ndraw=0;
@@ -205,9 +211,11 @@ int cpvid_sync(int checkredraw)
     // vid_refresh ();
     //
     // If cpanel is big (say 3000x1000 pixels), surface will have >10MB. To avoid these big
-    // malloc and memcopy, a new surface list refresh is used, to update only changes surface zones
+    // malloc and memcopy, a new surface list refresh is used, to update only changed surface zones
+    // a list of changed rectangles is provided in RectList structure- Also this allows to scale
+    // down image using antialiasing for a nice control panel looking
 
-    vid_refresh_ex(surface, xpixels, ypixels);
+    vid_refresh_ex(surface, surface_scale);
     return 1; // redraw done
 }
 

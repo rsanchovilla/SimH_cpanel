@@ -23,6 +23,9 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from the author.
 
+   Jun-2021     RSV     Added support for incremental updates based on
+                        rectangle list to greatly reduce CPU usage
+                        (identified & isolated with ifdef's)
    Jun-2020     RSV     Some additions & changes for Control Panel support
                         (identified & isolated with ifdef's)
    08-Nov-2013  MB      Added globals for current mouse status
@@ -227,9 +230,25 @@ extern int (*vid_display_kb_event_process)(SIM_KEY_EVENT *kev);
 
 extern t_stat vid_SetWindowSizeAndPos (int Mode, int x, int y); // Mode=1 -> set pos, =2 -> set size, =3 -> move relative (eg x=-3, y=+4 -> move window 3 pixels left, 4 down)
 extern void vid_set_icon(void);
+extern void vid_set_title(char * title);
 extern int icon_rgb_defined;
 extern void vid_set_system_cursor (int nCursor); // nCursor=0 -> slashed circle, =1 -> set arrow cursor, =2 -> hand cursor, =3 -> Four pointed arrow pointing north, south, east, and west
-extern void vid_refresh_ex (uint32 * surf, int ww, int hh); 
+extern void vid_refresh_ex (uint32 * surf, uint32 * surf_scale);
+
+#define RECTLIST_MAX     150
+typedef struct {
+    int MaxCount;                // table size
+    int Count;                   // Count of rectamgles in list. -1 if table full, 
+    int x[RECTLIST_MAX];         // rectangle to paint
+    int y[RECTLIST_MAX];
+    int w[RECTLIST_MAX];
+    int h[RECTLIST_MAX];
+    int Scale;                   // at this scale (100 = same size, 50 = 50% size, 200=double size)
+} rectlist;
+rectlist RectList;
+extern int vid_frames_count;
+extern int vid_refresh_in_progress; 
+
 
 #endif
 

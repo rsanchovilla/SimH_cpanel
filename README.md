@@ -1,7 +1,7 @@
 # SimH_cpanel
 
 
-**NEW!: IBM NORC Control Panels**
+**NEW!: IBM 701 Simulator**
 
 The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
@@ -13,13 +13,19 @@ i650 and NORC work is based on my own SimH simulators
 
 Currently supports visuals emulation for:
 
-* IBM NORC Naval Ordnance Research Calculator. 
+* IBM 701 Electronic Data Processing Machine (NEW JUL/2021)
+  * panels for tapes, main console, card read, card punch and printer
+
+  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20701%20Panels%20Screen%20Shots.png) to preview control panels.
+   Source code in simh-master folder
+
+* IBM NORC Naval Ordnance Research Calculator (UPDATED JUL/2021)
   * panels for tapes, printer, indicator panel and main console
 
   Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20NORC%20Panels%20Screen%20Shots.png) to preview control panels.
    Source code in simh-master folder
 
-* IBM 650 Magnetic Drum Data Processing machine (UPDATED 2021). 
+* IBM 650 Magnetic Drum Data Processing machine (UPDATED JUL/2021). 
   * IBM 727 tapes, IBM 533 card read punch, and IBM 355 RAMAC Disk Storage
   * panels for IBM 653 Storage Unit and IBM 652 Control Unit
 
@@ -56,6 +62,19 @@ Hot keys are available when GUI window has the focus:
 
 Press power button to quit the simulator.
 (On i7000 control panels, only ^E, ^Y and ^T available)
+
+## IBM 701
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701.zip) to download all the test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM 701 demo.bat` batch file to demo computer and its equipement demo
+* execute `run IBM 701 NAA SpeedEx Assembler (1953).bat` batch file to assemble and run a sample program 
+* execute `run IBM 701 NR9003 Assembly (1952).bat` batch file to assemble and run a sample program with Nathaniel Rochester Symbolic Assembler
+* execute `run IBM 701 SO2 Regional Assembler (1952).bat` batch file to assemble and run a sample program with William F. McClelland Assembler  
+ 
+  ![IBM 701 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/i701.png)
 
 ## IBM NORC
 

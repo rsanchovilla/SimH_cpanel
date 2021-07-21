@@ -27,6 +27,7 @@
    10-Nov-17    RSV     control panel support for rcornwell sims IBM 7000 family
    14-May-20    RSV     Control panel support for IBM 650 use standard LIB PNG bitmaps
    27-Jan-21    RSV     Control panel support for IBM NORC mouse drag and zoom
+   22-Jun-21    RSV     Control panel support for IBM 701 support for big panels
 
    This module implements the following routines to support control panel simulation.
 

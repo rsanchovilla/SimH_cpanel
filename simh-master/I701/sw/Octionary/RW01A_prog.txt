@@ -1,0 +1,82 @@
+
+                           Load Read Write Subprogram on mem
+
+                           by Nathaniel Rochester
+                           May 1952 
+
+                           taken from binary card image in page 81 of
+                           Logical Organization of the new IBM Scentific Calculator
+                           Proceedings of the association for computing machinery
+                           from https://archive.org
+
+OCT                        DEC=Number are in decimal (default). OCT=Numbers are in octal
+
+NNNN S OPNAME   OP ADDR    Remarks ... (max 79 chars)
+
+                           Self loading of Subprogram on top of mem
+
+
+0000   77 0002             0000   - COPY    31 0002  read 10 fullwords from card
+0001   77 0004             0001   - COPY    31 0004  up to addr 0011
+0002   77 0006             0002   - COPY    31 0006
+0003   77 0010             0003   - COPY    31 0008  load prog in this card and store it  
+0004   77 0012             0004   - COPY    31 0010  at addr 2014 dec, 3736 octal 
+0005   01 0010             0005   + TR      01 0008
+0006   11 0000             0006   + ADD     09 0000
+0007   15 0010             0007   + STORE A 13 0008
+0010   77 3736             0008   - COPY    31 2014
+0011   12 0010             0009   + R ADD   10 0008
+0012   01 0006             0010   + TR      01 0006 
+0013   00 0000             0011   + STOP    00 0000  stop here when this card loaded
+                                                     press start to continue loading 
+                                                     next binary card
+
+                           subproc COPY n words
+                           subprog called with 
+                           a      + R ADD         a
+                           a+1    + TR         3740
+                           a+2              param 1  addr for COPY (12 lower bits) 
+                           a+3    +|-       param 2  Instr to exec on end of file. If minus, COPY addr decremented
+                           a+4    + TR      param 3  Instr to exec on end of record if sw1 is up
+                                                          if sw1 down, call 0120 octal, then transfer to end of record routine
+                              
+
+3736   00 0060             2014  + STOP     00 0048  INDEX, 2N OR TR OV 2N
+3737   00 0002             2015  + STOP     00 0002  will be +2 or -2: value to increment COPY addr
+3740   11 3776             2016  + ADD      09 2046  acc += 2: now acc has addr of param 1
+3741   15 3747             2017  + STORE A  13 2023  set addr to read param 1
+3742   11 3777             2018  + ADD      09 2047  acc = acc + 1
+3743   15 3751             2019  + STORE A  13 2025  set addr of param 2
+3744   15 3770             2020  + STORE A  13 2040  set also this addr to transfer to on end of file
+3745   11 3777             2021  + ADD      09 2047  acc = acc + 1
+3746   15 3772             2022  + STORE A  13 2042  set addr of param 3 to transfer to on end of record
+3747   12 0000             2023  + R ADD    10 [  ]  read param 1
+3750   15 3766             2024  + STORE A  13 2038  store as addr for COPY
+3751   17 0000             2025  + LOAD MQ  15 [  ]  mq=param 2
+3752   12 3776             2026  + R ADD    10 2046  acc = 2
+3753   24 0000             2027  + L LEFT   20 0000  sgn of acc set to be same as MQ sgn 
+3754   14 3737             2028  + STORE    12 2015  (3737) = +2 or -2 depending on sign of param 2
+3755   24 0044             2029  + L LEFT   20 0036  acc=param 2
+3756   01 3764             2030  + TR       01 2036  to store param 2 as end of copy addr
+
+3757   06 3737             2031  + R SUB    06 2015  incr copy addr 
+3760   11 3766             2032  + ADD      09 2038   with +2 or -2
+3761   15 3766             2033  + STORE A  13 2038    increment
+3762   06 3737             2034  + R SUB    06 2015  incr param 2 addr  
+3763   11 3736             2035  + ADD      09 2014    with +2 or -2
+3764   14 3736             2036  + STORE    12 2014     increment
+3765   04 3771             2037  + TR 0     04 2041  if zero -> tr to end of record
+3766   77 0000             2038  - COPY     31 [  ] 
+3767   01 3757             2039  + TR       01 2031
+3770   01 0000             2040  + TR       01 [  ]  end of file -> transfer to addr in param 2
+3771   36 0105             2041  + SENSE    30 0069  end of record: sense switch 1
+3772   01 0057             2042  + TR       01 [  ]  if sw off/up -> transfer to addr in param 3
+3773   12 3773             2043  + R ADD    10 2043  if sw on/down -> call subprog at addr 0170 octal
+3774   01 0170             2044  + TR       01 0120                   then transfer to addr in param 3
+3775   01 3772             2045  + TR       01 2042
+
+3776   00 0002             2046  + STOP     00 0002  const 2 
+3777   00 0001             2047  + STOP     00 0001  const 1
+4000   30 4000             2048  + READ     24 2048  Start reading from card reader
+4001   01 3766             2049  + TR       01 2038
+                           

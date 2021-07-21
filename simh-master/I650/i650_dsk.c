@@ -220,6 +220,9 @@ int dsk_set_mov_seq(int unit,int arm)
     //   read: 110 msec
     //   write: 135 msec
     //
+    //   These figures comes from ramac doc. They does not take into account the arm
+    //   acceleration time. To get a more realistic movement, time to start/stop vertical
+    //   motion is reduced, but time per physical disk takes into account vertical acceleration
 
     int cmd, i, d1, d2, dy, di, tr, msec, time;
     static int ArmVertAccel[] = {40,25,15,10};
@@ -421,7 +424,7 @@ t_stat dsk_srv(UNIT * uptr)
     int                 time, msec, arm, cmd, nseq, hint;
     t_int64             InitTime, nWordTimes; 
     int                 bSequenceInProgress=0; 
-    int                 bFastMode, n; 
+    int                 bFastMode; 
 
     // init IBM 652 Control Unit internal registers
     bFastMode = 0;

@@ -2185,7 +2185,7 @@ t_stat sim_instr(void)
                     } 
                     // time to process one card in fast mode
                     msec=2; // 2 msec per card -> 500 cards per sec -> 2000 cards needs 4 sec
-                    if (sim_os_msec() - nCardInReadHopperTm0 < msec) continue; 
+                    if (sim_os_msec() - nCardInReadHopperTm0 < (uint32) msec) continue; 
                     // card processed, reset when card gone
                     if (nCardInReadHopper!=nCardInReadHopper0) {
                         nCardInReadHopper0=nCardInReadHopper; 
@@ -2612,7 +2612,7 @@ t_stat cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cpt
 t_stat cpu_set_speed(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 {
     float num; 
-    int c;
+    int c, MachineCycle_usec;
     CONST char *tptr;
 
     if (cptr == NULL) return SCPE_ARG;
@@ -2644,8 +2644,11 @@ t_stat cpu_set_speed(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 
     // calculate values
     CpuSpeed_Acceleration = (int) (num * 100); 
-    CpuSpeed.WordTimeMax  = (int) (CpuSpeed.msec * CpuSpeed_Acceleration / (100.0 * 0.096));
-    CpuSpeed.WordTimeObjectivePerSec = (int) (10416.0 * num);
+    // machine cycle: 96 microseconds as word time
+    MachineCycle_usec = 96; 
+    CpuSpeed.WordTimeMax  = (int) (CpuSpeed.msec * CpuSpeed_Acceleration * 1000 / (100.0 * MachineCycle_usec));
+    // 10416 Word times per second at x1.0 speed
+    CpuSpeed.WordTimeObjectivePerSec = (int) (1000000 * CpuSpeed_Acceleration / (MachineCycle_usec * 100));
     return SCPE_OK;
 }
 

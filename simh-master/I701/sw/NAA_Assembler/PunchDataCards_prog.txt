@@ -1,0 +1,522 @@
+                                                             Punch Binary Data cards Program
+                             
+                                                             (c) April 2021 by Roberto Sancho
+                           
+                                                             Written to allow the creation of binary punched cards
+                                                             with data to be loaded in memory. 
+                                                             Based on NAA SpeedEx code
+                                                              
+                                                             To be used to load data necessary for mnemonics
+                                                             definition on NAA SpeedEx assembler
+                           
+                                                             To be assembled with Ibm701Assembler.exe cross-assembler
+                           
+                           
+                                      HEAD      NAA          Generate NAA Assembler source  
+                                      HEAD      01000
+                           
+                                                             Set up initial contidition
+                                      ORG       0040  
+                           
+OCT
+0050 +12 0044              START    + R ADD     0036         PROGRAM LOCATION MINUS FILE LOCATIO      (*0044)=addr of program origin set by naa assembler part 1
+0051 +05 0047                       + SUB       0039         X                                        (*0047)=last file addr-> first assembled prog instr 
+0052 +11 0533                       + ADD       D4096        ADD 4096
+0053 +11 0523                       + ADD       ONE          ADD ONE TO CARRY IF ODD
+0054 +27 0023                       + A RIGHT   0019         FORCE LOW ORDER BIT TO ZERO         
+0055 +26 0023                       + A LEFT    0019         X                                   
+0056 +14 0630                       + STORE     DATAAD       ORIGIN DATA STORAGE                      
+0057 +12 0522                       + R ADD     ZERO         CLEAR INFORMATION AREA             
+0060 -14 0044                       - STORE     0036         X                                  
+0061 -14 0046                       - STORE     0038         X                     
+0062 +14 0634                       + STORE     WRDATLOC     INIT CARD WRITE DATA LOCATION (ZERO = NO LOC)
+0063 +14 0635                       + STORE     WRDATCNT     INIT CARD WRITE DATA HALF WORDS
+                                    
+                             
+                                                             Read card and convert to binary
+                                      HEAD      02000
+                                       
+0064 +32 4004                RDCARD + WRITE     2052         INSURE THAT MQ NOT IN USE            
+0065 +30 4000                RDCRD2 + READ      2048         PREPARE TO READ CARD                 
+0066 +12 0522                       + R ADD     ZERO         CLEAR CARD CONVERSION COUNTERS      (0602..0610)=0    
+0067 -14 0620                L02040 - STORE     T00050       X                                    
+0070 -14 0622                       - STORE     T00052       X                                    
+0071 -14 0624                       - STORE     T00054       X                                    
+0072 -14 0626                L02070 - STORE     T00056       X
+0073 +12 0510                       + R ADD     CDBUFA       RESET TO INITIAL COPY LOOP ADDRESS     
+0074 +15 0101                       + STORE A   RDROW        WITH START OF CARD IMAGE BUFFER ADDRESS 
+0075 +15 0102                       + STORE A   LDROW        X                                    
+0076 +12 0506                       + R ADD     INITRAD1     RESET TRANSFER ADDRESS               
+0077 +15 0147                       + STORE A   L08180       X                                    
+0100 +36 0100                       + SENSE     0064         TURN OFF SENSE LIGHS                
+                             
+0101 -37 0000                RDROW  - COPY      /   /        COPY LEFT WORD                 copy 0520|4           -3- -7-                         
+0102 -06 0000                LDROW  - R SUB     /   /        TEST SIGN OF WORD JUST COPIED  acc=-370 000  XXXXxxxx.OO OOO .... | ..................      
+0103 +03 0501                       + TR +      END          END OF FILE IF PLUS                                  
+                             
+0104 +12 0101                       + R ADD     RDROW        LEFT COPY ADDRESS              acc=-37 0520                   
+0105 +15 0122                       + STORE A   L05010       ALTER LQ ADDRESS                     
+0106 +05 0524                       + SUB       TWO  
+0107 +15 0110                       + STORE A   L04RWD       ALTER RIGHT WORD COPY ADDRESS        
+0110 -37 0000                L04RWD - COPY      /   /        COPY RIGHT WORD                copy 0522                 
+0111 +05 0524                       + SUB       TWO          X                              acc=-37 0524                                 
+0112 +15 0101                       + STORE A   RDROW        ALTER LEFT WORD COPY ADDRESS   
+0113 +15 0102                       + STORE A   LDROW        X                                    
+0114 +06 0067                       + R SUB     L02040       RESET ADDRESSES IN CARD        acc=+store 0602      
+0115 +15 0145                       + STORE A   L08160       CONVERSION LOOP                   
+0116 +15 0146                       + STORE A   L08170       X                                    
+0117 +11 0523                       + ADD       ONE          X                              acc=+store 0603                               
+0120 +15 0150                       + STORE A   L08190       X                                    
+0121 +15 0151                       + STORE A   L08200       X                                    
+0122 -17 0000                L05010 - LOAD MQ   /   /        SPACE LEFT ROW IMAGE           load mq 0520 get  left row mq=370 000     
+0123 +24 0005                       + L LEFT    0005         X .*echo ROW_IMAGE:Q           acc=37, mq=0      inserted one bit        
+0124 +26 0001                       + A LEFT    0001         X                              acc=76            -3- -7- v new bit inserted 
+0125 +25 0006                       + L RIGHT   0006         X                              mq=370000 000000  .OO OOO x .... | ..................          
+0126 +12 0110                       + R ADD     L04RWD       TEST FOR ZERO ROW              acc=-37 0522                   
+0127 +05 0512                       + SUB       ROW0RAD      X                              sub-770566 -> acc=44           
+0130 +04 0141                       + TR 0      L08120       X                              exit to 0152 if instr 0121 has addr 0566
+                             
+0131 +02 0132                L08040 + TR OV     L08050       RESET OVERFLOW INDICATOR       convert MQ=binary b1 b2 b3 b4 b5            
+0132 +12 0532                L08050 + R ADD     EIGHT        X .*echo MQ_to_convert:Q       SET END OF GROUP INDICATOR     to acc= decimal +11111: a 1 if bit n=1, a 0 if bit=0
+0133 +24 0001                L08060 + L LEFT    0001         DIGIT INTO ACCUMULATOR         
+0134 -02 0144                       - TR OV     L08150       LOOP END IF LAST DIGIT                     
+0135 -14 0616                       - STORE     T00048       CONVERSION TO BINARY           
+0136 +26 0002                       + A LEFT    0002         X                              
+0137 -11 0616                       - ADD       T00048       X                              
+0140 +01 0133                       + TR        L08060       RETURN FOR NEXT DIGIT    
+                             
+0141 +12 0507                L08120 + R ADD     SKPDSUM      ALTER TRANSFER FORK ADDRESS                
+0142 +15 0147                       + STORE A   L08180       X                                          
+0143 +01 0131                       + TR        L08040       RETURN TO CONVERSION                       
+                             
+0144 +26 0022                L08150 + A LEFT    0018         POSITION CONVERTED GROUP                   Acc=+11111|0        
+0145 +11 0000                L08160 + ADD       /   /        ADD SINGLE SUM CONVERSION CNTRS            add 0602|4
+0146 +14 0000                L08170 + STORE     /   /        X                                          store 0602|4=+11111
+0147 +01 0000                L08180 + TR        /   /        AVOID DBLE SUMS IF ROW 0 THRU 12           tr 0161
+0150 +11 0000                L08190 + ADD       /   /        ADD DOUBLE SUM CONVERSION CNTRS            add 0603|5         
+0151 +14 0000                L08200 + STORE     /   /        X                                          store 0603|5
+0152 +06 0146                L08210 + R SUB     L08170       ALTER SINGLE SUM ADDRESSES                 acc=-14 0602            
+0153 +05 0524                       + SUB       TWO          X                                          acc=-14 0604
+0154 +15 0145                       + STORE A   L08160       X                                          
+0155 +15 0146                       + STORE A   L08170       X                                          
+0156 +05 0523                       + SUB       ONE          ALTER DOUBLE SUM ADDRESSES                 acc=-14 0605|7|11
+0157 +15 0150                       + STORE A   L08190       X                                          
+0160 +15 0151                       + STORE A   L08200       X                                          
+0161 +05 0072                       + SUB       L02070       LOOP END TEST                              acc-(-14 610)
+0162 -03 0131                       - TR +      L08040       CONVERT NEXT GROUP                                         
+                             
+0163 +12 0102                       + R ADD     LDROW        TEST FOR END OF CARD                       
+0164 +05 0513                       + SUB       LDROWEND     X                                         
+0165 +03 0101                       + TR +      RDROW        X                                          
+                             
+                                                             Is punch pattern correct?
+                              
+0166 +12 0620                       + R ADD     T00050       ADD SINGLE SUM CONVERSION CNTRS            
+0167 +04 0064                       + TR 0      RDCARD
+0170 +05 0531                       + SUB       CVTST        SUBTRACT CONVERSION TEST SUM               
+0171 -04 0174                       - TR 0      GETDAT       TRANSFER IF CORRECT                      
+                             
+                                                             No, punched pattern not correct
+                                                             STOP light 2
+                              
+0172 +36 0102                       + SENSE     0066         PUNCH PATTERN ERROR STOP                   
+0173 +00 0064                       + STOP      RDCARD       X                                          
+                             
+                                                             Yes, punched pattern correct
+                                                             Obtain actual location and data
+                                      HEAD      05000
+                              
+0174 +12 0522                GETDAT + R ADD     ZERO         CLEAR HIGH ORDER OF CONVERTED     
+0175 +14 0620                       + STORE     T00050       LOC CODE ADDR
+0176 +14 0622                       + STORE     T00052       X                                 
+0177 +14 0624                       + STORE     T00054       X                                         
+0200 -17 0620                       - LOAD MQ   T00050       OBTAIN LOC AS DIVIDEND              mq=loc on right halfword = 0|loc
+0201 -22 0534                       - DIV       TENFW        DIVIDE BY TEN                       div by full word 0362 0363 = 0|10
+0202 -16 0620                       - STORE MQ  T00050       STORE. T00051 HOLDS LOCATION
+                           
+0203 +12 0522                       + R ADD     ZERO         CLEAR ACCUMULATOR                   clear remainder in acc, MQ=cod/10   
+0204 -17 0622                       - LOAD MQ   T00052       OBTAIN CODE AS DIVIDEND             mq= 0|D0+1 = 0|xbsn where x=D or A, b=0 or 8, s=space or S, n=0..9 most significant digit of data value
+0205 -22 0534                       - DIV       TENFW        DIVIDE BY TEN                       div by full word 0362 0363 = 0|10
+0206 -14 0002                       - STORE     0002         LOC 0003 HOLDS 6TH DIGIT OF DATA
+0207 +12 0522                       + R ADD     ZERO         CLEAR ACCUMULATOR                   clear remainder in acc, MQ=cod/10   
+0210 -22 0534                       - DIV       TENFW        DIVIDE BY TEN                          
+0211 -14 0004                       - STORE     0004         GET DIGIT FOR SIGN
+0212 +12 0606                       + R ADD     T00040       IF ROW X NOT SET THEN SIGN DATA IS POSITIVE
+0213 +14 0631                       + STORE     SIGN         AND SIGN IS ZEROE, NON ZERO IF DATA IS NEGATIVE
+0214 +12 0522                       + R ADD     ZERO         CLEAR ACCUMULATOR                   clear remainder in acc, MQ=cod/100   
+0215 -22 0534                       - DIV       TENFW        DIVIDE BY TEN                          
+0216 -14 0004                       - STORE     0004         BASE WILL BE ZERO IF 
+0217 +12 0005                       + R ADD     0005         BASE IS DECIMAL OR
+0220 +14 0632                       + STORE     BASE         NON ZERO IF BASE IS OCTAL
+0221 +12 0522                       + R ADD     ZERO         CLEAR ACCUMULATOR                   clear remainder in acc, MQ=cod/1000   
+0222 -22 0534                       - DIV       TENFW        DIVIDE BY TEN                          
+0223 -14 0004                       - STORE     0004         GET DIGIT FOR ADDRESS MODE
+0224 +12 0005                       + R ADD     0005         AMODE IS ZERO IF MODE IS A (ABSOLUTE)
+0225 +05 0523                       + SUB       ONE          OR NON ZERO IF MODE IS D
+0226 +14 0633                       + STORE     AMODE        (DATA RELATIVE)
+                            
+0227 -17 0526                       - LOAD MQ   D100K        ADD 6TH DIGIT OF DATA       
+0230 -20 0002                       - MPY       0002         X
+0231 -24 0043                       - L LEFT    0035         AND STORE THE RESULTING DATA
+0232 -11 0624                       - ADD       T00054       IN T00054-55 
+0233 -14 0624                       - STORE     T00054       X
+                           
+0234 +12 0632                       + R ADD     BASE         CHECK BASE. IF ZERO (BASE IS DECIMAL) 
+0235 +04 0251                       + TR 0      GETDAT2      THEN SKIP OCTAL CONVERSION
+                           
+0236 -17 0624                       - LOAD MQ   T00054       CONVERT DATA TO OCTAL
+0237 +12 0237                       + R ADD     *            X
+0240 +01 0264                       + TR        MQ2OCT       X 
+0241 -16 0624                       - STORE MQ  T00054       X
+                           
+0242 +12 0633                       + R ADD     AMODE        CHECK ADDRESS MODE. IF ZERO (ABSOLUTE LOC)
+0243 +04 0245                       + TR 0      GETDAT1      CONVERT ALSO LOC TO OCTAL
+0244 +01 0251                       + TR        GETDAT2
+                           
+0245 -17 0620               GETDAT1 - LOAD MQ   T00050       CONVERT LOCATION TO OCTAL
+0246 +12 0246                       + R ADD     *            X
+0247 +01 0264                       + TR        MQ2OCT       X
+0250 -16 0620                       - STORE MQ  T00050       X 
+                           
+                           
+0251 +12 0631               GETDAT2 + R ADD     SIGN         CHECK SIGN OF DATA. IF ZERO (DATA SIGN
+0252 +04 0256                       + TR 0      GETDAT3      IS POSITIVE) SKIP SETTING DATA AS NEGATIVE
+                           
+0253 +06 0522                       + R SUB     ZERO         X
+0254 +07 0625                       + SUB AB    T00055       X
+0255 +14 0625                       + STORE     T00055       X
+                           
+0256 +12 0633               GETDAT3 + R ADD     AMODE        CHECK ADDRESS MODE. IF ZERO (ABSOLUTE LOC)
+0257 +04 0263                       + TR 0      GETDAT4      SKIP SETTING LOCATION AS RELATIVE TO DATA ADDRESS
+                           
+0260 +12 0621                       + R ADD     T00051       X
+0261 +11 0630                       + ADD       DATAAD       X
+0262 +14 0621                       + STORE     T00051       X
+                           
+0263 +01 0320               GETDAT4 + TR        PRDATA       TRANFER TO PRINT LOC-DATA (T00051 T00055)
+                           
+                                                             Convert MQ to octal (6 digits) subroutine
+                                      HEAD      08000
+                                    
+0264 +11 0524               MQ2OCT  + ADD       TWO
+0265 +15 0315                       + STORE A   MQ2OCEX      STORE EXIT ADDRESS
+0266 +12 0522                       + R ADD     ZERO         CLEAR ACCUMULATOR                   
+0267 -14 0002                       - STORE     0002         CLEAR RESULT IN 0002-3
+0270 +14 0001                       + STORE     0001         INIT DIGIT COUNTER IN 0001
+0271 +12 0522              NXOCTDIG + R ADD     ZERO         X
+0272 -22 0534                       - DIV       TENFW        DIV BY TEN TO GET 
+0273 -14 0004                       - STORE     0004         LAST DIGIT IN 0004-5
+0274 +12 0005                       + R ADD     0005         CHECK IT IS NOT 8 OR 9
+0275 +05 0532                       + SUB       EIGHT        X
+0276 +03 0316                       + TR +      ERROCT       BAD OCTAL DIGIT
+0277 -12 0004                       - R ADD     0004         SHIFT OCTAL DIGIT TO
+0300 -26 0017                       - A LEFT    0015         POS N 0 0 0 0 0
+0301 -14 0004                       - STORE     0004         X
+0302 -12 0002                       - R ADD     0002         SHIFT RESULT TO RIGHT
+0303 -27 0003                       - A RIGHT   0003         ONE OCTAL DIGIT AND
+0304 -11 0004                       - ADD       0004         ADD NEW DIGIT
+0305 -14 0002                       - STORE     0002         X
+0306 +12 0001                       + R ADD     0001         INCR DIGIT COUNT
+0307 +11 0523                       + ADD       ONE          X
+0310 +14 0001                       + STORE     0001         X
+0311 +05 0530                       + SUB       SIX          TEST IF 6 DIGITS PROCESSED
+0312 +04 0314                       + TR 0      MQ2OCTEN
+0313 +01 0271                       + TR        NXOCTDIG     GO TO PROCESS NEXT OCTAL DIGIT
+0314 -17 0002              MQ2OCTEN - LOAD MQ   0002         LOAD RESULT BACK IN MQ
+0315 +01 0000              MQ2OCEX  + TR        0            EXIT ADDRESS. RETURN TO CALLER         
+                           
+                                                             Bad code
+                                                             STOP light 3
+                             
+0316 +36 0103               ERROCT  + SENSE     0067         ERROR INDICATION BAD OCTAL 
+0317 +00 0064                       + STOP      RDCARD       DIGIT 8 OR 9                                      
+                           
+                                                             Print location and data if to print                                
+                                      HEAD      10000
+                                                                                                                            
+0320 +36 0111                PRDATA + SENSE     0073         SKIPS IF NO PRINTING DESIRED
+0321 -01 0323                       - TR        L31320       PRINTING DESIRED
+0322 +01 0361                       + TR        PRDATEND     NO PRINTING DESIRED
+0323 +32 1000                L31320 + WRITE     0512         PREPARE TO WRITE PRINTER             
+0324 +12 0524                       + R ADD     TWO          COLUMN INDICATOR                    
+0325 -14 0622                       - STORE     T00052       X                                   
+0326 +12 0625                       + R ADD     T00055       DATA
+0327 +03 0331                       + TR +      L33040       AVOID PICKING SELECTOR IF PLUS      
+0330 +36 1006                       + SENSE     0518         PICK FOR MINUS                      
+0331 +25 0043                L33040 + L RIGHT   0035         SHIFT TO MQ                          
+0332 +12 0621                       + R ADD     T00051       ACTUAL LOCATION                     
+0333 +27 0021                       + A RIGHT   0017         X                                   
+0334 +25 0015                       + L RIGHT   0013         SHIFT INTO MQ
+0335 +24 0003                L33080 + L LEFT    0003         BEGIN CONVERSION LOOP               
+0336 +26 0024                       + A LEFT    0020         FOUR TIMES DIGITS EQUIV TO ADDR      
+0337 +11 0511                       + ADD       ROW0LAD      ADD CARD IMAGE BASE                 
+0340 +15 0345                       + STORE A   L33160       CORRECT ROW IMAGE ADDRESS        
+0341 +15 0346                       + STORE A   L33170       X                                   
+0342 -12 0622                       - R ADD     T00052       ALTER COLUMN INDICATOR               
+0343 +27 0001                       + A RIGHT   0001         X                                   
+0344 -14 0622                       - STORE     T00052       X                                   
+0345 -11 0000                L33160 - ADD       /   /        ADD CORRECT ROW IMAGE
+0346 -14 0000                L33170 - STORE     /   /        STORE IN CORRECT ROW IMAGE           
+0347 +26 0033                       + A LEFT    0027         TEST FOR END OF CONVERSION           
+0350 +04 0335                       + TR 0      L33080       REMAIN IN LOOP IF ZERO
+0351 +12 0510                       + R ADD     CDBUFA       SET UP FIRST COPY ADDRESS            
+0352 +15 0353                       + STORE A   L35030       X                                   
+0353 -37 0000                L35030 - COPY      /   /        COPY WORD                           
+0354 +12 0353                       + R ADD     L35030       ALTER COPY ADDRESS                  
+0355 +05 0524                       + SUB       TWO          X                                   
+0356 +15 0353                       + STORE A   L35030       X                                   
+0357 +05 0514                       + SUB       CPROWEND     TEST FOR END OF LOOP                
+0360 +03 0353                       + TR +      L35030       REMAIN IN LOOP                      
+0361 +01 0362              PRDATEND + TR        WRDATA       TRANSFER TO WRITE DATA ON PUNCHED CARD 
+                                                                                                                           
+                                                             Add location and data to punched card image in mem
+                                      HEAD      12000
+                           
+0362 +12 0635                WRDATA + R ADD     WRDATCNT     CHECK IF PUNCHED CARD IS EMPTY
+0363 +04 0365                       + TR 0      PH0          YES, EMPTY
+0364 +01 0405                       + TR        PH1          NO, ALREADY SOME DATA
+                           
+0365 +12 0621                   PH0 + R ADD     T00051       GET LOCATION OF DATA 
+0366 +14 0634                       + STORE     WRDATLOC     AND SAVE IT AS PUNCHED CARD LOC 
+0367 +25 0023                       + L RIGHT   0019         CHECK IF IS EVEN
+0370 +12 0522                       + R ADD     ZERO         X
+0371 +24 0001                       + L LEFT    0001         X
+0372 +04 0376                       + TR 0      PHOK         OK, IS EVEN
+                                                         
+0373 +36 0103                       + SENSE     0067         OUTPUT BINARY CARD CANNOT 
+0374 +36 0104                       + SENSE     0068         START AT ODD LOCATION
+0375 +00 0434                       + STOP      PHEXIT       STOP LIGHT 3 AND 4
+                           
+0376 +12 0523                  PHOK + R ADD     ONE
+0377 +14 0635                       + STORE     WRDATCNT     ONE HWORD IN PUNCHED CARD
+0400 +12 0625                       + R ADD     T00055       GET DATA
+0401 +14 0636                       + STORE     PHBUF        SAVE IT AS FIRTS DATA IN PUNCHED CARD
+0402 +01 0434                       + TR        PHEXIT       X
+                           
+0403 +36 0104               PHTWICE + SENSE     0068         ERROR: SAME LOC USED TWICE
+0404 +00 0434                       + STOP      PHEXIT       STOP LIGHT 4
+                           
+0405 +12 0634                   PH1 + R ADD     WRDATLOC     CHECK IF ADDING DATA TWICE AT SAME LOC
+0406 +05 0621                       + SUB       T00051       DATA LOC
+0407 +04 0403                       + TR 0      PHTWICE      X
+0410 +12 0634                       + R ADD     WRDATLOC     CHECK IF DATA TO ADD AT LOC IS JUST AT
+0411 +11 0635                       + ADD       WRDATCNT     NEXT FREE LOCATION OF ALREADY PRESENT WORDS
+0412 +05 0621                       + SUB       T00051       IN PUNCHED CARD
+0413 +04 0417                       + TR 0      PH3          YES, JUST ADD DATA TO PUNCHED CARD
+                                    
+0414 +12 0414                   PH2 + R ADD     *            NO, FLUSH CURRENT PUNCHED CARD
+0415 +01 0435                       + TR        FLUSH        X
+0416 +01 0365                       + TR        PH0          THEN INIT A NEW FRESH PUNCHED CARD
+                           
+0417 +12 0516                   PH3 + R ADD     PHBUFAD      SET UP STORE IN PUNCHED
+0420 +11 0635                       + ADD       WRDATCNT     CARD IMAGE TO STORE 
+0421 +15 0423                       + STORE A   PHADD        WRDATCNT HALF WORDS
+0422 +12 0625                       + R ADD     T00055       GET HALF WORD DATA TO BE 
+0423 +14 0000                 PHADD + STORE     /   /        STORED IN PUNCHED CARD
+0424 +12 0635                       + R ADD     WRDATCNT     INCR NUMBER
+0425 +11 0523                       + ADD       ONE          OF DATA HWORDS IN PUNCHED CADR
+0426 +14 0635                       + STORE     WRDATCNT     IF FULL (44 HWORDS)
+0427 +05 0525                       + SUB       D44          FLUSH THE CARD
+0430 +04 0432                       + TR 0      PHFULL       X
+0431 +01 0434                       + TR        PHEXIT       X
+0432 +12 0432                PHFULL + R ADD     *            X
+0433 +01 0435                       + TR        FLUSH        X
+0434 +01 0064                PHEXIT + TR        RDCARD       X
+                           
+                                                             flush punched card data to binary cards
+                                      HEAD      15000
+                           
+0435 +11 0524               FLUSH   + ADD       TWO
+0436 +15 0500                       + STORE A   FLUSHEX      STORE EXIT ADDRESS
+0437 +12 0516                       + R ADD     PHBUFAD      INIT START OF DATA TO PUNCH
+0440 +15 0464                       + STORE A   L40290       X                                   
+0441 +15 0465                       + STORE A   L40300       X      
+0442 +11 0635                       + ADD       WRDATCNT     STORE ZERO AFTER KAST HALF WORD
+0443 +15 0445                       + STORE A   FLADD        IN PUNCH BUFFER 
+0444 +12 0522                       + R ADD     ZERO         X
+0445 +14 0000                 FLADD + STORE     /   /        X
+0446 +12 0635                       + R ADD     WRDATCNT     HALF WORD COUNT FOR 
+0447 +14 0623                       + STORE     T00053       FIRST CARD                       
+0450 +11 0523                       + ADD       ONE          ADD ONE TO CARRY IF ODD
+0451 +25 0023                       + L RIGHT   0019         FORCE LOW ORDER BIT TO ZERO
+0452 +26 0036                       + A LEFT    0030         FULLWORDS TO LEFT                                   
+0453 +11 0634                       + ADD       WRDATLOC     ADD DATA ADDRESS 
+0454 -14 0536                       - STORE     CDBUF        X                                   
+0455 -14 0540                       - STORE     T00002       START CK SUM                        
+0456 +32 2000                       + WRITE     1024         PREPARE TO PUNCH                    
+0457 -37 0536                       - COPY      CDBUF        COPY 9 LEFT ROW                     
+0460 +06 0464                       + R SUB     L40290       SETUP TEST LOOP WORD
+0461 +11 0623                       + ADD       T00053       X                                   
+0462 +14 0622                       + STORE     T00052       X                                   
+0463 -12 0540                L40280 - R ADD     T00002       PARTIAL CK SUM                      
+0464 -37 0000                L40290 - COPY      /   /        COPY WORD                           
+0465 -11 0000                L40300 - ADD       /   /        ADD TO CK SUM                       
+0466 -14 0540                       - STORE     T00002       X                                   
+0467 +12 0464                       + R ADD     L40290       ALTER LOOP ADDRESSES                
+0470 +05 0524                       + SUB       TWO          X                                   
+0471 +15 0464                       + STORE A   L40290       X                                   
+0472 +15 0465                       + STORE A   L40300       X                                   
+0473 +11 0622                       + ADD       T00052       TEST FOR END OF LOOP                
+0474 +03 0463                       + TR +      L40280       REMAIN IN LOOP IF PLUS              
+0475 -37 0540                       - COPY      T00002       COPY CK SUM                         
+0476 +12 0522                L40400 + R ADD     ZERO         SET PUNCHED CARD AS 
+0477 +14 0635                       + STORE     WRDATCNT     EMPTY 
+0500 +01 0000               FLUSHEX + TR        /   /        RETURN FROM SUBROUTINE
+                                   
+                                                             Input card deck terminated. 
+                                                             flush punched card deck and stop                          
+                                      HEAD      20000
+                                    
+0501 +12 0635                   END + R ADD     WRDATCNT     CHECK IF PUNCHED CARD IS EMPTY
+0502 +04 0505                       + TR 0      END1         YES, EMPTY
+0503 +12 0503                       + R ADD     *            NO, THERE ARE SOME WORDS PENDING TO BE PUNCHED
+0504 +01 0435                       + TR        FLUSH        SO FLUSH PUNCHED CARD
+0505 +00 0006                  END1 + STOP      0006         PROGRAM FINISH                      
+                           
+                                                             PROG CONSTANTS
+                              
+0506 +00 0150              INITRAD1 + STOP      L08190       INITIAL TRANSFER ADDR FOR DOUBLE SUM ADDITION INSTRUCTION            
+0507 +00 0152               SKPDSUM + STOP      L08210       AVOID DOUBLE SUM TRANSFER ADDR              
+0510 +00 0536                CDBUFA + STOP      CDBUF        9 LEFT ROW IMAGE ADDRESS                  
+0511 -00 0602               ROW0LAD - STOP      T00036       0 LEFT ROW IMAGE ADDRESS                   
+0512 -37 0604               ROW0RAD - COPY      T00038       0 RIGHT ROW IMAGE ADDRESS                   
+0513 -06 0616              LDROWEND - R SUB     T00048       END OF CARD ROW READ LOOP BECAUSE END OF CARD IMAGE 
+0514 -37 0616              CPROWEND - COPY      T00048       END OF CARD ROW COPY LOOP BECAUSE END OF CARD IMAGE 
+0515 +00 0533                  DATA + STOP      D4096        BASE OF DATA REGION                         
+0516 +00 0636               PHBUFAD + STOP      PHBUF        FIRST PUNCHED CARD DATA HWORD
+                                                 
+                                                             DATA REGION
+                           
+                                      ORG       EVEN         START DATA REGION ON EVEN ADDR
+                           
+0522 +00 0000              ZERO       DEF             0 
+0523 +00 0001              ONE        DEF             1
+                           
+0524 +00 0002              TWO        DEF             2
+0525 +00 0054              D44        DEF            44
+                           
+0526 +00 0000              D100K      DEF             0
+0527 +30 3240                         DEF        100000
+                           
+0530 +00 0006              SIX        DEF             6
+0531 +02 5546              CVTST      DEF       *025546      Conversion test sum (=11110 dec)
+                           
+0532 +00 0010              EIGHT      DEF             8 
+0533 +01 0000              D4096      DEF          4096
+                           
+0534 +00 0000              TENFW      DEF             0
+0535 +00 0012              TEN        DEF            10 
+                           
+                           
+                                      ORG       EVEN         START TEMP REGION ON EVEN ADDR
+                           
+0536 +00 0000              CDBUF      RES             2      Card Image
+0540 +00 0000              T00002     RES             2
+0542 +00 0000              T00004     RES            32
+0602 +00 0000              T00036     RES             2
+0604 +00 0000              T00038     RES             2
+0606 +00 0000              T00040     RES             4
+0612 +00 0000              T00044     RES             4
+0616 +00 0000              T00048     DEF             0
+0617 +00 0000              T00049     DEF             0
+                           
+0620 +00 0000              T00050     DEF             0 
+0621 +00 0000              T00051     DEF             0      location of data (bin value, but not converted to octal yet)
+0622 +00 0000              T00052     DEF             0
+0623 +00 0000              T00053     DEF             0
+0624 +00 0000              T00054     DEF             0
+0625 +00 0000              T00055     DEF             0
+0626 +00 0000              T00056     DEF             0
+0627 +00 0000              T00057     DEF             0
+                           
+0630 +00 0000              DATAAD     DEF             0      data address for previous program assembly
+0631 +00 0000              SIGN       DEF             0      =0 if data >0, !=0 if data negative
+0632 +00 0000              BASE       DEF             0      =0 if decimal, !=0 if octal
+0633 +00 0000              AMODE      DEF             0      =0 if loc is absolute, !=0 if loc is data relative
+                            
+0634 +00 0000              WRDATLOC   DEF             0      LOCATION OF DATA IN PUNCHED CARD 
+0635 +00 0000              WRDATCNT   DEF             0      NUMBER OF WORDS IN PUNCHED CARD BUFFER PHBUF 
+0636 +00 0000              PHBUF      RES            46      BUFFER OF DATA TO BE PUNCHED
+                           
+                           
+                                                             Usage:
+                           
+                                                             Used to generate data cards after running NAA SpeedEx Assembler
+                                                             Generates binary cards that stores BBBBBB halfword values 
+                                                             at LLLL location
+                           
+                                                             Input Card Deck:
+                                                                a) Self Loading Card
+                                                                b) Program Binary Cards
+                                                                c) Input Data Cards 
+                           
+                                                             Operation: 
+                                                                - Select load from card 
+                                                                - set address to 0000
+                                                                - press load button
+                           
+                                                             Output:
+                                                                Binary Cards with data from input cards
+                           
+                              
+                                                             Normal Stops:
+                                                             - STOP At IC 0325 on termination (card reader end of file)
+                           
+                                                             Error stops:
+                                                             - STOP At IC 0123 if input card punch pattern not correct (also set light 2)
+                                                             - STOP At IC 0207 if digit 8 or 9 in octal number (also set light 3)
+                                                             - STOP At IC 0253 output card cannot start odd location  (also set light 3 and 4)
+                                                             - STOP At IC 0260 same loc used twice (also set light 4)
+                           
+                           
+                                                             Input card:
+                           
+                                                               Column:
+                                                                       10   15  18                       46
+                                                                        v    v  v                        v
+                                                                 ------------------------------------------------------+ 
+                                                               /        LLLL RE BBBBBB                   Comment       |
+                                                              |                                                        |
+                                                              |                                                        |
+                                                              |                                                        |
+                                                              |                                                        |
+                                                              |                                                        |
+                                                              |                                                        |
+                                                              |                                                        |
+                                                              |                                                        |
+                                                              |                                                        |
+                                                              |                                                        |
+                                                              +--------------------------------------------------------+
+                           
+                                                             where: LLLL   = index/location
+                                                                    RE     = Select Data region or Absolute location, Octal or decimal
+                                                                    BBBBBB = halfword value
+                           
+                                                                    LLLL D0 BBBBBB
+                                                                         A8-     B
+                           
+                                                                          if LLLL are all blanck -> skip card
+                                                                          else 4 digits must be provided for LLLL
+                           
+                                                                    RE values
+                           
+                                                                           D  -> this card defines a halfword BBBBBB 
+                                                                                 to be stored on previous 
+                                                                                 NAA assembled program data region
+                                                                                 index number LLLL (always decimal)
+                           
+                                                                           D8 -> value BBBBBB is an octal number
+                                                                           D0 ->                 a decimal number
+                           
+                                                                           A  -> this card defines a halfword BBBBBB to be 
+                                                                                 stored at absolute location LLLL
+                                                                           A8 -> both LLLL and BBBBBB are octal 
+                                                                           A0 ->                      are decimal 
+                           
+                                                                    BBBBBB value: blank digits are interpreted as zero
+                                                                    a minus sign can appear any place: -123456, or -2 or 45-
+                                                     
+                                                                      
+                           
+                           
+                           

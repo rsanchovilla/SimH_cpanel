@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   ROBERTO SANCHO BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -29,7 +29,6 @@
 
    IBM 650 CPU control panel (1954 & 1955 version)
    IBM 533 Card Read Punch
-   IBM 727 Magnetic Tape
    IBM 727 Magnetic Tape
    IBM 355 RAMAC
    IBM 652 Control Unit
@@ -324,6 +323,7 @@ int CpuSpeed_Acceleration_save = 0; // save value during HotKey ^F Max Speed
 int bShowInfo                  = 0; // flag to show info for ^I 
 uint32 ShowInfoTm0             = 0; // last sim_os_msec() of ShowInfo display
 int InstrExec0                 = 0; // instr executed on ShowInfoTm0
+int FramesCount0               = 0; // num of frames on ShowInfoTm0
 
 // for ibm 407 printer printout
 int lptPrintOutDoneCount       = -1; // number of lines already printed on cpanel paper
@@ -963,7 +963,7 @@ void Refresh_CardReadPunch(void)
     }
 
     // animation sequence: punched card going out to already-punched-card-deck on card punch take stacker 
-    // 9 states animation
+    // 4 states animation
     // duration of card animation: 120 msec this value is a guess; used because it looks good
     AnimateCard(tm0CardInPunchStacker, IBM650.PunchStacker, 1,4, 120, &has_changed, &AnimationFinished);
     if (AnimationFinished) {
@@ -1357,10 +1357,11 @@ int mt_do_animation_seq(int unit,
             if (u3) {
                 if (mtcab[unit].seq[nseq].R_VacCol_inc==0) {
                     // update mtcab[unit].rew_u3 to signal progress of rewind
-                    p = 100 - 100*m / msec; 
-                    if (p>100) p=100; if (p<0) p=0; // m=0..100 is % of time of step remaining
+
+                    p = 1000 - 1000*m / msec; 
+                    if (p>1000) p=1000; if (p<0) p=0; // m=0..1000 is % x10 of time of step remaining
                     // calculate rew_u3 = how much medium has been rew 
-                    mtcab[unit].rew_u3 = u3 * p / 100;
+                    mtcab[unit].rew_u3 = (int) (((t_int64) (u3)) * ((t_int64) (p)) / 1000);
                 } else {
                     // update mt_unit[unit].u3 to signal progress of r/w
                     mt_unit[unit].u3 = (int) (1.0 * u3 * (n < 0 ? msec-m:m) / msec); // to avoid int overflow
@@ -1736,7 +1737,7 @@ void mt_set_rew_seq(int unit)
 
     bHi=0; // flag high/low speed rew
     mtcab[unit].rew_u3 = u3; // amount on tape medium (inch x1000) in reel R that should be rewinded
-                             // original mt_info[].u3 is set to 0 on OP_RWD command start in mt_cmd()
+                             // original mt_unit[].u3 is set to 0 on OP_RWD command start in mt_cmd()
 
     // check if rew at high speed. Hi Speed rew is done when at least 450 feet in take reel
     // 450 feet -> 5400 inches
@@ -1907,7 +1908,7 @@ void mt_reels_mov(int unit, int cmd,
     }
     // check if a new r/w operation can be schedulled 
     if ((mtcab[unit].rw_msec == 0) && (cmd==1) && (mt_info[unit].cmd_tm0)){ 
-        // if no r/w op being animated (rw_tm0=0), and now a r/w operation is being done by tape
+        // if no r/w op being animated (rw_msec=0), and now a r/w operation is being done by tape (cmd_tm0 > 0)
         mt_info[unit].cmd_tm0=0;   // mark this as being animated (to avoid animating it twice)
         mtcab[unit].rw_tm0     = tnow; 
         mtcab[unit].rw_msec    = mt_info[unit].cmd_msec;
@@ -2567,30 +2568,35 @@ void Refresh_ShowInfo(void)
 {
     char buf[300];
     int WordTimeCountPerSec; 
-    int InstrExecPerSec, n; 
+    int InstrExecPerSec, n, fps; 
     uint32 msec; 
 
     // set dynamic contents of CtrlInfoPanel and MT_InfoPanel
 
     if (bShowInfo>1) {
-        WordTimeCountPerSec =  InstrExecPerSec =  0;
+        WordTimeCountPerSec =  InstrExecPerSec = fps = 0;
     } else {
         WordTimeCountPerSec =  Measure_CpuSpeed(1); 
-        InstrExecPerSec =  0;
+        InstrExecPerSec = fps = 0;
         msec = Refresh_tnow - ShowInfoTm0; 
         if ((msec > 0) && (msec < 1000)) {
             n = Measure_CpuSpeed(2)- InstrExec0;
             if (n<0) n=0;
             InstrExecPerSec = n * 1000 / msec;
+            n = vid_frames_count - FramesCount0;
+            fps             = n * 1000 / msec;
+            if (fps>60) fps=60;
+            if (fps<0) fps=0;
         }
         ShowInfoTm0 = Refresh_tnow;
         InstrExec0  = Measure_CpuSpeed(2); 
+        FramesCount0 = vid_frames_count; 
     }
 
     sprintf(buf, "FPS: %d \n"
         "Cpu Speed: %d (x%0.1f) %d IPS\n"
         "Cards in read hopper: %d", 
-        cpanel_measured_fps, 
+        fps, 
         WordTimeCountPerSec,  WordTimeCountPerSec / 10416.0, InstrExecPerSec, 
         nCardInReadHopper);
 
@@ -2609,7 +2615,7 @@ void Refresh_ShowInfo(void)
             } else if ((mtcab[i].mt_is == MT_is_rewinding) || 
                        ((mtcab[i].mt_is == MT_is_loading_tape) && (mtcab[i].rew_u3 > 0))) {
                 // if rewinding then the ammount of tape medium used is in variable recsize, not in u3
-                // if loading tape AND rew_u3 > 0 then the tpe is shounf a nice rew animation started with *R
+                // if loading tape AND rew_u3 > 0 then the tape is showing a nice rew animation started with *R
                 n = mtcab[i].rew_u3; 
                 c = 'R';
             } else {
@@ -2961,7 +2967,7 @@ struct {
 //    switch "name" to nnnn 
 //    press "name"
 //    depress "name"
-t_stat ibm650_set_csw_btn_cmd(int32 flag, CONST char *cptr)
+t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
 {
     char gbuf[4*CBUFSIZE];
     int n, id, result, neg, IsNeg; 

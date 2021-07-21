@@ -1,0 +1,72 @@
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+                                  This is same as BP06_prog.txt but using
+                                  cross assembler syntax (and alphabetic symbol names)
+           ORG       0048
+
+BP06     + ADD       TWO
+         + STORE A   BP06EX
+         + R ADD     R                                               
+         + STORE A   RDHWORD      Initialize ADD sequence, COPY         
+         + STORE A   CPFWORD        sequence, COPY index, and           
+         + ADD       V            ADD index                           
+         + STORE A   CPFWEND                                               
+         + STORE A   RDHWEND                                               
+         + R SUB     R1                                               
+         + SUB       V            Add half word count and loading       
+         + A RIGHT   0017           address to check sum  
+         - STORE     CHKSUM         
+RDHWORD  + R ADD     [  ]                                               
+         + STORE     R                                               
+         - R SUB     RFULLW                                               
+         + A LEFT    0001         
+         - ADD       CHKSUM       ADD sequence for computing
+         - STORE     CHKSUM         card check sum
+         + R SUB     RDHWORD                                               
+         + SUB       ONE
+         + STORE A   RDHWORD         
+         + ADD       RDHWEND         
+         + TR +      RDHWORD         
+         + WRITE     1024         Select card punch
+         - COPY      CHKSUM       Punch nine left                       
+CPV      - COPY      V            Punch nine right                      
+         + R ADD     CPFWORD      initialize end of card index 
+         + SUB       D44         
+CPLOOP0  + STORE A   CPEND                                               
+CPLOOP   + R ADD     CPFWORD                                               
+         + SUB       CPFWEND                                               
+         + TR 0      FLUSHEX                                               
+CPFWORD  - COPY      [  ]                                               
+         + R ADD     CPFWORD      COPY sequence                         
+         + SUB       TWO                                               
+         + STORE A   CPFWORD                                               
+         + SUB       CPEND                                               
+         + TR +      CPLOOP         
+         + R ADD     CPFWORD      Coincidence test for end of card
+         + SUB       CPFWEND       and end of COPY conditions
+         + TR 0      FLUSHEX         
+         + WRITE     1024         Select card punch
+         + R ADD     CPEND        Set up end of card index
+         + ADD       CPD48         
+         + TR OV     CPLOOP0      Continue punching
+BP06EX   + TR        /   /        End of punching
+
+CPFWEND  - COPY      0000         LOOP END FOR COPY DATA TO CARD PUNCH 
+RDHWEND  + R ADD     0000         LOOP END FOR READ DATA TO COMPUTE CHKSUM
+CPEND    - COPY      0000         COPY END LOOP   addr 28
+CPD48    - COPY      0048
+          
+           ORG       EVEN
+
+RFULLW     DEF       0
+R          DEF       0            START OF BLOCK TO PUNCH (MUST BE EVEN)
+V          DEF       0            NUMBER OF HALF WORDS TO PUNCH (MUST BE EVEN)
+R1         DEF       0            ADDR WHERE WILL BE RESTORED BY SL05 (=R-2)
+CHKSUM     RES       2
+
+
+D44        DEF       44
+ONE        DEF       1            addr 9
+TWO        DEF       2
+                                

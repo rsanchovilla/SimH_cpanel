@@ -84,10 +84,11 @@ DEVICE              cdr_dev = {
     NULL, NULL, &cdr_help, NULL, NULL, &cdr_description
 };
 
-// buffer to hold read cards in take hopper of each unit
-// to be printed by carddeck command
+// buffer to hold read cards in take hopper of ecah unit (cards just read)
+// to be printed by carddeck echolast command
+// is a circular buffer of MAX_CARDS_IN_READ_STAKER_HOPPER cards
 uint16 ReadStaker[3 * MAX_CARDS_IN_READ_STAKER_HOPPER * 80];
-int    ReadStakerLast[3];
+int    ReadStakerLast[3]; // index of last card read into circular buffer for each unit
 
 // get 10 digits word with sign from card buf (the data struct). 
 // return the first column where HiPunch set (first column is 1; 0 is no HiPunch set)
@@ -1179,7 +1180,7 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
     // by carddec echolast scp command
     ncdr = uptr - &cdr_unit[1];         // ncdr is the card reader: 0 for cdr1, 1 for cdr2, 2 for cdr3
     if ((ncdr >= 0) && (ncdr < 3)) {   // safety check, not needed (should allways be true) but just to be sure
-        // advance read buffer last card 
+        // advance read circular buffer last card 
         ReadStakerLast[ncdr] = (ReadStakerLast[ncdr] + 1) % MAX_CARDS_IN_READ_STAKER_HOPPER;
         // save card in read card hopper buffer
         ic = (ncdr * MAX_CARDS_IN_READ_STAKER_HOPPER + ReadStakerLast[ncdr]) * 80;

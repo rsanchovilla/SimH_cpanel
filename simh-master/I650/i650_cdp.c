@@ -1325,7 +1325,7 @@ void encode_fortransit_wiring(void)
     }
 }
 
-/* lpt print routine. If line is NULL of nlen = 0 prints empty lines */
+// lpt print routine. If line is NULL of nlen = 0 prints empty lines 
 void lpt_printline(char * line, int nlen)
 {
     int i, n; 
@@ -1521,8 +1521,7 @@ t_stat cdp_set_echo (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
         if (r != SCPE_OK) return r;
     }
     if (u == 0) {
-       sim_printf("this option cannot be set for CDP0\r\n");
-       return SCPE_ARG;
+       return sim_messagef(SCPE_ARG, "this option cannot be set for CDP0\r\n");
     }
     switch(val) {
         case 0:
@@ -1543,7 +1542,6 @@ t_stat cdp_set_echo (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     return SCPE_OK;
 }
 
-/* Show card read/punch control panel wiring */
 t_stat cdp_show_echo (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
     switch(val) {

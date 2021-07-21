@@ -27,6 +27,7 @@
    10-Nov-17    RSV     control panel support for rcornwell sims IBM 7000 family
    14-May-20    RSV     Control panel support for IBM 650 use standard LIB PNG bitmaps
    27-Jan-21    RSV     Control panel support for IBM NORC mouse drag and zoom
+   22-Jun-21    RSV     Control panel support for IBM 701 support for big panels, reduce cpu usage
 
    These simulator commands controls the control panel
 
@@ -86,13 +87,18 @@
                                  clickable controls). If <NONE> is given as name
                                  all marks are removed.
 
-      SET CPANEL LIST=<ALL> | name 
+      SET CPANEL LIST=<ALL> | <FREE> | name 
                              --> List the properties defined in control panel
                                  definition file for the given sigle control
-                                 name, or control array name. If <ALL> is given
-                                 as name, then all controls defined will be 
-                                 listed, the numbers of defined/free controls 
-                                 are listed, and the defined options are listed
+                                 name, or control array name. 
+                                 
+                                 If <ALL> is given as name, then all controls 
+                                 defined will be listed, the numbers of 
+                                 defined/free controls are listed, and the 
+                                 defined options are listed
+
+                                 if <FREE> is given as name, only free 
+                                 controls space is listed
 
       SET CPANEL SCALE=n     --> Sets the GUI window scale. Default is 100 
                                  (GUI has same size as defined in control panel 
@@ -204,7 +210,7 @@ DEVICE cp_dev = {
 #define MAX_CONTROLS            1000                    // max number of controls per control panel
 #define MAX_CARRAYS              128                    // max number of controls arrays per control panel
 #define MAX_CARRAYITEMS         1000                    // max number of controls in control arrays
-#define MAX_PIXELS      16*1024*1024                    // max number of pixels on control panel
+#define MAX_PIXELS      40*1024*1024                    // max number of pixels on control panel
 #define MAX_IMAGES                32                    // max number of images for controls that can be loaded at same time
 #define MAX_OPTIONS             2048                    // max number of chars to store options defined for control panel
 #define MAX_TICK_COUNT           128                    // max mumber of register tick count 
@@ -274,6 +280,7 @@ static struct {                                     // Control Panel main data
     } TickCount[MAX_TICK_COUNT];
     char Options[MAX_OPTIONS];                      // options defined (separated by ;)
     int FullRedrawNeeded;                           // =1 if a full redraw is needed
+    int FullSurfaceRedrawTm0;                       // sim_os_msec value when a full surface is redraw 
     int EnableTickCount;                            // =0 -> do not use TickCount callback and disable SetStateWithIntensity
     int Scale;                                      // Scale factor for GUI window. 100 -> 100% -> GUI window with size as defined. 50% -> half size
     uint32 LastRefreshInit;                         /* sim_os_msec() at starting of last refresh. used to calc FPS */
@@ -293,6 +300,7 @@ DEVICE * cp_dev_ptr = NULL;
 #define MAX_SCP_CMD_LEN     80                      // max len of a scp command
 char SCP_cmd[MAX_SCP_CMDS * MAX_SCP_CMD_LEN];       // stores scp commnads list queued by control panel pending to be executed
 int  SCP_cmd_count = 0;                             // number of commands in list
+int  SCP_cmd_echo  = 1;                             // echo DoSCP commands
 
 int cpanel_TypeId = 0;                              // control panel type id from definition file
 extern char vid_title[128];
@@ -349,11 +357,11 @@ int AddControl(char *Name, int nStates,
     // Control Id
     // check for room and get the control id
     if (CP.ControlItems >= MAX_CONTROLS) {
-        fprintf(stderr, "No room to add control %s\r\n", Name);
+        fprintf(stderr, "No room to add control %s\n", Name);
         return -1; 
     }
     if ((Name != NULL) && (Name[0] != 0) && (GetByName(Name) >= 0)) {
-        fprintf(stderr, "Already exists a Control or Control Array with name %s\r\n", Name);
+        fprintf(stderr, "Already exists a Control or Control Array with name %s\n", Name);
         return -1; 
     }
     CId = CP.ControlItems++;
@@ -381,7 +389,10 @@ int AddControl(char *Name, int nStates,
     // see if room for pixels of control, and get space for pixels
     CP.Control[CId].iPos_surface = CP.SurfaceItems;
     n = CP.SurfaceItems + nStates * W * H + 1;
-    if (n >= MAX_PIXELS) return -1; // no room for pixels of control!
+    if (n >= MAX_PIXELS) {
+        fprintf(stderr, "No room for control image\n");
+        return -1; // no room for pixels of control!
+    }
     for (i=CP.Control[CId].iPos_surface; i<n;i++) CP.surface[i] = 0;     // fill with transparent 
     CP.SurfaceItems = n; 
     // int state 
@@ -395,14 +406,14 @@ int AddControl(char *Name, int nStates,
 int CHK_CId(int CId)
 {
     if ((CId < 0) || (CId > CP.ControlItems)) {
-        fprintf(stderr, "CId %d out of range (Items %d)\r\n", CId, CP.ControlItems); 
+        fprintf(stderr, "CId %d out of range (Items %d)\n", CId, CP.ControlItems); 
         return -1; 
     }
     return 0;
 }
 
-#define CHK_CArrayId(CArrayId)  if ((CArrayId < CARRAY_START) || (CArrayId > CARRAY_START+CP.CArrayItems)) {fprintf(stderr, "CArrayId %d out of range (Items %d)\r\n", CArrayId, CP.CArrayItems); return -1; }
-#define CHK_Item(CArrayId,n)    if ((n < 0) || (n >= CP.CArray[CArrayId-CARRAY_START].Items)) {fprintf(stderr, "Item %d out of range (CArrayId %d, Items %d)\r\n", n, CArrayId, CP.CArray[(CArrayId)-(CARRAY_START)].Items); return -1; }
+#define CHK_CArrayId(CArrayId)  if ((CArrayId < CARRAY_START) || (CArrayId > CARRAY_START+CP.CArrayItems)) {fprintf(stderr, "CArrayId %d out of range (Items %d)\n", CArrayId, CP.CArrayItems); return -1; }
+#define CHK_Item(CArrayId,n)    if ((n < 0) || (n >= CP.CArray[CArrayId-CARRAY_START].Items)) {fprintf(stderr, "Item %d out of range (CArrayId %d, Items %d)\n", n, CArrayId, CP.CArray[(CArrayId)-(CARRAY_START)].Items); return -1; }
 
 uint8 *Font = NULL;     // pointer to block of malloc mem that stores the internal font
 
@@ -713,7 +724,7 @@ int CopyControlPixels(int OrgCId, int DestCId)
     if ( (W != CP.Control[DestCId].W) || 
          (H != CP.Control[DestCId].H) ||
          (nStates != CP.Control[DestCId].nStates) ) {
-        fprintf(stderr, "Cannot copy pixels: Org and Dest controls have diferent geometry\r\n");
+        fprintf(stderr, "Cannot copy pixels: Org and Dest controls have diferent geometry\n");
         return -1; 
     }
     for (i=0;i< nStates * W * H;i++) {
@@ -837,11 +848,11 @@ int AddCArray(char *Name)
     // Control Array Id
     // check for room and get the control array id
     if (CP.CArrayItems >= MAX_CARRAYS) {
-        fprintf(stderr, "No room to add control array %s\r\n", Name);
+        fprintf(stderr, "No room to add control array %s\n", Name);
         return -1;
     }
     if ((Name != NULL) && (Name[0] != 0) && (GetByName(Name) >= 0)) {
-        fprintf(stderr, "Already exists a Control or Control Array with name %s\r\n", Name);
+        fprintf(stderr, "Already exists a Control or Control Array with name %s\n", Name);
         return -1; 
     }
     CArrayId = CARRAY_START+CP.CArrayItems;
@@ -875,14 +886,14 @@ int AddCArrayItem(int CArrayId, int CId)
     if (CHK_CId(CId) < 0) return -1;                                // sanity check
     CHK_CArrayId(CArrayId)              
     if (CArrayId != CARRAY_START+CP.CArrayItems - 1) {
-        fprintf(stderr, "Can only add controls to last defined CArray (Current CArrayId %d, Last defined CArrayId %d)\r\n", 
+        fprintf(stderr, "Can only add controls to last defined CArray (Current CArrayId %d, Last defined CArrayId %d)\n", 
             CArrayId, CARRAY_START+CP.CArrayItems - 1);
         return -1;
     }
     n = CP.CArray[CArrayId-CARRAY_START].Items;
     CId0 = CP.CArray[CArrayId-CARRAY_START].CId0;
     if (CId0 + n >= MAX_CARRAYITEMS) {
-        fprintf(stderr, "No room to add control %d to control array %d\r\n", CId, CArrayId);
+        fprintf(stderr, "No room to add control %d to control array %d\n", CId, CArrayId);
         return -1;
     }
     CP.CArray[CArrayId-CARRAY_START].Items++;
@@ -909,7 +920,7 @@ int AddPNGImage(char * ImgName, char * FileName)
     if (i>=CP.ImgItems) {
         // new image
         if (CP.ImgItems >= MAX_IMAGES) {
-            fprintf(stderr, "Too many Images loaded\r\n");
+            fprintf(stderr, "Too many Images loaded\n");
             return -1;
         }
         i=CP.ImgItems++;
@@ -922,7 +933,7 @@ int AddPNGImage(char * ImgName, char * FileName)
     // read_png allocated the surface memory
     pngsurface = read_png_file(FileName, &W, &H);
     if (!pngsurface) {
-        fprintf(stderr, "Error decoding PNG image\r\n");
+        fprintf(stderr, "Error decoding PNG image\n");
         return -1;
     }
     CP.Img[nImage].surface = pngsurface;
@@ -1266,9 +1277,9 @@ int file_exists(char * filename)
 
 
 #define DF_ERR_NLIN             fprintf(stderr, "Control Panel Definition File line %d: ", nLin)
-#define DF_ERR(str)             DF_ERR_NLIN; fprintf(stderr, str); fprintf(stderr, "\r\n")
-#define DF_ERR2(str,param)      DF_ERR_NLIN; fprintf(stderr, str, param); fprintf(stderr, "\r\n")
-#define DF_ERR3(str,p1,p2)      DF_ERR_NLIN; fprintf(stderr, str, p1, p2); fprintf(stderr, "\r\n")
+#define DF_ERR(str)             DF_ERR_NLIN; fprintf(stderr, str); fprintf(stderr, "\n")
+#define DF_ERR2(str,param)      DF_ERR_NLIN; fprintf(stderr, str, param); fprintf(stderr, "\n")
+#define DF_ERR3(str,p1,p2)      DF_ERR_NLIN; fprintf(stderr, str, p1, p2); fprintf(stderr, "\n")
 #define DF_ERR_INV_NUM(str)     DF_ERR2("invalid number in %s", str)
 
 // load & process control panel definition file (using attached filename)
@@ -1296,7 +1307,7 @@ void ControlPanelLoad(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr)
     } else {
         // Control Panel definition file not attached, check default name
         if ((!cpanel_default_filename[0]) || (!file_exists(cpanel_default_filename))) {
-            fprintf(stderr, "Control Panel definition file not attached\r\n");
+            fprintf(stderr, "Control Panel definition file not attached\n");
             return;
         }
         // use default name
@@ -1304,7 +1315,7 @@ void ControlPanelLoad(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr)
     }
     file = sim_fopen (DF_filename, "r");
     if (file == NULL) {                         // open failed? 
-        fprintf(stderr, "Cannot open Control Panel definition file %s\r\n", uptr->filename);
+        fprintf(stderr, "Cannot open Control Panel definition file %s\n", uptr->filename);
         return;
     }
     sim_debug (CP_DF, dptr, "Control Panel definition file used: %s\n", uptr->filename);
@@ -1314,7 +1325,7 @@ void ControlPanelLoad(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr)
     // load internal font
     FontLoad(1);
     // set CP.Surface to its max size
-    CP.surface = (uint32 *)malloc ((MAX_PIXELS)*sizeof(*CP.surface)); // 16M pixels x 4bytes = 64 Mb
+    CP.surface = (uint32 *)malloc ((MAX_PIXELS)*sizeof(*CP.surface)); // 40M pixels x 4bytes = 160 Mb max
     cpanel_name[0] = 0;     // control panel's name
     ControlName[0] = 0;     // current control name being defined
     CId = CArrayId = X = Y = W = H = n = col = wx = wy = r = g = b = i = -1; 
@@ -2141,7 +2152,7 @@ void ControlPanel_Bind(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr)
         };
         *Id = GetByName(cp_def[i].Name);
         if (*Id < 0) {
-            fprintf(stderr, "control %s not found. ControlPanel_Bind failed\r\n", cp_def[i].Name);
+            fprintf(stderr, "control %s not found. ControlPanel_Bind failed\n", cp_def[i].Name);
         } else if (*Id < CARRAY_START) {    
             // single control OnClick event
             CP.Control[*Id].OnClick = cp_def[i].CallBack;   
@@ -2163,9 +2174,10 @@ void ControlPanel_Refresh(void);
 void ControlPanel_init(DEVICE *dptr)
 {
     int wx, wy, xSize, ySize, xPos, yPos; 
+    char buf[128]; 
 
     if (CP.ControlItems < 1) {
-        fprintf(stderr, "No controls loaded. Cannot init Control Panel GUI window\r\n");
+        fprintf(stderr, "No controls loaded. Cannot init Control Panel GUI window\n");
         return;
     }
     if (vid_active) {
@@ -2176,7 +2188,7 @@ void ControlPanel_init(DEVICE *dptr)
     wx = CP.Control[0].W;
     wy = CP.Control[0].H;
     if (!cpvid_init(cpanel_name, wx, wy, dptr )) {
-        fprintf(stderr, "Control Panel GUI window initialization failed\r\n");
+        fprintf(stderr, "Control Panel GUI window initialization failed\n");
         return;
     }
     sim_debug (CP_CMDS, cp_dev_ptr, "GUI window created Title: %s\n", vid_title);
@@ -2189,10 +2201,14 @@ void ControlPanel_init(DEVICE *dptr)
         sim_debug (CP_CMDS, cp_dev_ptr, "GUI initial Size %d x %d \n", xSize, ySize);
         vid_SetWindowSizeAndPos(2, xSize, ySize);
     }
+    sprintf(buf, "%s (Scale %d%%)", cpanel_name, CP.Scale);
+    vid_set_title(buf);
     cpanel_on = cpanel_TypeId;  
     cpanel_interactive = 0;
     CP.LastTickCountNum = 0;
     CP.FullRedrawNeeded=1;
+    CP.FullSurfaceRedrawTm0=0;
+    RectList.MaxCount = RECTLIST_MAX;
     ControlPanel_Refresh();
 }
 
@@ -2314,10 +2330,10 @@ int GetCArrayCId(int CArrayId, int n)
 int SetStateAutoNext(int Id, int NextState, uint32 Duration_msec)
 {
     if (Id < 0) {
-        fprintf(stderr, "Cannot Get AutoNext %d\r\n", Id);
+        fprintf(stderr, "Cannot Get AutoNext %d\n", Id);
         return -1;
     } else if (Id >= CARRAY_START) {    
-        fprintf(stderr, "Cannot Set AutoNext for arrays %d\r\n", Id);
+        fprintf(stderr, "Cannot Set AutoNext for arrays %d\n", Id);
         return -1;
     }
     // single control 
@@ -2337,11 +2353,29 @@ int Into_Refresh = 0; // flag to avoid recursive call to ControlPanel_Refresh()
 
 void DoActionSetScale(void)
 {
+    char buf[128];
+
     int xSize = CP.Control[0].W * CP.Scale / 100;
     int ySize = CP.Control[0].H * CP.Scale / 100;
     sim_debug (CP_CMDS, cp_dev_ptr, "GUI set Scale %d to Size %d x %d \n", CP.Scale, xSize, ySize);
     vid_SetWindowSizeAndPos(2, xSize, ySize);
+    sprintf(buf, "%s (Scale %d%%)", cpanel_name, CP.Scale);
+    vid_set_title(buf);
 }
+
+void DoActionPrintFreeControls(void)
+{
+    int i,n; 
+
+    sim_printf("Total Defined:\n");
+    sim_printf("   Single Controls     : %d (Max %d)\n", CP.ControlItems, MAX_CONTROLS);
+    sim_printf("   Control Arrays      : %d (Max %d)\n", CP.CArrayItems, MAX_CARRAYS);
+    sim_printf("   Loaded Images       : %d (Max %d)\n", CP.ImgItems, MAX_IMAGES);
+    sim_printf("   Control State Pixels: %d (Max %d)\n", CP.SurfaceItems, MAX_PIXELS);
+    n = 0; for (i=0;i<CP.TickCountItems;i++) if (CP.TickCount[i].Num >= 0) n++;
+    sim_printf("   Tick Count used     : %d (Max %d)\n", n, MAX_TICK_COUNT);
+}
+
 
 // If Action = 0 -> calls the OnClick event of given single control/control array name
 // If Action = 1 -> Signal with a mark on GUI the clickable area of given single control/control array name
@@ -2403,54 +2437,50 @@ int DoActionByName(char * Name, int Action)
             // print all 
             for (i=0; i<CP.ControlItems;i++) DoActionByName(CP.Control[i].Name, 2);
             for (i=0; i<CP.CArrayItems;i++)  DoActionByName(CP.CArray[i].Name, 2);
-            // print used free
-            sim_printf("Total Defined:\r\n");
-            sim_printf("   Single Controls     : %d (Max %d)\r\n", CP.ControlItems, MAX_CONTROLS);
-            sim_printf("   Control Arrays      : %d (Max %d)\r\n", CP.CArrayItems, MAX_CARRAYS);
-            sim_printf("   Loaded Images       : %d (Max %d)\r\n", CP.ImgItems, MAX_IMAGES);
-            sim_printf("   Control State Pixels: %d (Max %d)\r\n", CP.SurfaceItems, MAX_PIXELS);
-            n = 0; for (i=0;i<CP.TickCountItems;i++) if (CP.TickCount[i].Num >= 0) n++;
-            sim_printf("   Tick Count used     : %d (Max %d)\r\n", n, MAX_TICK_COUNT);
-            sim_printf("Options Defined:\r\n");
-            sim_printf("   %s\r\n", CP.Options);
+            // print used and free controls
+            DoActionPrintFreeControls();
+            sim_printf("Options Defined:\n");
+            sim_printf("   %s\n", CP.Options);
+        } else if (cmpstr(Name, "<FREE>",0)) {
+            DoActionPrintFreeControls();
         } else if ((Id = GetByName(Name)) < 0) {
             // name not found
             return -1;   
         } else if (Id < CARRAY_START) {
             // Name is a single control, printf definition
-            sim_printf("ControlName=%s (Id=%d)\r\n", CP.Control[Id].Name, Id);
+            sim_printf("ControlName=%s (Id=%d)\n", CP.Control[Id].Name, Id);
             if (CP.Control[Id].X < 0) {
-                sim_printf("   WH=%d,%d\r\n", CP.Control[Id].W, CP.Control[Id].H);
+                sim_printf("   WH=%d,%d\n", CP.Control[Id].W, CP.Control[Id].H);
             } else {
-                sim_printf("   XYWH=%d,%d,%d,%d\r\n", CP.Control[Id].X, CP.Control[Id].Y, CP.Control[Id].W, CP.Control[Id].H);
+                sim_printf("   XYWH=%d,%d,%d,%d\n", CP.Control[Id].X, CP.Control[Id].Y, CP.Control[Id].W, CP.Control[Id].H);
             }
             if (CP.Control[Id].MaxH > 0) {
-                sim_printf("   Heigth=%d\r\n", CP.Control[Id].MaxH);
+                sim_printf("   Heigth=%d\n", CP.Control[Id].MaxH);
             }
-            sim_printf("   nStates=%d\r\n", CP.Control[Id].nStates);
-            sim_printf("   ;   Current State: %d\r\n", CP.Control[Id].State);
+            sim_printf("   nStates=%d\n", CP.Control[Id].nStates);
+            sim_printf("   ;   Current State: %d\n", CP.Control[Id].State);
             if (CP.Control[Id].OnClick) {
-                sim_printf("   ;   OnClick Event defined\r\n");
+                sim_printf("   ;   OnClick Event defined\n");
             }
         } else {
             // Name is a control array, printf its control's names
-            sim_printf("ControlArrayName=%s (Id=%d)\r\n", CP.CArray[Id - CARRAY_START].Name, Id);
-            sim_printf("   ;   Number of Items: %d\r\n", CP.CArray[Id - CARRAY_START].Items);
+            sim_printf("ControlArrayName=%s (Id=%d)\n", CP.CArray[Id - CARRAY_START].Name, Id);
+            sim_printf("   ;   Number of Items: %d\n", CP.CArray[Id - CARRAY_START].Items);
             if (CP.CArray[Id - CARRAY_START].OnClick) {
-                sim_printf("   ;   OnClick Event defined\r\n");
+                sim_printf("   ;   OnClick Event defined\n");
             }
             CId0 = CP.CArray[Id - CARRAY_START].CId0;
             for (i=0;i<CP.CArray[Id - CARRAY_START].Items;i++) {
                 CId = CP.CArrayCidItems[CId0 + i];
                 if ((i & 3) == 0) {
-                    if (i>0) sim_printf("\r\n");
+                    if (i>0) sim_printf("\n");
                     sim_printf("   ControlArrayItems=");
                 } else {
                     sim_printf(", ");
                 }
                 sim_printf("%s", CP.Control[CId].Name);
             }
-            sim_printf("\r\n");
+            sim_printf("\n");
         }
         return 0;
     }
@@ -2650,7 +2680,7 @@ void ControlPanel_Refresh(void)
     uint32 t0, t1, RefreshInterval;
     uint32 *surface = (uint32 *) get_surface(&xpixels, &ypixels);
     uint32 AlphaMask = surface_rgb_color(0,0,0);
-    int bShouldUpdateGUI, xx, bClickbleControlAtPosXY;
+    int bShouldUpdateGUI, bShouldUpdateRect, xx, yy, bClickbleControlAtPosXY;
     int Mouse_PosX, Mouse_PosY;
     static int ButtonPressed = 0; 
 
@@ -2678,7 +2708,9 @@ void ControlPanel_Refresh(void)
     }
     MarkCol = ((Refresh_Frames_Count >> 4) & 1);  // at 60 FPS >> 4 -> 3.8 FPS alternate marks colors
     // init to check if something has changed in surface and should be redraw on GUI
-    bShouldUpdateGUI=0;    
+    bShouldUpdateGUI=0;
+    RectList.Count=0;
+    RectList.Scale=CP.Scale; 
     // itearate on controls and draw the ones that changed / are marked
     for(i=0;i<CP.ControlItems;i++) {
         State = CP.Control[i].State;
@@ -2701,6 +2733,7 @@ void ControlPanel_Refresh(void)
                  + State * W * H;                    // start of this state 
         // set max height to be draw
         if ((MaxH == 0) || (MaxH > H)) MaxH = H;
+        bShouldUpdateRect=0;
         // copy control pixels to GUI surface
         for (iy=Y;iy<Y+MaxH;iy++) {
             if (iy < 0) continue;
@@ -2740,20 +2773,61 @@ void ControlPanel_Refresh(void)
                 }
                 if ((xx >= 0) && (c)) {
                    surface[p] = c;         // c==0 -> transparent pixel, else draw pixel with color c on GUI window
-                   bShouldUpdateGUI=1;
+                   bShouldUpdateRect=1; 
                 }
                 p++; n++;
             }
         }
-
+        if (bShouldUpdateRect) {
+            // add control to be draw to rectangle list to be updated in surface and sent to 
+            // SDL texture+Renderer (the actual VRAM video memory). If rectangle list count is <1 then
+            // the full surface will be sent to VRAM. 
+            n=RectList.Count; 
+            if (n==-1) {
+                // rect table full
+            } else if (n>=RectList.MaxCount) {
+                // set rect table as full
+                RectList.Count=-1; 
+            } else {
+                // room left on rectable table
+                ix=X; xx=X+W; 
+                iy=Y; yy=Y+MaxH;
+                if (ix < 0) ix=0; if (xx < 0) xx=0; if (ix >= xpixels) ix=xpixels; if (xx >= xpixels) xx=xpixels;
+                if (iy < 0) iy=0; if (yy < 0) yy=0; if (iy >= ypixels) iy=ypixels; if (yy >= ypixels) yy=ypixels;
+                RectList.x[n]=ix; RectList.w[n]=xx-ix; 
+                RectList.y[n]=iy; RectList.h[n]=yy-iy; 
+                RectList.Count++;
+                bShouldUpdateGUI=1;
+            }
+        }
     }
+    // printf("RectList.Count %d \n", RectList.Count);    
 
     //update GUI window
     if (cpanel_on) {
         cpvid_poll ();
+        // if full redraw asked, update all the surface, not the rectlist
+        if (CP.FullRedrawNeeded) RectList.Count=-1;      
+        // if more than 6 sec without updating all the surface do a full surface update ignoring RectList
+        // this is a catch-up for any missing refresh skipped
+        if ((CP.FullSurfaceRedrawTm0) && ((Refresh_tnow - CP.FullSurfaceRedrawTm0 < 0) || (Refresh_tnow - CP.FullSurfaceRedrawTm0 > 6000))) {
+            sim_debug (CP_REFRESH, cp_dev_ptr, "GUI doing a full surface Catch-up Refresh \n");
+            RectList.Count=-1; 
+        }
+        // if updating all the surface set FullSurfaceSyncTm0 with current sim_os_msec
+        if (RectList.Count==-1) {
+            CP.FullSurfaceRedrawTm0 = 0; // will do a catch-up full redraw
+            bShouldUpdateGUI=1; 
+        }
         if (bShouldUpdateGUI) {
             if (0==cpvid_sync (1)) {
                 sim_debug (CP_REFRESH, cp_dev_ptr, "GUI Refresh skipped - Event Queue too long/already redraw in Event Queue\n");
+                if (CP.FullSurfaceRedrawTm0==0) {
+                    CP.FullSurfaceRedrawTm0 = Refresh_tnow; // set catch-up full redraw because this refresh has been skipped
+                    sim_debug (CP_REFRESH, cp_dev_ptr, "GUI request a full surface Catch-up Refresh \n");
+                } else {
+                    sim_debug (CP_REFRESH, cp_dev_ptr, "GUI Catch-up Refresh already requested, pending to be executed\n");
+                }
             }
         } else {
            sim_debug (CP_REFRESH, cp_dev_ptr, "GUI Refresh skipped - bShouldUpdateGUI=0\n");
@@ -2821,8 +2895,8 @@ int Refresh_needed(void)
     if ((tnow < CP.LastRefreshDone) || ((tnow - CP.LastRefreshDone) > (1000 / FPS) )) {
         CP.LastTickIntensityDone = tnow; 
         return 1; // return needs refresh
-    } else if ((tnow - CP.LastTickIntensityDone) > (100 / FPS) ) {
-        // tickintensity is called 10 times between each frame (-> FPS x 10)
+    } else if (tnow != CP.LastTickIntensityDone) {
+        // tickintensity is called each millisec (-> 33 times per second if FPS=30)
         CP.LastTickIntensityDone = tnow; 
         return -1; // return can call tick intensity callback
     }  
@@ -2954,6 +3028,10 @@ void DoSCP(char *cmd)
     int i; 
 
     if ((cmd == NULL) || (cmd[0] == 0)) return;
+    if (strcmp(cmd, "<NOECHO1>") == 0) {
+        SCP_cmd_echo=0; // disable DoSCP echo on next command sent
+        return; 
+    }
     if (SCP_cmd_count >= MAX_SCP_CMDS) {
         // if list full, discard list
         SCP_cmd_count = 0;
@@ -2977,8 +3055,10 @@ char * cpanel_fgets(const char *prompt, char *cptr, int32 size, FILE *stream)
         // if control panel has generated a SCP command not yet executed, get it 
         ControlPanel_GetSCP_pending(cptr, size);		   
         // then print it as if it was typed by user
-        if (prompt) printf ("%s", prompt);                              
-        sim_printf("%s\n", cptr);
+        if (SCP_cmd_echo) {
+            if (prompt) printf ("%s", prompt);                              
+            sim_printf("%s\n", cptr);
+        }
     } else {
         // no pending SCP commands generated by control panel
         if (cpanel_on) {
@@ -2990,6 +3070,7 @@ char * cpanel_fgets(const char *prompt, char *cptr, int32 size, FILE *stream)
         cptr = fgets (cptr, size, stream);     
 
     }
+    SCP_cmd_echo=1; // restore echo of scp commands sent by DoSCP
     return cptr;
 }
 
@@ -3117,23 +3198,23 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 
     if (value == 1) { // SET PRESS=name
         if (DoActionByName((char *) cptr,0) < 0) {
-            fprintf(stderr, "Control %s not found\r\n", cptr);
+            fprintf(stderr, "Control %s not found\n", cptr);
         }
     } else if (value == 2) { // SET MARK=name|<ALL>|<NONE>
         if (DoActionByName((char *) cptr,1) < 0) {
-            fprintf(stderr, "Control %s not found\r\n", cptr);
+            fprintf(stderr, "Control %s not found\n", cptr);
         }
     } else if (value == 3) { // SET LIST=name|<ALL>
         if (DoActionByName((char *) cptr,2) < 0) {
-            fprintf(stderr, "Control %s not found\r\n", cptr);
+            fprintf(stderr, "Control %s not found\n", cptr);
         }
     } else if (value == 4) { // SET STATE=name|<ALL> / n|*
         if (DoActionByName((char *) cptr,3) < 0) {
-            fprintf(stderr, "Control %s not found\r\n", cptr);
+            fprintf(stderr, "Control %s not found\n", cptr);
         }
     } else if (value == 5) { // SET OPTION=name|<NONE> 
         if (AddOption((char *) cptr) < 0) {
-            fprintf(stderr, "Cannot set option\r\n");
+            fprintf(stderr, "Cannot set option\n");
         }
     } else if (value == 6) { // SET TICKCOUNT=0|1
         num = (int32) get_uint (cptr, 10, 1, &r);
@@ -3155,7 +3236,7 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
         yPos = (int) strtotsv (++tptr, &tptr, 0);
         if (cptr == tptr) return SCPE_ARG;
         if (cpanel_on == 0) {
-            fprintf(stderr, "No cpanel open\r\n");
+            fprintf(stderr, "No cpanel open\n");
             return SCPE_OK; // no panel opened
         }
         sim_debug (CP_CMDS, cp_dev_ptr, "GUI Pos x=%d, y=%d \n", xPos, yPos);

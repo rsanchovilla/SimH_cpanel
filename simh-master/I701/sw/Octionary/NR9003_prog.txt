@@ -1,0 +1,1649 @@
+                           
+                                                             NR9003 Assembly
+                             
+                                                             Symbolic Assembler for IBM 701
+                                                             Part of Octionary Programming System 
+                                                             Poughkeepsie laboratory
+                           
+                                                             Original code (lost) by 
+                                                             Nathaniel Rochester, July 1952 
+                           
+                                                             Rewritten by Roberto Sancho May 2021
+                                                             using usage doc at 102663096-05-01-acc.pdf, page 167
+                                                             and program inner working description doc at page 84
+                                                             from Computer History Museum collection
+                           
+                                                             To be assembled with Ibm701Assembler.exe cross-assembler
+                           
+                           
+                           
+                                      HEAD      NR9003
+                           
+                                      ORG       200          Used all memory except 0000-octal 0308 
+                           
+                                                             SETUP INITIAL CONDITION
+                           
+OCT
+0310 +01 0553                       + TR        START        TR TO PROG START 
+0311 +10 0000                       + NOOP      0000         TO GUARANTEE VARS ALIGNED AT EVEN LOC
+                           
+0312 +00 0000              CDBUF      RES       48           CARD BUFFER: 48 HALF WORDS
+                           
+0372 +00 0000              NSYNDEF    RES       1            NUMBER OF SYNONYNS DEFINED
+0373 +00 0000              NDRADEF    RES       1            NUMBER OF DRUM ASSIGN DEFINED
+0374 +00 0000              NINSTDEF   RES       1            NUMBER OF INSTRUCTIONS IN BATCH
+0375 +00 0000              NSADDRUD   RES       1            NUMBER OF SYMBOLIC ADDR UNDEFINED
+0376 +00 0000              NBATCH     RES       1            NUMBER OF BATCHES SAVED IN TAPE
+0377 +00 0000              ORG0FLAG   RES       1            SET TO 1 IF PROGRAM ORIGIN IS ZERO
+                           
+0400 +00 0000              HEADING    RES       1            CURRENT HEADING
+0401 +00 0000              CURLOC     RES       1            CURRENT INSTR LOCATION
+0402 +00 0000              SLOC0      RES       2            PREVIOUS INSTR SYMBOLIC LOCATION 
+                           
+0404 +00 0000              CTYPE      RES       1            CARD TYPE
+0405 +00 0000              SIGN       RES       1            OPCODE SIGN
+0406 +00 0000              SLOC       RES       2            SYMBOLIC LOCATION
+0410 +00 0000              SADDR      RES       2            SYMBOLIC OPERATION ADDRESS 
+0412 +00 0000              OPCODE     RES       1            OPERATION CODE 
+0413 +00 0000              OPADDR     RES       1            ACTUAL OPERATION ADDRESS 
+                           
+0414 +00 0000              LHWORD     RES       1            TO CONVERT FROM/TO HALF 
+0415 +00 0000              RHWORD     RES       1            WORD TO/FROM FULLWORD
+                           
+0416 +00 0000              FILETOP    RES       1            START OF SYMBOL TABLE
+0417 +00 0000              FILEHED    RES       1            FIRST ADDR IN FILE FREE TO STORE DATA (FILE HEAD)
+0420 +00 0000              FILEAD     RES       1            ADDR OF START OF FILE
+0421 +00 0000              FILESLOC   RES       1            START ADDR IN FILE OF SYMB LOCATIONS TABLE
+                           
+0422 +00 0000              FILEDR     RES       1            START ADDR IN FILE OF DRUM ASSIGN DATA
+0423 +00 0000              FILESY     RES       1            START ADDR IN FILE OF SYNONYM DATA
+0424 +00 0000              FILELAST   RES       1            LAST ADDR AVAILABLE FOR FILE
+0425 +00 0000              CARDADDR   RES       1            SET FIRST ADDR OF DATA IN CARD WHEN PUNCHING FEJ019 BIN CARD FORMAT 
+                           
+0426 -12 0000              LOOPEND  - R ADD     0000         END OF LOOP VALUE
+0427 -12 0000              LOOPEND2 - R ADD     0000         END OF LOOP VALUE 2
+                           
+0430 +00 0000              BINOUT     RES       2            OUTPUT BINARY CARD BUFFER
+0432 +00 0000              BINOUT2    RES       46
+0510 +00 0000              OUTCOUNT   RES       1            NUMBER OF WORDS IN OUTPUT BINARY CARD 
+0511 +00 0000              OUTLOC     RES       1            LOAD ADDRESS FOR FEJ015 BINARY CARD 
+                           
+                                                             FILE MEMORY MAP
+                                                             .            <- Full Word ->
+                                                             .           +--------------+
+                                                             FILETOP --> |symbolic addr | first addr of file (symbol table) = FILESTRT = fisrt addr of file
+                                                             .           |actual loc    | 
+                                                             .           |symbolic addr | Symbolic address are
+                                                             .           |actual loc    | 2 full words long
+                                                             .            ...
+                                                             .           |symbolic addr | last symbolic addr
+                                                             .           |actual loc    | actual loc = -1 if symbol defined but unresolved
+                                                             FILEHEAD -> |              | first free loc in file
+                                                             .             ...
+                                                             .                   |
+                                                             .                   v
+                           
+                                                             .                   ^
+                                                             .                   |
+                                                             FILEAD  --> |sloc          | first in use loc in file
+                                                             .           |saddr         | = last instr of batch from reads card
+                                                             .           |curloc |opcdad| 3 full words per intruction
+                                                             .           |sloc          | symbolic location  
+                                                             .           |saddr         | symbolic addr (=0 if actual addr set)
+                                                             .           |curloc |opcdad| curloc = actual location of instruction
+                                                             .           |sloc          | 
+                                                             .           |saddr         | 
+                                                             .           |curloc |opcdad| opcdad = actual opcode + actual opaddr of instruction
+                                                             .            ...
+                                                             .           |sloc          | = first instruction of batch from read cards
+                                                             .           |saddr         | 
+                                                             .           |curloc |opcdad| 
+                                                             FILEDR  --> |saddr         | = last drum assign card symbolic = FILESLOC = initial value for FILEAD prior to load instr batch
+                                                             .           |actual loc    | actual location
+                                                             .           |saddr         | 2 full words per drum assign
+                                                             .           |actual loc    |
+                                                             .            ...
+                                                             .           |saddr         |
+                                                             .           |actual loc    |
+                                                             FILESY  --> |saddr do not  | = last synonym card do not use this
+                                                             .           |saddr use this| use this symb address
+                                                             .           |saddr do not  | 2 full words per synonym 
+                                                             .           |saddr use this|
+                                                             .            ...
+                                                             .           |saddr do not  | 
+                                                             .           |saddr use this|
+                                                             FILELAST -> end of mem location 4096
+                           
+0512 +00 0011                  NINE   DEF       9            VALUE OF ROW 9
+0513 +00 0010                 EIGHT   DEF       8
+0514 +00 0007                         DEF       7
+0515 +00 0006                   SIX   DEF       6
+0516 +00 0005                         DEF       5
+0517 +00 0004                  FOUR   DEF       4
+0520 +00 0003                 THREE   DEF       3
+0521 +00 0002                   TWO   DEF       2
+0522 +00 0001                   ONE   DEF       1            VALUE OF ROW 1
+0523 +00 0012                   TEN   DEF       10           VALUE OF ROW 0(TEN)
+0524 +00 0024                  KY11   DEF       20           VALUE OF ROW X(11)
+0525 +00 0036                  KY12   DEF       30           VALUE OF ROW Y(12) HIGH PUNCH
+                           
+0526 +00 0012                 MBASE   DEF       10           MULTIPLIER BASE DEPENDING ON CHAR 
+0527 +00 0010                         DEF       8            FORMAT DECIMAL, OCTAL, ALPHA
+0530 +00 0144                 D100    DEF       100
+0531 +01 0000                D4096    DEF       4096
+                           
+0532 +00 0000                 ZERO    DEF       0       
+0533 +00 0023                  D19    DEF       19
+0534 +00 0031                  D25    DEF       25
+0535 +00 0060                  D48    DEF       48
+                           
+0536 -00 0001               MINUS1    DEF       *400001
+0537 -00 0002               MINUS2    DEF       *400002
+                           
+0540 +00 0000                FORMAT   RES       1            FORMAT OF CHARS TO READ
+0541 +00 0000                CHAR     RES       1            CURRENT COLUMN CHAR
+0542 +00 0000                RESULT   RES       2            GETCHRS RESULT VALUE
+0544 +00 0000                PROW     RES       2            ROW TO BE SENT TO PRINTER
+                           
+0546 +00 0512                  K9AD + STOP      NINE         ADDR OF START OF ROW K VALUES (ROW 9)
+0547 +11 0526                 K12AD + ADD       MBASE        ADDR OF END ROW K VALUES (ROW 12 Y) + 1
+0550 +00 0526               MBASEAD + STOP      MBASE        ADDR OF MBASE TABLE
+0551 +00 0312               CDBUFAD + STOP      CDBUF        ADDR OF CARD BUFFER
+                           
+0552 +00 0430              BINOUTAD + STOP      BINOUT       ADDR OF OUTPUT BINARY CARD BUFFER
+                           
+                                      HEAD                   PROGRAM START
+                           
+0553 +12 0531              START    + R ADD     D4096        SET LAST ADDR AVAILABLE FOR FILE
+0554 +14 0424                       + STORE     FILELAST     X 
+0555 +12 0532                       + R ADD     ZERO         RESET 
+0556 -14 0402                       - STORE     SLOC0        ... SYMBOLIC LOCATION OF PREVIOUS INSTRUCTION   
+0557 +14 0372                       + STORE     NSYNDEF      ... NUMBER OF SYNONYNS DEFINED
+0560 +14 0373                       + STORE     NDRADEF      ... NUMBER OF DRUM ASSIGN DEFINED
+0561 +14 0374                       + STORE     NINSTDEF     ... NUMBER OF INSTRUCTIONS IN BATCH
+0562 +14 0375                       + STORE     NSADDRUD     ... NUMBER OF SYMBOLIC ADDR UNDEFINED
+0563 +14 0376                       + STORE     NBATCH       ... NUMBER OF BATCHES SAVED IN TAPE
+0564 +14 0377                       + STORE     ORG0FLAG     ... SET TO 1 IF PROGRAM ORIGIN IS ZERO
+0565 +14 0423                       + STORE     FILESY       ... START ADDR IN FILE OF SYNONYM DATA
+0566 +14 0422                       + STORE     FILEDR       ... START ADDR IN FILE OF DRUM ASSIGN DATA
+0567 +14 0421                       + STORE     FILESLOC     ... START ADDR IN FILE OF SYMB LOCATIONS TABLE 
+0570 +14 0510                       + STORE     OUTCOUNT     ... NUMBER OF WORDS IN OUTPUT BINARY CARD 
+0571 +14 0511                       + STORE     OUTLOC       ... LOAD ADDRESS FOR FEJ015 BINARY CARD 
+                           
+0572 +12 0536                       + R ADD     MINUS1       SET CURRENt LOC AND
+0573 +14 0401                       + STORE     CURLOC       CURRENT HEADING
+0574 +14 0400                       + STORE     HEADING      AS UNDEFINED
+0575 +14 0425                       + STORE     CARDADDR     X
+0576 +12 0424                       + R ADD     FILELAST     RESET FILE AS EMPTY
+0577 +14 0420                       + STORE     FILEAD       X
+0600 +12 2511                       + R ADD     FILESTRT     SET FIRST ADDR OF FILE
+0601 +11 0522                       + ADD       ONE          AS EVEN ADDR
+0602 +27 0023                       + A RIGHT   0019         X
+0603 +26 0023                       + A LEFT    0019         X
+0604 +14 0416                       + STORE     FILETOP      RESET ADDR OF HEAD TO FILE
+0605 +14 0417                       + STORE     FILEHED      X
+                           
+                           
+                                      HEAD                   
+                                                             INIT READ CARD
+                           
+0606 +32 4004                RDCARD + WRITE     2052         INSURE THAT MQ NOT IN USE            
+0607 +30 4000                RDCRD2 + READ      2048         PREPARE TO READ CARD                 
+0610 +12 0532                       + R ADD     ZERO         CLEAR ...
+0611 +14 0404                       + STORE     CTYPE        ... CARD TYPE
+0612 -14 0406                       - STORE     SLOC         ... SYMBOLIC LOCATION
+0613 -14 0410                       - STORE     SADDR        ... SYMBOLIC OPERATION ADDRESS 
+0614 +14 0405                       + STORE     SIGN         ... OPCODE SIGN
+0615 +14 0412                       + STORE     OPCODE       ... ACTUAL OPERATION CODE
+0616 +14 0413                       + STORE     OPADDR       ... ACTUAL OPERATION ADDRESS
+0617 +12 0551                       + R ADD     CDBUFAD      RESET TO INITIAL COPY LOOP ADDRESS     
+0620 +15 0621                       + STORE A   RDROW        X
+                           
+                                                             READ CARD IN CDBUF
+                             
+0621 -37 0000                RDROW  - COPY      /   /        COPY WORD                
+0622 +01 0625                       + TR        LRD1         X  
+0623 +01 1662                       + TR        EOF          END OF FILE
+0624 +01 0761                       + TR        DECODE       END OF CARD, PROCEED TO DECODE CARD
+0625 +11 0521                LRD1   + ADD       TWO          INCR CDBUF ADDR
+0626 +15 0621                       + STORE A   RDROW        X
+0627 +01 0621                       + TR        RDROW        GO TO READ NEXT ROW
+                           
+                                      HEAD                   
+                                                             ROUTINES TO READ CARD
+                                                             GETCHRS RETURNS IN ACC A 36BIT VALUE 
+                                                              GIVEN A FORMAT PARAMETER
+                            
+0630 +11 0521               GETCHRS + ADD       TWO          GET CHARS FROM CARD USING FORMAT PARAM
+0631 +15 0634                       + STORE A   LGC0         SET FIRST PARAM ADDR 
+0632 +11 0522                       + ADD       ONE          X 
+0633 +15 0725                       + STORE A   GETCHEX      SET ROUTINE EXIT
+0634 +12 0000                  LGC0 + R ADD     /   /        READ FIRST ROUTINE PARAM
+0635 +14 0540                       + STORE     FORMAT       IS THE FORMAT OF CHARS TO GET
+0636 +12 0532                       + R ADD     ZERO         X
+0637 -14 0542                       - STORE     RESULT       RESET RESULT
+0640 +12 0546                  LGCH + R ADD     K9AD         RESET TO INITAL ROW 9 VALUE 
+0641 +15 0657                       + STORE A   LK           X
+0642 +12 0532                       + R ADD     ZERO         RESET COLUMN CHAR
+0643 +14 0541                       + STORE     CHAR         X
+0644 +12 0551                       + R ADD     CDBUFAD      RESET TO CARD ADDRESS INITAL ADDR
+0645 +15 0651                       + STORE A   LGCROW       X
+0646 +12 0652                       + R ADD     NCOL         SELECT NEXT CARD COLUMN 
+0647 +11 0522                       + ADD       ONE          X
+0650 +15 0652                       + STORE A   NCOL         X 
+0651 -17 0000                LGCROW - LOAD MQ   /   /        READ ROWS LOOP
+0652 +24 0000                  NCOL + L LEFT    /   /        SHIFT TO GET NCOL BIT
+0653 +12 0532                       + R ADD     ZERO         FROM ROW
+0654 +24 0001                       + L LEFT    0001         X
+0655 +04 0661                       + TR 0      LGCNXT       IF NO PUNCH TR PROCESS TO NEXT COL
+0656 +12 0541                       + R ADD     CHAR         HAS PUNCH, SO ADD K ROW VALUE
+0657 +11 0000                    LK + ADD       /   /        TO CHAR
+0660 +14 0541                       + STORE     CHAR         X
+0661 +12 0651                LGCNXT + R ADD     LGCROW       SELECT NEXT LEFT ROW
+0662 +05 0517                       + SUB       FOUR         X
+0663 +14 0651                       + STORE     LGCROW       X
+0664 +12 0657                       + R ADD     LK           SELECT NEXT K VALUE
+0665 +11 0522                       + ADD       ONE          X
+0666 +15 0657                       + STORE A   LK           X
+0667 +05 0547                       + SUB       K12AD        CHECK IF END OF ROWS
+0670 +03 0672                       + TR +      LGC1         YES, CHAR READ
+0671 +01 0651                       + TR        LGCROW       NO, LOOP FOR MORE ROWS
+0672 +12 0541                  LGC1 + R ADD     CHAR         IF CHAR IS PUNCH AT ROW 0 (TEN)
+0673 +04 0723                       + TR 0      LGCERR       SET IT TO ZERO. IF NO CHAR 
+0674 +05 0523                       + SUB       TEN          PUNCHED STOP
+0675 +04 0677                       + TR 0      LGC2         X
+0676 +11 0523                       + ADD       TEN          X
+0677 +14 0541                  LGC2 + STORE     CHAR         X .*echo char:
+0700 +12 0532                       + R ADD     ZERO         GET LEFTMOST OCTAL DIGIT FROM FORMAT
+0701 +17 0540                       + LOAD MQ   FORMAT       1=DEC, 2=OCT, 3=ALPHA
+0702 +24 0003                       + L LEFT    0003         X
+0703 +16 0540                       + STORE MQ  FORMAT       X  
+0704 +26 0021                       + A LEFT    0017         X
+0705 +05 0522                       + SUB       ONE          NOW 0=DEC, 1=OCTAL, 3=ALPHA
+0706 +11 0550                       + ADD       MBASEAD      SET MBASE TO 10,8,40 DEPENDING 
+0707 +15 0711                       + STORE A   LMPY         ON FORMAT
+0710 -17 0542                       - LOAD MQ   RESULT       RESULT (36B) = RESULT (36B) * MBASE (18B)
+0711 +20 0000                  LMPY + MPY       /   /                 +
+0712 -24 0021                       - L LEFT    00017                CHAR (18B)  
+0713 -14 0542                       - STORE     RESULT       X
+0714 +12 0541                       + R ADD     CHAR         X
+0715 +27 0022                       + A RIGHT   0018         X 
+0716 -11 0542                       - ADD       RESULT       X
+0717 -14 0542                       - STORE     RESULT       X 
+0720 +12 0540                       + R ADD     FORMAT       IF NO MORE FORMAT
+0721 +04 0724                       + TR 0      LGCFIN       DIGITS THEN FINISH ROUTINE
+0722 +01 0640                       + TR        LGCH         ELSE PROCESS NEXT COLUMN CHAR         
+0723 +00 0001                LGCERR + STOP      0001         STOP BECAUSE INVALID FORMAT IN INPUT CARD
+0724 -12 0542                LGCFIN - R ADD     RESULT       RETURN RESULT
+0725 +01 0000               GETCHEX + TR        /   /        ROUTINE EXIT .*echo result:f
+                            
+                                      HEAD                   
+                                                             ROUTINES TO READ CARD
+                                                             GETCHAR RETURNS In ACC A 18BIT VALUE
+                                                              JUST FOR NEXT CHAR
+                           
+0726 +11 0521               GETCHAR + ADD       TWO          GET ONE CHAR FROM CARD
+0727 +15 0734                       + STORE A   GTCHAEX      SET ROUTINE EXIT
+0730 +12 0730                       + R ADD     *            CALL ROUTINE GETCHRS
+0731 +01 0630                       + TR        GETCHRS      TO GET JUST ONE 
+0732 +30 0000                         DEF       *300000      CHAR/DIGIT 
+0733 +26 0022                       + A LEFT    0018         RESULT TO 18B IN ACC       
+0734 +01 0000               GTCHAEX + TR        /   /        ROUTINE EXIT
+                           
+0735 +11 0521               GETNN   + ADD       TWO          GET 2 DIGITS DECIMAL VALUE FROM CARD
+0736 +15 0743                       + STORE A   GTNNEX       SET ROUTINE EXIT
+0737 +12 0737                       + R ADD     *            CALL ROUTINE GETCHRS
+0740 +01 0630                       + TR        GETCHRS      TO GET 2 DIGITS 
+0741 +11 0000                         DEF       *110000      DECIMAL VALUE
+0742 +26 0022                       + A LEFT    0018         RESULT TO 18B IN ACC       
+0743 +01 0000               GTNNEX  + TR        /   /        ROUTINE EXIT
+                           
+0744 +11 0521               GETN4   + ADD       TWO          GET 4 DIGITS DECIMAL VALUE FROM CARD
+0745 +15 0752                       + STORE A   GTN4EX       SET ROUTINE EXIT
+0746 +12 0746                       + R ADD     *            CALL ROUTINE GETCHRS
+0747 +01 0630                       + TR        GETCHRS      TO GET 4 DIGITS 
+0750 +11 1100                         DEF       *111100      DECIMAL VALUE
+0751 +26 0022                       + A LEFT    0018         RESULT TO 18B IN ACC       
+0752 +01 0000               GTN4EX  + TR        /   /        ROUTINE EXIT
+                           
+0753 +11 0521               GETSYMB + ADD       TWO          GET 6 CHARS SYMBOLIC ADDR FROM CARD
+0754 +15 0760                       + STORE A   GTSYMEX      SET ROUTINE EXIT
+0755 +12 0755                       + R ADD     *            CALL ROUTINE GETSYMB
+0756 +01 0630                       + TR        GETCHRS      TO GET SYMBOLIC LOC/ADDR
+0757 +13 1111                         DEF       *131111      6 CHARS: DEC DIGIT + ALPHA + 4 x DEC DIGIT
+0760 +01 0000               GTSYMEX + TR        /   /        ROUTINE EXIT
+                           
+                                      HEAD                   
+                                                             DECODE SOURCE CARD READ
+                                                             LOAD OPCODE OPADDR SLOC SADDR ETC VARS
+                                                             AND TRANSFER TO APPROPRIATE
+                                                             HANDLING ROUTINES                          
+                           
+0761 +12 0512                DECODE + R ADD     NINE         SET FIRST CARD COL TO GET
+0762 +15 0652                       + STORE A   NCOL         AS COL 10 (CARD TYPE)
+0763 +12 0763                       + R ADD     *            CALL ROUTINE GETCHAR
+0764 +01 0726                       + TR        GETCHAR      TO GET CARD TYPE
+0765 +14 0404                       + STORE     CTYPE        SAVE CARD TYPE
+0766 +12 0766                       + R ADD     *            WRITE CARD IMAGE TO TAPE 0
+0767 +01 1406                       + TR        WRCDTAPE     X
+0770 +12 0404                       + R ADD     CTYPE
+0771 +05 0515                       + SUB       SIX          CHECK IF CARD TYPE
+0772 +03 1006                       + TR +      LTY6P        IS 0 TO 5 OR 9
+0773 +12 0776                       + R ADD     LTYTR0       AND TRANSFER TO THE 
+0774 +11 0404                       + ADD       CTYPE        CORRESPONDING 
+0775 +11 0522                       + ADD       ONE
+0776 +15 0777                LTYTR0 + STORE A   LTYTRJ       ENTRY POINT
+0777 +01 0000                LTYTRJ + TR        /   /        X
+1000 +01 1011                       + TR        DECTY01      TR TO DECODE TYPE 0 CARDS
+1001 +01 1011                       + TR        DECTY01      TR TO DECODE TYPE 1 CARDS
+1002 +01 1067                       + TR        DECTY23      TR TO DECODE TYPE 2 CARDS
+1003 +01 1067                       + TR        DECTY23      TR TO DECODE TYPE 3 CARDS
+1004 +01 1145                       + TR        DECTY4       TR TO DECODE TYPE 4 CARDS
+1005 +01 1146                       + TR        DECTY5       TR TO DECODE TYPE 5 CARDS
+1006 +05 0520                 LTY6P + SUB       THREE        X
+1007 +04 1162                       + TR 0      DECTY9       X
+1010 +00 0002                       + STOP      0002         STOP BECAUSE CARD TYPE INVALID. MUST BE 0-5 OR 9
+                                              
+                                      HEAD                   
+                                                             DECODE SYMBOLIC INSTRUCTION CARD TYPE 0 AND 1
+                                                             
+1011 +12 1011               DECTY01 + R ADD     *            CALL ROUTINE GETCHRS
+1012 +01 0753                       + TR        GETSYMB      TO GET SYMBOLIC LOC
+1013 -14 0406                       - STORE     SLOC         SAVE SYMBOLIC LOCATION
+1014 -05 0402                       - SUB       SLOC0        STOP IF SYMB LOC OF PREVIOUS INSTRUCTION
+1015 +04 1017                       + TR 0      LERRSEQ      IS SAME OF GREATER THAN CURRENT SYMB
+1016 +03 1020                       + TR +      LTY01A       LOCATION 
+1017 +00 0003               LERRSEQ + STOP      0003         STOP BECAUSE SYMBOLIC LOCATION NOT IN SEQUENCE
+1020 -12 0406                LTY01A - R ADD     SLOC
+1021 -14 0402                       - STORE     SLOC0
+1022 +12 0400                       + R ADD     HEADING      SET HEADING IN SLOC
+1023 +26 0006                       + A LEFT    0006         X
+1024 -11 0406                       - ADD       SLOC         X 
+1025 -14 0406                       - STORE     SLOC         X
+1026 +12 1026                       + R ADD     *
+1027 +01 0726                       + TR        GETCHAR      GET SIGN
+1030 +05 0524                       + SUB       KY11         CAN BE (-) MINUS PUNCH ON ROW X(11) 
+1031 +04 1035                       + TR 0      L0N          CAN BE (+) PLUS PUNCH ON ROW Y(12) HIPUNCH
+1032 +05 0523                       + SUB       TEN          IF COLUMN NOT PUNCHED INTERPRETED
+1033 +04 1037                       + TR 0      L0P          AS PLUS. ANY OTHER PUNCH IN INVALID
+1034 +00 0004                       + STOP      0004         STOP BECAUSE INVALID OPCODE SIGN (MUST BE + OR -)
+1035 +12 0522                   L0N + R ADD     ONE          SIGN ZERO MEANS OPCODE POSITIVE
+1036 +14 0405                       + STORE     SIGN         SIGN ONE MEANS OPCODE NEGATIVE
+1037 +12 1037                   L0P + R ADD     *            CALL ROUTINE GETCHRS
+1040 +01 0630                       + TR        GETCHRS      TO GET OCTIONARY OPCODE
+1041 +22 0000                         DEF       *220000      2 OCTAL DIGIT
+1042 +26 0022                       + A LEFT    00018        X      
+1043 +14 0412                       + STORE     OPCODE       X         
+1044 +12 0400                       + R ADD     HEADING      CHECK IF SOME HEADING CARD HAS
+1045 +05 0536                       + SUB       MINUS1       BEEN PROCESSED
+1046 +04 1066                       + TR 0      LERRHD       X
+1047 +12 0404                       + R ADD     CTYPE
+1050 +04 1052                       + TR 0      DECTY0
+1051 +01 1062                       + TR        DECTY1
+                           
+                                      HEAD                   
+                                                             DECODE SYMBOLIC INSTRUCTION 
+                                                             CARD TYPE 0 
+                           
+1052 +12 1052               DECTY0  + R ADD     *            CALL ROUTINE GETSYMB
+1053 +01 0753                       + TR        GETSYMB      TO GET SYMBOLIC ADDR
+1054 -14 0410                       - STORE     SADDR        SAVE SYMBOLIC ADDR
+1055 +12 0400                       + R ADD     HEADING      SET HEADING IN SADDR
+1056 +26 0006                       + A LEFT    0006         X
+1057 -11 0410                       - ADD       SADDR        X 
+1060 -14 0410                       - STORE     SADDR        X
+1061 +01 1252                       + TR        ADDINST      ADD INSTRUCTION TO BATCH
+                           
+                                                             DECODE ACTUAL INSTRUCTION 
+                                                             CARD TYPE 1 
+                           
+1062 +12 1062               DECTY1  + R ADD     *            CALL ROUTINE GETN4
+1063 +01 0744                       + TR        GETN4        TO GET ACTUAL ADDR
+1064 +14 0413                       + STORE     OPADDR       SAVE ACTUAL ADDR
+1065 +01 1252                       + TR        ADDINST      ADD INSTRUCTION TO BATCH
+                                     
+1066 +00 0005               LERRHD  + STOP      0005         STOP BECAUSE EXPECTING HEADING CARD BEFORE THIS ONE
+                           
+                                      HEAD                   
+                                                             DECODE DEFINE CARD TYPE 2 AND 3
+                                                             
+1067 +12 1067               DECTY23 + R ADD     *            CALL ROUTINE GETCHRS
+1070 +01 0753                       + TR        GETSYMB      TO GET SYMBOLIC LOC
+1071 -14 0406                       - STORE     SLOC         SAVE SYMBOLIC LOCATION
+1072 +12 0533                       + R ADD     D19          SET NEXT COL AS CARD COLUMN
+1073 +15 0652                       + STORE A   NCOL         NUMBER 30
+1074 +12 0401                       + R ADD     CURLOC       CHECK IF SOME E.M. ASSINGMENT CARD HAS
+1075 +05 0536                       + SUB       MINUS1       BEEN PROCESSED
+1076 +04 1100                       + TR 0      LTY23A       X
+1077 +00 0006                       + STOP      0006         STOP BECAUSE THIS CARD ONLY ALLOWED BEFORE ELECTROSTATIC ASSIGNEMENT CARD
+1100 +12 0404                LTY23A + R ADD     CTYPE        X
+1101 +05 0520                       + SUB       THREE        X
+1102 +04 1127                       + TR 0      DECTY3       X
+                           
+                                      HEAD                   
+                                                             DECODE DEFINE SYNONYME
+                                                             CARD TYPE 2 
+                           
+1103 +12 1103               DECTY2  + R ADD     *            CALL ROUTINE GETCHRS
+1104 +01 0753                       + TR        GETSYMB      TO GET SYMBOLIC ADDR
+1105 -14 0410                       - STORE     SADDR        SAVE SYMBOLIC ADDR
+1106 +12 1106                       + R ADD     *            CALL ROUTINE GETNN
+1107 +01 0735                       + TR        GETNN        TO GET PREFIX 2
+1110 +26 0006                       + A LEFT    0006         APPLY PREFIX 2
+1111 -11 0406                       - ADD       SLOC         TO SYMB LOC (USE
+1112 -14 0406                       - STORE     SLOC         SYMB ADDR 2)
+1113 +12 1113                       + R ADD     *            CALL ROUTINE GETNN
+1114 +01 0735                       + TR        GETNN        TO GET PREFIX 1
+1115 +26 0006                       + A LEFT    0006         APPLY PREFIX 1
+1116 -11 0410                       - ADD       SADDR        TO SYMB ADDR (DO NOT USE
+1117 -14 0410                       - STORE     SADDR        SYMB ADDR 1)
+1120 +12 0373                       + R ADD     NDRADEF      STOP IF SYNONIME CARD IS READ
+1121 +04 1123                       + TR 0      TY2A         AFTER A DRUM ASSIGN CARD
+1122 +00 0007                       + STOP      0007         STOP BECAUSE THIS CARD NOT ALLOWED AFTER A DRUM ASSIGN CARD
+1123 +12 0401                  TY2A + R ADD     CURLOC       IF CURRENT LOCATION
+1124 +05 0536                       + SUB       MINUS1       ASSIGNED THEN ERROR
+1125 +04 1216                       + TR 0      ADDSYDEF     ELSE ADD SYNONYM TO FILE
+1126 +00 0010                       + STOP      0008         STOP BECAUSE THIS CARD NOT ALLOWED AFTER ELECTROSTATIC ASSIGNEMENT CARD
+                           
+                                      HEAD                   
+                                                             DECODE DEFINE DRUM ASSIGNEMENT
+                                                             CARD TYPE 3 
+                           
+1127 +12 1127               DECTY3  + R ADD     *            CALL ROUTINE GETCHRS
+1130 +01 0744                       + TR        GETN4        TO GET ACTUAL ADDR
+1131 +14 0413                       + STORE     OPADDR       SAVE ACTUAL ADDR
+1132 +12 0534                       + R ADD     D25          SET NEXT COL AS CARD COLUMN
+1133 +15 0652                       + STORE A   NCOL         NUMBER 36
+1134 +12 1134                       + R ADD     *            CALL ROUTINE GETNN
+1135 +01 0735                       + TR        GETNN        TO GET PREFIX 
+1136 +26 0006                       + A LEFT    0006         APPLY PREFIX 
+1137 -11 0406                       - ADD       SLOC         TO SYMB LOC 
+1140 -14 0406                       - STORE     SLOC         X
+1141 +12 0401                       + R ADD     CURLOC       IF CURRENT LOCATION
+1142 +05 0536                       + SUB       MINUS1       ASSIGNED THEN ERROR
+1143 +04 1234                       + TR 0      ADDDRDEF     ELSE ADD DRUM ASSIGN TO FILE
+1144 +00 0011                       + STOP      0009         STOP BECAUSE THIS CARD NOT ALLOWED AFTER ELECTROSTATIC ASSIGNEMENT CARD
+                           
+                                      HEAD                   
+                                                             DECODE COMMENT
+                                                             CARD TYPE 4 
+                           
+1145 +01 0606               DECTY4  + TR        RDCARD       PROCEED WITH NEXT CARD
+                                    
+                                                             DECODE HEADING
+                                                             CARD TYPE 5 
+                           
+1146 +12 0534               DECTY5  + R ADD     D25          SET NEXT COL AS CARD COLUMN
+1147 +15 0652                       + STORE A   NCOL         NUMBER 36
+1150 +12 1150                       + R ADD     *            CALL ROUTINE GETNN
+1151 +01 0735                       + TR        GETNN        TO GET PREFIX 1
+1152 +14 0400                       + STORE     HEADING      SAVE PREFIX 1
+1153 +12 0401                       + R ADD     CURLOC       IF NO CURRENT LOCATION
+1154 +05 0536                       + SUB       MINUS1       ASSIGNED THEN ERROR
+1155 +04 1161                       + TR 0      LLOCERR 
+1156 +12 0532                       + R ADD     ZERO         RESET SYMBOLIC LOCATION 
+1157 -14 0402                       - STORE     SLOC0        OF PREVIOUS INSTRUCTION
+1160 +01 1532                       + TR        PRBATCH      PROCESS INSTRUCTION BATCH
+                           
+1161 +00 0012              LLOCERR  + STOP      0010         STOP BECAUSE EXPECTING ELECTROSTATIC ASSIGNEMENT CARD
+                           
+                           
+                                      HEAD                   
+                                                             DECODE ELECTROSTATIC ASSIGNEMENT
+                                                             CARD TYPE 9 
+                           
+1162 +12 0533               DECTY9  + R ADD     D19          SET NEXT COL AS CARD COLUMN
+1163 +15 0652                       + STORE A   NCOL         NUMBER 30
+1164 +12 1164                       + R ADD     *            CALL ROUTINE GETN4
+1165 +01 0744                       + TR        GETN4        TO GET ORIGIN ADDR
+1166 +14 0401                       + STORE     CURLOC       SAVE CURRENT LOCATION ASSIGNEMENT
+1167 +04 1171                       + TR 0      DECTY9Z      SET ORG0FLAG IF PROGRAM ORIGIN IS ZERO
+1170 +01 1173                       + TR        DECTY9B      X
+1171 +12 0522               DECTY9Z + R ADD     ONE          X
+1172 +14 0377                       + STORE     ORG0FLAG     X
+1173 +12 0536               DECTY9B + R ADD     MINUS1       INVALIDATE CURRENT HEADING
+1174 +14 0400                       + STORE     HEADING      TO FORCE HEADING CARD AS NEXT CARD
+1175 +01 0606                       + TR        RDCARD       PROCEED WITH NEXT CARD
+                           
+                                      HEAD                   
+                                                             RESERVE N FULLWORDS IN FILE
+                                                             STOP IF FILE FULL
+                                                             RETURN IN ACC FILE ADDRESS TO STORE DATA
+                           
+1176 +11 0521               ADDFILE + ADD       TWO          RESERVE N FULLWORDS IN FILE
+1177 +15 1202                       + STORE A   LAFP1        SET ROUTINE PARAM ADDR
+1200 +11 0522                       + ADD       ONE          X
+1201 +15 1215                       + STORE A   ADDFIEX      SET ROUTINE EXIT 
+1202 +12 0000                LAFP1  + R ADD     /   /        GET PARAM: NUMBER OF FULL 
+1203 +14 0541                       + STORE     CHAR         WORDS TO STORE IN FILE
+1204 +12 0420                       + R ADD     FILEAD       DECR FILE ADDRESS POINTER 
+1205 +05 0541                       + SUB       CHAR         (FIRST FREE ADDR IN FILE)
+1206 +05 0541                       + SUB       CHAR         X
+1207 +05 0417                       + SUB       FILEHED      CHECK IF OVERFLOWS 
+1210 +03 1213                       + TR +      LADDOK       FILE HEAD
+1211 +12 0410                       + R ADD     SADDR        .*mo0416-7       
+1212 +00 0013                       + STOP      0011         STOP BECAUSE FILE FULL
+1213 +11 0417                LADDOK + ADD       FILEHED      RETURN
+1214 +14 0420                       + STORE     FILEAD       FILEAD IN ACC .*echo filead:
+1215 +01 0000               ADDFIEX + TR        /   /
+                                     
+                                      HEAD                   
+                                                             ADD SYNONYM TO FILE
+                           
+1216 +12 1216              ADDSYDEF + R ADD     *            ADD SYNONYM TO FILE
+1217 +01 1176                       + TR        ADDFILE      RESERVE TWO FULL WORDS IN FILE
+1220 +00 0002                         DEF       0002         X
+1221 +15 1225                       + STORE A   LASY1        SET DEST ADDR FOR FW 1
+1222 +11 0521                       + ADD       TWO          X
+1223 +15 1227                       + STORE A   LASY2        SET DEST ADDR FOR FW 2
+1224 -12 0410                       - R ADD     SADDR        STORE IN FILE            .*echo add_synonym
+1225 -14 0000                 LASY1 - STORE     /   /        SYN DO NOT USE THIS ADDR .*echo do_not_use:f
+1226 -12 0406                       - R ADD     SLOC         STORE IN FILE  
+1227 -14 0000                 LASY2 - STORE     /   /        SYN USE THIS ADDR        .*echo use_this:f
+1230 +12 0372                       + R ADD     NSYNDEF      INCR NUMBER OF
+1231 +11 0522                       + ADD       ONE          SYNONYMS DEFINED
+1232 +14 0372                       + STORE     NSYNDEF      X
+1233 +01 0606                       + TR        RDCARD       PROCEED WITH NEXT CARD
+                           
+                                      HEAD                   
+                                                             ADD DRUM ASSIGN TO FILE
+                           
+1234 +12 1234              ADDDRDEF + R ADD     *            ADD DRUM ASSIGN TO FILE
+1235 +01 1176                       + TR        ADDFILE      RESERVE TWO FULL WORDS IN FILE
+1236 +00 0002                         DEF       0002         X
+1237 +15 1243                       + STORE A   LADR1        SET DEST ADDR FOR FW 1
+1240 +11 0521                       + ADD       TWO          X
+1241 +15 1245                       + STORE A   LADR2        SET DEST ADDR FOR FW 2
+1242 -12 0406                       - R ADD     SLOC         STORE IN FILE          .*echo add_dr_assign
+1243 -14 0000                 LADR1 - STORE     /   /        SADDR DEFINED          .*echo saddr:f
+1244 +12 0413                       + R ADD     OPADDR       STORE IN FILE  
+1245 +14 0000                 LADR2 + STORE     /   /        ACTUAL ADDR OF SADDR   .*echo addr:
+1246 +12 0373                       + R ADD     NDRADEF      INCR NUMBER OF
+1247 +11 0522                       + ADD       ONE          DRUM ASSINGN DEFINED
+1250 +14 0373                       + STORE     NDRADEF      X
+1251 +01 0606                       + TR        RDCARD       PROCEED WITH NEXT CARD
+                           
+                                      HEAD                   
+                                                             ADD INSTRUCTION TO BATCH           
+                           
+1252 +12 0423              ADDINST  + R ADD     FILESY       ADD INSTRUCTION TO BATCH
+1253 +04 1255                       + TR 0      LSYDR0       TRANSFER IF NO DRUM ASSIGN TO TEST
+1254 +01 1265                       + TR        LSYDR1       SET IF NEEDED FILE ADDR FOR SYNONYMS
+1255 +12 0420              LSYDR0   + R ADD     FILEAD       AND DRUM ASSIGN
+1256 +14 0422                       + STORE     FILEDR       START ADDR IN FILE OF DRUM ASSIGN DATA
+1257 +14 0421                       + STORE     FILESLOC     START ADDR IN FILE OF SIMBOLIC LOCATIONS 
+1260 +11 0373                       + ADD       NDRADEF
+1261 +11 0373                       + ADD       NDRADEF
+1262 +11 0373                       + ADD       NDRADEF
+1263 +11 0373                       + ADD       NDRADEF
+1264 +14 0423                       + STORE     FILESY       START ADDR IN FILE OF SYNONYMS DATA
+                           
+                                      HEAD                   
+                                                             CHECK IF MUST SCAN SYNONYMS AND 
+                                                             DRUM ASSIGNS
+                           
+1265 -12 0410              LSYDR1   - R ADD     SADDR        IF INSTR HAS NOT SYMBOLIC ADDR
+1266 +04 1345                       + TR 0      LSYDR3       SKIP SYN/DRUM ASSING SCAN
+                           
+                                                             SCAN SYNONYMS AND REPLACE 
+                                                             SADDR IF NEEDED
+                           
+1267 +12 0372                       + R ADD     NSYNDEF      IF NO SYNONYMS DEFINED
+1270 +04 1315                       + TR 0      LSYDR2       SKIP SYNONYMS SCAN
+1271 +12 0423                       + R ADD     FILESY       INIT LOOP AT FILE SCAN ADDRESS           
+1272 +15 1275                       + STORE A   LSY1         X
+1273 +12 0424                       + R ADD     FILELAST     END LOOP AT END OF MEM
+1274 +15 0426                       + STORE A   LOOPEND      X
+1275 -12 0000              LSY1     - R ADD     /   /        GET SYN DO NOT USE THIS SADDR FROM FILE
+1276 -05 0410                       - SUB       SADDR        CHECK IF SADDR IS SAME AS THE ONE IN INSTR
+1277 +04 1301                       + TR 0      LSY2         YES, SYN FOUND, MUST REPLACE
+1300 +01 1306                       + TR        LSY4         NO, CHECK NEXT SYN
+1301 +12 1275              LSY2     + R ADD     LSY1         GET REPLACEMENT SADDR
+1302 +05 0521                       + SUB       TWO          FROM FILE
+1303 +15 1304                       + STORE A   LSY3         X 
+1304 -12 0000              LSY3     - R ADD     /   /        AND USE IT FOR
+1305 -14 0410                       - STORE     SADDR        CURRENT INSTRUCTION
+1306 +12 1275              LSY4     + R ADD     LSY1         INCR AND LOOP
+1307 +05 0517                       + SUB       FOUR         X
+1310 +15 1275                       + STORE A   LSY1         X
+1311 +12 1275                       + R ADD     LSY1         MUST RELOAD TO HANDLE WRAP ARROUND ADDR 4096
+1312 +05 0426                       + SUB       LOOPEND      X
+1313 +04 1315                       + TR 0      LSYDR2       X
+1314 +01 1275                       + TR        LSY1         X
+                           
+                                      HEAD                   
+                                                             SCAN DRUM ASSIGN AND REPLACE 
+                                                             SADDR IF NEEDED
+                           
+1315 +12 0373              LSYDR2   + R ADD     NDRADEF      IF NO DRUM ASSIGN DEFINED
+1316 +04 1345                       + TR 0      LSYDR3       SKIP DRUM ASSIGN SCAN
+1317 +12 0422                       + R ADD     FILEDR       INIT LOOP AT FILE SCAN ADDRESS           
+1320 +15 1323                       + STORE A   LDR1         X
+1321 +12 0423                       + R ADD     FILESY       END LOOP AT SYNONIM START ADDR
+1322 +15 0426                       + STORE A   LOOPEND      X
+1323 -12 0000              LDR1     - R ADD     /   /        GET DRUM SLOC FROM FILE
+1324 -05 0410                       - SUB       SADDR        CHECK IF IS SAME AS THE SADDR IN INSTR
+1325 +04 1327                       + TR 0      LDR2         YES, ASSIGN FOUND, MUST REPLACE
+1326 +01 1336                       + TR        LDR4         NO, CHECK NEXT SYN
+1327 +12 1323              LDR2     + R ADD     LDR1         GET REPLACEMENT FOR SADDR
+1330 +05 0521                       + SUB       TWO          FROM FILE
+1331 +15 1332                       + STORE A   LDR3         X 
+1332 +12 0000              LDR3     + R ADD     /   /        AND USE IT TO PUT ACTUAL ADDRESS
+1333 +14 0413                       + STORE     OPADDR       IN INSTRUCTION
+1334 +12 0532                       + R ADD     ZERO         CLEAR SADDR TO MARK IT
+1335 -14 0410                       - STORE     SADDR        AS RESOLVED
+1336 +12 1323              LDR4     + R ADD     LDR1         INCR AND LOOP 
+1337 +05 0517                       + SUB       FOUR         X
+1340 +15 1323                       + STORE A   LDR1         X
+1341 +12 1323                       + R ADD     LDR1         MUST RELOAD TO HANDLE WRAP ARROUND ADDR 4096
+1342 +05 0426                       + SUB       LOOPEND      X
+1343 +04 1345                       + TR 0      LSYDR3       X
+1344 +01 1323                       + TR        LDR1         X
+                           
+                                      HEAD                   
+                                                             ADD INSTR TO FILE
+                           
+1345 +12 1345              LSYDR3   + R ADD     *            ADD INSTR TO FILE
+1346 +01 1176                       + TR        ADDFILE      RESERVE THREE FULL WORDS IN FILE
+1347 +00 0003                         DEF       0003         X
+1350 +15 1360                       + STORE A   LIN1         SET DEST ADDR FOR FW 1
+1351 +11 0521                       + ADD       TWO          X
+1352 +15 1362                       + STORE A   LIN2         SET DEST ADDR FOR FW 2
+1353 +11 0521                       + ADD       TWO          X
+1354 +15 1364                       + STORE A   LIN3         SET DEST ADDR FOR HW 3
+1355 +11 0522                       + ADD       ONE          X
+1356 +15 1376                       + STORE A   LIN4         SET DEST ADDR FOR HW 4
+1357 -12 0406                       - R ADD     SLOC         STORE IN FILE          .*echo add_instr
+1360 -14 0000                 LIN1  - STORE     /   /        SLOC OF INSTR          .*echo sloc:f
+1361 -12 0410                       - R ADD     SADDR        STORE IN FILE  
+1362 -14 0000                 LIN2  - STORE     /   /        SADDR OF INSTR         .*echo saddr:f
+1363 +12 0401                       + R ADD     CURLOC       STORE IN FILE  
+1364 +14 0000                 LIN3  + STORE     /   /        ACTUAL LOC OF INSTR    .*echo curloc:
+1365 +12 0412                       + R ADD     OPCODE       STORE IN FILE  
+1366 +26 0014                       + A LEFT    00012        X
+1367 +11 0413                       + ADD       OPADDR       X
+1370 +14 0542                       + STORE     RESULT       X
+1371 +12 0405                       + R ADD     SIGN         X
+1372 +04 1375                       + TR 0      LIN3A        X
+1373 +06 0542                       + R SUB     RESULT       X
+1374 +14 0542                       + STORE     RESULT       X
+1375 +12 0542                 LIN3A + R ADD     RESULT       X
+1376 +14 0000                 LIN4  + STORE     /   /        ACTUAL SIGN OPCODE OPADDR INSTR .*echo op:o
+1377 +12 0374                       + R ADD     NINSTDEF     INCR NUMBER OF INSTRUCTIONS DEFINED IN BATCH
+1400 +11 0522                       + ADD       ONE          X
+1401 +14 0374                       + STORE     NINSTDEF     X
+1402 +12 0401                       + R ADD     CURLOC       INCR CURRENT LOC
+1403 +11 0522                       + ADD       ONE          X
+1404 +14 0401                       + STORE     CURLOC       X
+1405 +01 0606                       + TR        RDCARD       PROCEED WITH NEXT CARD
+                           
+                                      HEAD                   
+                                                             WRITE CARD BUFER (CARD IMAGE) 
+                                                             AND CURRENT LOC
+                                                             INTO TAPE 0, THEN 
+                                                             GO TO READ NEXT CARD
+                           
+1406 +11 0521              WRCDTAPE + ADD       TWO          WRITE CARD BUFER (CARD IMAGE) 
+1407 +15 1436                       + STORE A   WRCDTPEX     IN TAPE 0
+1410 +32 0400                       + WRITE     0256         PREPARE TO WRITE ON TAPE 0                
+1411 +12 0536                       + R ADD     MINUS1       INIT CURRENT LOCATION 
+1412 -14 0542                       - STORE     RESULT       X
+1413 +12 0404                       + R ADD     CTYPE        IF CARD IS TYPE 0 OR 1 (INSTRUCTIONS)
+1414 +05 0521                       + SUB       TWO          THEN SET CURRENT INSTR LOCATION
+1415 +03 1420                       + TR +      LWRCD1       X
+1416 +12 0401                       + R ADD     CURLOC       SAVE AS SECOND FULL WORD CURLOC (OR -1)
+1417 -14 0542                       - STORE     RESULT       X .*echo WrTape_cardimage:
+1420 -37 0542                LWRCD1 - COPY      RESULT       X
+1421 +12 0551                       + R ADD     CDBUFAD      RESET TO INITIAL COPY LOOP ADDRESS     
+1422 +15 1426                       + STORE A   WRCDROW      FOR CARD BUFFER
+1423 +12 1426                       + R ADD     WRCDROW      X
+1424 +05 0535                       + SUB       D48          X
+1425 +14 0542                       + STORE     RESULT       X
+1426 -37 0000               WRCDROW - COPY      /   /        COPY WORD TO TAPE               
+1427 +12 1426                       + R ADD     WRCDROW      X
+1430 +05 0521                       + SUB       TWO          INCR CDBUF ADDR
+1431 +15 1426                       + STORE A   WRCDROW      X
+1432 +05 0542                       + SUB       RESULT       CHECK FOR END
+1433 +04 1435                       + TR 0      LWRCD2       X
+1434 +01 1426                       + TR        WRCDROW      LOOP
+1435 +32 4004                LWRCD2 + WRITE     2052         INSURE THAT MQ NOT IN USE            
+1436 +01 0000              WRCDTPEX + TR        /   /        EXIT ROUTINE
+                           
+                           
+                                      HEAD                   
+                                                             SCAN CURRENT INSTR BATCH LOOKING 
+                                                             FOR A SLOC THAT MATCHES SADDR
+                                                             RETURN 0 IF NOT FOUND, 
+                                                             RETURN 1 IF FOUND (ACTUAL ADDR 
+                                                             STORED IN RESULT)
+                           
+1437 +11 0521              SCANBAT  + ADD       TWO          SCAN CURRENT INSTR BATCH LOOKING FOR A SLOC THAT MATCHES SADDR
+1440 +15 1477                       + STORE A   SCANBAEX     SET ROUTINE EXIT
+                                    
+1441 +12 0421                       + R ADD     FILESLOC     SET END OF LOOP VALUE (FILEAD POINTS TO FIRST INSTR CARD OF BATCH)
+1442 +15 0427                       + STORE A   LOOPEND2     X .*echo FilesLoc:
+1443 +05 0515                       + SUB       SIX          X
+1444 +15 1454                       + STORE A   LSCAN        X .*m4066-30f
+1445 +15 1446                       + STORE A   LSC0         X
+1446 -12 0000              LSC0     - R ADD     /   /        CHECK FIRST 
+1447 -05 0410                       - SUB       SADDR        X .*echo Scan: IF SAME AS SADDR GOTO SADDR FOUND
+1450 +04 1471                       + TR 0      LSCFOUND     IF SLOC LESS THAN SADDR THEN SADDR NOT IN CURRENT BATCH
+1451 +03 1467                       + TR +      LSCNOTF      X
+                           
+1452 +12 0420                       + R ADD     FILEAD       INIT LOOP ADDR BATCH (FILEAD POINTS TO LAST INSTR OF BATCH)
+1453 +15 1454                       + STORE A   LSCAN        THAT MATCH CURRENT INSTR SADDR
+                           
+1454 -12 0000              LSCAN    - R ADD     /   /        GET SLOC FOR INSTR IN BATCH 
+1455 -05 0410                       - SUB       SADDR        IF SAME AS SADDR GOTO SADDR FOUND
+1456 +04 1471                       + TR 0      LSCFOUND     IF SLOC LESS THAN SADDR THEN SADDR NOT IN CURRENT BATCH
+1457 +03 1461                       + TR +      LSC1         X
+1460 +01 1467                       + TR        LSCNOTF      X
+1461 +12 1454              LSC1     + R ADD     LSCAN        CONTINUE SCANNING BATCH
+1462 +05 0515                       + SUB       SIX          X
+1463 +15 1454                       + STORE A   LSCAN        X
+1464 +05 0427                       + SUB       LOOPEND2     X
+1465 +04 1467                       + TR 0      LSCNOTF      END OF SCAN, NOT FOUND
+1466 +01 1454                       + TR        LSCAN        X
+1467 +12 0532              LSCNOTF  + R ADD     ZERO         SADDR NOT FOUND IN BATCH
+1470 +01 1477                       + TR        SCANBAEX     X .*echo NotFound
+1471 +12 1454              LSCFOUND + R ADD     LSCAN        SADDR FOUND IN BATCH 
+1472 +05 0517                       + SUB       FOUR         SO GET THE ACTUAL LOCATION OF THE INSTR FOUND
+1473 +15 1474                       + STORE A   LSC2         X
+1474 +12 0000              LSC2     + R ADD     /   /        GET CURLOC 
+1475 +14 0542                       + STORE     RESULT       RESULT IS THE ACTUAL LOCATION FOR SADDR
+1476 +12 0522                       + R ADD     ONE          X .*echo Found_Addr:
+1477 +01 0000              SCANBAEX + TR        /   /
+                           
+                                      HEAD                   
+                                                             SCAN SYMBOLIC ADDR FILE LOOKING 
+                                                             FOR A GIVEN SYMBOL SADDR
+                                                             RETURN 0 IF NOT FOUND, 
+                                                             RETURN 1 IF FOUND (ACTUAL ADDR 
+                                                             STORED IN RESULT, MINUS1 IF SADDR 
+                                                             BUT IS UNRESOLVED YET)
+                           
+1500 +11 0521              SCANSYM  + ADD       TWO          SCAN SYMBOLIC ADDR FILE LOOKING FOR SADDR
+1501 +15 1531                       + STORE A   SCANSYEX     SET ROUTINE EXIT
+                                    
+1502 +12 0417                       + R ADD     FILEHED      SET END OF LOOP VALUE 
+1503 +15 0427                       + STORE A   LOOPEND2     X
+1504 +12 0416                       + R ADD     FILETOP      INIT LOOP TOP OF FILE
+1505 +15 1510                       + STORE A   LSYSCAN      THAT MATCH CURRENT INSTR SADDR
+1506 +05 0417                       + SUB       FILEHED
+1507 +04 1521                       + TR 0      LSCSYNF      SYMBOL TABLE EMPTY, SO SYMBOL NOT FOUND
+                           
+1510 -12 0000              LSYSCAN  - R ADD     /   /        GET SADDR NAME OF CURRENT SYMBOLIC ADDRESS
+1511 -05 0410                       - SUB       SADDR        IF SAME AS SEARCHED SADDR GOTO SYMBOL FOUND
+1512 +04 1523                       + TR 0      LSCSYFND     X
+1513 +12 1510                       + R ADD     LSYSCAN      CONTINUE SCANNING BATCH
+1514 +05 0517                       + SUB       FOUR         X
+1515 +15 1510                       + STORE A   LSYSCAN      X
+1516 +05 0427                       + SUB       LOOPEND2     X
+1517 +04 1521                       + TR 0      LSCSYNF      END OF SCAN, NOT FOUND
+1520 +01 1510                       + TR        LSYSCAN      X
+1521 +12 0532              LSCSYNF  + R ADD     ZERO         SADDR NOT FOUND IN BATCH
+1522 +01 1531                       + TR        SCANSYEX     X  .*echo NotFound
+1523 +12 1510              LSCSYFND + R ADD     LSYSCAN      SADDR FOUND IN BATCH 
+1524 +05 0521                       + SUB       TWO          SO GET THE ACTUAL LOCATION OF THE INSTR FOUND
+1525 +15 1526                       + STORE A   LSCSY2       X
+1526 +12 0000              LSCSY2   + R ADD     /   /        GET ADDR
+1527 +14 0542                       + STORE     RESULT       RESULT IS THE ACTUAL LOCATION FOR SADDR
+1530 +12 0522                       + R ADD     ONE          X  .*echo Found_Addr:
+1531 +01 0000              SCANSYEX + TR        /   /
+                           
+                                      HEAD                   
+                                                             PROCESS INSTRUCTION BATCH
+                           
+1532 +12 0374              PRBATCH  + R ADD     NINSTDEF     IF NO INSTRUCTIONS IN THIS BATCH 
+1533 +04 0606                       + TR 0      RDCARD       PROCEED WITH NEXT CARD .*echo NInst_Batch:
+                           
+1534 +12 0421                       + R ADD     FILESLOC     GET END OF BATCH ADDR + 1 FULL WORD
+1535 +11 0521                       + ADD       TWO          X .*mo7740-40f
+1536 +15 0426                       + STORE A   LOOPEND      SET AS END OF LOOP VALUE                
+1537 +12 0420                       + R ADD     FILEAD       INIT LOOP START AT FILEAD + 1 FULL WORD
+1540 +11 0521                       + ADD       TWO          X
+1541 +15 1542                       + STORE A   LINSADDR     X
+                           
+                                                             SCAN BATCH TO RESOLVE LOCAL 
+                                                             SADDR REFERENCES
+                           
+                                      HEAD                   
+1542 -12 0000              LINSADDR - R ADD     /   /        GET SYMBOLIC ADDR OF CURRENT INSTR IN SADDR
+1543 +04 1560                       + TR 0      LINSNXT      IF SADDR IS ZERO THEN NOTHING TO RESOLVE SO PROCEED TO NEXT INSTR
+1544 -14 0410                       - STORE     SADDR        X .*echo search_in_batch_sloc:f
+                                    
+1545 +12 1545                       + R ADD     *            SCAN CURRENT INST BATCH LOOKING FOR A SLOC THAT MATCHES SADDR
+1546 +01 1437                       + TR        SCANBAT      RETURN 0 IF NOT FOUND, ACTUAL LOCATION IN RESULT IF FOUND
+1547 +04 1560                       + TR 0      LINSNXT      NOT FOUND SO PROCEED TO NEXT INSTR
+                           
+                                                             RESOLVE SADDR IN CURRENT 
+                                                             INST USING RESULT (CONTAINS THE ACTUAL LOCATION)
+                           
+                                      HEAD                   
+1550 +12 1542                       + R ADD     LINSADDR     GET SADDR ADDRESS OF CURRENT INSTR SCANNED
+1551 +15 1555                       + STORE A   LPR4A        X
+1552 +05 0520                       + SUB       THREE        X
+1553 +15 1557                       + STORE A   LPR4B        X
+1554 +12 0532                       + R ADD     ZERO         X
+1555 -14 0000              LPR4A    - STORE     /   /        CLEAR SADDR TO MARK IT AS RESOLVED
+1556 +12 0542                       + R ADD     RESULT       SET RESULT AS OPADDR FOR OPCODE 
+1557 +15 0000              LPR4B    + STORE A   /   /        IN ACTUAL INSTRUCTION .*echo rm_saddr_set_opaddr
+                           
+                                      HEAD                   
+                                                             SELECT NEXT INSTR FORM BATCH
+                                   
+1560 +12 1542              LINSNXT  + R ADD     LINSADDR     INCR POINTER TO SELECT SADDR 
+1561 +05 0515                       + SUB       SIX          OF NEXT INSTR In BATCH
+1562 +15 1542                       + STORE A   LINSADDR     X 
+1563 +12 1542                       + R ADD     LINSADDR     X 
+1564 +05 0426                       + SUB       LOOPEND      CHECK END OF LOOP
+1565 +04 1567                       + TR 0      WRBAT
+1566 +01 1542                       + TR        LINSADDR     X
+                                    
+                                      HEAD                   
+                                                             WRITE BATCH INTO TAPE 1
+                           
+1567 +32 0401               WRBAT   + WRITE     0257         PREPARE TO WRITE ON TAPE 1 .*echo Batch_to_Tape_start
+1570 +12 0421                       + R ADD     FILESLOC     LOOP STARTS AT FIRST CARD IN BATCH 
+1571 +05 0515               WRBAT0  + SUB       SIX          (STORE FIRST IN FILE, SO IS AT FILESLOC)
+1572 +15 1573                       + STORE A   WRBAT1       FOR INSTRUCTION BATCH
+1573 -37 0000               WRBAT1  - COPY      /   /        EACH INST IS 3 FULL WORDS
+1574 +11 0521                       + ADD       TWO          STORE THEM IN TAPE
+1575 +15 1576                       + STORE A   WRBAT2       X
+1576 -37 0000               WRBAT2  - COPY      /   /        X
+1577 +11 0521                       + ADD       TWO          X
+1600 +15 1601                       + STORE A   WRBAT3       X
+1601 -37 0000               WRBAT3  - COPY      /   /        X
+1602 +05 0517                       + SUB       FOUR         X
+1603 +05 0420                       + SUB       FILEAD       X
+1604 +04 1607                       + TR 0      WRBAT4       EXIT IF END OF BATCH REACHED
+1605 +11 0420                       + ADD       FILEAD       X
+1606 +01 1571                       + TR        WRBAT0       LOOP NEXT BATCH INSTR
+                                     
+                                      HEAD                   
+                           
+1607 +32 4004               WRBAT4  + WRITE     2052         INSURE THAT MQ NOT IN USE            
+1610 +12 0532                       + R ADD     ZERO         RESET NUM OF INSTR IN BATCH
+1611 +14 0374                       + STORE     NINSTDEF     X 
+1612 +12 0376                       + R ADD     NBATCH       INCR NUMBER OF BATCHES SAVED IN TAPE
+1613 +11 0522                       + ADD       ONE
+1614 +14 0376                       + STORE     NBATCH       X .*echo NBatches_in_Tape:
+                           
+                                                             STORE UNRESOLVED SADDR 
+                                                             OF BATCH INSTR INTO FILE TOP
+                           
+1615 +12 0421                       + R ADD     FILESLOC     INIT LOOP ON BATCH INST
+1616 +11 0521                       + ADD       TWO          X .*echo Scan_Unresolved
+1617 +15 0426                       + STORE A   LOOPEND      X 
+1620 +12 0420                       + R ADD     FILEAD       X
+1621 +11 0521                       + ADD       TWO          X
+1622 +15 1623                       + STORE A   RSADDR       X
+1623 -12 0000              RSADDR   - R ADD     /   /        GET SADDR
+1624 +04 1650                       + TR 0      RSADNXT      ZERO IF NO SYMBOLIC ADDR, GO TO NEXT INSTR
+1625 -14 0410                       - STORE     SADDR        X .*echo Scan_Symb:f 
+                           
+1626 +12 1626                       + R ADD     *            SCAN SYMBOLIC ADDR FILE LOOKING FOR SADDR
+1627 +01 1500                       + TR        SCANSYM      RETURN 0 IF NOT FOUND, ACTUAL ADDR OF SYMBOL IN RESULT IF FOUND (RESULT IS MINUS1 IF FOUND BUF SADDR UNRESOLVED)
+1630 +05 0522                       + SUB       ONE          X 
+1631 +04 1650                       + TR 0      RSADNXT      IF FOUND (SYMB ALREADY IN SYMBOL TABLE) THEN PROCEED TO NEXT INSTR
+                           
+1632 +12 0417                       + R ADD     FILEHED      ADD SADDR TO UNRESOLVED SYMBOLS LIST
+1633 +15 1641                       + STORE A   WSADDR1      X 
+1634 +11 0521                       + ADD       TWO          X
+1635 +15 1643                       + STORE A   WSADDR2      X 
+1636 +11 0521                       + ADD       TWO          X
+1637 +14 0417                       + STORE     FILEHED      X
+1640 -12 0410                       - R ADD     SADDR        X 
+1641 -14 0000              WSADDR1  - STORE     /   /        X .*echo Add_As_NoResolved:f
+1642 +12 0536                       + R ADD     MINUS1       X
+1643 -14 0000              WSADDR2  - STORE     /   /        X
+1644 +12 0375                       + R ADD     NSADDRUD     INCR NUM OF UNDEFINED SYMBOLIC ADDR
+1645 +11 0522                       + ADD       ONE          X
+1646 +14 0375                       + STORE     NSADDRUD     X
+1647 +01 1650                       + TR        RSADNXT      X
+                                    
+1650 +12 1623              RSADNXT  + R ADD     RSADDR       SELECT NEXT BATCH INSTR
+1651 +05 0515                       + SUB       SIX          X
+1652 +15 1623                       + STORE A   RSADDR       X
+1653 +12 1623                       + R ADD     RSADDR       X
+1654 +05 0426                       + SUB       LOOPEND      EXIT IF END OF BATCH REACHED
+1655 +04 1657                       + TR 0      RSAD9        X
+1656 +01 1623                       + TR        RSADDR       LOOP TO PROCESS NEXT BATCH INSTR
+                           
+1657 +12 0421              RSAD9    + R ADD     FILESLOC     CLEAR BATCH INSTR Nn FILE
+1660 +14 0420                       + STORE     FILEAD
+1661 +01 0606                       + TR        RDCARD       PROCEED WITH NEXT CARD (FIRST CARD OF NEXT BATCH)
+                           
+                           
+                                      HEAD                   
+                                                             END OF CARD READING SO PASS 1 FINISHED
+                                                             WRITE END OF FILE 
+                                                             AND REWIND TAPES 0 AND 1
+                           
+1662 +12 0374              EOF      + R ADD     NINSTDEF     X
+1663 +04 1665                       + TR 0      EOF1         X 
+1664 +00 0014                       + STOP      0012         STOP BECAUSE MISSING A HEADING CARD AS PROGRAM END
+1665 +33 0400              EOF1     + WRITE EF  0256         X
+1666 +33 0401                       + WRITE EF  0257         X
+1667 +34 0400                       + REWIND    0256         X
+1670 +34 0401                       + REWIND    0257         X
+1671 +12 0375                       + R ADD     NSADDRUD     GET NUM OF UNDEFINED SYMBOLIC ADDR
+1672 +04 2001                       + TR 0      PASS3        IF NO UNDEFINED SADDR PROCEES TO PASS 3
+1673 +12 0376                       + R ADD     NBATCH       IF NUMBER OF BATCHES SAVED IN TAPE IS ONE
+1674 +05 0522                       + SUB       ONE          THEN GOTO PASS3
+1675 +04 2001                       + TR 0      PASS3
+                                   
+                                      HEAD                   
+                                                             START OF PASS 2
+                                                             LOAD BATCH FROM TAPE 1
+                           
+1676 +10 0000              PASS2    + NOOP      0000
+1677 +12 0424              LOADB    + R ADD     FILELAST     RESET FILE AS EMPTY
+1700 +14 0420                       + STORE     FILEAD       X 
+1701 +14 0421                       + STORE     FILESLOC     X
+                           
+1702 +30 0401                       + READ      0257         READ BATCH IN TAPE .*echo Batch_Start
+1703 -37 0406              LOADINS  - COPY      SLOC         IN SLOC, SADDR, RESULT
+1704 +01 1707                       + TR        LOAD2        X
+1705 +01 1777                       + TR        LOADEND      END OF BATCHES 
+1706 +01 1735                       + TR        BSCAN1       END OF RECORD SO GO TO SCAN BATCH JUST LOADED
+                           
+1707 +12 0420              LOAD2    + R ADD     FILEAD       DECR FILE ADDRESS POINTER 
+1710 +05 0515                       + SUB       SIX
+1711 +14 0420                       + STORE     FILEAD       FILEAD IN ACC .*echo filead:
+1712 +05 0417                       + SUB       FILEHED      CHECK IF OVERFLOWS 
+1713 +03 1716                       + TR +      LOAD2A       FILE HEAD
+1714 +12 0410                       + R ADD     SADDR        LAST SYMB ADDR STORED
+1715 +00 0013                       + STOP      0011         STOP BECAUSE FILE FULL
+                           
+1716 -37 0410              LOAD2A   - COPY      SADDR        X
+                           
+1717 +12 0420                       + R ADD     FILEAD       ADD INSTR TO FILE
+1720 +15 1727                       + STORE A   LIN7         SET DEST ADDR FOR FW 1
+1721 +11 0521                       + ADD       TWO          X
+1722 +15 1731                       + STORE A   LIN8         SET DEST ADDR FOR FW 2
+1723 +11 0521                       + ADD       TWO          X
+1724 +15 1733                       + STORE A   LIN9         SET DEST ADDR FOR HW 3
+                           
+1725 -37 0542              LOAD2B   - COPY      RESULT       X
+                           
+1726 -12 0406                       - R ADD     SLOC         STORE IN FILE          .*echo read_instr
+1727 -14 0000                 LIN7  - STORE     /   /        SLOC OF INSTR          .*echo sloc:f
+1730 -12 0410                       - R ADD     SADDR        STORE IN FILE  
+1731 -14 0000                 LIN8  - STORE     /   /        SADDR OF INSTR         .*echo saddr:f
+1732 -12 0542                       - R ADD     RESULT       STORE IN FILE  
+1733 -14 0000                 LIN9  - STORE     /   /        ACTUAL LOC OF INSTR    .*echo curloc_opcode:
+1734 +01 1703                       + TR        LOADINS
+                                                             RESOLVE UNDEF SYMBOLS IN FILE USING BATCH INSTR SLOC
+                           
+                                      HEAD                   
+1735 +12 0417              BSCAN1   + R ADD     FILEHED      INIT FILEHED AND FILETOP TO
+1736 +15 0426                       + STORE A   LOOPEND      SACN ALL SYMBOLS
+1737 +12 0416                       + R ADD     FILETOP      X
+1740 +15 1741                       + STORE A   BSCANSY      X
+                                             
+1741 -12 0000              BSCANSY  - R ADD     /   /        GET SYMBOL TABLE SADDR
+1742 -14 0410                       - STORE     SADDR
+1743 +12 1741                       + R ADD     BSCANSY      .*echo Scan_saddr:f
+1744 +05 0521                       + SUB       TWO
+1745 +15 1751                       + STORE A   BSCANLOC
+                           
+1746 +12 1746                       + R ADD     *            SCAN CURRENT INST BATCH LOOKING FOR A SLOC THAT MATCHES SADDR
+1747 +01 1437                       + TR        SCANBAT      RETURN 0 IF NOT FOUND, ACTUAL LOCATION IN RESULT IF FOUND
+1750 +04 1771                       + TR 0      BSCANXT      NOT FOUND SO PROCEED TO NEXT SYMBOL
+                                            
+1751 +12 0000              BSCANLOC + R ADD     /   /        GET ACTUAL ADDR OF SYMBOL IN SYMBOL TABLE
+1752 +14 0406                       + STORE     SLOC         IF THE SADDR WAS UNDEFINED .*echo at_loc:
+1753 +05 0536                       + SUB       MINUS1       THEN 
+1754 +04 1765                       + TR 0      BSCANDEF     TRANSFER TO BSCANDEF
+1755 +12 0406                       + R ADD     SLOC         IF THE SADDR WAS REDEFINED TWICE
+1756 +05 0537                       + SUB       MINUS2       THEN 
+1757 +04 1771                       + TR 0      BSCANXT      PROCEED TO NEXT SYMBOL
+                           
+1760 +12 0406                       + R ADD     SLOC         SADDR SYMBOL IS ALREADY DEFINED. CHECK NOT REDEFINED WITH DIFFERENT ACTUAL ADDR
+1761 +05 0542                       + SUB       RESULT       
+1762 +04 1771                       + TR 0      BSCANXT      SAME ACTUAL ADDRESS SO PROCEED TO NEXT SYMBOL
+1763 +12 0537                       + R ADD     MINUS2       SYMBOL REDEFINED SO STORE MINUS2 VALUE
+1764 +14 0542                       + STORE     RESULT
+                           
+1765 +12 1751              BSCANDEF + R ADD     BSCANLOC     DEFINE ACTUAL ADDRESS FOR SYMBOL SADDR
+1766 +15 1770                       + STORE A   BSCANLO2
+1767 +12 0542                       + R ADD     RESULT
+1770 +14 0000              BSCANLO2 + STORE     /   /
+                                   
+1771 +12 1741              BSCANXT  + R ADD     BSCANSY
+1772 +05 0517                       + SUB       FOUR
+1773 +15 1741                       + STORE A   BSCANSY
+1774 +05 0426                       + SUB       LOOPEND
+1775 +04 1677                       + TR 0      LOADB
+1776 +01 1741                       + TR        BSCANSY
+                           
+                                      HEAD                   
+                           
+                                                             REW TAPE 1, START PASS 3
+1777 +34 0401              LOADEND  + REWIND    0257
+2000 +01 2001                       + TR        PASS3        .*m1142-20f:Symb_Table
+                                                             LOAD BATCH FROM TAPE 1
+                           
+2001 +12 0424              PASS3    + R ADD     FILELAST     RESET FILE AS EMPTY
+2002 +14 0420                       + STORE     FILEAD       X .*echo Read_Batch_From_Tape
+2003 +14 0421                       + STORE     FILESLOC     X
+                           
+2004 +30 0401              LOADB2   + READ      0257         READ INSTRUCTION FROM BATCH IN TAPE 1
+2005 -37 0406              LOADINS2 - COPY      SLOC         IN SLOC, SADDR, RESULT
+2006 +01 2011                       + TR        LOAD4        X
+2007 +01 2137                       + TR        LOADEND2     END OF BATCHES 
+2010 +01 2037                       + TR        BPROC2       END OF RECORD SO GO TO PROCESS BATCH JUST LOADED
+                           
+2011 +12 0420              LOAD4    + R ADD     FILEAD       DECR FILE ADDRESS POINTER 
+2012 +05 0515                       + SUB       SIX
+2013 +14 0420                       + STORE     FILEAD       FILEAD IN ACC .*echo filead:
+2014 +05 0417                       + SUB       FILEHED      CHECK IF OVERFLOWS 
+2015 +03 2020                       + TR +      LOAD4A       FILE HEAD
+2016 +12 0410                       + R ADD     SADDR        LAST SYMB ADDR STORED
+2017 +00 0013                       + STOP      0011         STOP BECAUSE FILE FULL
+                           
+2020 -37 0410              LOAD4A   - COPY      SADDR        X
+                           
+2021 +12 0420                       + R ADD     FILEAD       ADD INSTR TO FILE
+2022 +15 2031                       + STORE A   LIN7B        SET DEST ADDR FOR FW 1
+2023 +11 0521                       + ADD       TWO          X
+2024 +15 2033                       + STORE A   LIN8B        SET DEST ADDR FOR FW 2
+2025 +11 0521                       + ADD       TWO          X
+2026 +15 2035                       + STORE A   LIN9B        SET DEST ADDR FOR HW 3
+                           
+2027 -37 0542              LOAD4B   - COPY      RESULT       X
+                           
+2030 -12 0406                       - R ADD     SLOC         STORE IN FILE        .*echo read_instr
+2031 -14 0000                 LIN7B - STORE     /   /        SLOC OF INSTR        .*echo sloc:f
+2032 -12 0410                       - R ADD     SADDR        STORE IN FILE  
+2033 -14 0000                 LIN8B - STORE     /   /        SADDR OF INSTR       .*echo saddr:f
+2034 -12 0542                       - R ADD     RESULT       STORE IN FILE  
+2035 -14 0000                 LIN9B - STORE     /   /        ACTUAL LOC OF INSTR  .*echo curloc_opcode:f
+2036 +01 2005                       + TR        LOADINS2
+                                                         
+                                      HEAD                   
+                                                             PROCESS INSTR FROM BATCH 
+                           
+2037 +12 0421              BPROC2   + R ADD     FILESLOC     GET END OF BATCH ADDR + 1 FULL WORD
+2040 +05 0517                       + SUB       FOUR         X
+2041 +15 2045                       + STORE A   LOP          SET AS START OF OF LOOP VALUE                
+2042 +12 0420                       + R ADD     FILEAD       INIT LOOP START AT FILEAD + 1 FULL WORD
+2043 +05 0517                       + SUB       FOUR         X
+2044 +15 0426                       + STORE A   LOOPEND      X .*echo Process_Batch
+                           
+2045 -12 0000              LOP      - R ADD     /   /        GET SYMBOLIC ADDR OF CURRENT INSTR IN SADDR
+2046 -14 0410                       - STORE     SADDR        X    .*echo saddr:f 
+2047 +12 2045                       + R ADD     LOP          X
+2050 +05 0521                       + SUB       TWO          X
+2051 +15 2052                       + STORE A   LOP2         X
+2052 -12 0000              LOP2     - R ADD     /   /        X
+2053 -14 0414                       - STORE     LHWORD       GET CURLOC (FROM LEFT HWORD)
+2054 +12 0414                       + R ADD     LHWORD       AND OPCODE (FROM RIGHT HWORD)
+2055 +14 0401                       + STORE     CURLOC       X
+2056 +12 0415                       + R ADD     RHWORD       X
+2057 +14 0412                       + STORE     OPCODE       X
+                           
+                                      HEAD                   
+                                                             GET PUNCHED CARD FROM TAPE 0
+                           
+2060 +12 0401              LOP2B    + R ADD     CURLOC
+2061 +10 0000                       + NOOP      0000         .*echo CurLoc:     
+2062 +12 2062                       + R ADD     *            .*echo opcode:o
+2063 +01 2143                       + TR        RDCDTAPE
+2064 +12 0542                       + R ADD     RESULT           
+2065 +05 0401                       + SUB       CURLOC       .*echo Card_Loc: 
+2066 +04 2076                       + TR 0      LOP3         IF IS CARD BEING PROCESSED FROM BATCH, GO TO LOP3
+                           
+2067 +12 0542                       + R ADD     RESULT       IF RESULT ID MINUS2 THEN IS EOF      
+2070 +05 0537                       + SUB       MINUS2       AND THEN TRANSFER TO PROCESS 
+2071 +04 2137                       + TR 0      LOADEND2     END OF BATCHES 
+                           
+                           
+2072 +12 2072                       + R ADD     *            PRINT NON INSTR CARD
+2073 +01 2166                       + TR        PRTCARD 
+2074 +00 0000                         DEF       0            NO ACTUAL CURLOC OPCODE
+2075 +01 2060                       + TR        LOP2B
+                                
+                                      HEAD                   
+                                                             RESOLVE UNDEF SADDR IN BATCH 
+                                                             INSTR USING SYMBOLS IN FILE
+                           
+2076 -12 0410              LOP3     - R ADD     SADDR        GET SADDR OF INSTRCTION
+2077 +04 2121                       + TR 0      LOP4         IF ZERO IS AN ACTUAL ADDR (NOT SYMBOLIC) SO TRANSFER
+                                       
+2100 +12 2100              LOP3A    + R ADD     *            SCAN SYMBOLIC ADDR FILE LOOKING FOR SADDR
+2101 +01 1500                       + TR        SCANSYM      RETURN 0 IF NOT FOUND, ACTUAL ADDR OF SYMBOL IN RESULT IF FOUND (RESULT IS MINUS1 IF FOUND BUF SADDR UNRESOLVED)
+2102 +04 2130                       + TR 0      LOP5ERR      IF NOT FOUND TR TO ERROR STOP (SHOULD NOT OCCURS)
+2103 +12 0542                       + R ADD     RESULT       IF FOUND BUT SADDR'S LOC IS -2 THEN 
+2104 +05 0537                       + SUB       MINUS2       THE SYMBOLIC SADDR HAS BEEN DEFINED TWICE WITH
+2105 +04 2116                       + TR 0      LOP3B        TWO DIFFERENT LOCATIOS. TR TO SIGNAL IT
+2106 +12 0542                       + R ADD     RESULT       IF FOUND BUT SADDR'S LOC IS -1 THEN  
+2107 +05 0536                       + SUB       MINUS1       THE SYMBOLIC SADDR HAS NOT BEEN RESOLVED
+2110 +04 2121                       + TR 0      LOP4         LEAVE SADDR UNTOUCHED AND TRANSFER
+2111 +12 0542                       + R ADD     RESULT       AT LAST ... RESULT HOLDS THE ACTUAL LOCATION FOR SADDR
+2112 +15 0412                       + STORE A   OPCODE       STORE IT IN OPCODE AS ACUAL ADDRESS
+2113 +12 0532                       + R ADD     ZERO         PUT ZERO On SDAAR TO SIGNAL IT HAS BEEN 
+2114 -14 0410                       - STORE     SADDR        RESOLVED
+2115 +01 2121                       + TR        LOP4         X
+2116 +12 0537              LOP3B    + R ADD     MINUS2       X
+2117 +14 0410                       + STORE     SADDR        X
+2120 +01 2121                       + TR        LOP4         X
+                           
+2121 +12 2121              LOP4     + R ADD     *            PRINT INST CARD
+2122 +01 2166                       + TR        PRTCARD
+2123 +00 0001                         DEF       1            WITH ACTUAL CURLOC OPCODE, ADDED TO OUTPUT BINARY CARD
+                           
+2124 -12 0410                       - R ADD     SADDR        ZERO IS SADDR OK, POSITIVE IS UNDEF, NEGATIVE IS DEFINED TWICE
+2125 +04 2131                       + TR 0      LOPNEXT      X
+2126 +03 2130                       + TR +      LOP5ERR      STOP IF SADDR NOT OK
+2127 +00 0025                       + STOP      0021         STOP BECAUSE SADDR DEFINED TWICE
+2130 +00 0024              LOP5ERR  + STOP      0020         STOP BECAUSE SADDR NOT FOUND
+                           
+2131 +12 2045              LOPNEXT  + R ADD     LOP          INCR POINTER TO SELECT SADDR 
+2132 +11 0515                       + ADD       SIX          OF NEXT INSTR IN BATCH
+2133 +15 2045                       + STORE A   LOP          X 
+2134 +05 0426                       + SUB       LOOPEND      CHECK END OF LOOP
+2135 +04 2001                       + TR 0      PASS3        X
+2136 +01 2045                       + TR        LOP          X
+                           
+2137 +12 2137              LOADEND2 + R ADD     *            PRINT INST CARD
+2140 +01 2166                       + TR        PRTCARD      FLUSH PENDING DATA TO OUTPUT BINARY CARD
+2141 +00 0002                         DEF       2   
+2142 +01 2510                       + TR        FINISH         
+                           
+                                      HEAD                   
+                                                             READ CARD IMAGE FROM TAPE
+                                                             SET CTYPE VARIABLE WITH CARD TYPE
+                                                             SET RESULT VARIABLE WITH ITS ACTUAL LOCATION (CURLOC) 
+                                                             IF IS AN INSTRUCTION, SET -1 IF IS NOT AN 
+                                                             INSTRUCTION (COMMENT, HEADING, ...), SET -2 IF END OF FILE
+                           
+2143 +11 0521              RDCDTAPE + ADD       TWO          READ CARD IMAGE FROM TAPE
+2144 +15 2165                       + STORE A   RDCDTPEX     X
+2145 +30 0400                       + READ      0256         PREPARE TO READ FROM TAPE 0                
+2146 +12 0551                       + R ADD     CDBUFAD      RESET TO INITIAL COPY LOOP ADDRESS     
+2147 +15 2154                       + STORE A   RDCDROW      FOR CARD BUFFER
+2150 -37 0542                       - COPY      RESULT       X .*echo RdTape_cardimage
+2151 +01 2154                       + TR        RDCDROW      X
+2152 +01 2163                       + TR        RDCDEOF      EXIT BECAUSE EOF
+2153 +01 2165                       + TR        RDCDTPEX     EXIT BECAUSE END OF RECORD
+2154 -37 0000               RDCDROW - COPY      /   /        COPY WORD FROM TAPE               
+2155 +01 2160                       + TR        LRDCD1       X
+2156 +01 2163                       + TR        RDCDEOF      EXIT BECAUSE EOF
+2157 +01 2165                       + TR        RDCDTPEX     EXIT BECAUSE END OF RECORD
+2160 +11 0521               LRDCD1  + ADD       TWO          INCR CDBUF ADDR
+2161 +15 2154                       + STORE A   RDCDROW      X
+2162 +01 2154                       + TR        RDCDROW      X
+2163 +12 0537               RDCDEOF + R ADD     MINUS2       SIGNAR EOF RETURNING 
+2164 +14 0542                       + STORE     RESULT       VALUE -2 IN RESULT
+2165 +01 0000              RDCDTPEX + TR        /   /        EXIT ROUTINE
+                                    
+                           
+                                      HEAD                   
+                                                             PRINT CARD
+                                                             IF PARAM IS ZERO IS A NON INSTRUCTION
+                                                             IF PARAM IS ONE IS AN INSTRUCTION, ALSO
+                                                             ADD THE INSTRUCTION TO THE PUNCH OUTPUT BUFFER
+                                                             IF PARAM IS TWO FLUSH AND PUNCH OUTPUT BINARY CARD
+                           
+2166 +11 0521              PRTCARD  + ADD       TWO
+2167 +15 2172                       + STORE A   PRTPARAM
+2170 +11 0522                       + ADD       ONE
+2171 +15 2504                       + STORE A   PRTCDEX
+2172 +12 0000              PRTPARAM + R ADD     /   /
+2173 +14 2506                       + STORE     PMODE        X .*echo Print_Mode:
+2174 +05 0521                       + SUB       TWO
+2175 +04 2364                       + TR 0      FLUSH
+                           
+2176 +12 0551                       + R ADD     CDBUFAD      RESET TO INITIAL COPY LOOP ADDRESS     
+2177 +15 2204                       + STORE A   PR1          FOR CARD BUFFER
+2200 +15 2214                       + STORE A   PR2          X
+2201 +12 2204                       + R ADD     PR1          X
+2202 +05 0535                       + SUB       D48          X
+2203 +14 2505                       + STORE     PLOOPEND     X
+2204 -12 0000              PR1      - R ADD     /   /        REORDER COLUMNS IN CARD IMAGE 
+2205 -25 0030                       - L RIGHT   0024         REMOVE OPCODE, CARD TYPE 
+2206 +12 0532                       + R ADD     ZERO         PUT SYMBOLIC LOC AND SYMBOLIC ADDR ON LEFT 
+2207 -24 0011                       - L LEFT    0009         OF CARD
+2210 -27 0003                       - A RIGHT   0003         X
+2211 -26 0001                       - A LEFT    0001         X
+2212 -24 0006                       - L LEFT    0006         X
+2213 -26 0026                       - A LEFT    0022         X
+2214 -14 0000              PR2      - STORE     /   /        X
+2215 +12 2204                       + R ADD     PR1          X
+2216 +05 0517                       + SUB       FOUR         X
+2217 +15 2204                       + STORE A   PR1          X
+2220 +15 2214                       + STORE A   PR2          X
+2221 +05 2505                       + SUB       PLOOPEND     X
+2222 +04 2224                       + TR 0      PR3          X
+2223 +01 2204                       + TR        PR1          X
+                           
+2224 +12 2506              PR3      + R ADD     PMODE
+2225 +05 0522                       + SUB       ONE
+2226 +04 2230                       + TR 0      PROPCODE     
+2227 +01 2262                       + TR        PRINT  
+                           
+                                      HEAD                   
+2230 +12 0522              PROPCODE + R ADD     ONE          ADD ACTUAL OPCODE AND OPADDR TO CARD IMAGE
+2231 +26 0020                       + A LEFT    0016         X
+2232 -14 0544                       - STORE     PROW         X .*echo Print_SetOpCode
+2233 +12 0412                       + R ADD     OPCODE       PRINT ACTUAL CURLOC OPCODE
+2234 +25 0044                       + L RIGHT   0036         SHIFT INTO MQ .*echo opcode:o  
+2235 +12 0401                       + R ADD     CURLOC       X
+2236 +27 0022                       + A RIGHT   0018         X .*echo curloc:
+2237 +25 0014                       + L RIGHT   0012         X
+2240 +24 0003              PROP2    + L LEFT    0003         X
+2241 +26 0022                       + A LEFT    0018         X
+2242 +14 0541                       + STORE     CHAR         X .*echo Print_char:
+2243 +12 0512                       + R ADD     NINE
+2244 +05 0541                       + SUB       CHAR
+2245 +26 0002                       + A LEFT    0002
+2246 +11 0522                       + ADD       ONE
+2247 +11 0551                       + ADD       CDBUFAD
+2250 +15 2255                       + STORE A   PROP3
+2251 +15 2256                       + STORE A   PROP4
+2252 -12 0544                       - R ADD     PROW
+2253 +27 0001                       + A RIGHT   0001
+2254 -14 0544                       - STORE     PROW
+2255 +11 0000              PROP3    + ADD       /   /
+2256 +14 0000              PROP4    + STORE     /   /
+2257 -12 0544                       - R ADD     PROW
+2260 +26 0014                       + A LEFT    0012
+2261 +04 2240                       + TR 0      PROP2
+                                    
+                                      HEAD     
+                                         
+2262 +36 0111              PRINT    + SENSE     0073         SWITCH 5 CONTROLS PROGRAM LISTING 
+2263 +01 2265                       + TR        PRTOK        PRINTING DESIRED
+2264 +01 2310                       + TR        PRTEND       NO PRINTING DESIRED
+                           
+2265 +32 1000              PRTOK    + WRITE     0512         PREPARE TO WRITE CBUF ON PRINTER
+2266 +12 2506                       + R ADD     PMODE
+2267 +04 2271                       + TR 0      PROP5
+2270 +36 1005                       + SENSE     0517         SELECT HUB FOR SIGN AND DOTS
+2271 +12 0412              PROP5    + R ADD     OPCODE       
+2272 +03 2274                       + TR +      PROP1        X .*echo opcode:o         
+2273 +36 1006                       + SENSE     0518         SELECT HUB FOR MINUS
+2274 +12 0551              PROP1    + R ADD     CDBUFAD      RESET TO INITIAL COPY LOOP ADDRESS     
+2275 +15 2301                       + STORE A   PRCDROW      FOR CARD BUFFER
+2276 +12 2301                       + R ADD     PRCDROW      X .*echo Print
+2277 +05 0535                       + SUB       D48          X 
+2300 +14 2505                       + STORE     PLOOPEND     X
+2301 -37 0000               PRCDROW - COPY      /   /        COPY WORD TO PRINTER
+2302 +12 2301                       + R ADD     PRCDROW      X
+2303 +05 0521                       + SUB       TWO          INCR CDBUF ADDR
+2304 +15 2301                       + STORE A   PRCDROW      X
+2305 +05 2505                       + SUB       PLOOPEND     CHECK FOR END
+2306 +04 2310                       + TR 0      PRTEND       
+2307 +01 2301                       + TR        PRCDROW 
+2310 +12 2506              PRTEND   + R ADD     PMODE
+2311 +04 2504                       + TR 0      PRTCDEX      IF MODE ZERO EXIT ROUTINE
+                           
+                                      HEAD                   
+2312 +12 0510              PUNCH    + R ADD     OUTCOUNT     PUNCH CARD IF OUTPUT BUF IS FULL
+2313 +05 0535                       + SUB       D48          .*echo PunchOutCount:
+2314 +04 2412                       + TR 0      PHCARD
+                           
+                                      HEAD                   
+2315 +12 0377              PH0      + R ADD     ORG0FLAG     IS ONE IF PROGRAM ORIGIN IS ZERO
+2316 +04 2320                       + TR 0      PUNCH015     IS ZERO IF PUNCH OUTPUT IS IN PUNCH IN FEJ015 BIN CARD FORMAT
+2317 +01 2335                       + TR        PHADD
+                           
+                                      HEAD                   
+2320 +12 0510              PUNCH015 + R ADD     OUTCOUNT     PUNCH IN FEJ015 BIN CARD FORMAT
+2321 +04 2330                       + TR 0      PH015A       IF CARD IS EMPTY, RESERVE 4 HALF WORDS
+2322 +12 0401                       + R ADD     CURLOC       IF CARD HAS ALREADY SOME INSTR, CHECK
+2323 +05 2507                       + SUB       CURLOC0      THERE IS NO GAPS IN ADDR OF INSTR
+2324 +05 0522                       + SUB       ONE          X
+2325 +04 2335                       + TR 0      PHADD        TRANSFER TO ADD TO CARD BECAUSE NO GAPS
+2326 +01 2364                       + TR        FLUSH        FLUSH CARD TO START A NEW FRESH ONE IN THE NEW CURLOC ADDR
+                           
+2327 +01 2335                       + TR        PHADD        FOR CHKSUM (2 HWORDS), DATA ADDR, DATA HWORDS LEN
+2330 +11 0517              PH015A   + ADD       FOUR         X
+2331 +14 0510                       + STORE     OUTCOUNT     X 
+2332 +12 0401                       + R ADD     CURLOC       SET FIRST ADDR OF DATA IN CARD
+2333 +14 0425                       + STORE     CARDADDR     X
+2334 +14 2507                       + STORE     CURLOC0      SET LASt PUNCHED LOC IN CARD
+                           
+                                      HEAD                   
+                                                             ADD OPCODE TO OUTPUT CARD BUFFER
+                                                             IN RAW BINARY MODE (RAW BINARY MODE)
+                           
+2335 +12 0510              PHADD    + R ADD     OUTCOUNT     CALC DESTINATION FULL WORD 
+2336 +25 0023                       + L RIGHT   0019         MAKE ACC EVEN, RIGHT MOST BIT IN MQ
+2337 +26 0023                       + A LEFT    0019
+2340 +11 0552                       + ADD       BINOUTAD     X
+2341 +15 2350                       + STORE A   PH1
+2342 +15 2355                       + STORE A   PH2          X
+2343 +12 0532                       + R ADD     ZERO
+2344 +24 0001                       + L LEFT    0001         GET BACK BIT FROM MQ
+2345 +04 2354                       + TR 0      PHEVEN       TRANSFER IF EVEN (ADDING OPCODE TO RIGHT HALF WORD)
+2346 +12 0412                       + R ADD     OPCODE       ADD OPCODE AT RIGHT HALF WORD
+2347 +14 0415                       + STORE     RHWORD
+2350 +12 0000              PH1      + R ADD     /   /
+2351 +14 0414                       + STORE     LHWORD
+2352 -12 0414                       - R ADD     LHWORD
+2353 +01 2355                       + TR        PH2
+2354 +12 0412              PHEVEN   + R ADD     OPCODE       ADD OPCODE AT EVEN HALF WORD
+2355 -14 0000              PH2      - STORE     /   /        STORE INSTR IN OUT BUF 
+2356 +12 0510                       + R ADD     OUTCOUNT     INCR NUMBER OF HALF WORDS IN
+2357 +11 0522                       + ADD       ONE          OUTPUT BUFFER
+2360 +14 0510                       + STORE     OUTCOUNT
+2361 +12 0401                       + R ADD     CURLOC       SAVE LAST LOC ADDED TO CARD
+2362 +14 2507                       + STORE     CURLOC0 
+2363 +01 2504                       + TR        PRTCDEX
+                           
+                                      HEAD                   
+2364 +12 0510              FLUSH    + R ADD     OUTCOUNT     FLUSH CURRENT OUTPUT BUF THEN EXIT ROUTINE
+2365 +04 2504                       + TR 0      PRTCDEX      NOTHING TO FLUSH, JUST EXIT
+2366 +05 0535                       + SUB       D48          .*echo Flush
+2367 +04 2412                       + TR 0      PHCARD       .*mo0426-60:BinPutBuf
+2370 +11 0522                       + ADD       ONE
+2371 +04 2412                       + TR 0      PHCARD       IF ALREADY FULL PROCEED TO WRITE OUTPUT CARD 
+2372 +12 0552                       + R ADD     BINOUTAD
+2373 +11 0535                       + ADD       D48
+2374 +15 2403                       + STORE A   PH5
+2375 +12 2403                       + R ADD     PH5
+2376 +14 2505                       + STORE     PLOOPEND
+2377 +12 0510                       + R ADD     OUTCOUNT     ELSE FILL REMAINING OUT BUF WITH ZERO
+2400 +11 0552                       + ADD       BINOUTAD     
+2401 +15 2403                       + STORE A   PH5
+2402 +12 0532              PH6      + R ADD     ZERO
+2403 +14 0000              PH5      + STORE     /   /         
+2404 +12 2403                       + R ADD     PH5
+2405 +11 0522                       + ADD       ONE
+2406 +14 2403                       + STORE     PH5   
+2407 +05 2505                       + SUB       PLOOPEND
+2410 +04 2412                       + TR 0      PHCARD
+2411 +01 2402                       + TR        PH6
+                           
+                                      HEAD                   
+2412 +12 0377              PHCARD   + R ADD     ORG0FLAG     IS ONE IF PROGRAM ORIGIN IS ZERO (BIN CARDS)
+2413 +04 2437                       + TR 0      CHK015       IS ZERO IF PUNCH OUTPUT IS FEJ015 FORMAT. TR TO PUT CHECKSUM In CARD
+2414 +32 2000              PH7      + WRITE     1024         PREPARE TO PUNCH CARD                 
+2415 +12 0552                       + R ADD     BINOUTAD     .*echo PhCard
+2416 +15 2422                       + STORE A   PH3
+2417 +12 2422                       + R ADD     PH3
+2420 +05 0535                       + SUB       D48
+2421 +14 2505                       + STORE     PLOOPEND
+2422 -37 0000              PH3      - COPY      /   /
+2423 +12 2422                       + R ADD     PH3
+2424 +05 0521                       + SUB       TWO
+2425 +15 2422                       + STORE A   PH3
+2426 +05 2505                       + SUB       PLOOPEND
+2427 +04 2431                       + TR 0      PH4          EXIT PUNCH WORD LOOP
+2430 +01 2422                       + TR        PH3
+2431 +12 0532              PH4      + R ADD     ZERO         MARK BUFFER AS EMPTY
+2432 +14 0510                       + STORE     OUTCOUNT     
+2433 +12 2506                       + R ADD     PMODE
+2434 +05 0521                       + SUB       TWO
+2435 +04 2504                       + TR 0      PRTCDEX      IF PMODE IS TWO (FLUSH) THEN EXIT ROUTINE
+2436 +01 2315                       + TR        PH0          ELSE AFTER FLUSHING PROCEED TO ADD NEW 
+                                                             DATA TO FRESH NEW EMPTY OUTPUT CARD          
+                                      HEAD                   
+                                                             CALCULATE FEH019/FEJ015 CHECKSUM AND
+                                                             SET CARD BINARY FORMAT 
+                                                             | CHK  .  SUM | COUNT | ADDR | 
+                           
+2437 +12 0532              CHK015   + R ADD     ZERO
+2440 -14 0542                       - STORE     RESULT       RESULT HOLDS THE CHECKSUM OF CARD
+2441 +14 0414                       + STORE     LHWORD
+2442 +12 0552                       + R ADD     BINOUTAD
+2443 +11 0535                       + ADD       D48
+2444 +15 2452                       + STORE A   PH8
+2445 +12 2452                       + R ADD     PH8
+2446 +14 2505                       + STORE     PLOOPEND
+2447 +12 0552                       + R ADD     BINOUTAD     .*echo ChkSUmCard
+2450 +11 0517                       + ADD       FOUR
+2451 +15 2452                       + STORE A   PH8
+2452 +12 0000              PH8      + R ADD     /   /
+2453 +14 0415                       + STORE     RHWORD   
+2454 -06 0414                       - R SUB     LHWORD  
+2455 +26 0001                       + A LEFT    0001   
+2456 -11 0542                       - ADD       RESULT
+2457 -14 0542                       - STORE     RESULT
+2460 +12 2452                       + R ADD     PH8
+2461 +11 0522                       + ADD       ONE
+2462 +15 2452                       + STORE A   PH8
+2463 +05 2505                       + SUB       PLOOPEND
+2464 +04 2466                       + TR 0      PH9          EXIT CALC CHKSUM LOOP
+2465 +01 2452                       + TR        PH8
+2466 +06 0510              PH9      + R SUB     OUTCOUNT
+2467 +11 0517                       + ADD       FOUR
+2470 +05 0425                       + SUB       CARDADDR
+2471 +27 0021                       + A RIGHT   0017   
+2472 -11 0542                       - ADD       RESULT       SET CHECKSUM
+2473 -14 0430                       - STORE     BINOUT
+2474 +12 0425                       + R ADD     CARDADDR
+2475 +14 0415                       + STORE     RHWORD
+2476 +12 0510                       + R ADD     OUTCOUNT
+2477 +05 0517                       + SUB       FOUR
+2500 +14 0414                       + STORE     LHWORD
+2501 -12 0414                       - R ADD     LHWORD
+2502 -14 0432                       - STORE     BINOUT2
+2503 +01 2414                       + TR        PH7
+                                                   
+                                      HEAD                   
+2504 +01 0000              PRTCDEX  + TR        /   /
+2505 +00 0000              PLOOPEND   DEF       0
+2506 +00 0000              PMODE      DEF       0
+2507 +00 0000              CURLOC0    DEF       0
+                           
+                                      HEAD                   END OF PROG
+2510 +00 0000              FINISH   + STOP      0000         STOP NO ERRORS
+2511 +00 2511              FILESTRT + STOP      FILESTRT     FILE START ADDR. MUST BE LAST LINE OF PROGRAM
+                           
+                                                             Usage:
+                                  
+                                                             The purpose of NR9003 is to accept one or more programs in symbolic
+                                                             form and to combine them into one program in actual form. 
+                                                             The symbolic program is presented with one instruction punched to 
+                                                             a card, and the calculator produces the program on binary cards.
+                                                             The calculator also produces a printed program which contains
+                                                             the original symbolic program, the new actual program (in octonary) 
+                                                             and the comments which were associated with the original program.
+                                  
+                                                             Occupies all of electrostatic memory except addresses 0000 to 0307 octal
+                                                             (0 to 199 decimal)
+                                  
+                                                             Locations must be given in symbolic form. Address parts may be
+                                                             given in symbolic form or as actual 4-digit decimal numbers. Operation
+                                                             parts are to be given in octonary.
+                                  
+                                                             A symbolic address is a 6-digit number. The only two important precautions
+                                                             are:
+                                  
+                                                                 1) Do not. use 000 000 as a symbolic address with 00 as a heading.
+                                                                 2) Do not use the same symbolic address with the same heading for two different purposes.
+                                  
+                                                             Programs must be broken down into batches of instructions so that
+                                                             they can be processed one by one withput exhausting storage
+                                  
+                                                             The assembly source program cards must be placed in the 
+                                                             following order:
+                                  
+                                                                1) Synonyms cards
+                                                                2) Drum assignments cards
+                                                                3) First electrostatic assignment card
+                                                                4) First heading card
+                                                                5) Instructions of first batch in the correct order for assignment of locations.
+                                                                6) Other heading cards and their instructions
+                                                                7) Last heading card.
+                                  
+                                                                Comments may be interspersed at will
+                                  
+                                                                Subsequent electrostatic assignment cards may be used at will and
+                                                                each gives the location of the next instruction. Each electrostatic 
+                                                                assignment card must be accompanied by a heading card.
+                                  
+                                                                When one is combining several different programs, a different 2-digit 
+                                                                prefix must be used with each different program to avoid homonyms.
+                                                                
+                                                                The various heading cards which break up a single program into manageable
+                                                                batches may all have the same prefix but this is not necessary. The last
+                                                                card must be a heading but this is a dummy. The value of the prefix on 
+                                                                this last card is irrelevant.
+                                  
+                                                                Synonym cards are used to establish the connections between independent
+                                                                programs which are being combined by the assembly program.
+                                  
+                                                             If program origin is 0000, the punched cards resulting from
+                                                             assembly will be binary cards with 48 instructions per card. 
+                                                             All instruction wll be punched in sequence, even if there are
+                                                             gaps in location address. It is responsibility of program to
+                                                             store the instrs at the right location. This allow to create 
+                                                             self-loading cards. 
+                           
+                                                             If program origin is other than 0000, the punched cards will 
+                                                             be in a format suitable to be loaded with FEJ 015. The program origin
+                                                             must be 134 octal or higher (FEJ 015 cannot load at lower locations)
+                                                             when assembling, if an origin card is found, the current binary output
+                                                             card will be flushed, and a new fresh one will be started. This allow
+                                                             to have gaps in program locations used.
+                                           
+                                                             Program Loading:
+                                                                1) Place the assembly program NR9003 in the card hopper.
+                                                                2) Place the program to be assembled in the hopper on top of NR9003.
+                                                                3) Press the card reader START until it is READY.
+                                                                4) Printer READY with NR9003 plugboard.
+                                                                5) Card Punch READY with binary cards.
+                                                                6) Tape 0400 READY
+                                                                7) Tape 0401 READY
+                                                                8) Preset RESET AND CLEAR MEMORY.
+                                                                9) Press LOAD.
+                                                               10) When the Card Reader stops with SELECT, press the Card Reader START.
+                                  
+                                                                   The calculator will automatically figure out the actual program, print
+                                                                   it, and punch it on binary cards
+                                  
+                                                             Sense Input Switch 5 controls the program printout
+                                                             If set up, assembled program is listed. 
+                                                             If set down, no listing is generated        
+                                  
+                                                             Normal Stops:
+                                                                STOP 0000  End of assembly, no errors
+                                  
+                                                             Error stops:
+                                                                STOP 0001  Stop because invalid format in input card
+                                                                STOP 0002  Stop because card type invalid. must be 0-5 or 9
+                                                                STOP 0003  Stop because symbolic location not in sequence
+                                                                STOP 0004  Stop because invalid opcode sign (must be + or -)
+                                                                STOP 0005  Stop because expecting heading card before this one
+                                                                STOP 0006  Stop because this card only allowed before electrostatic assignement card
+                                                                STOP 0007  Stop because this card not allowed after a drum assign card
+                                                                STOP 0008  Stop because this card not allowed after electrostatic assignement card
+                                                                STOP 0009  Stop because this card not allowed after electrostatic assignement card
+                                                                STOP 0010  Stop because expecting electrostatic assignement card
+                                                                STOP 0011  Stop because file full. the calculator discovered a batch 
+                                                                .          which was too large. Relocate heading cards and start
+                                                                STOP 0012  Stop because missing a heading card as program end
+                                                                STOP 0021  Stop because symbolic loc defined twice
+                                                                STOP 0020  Stop because symbolic addr not found
+                                                             
+                                  
+                                                             Source card format:
+                                  
+                                                               column  14-19   should be +01020
+                                                                       20      card type: one digit 0-5, or 9
+                                                                       21-26   symbolic location: 6 decimal digits
+                                                                       27      sign of instruction (row 11 punch for -, row 12 for +)
+                                                                       28-29   operation part of instruction (octal)
+                                                                       20-25   symbolic/actual address (decimal)
+                                                                       39-44   Blank
+                                                                       45-80   Comment
+                           
+                                                               Column:
+                                                               .               14    20 21 27 28 30  36 38     45 
+                                                               .                v     vv     vv v     v v      v
+                                                               .     ------------------------------------------------------+ 
+                                                               .   /            +01020tLLLLLLsOPAAAAAAppPP     Comment     |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  |                                                        |
+                                                               .  +--------------------------------------------------------+
+                           
+                                                               The fields to fullfill depends on card type
+                                                               
+                                                                    card type 0: Symbolic Intruction
+                           
+                                                                               +010200LLLLLLsOPAAAAAA         Comment     
+                           
+                                                                    card type 1: Actual Intruction 
+                                                                                 AAAA=actual op address part, as 4 digits decimal value)
+                           
+                                                                               +010201LLLLLLsOPAAAA           Comment     
+                           
+                                                                    card type 2: Synonym: 
+                                                                                 AAAAA1 prefix PP=Do not use this 
+                                                                                 BBBBB2 prefix pp=use this address       
+                           
+                                                                               +010202BBBBB2   AAAAA1ppPP     Comment     
+                                                                               
+                                                                    card type 3: Drum Assignment
+                                                                                 SSSSSS prefix pp=Symbolic address
+                                                                                 AAAA=Actual address as 4 digits decimal value
+                           
+                                                                               +010203SSSSSS   AAAAA1pp       Comment     
+                           
+                                                                    card type 4: Comment
+                           
+                                                                               +010204                        Comment     
+                           
+                                                                    card type 5: Heading                                           
+                           
+                                                                               +010205               pp       Comment     
+                           
+                                                                    card type 9: Electrostatic assignment
+                                                                                 AAAA=Actual address for memory origin assignment
+                                                                                      as 4 digits decimal value
+                           
+                                                                               +010209           AAAA         Comment     
+                           
+                                                             Punched binary cards format (when program origin not 0000):
+                                  
+                                                                - in row 9: 
+                                                                      A & B = checksum
+                                                                      C     = Number of instructions on this card
+                                                                      D     = first address of this card
+                                                                - in rows 8 to 0, X and Y: up to 44 instructions
+                                  
+                                                               .     ------------------------------------------------------+
+                                                               .   /   |            |            |  ...       | instr 44   |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |  instr 5   |  ...       |            |            |
+                                                               .  |    |  instr 1   |  instr 2   |  instr 3   |  instr 4   |
+                                                               .  |    +------------+------------+------------+------------+
+                                                               .  |    |     A      |     B      |      C     |     D      |
+                                                               .  +----+------------+------------+------------+------------+
+                           
+                           
+                                                             Punched binary cards format (when program origin is 0000):
+                                         
+                                                               .     ------------------------------------------------------+
+                                                               .   /   |            |            |  ...       | instr 48   |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |            |            |            |            |
+                                                               .  |    |  instr 5   |  ...       |            |            |
+                                                               .  |    |  instr 1   |  instr 2   |  instr 3   |  instr 4   |
+                                                               .  +----+------------+------------+------------+------------+
+                           
+                                                             

@@ -120,7 +120,7 @@ extern t_stat       mt_detach(UNIT * uptr);
 typedef struct {
     int justattached;                       // 1=just attached. Set to 1 by attach
     int numrw;                              // number of read/write cmds exec on tape on attached reel
-    int numrec;                             // recorn number where the tape is positioned on (+1 on r/w, -1 on backspace)
+    int numrec;                             // record number where the tape is positioned on (+1 on r/w, -1 on backspace)
     int V1,V2,BlockNum;                     // params for current/last cmd executed
     int recsize;                            // record size (inches x1000), <0 if reading backwards
     int cmd_usec1;                          // time needed to exec tape cmd (in microseconds), for read/verify: usec1=scan time, usec2=read time
@@ -176,7 +176,7 @@ extern REG         cpu_reg[];
 
 extern const char *cpu_description(DEVICE *dptr);
 
-// Instruction Opcodes
+// Instruction Opcodes (total: 67 opcodes)
 // C(X) = contents of X
 #define OP_ADD           20  //   C(R) + C(S) to T      Ordinary - rounded
 #define OP_ADDM          21  // -[C(R) + C(S)] to T     Ordinary - rounded

@@ -1,0 +1,329 @@
+
+                                  WHT 014
+                    
+                                  Print tape in Octionary 
+                                  Octionary Programming System 
+                    
+                                  Poughkeepsie laboratory
+                                  (c) 15 August 1952 by ???
+                    
+                                  Written by Roberto Sancho May 2021
+                                  based on WHT016 listing at 102663096-05-01-acc.pdf, page 200
+                                  from Computer History Museum collection, and Read Write
+                                  sample routine for Simbolic Assembler on same pdf
+                       
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+           HEAD      NR9003
+           ORG       200          
+
+START    + R ADD     ZERO
+         + STORE     CURREC       INIT CURRENT RECORD
+         + R ADD     TAPBUFAD     INIT PRINT MEM ADDR
+         + STORE     ADDR1        TO START OF TAPE READ BUFFER
+         + READ      2048         READ CONTROL CARD   
+         - COPY      REC1         GET INITAL TAPE RECORD TO PRINT
+         + TR        L1           AND NUM OF RECORDS TO PRINT
+         + STOP      START
+FINISH   + STOP      START
+L1       - COPY      LHWORD       GET TAPE IDENTIFICATION
+         + R ADD     RHWORD
+         + STORE A   RDTAP
+         + STORE A   RDTAP2
+        
+           HEAD                   
+
+RDTAP    + READ      /   /        READ TAPE
+         + R ADD     CURREC
+         + ADD       ONE
+         + STORE     CURREC
+         + SUB       REC1
+         + TR 0      RDREC
+         - COPY      LHWORD       START READING TAPE RECORD
+         + WRITE     2052         BUT DISCONNECT TO SKIP THE WHOLE RECORD
+         + TR        RDTAP
+
+           HEAD                   
+
+RDREC    + R ADD     *            READ TAPE RECORD 
+         + TR        RWSUB        LINK TO RWSUB SUBPROGRAM
+TAPBUFAD + STOP      2000         ADDR OF TAPE REC BUFFER IN MEM
+         + STOP      910          MAX NUM OF FULL WORDS
+         + TR        PRTREC       INSTR TO EXEC ON END OF RECORD
+PRTREC   + R ADD     CPADDR       FIRST ADDR FREE AFTER RECORD LOADING
+         + ADD       ONE
+         + A RIGHT   19
+         + A LEFT    19
+         + STORE A   ADDR2
+         + R ADD     *
+         + TR        PRTMEM       
+         + R ADD     NRECS
+         + SUB       ONE
+         + STORE     NRECS
+         + TR 0      FINISH
+RDTAP2   + READ      /   /        READ TAPE NEXT RECORD
+         + TR        RDREC
+
+           HEAD                   VARIABLES
+
+REC1       DEF       0            FIRST TAPE RECORD TO PRINT
+NRECS      DEF       0            NUMBER OF RECORDS TO PRINT
+LHWORD     DEF       0            LEFT/RIGHT HLAF WORD
+RHWORD     DEF       0             FORMING A FULL WORD
+CURREC     DEF       0            CURRENT RECORD
+VOID       DEF       0            TO ASURE NEXT IS AN EVEN LOCATION        
+
+           HEAD                   
+
+PRTMEM   + ADD       TWO
+         + STORE A   PREXIT
+         + R ADD     L5.24        reset exit condition
+         + STORE A   L4.42        after printing                
+         + R ADD     ADDR1                                                               
+         + STORE A   L2.1         Store address of                   
+         + STORE A   L2.5         first instruction in               
+         + STORE A   L2.9         2.1, 2.5, and 2.9                  
+L1.7     + LOAD MQ   ZERO                                            
+         + R ADD     ZERO                                            
+         + STORE A   L1.10                                           
+L1.10    - STORE MQ  /   /        Clear card image                   
+         + R ADD     L1.10        to zero                            
+         + SUB       TWO                                             
+         + STORE A   L1.10                                           
+         + ADD       STOMQ50                                         
+         + TR +      L1.10                                           
+L1.16    + R ADD     ZERO                                            
+         - STORE     CROW12                                          
+         - STORE     CROW0        clear conversion                   
+         - STORE     CROW2        counters to zero                   
+         - STORE     CROW4                                           
+         - STORE     CROW6                                           
+         + R ADD     PTABAD       Set 3.12 to store                  
+         + STORE A   L3.12        first 6.4                          
+                                                                                         
+           HEAD                   
+
+L2.1     + R ADD     /   /        Determine sign of word
+         + TR +      L2.7         if -, put bit in 11                
+         + R ADD     OCT100       row of conversion ctr.             
+         + STORE     CROW11       and out 7 instruction              
+L2.5     - R SUB     /   /        in accumulator                     
+         + TR        L3.3                                            
+L2.7     + R ADD     OCT100       if positive, put bit               
+         + STORE     CROW12       in 12 row of                       
+L2.9     - R ADD     /   /        conversion ctr.                    
+L3.3     + L RIGHT   0033         Get digit in acc.                  
+
+           HEAD                   
+
+L3.8     + A LEFT    0018         move to left of acc                
+         + ADD       CROW0AD      Determine conversion               
+         + STORE A   L3.13        counter in word ro                 
+         + STORE A   L3.14        store bit                          
+L3.12    + R ADD     /   /        Add bit to                         
+L3.13    + ADD       /   /        conversion counter                 
+L3.14    + STORE     /   /                                           
+         + R ADD     L3.12        Increase address of                
+         + ADD       ONE          3.17 by 1                          
+         + STORE A   L3.12                                           
+                                                                      
+         + SUB       DLOOPEND     Is translation finished?           
+         + TR 0      L4.1         Yes                                
+         + L LEFT    0003         No, get next digit                 
+         + TR        L3.8                                            
+                                                                     
+           HEAD                   
+
+L4.1     + R ADD     CROW7AD      Set 4.3 to store 7 row             
+         + STORE A   L4.3         of conversion counter              
+L4.3     + R ADD     /   /        Store conversion counter           
+L4.4     + STORE     /   /        contents in card image             
+         + R ADD     L4.4                                            
+         + ADD       FOUR         Increase address of                
+         + STORE A   L4.4         4.4 by 4                           
+         + R ADD     L4.3                                            
+         + SUB       ONE          Decrease address of                
+         + STORE A   L4.3         4.3 by 1                           
+         + SUB       CLOOPEND     Is storage completed?              
+         + TR +      L4.3         No                                 
+         + R ADD     L2.1         Yes                                
+         + A LEFT    0007         Has last instruction               
+         + A RIGHT   0007         been translated?                   
+         + SUB       ADDR2                                           
+         + TR 0      L4.44        yes                                
+         + R ADD     L2.1         no                                 
+         + ADD       TWO          Increase address of                
+         + STORE A   L2.1         2.1, 2.5 and 2.9 to                
+         + STORE A   L2.5         get next instruction               
+         + STORE A   L2.9                                            
+         + R ADD     L4.4         Prepare to store in                
+         + SUB       OCT47        next portion of                    
+         + STORE A   L4.4         6.1                                
+         + SUB       PLOOPEND     Is card image filled?              
+         + TR 0      L4.29        Yes                                
+         + TR        L1.16        No. Translate next inst            
+                                                                      
+L4.29    + WRITE     0512                                            
+         + R ADD     ZERO                                            
+         + STORE A   L4.4         Reset address of 4.4               
+         + STORE A   L4.37        and 4.37 to zero                   
+         + COPY      ZERO                                            
+         + COPY      ZERO         Copy O's for 8 & 9 rows            
+         + COPY      ZERO                                            
+         + COPY      ZERO                                            
+L4.37    - COPY      /   /        Copy half row                      
+         + R ADD     L4.37                                           
+         + SUB       TWO          Increase address of                
+         + STORE A   L4.37        4.37 by 2                          
+         + ADD       TLOOPEND     Is printing finished?              
+L4.42    + TR 0      L1.7         Yes                                
+         + TR        L4.37        No                                 
+                                                                     
+L4.44    + R ADD     L5.23        Prepare for giving                 
+         + STORE A   L4.42        LOAD after printing                
+         + TR        L4.29                                           
+
+L4.47    + WRITE     0512         print blank line
+         + COPY      ZERO                                            
+         + WRITE     2052         Wait for printing
+PREXIT   + TR        /   /        exit routine
+                                                                                    
+           HEAD                   CONSTANTS AND STORAGE                                                         
+
+ ADDR1     DEF       *100         (first address to be printed)   
+ ADDR2     DEF       *130         (Last address to be printed)    
+ PTABLE    DEF       *10000       Print table a one
+           DEF       *4000         indicates position 
+           DEF       *2000          of digit to print                                 
+           DEF       *1000                                           
+           DEF       *400                                            
+           DEF       *200                                            
+           DEF       *40                                             
+           DEF       *20                                             
+           DEF       *10                                             
+FOUR       DEF       4                                               
+TWO        DEF       2                                               
+ONE        DEF       1                                               
+ZERO       DEF       0                                               
+OCT100     DEF       *20000       position of sign                                     
+PTABAD   + STOP      PTABLE                                          
+STOMQ50  + STORE MQ  *50                                             
+CROW0AD  + STOP       CROW0                                          
+DLOOPEND + R ADD     ZERO                                            
+CROW7AD  + STOP      CROW7                                           
+CLOOPEND + R ADD     CROW12                                          
+OCT47      DEF       *47                                             
+PLOOPEND + STORE     0004                                            
+TLOOPEND + COPY      *50                                             
+L5.23    + STOP      L4.47
+L5.24    + STOP      L1.7
+                                                                              
+           HEAD                   conversion counters
+                                                                              
+ CROW12    DEF         0          12 row                             
+ CROW11    DEF         0          11 row                             
+ CROW0     DEF         0           0 row                             
+           DEF         0           1 row                             
+ CROW2     DEF         0           2 row         
+           DEF         0           3 row                             
+ CROW4     DEF         0           4 row                             
+           DEF         0           5 row                             
+ CROW6     DEF         0           6 row                             
+ CROW7     DEF         0           7 row                             
+
+
+           HEAD                   THIS IS RW01B - Read Write Subroutine
+
+
+NWORDS     DEF       0            INDEX, 2N OR TR OV 2N
+ADINCR     DEF       0            * SPACE FOR MANIPULATION                  
+
+           HEAD                   Subroutine start
+
+RWSUB    + ADD       RWTWO        
+         + STORE A   PARAM1       STORE LOCATION OF FIRST ADDRESS           
+         + ADD       RWONE        
+         + STORE A   PARAM2       STORE LOCATION OF NUMBER OF WORDS         
+         + STORE A   EOFTR        STORE LOC OF END OF FILE PROCEDURE        
+         + ADD       RWONE        
+         + STORE A   EORTR        STORE LOC OF END OF RECORD PROCEDURE      
+PARAM1   + R ADD     /   /        
+         + STORE A   CPADDR       INSERT FIRST ADDRESS FOR COPY             
+PARAM2   + R ADD     /   /        
+         + A LEFT    0001         *                                         
+         + STORE     NWORDS       STORE NUMBER OF WORDS                     
+         + TR +      RWL1         *                                         
+         + R SUB     RWTWO        *                                         
+         + TR        RWL2         *                                         
+RWL1     + R ADD     RWTWO        *                                         
+RWL2     + STORE     ADINCR       * STORE ADDRESS INCREMENT                 
+         + TR        CPADDR       
+
+           HEAD                   Copy loop
+           
+RWL3     + R SUB     ADINCR       
+         + ADD       CPADDR       
+         + STORE     CPADDR       STORE NEXT ADDRESS WITH COPY              
+         + R SUB     ADINCR       
+         + ADD       NWORDS       
+         + STORE     NWORDS       
+         + TR 0      RWL4         IS THE RECORD COMPLETE                    
+CPADDR   - COPY      /   /        
+         + TR        RWL3         
+EOFTR    + TR        /   /        END OF FILE PROCEDURE                     
+RWL4     + WRITE     2052         DELAY UNTIL END OF RECORD                 
+EORTR    + TR        /   /        END OF RECORD PROCEDURE                   
+
+           HEAD                   Constants for RWSUB
+
+RWTWO      DEF       2            TWO
+RWONE      DEF       1            ONE 
+
+                                  Usage:
+                      
+                                  Printing (in octonary) any desired unit record (not more than 910
+                                  full words long) from any tape unit
+                      
+                                  Card Deck
+                                      a) FEJ015
+                                      b) Binary program cards
+                                      c) Control card(s) (binary) 
+                      
+                                   Load button (address 0000)
+                      
+                                   Control Card: in row 9
+                                      - First half word:  A = number of first record to be printed,
+                                                              considering records to be serially 
+                                                              numbered from start of tape.
+                                      - Second half word: B = number of consecutive records to be printed.
+                                      - last half word:   C = Tape identification
+                      
+                                   .      ------------------------------------------------------+
+                                   .    /   |            |            |            |            |
+                                   .   |    |            |            |            |            |
+                                   .   |    |            |            |            |            |
+                                   .   |    |            |            |            |            |
+                                   .   |    |            |            |            |            |
+                                   .   |    |            |            |            |            |
+                                   .   |    |            |            |            |            |
+                                   .   |    |            |            |            |            |
+                                   .   |    |            |            |            |            |
+                                   .   |    +------------+------------+------------+------------+
+                                   .   |    |     A      |     B      |            |      C     |
+                                   .   +----+------------+------------+------------+------------+
+                      
+                      
+                                         If entire tape is to be printed: A = 000001
+                                                                          B = 777777
+
+                                   Output Printed Results: (4 full words per line)
+                      
+                                         +351246 741002  -156207 376012  +001001 716003  -0156371 123737
+                      
+                                   Comments
+                      
+                                         More than one control card may be used - program will continue
+                                         to read control cards after depressing Start button when Program Stop
+                      
+                      
+                      

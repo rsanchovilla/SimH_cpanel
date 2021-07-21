@@ -1,4 +1,4 @@
-/* NORC_mt.c: IBM NORC Line Printer
+/* NORC_lp.c: IBM NORC Line Printer
 
    Copyright (c) 2020, Roberto Sancho
 
@@ -188,7 +188,6 @@ t_stat lp_srv(UNIT * uptr)
 {
     DEVICE             *dptr = find_dev_from_unit(uptr);
     int                 unit = (uptr - dptr->units);
-    int                 cmd = uptr->u5 & MT_CMDMSK;
 
     PRT=1; 
     sim_debug(DEBUG_CMD, dptr, "Printer %d cycle terminated\n", unit);

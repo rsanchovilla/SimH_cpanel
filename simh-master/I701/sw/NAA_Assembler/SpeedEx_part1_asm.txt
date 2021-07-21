@@ -1,0 +1,388 @@
+
+                                  SpeedEx 
+  
+                                  Single Address Assembly Program
+                                  North American Aviation
+                                  program part 1
+
+                                  (c) July 1953 by Ed Law
+
+                                  listing at 102663105-05-01-acc.pdf, page 116
+                                  from Computer History Museum collection
+
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+                                  Set up initial contidition
+                                  lines 01010-01230
+
+           ORG       0040  
+
+START    + R ADD     D4095        SET STARTING ADDRESS FOR FILE    
+         + STORE A   FILEAD       X                                
+         + R ADD     WRHDST       SET WRITE TAPE EXIT 
+         + STORE A   WRTPEX        TO PROCESS INITIAL 3 CARDS                                    
+         + R ADD     HEAD3        SET ADDR TO STORE 
+         + STORE A   WRHDWD        INITIAL 3 CARDS
+         + R ADD     ZERO         CLEAR INFORMATION AREA             
+         - STORE     0036         X                                  
+         - STORE     0038         X                                  
+         + R ADD     MAXINT       SETUP FIRST VALUE FOR SEQUENCE CK  (0001) = max int value  
+         + STORE     0001         X                                    
+         + SENSE     0070         CHANGE TAPES IF 2 DOWN               
+         + TR        L01A         X                                    
+         + R ADD     TAP2         X                                   store addr of tape 2 (dec 257, octal 0401) into                                 
+         + STORE A   L01A         X                                    in rew and write tape instr          
+         + STORE A   WRINST       X                                    
+  L01A   + REWIND    0256         INSURE THAT TAPE IS REWOUND          
+  
+                                  Read card and convert to binary
+                                  lines 02010-10080
+   
+  RDCARD + WRITE     2052         INSURE THAT MQ NOT IN USE            
+  RDCRD2 + READ      2048         PREPARE TO READ CARD                 
+         + R ADD     ZERO         CLEAR CARD CONVERSION COUNTERS      (0602..0610)=0    
+  L02040 - STORE     T00050       X                                    
+         - STORE     T00052       X                                    
+         - STORE     T00054       X                                    
+  L02070 - STORE     T00056       CLEAR CK SUM COUNTER                 
+         + R ADD     CDBUFA       RESET TO INITIAL COPY LOOP ADDRESS     
+         + STORE A   RDROW        WITH START OF CARD IMAGE BUFFER ADDRESS 
+         + STORE A   LDROW        X                                    
+         + STORE A   WRTPWD       X                                    
+         + R ADD     C19003       RESET TRANSFER ADDRESS               
+         + STORE A   L08180       X                                    
+         + SENSE     0064         TURN OFF SENSE LIGHS                
+  
+  RDROW  - COPY      /   /        COPY LEFT WORD                 copy 0520|4           -3- -7-                         
+  LDROW  - R SUB     /   /        TEST SIGN OF WORD JUST COPIED  acc=-370 000  XXXXxxxx.OO OOO .... | ..................      
+         + TR +      0006         END OF FILE IF PLUS                                  
+  
+         + R ADD     RDROW        LEFT COPY ADDRESS              acc=-37 0520                   
+         + STORE A   L05010       ALTER LQ ADDRESS                     
+         + STORE A   L10010       STORE LEFT WORD ADDRESSES            
+         + SUB       ONE           FOR CK SUM                  acc=-37 0521
+         + STORE A   L10020       X                                    
+         + SUB       ONE          X                              acc=-37 0522      
+         + STORE A   L04RWD       ALTER RIGHT WORD COPY ADDRESS        
+  L04RWD - COPY      /   /        COPY RIGHT WORD                copy 0522                 
+         + SUB       TWO          X                              acc=-37 0524                                 
+         + STORE A   RDROW        ALTER LEFT WORD COPY ADDRESS   
+         + STORE A   LDROW        X                                    
+         + R SUB     L02040       RESET ADDRESSES IN CARD        acc=+store 0602      
+         + STORE A   L08160       CONVERSION LOOP                   
+         + STORE A   L08170       X                                    
+         + ADD       ONE          X                              acc=+store 0603                               
+         + STORE A   L08190       X                                    
+         + STORE A   L08200       X                                    
+  L05010 - LOAD MQ   /   /        SPACE LEFT ROW IMAGE           load mq 0520 get  left row mq=370 000     
+         + L LEFT    0005         X .*echo ROW_IMAGE:Q           acc=37, mq=0      inserted one bit        
+         + A LEFT    0001         X                              acc=76            -3- -7- v new bit inserted 
+         + L RIGHT   0006         X                              mq=370000 000000  .OO OOO x .... | ..................          
+         + R ADD     L04RWD       TEST FOR ZERO ROW              acc=-37 0522                   
+         + SUB       C19004       X                              sub-770566 -> acc=44           
+         + TR 0      L08120       X                              exit to 0152 if instr 0121 has addr 0566
+  
+  L08040 + TR OV     L08050       RESET OVERFLOW INDICATOR       convert MQ=binary b1 b2 b3 b4 b5            
+  L08050 + R ADD     EIGHT        X .*echo MQ_to_convert:Q       SET END OF GROUP INDICATOR     to acc= decimal +11111: a 1 if bit n=1, a 0 if bit=0
+  L08060 + L LEFT    0001         DIGIT INTO ACCUMULATOR         
+         - TR OV     L08150       LOOP END IF LAST DIGIT                     
+         - STORE     T00048       CONVERSION TO BINARY           
+         + A LEFT    0002         X                              
+         - ADD       T00048       X                              
+         + TR        L08060       RETURN FOR NEXT DIGIT    
+  
+  L08120 + R ADD     C19005       ALTER TRANSFER FORK ADDRESS                
+         + STORE A   L08180       X                                          
+         + TR        L08040       RETURN TO CONVERSION                       
+  
+  L08150 + A LEFT    0018         POSITION CONVERTED GROUP                   Acc=+11111|0        
+  L08160 + ADD       /   /        ADD SINGLE SUM CONVERSION CNTRS            add 0602|4
+  L08170 + STORE     /   /        X                                          store 0602|4=+11111
+  L08180 + TR        /   /        AVOID DBLE SUMS IF ROW 0 THRU 12           tr 0161
+  L08190 + ADD       /   /        ADD DOUBLE SUM CONVERSION CNTRS            add 0603|5         
+  L08200 + STORE     /   /        X                                          store 0603|5
+  L08210 + R SUB     L08170       ALTER SINGLE SUM ADDRESSES                 acc=-14 0602            
+         + SUB       TWO          X .*mo0602-6:Bit_Sum_Counters              acc=-14 0604
+         + STORE A   L08160       X                                          
+         + STORE A   L08170       X                                          
+         + SUB       ONE          ALTER DOUBLE SUM ADDRESSES                 acc=-14 0605|7|11
+         + STORE A   L08190       X                                          
+         + STORE A   L08200       X                                          
+         + SUB       L02070       LOOP END TEST                              acc-(-14 610)
+         - TR +      L08040       CONVERT NEXT GROUP                                         
+  
+  L10010 + R SUB     /   /        MINUS LEFT HALF WORD                        
+  L10020 + SUB       /   /        MINUS RIGHT HALF WORD          
+         + A RIGHT   0018                                             
+         - ADD       T00056       PREVIOUS PARTIAL CK SUM
+         - STORE     T00056       STORE NEW PARTIAL CK SUM                   
+         + R SUB     L10010       TEST FOR END OF CARD                       
+         + ADD       C19006       X                                         
+         + TR +      RDROW        X                                          
+  
+                                  Is punch pattern correct?
+                                  lines 12010-12050
+   
+         + R ADD     T00050       ADD SINGLE SUM CONVERSION CNTRS            
+         + ADD       T00052       X                                          
+         + ADD       T00054       X                                          
+         + SUB       CVTST        SUBTRACT CONVERSION TEST SUM               
+         - TR 0      GETOPC       TRANSFER IF CORRECT                        
+  
+                                  No, punched pattern not correct
+                                  STOP 212(8), light 2
+                                  lines 12080-12090
+   
+         + SENSE     0066         PUNCH PATTERN ERROR STOP                   
+         + STOP      RDCARD       X                                          
+  
+                                  Yes, punched pattern correct
+                                  Obtain true operation code. Test for bad code
+                                  lines 12100-12263
+   
+  GETOPC + R ADD     ZERO         CLEAR HIGH ORDER OF CONVERTED       acc=0       
+         + STORE     T00050       SYMBOLIC OPERATION AND ADDR      reset to zero number of punches on card columns            
+         + STORE     T00052       X                                    counters on 0602, 0604, 0606     
+         + STORE     T00054       X                                         
+         - LOAD MQ   T00052       OBTAIN SYM OPER AS DIVIDEND         mq=symb opcode on right halfword = 0|symbop
+         - DIV       TENFW        DIVIDE BY TEN                       div by full word 0362 0363 = 0|10
+         - STORE     0002         FIRST REMAINDER IS SYM SIGN         (0002 0003)=sign 1 or 2    
+         + R ADD     ZERO         CLEAR ACCUMULATOR                   clear remainder in acc, MQ=symbop/10   
+         - DIV       TENFW        DIVIDE BY TEN                          
+         - STORE     T00048       SECOND REMAINDER IS TYPE            (0600 0601)=type: A=1    
+         - STORE MQ  0004         CODED OPERATION AS FULL WORD        (0004 0005)=coded opcode    
+         + R ADD     0005         CODED OPERATION AS HALF WORD           
+         + ADD       DATA         ADD BASE OF ASSEMBLY DATA               
+         + STORE A   L12A         ADDRESS OF TRUE OPERATION CODE          
+  L12A   + R ADD     /   /        .*echo Addr: OBTAIN TRUE OPERATION CODE              
+         + LOAD MQ   ZERO         CLEAR MQ               
+         + L RIGHT   0023         SHIFT OPERATION TO MQ               mq=5bit opcode | 12+18 bits 0
+         - SUB       OPCONST      SUBTRACT OPERATION CK CONSTANT          
+         + TR 0      OPCOK        AVOID ERROR INDICATION IF OPERATION     
+  
+                                  Bad code
+                                  STOP (237)8, light 3
+                                  lines 12266-12270
+  
+         + SENSE     0067         ERROR INDICATION NO SUCH OPERATION      
+         + STOP      L12ERR       X                                      
+  L12ERR + SENSE     0071         CONTINUE OR REREAD BAD OPERATION        
+         + TR        ERRGO1       CONTINUE                                
+         + TR        RDCRD2       REREAD BAD OPERATION CORRECTED          
+   
+                                  Leave marker to indicate bad op. code
+                                  lines 12283-12293
+  
+  ERRGO1 + R ADD     ONE          LEAVE INDICATION OF BAD OPERATION      
+         + A RIGHT   0017         X                                       
+         - ADD       T00004       X                                      
+         - STORE     T00004       X                                       
+  
+                                  Good op. code
+                                  Are symbolic decimal card in sequence?
+                                  lines  12296-12310
+  
+   OPCOK + R ADD     T00051       SEQUENCE CHECK OF LOCATIONS         (0603) = symbolic location value 00000 to 99999
+         + SUB       0001         X                                   sub last loc number                                       
+         + TR +      ERR2         SEQUENCE ERROR IF PLUS              if (last loc) <= (current loc) then error
+         + R ADD     T00051       REPLACE LAST WITH CURRENT LOCATION  set new value for last location
+         + STORE     0001         X                                      
+         + TR        WRINST       CONTINUE                                
+  
+                                  No, symbolic decimal card not in sequence  
+                                  STOP (256)8, light 1
+                                  lines 12213-12216
+  
+  ERR2   + SENSE     0065         SEQUENCE ERROR                         
+         + STOP      START        X                                       
+  
+                                  Yes, symbolic decimal card in sequence  
+                                  Set up symbolic instruction. Send symbolic location to file
+                                  lines 12320-12430
+  
+  WRINST + WRITE     0256         PREPARE TO WRITE ON TAPE                
+         + L LEFT    0035         SHIFT OPERATION BACK TO ACCUM                   
+         + ADD       T00049       ADD TYPE OF ADDRESS                    
+         - ADD       T00054       ADD SYM ADDR TO OPER AND TYPE           
+         - STORE     T00048       STORE OP AND TYPE AND ADDR          acc=XX000T|00AAAA  XX=opcode, T=addr type. AAAA=addr
+         - R ADD     0002         SYMBOLIC SIGN                           
+         + A RIGHT   0001         SHIFT FOR 1 OR 2 ODD OR EVEN           
+         + TR 0      WRIN1        AVOID MINUS ACTION                       
+         - R SUB     T00048       ATTACH MINUS SIGN IF NEGATIVE           
+         - STORE     T00048       X                                   acc=[+|-]XX 000T 1 00 AAAA                                     
+  WRIN1  + R ADD     T00051       SYMBOLIC LOCATION                       
+  FILEAD + STORE     /   /        STORE IN FILE                       start at addr=4095, grows to lower addr                
+  
+                                  Alter file address. Is file too large?
+                                  lines 12440-12500
+   
+         + R ADD     FILEAD       FILE ADDRESS                        decr current file addr
+         + STORE A   0039         LAST FILE ADDRESS LEFT HERE         (0047)=last file addr    
+         + STORE A   T00050       FILE ADDRESS FOR TAPE WRITING       (0602)=addr to write to file
+         + SUB       ONE          ALTER FILE ADDRESS                  check file addr > to lower  
+         + STORE A   FILEAD       X                                    limit at addr 0614
+         + SUB       FILEND       SUBTRACT FILE LOWER LIMIT               
+         - TR +      WRTAP        AVOID ERROR INDICATION                  
+  
+                                  Yes, file too large
+                                  STOP (303)8, light 4
+                                  lines 12530-12540
+   
+         + SENSE     0068         ERROR FILE TOO LARGE                   
+         + STOP      START        X                                       
+  
+                                  No, file not too large
+                                  Write card image and converted instruction on tape
+                                  lines 13010-14070
+   
+  WRTAP  + R SUB     T00048       COMPLETE CHECK SUM                  ChkSum is (0600)=instr to assemble: [+|-]XX000T
+         + SUB       T00049       X                                       +(0601)=00AAAA=addr     
+         + SUB       T00050       X                                       +(0602)=addr in file
+         + SUB       T00051       X                                       +(0603)=symbolic location value 00000 to 99999
+         + A RIGHT   0018         X                                   acc=0|chksum        
+         - ADD       T00056       X                                       +card checksum    
+         - STORE     T00052       X                                   (0604)=card chk | instr chk        
+  WRTPWD - COPY      /   /        COPY WORD                           Save to tape card row9 left (addr 0520), 
+         + R ADD     WRTPWD       ALTER COPY ADDRESS                    row9 right (addr 0522),       
+         + SUB       TWO          X                                     ...
+         + STORE A   WRTPWD       X                                     row Y(12) right (addr 0604)      
+         + SUB       C19010       CHECK FOR END OF LOOP                       
+         + TR +      WRTPWD       REMAIN IN LOOP IF PLUS                      
+  WRTPEX + TR        /   /        WRITE CARD In TAPE EXIT GATE         
+  
+                                  For first 3 cards
+                                  Store initial information about program being assembled
+                                  lines 16010-16100 
+  
+                                  write first 3 cards symbolic address decimal value in 
+                                  addr octal 0044,0045,0046. Then process normaly remaining
+                                  input cards. 
+  
+                                  (oct 0046)=len (in hwords) of temp area
+                                  (0045)=len (in hwords) of data area
+                                  (0044)=addr of program origin
+     
+  WRHEAD + R ADD     T00049       PLACE INITIAL INFORMATION           
+  WRHDWD + STORE     /   /        X                                   
+         + R ADD     WRHDWD       ALTER SR ADDRESS                    
+         + SUB       ONE          X                                           
+         + STORE A   WRHDWD       X                                           
+         + SUB       HD3END       TEST FOR LAST INITIAL SPEC ADDR                 
+         + TR +      RDCARD       RETURN TO NEXT CARD IF PLUS                
+         + R ADD     L16A         SET WRITE TAPE EXIT GATE TO
+         + STORE A   WRTPEX       TARNSFER TO READ NEXT CARD                                           
+  L16A   - TR        RDCARD       RETURN TO READ NEXT CARD                    
+  
+   
+  WRHDST + STOP      WRHEAD       ENTRANCE TO INITIAL 3 REGION               
+  CDBUFA + STOP      CDBUF        9 LEFT ROW IMAGE ADDRESS                  
+  C19003 + STOP      L08190       DOUBLE SUM ADDITION INSTRUCTION            
+  C19004 - COPY      T00038       0 RIGHT ROW IMAGE ADDRESS                   
+  C19005 + STOP      L08210       AVOID DOUBLE SUM TRANSFER ADDR              
+  C19006 + R SUB     T00044       END OF CARD TEST ADDRFSS                    
+  C19007 - COPY      T00048       CARD IMAGE END TEST ADDRESS                
+   HEAD3 + STOP      0038         FIRST SR ADDRESS IN INITIAL 3 CARD VALUES              
+    DATA + STOP      D4096        BASE OF DATA REGION                         
+  C19010 - COPY      T00054       TAPE WRITING LOOP END TEST                  
+  HD3END + STORE     0036         LAST INITIAL 3 TEST WORD                    
+    TAP2 + REWIND    0257         TAPE 2 ADDRESS                              
+  FILEND + STORE     0396         FILE LOWER LIMIT TEST                       
+  C19997 + STOP      0040         PROGRAM ORIGIN                              
+  C19998 + STOP      0100         NUMBER HALF WORDS DATA                     
+  C19999 + STOP      0058         NUMBER HALF WORDS TEMPORARY                 
+                     
+                                  DATA REGION
+
+           ORG       *0354
+
+D4096      DEF          4096
+ONE        DEF             1
+TWO        DEF             2
+CVTST      DEF       *057573       Conversion test sum
+OPCONST    DEF       *000000       Operation test constant
+           DEF       *005252   
+ZERO       DEF             0 
+TEN        DEF            10 
+EIGHT      DEF             8 
+D4095      DEF          4095 
+MAXINT     DEF       *377777  
+
+TENFW      EQU       ZERO
+
+           ORG       *0367
+
+                                  Two-letters menmonics table as defined by NAA Assembler
+
+*0371      DEF       *2525 26     AL Accumulator Left shift    A LEFT
+*0372      DEF       *2525 11     AD ADd                       ADD
+*0375      DEF       *2525 13     AP Add as if Plus            ADD AB
+*0377      DEF       *2525 27     AR Accumulator Right shift   A RIGHT 
+*0401      DEF       *2525 15     SA Store Address             STORE A
+*0402      DEF       *2525 36     SS Sense and Skip            SENSE 
+*0403      DEF       *2525 00     ST Stop and Transfer         STOP
+*0404      DEF       *2525 05     SU SUbtract                  SUB
+*0407      DEF       *2525 07     SP Subtract as if Plus       SUB AB
+*0410      DEF       *2525 16     SQ Store MQ                  STORE MQ
+*0411      DEF       *2525 14     SR Store Result              STORE 
+*0414      DEF       *2525 37     CS Copy and Skip             COPY
+*0415      DEF       *2525 24     LL Long Left shift           L LEFT
+*0422      DEF       *2525 17     LQ Load MQ                   LOAD MQ
+*0423      DEF       *2525 25     LR Long Right shift          L RIGHT 
+*0425      DEF       *2525 35     DA set Drum Address          SET DR 
+*0427      DEF       *2525 01     UT Unconditional Transfer    TR
+*0431      DEF       *2525 22     DV DiVide                    DIV
+*0434      DEF       *2525 20     MY Multiply                  MPY
+*0435      DEF       *2525 21     MR Multiply and Round        MPY R 
+*0441      DEF       *2525 15     ET ExtracT                   EXTRACT
+*0444      DEF       *2525 33     EF write End of File         WRITE EF
+*0447      DEF       *2525 10     NI No Instruction            NO OP
+*0455      DEF       *2525 02     OV OVerflow Transfer         TR OV
+*0461      DEF       *2525 32     WR WRite                     WRITE
+*0465      DEF       *2525 03     PT Plus Transfer             TR +
+*0501      DEF       *2525 00     YE Your Entry            
+*0507      DEF       *2525 12     RA Reset and Add             R ADD 
+*0510      DEF       *2525 06     RS Reset and Subtract        R SUB 
+*0511      DEF       *2525 04     ZT Zero Transfer             TR 0
+*0512      DEF       *2525 30     RD ReaD                      READ 
+*0513      DEF       *2525 23     RN RouNd                     ROUND
+*0514      DEF       *2525 34     RW ReWind                    REWIND
+*0517      DEF       *2525 31     RR Read in Reverse           READ B      D1 00099  Operation table end
+                                             
+                                  TEMPORARY
+
+CDBUF      RES        46          T2 0   Card Image
+
+T00004     EQU        *0524
+T00038     EQU        *0566
+T00044     EQU        *0574
+
+           ORG        *0600
+
+T00048     DEF              0
+T00049     DEF              0
+T00050     DEF              0 
+T00051     DEF              0
+T00052     RES        2
+T00054     RES        2
+T00056     DEF              0
+
+
+                                                 T2 46
+                                                 T2 48  Conversion Working storage
+                                                 T1 50  Conversion Summing Locations
+                                                 T1 55
+                                                 T1 56  Partial Checksum
+
+; 0600 +      0              = instr to assemble: [+|-]XX000T  XX=opcode, T=addr type. 0600|06001 fullword is XX000T|00AAAA=addr     
+; 0601 +      0              = symbolic addr type: A=1 (absolute), S=2 (Symbolic), T=3 (temp), D=4 (data)
+; 0602 +      0              = +11111 (dec), a 1 means number of punches in column. Leftmost digit is card column 10. Also = addr to write to tape
+; 0603 +      0              = symbolic location value 00000 to 99999
+; 0604 +      0              = + 2221 (dec), a 1 means numb of punches in col. Leftmost digit is card column 15. >1 means alphabetic char
+; 0605 +      0              = symbolic opcode (2 chars) + type (A, S, D, T) + sign of operation (1 or 2)
+; 0606 +      0              = +11111 (dec), a 1 means number of punches. Leftmost digit is card column 19. 
+; 0607 +      0              = symbolic address value 00000 to 99999
+  
+      

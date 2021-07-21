@@ -1395,14 +1395,14 @@ t_stat printcards_cmd(int32 flag, CONST char *cptr)
                     sprintf(&line[strlen(line)], " %c%08d%08d%c", 
                        (bHi & 1) ? '-':' ', printfw(d), (bHi & 2) ? '-':' ');
                 }
-                if (format==3) sprintf(&line[strlen(line)], "\r\n");  // if 1 word per line, add end of line after each word                          
+                if (format==3) sprintf(&line[strlen(line)], "\n");  // if 1 word per line, add end of line after each word                          
             }
             // remove last end of line, if any
             while (((n = strlen(line)) > 0) && (line[n-1] < 32)) line[n-1]=0;
         } else return sim_messagef (SCPE_ARG, "Invalid format \"%d\"\n", format);
         // lin is ready to be printed
      DoPrintLine:
-        sprintf(&line[strlen(line)], "\r\n"); // add end of line
+        sprintf(&line[strlen(line)], "\n"); // add end of line
         if (fText) {
             sim_fwrite(line, 1, strlen(line), fText); // to output text file
         }

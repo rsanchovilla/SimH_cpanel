@@ -1,0 +1,456 @@
+
+                           SpeedEx 
+
+                           Single Address Assembly Program
+                           North American Aviation
+                           program part 2
+
+                           (c) July 1953 by Ed Law
+
+                           listing at 102663105-05-01-acc.pdf, page 116
+                           from Computer History Museum collection
+
+                           program to be loaded with simh load SCP command
+
+OCT                        DEC=Number are in decimal (default). OCT=Numbers are in octal
+
+NNNN S OPNAME   OP ADDR    Remarks ... (max 79 chars)
+                           
+                           Write end of file on tape used
+                           lines 20001-20010
+           
+0050 +36 0106              20001 + SENSE     SS A1 00070  CHANGE TAPES IF 2 DOWN              
+0051 +01 0056              20002 + TR        UT S1 20010  X                                   
+0052 +12 0501              20003 + R ADD     RA S1 49010  X                                   
+0053 +15 0056              20004 + STORE A   SA S1 20010  X                                   
+0054 +15 0140              20005 + STORE A   SA S1 22010  X                                   
+0055 +15 0200              20006 + STORE A   SA S1 22286  X                                   
+0056 +33 0400              20010 + WRITE EF  EF A1 00256  WRITE END OF FILE ON TAPE           
+0057 +32 1000              20020 + WRITE     WR A1 00512  PREPARE TO IDENTIFY PRINTER BOARD
+0060 +36 1011              20030 + SENSE     SS A1 00521  X                                   
+                                                                                                              
+                           Calculate data and temporary origins                                   
+                           lines 20040-20170                                                      
+                                                                                                              
+0061 +12 0044              20040 + R ADD     RA A1 00036  PROGRAM LOCATION MINUS FILE LOCATIO      (0044)=addr of program origin
+0062 +05 0047              20050 + SUB       SU A1 00039  X                                        (0047)=last file addr-> first assembled prog instr 
+0063 +14 0604              20060 + STORE     SR T1 00054  X                                        (0604)=value to add to file addr to get absolute instr location
+0064 +11 0511              20080 + ADD       AD D1 00003  ADD 4096                            
+0065 +11 0507              20090 + ADD       AD D1 00001  ADD ONE TO CARRY IF ODD
+0066 +27 0023              20100 + A RIGHT   AR A1 00019  FORCE LOW ORDER BIT TO ZERO         
+0067 +26 0023              20110 + A LEFT    AL A1 00019  X                                   
+0070 +14 0605              20120 + STORE     SR T1 00055  ORIGIN DATA STORAGE                      (0605)=addr of data origin
+0071 +11 0045              20130 + ADD       AD A1 00037  ADD NUMBER HALF WORDS DATA               (0045)=len (in hwords) of data area
+0072 +11 0507              20140 + ADD       AD D1 00001  ADD ONE TO CARRY IF ODD
+0073 +27 0023              20150 + A RIGHT   AR A1 00019  FORCE LOW ORDER BIT TO ZERO         
+0074 +26 0023              20160 + A LEFT    AL A1 00019  X                                   
+0075 +14 0606              20170 + STORE     SR T1 00056  ORIGIN TEMPORARY STORAGE                 (0606)=addr of temp origin
+                                                                                                              
+                           Is last temporay location <= 4095?                                     
+                           lines 20180-20360                                                      
+                                                                                                              
+0076 +11 0046              20180 + ADD       AD A1 00038  ADD NUMBER HALF WORDS TEMPORARY          (0046)=len (in hwords) of temp area 
+0077 +05 0515              20190 + SUB       SU D1 00007  SUBTRACT 4097                       
+0100 +03 0467              20200 + TR +      PT S1 47010  ELECTROSTATIC EXCEEDED IF PLUS      
+0101 +12 0047              20310 + R ADD     RA A1 00039  OBTAIN THE LOWER SEARCH EXTREME          (0047)=last file addr-> first assembled prog instr 
+0102 +05 0507              20320 + SUB       SU D1 00001  X                                         -1
+0103 +14 0607              20330 + STORE     SR T1 00057  X                                          -> (0607)=first file addr
+0104 +12 0506              20340 + R ADD     RA D1 00000  SET FIRST DA ADDRESS TO ZERO             Set DR addr 
+0105 +15 0311              20350 + STORE A   SA S1 31230  X                                         to zero
+0106 +12 0605              20360 + R ADD     RA T1 00055  OBTAIN NUMBER HALF WORDS IN PROG         (0611)=len (in hword) of program
+0107 +05 0044              20370 + SUB       SU A1 00036  X                                         =(0605 data origin) - (0044 prog origin)
+0110 +14 0611              20380 + STORE     SR T1 00059  X                                   
+                                                                                                              
+                           Yes, temporay location is <= 4095?                                     
+                           Test size of program and set drum gates                                
+                           lines 20390-20510                                                      
+                                                                                                              
+0111 +05 0514              20390 + SUB       SU D1 00006  TEST SIZE OF PROGRAM
+0112 +03 0117              20400 + TR +      PT S1 20450  LARGE PROGRAM IF PLUS
+0113 +12 0305              20410 + R ADD     RA S1 31180  SET DRUM GATES FOR SMALL PROGRAM    
+0114 +15 0302              20420 + STORE A   SA S1 31150  X                                   
+0115 +12 0500              20430 + R ADD     RA S1 49009  X                                   
+0116 +01 0122              20440 + TR        UT S1 20480  X                                   
+0117 +12 0476              20450 + R ADD     RA S1 49007  SET DRUM GATES FOR LARGE PROGRAM    
+0120 +15 0302              20460 + STORE A   SA S1 31150  X                                   
+0121 +12 0477              20470 + R ADD     RA S1 49008  X                                   
+0122 +15 0370              20480 + STORE A   SA S1 37030  X                                   
+0123 +12 0315              20490 + R ADD     RA S1 31270  SET DRUM READ TEST ADDRESS          
+0124 +05 0611              20500 + SUB       SU T1 00059  X                                   
+0125 +15 0475              20510 + STORE A   SA S1 49006  X                                   
+                                                                                                              
+                           Is correct printer board in?                                           
+                           lines 20530-20586                                                      
+                                                                                                 
+0126 +36 0111              20530 + SENSE     SS A1 00073  SKIPS IF NO PRINTING DESIRED        
+0127 -01 0131              20535 - TR        UT S2 20550  TRANSFER IF PRINTING DESIRED        
+0130 -01 0137              20540 - TR        UT S2 20610  NO PRINTING DESIRED 
+0131 +36 0101              20550 + SENSE     SS A1 00065  TURN ON SENSE LITES                 
+0132 +20 0000              20564 + MPY       MY A1 00000  ALLOW TIME FOR SELECTOR PICKUP      
+0133 +20 0000              20565 + MPY       MY A1 00000  X                                   
+0134 +20 0000              20586 + MPY       MY A1 00000  X                                   
+                                                                                                              
+                           Not correct printer board in                                           
+                           STOP 0136(8), Light 1                                                                
+                           lines 20590-20610                                                      
+                                                                                                 
+0135 +36 1012              20590 + SENSE     SS A1 00522  IS CORRECT PRINTER BOARD IN         
+0136 +00 0060              20600 + STOP      ST S1 20030  STOP IF NOT                         
+0137 +36 0100              20610 + SENSE     SS A1 00064  TURN OFF SENSE LITES IF SO
+
+                           Read unit record from tape                                             
+                           Is checksum correct?                                                   
+                           lines 22010-22280                                                      
+
+0140 +31 0400              22010 + READ B    RR A1 00256  PREPARE TO READ IN REVERSE          
+0141 -37 0602              22020 - COPY      CS T2 00052  COPY TAPE CHECK SUM                 
+0142 +01 0144              22030 + TR        UT S1 22050  AVOID END OF FILE OUT               
+0143 -01 0366              22040 - TR        UT S2 37010  END OF FILE OUT
+0144 -37 0600              22050 - COPY      CS T2 00050  COPY WORD                           
+0145 +12 0144              22060 + R ADD     RA S1 22050  SET FIRST ADDRESS OF COPY LOOP      
+0146 +11 0510              22070 + ADD       AD D1 00002  ALTER COPY ADDRESS                  
+0147 +15 0153              22080 + STORE A   SA S1 22120  X                                   
+0150 +15 0154              22090 + STORE A   SA S1 22130  STORE ADDRESS FOR CK SUM            
+0151 +05 0507              22100 + SUB       SU D1 00001  X                                   
+0152 +15 0155              22110 + STORE A   SA S1 22140  X                                   
+0153 -37 0000              22120 - COPY      CS A2 /   /  COPY LEFT WORD                      
+0154 +12 0000              22130 + R ADD     RA A1 /   /  LEFT WORD AGAINST CK SUM            
+0155 +11 0000              22140 + ADD       AD A1 /   /  X                                   
+0156 +27 0022              22150 + A RIGHT   AR A1 00018  X                                   
+0157 -11 0602              22160 - ADD       AD T2 00052  X                                   
+0160 -14 0602              22170 - STORE     SR T2 00052  X                                   
+0161 +12 0153              22180 + R ADD     RA S1 22120  SET RIGHT COPY ADDRESS              
+0162 +11 0510              22190 + ADD       AD D1 00002  X                                  
+0163 +15 0164              22200 + STORE A   SA S1 22210  X                                   
+0164 -37 0000              22210 - COPY      CS A2 /   /  COPY RIGHT WORD                     
+0165 +01 0146              22220 + TR        UT S1 22070  CONTINUE IN LOOP                    
+0166 +14 0614              22230 + STORE     SR A1 00396  INSTRUCTIONAL CONSTANT             
+0167 +12 0600              22240 + R ADD     RA T1 00050  COMPLETE CK SUM CHECK               
+0170 +11 0601              22250 + ADD       AD T1 00051  X                                   
+0171 +27 0022              22260 + A RIGHT   AR A1 00018  X                                   
+0172 -11 0602              22270 - ADD       AD T2 00052  X                                   
+0173 +04 0206              22275 + TR 0      ZT S1 24010  ZERO TRANSFER IF CORRECT            
+                                                                                                              
+                           Checksum not correct                                                   
+                           STOP 0175(8), light 2                                                                
+                           lines 20280-20284                                                      
+                                                                                                 
+0174 +36 0103              22280 + SENSE     SS A1 00067  TURN ON LITE 3 FOR TAPE ERROR       
+0175 +00 0176              22281 + STOP      ST S1 22282  ERROR STOP TAPE ERROR               
+0176 +36 0110              22282 + SENSE     SS A1 00072  REREAD OR GO ON                     
+0177 +01 0202              22284 + TR        UT S1 22290  LEAVE MARKER AND GO ON              
+                                                                                                 
+                           SW4 down. Step tape up one unit record and reread                      
+                           lines 22286-22306
+                                                                                                 
+0200 +30 0400              22286 + READ      RD A1 00256  STEP BACK                           
+0201 +01 0137              22288 + TR        UT S1 20610  REREAD                              
+0202 +12 0507              22290 + R ADD     RA D1 00001  ERROR INDICATION TAPE ERROR           
+0203 +27 0017              22300 + A RIGHT   AR A1 00015  X                                
+0204 -11 0532              22303 - ADD       AD T2 00012  X                
+0205 -14 0532              22306 - STORE     SR T2 00012  X                                   
+                                                                                                              
+                           Test type of address                                                   
+                           lines 24010-24080                                                      
+                                                                                                 
+0206 +12 0210              24010 + R ADD     RA S1 24030  ORIGIN OF TRANSFER REGION           
+0207 +13 0576              24020 + ADD AB    AP T1 00048  OPERATION AND TYPE                  (0576)=addr type: addr type: A=1 (absolute), S=2 (Symbolic), T=3 (temp), D=4 (data)
+0210 +15 0211              24030 + STORE A   SA S1 24040  STORE TRANSFER FORK ADDRESS         
+0211 +01 0000              24040 + TR        UT A1 /   /  TRANSFER TO TYPE TRANSFER           
+0212 -01 0264              24050 - TR        UT S2 29010  TRANSFER FOR ABSOLUTE TYPE
+0213 -01 0216              24060 - TR        UT S2 26010  TRANSFER FOR SYMBOLIC TYPE
+0214 -01 0260              24070 - TR        UT S2 27010  TRANSFER FOR TEMPORARY TYPE
+0215 -01 0262              24080 - TR        UT S2 28010  TRANSFER FOR DATA TYPE
+                                                                                                              
+                           Address type: S                                                        
+                           search file for matching symbolic location                             
+                           lines 26010-26150                                                      
+                                                                                                 
+0216 +12 0607              26010 + R ADD     RA T1 00057  OBTAIN LOWER EXTREME                
+0217 +14 0602              26020 + STORE     SR T1 00052  STORE AS WORKING LOWER              
+0220 +12 0511              26030 + R ADD     RA D1 00003  OBTAIN UPPER EXTREME                
+0221 +14 0603              26040 + STORE     SR T1 00053  STORE AS WORKING UPPER              
+0222 +12 0602              26050 + R ADD     RA T1 00052  BEGINNNNING OF SEARCH LOOP            
+0223 +11 0603              26060 + ADD       AD T1 00053  SUM OF UPPER AND LOWER EXTREMES
+0224 +27 0001              26070 + A RIGHT   AR A1 00001  MEAN OF UPPER AND LOWER EXTREMES
+0225 +14 0610              26080 + STORE     SR T1 00058  STORE MEAN 
+0226 +15 0227              26090 + STORE A   SA S1 26100  STORE MEAN AS ADDRESS
+0227 +12 0000              26100 + R ADD     RA A1 /   /  CONTENTS MEAN LOCATION              
+0230 +05 0577              26110 + SUB       SU T1 00049  SUBTRACT SYMBOLIC ADDRESS          (0577)=symbolic addr 
+0231 +04 0247              26120 + TR 0      ZT S1 26260  OUT OF LOOP IF SEARCH COMPLETED     
+0232 +03 0241              26130 + TR +      PT S1 26200  AVOID MINUS ACTION                  
+0233 +12 0602              26140 + R ADD     RA T1 00052  RESET ADD OLD LOWER             
+0234 +05 0610              26150 + SUB       SU T1 00058  SUBTRACT NEW LOWER                 
+                                                                                                 
+                           Was the search sucessful?                                              
+                           lines 26160-26220                                                      
+                                                                                                 
+0235 +03 0252              26160 + TR +      PT S1 26300  ERROR NO SUCH SYMBOLIC ADDRESS      
+0236 +12 0610              26170 + R ADD     RA T1 00058  MEAN BECOMES NEW LOWER              
+0237 +14 0602              26180 + STORE     SR T1 00052  STORE NEW LOWER                     
+0240 +01 0223              26190 + TR        UT S1 26060  RETURN FOR NEXT TRIAL               
+0241 +12 0610              26200 + R ADD     RA T1 00058  RESET ADD THE MEAN                  
+0242 +05 0603              26210 + SUB       SU T1 00053  SUBTRACT OLD UPPER                  
+0243 +03 0252              26220 + TR +      PT S1 26300  ERROR NO SUCH SYMBOLIC ADDRESS 
+0244 +12 0610              26230 + R ADD     RA T1 00058  RESET ADD THE MEAN                  
+0245 +14 0603              26240 + STORE     SR T1 00053  STORE NEW UPPER                     
+0246 +01 0222              26250 + TR        UT S1 26050  RETURN FOR NEXT TRIAL               
+0247 +12 0227              26260 + R ADD     RA S1 26100  RESET ADD FINAL SEARCH LOCATION     
+0250 +11 0604              26270 + ADD       AD T1 00054  OBTAIN ACTUAL ADDRESS               
+0251 -01 0266              26290 - TR        UT S2 29030  END OF INSTRUCTION ASSEMBLY         
+                                                                                      
+                           No, symbolic address not found                                         
+                           Set up printing marker before stopping                                 
+                           lines 26300-26316                                                      
+                                                                                                              
+0252 +12 0507              26300 + R ADD     RA D1 00001  NO SUCH SYMBOLIC ADDRESS            
+0253 +27 0020              26310 + A RIGHT   AR A1 00016  X                                   
+0254 -11 0526              26313 - ADD       AD T2 00008  X                                   
+0255 -14 0526              26316 - STORE     SR T2 00008  X                                   
+                                                                                                              
+                           STOP 0257(8), Light 4                                                                
+                           lines 26320-26330                                                      
+                                                                                                 
+0256 +36 0104              26320 + SENSE     SS A1 00068  X                                   
+0257 +00 0267              26330 + STOP      ST S1 31010  X                                   
+                                                                                                 
+                           Type address is A, T, D                                                
+                           Add address to correct origin                                          
+                           lines 27010-29030                                                      
+                                                                                                              
+0260 +12 0606              27010 + R ADD     RA T1 00056  ORIGIN OF TEMPORARY                 
+0261 +01 0265              27020 + TR        UT S1 29020  X                                   
+0262 +12 0605              28010 + R ADD     RA T1 00055  ORIGIN OF DATA
+0263 +01 0265              28020 + TR        UT S1 29020  X                                   
+0264 +12 0506              29010 + R ADD     RA D1 00000  ZERO                                
+0265 +11 0577              29020 + ADD       AD T1 00049  ADD SYMBOLIC ADDRESS              (0577)=symbolic addr  
+0266 +15 0576              29030 + STORE A   SA T1 00048  STORE ACTUAL ADDRESS              (0576)=set actual opaddr in instr             
+                                                                                                 
+                           Store assembled instruction                                            
+                           lines 31010-31290                                                      
+                                                                                                 
+0267 +12 0600              31010 + R ADD     RA T1 00050  FILE LOCATION                     
+0270 +11 0604              31020 + ADD       AD T1 00054  OBTAIN ACTUAL LOCATION             
+0271 +14 0600              31030 + STORE     SR T1 00050  REPLACE FILE LOC WITH ACTUAL LOC  (0600)=actual location of instr    
+0272 +12 0576              31040 + R ADD     RA T1 00048  ACTUAL INSTRUCTION                (0576)=actual opcode opaddr instr             
+0273 +14 0612              31050 + STORE     SR A1 00394  STORE IN TEMPORARY LOCATION       (0612, 0613, ...)=actual instr assembled
+0274 +12 0273              31060 + R ADD     RA S1 31050  ALTER TEMPORARY LOCATION BY 1     incr ^addr to store assembled instr
+0275 +11 0507              31070 + ADD       AD D1 00001  X                                   
+0276 +15 0273              31080 + STORE A   SA S1 31050  X                                   
+0277 +15 0301              31081 + STORE A   SA S1 31083  NEXT TEMPORARY LOCATION             
+0300 +12 0506              31082 + R ADD     RA D1 00000  ZERO                                
+0301 +14 0000              31083 + STORE     SR A1 /   /  CLEAR NEXT TEMPORARY LOCATION             
+0302 +01 0000              31150 + TR        UT A1 /   /  PRESET DRUM GATE                    
+0303 +06 0273              31160 + R SUB     RS S1 31050  TEMPORARY LOCATION             
+0304 +11 0166              31170 + ADD       AD S1 22230  TEMPORARY TEST LOCATION
+0305 +03 0320              31180 + TR +      PT S1 31300  TRANSFER IF PAIR NOT READY          
+0306 +32 0203              31190 + WRITE     WR A1 00131  PREPARE TO WRITE ON DRUM
+0307 +12 0315              31200 + R ADD     RA S1 31270  RESET TEMPORARY PAIR ADDRESS       
+0310 +15 0273              31220 + STORE A   SA S1 31050  X                                   
+0311 -35 0000              31230 - SET DR    DA A2 /   /  SET DRUM ADDRESS                    
+0312 +12 0311              31240 + R ADD     RA S1 31230  MODIFY DRUM ADDRESS                 
+0313 +05 0510              31250 + SUB       SU D1 00002  X                                   
+0314 +15 0311              31260 + STORE A   SA S1 31230  X                                
+0315 -37 0612              31270 - COPY      CS A2 00394  COPY WORD                           
+0316 +12 0506              31280 + R ADD     RA D1 00000  RESET PAIR LOCATION TO ZERO
+0317 -14 0612              31290 - STORE     SR A2 00394  X                                   
+                                                                                                 
+                           Print assembled instruction if to print                                
+                           lines 31300-35090                                                      
+                                                                                                 
+0320 +36 0111              31300 + SENSE     SS A1 00073  SKIPS IF NO PRINTING DESIRED
+0321 -01 0323              31305 - TR        UT S2 31320  PRINTING DESIRED
+0322 +01 0137              31310 + TR        DT S1 20610  NO PRINTING DESIRED
+0323 +32 1000              31320 + WRITE     WR A1 00512  PREPARE TO WRITE PRINTER             
+0324 +12 0566              31330 + R ADD     RA T1 00040  11 LEFT ROW IMAGE                   
+0325 +26 0013              31340 + A LEFT    AL A1 00011  X                                   
+0326 +04 0330              31350 + TR 0      ZT S1 33010  TRANSFER IF NO X                    
+0327 +36 1010              31360 + SENSE     SS A1 00520  PICKUP PRINT SELEC FOR PAREN        
+0330 +12 0510              33010 + R ADD     RA D1 00002  COLUMN INDICATOR                    
+0331 -14 0602              33020 - STORE     SR T2 00052  X                                   
+0332 +12 0576              33025 + R ADD     RA T1 00048  ASSEMBLED INSTRUCTION               
+0333 +03 0335              33030 + TR +      PT S1 33040  AVOID PICKING SELECTOR IF PLUS      
+0334 +36 1006              33035 + SENSE     SS A1 00518  PICK FOR MINUS                      
+0335 +25 0043              33040 + L RIGHT   LR A1 00035  SHIFT TO MQ                          
+0336 +12 0600              33050 + R ADD     RA T1 00050  ACTUAL LOCATION                     
+0337 +27 0021              33060 + A RIGHT   AR A1 00017  X                                   
+0340 +25 0015              33070 + L RIGHT   LR A1 00013  SHIFT INTO MQ
+0341 +24 0003              33080 + L LEFT    LL A1 00003  BEGIN CONVERSION LOOP               
+0342 +26 0024              33090 + A LEFT    AL A1 00020  FOUR TIMES DIGITS EQUIV TO ADDR      
+0343 +11 0471              33100 + ADD       AD S1 49001  ADD CARD IMAGE BASE                 
+0344 +15 0351              33110 + STORE A   SA S1 33160  CORRECT ROW IMAGE ADDRESS        
+0345 +15 0352              33120 + STORE A   SA S1 33170  X                                   
+0346 -12 0602              33130 - R ADD     RA T2 00052  ALTER COLUMN INDICATOR               
+0347 +27 0001              33140 + A RIGHT   AR A1 00001  X                                   
+0350 -14 0602              33150 - STORE     SR T2 00052  X                                   
+0351 -11 0000              33160 - ADD       AD A2 /   /  ADD CORRECT ROW IMAGE
+0352 -14 0000              33170 - STORE     SR A2 /   /  STORE IN CORRECT ROW IMAGE           
+0353 +26 0033              33180 + A LEFT    AL A1 00027  TEST FOR END OF CONVERSION           
+0354 +04 0341              33190 + TR 0      ZT S1 33080  REMAIN IN LOOP IF ZERO
+0355 +12 0472              35010 + R ADD     RA S1 49002  SET UP FIRST COPY ADDRESS            
+0356 +15 0357              35020 + STORE A   SA S1 35030  X                                   
+0357 -37 0000              35030 - COPY      CS A2 /   /  COPY WORD                           
+0360 +12 0357              35040 + R ADD     RA S1 35030  ALTER COPY ADDRESS                  
+0361 +05 0510              35050 + SUB       SU D1 00002  X                                   
+0362 +15 0357              35060 + STORE A   SA S1 35030  X                                   
+0363 +05 0473              35070 + SUB       SU S1 49003  TEST FOR END OF LOOP                
+0364 +03 0357              35080 + TR +      PT S1 35030  REMAIN IN LOOP                      
+0365 +01 0137              35090 + TR        UT S1 20610  TRANSFER TO NEXT TAPE READ          
+                                                                                                 
+                           Tape end of file                                                       
+                           Read assembled program from drum if drum used                          
+                           lines 37040-37140                                                      
+                                                                                                 
+0366 +32 1000              37010 + WRITE     WR A1 00512  EJECT LAST PAGE IN PRINTER          
+0367 +36 1007              37020 + SENSE     SS A1 00519  EJECT LAST PAGE IN PRINTER          
+0370 +01 0000              37030 + TR        UT A1 /   /  PRESET DRUM GATE
+0371 +12 0474              37040 + R ADD     RA S1 49005  WRITE LAST WORD ON DRUM             
+0372 +14 0320              37050 + STORE     SR S1 31300  X                                   
+0373 +01 0306              37060 + TR        UT S1 31190  X                                   
+0374 +30 0203              37070 + READ      RD A1 00131  READ RECORD FROM DRUM               
+0375 -35 0000              37080 - SET DR    DA A2 00000  X                                   
+0376 -37 0612              37090 - COPY      CS A2 00394  X                                  
+0377 +12 0376              37100 + R ADD     RA S1 37090  X                                   
+0400 +05 0510              37110 + SUB       SU D1 00002  X                                   
+0401 +15 0376              37120 + STORE A   SA S1 37090  X                                   
+0402 +05 0475              37130 + SUB       SU S1 49006  X                                   
+0403 +03 0376              37140 + TR +      PT S1 37090  X                                   
+                                                                                                              
+                           Punch program onto binary cards                                        
+                           lines 40010-40390                                                      
+                                                                                                 
+0404 +12 0513              40010 + R ADD     RA D1 00005  HALF AND FULL WORD COUNT FOR        acc=44
+0405 +14 0603              40020 + STORE     SR T1 00053     FIRST CARD                       (0603)=44
+0406 +26 0013              40030 + A LEFT    AL A1 00011  X                                   
+0407 +11 0044              40040 + ADD       AD A1 00036  1ST ADDRESS FOR 1ST CARD INTO       
+0410 -14 0516              40050 - STORE     SR T2 00000  X                                   
+0411 +12 0611              40060 + R ADD     RA T1 00059  BEGINNING OF PUNCH LOOP             (0611)=num of words to punch
+0412 -04 0456              40070 - TR 0      ZT S2 42010  OUT IF PUNCHING FINISHED             
+0413 +32 2000              40080 + WRITE     WR A1 01024  PREPARE TO PUNCH                    
+0414 +05 0513              40090 + SUB       SU D1 00005  SUBTRACT 44                         
+0415 +04 0417              40100 + TR 0      ZT S1 40120  TO LAST CARD ACTION                 
+0416 +03 0431              40110 + TR +      PT S1 40210  AVOID LAST CARD ACTION              
+0417 +12 0044              40120 + R ADD     RA A1 00036  FIRST TO EXELX                      acc=(0044)=prog start addr
+0420 +27 0022              40130 + A RIGHT   AR A1 00018  X                                   
+0421 +11 0516              40140 + ADD       AD T1 00000  FIRST TO READ INTO                  
+0422 +25 0036              40150 + L RIGHT   LR A1 00030  X                                   
+0423 +12 0611              40160 + R ADD     RA T1 00059  HALF AND FULL WORD COUNT FOR LAST
+0424 +14 0603              40170 + STORE     SR T1 00053  X                                   
+0425 +27 0023              40180 + A RIGHT   AR A1 00019  X                                   
+0426 +25 0005              40190 + L RIGHT   LR A1 00005  X                                   
+0427 -16 0516              40195 - STORE MQ  SQ T2 00000  STORE CONTROL WORD FOR LAST CARD    
+0430 +12 0506              40200 + R ADD     RA D1 00000  CLEAR ACCUMULATOR                   
+0431 +14 0611              40210 + STORE     SR T1 00059  NUMBER HALF WORDS LEFT              
+0432 -37 0516              40220 - COPY      CS T2 00000  COPY 9 LEFT ROW                     
+0433 -12 0516              40230 - R ADD     RA T2 00000  START CK SUM                        
+0434 -14 0520              40240 - STORE     SR T2 00002  X                                   
+0435 +06 0441              40250 + R SUB     RS S1 40290  SETUP TEST LOOP WORD
+0436 +11 0603              40260 + ADD       AD T1 00053  X                                   
+0437 +14 0602              40270 + STORE     SR T1 00052  X                                   
+0440 -12 0520              40280 - R ADD     RA T2 00002  PARTIAL CK SUM                      
+0441 -37 0612              40290 - COPY      CS A2 00394  COPY WORD                           
+0442 -11 0612              40300 - ADD       AD A2 00394  ADD TO CK SUM                       
+0443 -14 0520              40310 - STORE     SR T2 00002  X                                   
+0444 +12 0441              40320 + R ADD     RA S1 40290  ALTER LOOP ADDRESSES                
+0445 +05 0510              40330 + SUB       SU D1 00002  X                                   
+0446 +15 0441              40340 + STORE A   SA S1 40290  X                                   
+0447 +15 0442              40350 + STORE A   SA S1 40300  X                                   
+0450 +11 0602              40360 + ADD       AD T1 00052  TEST FOR END OF LOOP                
+0451 +03 0440              40370 + TR +      PT S1 40280  REMAIN IN LOOP IF PLUS              
+0452 -37 0520              40380 - COPY      CS T2 00002  COPY CK SUM                         
+0453 -12 0516              40383 - R ADD     RA T2 00000  FIRST INTO FOR NEXT CARD            
+0454 +11 0603              40386 + ADD       AD T1 00053  X                                   
+0455 +01 0410              40390 + TR        UT S1 40050  RETURN TO PUNCH NEXT CARD
+                                                                                                 
+                           Set up data origin and extent for possible data assembly               
+                           lines 42010-42016                                                      
+                                                                                                              
+0456 +12 0605              42010 + R ADD     RA T1 00055  SETUP DATA ORIGIN                   
+0457 +14 7776              42012 + STORE     SR A1 04094  X                                   
+0460 +12 0045              42014 + R ADD     RA A1 00037  SETUP NUMBER HALF WORDS DATA        
+0461 +14 7777              42016 + STORE     SR A1 04095  X                                   
+                                                                                                              
+                           Program completed. Stop or load another                                
+                           lines 42018-42060                                                      
+                                                                                                 
+0462 +36 0112              42018 + SENSE     SS A1 00074  SKIP IF ANOTHER PROGRAM READY       
+0463 +00 0006              42020 + STOP      ST A1 00006  PROGRAM FINISH                      
+0464 +30 4000              42040 + READ      RD A1 02048  EQUIVALENT OF LOAD BUTTON           
+0465 -37 0000              42050 - COPY      CS A2 00000  X                                   
+0466 +01 0000              42060 + TR        UT A1 00000  X                                   
+                                                                                                 
+                           Location > 4095                                                        
+                           STOP 470(8), light 2                                                   
+                                                                                                 
+0467 +36 0102              47010 + SENSE     SS A1 00066  ES CAPACITY EXCEEDED ERROR          
+0470 +00 0101              47020 + STOP      ST S1 20310  X                                   
+                                                                                                              
+                                                                                                              
+0471 -00 0562              49001 - STOP      ST T2 00036  0 LEFT ROW IMAGE ADDRESS
+0472 -00 0516              49002 - STOP      ST T2 00000  9 LEFT ROW IMAGE ADDRESS
+0473 -37 0576              49003 - COPY      CS T2 00048  CARD IMAGE END TEST ADDRESS
+0474 +01 0374              49005 + TR        UT S1 37070  DRUM WRITE RETURN ADDRESS           
+0475 -37 0000              49006 - COPY      CS A2 /   /  DRUM READ COPY LOOP TEST
+0476 +00 0303              49007 + STOP      ST S1 31160  DRUM GATE ADDRESSES                 
+0477 +00 0371              49008 + STOP      ST S1 37040  X                                  
+0500 +00 0404              49009 + STOP      ST S1 40010  X                                   
+0501 +00 0401              49010 + STOP      ST A1 00257  TAPE 2 ADDRESS          
+0502 +00 0050              49997 + STOP      ST A1 00040  PROGRAM ORIGIN                      
+0503 +00 0010              49998 + STOP      ST A1 00008  NUMBER HALFWORDS DATA               
+0504 +00 0074              49999 + STOP      ST A1 00060  NUMBER HALFWORDS TEMPORARY          
+                           
+                           DATA REGION
+
+0506 +      0                                   D1 00000  0
+0507 +      1                                   D1 00001  1
+0510 +      2                                   D1 00002  2
+0511 +01 0000                                   D1 00003  4096
+0512 +00 0400                                   D1 00004  256
+0513 +     54                                   D1 00005  44
+0514 +   3472                                   D1 00006  Drum use test amt - prg bigger than 1850 words (3472 octal) uses drum
+0515 +01 0001                                   D1 00007  4097
+
+                           TEMPORARY
+
+                                                T2 0   Card Image
+                                                T2 46
+0576 +      0                                   T2 48  Operation, Type and Address 
+                                                       instr to assemble: [+|-]XX000T  XX=opcode, T=addr type. fullword is XX000T|00AAAA=addr     
+                                                       symbolic addr type: A=1 (absolute), S=2 (Symbolic), T=3 (temp), D=4 (data)
+                                                T2 50  File and Symbolic Locations
+                                                T2 52  Tape CheckSum, Print conversion column indicator
+                                                T1 52  Working search lower extreme, punching loop test word
+                                                T1 53  Working search upper extreme, halft word count for card
+                                                T1 54  Program origin minus file origin
+                                                T1 55  Origin data area
+                                                T1 56  Origin temporary area
+                                                T1 57  File lower extreme
+                                                T1 58  Working search 
+                                                T1 59  Number half words to punch
+                                                 
+
+
+                                    
+                                    Output card:
+                                    Column:
+                                      ------------------------------------------------------+ 
+                                    /                                                       |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   |                                                        |
+                                   +---------------+-------------+--------------+-----------+
+                                   |          check sum          |              |           |
+                                   +---------------+-------------+--------------+-----------+
+                                   | instr 3       |   instr 4   |   ...        |  instr N  |
+                                   +---------------+-------------+--------------+-----------+
+                                   | NNaaaa        |   00tttt    |   instr 1    |  instr 2  |
+                                   +---------------+-------------+--------------+-----------+
+                                          control full word
+
+                                   where: NN   = number of full words of data
+                                          aaaa = addr to store first fullword
+                                          tttt = if not zero, this is last card, and transfer to this location
+                                          Check Sum = sum of control full word + all full words except checksum itself
+
+

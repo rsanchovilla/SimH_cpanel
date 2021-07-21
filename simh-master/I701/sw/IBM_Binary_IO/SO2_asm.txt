@@ -1,0 +1,883 @@
+
+                                  SO2 Assembly
+  
+                                  RAL Regional Assembler languaje
+                                  (Regional Programming) 
+
+                                  Applied Science Departement
+                                  New York
+
+                                  Original code (lost) by 
+                                  William F. McClelland July 1952 
+
+                                  Rewritten by Roberto Sancho May 2021
+                                  using description doc at 102663096-05-01-acc.pdf, page 76
+                                  from Computer History Museum collection
+                                  and program coding sheet at page 15 of 
+                                  Los Alamos Computing 1940-1950 from
+                                  https://fas.org/sgp/othergov/doe/lanl/docs1/LA-6943-H.pdf
+                                  To do the binary punching I borrowed BP05 program
+                                  
+
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      SO2
+           ORG       200          
+
+           HEAD      00F          MAIN PROGRAM
+
+START    + R ADD     D4096        SET LAST ADDR AVAILABLE FOR FILE
+         + STORE     FILELAST     X 
+         + R ADD     ZERO         RESET 
+         + STORE     OUTCOUNT     ... NUMBER OF WORDS IN OUTPUT BINARY CARD 
+         + STORE     ORG0FLAG     ... ORG 0 FLAG
+
+         + R ADD     MINUS1       INIT CURRENT LOC AND
+         + STORE     CARDADDR     X
+         + R ADD     FILELAST     RESET FILE AS EMPTY
+         + SUB       TWO
+         + STORE     FILEAD       ADD REGION 00R TO FILE
+         + STORE A   INIFIL       FOR ABSOLUTE ADDRESSES
+         + R ADD     REG00R
+INIFIL   - STORE     /   /
+         + R ADD     FILESTRT     SET FIRST ADDR OF FILE
+         + ADD       TWO          AS EVEN ADDR
+         + A RIGHT   0019         X
+         + A LEFT    0019         X
+         + STORE     FILETOP      RESET ADDR OF HEAD TO FILE
+
+                                  INIT READ CARD
+
+  RDCARD + WRITE     2052         INSURE THAT MQ NOT IN USE            
+  RDCRD2 + READ      2048         PREPARE TO READ CARD                 
+         + R ADD     ZERO         CLEAR ...
+         + STORE     CTYPE        ... CARD TYPE
+         + STORE     RLOC         ... LOCATION REGION
+         + STORE     ILOC         ... LOCATION INDEX
+         + STORE     RADDR        ... ADDRESS REGION
+         + STORE     IADDR        ... ADDRESS INDEX
+         + STORE     SIGN         ... OPCODE SIGN
+         + STORE     OPCODE       ... ACTUAL OPERATION CODE
+         + STORE     OPADDR       ... ACTUAL OPERATION ADDRESS
+         + R ADD     CDBUFAD      RESET TO INITIAL COPY LOOP ADDRESS     
+         + STORE A   RDROW        X
+
+                                  READ CARD IN CDBUF
+  
+  RDROW  - COPY      /   /        COPY WORD                
+         + TR        LRD1         X  
+         + TR        EOF          PROCESS END OF FILE
+         + TR        DECODE       END OF CARD, PROCEED TO DECODE CARD
+  LRD1   + ADD       TWO          INCR CDBUF ADDR
+         + STORE A   RDROW        X
+         + TR        RDROW        GO TO READ NEXT ROW
+
+  EOF    + R ADD     *            FLUSH CURRENT OUTPUT 
+         + TR        PRTCARD      BINARY CARD    
+           DEF       2            AND TERMINATE ASSEMBLING
+FINISH   + STOP      0000         STOP NO ERRORS
+
+                                  DECODE SOURCE CARD READ
+                                  LOAD OPCODE OPADDR SLOC SADDR ETC VARS
+                                  AND TRANSFER TO APPROPRIATE
+                                  HANDLING ROUTINES                          
+
+DECODE   + R ADD     CDBUFAD      GET CARD IMAGE WORD 32
+         + ADD       D32          WILL BE NEGATIVE IF
+         + STORE A   LAR0A        CARD TYPE IS ONE
+LAR0A    + R ADD     /   /        
+         + TR +      LAR0B
+         + R ADD     ONE
+         + STORE     CTYPE 
+LAR0B    + R ADD     D4096        SET FIRST CARD COL TO PROCESS
+         + SUB       ONE
+         + STORE A   NCOL         
+         + R ADD     *            CALL ROUTINE GETREG
+         + TR        GETREG       TO GET REGIONAL LOCATION
+         - STORE     RLOC         SAVE REG LOC (FULL WORD) .*echo RLoc:f
+         + R ADD     *            CALL ROUTINE GETCHRS
+         + TR        GETCHRS      TO GET JUST ONE 
+           DEF       *700000      CHAR/DIGIT/BLANK FOR SIGN
+         + A LEFT    0018         RESULT TO 18B IN ACC       
+         + TR 0      L0P          CAN BE BLANK (AS PLUS) .*echo sign:
+         + SUB       KY11         CAN BE (-) MINUS PUNCH ON ROW X(11) 
+         + TR 0      L0N          CAN BE (+) PLUS PUNCH ON ROW Y(12) HIPUNCH
+         + SUB       TEN          IF COLUMN NOT PUNCHED INTERPRETED
+         + TR 0      L0P          AS PLUS. ANY OTHER PUNCH IN INVALID
+         + STOP      0002         STOP BECAUSE INVALID OPCODE SIGN (MUST BE + OR - )
+     L0N + R ADD     ONE          SIGN ZERO MEANS OPCODE POSITIVE
+         + STORE     SIGN         SIGN ONE MEANS OPCODE NEGATIVE
+     L0P + R ADD     *            CALL ROUTINE GETCHRS
+         + TR        GETCHRS      TO GET DECIMAL OPCODE
+           DEF       *110000      2 DECIMAL DIGIT
+         + A LEFT    00018        STORE In OPCODE      
+         + STORE     OPCODE       THEN .*echo OpCode:        
+         + R ADD     *            CALL ROUTINE GETREG
+         + TR        GETREG       TO GET REGIONAL ADDRESS
+         - STORE     RADDR        SAVE REG ADDR (FULL WORD) .*echo RAddr:f
+
+         + R ADD     CTYPE        PROCESS CARD TYPE
+         + TR 0      ADDINST      TR TO DECODE TYPE 0 CARDS
+         + SUB       ONE          CHECK IF CARD TYPE
+         + TR 0      ADDREG       TR TO DECODE TYPE 1 CARDS
+         + STOP      0003         STOP BECAUSE CARD TYPE INVALID. MUST BE 0 OR 1
+
+                                  DECODE CONTROL CARD
+                                  CARD TYPE 1
+
+ADDREG   + R ADD     *            FLUSH TO CARD 
+         + TR        PRTCARD      INSTR ALREADY 
+           DEF       2            ASSEMBLED IF ANY 
+         + R ADD     ILOC         DECODE CONTROL CARD
+         + TR 0      LAR1         LOCATION INDEX SHOULD 
+         + STOP      0004         BE ZERO IN CONTROL CARD
+LAR1     - LOAD MQ   RLOC         CHECK IF CAN RESOLVE RLOC
+         + R ADD     *            IF SO THE REGION HAS 
+         + TR        RESOLVE      ALREADY BEEN DEFINED
+         + SUB       MINUS1       SO STOP WITH ERROR
+         + TR 0      LAR2
+         + STOP      0005         STOP BECAUSE REGION ALREADY DEFINED
+LAR2     - LOAD MQ   RADDR        RESOLVE REGIONAL 
+         + R ADD     *            ADDRESS (RADDR FULLWORD)
+         + TR        RESOLVE      THIS IS THE ORIGIN OF NEW REGION
+         + STORE     ILOC         STORE IT AT ILOC 
+         + TR +      LAR3         IF CANNOT RESOLVE REGIONAL ADDRESS 
+         + STOP      0006         STOP BECAUSE UNDEF ORIGIN IN CONTROL CARD
+LAR3     + R ADD     FILEAD       DECR FILE ADDRESS POINTER 
+         + SUB       TWO          TO MAKE ROOM FOR NEW REGION DEFINED
+         + SUB       FILETOP      CHECK IF OVERFLOWS 
+         + TR +      LAROK        TR IF HAS ROOM
+         + STOP      0007         STOP BECAUSE FILE FULL
+LAROK    + ADD       FILETOP      UPDATE FILE ADDRESs POINTER
+         + STORE     FILEAD       FILEAD IN ACC .*echo filead:
+         + STORE A   LARFIL       SET ADDR TO STORE REGION 
+         - R ADD     RLOC         CODE AND BASEINTO FILE  
+LARFIL   - STORE     /   /        STORE NEW REGION CODE AND BASE
+         - SUB       ORG0REG      CHECK IF REGION OOF 
+         + TR 0      LAR4         HAS ORIGIN 0000. 
+         + TR        LAR5
+LAR4     + R ADD     ONE          IF SO, SET ORG0FLAG TO ONE
+         + STORE     ORG0FLAG
+LAR5     + R ADD     *            PRINT CONTROL CARD
+         + TR        PRTCARD        
+           DEF       0            
+         + TR        RDCARD       NEXT INPUT CARD
+
+                                  DECODE INSTRUCTION CARD
+                                  CARD TYPE 0
+
+ADDINST  - LOAD MQ   RLOC         DECODE INSTRUCTION CARD
+         + R ADD     *            CARD TYPE 0
+         + TR        RESOLVE      RESOLVE LOCATION 
+         + STORE     CURLOC       IF CANNOT BE RESOLVED .*echo CurLoc:
+         + TR +      LAI1         THEN
+         + STOP      0008         STOP BECAUSE LOC REGION CANNOT BE RESOLVED
+LAI1     - LOAD MQ   RADDR        RESOLVE ADDRESS 
+         + R ADD     *            IF CANNOT BE RESOLVED
+         + TR        RESOLVE      THEN 
+         + STORE     OPADDR       .*echo OpAddr:
+         + TR +      LAI2
+         + STOP      0009         STOP BECAUSE ADDR REGION CANNOT BE RESOLVED
+
+LAI2     + R ADD     OPCODE
+         + A LEFT    0012
+         + ADD       OPADDR
+         + STORE     OPCODE
+         + R ADD     SIGN
+         + TR 0      LAI3
+         + R SUB     OPCODE
+         + STORE     OPCODE
+LAI3     + NOOP      0000
+         
+
+         + R ADD     *            PRINT CURRENT INSTRUCTION
+         + TR        PRTCARD      CARD, AND ADD INSTR TO 
+           DEF       1            OUTPUT BINARY CARD
+
+         + TR        RDCARD       PROCEED WITH NEXT INOUT CARD
+
+           HEAD      03F          GETCHRS ROUTINE
+
+                                  ROUTINES TO READ CARD
+                                  GETCHRS RETURNS IN ACC A 36BIT VALUE 
+                                  GIVEN A FORMAT PARAMETER
+
+ GETCHRS + ADD       TWO          GET CHARS FROM CARD USING FORMAT PARAM
+         + STORE A   LGC0         SET FIRST PARAM ADDR 
+         + ADD       ONE          X 
+         + STORE A   GETCHEX      SET ROUTINE EXIT
+         + R ADD     ZERO         DEFAULT NO BLANKS ALLOWED
+         + STORE     BLKALWD      X
+         - STORE     RESULT       RESET RESULT
+    LGC0 + R ADD     /   /        READ FIRST ROUTINE PARAM
+         + STORE     FORMAT       IS THE FORMAT OF CHARS TO GET
+         + TR +      LGCH         IF FORMAT IS NEGATIVE
+         + R SUB     FORMAT       THEN RESET FORMAT SIGN 
+         + STORE     FORMAT       AND SIGNAL BLANK CHARS ARE ALLOWED
+         + R ADD     ONE          X
+         + STORE     BLKALWD      X
+    LGCH + R ADD     K9AD         RESET TO INITAL ROW 9 VALUE 
+         + STORE A   LK           X
+         + R ADD     ZERO         RESET COLUMN CHAR
+         + STORE     CHAR         X
+         + R ADD     CDBUFAD      RESET TO CARD ADDRESS INITAL ADDR
+         + STORE A   LGCROW       X
+         + R ADD     NCOL         SELECT NEXT CARD COLUMN 
+         + ADD       ONE          X
+         + STORE A   NCOL         X 
+  LGCROW - LOAD MQ   /   /        READ ROWS LOOP
+    NCOL + L LEFT    /   /        SHIFT TO GET NCOL BIT
+         + R ADD     ZERO         FROM ROW
+         + L LEFT    0001         X
+         + TR 0      LGCNXT       IF NO PUNCH TR PROCESS TO NEXT COL
+         + R ADD     CHAR         HAS PUNCH, SO ADD K ROW VALUE
+      LK + ADD       /   /        TO CHAR
+         + STORE     CHAR         X
+  LGCNXT + R ADD     LGCROW       SELECT NEXT LEFT ROW
+         + SUB       FOUR         X
+         + STORE     LGCROW       X
+         + R ADD     LK           SELECT NEXT K VALUE
+         + ADD       ONE          X
+         + STORE A   LK           X
+         + SUB       K12AD        CHECK IF END OF ROWS
+         + TR +      LGC1         YES, CHAR READ
+         + TR        LGCROW       NO, LOOP FOR MORE ROWS
+    LGC1 + R ADD     BLKALWD      CHECK IF BLANK CHAR ALLOWED
+         + TR 0      LGC1A        NOT ALLOWED, TR TO NORMAL DECODING (0 value = zero, no blank allowed)
+         + R ADD     CHAR         BLANK ALLOWED (O value is CHAR TEN, Blank char is CHAR ZERO)
+         + TR        LGC2
+   LGC1A + R ADD     CHAR         IF CHAR IS PUNCH AT ROW 0 (TEN)
+         + TR 0      LGCERR       SET IT TO ZERO, ERROR STOP (BLANK CHAR)
+         + SUB       TEN          X
+         + TR 0      LGC2         X
+         + ADD       TEN          X
+    LGC2 + STORE     CHAR         X .*echo char:
+         + R ADD     ZERO         GET LEFTMOST OCTAL DIGIT FROM FORMAT
+         + LOAD MQ   FORMAT       1=DEC, 2=OCT, 3=ALPHA
+         + L LEFT    0003         X
+         + STORE MQ  FORMAT       X  
+         + A LEFT    0017         X
+         + SUB       ONE          NOW 0=DEC, 1=OCTAL, 3=ALPHA
+         + ADD       MBASEAD      SET MBASE TO 10,8,40 DEPENDING 
+         + STORE A   LMPY         ON FORMAT
+         - LOAD MQ   RESULT       RESULT (36B) = RESULT (36B) * MBASE (18B)
+    LMPY + MPY       /   /                 +
+         - L LEFT    00017                CHAR (18B)  
+         - STORE     RESULT       X
+         + R ADD     CHAR         X
+         + A RIGHT   0018         X 
+         - ADD       RESULT       X
+         - STORE     RESULT       X 
+         + R ADD     FORMAT       IF NO MORE FORMAT
+         + TR 0      LGCFIN       DIGITS THEN FINISH ROUTINE
+         + TR        LGCH         ELSE PROCESS NEXT COLUMN CHAR         
+  LGCERR + STOP      0001         STOP BECAUSE INVALID FORMAT IN INPUT CARD
+  LGCFIN - R ADD     RESULT       RETURN RESULT
+ GETCHEX + TR        /   /        ROUTINE EXIT .*echo result:f
+ BLKALWD   DEF       0            BLANK ALLOWED FLAG LOCAL VARIABLE
+ 
+           HEAD      04F          GETREG ROUTINE                                 
+
+ GETREG  + ADD       TWO          GET 3 CHARS REGION FROM CARD + INDEX
+         + STORE A   GTREGEX      SET ROUTINE EXIT
+         + R ADD     *            CALL ROUTINE GETCHARS
+         + TR        GETCHRS      TO GET REGIONAL CODE
+           DEF       *113000      7 CHARS: 2 x DEC DIGIT + 1 x ALPHA CHAR 
+         + A LEFT    0018         SET REGIONAL CODE IN LEFT 18B IN ACC       
+         + STORE     LHWORD       STOTE REGIONAL CODE IN LHWORD
+         + R ADD     *            CALL ROUTINE GETCHRS
+         + TR        GETCHRS      TO GET 4 DIGITS 
+           DEF       *111100      DECIMAL VALUE
+         + A LEFT    0018         RESULT TO 18B IN ACC       
+         + STORE     RHWORD       STOTE REGIONAL INDEX IN RHWORD
+         - R ADD     LHWORD
+ GTREGEX + TR        /   /        ROUTINE EXIT
+
+           HEAD      05F          RESOLVE ROUTINE
+
+                                  RESOLVE REGIONAL ADDRESS IN MQ
+                                  RETURN IN ACC ACTUAL ADDR OR
+                                  MINUS1 IF CANNOT BE RESOLVED
+
+RESOLVE  + ADD       TWO          RESOLVE REGIONAL ADDRESS IN MQ
+         + STORE A   RSLVEX       RETURN IN ACC ACTUAL ADDR OR
+         - STORE MQ  RESULT       MINUS1 IF CANNOT BE RESOLVED
+
+         + R ADD     FILELAST     SEARCH REG CODE FROM
+         + STORE A   RLOOPEND     FILEAD TO FILELAST
+         + R ADD     FILEAD
+         + STORE A   RSLV1
+RSLV1    + R ADD     /   /
+         + SUB       RESULT
+         + TR 0      RSLVFND
+         + R ADD     RSLV1
+         + ADD       TWO
+         + STORE A   RSLV1
+         + R ADD     RSLV1
+         + SUB       RLOOPEND
+         + TR 0      RSLVNF
+         + TR        RSLV1
+RSLVFND  + R ADD     RSLV1        FOUND, GET REG ORIGIN
+         + STORE A   RSLV2
+RSLV2    - R ADD     /   /        SAVE AS     
+         - STORE     LASTFND      LAST FOUND .*echo FoundReg:f
+         - ADD       RESULT       APPLY ORIGIN TO REG ADDR
+         + L RIGHT   0012         RETURN ACTUAL ADDR
+         + R ADD     ZERO
+         + L LEFT    0012
+         + A LEFT    0018
+         + TR        RSLVEX       IN LEFT ACC
+RSLVNF   + R ADD     MINUS1       NOT FOUND, RETURN -1
+RSLVEX   + TR        /   /        EXIT ROUTINE .*echo ActualAddr:
+RLOOPEND + R ADD     0000         LOOP END VALUE
+
+           HEAD      06F          PRINT PUNCH CARD ROUTINE
+
+                                  PRINT CARD
+                                  IF PARAM IS ZERO IS A NON INSTRUCTION
+                                  IF PARAM IS ONE IS AN INSTRUCTION, ALSO
+                                  ADD THE INSTRUCTION TO THE PUNCH OUTPUT BUFFER
+                                  IF PARAM IS TWO FLUSH AND PUNCH OUTPUT BINARY CARD
+
+PRTCARD  + ADD       TWO
+         + STORE A   PRTPARAM
+         + ADD       ONE
+         + STORE A   PRTCDEX
+PRTPARAM + R ADD     /   /
+         + STORE     PMODE        X .*echo Print_Mode:
+         + SUB       TWO
+         + TR 0      FLUSH
+
+PR3      + R ADD     PMODE
+         + SUB       ONE
+         + TR 0      PROPCODE     
+         + TR        PRINT  
+
+PROPCODE + R ADD     ONE          ADD ACTUAL OPCODE AND OPADDR TO CARD IMAGE
+         + A LEFT    0013         X
+         - STORE     PROW         X .*echo Print_SetOpCode
+         + R ADD     OPCODE       PRINT ACTUAL CURLOC OPCODE
+         + STORE     RHWORD
+         + R ADD     CURLOC       X
+         + STORE     LHWORD
+         - R ADD     LHWORD
+         + L RIGHT   0030         SHIFT INTO MQ .*echo opcode:fo  
+PROP2    + R ADD     ZERO
+         + L LEFT    0003         X
+         + A LEFT    0018         X
+         + STORE     CHAR         X .*echo Print_char:
+         + R ADD     NINE
+         + SUB       CHAR
+         + A LEFT    0002
+         + ADD       ONE
+         + ADD       CDBUFAD
+         + STORE A   PROP3
+         + STORE A   PROP4
+         + R ADD     PROW
+PROP3    + ADD       /   /
+PROP4    + STORE     /   /
+         + R ADD     PROW
+         + A RIGHT   0001
+         + STORE     PROW
+         + A RIGHT   0022
+         + TR 0      PRINT
+         + TR        PROP2
+         
+PRINT    + WRITE     0512         PREPARE TO WRITE CBUF ON PRINTER
+         + R ADD     CDBUFAD      RESET TO INITIAL COPY LOOP ADDRESS     
+         + STORE A   PRCDROW      FOR CARD BUFFER
+         + R ADD     PRCDROW      X .*echo Print
+         + SUB       D48          X 
+         + STORE     PLOOPEND     X
+ PRCDROW - COPY      /   /        COPY WORD TO PRINTER
+         + R ADD     PRCDROW      X
+         + SUB       TWO          INCR CDBUF ADDR
+         + STORE A   PRCDROW      X
+         + SUB       PLOOPEND     CHECK FOR END
+         + TR 0      PRTEND       
+         + TR        PRCDROW 
+PRTEND   + R ADD     PMODE
+         + TR 0      PRTCDEX      IF MODE ZERO EXIT ROUTINE
+
+           HEAD      07F          ADD INSTR TO PUNCH BUFFER
+
+PUNCH    + R ADD     CARDADDR     ADD INSTR TO PUNCH BUFFER
+         + TR +      PH0          IF CARD EMPTY, INIT 
+         + R ADD     CURLOC       CARD BASE ADDR
+         + STORE     CARDADDR
+
+PH0      + R ADD     CURLOC       CHECK IF THERE IS A GAP
+         + SUB       CARDADDR     BETWEEN THIS INSTR AND
+         + SUB       OUTCOUNT     PREVIOUS ONE
+         + TR 0      PHADD        TR IF NO GAP
+         + TR +      PHGAP        TR IF POSITIVE GAP
+         + STOP      0010         STOP BECAUSE NEGATIVE GAP WITH PREVIOUS INSTRUCTION 
+
+PHGAP    + STORE     CHAR         NUMBER OF HWORDS OF GAP
+         + STORE     RESULT
+         + R ADD     OUTCOUNT
+         + ADD       FILETOP          
+         + STORE A   PHGAP1
+         + SUB       FILEAD       CHECK IF ROOM AVAILABLE
+         + ADD       TWO          GUARD
+         + TR +      PHFULL1      TR IF NO ROOM 
+         + TR        PHGAP0
+PHFULL1  + STOP      0011         STOP BECAUSE GAP BETWEEN REGIONS TOO BIG
+
+PHGAP0   + R ADD     ZERO
+PHGAP1   + STORE     /   /
+         + R ADD     CHAR
+         + SUB       ONE
+         + TR 0      PHGAP2
+         + STORE     CHAR
+         + R ADD     PHGAP1
+         + ADD       ONE
+         + STORE A   PHGAP1
+         + TR        PHGAP0
+PHGAP2   + R ADD     OUTCOUNT
+         + ADD       RESULT
+         + STORE     OUTCOUNT
+
+PHADD    + R ADD     OUTCOUNT     ADD INSTR TO PUNCH BUFFER
+         + ADD       FILETOP      .*echo PunchOutCount:
+         + STORE A   PHADD1
+         + SUB       FILEAD       CHECK IF ROOM AVAILABLE
+         + ADD       TWO          GUARD
+         + TR +      PHFULL2      TR IF NO ROOM 
+         + TR        PHADD0
+PHFULL2  + STOP      0012         STOP BECAUSE ASSEMBLED PROG TOO BIG
+
+PHADD0   + R ADD     OPCODE       ADD INSTRUCTION 
+PHADD1   + STORE     /   /        TO FILE
+         + R ADD     OUTCOUNT
+         + ADD       ONE
+         + STORE     OUTCOUNT
+         + TR        PRTCDEX
+
+           HEAD      08F          FLUSH OUTPUT BUF TO PUNCHED CARD
+
+FLUSH    + R ADD     OUTCOUNT     FLUSH OUTPUT BUF TO PUNCHED CARD
+         + TR 0      PRTCDEX      NOTHING TO FLUSH, JUST EXIT
+
+         + R ADD     ORG0FLAG     
+         + TR 0      PHBP05       PUNCH CARDS TO BE LOADED WITH SL05
+         + TR        PHBIN        PUNCH RAW BINARY CARDS
+
+PHBP05   + R ADD     OUTCOUNT     
+         + ADD       ONE          MAKE WORDS TO PUNCH
+         + A RIGHT   0019         WITH BP05 EVEN BEFORE
+         + A LEFT    0019         STORING THEM IN V
+         + STORE     V
+         + R ADD     FILETOP 
+         + STORE     R
+         + R ADD     CARDADDR
+         + SUB       TWO
+         + STORE     R1
+         + R ADD     *
+         + TR        BP05
+         + TR        FLDONE
+
+PHBIN    + R ADD     FILETOP
+         + STORE A   PHBIN1
+         + R ADD     PHBIN1
+         + SUB       OUTCOUNT
+         + SUB       ONE
+         + A RIGHT   0019
+         + A LEFT    0019
+         + STORE     PLOOPEND
+         + WRITE     1024         PREPARE TO PUNCH CARD                 
+PHBIN0A  + R ADD     D24
+PHBIN0B  + STORE     CHAR
+PHBIN1   - COPY      /   /
+         + R ADD     PHBIN1
+         + SUB       TWO
+         + STORE A   PHBIN1
+         + SUB       PLOOPEND
+         + TR 0      FLDONE       EXIT PUNCH WORD LOOP
+         + R ADD     CHAR
+         + SUB       ONE
+         + TR 0      PHBIN0A
+         + TR        PHBIN0B
+         
+
+FLDONE   + WRITE     2052
+         + R ADD     MINUS1
+         + STORE     CARDADDR
+         + R ADD     ZERO
+         + STORE     OUTCOUNT
+PRTCDEX  + TR        /   /
+
+           HEAD      85F          ADD INSTR TO PUNCH BUFFER
+
+BP05     + ADD       TWO
+         + STORE A   BP05EX
+         + R ADD     R                                               
+         + STORE A   RDHWORD      Initialize ADD sequence, COPY         
+         + STORE A   CPFWORD        sequence, COPY index, and           
+         + ADD       V            ADD index                           
+         + STORE A   CPFWEND                                               
+         + STORE A   RDHWEND                                               
+         + R SUB     R1                                               
+         + SUB       V            Add half word count and loading       
+         + A RIGHT   0017           address to check sum  
+         - STORE     CHKSUM         
+RDHWORD  + R ADD     [  ]                                               
+         + STORE     R                                               
+         - R SUB     RFULLW                                               
+         + A LEFT    0001         
+         - ADD       CHKSUM       ADD sequence for computing
+         - STORE     CHKSUM         card check sum
+         + R SUB     RDHWORD                                               
+         + SUB       ONE
+         + STORE A   RDHWORD         
+         + ADD       RDHWEND         
+         + TR +      RDHWORD         
+         + WRITE     1024         Select card punch
+         - COPY      CHKSUM       Punch nine left                       
+CPV      - COPY      V            Punch nine right                      
+         + R ADD     CPFWORD      initialize end of card index 
+         + SUB       D44         
+CPLOOP0  + STORE A   CPEND                                               
+CPLOOP   + R ADD     CPFWORD                                               
+         + SUB       CPFWEND                                               
+         + TR 0      BP05EX   
+CPFWORD  - COPY      [  ]                                               
+         + R ADD     CPFWORD      COPY sequence                         
+         + SUB       TWO                                               
+         + STORE A   CPFWORD                                               
+         + SUB       CPEND                                               
+         + TR +      CPLOOP         
+         + R ADD     CPFWORD      Coincidence test for end of card
+         + SUB       CPFWEND       and end of COPY conditions
+         + TR 0      BP05EX   
+         + WRITE     1024         Select card punch
+         + R ADD     CPEND        Set up end of card index
+         + ADD       CPD48
+         + TR OV     CPLOOP0      Continue punching
+BP05EX   + TR        /   /        End of punching
+
+CPFWEND  - COPY      0000         LOOP END FOR COPY DATA TO CARD PUNCH 
+RDHWEND  + R ADD     0000         LOOP END FOR READ DATA TO COMPUTE CHKSUM
+CPEND    - COPY      0000         COPY END LOOP   addr 28
+CPD48    - COPY      0048
+          
+           ORG       EVEN
+
+RFULLW     DEF       0
+R          DEF       0            START OF BLOCK TO PUNCH (MUST BE EVEN)
+V          DEF       0            NUMBER OF HALF WORDS TO PUNCH (MUST BE EVEN)
+R1         DEF       0            ADDR WHERE WILL BE RESTORED BY SL05 (=R-2)
+CHKSUM     RES       2
+
+
+PLOOPEND   DEF       0
+PMODE      DEF       0
+
+           ORG       EVEN
+           HEAD      00C          CARD IMAGE BUFFER
+
+CDBUF      RES       48           CARD BUFFER: 48 HALF WORDS
+
+           HEAD      00E          ERASABLE RESULTS
+
+CTYPE      RES       1            CARD TYPE
+CURLOC     RES       1            CURRENT INSTR LOCATION
+RLOC       RES       1            LOCATION REGION
+ILOC       RES       1            LOCATION INDEX
+
+SIGN       RES       1            OPCODE SIGN
+OPCODE     RES       1            OPERATION CODE 
+RADDR      RES       1            ADDRESS REGION
+IADDR      RES       1            ADDRESS INDEX
+OPADDR     RES       1            ACTUAL OPERATION ADDRESS 
+OUTCOUNT   RES       1            NUMBER OF INSTR ASSEMBLED
+
+LHWORD     RES       1            TO CONVERT FROM/TO HALF 
+RHWORD     RES       1            WORD TO/FROM FULLWORD
+
+FILETOP    RES       1            START OF SYMBOL TABLE
+FILEAD     RES       1            ADDR OF START OF FILE
+FILELAST   RES       1            LAST ADDR AVAILABLE FOR FILE
+CARDADDR   RES       1            SET FIRST ADDR OF DATA IN CARD WHEN PUNCHING SL05 BIN CARD FORMAT 
+
+LASTFND    RES       2            LAST FOUND REGION
+
+                                  FILE MEMORY MAP
+                                               <- Full Word ->
+                                               +--------------+
+                                  FILETOP  --> |inst 1| inst 2| assembled instructions 
+                                               |inst 3| inst 4| 
+                                                ...
+                                                      |
+                                                      v
+
+                                                      ^
+                                                      |
+
+                                  FILEAD   --> |reg    |base  | region NNA, actual location for region
+                                               |reg    |base  | 
+                                                ...
+                                               |reg    |base  | 
+                                               |reg    |base  | 
+                                  FILELAST ->  end of mem location 4096
+
+           ORG       EVEN
+           HEAD      00B          PROGRAM CONSTANTS
+
+    NINE   DEF       9            VALUE OF ROW 9
+   EIGHT   DEF       8
+   SEVEN   DEF       7
+     SIX   DEF       6
+           DEF       5
+    FOUR   DEF       4
+   THREE   DEF       3
+     TWO   DEF       2
+     ONE   DEF       1            VALUE OF ROW 1
+     TEN   DEF       10           VALUE OF ROW 0(TEN)
+    KY11   DEF       20           VALUE OF ROW X(11)
+    KY12   DEF       30           VALUE OF ROW Y(12) HIGH PUNCH
+
+   MBASE   DEF       10           MULTIPLIER BASE DEPENDING ON CHAR 
+           DEF       8            FORMAT DECIMAL, OCTAL, ALPHA
+   D100    DEF       100
+  D4096    DEF       4096
+
+   ZERO    DEF       0       
+ MINUS1    DEF       *400001
+    D48    DEF       48
+    D44    DEF       44
+    D32    DEF       32
+    D24    DEF       24
+
+REG00R     DEF       29           REGION 00R
+           DEF       0
+
+ORG0REG    DEF       36           REGION 00F
+           DEF        0           INDEX 0000
+
+           HEAD      01E          ERASABLE RESULTS
+
+ORG0FLAG   RES       1
+    VOID   RES       1
+
+  FORMAT   RES       1            FORMAT OF CHARS TO READ
+  CHAR     RES       1            CURRENT COLUMN CHAR
+  RESULT   RES       2            GETCHRS RESULT VALUE
+  PROW     RES       2            ROW TO BE SENT TO PRINTER
+
+
+           HEAD      01F          INSTRUCTIONAL CONSTANTS
+
+    K9AD + STOP      NINE         ADDR OF START OF ROW K VALUES (ROW 9)
+   K12AD + ADD       MBASE        ADDR OF END ROW K VALUES (ROW 12 Y) + 1
+ MBASEAD + STOP      MBASE        ADDR OF MBASE TABLE
+ CDBUFAD + STOP      CDBUF        ADDR OF CARD BUFFER
+
+FILESTRT + STOP      FILESTRT     FILE START ADDR. MUST BE LAST LINE OF PROGRAM
+
+                                  Usage:
+       
+                                  The purpose of SO2 is to accept one programs in regional programming
+                                  form and to combine them into one program in actual form. 
+                                  The regional program is presented with one instruction punched to 
+                                  a card, and the calculator produces the program on binary cards.
+                                  The calculator also produces a printed program which contains
+                                  the original regional program, the new actual program (in octonary) 
+                                  and the comments which were associated with the original program.
+       
+                                  Occupies all of electrostatic memory except addresses 0000 to 0307 octal
+                                  (0 to 199 decimal)
+       
+                                  intruction location and address must be given in regional form. 
+                                  Operation parts are to be given in decimal, + OR - sign allowed
+       
+                                  A regional address is 7-characters. The first part is the 
+                                  regional code (2 decimal digits and 1 one letter A-H or J-R) 
+
+                                  The regional code indicates the region to be used. Its base addess
+                                  (its origin) is set in a control card
+
+                                  The regional index is a 4-digit decimal number that indicates the 
+                                  offset in the region. For example:
+
+                                           Origin of 00F region set to decimal 1000
+
+                                           Regional Address   00F 0120   is translated to 
+                                           Actual Address     1120       (result of 1000+0120)
+                                           
+                                  if actual address is equal or greater than 4096, a modulo 4096
+                                  is used.
+       
+                                  Each region used should have its origin defined with a control card
+                                  The only exception is region 00R that is already defined, and 
+                                  has an origin of 0000. Thus using region 00R allows to specify abosulte
+                                  address
+       
+                                  The regional source program cards must be placed in the 
+                                  following order:
+       
+                                     1) Control cards
+                                     2) Instruction cards
+       
+                                  If region 00F gets as origin address 0000, the punched cards 
+                                  resulting from assembly will be binary cards with 48 instructions 
+                                  per card. 
+
+                                  In this case, all instruction will be punched in sequence. If there
+                                  are gaps between regions, the gap will be filled with zeroes
+                                  and punched on the output binary cards. 
+
+                                  If origin for region 00F is other than 0000, the punched cards will 
+                                  be in a format suitable to be loaded with SL05. The program origin
+                                  must be 0050 decimal or higher (SL05 cannot load at lower locations).
+
+                                  when defining a region origin, the 00R region can be used to 
+                                  set and absolute location, or another region code and index
+                                  can be used to set the origin relative to another already defined
+                                  region.
+                                  
+                                  If there are gaps between regions, the gap will be filled with
+                                  zeroes. 
+
+                                  Normally, all origin cards are placed on the beginning of deck.
+                                  But it is possible to place an origin card in at any point of
+                                  source deck. When processing the origin card, the assebler will
+                                  flush the current binary output pending to be punched (if any)
+                                  ans the start a new binary output card sequence. This is the 
+                                  way to have gaps between regions but not filled with zeroes.
+                                  It is also the way to assemble programs that are too big to 
+                                  fit in memory
+
+                                  Note that the assembler will stop on negative gaps (current 
+                                  instruction being assebled ocupies a location at a lower address
+                                  than the previous gap)
+                                  
+                                  Program Loading:
+                                     1) Place the SL05 loader in the card hopper.
+                                     2) Place the SO2 regional assembler binary cards deck
+                                     3) Place the regional source program deck to be assembled 
+                                        in the hopper on top of SO2.
+                                     3) Press the card reader START until it is READY.
+                                     4) Printer READY with SO2 plugboard.
+                                     5) Card Punch READY with binary cards.
+                                     6) Preset RESET AND CLEAR MEMORY.
+                                     7) Press LOAD.
+                                     8) When the Card Reader stops with SELECT, press the Card
+                                        Reader START.
+       
+                                        The calculator will automatically figure out the actual 
+                                        program, print it, and punch it on binary cards
+
+                                        On print out, the input card are reproduced. The assembled
+                                        absolute code (in octionary) is inserted before comments
+
+                                        only printer, card reader and punch are needed. No tapes 
+                                        or drum are used during assembly
+       
+       
+                                  Normal Stops:
+                                     STOP 0000  End of assembly, no errors
+       
+                                  Error stops:
+                                     STOP 0001  Stop because invalid format in input card
+                                     STOP 0002  Stop because opcode sign must be + or - or blank
+                                     STOP 0003  Stop because card type invalid. Must be 0 or 1
+                                     STOP 0004  Stop because location index in control card must be zero
+                                     STOP 0005  Stop because region already defined
+                                     STOP 0006  Stop because undefined origin in control card
+                                     STOP 0007  Stop because file full (too many control cards)
+                                     STOP 0008  Stop because instruction location region not found
+                                     STOP 0009  Stop because instruction address region not found
+                                     STOP 0010  Stop because negative gap with previous instructions
+                                     STOP 0011  Stop because gap between regions too big 
+                                     STOP 0012  Stop because program too big 
+                                            
+                                  Source card format:
+       
+                                    column  1-8     should be blank
+                                            9       card type: one digit 0 or 1
+                                            10-12   location region code
+                                            13-16   location region index  
+                                            17      sign of instruction (row 11 punch for -, 
+                                                    row 12 for +, blank column for +)
+                                            18-19   operation part of instruction (decimal)
+                                            20-22   address region code
+                                            23-26   address region index  
+                                            27-44   Blank
+                                            45-64   Comment
+                                            65-72   comment continuation (typically opcode name)
+                                            
+
+                                    Column:
+                                    .          9 10 13  17 20 23             45
+                                    .           vv  v   v  v  v              v
+                                    .     ------------------------------------------------------+ 
+                                    .   /       tlociiiisOPadriiii           Comment            |
+                                    .  |                                                        |
+                                    .  |                                                        |
+                                    .  |                                                        |
+                                    .  |                                                        |
+                                    .  |                                                        |
+                                    .  |                                                        |
+                                    .  |                                                        |
+                                    .  |                                                        |
+                                    .  |                                                        |
+                                    .  |                                                        |
+                                    .  +--------------------------------------------------------+
+
+                                    
+                                         card type 0: Intruction
+                                                       
+                                                      Regions used should be defined in a 
+                                                      previous card. Only exception is region 
+                                                      00R that is allways defined 
+
+                                         card type 1: Control Card
+
+                                                      define region loc based on 
+                                                      region adr and index iiii
+
+                                  Punched binary cards format (when 00F region origin not 0000):
+       
+                                     - in row 9: 
+                                           A & B = checksum
+                                           C     = Number of instructions on this card
+                                           D     = first address of this card
+                                     - in rows 8 to 0, X and Y: up to 44 instructions
+       
+                                    .     ------------------------------------------------------+
+                                    .   /   |            |            |  ...       | instr 44   |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |  instr 5   |  ...       |            |            |
+                                    .  |    |  instr 1   |  instr 2   |  instr 3   |  instr 4   |
+                                    .  |    +------------+------------+------------+------------+
+                                    .  |    |     A      |     B      |      C     |     D      |
+                                    .  +----+------------+------------+------------+------------+
+
+
+                                  Punched binary cards format (when 00F origin is 0000):
+              
+                                    .     ------------------------------------------------------+
+                                    .   /   |            |            |  ...       | instr 48   |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |            |            |            |            |
+                                    .  |    |  instr 5   |  ...       |            |            |
+                                    .  |    |  instr 1   |  instr 2   |  instr 3   |  instr 4   |
+                                    .  +----+------------+------------+------------+------------+
+
+                                  

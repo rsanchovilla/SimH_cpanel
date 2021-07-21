@@ -105,8 +105,8 @@ const char         *sim_subop_names[] = {
     0
 };
 
-t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr); 
 t_stat NORC_exdep_cmd (int32 flag, CONST char *cptr);
+t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr); 
 
 #define HLP_STEP        "*Commands Running_A_Simulated_Program STEP"
 
@@ -564,7 +564,8 @@ struct {
     int id;              // 0=button, >1 switch ident
     const char *name;    // name of button/switch to be used in scp command
 } csw_btn_def[] = {
-    {100, "Keyboard"},
+    // buttons
+    {100, "Keyboard"},   
     {101, "Register 1 to CRT"},
     {102, "Register 1 from CRT"},
     {103, "Register 1 from REG2"},
@@ -589,6 +590,7 @@ struct {
     {150, "Read Forward"},  
     {151, "Read Backward"},  
     {152, "Rewind"},  
+    // switches
     {  1, "SW74"},     
     {  2, "SW75"},     
     {  3, "SW76"},     
@@ -669,13 +671,6 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
     extern int Console_LiPrtChk;             // console lights for priter check flag (because writting to 0001-0007 while print cycle in progress)
     extern int Console_LiAddrChk;            // console lights for address check flag 
 
-    if ((*(cptr-1)=='S') || (*(cptr-1)=='s')) {
-        // switch aliases STEP command. detect it so 'S' abreviation is STEP instead of SWITCH
-        sim_printf("'s' command abreviation is 'switch', not 'step'. \n"); 
-        sim_printf("'s' You can abreviate 'step' with 'st' \n"); 
-        return SCPE_OK;
-    }
-
     cptr = get_glyph_quoted (cptr, gbuf, 0);   // get next param (name of button/switch, quoted)
     if (gbuf[0] == '"') memcpy(&gbuf[0], &gbuf[1], sizeof(gbuf)-1); // remove leading quote
     n=strlen(gbuf);
@@ -685,14 +680,14 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
     for(n=0;;n++) {
         id = csw_btn_def[n].id;
         if (id<0) {
-            return sim_messagef (SCPE_ARG, "Unknown button/switch name \"%s\"\r\n", gbuf); 
+            return sim_messagef (SCPE_ARG, "Unknown button/switch name \"%s\"\n", gbuf); 
         }
         if (sim_strncasecmp(gbuf, csw_btn_def[n].name, 32) != 0) continue; // loop if not this name
         // found, check button/switch vs command
         if ((flag == 2) && (id < 100)) {
-            return sim_messagef (SCPE_ARG, "Unknown button name \"%s\"\r\n", gbuf); // because pressing a switch
+            return sim_messagef (SCPE_ARG, "Unknown button name \"%s\"\n", gbuf); // because pressing a switch
         } else if ((flag == 1) && (id >= 100)) {
-            return sim_messagef (SCPE_ARG, "Unknown switch name \"%s\"\r\n", gbuf); // because switching a button
+            return sim_messagef (SCPE_ARG, "Unknown switch name \"%s\"\n", gbuf); // because switching a button
         }
         // found
         break;
@@ -831,7 +826,7 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
         sim_debug(DEBUG_DETAIL, &cpu_dev, "Console: Manual %s %s\n", 
             (id == 150) ? "Read Forward" : (id == 151) ? "Read Backward" : "Rewind", sMT);
         run_cmd(RU_GO, "");
-    } else if (id >= 100) return sim_messagef (SCPE_ARG, "Unknown button name\r\n"); 
+    } else if (id >= 100) return sim_messagef (SCPE_ARG, "Unknown button name\n"); 
     if (id >= 100) return SCPE_OK; 
 
     // is a set switch .. to "label"
@@ -852,7 +847,7 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
         // Console_Sw74[n]=2 -> Switch at 'OFF', =1 -> Switch at 'TRANSFER' . =0 -> Switch at 'STOP'
         if (sim_strncasecmp(gbuf, "OFF",      32) == 0) n=2; else
         if (sim_strncasecmp(gbuf, "TRANSFER", 32) == 0) n=1; else
-        if (sim_strncasecmp(gbuf, "STOP",     32) == 0) n=1; else
+        if (sim_strncasecmp(gbuf, "STOP",     32) == 0) n=0; else
         return SCPE_ARG; 
         Console_Sw74[id-1]=n;
     } else if ((id>=7) && (id<=11)) {
@@ -932,7 +927,7 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
         if (sim_strncasecmp(gbuf, "IREG", 32) == 0) n=2; else
         return SCPE_ARG; 
         Console_Sw_SourceOfInstr=n;
-    } else return sim_messagef (SCPE_ARG, "Unknown switch name\r\n"); 
+    } else return sim_messagef (SCPE_ARG, "Unknown switch name\n"); 
     return SCPE_OK;
 }
 
@@ -948,8 +943,13 @@ t_stat NORC_exdep_cmd (int32 flag, CONST char *cptr)
     extern int     NSUBOP;                      // indicates current machine suboperation number to be executed, 0=exec whole instruction
     extern int     ESUBOP;                      // already executed suboperations bitamap 
     int n;
+    const char * cptr2; 
 
-    get_glyph (cptr, gbuf, 0);                       // get param    
+    cptr2 = get_glyph (cptr, gbuf, 0);                       // get param    
+    while (gbuf[0]=='-') {
+        cptr2 = get_glyph (cptr2, gbuf, 0);                  // skip any option -Switch
+    }
+
     if (flag==EX_D) {
         if ((strlen(gbuf) == 1) && (strncmp(gbuf, "V", 1)==0))  {
             // deposit V 

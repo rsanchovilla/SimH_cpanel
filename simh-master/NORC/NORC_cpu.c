@@ -1610,7 +1610,7 @@ int Symbolic_Trace(uint32 Symbolic_Trace_tm0, char * Symbolic_Buffer, char * sTr
                      printfw(REG1), M4, M6, M8);
         trace = 1;
     } else if(strstr(sTrace, "**flags")) {
-        // the "**index" string in symbolic buffer prints on console the index registers
+        // the "**flags" string in symbolic buffer prints on console the flags
         // the values are the ones BEFORE opcode execution
         sprintf(buf, "OV: %d, IA: %d, ZR: %d, TCHK: %d, TEOF: %d, PRT: %d",  
                      OV, IA, ZR, TCHK, TEOF, PRT);
@@ -1640,10 +1640,10 @@ int Symbolic_Trace(uint32 Symbolic_Trace_tm0, char * Symbolic_Buffer, char * sTr
         ss = msec / 1000; msec = msec - ss * 1000;
         mm = ss   / 60;   ss   = ss   - mm * 60;
         hh = ss   / 60;   hh   = hh   - hh * 60;
-        sim_printf("%02d:%02d:%02d:%03d %04d: %s\r\n", hh,mm,ss,msec,IC,buf); 
+        sim_printf("%02d:%02d:%02d:%03d %04d: %s\n", hh,mm,ss,msec,IC,buf); 
         if (trace == 2) while(len>0) {
             if (addr<3600) d=CRT[addr]; else break;
-            sim_printf("             %04d: %08d%08d\r\n", 
+            sim_printf("             %04d: %08d%08d\n", 
                 addr, printfw(d)); 
             addr++;
             len--;       
@@ -2089,8 +2089,8 @@ t_stat sim_instr(void)
     {
         int i; 
         for (i=0;i<2; i++) {
-            if ((lp_unit[0].flags & UNIT_ATT) && (lp_unit[0].fileref)) {
-                fflush(lp_unit[0].fileref); 
+            if ((lp_unit[i].flags & UNIT_ATT) && (lp_unit[i].fileref)) {
+                fflush(lp_unit[i].fileref); 
             }
         }
     }
@@ -2186,7 +2186,7 @@ t_stat cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cpt
 t_stat cpu_set_speed(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 {
     float num; 
-    int c;
+    int c, MachineCycle_usec;
     CONST char *tptr;
 
     if (cptr == NULL) return SCPE_ARG;
@@ -2218,8 +2218,11 @@ t_stat cpu_set_speed(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 
     // calculate values
     CpuSpeed_Acceleration = (int) (num * 100); 
-    CpuSpeed.TicksMax  = (int) (CpuSpeed.msec * CpuSpeed_Acceleration * 1000 / 100.0); // max number of ticks allowed to be executed in msec time at selected cpu speeed
-    CpuSpeed.TicksObjectivePerSec = (int) (1000000.0 * num);
+    // machine cycle: 1 microseconds 
+    MachineCycle_usec = 1; 
+    CpuSpeed.TicksMax  = (int) (CpuSpeed.msec * CpuSpeed_Acceleration * 1000 / (100.0 * MachineCycle_usec));
+    // Clock set to 1MHz (ticks per sec)
+    CpuSpeed.TicksObjectivePerSec = (int) (1000000 * CpuSpeed_Acceleration / (MachineCycle_usec * 100));
     return SCPE_OK;
 }
 
