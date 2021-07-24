@@ -128,6 +128,7 @@ extern UNIT         cdp_unit[4];
 #define URCSTA_LOAD     01000    /* Load flag for 533 card reader */
 #define URCSTA_SOAPSYMB 02000    /* Get soap symbolic info when reading the card */
 
+#define LPT_COLUMNS        80    // colums in printout   
 #define lptPrintOutMAX     20    // last lptPrintOutMAX lines printed will be saved on circular buffer lptPrintOut
 extern void lpt_printline(char * line, int nline); 
 

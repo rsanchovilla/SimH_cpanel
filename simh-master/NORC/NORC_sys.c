@@ -216,7 +216,7 @@ char     sim_hol_to_ascii(uint16 hol)
 void vm_init(void) {
     static int inited = 0;
     extern int                 V;                           // Address to be accesed in CRT memory
-    extern char   lptPrintOut[120 * lptPrintOutMAX];
+    extern char   lptPrintOut[LPT_COLUMNS * lptPrintOutMAX];
 
     if (inited == 1) return;   /* Be sure to only do these things once */        
     inited = 1;

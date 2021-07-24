@@ -63,7 +63,7 @@ DEVICE              lp_dev = {
 };
 
 // buffer to hold last printed lines on lp1
-char   lptPrintOut[120 * lptPrintOutMAX];
+char   lptPrintOut[LPT_COLUMNS * lptPrintOutMAX];
 int    lptPrintOutCount = 0; // total number of lines printed
 
 // IBM NORC tape/printer control Unit internal state
@@ -112,8 +112,8 @@ int lpt_printline(UNIT * uptr, char * line)
         int nlen = (line) ? strlen(line):0; 
         int n; 
         char c; 
-        n = 120 * (lptPrintOutCount % lptPrintOutMAX); 
-        for (i=0;i<120;i++) {
+        n = LPT_COLUMNS * (lptPrintOutCount % lptPrintOutMAX); 
+        for (i=0;i<LPT_COLUMNS;i++) {
             c = (i<nlen) ? line[i] : ' ';
             lptPrintOut[n++]=c;
         }

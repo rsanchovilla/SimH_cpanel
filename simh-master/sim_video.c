@@ -1727,6 +1727,8 @@ void vid_update_ex (SDL_UserEvent *event)
         if (bUseRectList) {
             // do an incremental update based on rectangles modified
             vid_update_rectlist(surface, surface_scale);
+        } else if (RectList.Count==0) {
+            // do nothing
         } else {
             // create a full rectangle to update
             RectList.Count=-1; 

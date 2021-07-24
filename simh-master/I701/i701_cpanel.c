@@ -83,7 +83,7 @@ extern int bCardPunchError;
 // mt tape state
 
 // printout state
-extern char   lptPrintOut[80 * lptPrintOutMAX];
+extern char   lptPrintOut[LPT_COLUMNS * lptPrintOutMAX];
 extern int    lptPrintOutCount;
 
 
@@ -1527,7 +1527,7 @@ void Refresh_PrintOut(void)
     int paper_ww, paper_hh; // printed paper control size
     int bg_ww, bg_hh;       // printed paper background control size
     int y, nLin, nLinMax, iLin, n;
-    char sLin[81];
+    char sLin[LPT_COLUMNS+1];
 
 
     SetState(IBM701.LI_Ready_Printer, (lp_unit[0].flags & UNIT_DIS) ? 0:1); // Ready light on -> device under control of calculator
@@ -1574,7 +1574,7 @@ void Refresh_PrintOut(void)
     // chars to print comes from lptPrintOut[iLin]
     n = nLinMax-1;
     while (nLin-- > 0) {
-        memcpy(sLin, &lptPrintOut[iLin * 80], 80); sLin[80] = 0;
+        memcpy(sLin, &lptPrintOut[iLin * LPT_COLUMNS], LPT_COLUMNS); sLin[LPT_COLUMNS] = 0;
         iLin = (iLin-1) % lptPrintOutMAX;
         if (iLin<0) iLin += lptPrintOutMAX; 
         lpt_set_paper_background(n*PARAM_char_hh2, (n+1)*PARAM_char_hh2);

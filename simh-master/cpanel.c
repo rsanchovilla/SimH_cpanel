@@ -27,7 +27,7 @@
    10-Nov-17    RSV     control panel support for rcornwell sims IBM 7000 family
    14-May-20    RSV     Control panel support for IBM 650 use standard LIB PNG bitmaps
    27-Jan-21    RSV     Control panel support for IBM NORC mouse drag and zoom
-   22-Jun-21    RSV     Control panel support for IBM 701 support for big panels, reduce cpu usage
+   22-Jun-21    RSV     Control panel support for IBM 701 support for big panels, reduce cpu usage, antialise on scake < 50%
 
    These simulator commands controls the control panel
 
@@ -280,7 +280,6 @@ static struct {                                     // Control Panel main data
     } TickCount[MAX_TICK_COUNT];
     char Options[MAX_OPTIONS];                      // options defined (separated by ;)
     int FullRedrawNeeded;                           // =1 if a full redraw is needed
-    int FullSurfaceRedrawTm0;                       // sim_os_msec value when a full surface is redraw 
     int EnableTickCount;                            // =0 -> do not use TickCount callback and disable SetStateWithIntensity
     int Scale;                                      // Scale factor for GUI window. 100 -> 100% -> GUI window with size as defined. 50% -> half size
     uint32 LastRefreshInit;                         /* sim_os_msec() at starting of last refresh. used to calc FPS */
@@ -2207,7 +2206,6 @@ void ControlPanel_init(DEVICE *dptr)
     cpanel_interactive = 0;
     CP.LastTickCountNum = 0;
     CP.FullRedrawNeeded=1;
-    CP.FullSurfaceRedrawTm0=0;
     RectList.MaxCount = RECTLIST_MAX;
     ControlPanel_Refresh();
 }
@@ -2567,14 +2565,16 @@ int CheckHotKeys(unsigned char c)
     }
     if (c == '+') {
         // '+' -> Increase scale +10% up to 200%
-        CP.Scale += 10;
+        // Control-'+' -> Increase scale +1% up to 200%
+        CP.Scale += ((cpvid.kev_modifier == 2) ? 1:10);
         if (CP.Scale > 200) CP.Scale = 200;
         DoActionSetScale();
         return 1;
     }
     if (c == '-') {
         // '-' -> decrease scale -10% up to 10%
-        CP.Scale -= 10;
+        // Control-'-' -> decrease scale -1% up to 10%
+        CP.Scale -= ((cpvid.kev_modifier == 2) ? 1:10);
         if (CP.Scale < 10) CP.Scale = 10;
         DoActionSetScale();
         return 1;
@@ -2710,130 +2710,120 @@ void ControlPanel_Refresh(void)
     // init to check if something has changed in surface and should be redraw on GUI
     bShouldUpdateGUI=0;
     RectList.Count=0;
-    RectList.Scale=CP.Scale; 
-    // itearate on controls and draw the ones that changed / are marked
-    for(i=0;i<CP.ControlItems;i++) {
-        State = CP.Control[i].State;
-        Mark = CP.Control[i].Mark;  
-        nStates = CP.Control[i].nStates; 
-        if ((nStates == 0) && (Mark != 1)) continue; // if nStates==0 -> control not drawn. Just it is used for click sense on its area
-        X = CP.Control[i].X;                         // get control boundaries
-        Y = CP.Control[i].Y;
-        W = CP.Control[i].W;
-        H = CP.Control[i].H;
-        MaxH = CP.Control[i].MaxH;
-        if (X == -1) continue;                       // if X == -1 -> control not drawn nor sensed
-        if ((X+W <  0) || (Y+H <  0)) continue;      // sanity check
-        if ((X   > xpixels) || (Y   > ypixels)) continue;  // sanity check
-        if (Mark >= 256) State = Mark & 255;         // Mark > 255 -> holds the state to force redraw control with this state
-        if ((CP.Control[i].LastState == State) && (CP.FullRedrawNeeded == 0) && (Mark == 0)) continue; // skip control, no need to redraw
-        // control needs to be redrawn. 
-        CP.Control[i].LastState = State;             // save the last state drawn on GUI
-        nStart = CP.Control[i].iPos_surface          // start of control's pixels
-                 + State * W * H;                    // start of this state 
-        // set max height to be draw
-        if ((MaxH == 0) || (MaxH > H)) MaxH = H;
-        bShouldUpdateRect=0;
-        // copy control pixels to GUI surface
-        for (iy=Y;iy<Y+MaxH;iy++) {
-            if (iy < 0) continue;
-            if (iy >= ypixels) break;
-            p = iy*xpixels + X;
-            n = nStart + (iy-Y) * W;
-            for (ix=0;ix<W;ix++) {
-                xx=ix + X; 
-                if (xx >= xpixels) break;
-                if ((p >= xpixels * ypixels) || (n >= MAX_PIXELS)) break;
-                if (Mark==0) {                     // draw control on surface
-                    if (nStates > 0) {
-                        c = CP.surface[n];         // use pixel color if has one
-                        if ((c) && (c & AlphaMask) != AlphaMask) {
-                            // apply alpha on background
-                            alpha=get_surface_rgb_color(c,&rr,&gg,&bb)+1;           // get control image pixel with alpha value
-                            get_surface_rgb_color(surface[p],&rr_bg,&gg_bg,&bb_bg); // get background pixel
-                            // if alpha=255 -> color is rr. If alfa=0 -> color is rr_bg
-                            rr = rr_bg + (alpha * (rr-rr_bg)) / 256; 
-                            gg = gg_bg + (alpha * (gg-gg_bg)) / 256; 
-                            bb = bb_bg + (alpha * (bb-bb_bg)) / 256; 
-                            c = surface_rgb_color(rr,gg,bb);
+    RectList.Scale=CP.Scale;
+    if (cpvid_checkredraw()==0) {
+        // there is a refresh event pending to be terminated
+        // so no not update surface, nor set control LastState
+        bShouldUpdateGUI=0;
+    } else {
+        // itearate on controls and draw the ones that changed / are marked
+        for(i=0;i<CP.ControlItems;i++) {
+            State = CP.Control[i].State;
+            Mark = CP.Control[i].Mark;  
+            nStates = CP.Control[i].nStates; 
+            if ((nStates == 0) && (Mark != 1)) continue; // if nStates==0 -> control not drawn. Just it is used for click sense on its area
+            X = CP.Control[i].X;                         // get control boundaries
+            Y = CP.Control[i].Y;
+            W = CP.Control[i].W;
+            H = CP.Control[i].H;
+            MaxH = CP.Control[i].MaxH;
+            if (X == -1) continue;                       // if X == -1 -> control not drawn nor sensed
+            if ((X+W <  0) || (Y+H <  0)) continue;      // sanity check
+            if ((X   > xpixels) || (Y   > ypixels)) continue;  // sanity check
+            if (Mark >= 256) State = Mark & 255;         // Mark > 255 -> holds the state to force redraw control with this state
+            if ((CP.Control[i].LastState == State) && (CP.FullRedrawNeeded == 0) && (Mark == 0)) continue; // skip control, no need to redraw
+            // control needs to be redrawn. 
+            CP.Control[i].LastState = State;             // save the last state drawn on GUI
+            nStart = CP.Control[i].iPos_surface          // start of control's pixels
+                     + State * W * H;                    // start of this state 
+            // set max height to be draw
+            if ((MaxH == 0) || (MaxH > H)) MaxH = H;
+            bShouldUpdateRect=0;
+            // copy control pixels to GUI surface
+            for (iy=Y;iy<Y+MaxH;iy++) {
+                if (iy < 0) continue;
+                if (iy >= ypixels) break;
+                p = iy*xpixels + X;
+                n = nStart + (iy-Y) * W;
+                for (ix=0;ix<W;ix++) {
+                    xx=ix + X; 
+                    if (xx >= xpixels) break;
+                    if ((p >= xpixels * ypixels) || (n >= MAX_PIXELS)) break;
+                    if (Mark==0) {                     // draw control on surface
+                        if (nStates > 0) {
+                            c = CP.surface[n];         // use pixel color if has one
+                            if ((c) && (c & AlphaMask) != AlphaMask) {
+                                // apply alpha on background
+                                alpha=get_surface_rgb_color(c,&rr,&gg,&bb)+1;           // get control image pixel with alpha value
+                                get_surface_rgb_color(surface[p],&rr_bg,&gg_bg,&bb_bg); // get background pixel
+                                // if alpha=255 -> color is rr. If alfa=0 -> color is rr_bg
+                                rr = rr_bg + (alpha * (rr-rr_bg)) / 256; 
+                                gg = gg_bg + (alpha * (gg-gg_bg)) / 256; 
+                                bb = bb_bg + (alpha * (bb-bb_bg)) / 256; 
+                                c = surface_rgb_color(rr,gg,bb);
+                            }
+                        } else {
+                            c = 0;                     // control has no states -> set transparent
                         }
-                    } else {
-                        c = 0;                     // control has no states -> set transparent
+                    } else {                           // draw control with mark
+                        if (nStates > 0) {c = CP.surface[n];}         
+                        else             {c = surface[p];}  // control has no states -> get background color
+                        get_surface_rgb_color(c,&rr,&gg,&bb);
+                        if (MarkCol) {  // alternate marks colors
+                            if (gg <= 192) {gg += 64;} else {gg -= 64;}
+                        } else {
+                            if (rr <= 192) {rr += 64;} else {rr -= 64;}
+                        }
+                        c = surface_rgb_color(rr,gg,bb);
                     }
-                } else {                           // draw control with mark
-                    if (nStates > 0) {c = CP.surface[n];}         
-                    else             {c = surface[p];}  // control has no states -> get background color
-                    get_surface_rgb_color(c,&rr,&gg,&bb);
-                    if (MarkCol) {  // alternate marks colors
-                        if (gg <= 192) {gg += 64;} else {gg -= 64;}
-                    } else {
-                        if (rr <= 192) {rr += 64;} else {rr -= 64;}
+                    if ((xx >= 0) && (c)) {
+                       surface[p] = c;         // c==0 -> transparent pixel, else draw pixel with color c on GUI window
+                       bShouldUpdateRect=1; 
                     }
-                    c = surface_rgb_color(rr,gg,bb);
+                    p++; n++;
+                }   
+            }
+            if (bShouldUpdateRect) {
+                // add control to be draw to rectangle list to be updated in surface and sent to 
+                // SDL texture+Renderer (the actual VRAM video memory). If rectangle list count is <1 then
+                // the full surface will be sent to VRAM. 
+                n=RectList.Count; 
+                if (n==-1) {
+                    // rect table full
+                } else if (n>=RectList.MaxCount) {
+                    // set rect table as full
+                    RectList.Count=-1; 
+                } else {
+                    // room left on rectable table
+                    ix=X; xx=X+W; 
+                    iy=Y; yy=Y+MaxH;
+                    if (ix < 0) ix=0; if (xx < 0) xx=0; if (ix >= xpixels) ix=xpixels; if (xx >= xpixels) xx=xpixels;
+                    if (iy < 0) iy=0; if (yy < 0) yy=0; if (iy >= ypixels) iy=ypixels; if (yy >= ypixels) yy=ypixels;
+                    RectList.x[n]=ix; RectList.w[n]=xx-ix; 
+                    RectList.y[n]=iy; RectList.h[n]=yy-iy; 
+                    RectList.Count++;
+                    bShouldUpdateGUI=1;
                 }
-                if ((xx >= 0) && (c)) {
-                   surface[p] = c;         // c==0 -> transparent pixel, else draw pixel with color c on GUI window
-                   bShouldUpdateRect=1; 
-                }
-                p++; n++;
             }
         }
-        if (bShouldUpdateRect) {
-            // add control to be draw to rectangle list to be updated in surface and sent to 
-            // SDL texture+Renderer (the actual VRAM video memory). If rectangle list count is <1 then
-            // the full surface will be sent to VRAM. 
-            n=RectList.Count; 
-            if (n==-1) {
-                // rect table full
-            } else if (n>=RectList.MaxCount) {
-                // set rect table as full
-                RectList.Count=-1; 
-            } else {
-                // room left on rectable table
-                ix=X; xx=X+W; 
-                iy=Y; yy=Y+MaxH;
-                if (ix < 0) ix=0; if (xx < 0) xx=0; if (ix >= xpixels) ix=xpixels; if (xx >= xpixels) xx=xpixels;
-                if (iy < 0) iy=0; if (yy < 0) yy=0; if (iy >= ypixels) iy=ypixels; if (yy >= ypixels) yy=ypixels;
-                RectList.x[n]=ix; RectList.w[n]=xx-ix; 
-                RectList.y[n]=iy; RectList.h[n]=yy-iy; 
-                RectList.Count++;
-                bShouldUpdateGUI=1;
-            }
-        }
+        // printf("RectList.Count %d \n", RectList.Count);    
     }
-    // printf("RectList.Count %d \n", RectList.Count);    
-
     //update GUI window
     if (cpanel_on) {
         cpvid_poll ();
         // if full redraw asked, update all the surface, not the rectlist
         if (CP.FullRedrawNeeded) RectList.Count=-1;      
-        // if more than 6 sec without updating all the surface do a full surface update ignoring RectList
-        // this is a catch-up for any missing refresh skipped
-        if ((CP.FullSurfaceRedrawTm0) && ((Refresh_tnow - CP.FullSurfaceRedrawTm0 < 0) || (Refresh_tnow - CP.FullSurfaceRedrawTm0 > 6000))) {
-            sim_debug (CP_REFRESH, cp_dev_ptr, "GUI doing a full surface Catch-up Refresh \n");
-            RectList.Count=-1; 
-        }
         // if updating all the surface set FullSurfaceSyncTm0 with current sim_os_msec
-        if (RectList.Count==-1) {
-            CP.FullSurfaceRedrawTm0 = 0; // will do a catch-up full redraw
-            bShouldUpdateGUI=1; 
-        }
+        if (RectList.Count==-1) bShouldUpdateGUI=1; 
         if (bShouldUpdateGUI) {
             if (0==cpvid_sync (1)) {
                 sim_debug (CP_REFRESH, cp_dev_ptr, "GUI Refresh skipped - Event Queue too long/already redraw in Event Queue\n");
-                if (CP.FullSurfaceRedrawTm0==0) {
-                    CP.FullSurfaceRedrawTm0 = Refresh_tnow; // set catch-up full redraw because this refresh has been skipped
-                    sim_debug (CP_REFRESH, cp_dev_ptr, "GUI request a full surface Catch-up Refresh \n");
-                } else {
-                    sim_debug (CP_REFRESH, cp_dev_ptr, "GUI Catch-up Refresh already requested, pending to be executed\n");
-                }
             }
+            CP.FullRedrawNeeded=0;
         } else {
            sim_debug (CP_REFRESH, cp_dev_ptr, "GUI Refresh skipped - bShouldUpdateGUI=0\n");
         }
     }
-    CP.FullRedrawNeeded=0;
     // check key pressed
     if (cpvid.last_char && (CheckHotKeys(cpvid.last_char))) {
         cpvid.last_char = 0; // clear key as it is processed

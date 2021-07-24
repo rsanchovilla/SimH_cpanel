@@ -157,6 +157,7 @@ extern DEVICE       lp_dev;
 extern uint32       lp_cmd(UNIT *, uint16, uint16);
 extern UNIT         lp_unit[3];
 
+#define LPT_COLUMNS        120   // colums in printout   
 #define lptPrintOutMAX     20    // last lptPrintOutMAX lines printed will be saved on circular buffer lptPrintOut
 extern int lpt_printline(UNIT * uptr, char * line);
 

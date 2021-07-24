@@ -63,7 +63,7 @@ DEVICE              lp_dev = {
 extern t_int64             MQ;                          // M-Q register
 
 // buffer to hold last printed lines on lp
-char   lptPrintOut[80 * lptPrintOutMAX];
+char   lptPrintOut[LPT_COLUMNS * lptPrintOutMAX];
 int    lptPrintOutCount = 0; // total number of lines printed
 
 // IBM 701 tape/printer control Unit internal state
@@ -135,8 +135,8 @@ void lpt_printline(UNIT * uptr, char * line, int bNoEcho)
     // last lptPrintOutMAX printed lines will be saved on circular buffer lptPrintOut
     // acts as mapped memory for 20 last lines printed
     nlen = (line) ? strlen(line):0; 
-    n = 80 * (lptPrintOutCount % lptPrintOutMAX); 
-    for (i=0;i<80;i++) {
+    n = LPT_COLUMNS * (lptPrintOutCount % lptPrintOutMAX); 
+    for (i=0;i<LPT_COLUMNS;i++) {
         c = (i<nlen) ? line[i] : ' ';
         lptPrintOut[n++]=c;
     }

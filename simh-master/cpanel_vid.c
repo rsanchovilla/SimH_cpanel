@@ -183,25 +183,36 @@ void cpvid_shutdown(void)
     surface_scale = NULL;
 }
 
-
-int cpvid_sync(int checkredraw) 
+// check refresh 
+// return 0 if a refresh is in progress
+// return 1 if a refresh can be done
+int cpvid_checkredraw(void)
 {
     SDL_Event events[20];
     int i, count, ndraw;
 
+    if (vid_refresh_in_progress) return 0;
+    // check if DRAW/REDRAW events in SQL queue; if so do not redraw
+    count = SDL_PeepEvents(&events[0], 20, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+    ndraw=0;
+    for(i=0;i<count;i++) {             
+        if (events[i].type != SDL_USEREVENT) continue;
+        if ((events[i].user.code != 1 /*EVENT_REDRAW*/) && (events[i].user.code != 5 /*EVENT_DRAW*/)) continue;
+        ndraw++;
+    }
+    // if draw pendings, then exit without adding an additional redraw event
+    if ((ndraw > 0) || (count > 18)) return 0; 
+    return 1; 
+}
+
+// do the refresh
+// return 0 if a refresh is not done (because already one is in progress)
+// return 1 if a refresh event is sent to SDL 
+int cpvid_sync(int checkredraw) 
+{
     if (checkredraw) {
         // check refresh in progress
-        if (vid_refresh_in_progress) return 0;
-        // check if DRAW/REDRAW events in SQL queue; if so do not redraw
-        count = SDL_PeepEvents(&events[0], 20, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
-        ndraw=0;
-        for(i=0;i<count;i++) {             
-            if (events[i].type != SDL_USEREVENT) continue;
-            if ((events[i].user.code != 1 /*EVENT_REDRAW*/) && (events[i].user.code != 5 /*EVENT_DRAW*/)) continue;
-            ndraw++;
-        }
-        // if draw pendings, then exit without adding an additional redraw event
-        if ((ndraw > 0) || (count > 18)) return 0; 
+        if (cpvid_checkredraw()==0) return 0;
     }
 
     // these are standard call for SDL. vid_draw malloc and memcpy all the surface data, 

@@ -77,7 +77,7 @@ DEVICE              cdp_dev = {
 };
 
 // buffer to hold last printed lines on cdp0
-char   lptPrintOut[80 * lptPrintOutMAX];
+char   lptPrintOut[LPT_COLUMNS * lptPrintOutMAX];
 int    lptPrintOutCount = 0; // total number of lines printed
 
 // vars that notify the state of Card Punching process
@@ -1341,8 +1341,8 @@ void lpt_printline(char * line, int nlen)
     }
     // last lptPrintOutMAX printed lines will be saved on circular buffer lptPrintOut
     // acts as mapped memory for 20 last lines printed
-    n = 80 * (lptPrintOutCount % lptPrintOutMAX); 
-    for (i=0;i<80;i++) {
+    n = LPT_COLUMNS * (lptPrintOutCount % lptPrintOutMAX); 
+    for (i=0;i<LPT_COLUMNS;i++) {
         c = (i<nlen) ? line[i] : ' ';
         lptPrintOut[n++]=c;
     }
@@ -1352,7 +1352,7 @@ void lpt_printline(char * line, int nlen)
     n = lptPrintOutCount % 55;
     if ((n==0) && (lptPrintOutCount > 0)) {
         for(i=1;i>=0;i--) { // add empty lines
-           n = 80 * (lptPrintOutCount % lptPrintOutMAX); 
+           n = LPT_COLUMNS * (lptPrintOutCount % lptPrintOutMAX); 
            lptPrintOut[n]=i; // char 1 = page break mark
            lptPrintOutCount++; // incr num of lines printed
         }

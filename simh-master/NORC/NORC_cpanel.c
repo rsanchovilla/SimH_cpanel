@@ -95,7 +95,7 @@ extern int     Measure_CpuSpeed(int);       // return measured cpu speed
 extern tapedata * TapeData;           // holds words read/writen to/from tape
 
 // printout state
-extern char   lptPrintOut[120 * lptPrintOutMAX];
+extern char   lptPrintOut[LPT_COLUMNS * lptPrintOutMAX];
 extern int    lptPrintOutCount;
 
 
@@ -2200,7 +2200,7 @@ void Refresh_PrintOut(void)
     int paper_ww, paper_hh; // printed paper control size
     int bg_ww, bg_hh;       // printed paper background control size
     int y, nLin, nLinMax, iLin, n;
-    char sLin[121];
+    char sLin[LPT_COLUMNS+1];
 
     if (lptPrintOutCount == lptPrintOutDoneCount)  return; // nothing to update
 
@@ -2243,7 +2243,7 @@ void Refresh_PrintOut(void)
     // chars to print comes from lptPrintOut[iLin]
     n = nLinMax-1;
     while (nLin-- > 0) {
-        memcpy(sLin, &lptPrintOut[iLin * 120], 120); sLin[120] = 0;
+        memcpy(sLin, &lptPrintOut[iLin * LPT_COLUMNS], LPT_COLUMNS); sLin[LPT_COLUMNS] = 0;
         iLin = (iLin-1) % lptPrintOutMAX;
         if (iLin<0) iLin += lptPrintOutMAX; 
         lpt_set_paper_background(n*PARAM_char_hh2, (n+1)*PARAM_char_hh2);

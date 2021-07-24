@@ -270,7 +270,7 @@ void echo_cardimage(DEVICE * dptr, uint16 * image, int EchoLevel, char * msg, ch
 /* Initialize vm  */
 void vm_init(void) {
     static int inited = 0;
-    extern char   lptPrintOut[80 * lptPrintOutMAX];
+    extern char   lptPrintOut[LPT_COLUMNS * lptPrintOutMAX];
     extern mtinforec mt_info[4];
     int n; 
 

@@ -47,6 +47,7 @@ extern uint32 * get_surface(int *xp, int *yp); // return GUI surface (and size) 
 
 extern void cpvid_poll(void);                           // scan GUI and update cpvid struct
 extern int  cpvid_sync(int);                            // send surface rectable to GUI window
+extern int  cpvid_checkredraw(void);                    // check if refresh in progress
 extern int  cpvid_init(const char *, int, int, void *); // create and open GUI window
 extern void cpvid_shutdown(void);                       // close GUI window
 
