@@ -2715,6 +2715,7 @@ void ControlPanel_Refresh(void)
         // there is a refresh event pending to be terminated
         // so no not update surface, nor set control LastState
         bShouldUpdateGUI=0;
+        sim_debug (CP_REFRESH, cp_dev_ptr, "GUI Refresh skipped - Event Queue too long/already redraw in Event Queue\n");
     } else {
         // itearate on controls and draw the ones that changed / are marked
         for(i=0;i<CP.ControlItems;i++) {
@@ -2816,9 +2817,7 @@ void ControlPanel_Refresh(void)
         // if updating all the surface set FullSurfaceSyncTm0 with current sim_os_msec
         if (RectList.Count==-1) bShouldUpdateGUI=1; 
         if (bShouldUpdateGUI) {
-            if (0==cpvid_sync (1)) {
-                sim_debug (CP_REFRESH, cp_dev_ptr, "GUI Refresh skipped - Event Queue too long/already redraw in Event Queue\n");
-            }
+            cpvid_sync (0);
             CP.FullRedrawNeeded=0;
         } else {
            sim_debug (CP_REFRESH, cp_dev_ptr, "GUI Refresh skipped - bShouldUpdateGUI=0\n");

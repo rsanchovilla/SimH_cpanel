@@ -46,7 +46,7 @@ extern uint32 surface_rgb_color_alpha(uint32 r, uint32 g, uint32 b, uint32 alpha
 extern uint32 * get_surface(int *xp, int *yp); // return GUI surface (and size) to draw pixels on
 
 extern void cpvid_poll(void);                           // scan GUI and update cpvid struct
-extern int  cpvid_sync(int);                            // send surface rectable to GUI window
+extern void cpvid_sync(void);                           // send surface rectable to GUI window
 extern int  cpvid_checkredraw(void);                    // check if refresh in progress
 extern int  cpvid_init(const char *, int, int, void *); // create and open GUI window
 extern void cpvid_shutdown(void);                       // close GUI window

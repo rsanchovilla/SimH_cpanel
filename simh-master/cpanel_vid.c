@@ -206,15 +206,8 @@ int cpvid_checkredraw(void)
 }
 
 // do the refresh
-// return 0 if a refresh is not done (because already one is in progress)
-// return 1 if a refresh event is sent to SDL 
-int cpvid_sync(int checkredraw) 
+void cpvid_sync(void) 
 {
-    if (checkredraw) {
-        // check refresh in progress
-        if (cpvid_checkredraw()==0) return 0;
-    }
-
     // these are standard call for SDL. vid_draw malloc and memcpy all the surface data, 
     // refresh copies all the data to sdl_texture. 
     // 
@@ -227,7 +220,6 @@ int cpvid_sync(int checkredraw)
     // down image using antialiasing for a nice control panel looking
 
     vid_refresh_ex(surface, surface_scale);
-    return 1; // redraw done
 }
 
 

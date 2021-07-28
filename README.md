@@ -11,6 +11,25 @@ other devices: tapes, card readers, disk, etc.
 i7000 work is based on Richard Cornwell own's SimH fork, and is implemented using SimH own SDL based modules. 
 i701, i650 and NORC work is based on my own SimH simulators
 
+<table>
+<thead>
+<tr>
+<th>IBM 701</th>
+<th>IBM 650</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+![IBM 701 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701_animated.gif)
+</td>
+<td>
+![IBM 650 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650_animate.gif)
+</td>
+</tr>
+</tbody>
+</table>
+
 Currently supports visuals emulation for:
 
 * IBM 701 Electronic Data Processing Machine (NEW JUL/2021)
@@ -54,7 +73,7 @@ Hot keys are available when GUI window has the focus:
 * Control E -> Halt
 * Control T -> Toggles mark on clickable areas
 * Control Y -> Toggles size of GUI (half size <-> full size)
-* **+** (plus) and **-** (minus) keys -> Zoom In/Zoom Out
+* **+** (plus) and **-** (minus) keys -> Zoom In/Zoom Out (also Control + and Control -)
 * Control I -> Toggle info panel 
 * Control F -> Fast mode: while pressed, accelerates cpu to max speed
 * Mouse:
