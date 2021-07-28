@@ -22,6 +22,7 @@ i701, i650 and NORC work is based on my own SimH simulators
 <tr>
 <td>
 ![IBM 701 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701_animated.gif)
+<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701_animated.gif" alt="IBM701" title="IBM 701" /></p>
 </td>
 <td>
 ![IBM 650 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650_animate.gif)
