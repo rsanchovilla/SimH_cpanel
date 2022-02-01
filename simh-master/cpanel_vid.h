@@ -29,27 +29,52 @@
 
 */
 
-struct cpvidrec {                             
-    int mouse_b1;                           // =1 if mouse button 1 is being pressed
-    int X, Y;                               // mouse position on GUI Panel Window (0,0 is top left corner) of pressed button
-    char last_char;                         // last char pressed (ascii value). Set when key released. Never cleared (overwritten with next key pressed)
-    uint32 kev_key;                         /* SDL key sym */
-    uint32 kev_state;                       /* SDL key state change */
-    int    kev_modifier;                    // bit0=shift pressed, bit1=cntrl pressed
+struct cpinputrec {                             
+    struct {
+        int ncp;                                // index in cpvid that signals the control panel who has the focus for mouse input
+        int b1;                                 // =1 if mouse button 1 is being pressed
+        int X, Y;                               // mouse position on screen coordinates on current vptr GUI Window (0,0 is top left corner) of pressed button
+        int drag_flag;                          // 1-> drag in progresss, 2=drag ended (b1 released)
+    } mouse; 
+    struct {
+        int  ncp;                               // index in cpvid that signals the control panel who has the focus for keyboard
+    } keyb;
+    struct {
+        int ncp;                                // index in cpvid that signals the control panel who got the file drag and dropped
+    } DropFile; 
 };
+extern struct cpinputrec cpinput; 
 
-extern struct cpvidrec cpvid;   
+#define MAX_CPVID_WINDOWS   6                            // max number of cpanel windows 
+#define MAX_CPVID_KEYBUF  128                            // size of keyboard buffer (ascii chars)
 
+struct cpvidrec {
+    char short_name[32];                                // short name of the cpanel, to be used on SCP commands set cpanel name ...
+    char long_name[128];                                // long name of the cpanel, as defined in definiton file .ini with tag ControlPanelName=
+    int xpixels, ypixels;                               // size of cpanel (when created at 100% scale)
+    int InitialScale;                                   // initial scale 10..200 to be used when window is created
+    int bTextInput;                                     // if=0, window scales with +/-/^+/^-/^Y key, does not trasnlate natinal char to ascii. If =1, scales only eith ^+/^- but translates national keyboard
+    uint32 *surface;                                    // control panel pixels array. This is the whole 100% scale panel image bitmat
+    rectlist RectList;                                  // rectangle list: indicate rectangles in pixels array to update on screen at given scale    
+    int keyb_buf[MAX_CPVID_KEYBUF];                     // keyboard buffer of ascii values/scancodes for non-ascii keys typed (if bit30 (1<<30) set then bits 29..0 contains the scancode
+    int keyb_buf_len;                                   // number of keys in buffer
+    VID_DISPLAY * vptr_cp;                              // pointer to cpanel window for sim_video. Note that xpixels, ypixels and scale values are mirrored in vptr->vid_width, vid_heigh, scale
+};
+extern struct cpvidrec cpvid[MAX_CPVID_WINDOWS];        // array of cpanels
+extern int             cpvid_count;                     // number of entries in cpvid
+
+extern uint32 * get_surface(int ncp, int *xp, int *yp); // return GUI surface (and size) to draw pixels on for control panel vwindow cpvid[ncp]
 extern int get_surface_rgb_color(uint32 color, int *r_Color, int *g_Color, int *b_Color); // decompose a surface uint32 to its rr,gg,bb components. return alpha channel
 extern uint32 surface_rgb_color(uint32 r, uint32 g, uint32 b);  // return surface pixel with r g b color. r,g,b are 8bit! 
 extern uint32 surface_rgb_color_alpha(uint32 r, uint32 g, uint32 b, uint32 alpha); 
-extern uint32 * get_surface(int *xp, int *yp); // return GUI surface (and size) to draw pixels on
 
-extern void cpvid_poll(void);                           // scan GUI and update cpvid struct
+extern void cpvid_poll(void);                           // scan GUI and update cpinput struct
 extern void cpvid_sync(void);                           // send surface rectable to GUI window
 extern int  cpvid_checkredraw(void);                    // check if refresh in progress
-extern int  cpvid_init(const char *, int, int, void *); // create and open GUI window
-extern void cpvid_shutdown(void);                       // close GUI window
+extern int  cpvid_init(int ncp, const char *, int, int, void *); // open GUI window for given cpanel title, width and height
+extern void cpvid_close(int ncp);                      // close GUI window of given cpanel name
+extern char cpvid_getkey(int ncp);
+extern int  find_cpvid_by_vptr(VID_DISPLAY * ); 
 
 extern uint32 * read_png_file(char* file_name, int * WW, int * HH);
                                                     

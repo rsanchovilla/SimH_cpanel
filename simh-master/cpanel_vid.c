@@ -36,11 +36,26 @@
 #include "png.h"
 #include "cpanel_vid.h"
 
+#define CP_REFRESH      0x00000002                    // refresh events
+extern DEVICE cp_dev;                                 /* control panel device */
 
-struct cpvidrec cpvid;   
-int xpixels, ypixels;
-uint32 *surface = NULL;       // main control panel surface. This is the whole 100% scale panel
-uint32 *surface_scale = NULL; // control panel surface anti-aliased to current scale. 
+struct cpinputrec cpinput;                            // data for cpanel windows. Applies to all windows
+struct cpvidrec cpvid[MAX_CPVID_WINDOWS] = {0};   
+int cpvid_count = -1;                                 // number of entries in cpvid. -1 -> not initialized
+int DropFile_ncp = -1;                                // entry in cpvid that got the file droped
+
+// initialize cpvid array. Called from cpvid_init or cp_attach, wich happedns first
+void init_array_cpvid(void) 
+{
+    int ncp; 
+
+    if (cpvid_count >= 0) return; // already initialized
+    memset(cpvid, 0, sizeof(cpvid));
+    for (ncp=0; ncp<MAX_CPVID_WINDOWS; ncp++) {
+        cpvid[ncp].InitialScale=100; // default scale=100%
+    }
+    cpvid_count=0; // mark as initialized
+}
 
 // decompose a surface uint32 to its rr,gg,bb components. return alpha channel
 int get_surface_rgb_color(uint32 color, int *r_Color, int *g_Color, int *b_Color)
@@ -84,103 +99,81 @@ uint32 surface_rgb_color_alpha(uint32 r, uint32 g, uint32 b, uint32 alpha)  /* r
     return color;
 }
 
-
-
-uint32 * get_surface(int *xp, int *yp) 
+uint32 * get_surface(int ncp, int *xp, int *yp) 
 {
     // return static file-scope surface pointer for direct manipulation outside this module
     // return static xpixels,ypixels (the surface size in pixels) as wx,wy param 
     // handle with care, do not go outside the surface
-    *xp = xpixels; 
-    *yp = ypixels; 
-    return (void *)surface;
+    if (ncp >= MAX_CPVID_WINDOWS) return NULL; //safety
+    *xp = cpvid[ncp].xpixels; 
+    *yp = cpvid[ncp].ypixels; 
+    return cpvid[ncp].surface;
 }
 
-void key_to_ascii (SIM_KEY_EVENT *kev)
+// find cpvid entry that matches vptr
+// return index in cpvid array, -1 if not found
+int find_cpvid_by_vptr(VID_DISPLAY *vptr_cp)
 {
-    static t_bool k_ctrl, k_shift, k_alt, k_win;
-    int c=0; 
+    int ncp; 
 
-#define MODKEY(L, R, mod)   \
-    case L: case R: mod = (kev->state != SIM_KEYPRESS_UP); break;
-#define MODIFIER_KEYS       \
-    MODKEY(SIM_KEY_ALT_L,    SIM_KEY_ALT_R,      k_alt)     \
-    MODKEY(SIM_KEY_CTRL_L,   SIM_KEY_CTRL_R,     k_ctrl)    \
-    MODKEY(SIM_KEY_SHIFT_L,  SIM_KEY_SHIFT_R,    k_shift)   \
-    MODKEY(SIM_KEY_WIN_L,    SIM_KEY_WIN_R,      k_win)
-    
-    switch (kev->key) {
-        MODIFIER_KEYS
-        case SIM_KEY_0: case SIM_KEY_1: case SIM_KEY_2: case SIM_KEY_3: case SIM_KEY_4:
-        case SIM_KEY_5: case SIM_KEY_6: case SIM_KEY_7: case SIM_KEY_8: case SIM_KEY_9:
-            if (kev->state != SIM_KEYPRESS_UP)
-                cpvid.last_char = (char)('0' + (kev->key - SIM_KEY_0)); 
-            break;
-        case SIM_KEY_A: case SIM_KEY_B: case SIM_KEY_C: case SIM_KEY_D: case SIM_KEY_E:
-        case SIM_KEY_F: case SIM_KEY_G: case SIM_KEY_H: case SIM_KEY_I: case SIM_KEY_J:
-        case SIM_KEY_K: case SIM_KEY_L: case SIM_KEY_M: case SIM_KEY_N: case SIM_KEY_O:
-        case SIM_KEY_P: case SIM_KEY_Q: case SIM_KEY_R: case SIM_KEY_S: case SIM_KEY_T:
-        case SIM_KEY_U: case SIM_KEY_V: case SIM_KEY_W: case SIM_KEY_X: case SIM_KEY_Y:
-        case SIM_KEY_Z: 
-            if (kev->state != SIM_KEYPRESS_UP)
-                cpvid.last_char = (char)((kev->key - SIM_KEY_A) + 
-                                        (k_ctrl ? 1 : (k_shift ? 'A' : 'a')));
-            break;
-        case SIM_KEY_MINUS          : c='-'; break;
-        case SIM_KEY_EQUALS         : c='='; break;
-        case SIM_KEY_LEFT_BRACKET   : c='['; break;
-        case SIM_KEY_RIGHT_BRACKET  : c=']'; break;
-        case SIM_KEY_SEMICOLON      : c=';'; break;
-        case SIM_KEY_SINGLE_QUOTE   : c=0x27; break;
-        case SIM_KEY_BACKSLASH      : c=0x5c; break;
-        case SIM_KEY_COMMA          : c=','; break;
-        case SIM_KEY_PERIOD         : c='.'; break;
-        case SIM_KEY_SLASH          : c='/'; break;
-        case SIM_KEY_KP_ADD         : c='+'; break;
-        case SIM_KEY_KP_SUBTRACT    : c='-'; break;
-        case SIM_KEY_KP_ENTER       : c=13; break;
-        case SIM_KEY_KP_MULTIPLY    : c='*'; break;
-        case SIM_KEY_KP_DIVIDE      : c='/'; break;
-        case SIM_KEY_ESC            : c=27; break;
-        case SIM_KEY_BACKSPACE      : c=127; break;
-        case SIM_KEY_TAB            : c=9; break;
-        case SIM_KEY_ENTER          : c=13; break;
-        case SIM_KEY_SPACE          : c=32; break;
+    for (ncp=0; ncp<cpvid_count; ncp++) {
+        if (cpvid[ncp].vptr_cp == vptr_cp) {
+            return ncp; 
+            break; 
+        }
     }
-    if (kev->state != SIM_KEYPRESS_UP) {
-        if (c>0) cpvid.last_char = (char)c; // last_char set on key release
+    return -1; 
+}
+
+// create cpanel window at give cpvid entry. If short_name is empty, "MAIN" is used as default name
+// initialize cpvid entry, alloc surface 
+int cpvid_init(int ncp, const char *title, int xp, int yp, void *dptr)
+{
+    t_stat r; 
+    VID_DISPLAY *vptr_cp; 
+
+    // init cpvid if needed    
+    if (cpvid_count < 0) init_array_cpvid(); 
+    if (ncp<0) return -1; 
+    cpvid[ncp].xpixels = xp;
+    cpvid[ncp].ypixels = yp;
+    // cpvid[ncp].bTextInput should already be set previous to call to cpvid_init
+    // cpvid[ncp].short_name should already be set previous to call to cpvid_init
+    // Scale already set to 100 on init_array_cpvid, can have been changed previously
+    strncpy(cpvid[ncp].long_name, title, sizeof(cpvid[ncp].long_name));
+    // init to zero the others record entries just in case we are reopening this cpanel
+    memset(&cpvid[ncp].RectList, 0, sizeof(cpvid[ncp].RectList)); 
+    // create the pixel array (called in cpanel surface), the bitmap contents of windo
+    cpvid[ncp].surface = (uint32 *)malloc(xp*yp*sizeof(*cpvid[ncp].surface));
+    if (!cpvid[ncp].surface) return -1;
+    cpvid[ncp].keyb_buf_len=0; 
+    // create the window on GUI
+    r = vid_open_window (&vptr_cp, (DEVICE *)dptr, title, xp, yp, 
+                         SIM_VID_FLAG_SCALE_PLUSMINUS | 
+                         ((cpvid[ncp].bTextInput==1) ? SIM_VID_FLAG_ALLOW_TEXTINPUT : 0) |
+                         ((cpvid[ncp].bTextInput==2) ? SIM_VID_FLAG_ALLOW_ALPHAINPUT : 0) |
+                         SIM_VID_FLAG_ALLOW_TOOLTIP   | 
+                         SIM_VID_FLAG_ALLOW_DRAG      );
+    if (r) {
+      fprintf(stderr, "vid_open_window error %d\n", r);
+      return -1; 
     }
-    cpvid.kev_key = kev->key;       // key being pressed/released
-    cpvid.kev_state = kev->state;   // key state SIM_KEYPRESS_DOWN, SIM_KEYPRESS_UP, SIM_KEYPRESS_REPEAT    2
-    cpvid.kev_modifier = (k_ctrl ? 2:0) + (k_shift ? 1:0); 
-
+    cpvid[ncp].vptr_cp = vptr_cp; 
+    return ncp;
 }
 
-int cpvid_init(const char *name, int xp, int yp, void *dptr)
+// close cpanle window of given short_name. If ncp=-1, then close all windows
+void cpvid_close(int ncp)
 {
-    int ret;
-    
-    xpixels = xp;
-    ypixels = yp;
-    surface = (uint32 *)realloc (surface, xpixels*ypixels*sizeof(*surface));
-    surface_scale = (uint32 *)malloc (xpixels*ypixels*sizeof(*surface));
-    if (!surface) return 0;
-    ret = (0 == vid_open ((DEVICE *)dptr, name, xp, yp, 0));
-    return ret;
-}
-
-void cpvid_shutdown(void)
-{
-
-    extern SDL_Window *vid_window;                                 /* window handle */
-
-    if (vid_active==0) return; 
-    vid_close();
-    while (vid_window) SDL_Delay (20);
-    if (surface) free(surface);
-    if (surface_scale) free(surface_scale);
-    surface = NULL;
-    surface_scale = NULL;
+    if (vid_active==0) return; // video system not active
+    if (ncp<0) {
+        for (ncp=0; ncp<cpvid_count; ncp++) cpvid_close(ncp); 
+    } else {
+       if (cpvid[ncp].vptr_cp) vid_close_window(cpvid[ncp].vptr_cp);
+       if (cpvid[ncp].surface) free(cpvid[ncp].surface);
+       cpvid[ncp].surface = NULL;
+       cpvid[ncp].vptr_cp = NULL;
+    }
 }
 
 // check refresh 
@@ -191,7 +184,10 @@ int cpvid_checkredraw(void)
     SDL_Event events[20];
     int i, count, ndraw;
 
-    if (vid_refresh_in_progress) return 0;
+    if (vid_refresh_in_progress) {
+       sim_debug (CP_REFRESH, &cp_dev, "GUI Refresh skipped because vid_refresh_in_progress\n");
+       return 0;
+    }
     // check if DRAW/REDRAW events in SQL queue; if so do not redraw
     count = SDL_PeepEvents(&events[0], 20, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
     ndraw=0;
@@ -201,7 +197,9 @@ int cpvid_checkredraw(void)
         ndraw++;
     }
     // if draw pendings, then exit without adding an additional redraw event
-    if ((ndraw > 0) || (count > 18)) return 0; 
+    if ((ndraw > 0) || (count > 18)) {
+        return 0; 
+    }
     return 1; 
 }
 
@@ -215,31 +213,95 @@ void cpvid_sync(void)
     // vid_refresh ();
     //
     // If cpanel is big (say 3000x1000 pixels), surface will have >10MB. To avoid these big
-    // malloc and memcopy, a new surface list refresh is used, to update only changed surface zones
+    // malloc and memcopy, a new surface refresh list is used, to update only changed surface zones
     // a list of changed rectangles is provided in RectList structure- Also this allows to scale
     // down image using antialiasing for a nice control panel looking
 
-    vid_refresh_ex(surface, surface_scale);
+    uint32 * surface;  
+    void   * RectList; 
+    VID_DISPLAY *vptr_cp;
+    VID_DISPLAY *vptr_cp_last_refreshed = NULL;
+    int ncp; 
+
+    // call refresh for each cpanel window in cpvid array
+    for (ncp=0; ncp<cpvid_count; ncp++) {
+        if (cpvid[ncp].RectList.Count==0) continue; // nothing to refresh
+        vptr_cp = cpvid[ncp].vptr_cp; 
+        if (vptr_cp == NULL) continue; 
+        surface  = cpvid[ncp].surface;  
+        RectList = &cpvid[ncp].RectList; 
+        vid_refresh_ex(vptr_cp_last_refreshed=vptr_cp, surface, RectList); 
+    }
+    // indicates the end of updates on gui. Can refresh again
+    if (vptr_cp_last_refreshed) vid_refresh_ex(vptr_cp_last_refreshed, (void *) 1, NULL); 
+   
+
 }
 
-
+// fills cpinput struct with current input states
 void cpvid_poll(void)
 {
     SIM_MOUSE_EVENT mev;
     SIM_KEY_EVENT kev;
+    int n,ncp,key;
 
     if (SCPE_OK == vid_poll_mouse (&mev)) {
-        
-        cpvid.mouse_b1 = mev.b1_state;
-        cpvid.X = mev.x_pos; // position of mouse click/release event
-        cpvid.Y = mev.y_pos; 
+        // mouse coordinates are relative to window, and as if scale is 100%
+        // x,y coord are relative to surface size, and vid_wifth, vid_height. Not relative to the
+        // current scale of the window. The scale of window is transparent
+        cpinput.mouse.b1 = mev.b1_state;
+        cpinput.mouse.X = mev.x_pos; // position of mouse click/release event
+        cpinput.mouse.Y = mev.y_pos; 
+        cpinput.mouse.drag_flag=mev.drag_flag; 
+        cpinput.mouse.ncp=find_cpvid_by_vptr(mev.vptr); 
     }
-    if (SCPE_OK == vid_poll_kb (&kev)) {
-        key_to_ascii (&kev);
+    // get the ncp index for LeyPress/LastKeyPress
+    if (vid_keyb.vptr) cpinput.keyb.ncp=cpinput.keyb.ncp=find_cpvid_by_vptr(vid_keyb.vptr); 
+    // poll textinput keys
+    while (vid_poll_kb (&kev) == SCPE_OK) {
+        // get char in sim_video key event queue, and convert to ascii
+        ncp=cpinput.keyb.ncp=find_cpvid_by_vptr(kev.vptr); 
+        if (ncp>=0) {
+            key=kev.key; 
+            // now add key to cpvid input buffer
+            n=cpvid[ncp].keyb_buf_len; 
+            if (n>=MAX_CPVID_KEYBUF) {
+               // keyboard buffer full, do not add char to buffer
+            } else if (key) {
+               // add key pressed to buffer (can be ascii valur or scancode depending on bit 30)
+               cpvid[ncp].keyb_buf[n]=key; 
+               cpvid[ncp].keyb_buf_len++;
+            }
+        }
     }
-
+    if (DropFile_FileName[0]) {
+        cpinput.DropFile.ncp=find_cpvid_by_vptr(DropFile_vptr); 
+    }
 }
 
+// return next char in input buffer for ncp window
+// if no char return 0
+char cpvid_getkey(int ncp)
+{
+    int n,i; 
+    char c; 
+
+    if (ncp < 0) return 0;
+    n=cpvid[ncp].keyb_buf_len;
+    if (n==0) return 0; 
+    c=cpvid[ncp].keyb_buf[0]; 
+    if (n==1) {
+        // keyb buffer only had one char, buffer is empty
+        cpvid[ncp].keyb_buf_len=0;
+    } else {
+        // remove char from buffer
+        for (i=0; i<n-1; i++) {
+            cpvid[ncp].keyb_buf[i]=cpvid[ncp].keyb_buf[i+1];
+        }
+        cpvid[ncp].keyb_buf_len--;
+    }
+    return c; 
+}
 
 /*
 PNG load routine
@@ -390,3 +452,4 @@ uint32 * read_png_file(char* file_name, int * WW, int * HH)
 #endif
 
   
+

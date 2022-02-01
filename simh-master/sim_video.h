@@ -162,6 +162,13 @@ extern "C" {
 
 #define SIM_KEY_UNKNOWN        200
 
+#define SIM_ALPHA_NONE         1
+#define SIM_ALPHA_BLEND        2
+#define SIM_ALPHA_ADD          3
+#define SIM_ALPHA_MOD          4
+
+typedef struct VID_DISPLAY VID_DISPLAY;
+
 struct mouse_event {
     int32 x_rel;                                          /* X axis relative motion */
     int32 y_rel;                                          /* Y axis relative motion */
@@ -170,11 +177,18 @@ struct mouse_event {
     t_bool b1_state;                                      /* state of button 1 */
     t_bool b2_state;                                      /* state of button 2 */
     t_bool b3_state;                                      /* state of button 3 */
+    DEVICE *dev;                                          /* which device */
+    VID_DISPLAY *vptr;                                    /* which display */
+#if defined(CPANEL)
+    int drag_flag;                                        // 1-> drag in progresss, 2=drag ended (b1 released)
+#endif
     };
 
 struct key_event {
     uint32 key;                                           /* key sym */
     uint32 state;                                         /* key state change */
+    DEVICE *dev;                                          /* which device */
+    VID_DISPLAY *vptr;                                    /* which display */
     };
 
 typedef struct mouse_event SIM_MOUSE_EVENT;
@@ -196,16 +210,31 @@ void vid_draw (int32 x, int32 y, int32 w, int32 h, uint32 *buf);
 void vid_beep (void);
 void vid_refresh (void);
 const char *vid_version (void);
-const char *vid_key_name (int32 key);
+const char *vid_key_name (uint32 key);
 t_stat vid_set_cursor (t_bool visible, uint32 width, uint32 height, uint8 *data, uint8 *mask, uint32 hot_x, uint32 hot_y);
 t_stat vid_set_release_key (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
 t_stat vid_show_release_key (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
 t_stat vid_show_video (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
 t_stat vid_show (FILE* st, DEVICE *dptr,  UNIT* uptr, int32 val, CONST char* desc);
 t_stat vid_screenshot (const char *filename);
+t_bool vid_is_fullscreen (void);
+t_stat vid_set_fullscreen (t_bool flag);
 
-extern t_bool vid_active;
+extern int vid_active;
 void vid_set_cursor_position (int32 x, int32 y);        /* cursor position (set by calling code) */
+
+t_stat vid_open_window (VID_DISPLAY **vptr, DEVICE *dptr, const char *title, uint32 width, uint32 height, int flags);
+t_stat vid_close_window (VID_DISPLAY *vptr);
+t_stat vid_close_all (void);
+uint32 vid_map_rgb_window (VID_DISPLAY *vptr, uint8 r, uint8 g, uint8 b);
+uint32 vid_map_rgba_window (VID_DISPLAY *vptr, uint8 r, uint8 g, uint8 b, uint8 a);
+void vid_draw_window (VID_DISPLAY *vptr, int32 x, int32 y, int32 w, int32 h, uint32 *buf);
+void vid_refresh_window (VID_DISPLAY *vptr);
+t_stat vid_set_cursor_window (VID_DISPLAY *vptr, t_bool visible, uint32 width, uint32 height, uint8 *data, uint8 *mask, uint32 hot_x, uint32 hot_y);
+t_bool vid_is_fullscreen_window (VID_DISPLAY *vptr);
+t_stat vid_set_fullscreen_window (VID_DISPLAY *vptr, t_bool flag);
+void vid_set_cursor_position_window (VID_DISPLAY *vptr, int32 x, int32 y);        /* cursor position (set by calling code) */
+t_stat vid_set_alpha_mode (VID_DISPLAY *vptr, int mode);
 
 /* A device simulator can optionally set the vid_display_kb_event_process
  * routine pointer to the address of a routine.
@@ -227,31 +256,47 @@ extern int (*vid_display_kb_event_process)(SIM_KEY_EVENT *kev);
 #define SIM_VID_DBG_VIDEO   0x80000000
 
 #if defined(CPANEL)
+#define SIM_VID_FLAG_SCALE_PLUSMINUS       (1 << 8)      // allow hotkeys +,-, ^+, ^-, ^Y to control scale of GUI window. If TEXTINPUT present, allow only ^+ ^-  to control scale
+#define SIM_VID_FLAG_ALLOW_TEXTINPUT       (1 << 9)      // Allow text to be entered in window (but inhibits + - ^Y to scale)
+#define SIM_VID_FLAG_ALLOW_ALPHAINPUT      (1 << 10)     // Allow text to be entered in window (but does NOT inhibits + - ^Y to scale)
+#define SIM_VID_FLAG_FULL_TEXTURE_REDRAW   (1 << 11)     // request to update full texture from surface
+#define SIM_VID_FLAG_ALLOW_TOOLTIP         (1 << 12)     // allow tooltip on vptr window (made visible by right-clicking on GUI window)
+#define SIM_VID_FLAG_ALLOW_DRAG            (1 << 13)     // allow drag vptr window to move it (move mouse while left-button pressed)
 
-extern t_stat vid_SetWindowSizeAndPos (int Mode, int x, int y); // Mode=1 -> set pos, =2 -> set size, =3 -> move relative (eg x=-3, y=+4 -> move window 3 pixels left, 4 down)
-extern void vid_set_icon(void);
-extern void vid_set_title(char * title);
+extern t_stat vid_SetWindowSizeAndPos (VID_DISPLAY * vptr, int Mode, int x, int y); 
+extern int    vid_GetWindowSizeAndPos (VID_DISPLAY * vptr, char Mode); // Mode='X' or 'Y' return X/Y pos of window in screen coord. Mode='S' return scale 10..200
+extern void vid_set_icon(VID_DISPLAY * vptr);
+extern void vid_set_title(VID_DISPLAY * vptr, char * title);
 extern int icon_rgb_defined;
-extern void vid_set_system_cursor (int nCursor); // nCursor=0 -> slashed circle, =1 -> set arrow cursor, =2 -> hand cursor, =3 -> Four pointed arrow pointing north, south, east, and west
-extern void vid_refresh_ex (uint32 * surf, uint32 * surf_scale);
+extern void vid_set_system_cursor (int nCursor); // nCursor=0 -> slashed circle, =1 -> set arrow cursor, =2 -> hand cursor, =3 -> Four pointed arrow pointing north, south, east, and west, =4 -> wait
+extern void vid_refresh_ex (VID_DISPLAY *vptr, uint32 *pixels, void * RectList);
 
-#define RECTLIST_MAX     150
+#define RECTLIST_MAX               300
+#define RECTLIST_FLAG_NOSCALE        1
 typedef struct {
-    int MaxCount;                // table size
-    int Count;                   // Count of rectamgles in list. -1 if table full, 
-    int x[RECTLIST_MAX];         // rectangle to paint
+    int Count;                   // Count of rectangles in list. -1 if table full, and should repdraw the whole surface
+    int x[RECTLIST_MAX];         // rectangle for surface to paint to texture aplying scale
     int y[RECTLIST_MAX];
     int w[RECTLIST_MAX];
     int h[RECTLIST_MAX];
-    int Scale;                   // at this scale (100 = same size, 50 = 50% size, 200=double size)
+    int flags[RECTLIST_MAX];
 } rectlist;
-rectlist RectList;
-extern int vid_frames_count;
 extern int vid_refresh_in_progress; 
 
+typedef struct {
+    int Cntrl; // 1=control key is pressed right now
+    int Shift; // 1=Shift key is pressed right now
+    int KeyPress; // this key is pressed right now. 0=no key pressed. If < 256 is an ascii value. if Bit30=1 is a scan code
+    int LastKeyPress; // last value of KeyPress (but no set to zero on key release)
+    VID_DISPLAY *vptr; // windows that has focus when key was pressed
+} vidkeyb; 
+extern vidkeyb vid_keyb; 
+
+extern char DropFile_FileName[];           // filename droped in
+extern int DropFile_x_pos, DropFile_y_pos; // pos in window DropFile_vptr where file is dropped in
+extern VID_DISPLAY * DropFile_vptr;        
 
 #endif
-
 #ifdef  __cplusplus
 }
 #endif

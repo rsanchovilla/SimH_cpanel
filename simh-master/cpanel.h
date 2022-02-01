@@ -36,7 +36,6 @@
 
    GetState                                (called from xxx_cpanel.c) Get single control/control array state
    SetState                                (called from xxx_cpanel.c) Set single control/control array state
-   SetStateAutoNext                        (called from xxx_cpanel.c) Schedulle a control state change 
    GetCArrayCId                            (called from xxx_cpanel.c) Get n'th Control Id from a Control Array
 
    DoClickEvent                            (called from xxx_cpanel.c) Simulates a click event on control panel
@@ -52,11 +51,12 @@
 */
 
 #include "sim_defs.h"
-#include "sim_video.h"                                // just needed because it defines uint64
+#include "sim_video.h"                                   // just needed because it defines uint64
 #include "cpanel_vid.h"
 
 
-typedef void (*CP_CALLBACK)(void);                    // callback prototype for mouse click event/refresh 
+typedef void (*CP_CALLBACK)(void);                       // callback prototype for mouse click event/refresh 
+typedef void (*CP_CALLBACK2)(int CId, char * filename);  // callback prototype for mouse click event/refresh 
 typedef struct CP_DEF  CP_DEF;
 typedef struct CP_TYPE CP_TYPE;
 typedef struct CP_INTENSITY_COUNT CP_INTENSITY_COUNT;
@@ -73,19 +73,19 @@ struct CP_DEF {
     int                 *IdVar;                       /* addr of int var where control id named Name will be stored */
     char                *Name;                        /* control Name to locate in definition file */
     CP_CALLBACK         CallBack;                     /* control panel event callback */
-    int                 UsedByType;                   /* this control is bind if cpanel type match the given one (0=any) */
-    char                *OptName;                     /* this control is bind if OptName option defined (by DefOpt= or by SET OPTION) */
+    char                *OptName1;                    /* this control is bind if OptName option defined (by DefOpt= or by SET OPTION) */
+    char                *OptName2;                    /* ... AND this option (if defined) */
+    char                *OptName3;                    /* ... AND this option (if defined) */
 }; 
 
 struct CP_TYPE {
-    char                *Name;                        /* control panel type name as stated in definition */
-    int                 Id;                           /* and its corresponding integer id */
     CP_DEF              *cp_def;                      /* and its corresponfing control vars definition */
-    CP_CALLBACK         Refresh_CallBack;             /* refresh callback */
     CP_CALLBACK         Init_CallBack;                /* initialization after definition file loading and processing */
-    CP_CALLBACK         Reset_CallBack;               /* called on reset control panel device */
-    CP_CALLBACK         TickIntensity_CallBack;       /* called on ControlPanel_Refresh_CPU_Running */
     CP_CALLBACK         Done_CallBack;                /* called on set cpanel off */
+    CP_CALLBACK         Reset_CallBack;               /* called on reset control panel device */
+    CP_CALLBACK         Refresh_CallBack;             /* refresh callback */
+    CP_CALLBACK         TickIntensity_CallBack;       /* called on ControlPanel_Refresh_CPU_Running */
+    CP_CALLBACK2        DropFile_CallBack;            /* called when a file is droped on control */
 };
 
 typedef struct CP_CLICK {                             // data of mouse clicked control on control panel
@@ -96,7 +96,6 @@ typedef struct CP_CLICK {                             // data of mouse clicked c
 } CP_CLICK;                                        
 
 extern CP_CLICK CP_Click;                             // R/O. global variable with clicked control data 
-extern char cpanel_default_filename[128];             // R/W. default control panel file name (without path). To be set by SET CPU scp command
 extern int cpanel_ControlRedrawNeeded;                // R/W. if set to 1 -> asure that next SetState call will update the control on GUI screen even if state set is same that the control already had
 extern int cpanel_State_has_changed;                  // R/O. SetState call sets this to 0 or 1. 1=the state set was not the same the control had
 extern int cpanel_on;                                 // R/O. Control Panel GUI window. indicates if window created. 
@@ -113,7 +112,15 @@ extern int Refresh_tnow;                              // R/O. value of sim_os_ms
 extern t_uint64 SetState(int Id, t_uint64 State);
 extern t_uint64 GetState(int Id);
 extern int GetCArrayCId(int CArrayId, int n);
-extern int SetStateAutoNext(int Id, int NextState, uint32 Duration_msec);
+// get info on given control
+#define CINFO_X          1
+#define CINFO_Y          2
+#define CINFO_W          3
+#define CINFO_H          4
+#define CINFO_NSTATES    5
+#define CINFO_NITEMS     6
+#define CINFO_NCP        7
+extern int GetControlInfo(int Id, int mode); 
 // manage dynamic states
 extern uint32 * GetControlSurface(int CId, int State, int * ww, int * hh);
 extern int CopyControlImage(int FromCId, int FromState, int x0, int y0, int w, int h, int ToCId, int ToState, int x1, int y1);
@@ -130,8 +137,10 @@ extern int SetStateWithIntensity(int Id, t_uint64 n);
 // manage options
 extern int IsOption(char * Name); 
 extern char * IsOptionParam; 
+extern void RemoveOption(char * Name);
 // others
-extern int cpanel_scale(int scale); // get/set control panel scale
+extern int cpanel_scale(int ncp, int Scale); // get/set control panel scale
+extern int cpanel_visible(int ncp); // return 1 if control panel has its window open
 extern int DoClickEvent(int CId); 
 
 
