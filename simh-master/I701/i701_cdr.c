@@ -25,9 +25,9 @@
 #include "i701_defs.h"
 #include "sim_card.h"
 
-#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | MODE_026 | MODE_LOWER
+#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | MODE_026 
 
-#define OPTION_SKIPCOLS18         (1 << (UNIT_V_UF + 5))
+#define OPTION_SKIPCOLS18         (1 << (UNIT_V_UF + 8))
 
 /* std devices. data structures
 
@@ -278,7 +278,7 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
     } else if (cmd==OP_COPY) {
         if (cdr_CardImage_index < 0) {
             sim_debug(DEBUG_CMD, &cdr_dev, "COPY issued without previous READ\n");
-            return STOP_COPYCHECK;
+            return STOP_COPYCHECK; 
         }
         if (cdr_CardImage_index == 25) {
             sim_debug(DEBUG_CMD, &cdr_dev, "Signal EOF (end of card deck)\n");
@@ -365,9 +365,19 @@ t_stat cdr_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 
+    if (((sim_switches & SWMASK ('S')) != 0) && (uptr->flags & UNIT_ATT)) { 
+        // attach -s -> add cards to current deck
+        // just update deck count
+        r = sim_card_attach(uptr, file);
+        if (SCPE_BARE_STATUS(r) != SCPE_OK) return r;
+        nCardInReadHopper = nCardInReadHopperMax = sim_card_input_hopper_count(uptr);
+        nCardInReadStacker = sim_card_output_hopper_count(uptr);
+        return SCPE_OK; 
+    }
+
     if (uptr->flags & UNIT_ATT)         // remove current deck in read hopper before attaching
        sim_card_detach(uptr);           // the new one
-
+    
     r = sim_card_attach(uptr, file);
     if (SCPE_BARE_STATUS(r) != SCPE_OK) return r;
     uptr->u5 = 0;
@@ -378,7 +388,7 @@ t_stat cdr_attach(UNIT * uptr, CONST char *file)
     ReadStakerLast = 0;
     memset(ReadStaker, 0, sizeof(ReadStaker));
 
-    // clear read card take hopper buffer 
+    // adjust size of deck
     nCardInReadHopper = nCardInReadHopperMax = sim_card_input_hopper_count(uptr);
     nCardInReadStacker = sim_card_output_hopper_count(uptr);
     tm0CardInReadStacker = 0; // no animation

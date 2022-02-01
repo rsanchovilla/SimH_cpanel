@@ -123,6 +123,7 @@ typedef struct {
     int TapeCheck;                          // signal tape error
 
     int justattached;                       // 1=just attached. Set to 1 by attach
+    int justdetached;                       // 1=just detached. Set to 1 by detach
     int numrw;                              // number of read/write cmds exec on tape on attached reel
     int numrec;                             // record number where the tape is positioned on (+1 on r/w, -1 on backspace)
     int recsize;                            // on rewind, holds the u3 value before rewinding, record size (inches x1000), <0 if reading backwards

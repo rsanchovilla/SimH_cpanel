@@ -78,7 +78,7 @@ MTAB                mt_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",              &sim_tape_set_fmt, &sim_tape_show_fmt, NULL, 
                                                                                 "Set/Display tape format (SIMH, E11, TPC, P7B)"},
     {MTAB_XTD | MTAB_VUN, 0, "LENGTH", "LENGTH",              &mt_set_len, &mt_show_len, NULL,
-                                                                                "Set tape medium length (50 to 10000 foot)" },
+                                                                                "Set tape medium length (50 to 10000 feet)" },
     {MTAB_XTD | MTAB_VUN, 0, NULL,     "REWIND",              &mt_rew, NULL, NULL, "Rewind tape"},
     {0}
 };
@@ -416,7 +416,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 fast)
         }
         cmd_usec_duration = 50 * 1000;         // duration of command execution (in microsecond)
         cmd_usec_ready    = 50 * 1000;         // time in usec for tape to be ready for a new command
-        mt_info[unit].cmd_tm0=0;               // signal no tape animation rfor regular /w 
+        mt_info[unit].cmd_tm0=0;               // signal no tape animation for regular /w 
     } else if (cmd==OP_WRITE_EF) {
         // prepare for write an end of file mark
         // if tape in read status, this oreation is NOOP. Next COPY will fail
@@ -637,12 +637,14 @@ t_stat mt_attach(UNIT * uptr, CONST char *file)
     uptr->u3 = 0;
     uptr->u5 = MT_RDY ;
     mt_info[unit].justattached = 1; 
+    mt_info[unit].justdetached = 0; 
     mt_info[unit].numrw = 0;
     mt_info[unit].numrec = 0;
     mt_info[unit].TapeRecord_index=-1; 
     mt_info[unit].TapeStatus = 0;
     mt_info[unit].TapeCheck = 0;
     mt_info[unit].ReadyTickCount = 0;
+    mt_info[unit].recsize = 0;
 
     // allocate a buffer for the biggest possible tape records
     if (mt_info[unit].TapeRecord_buf==NULL) {
@@ -660,9 +662,12 @@ t_stat mt_detach(UNIT * uptr)
     int                 unit = (uptr - dptr->units);
 
     if (mt_info[unit].TapeRecord_index > 0) WriteTapeRecord(uptr, 0, unit); 
+    mt_info[unit].justattached = 0; 
+    mt_info[unit].justdetached = 1; 
     mt_info[unit].TapeRecord_index=-1; 
     mt_info[unit].TapeStatus = 0;
     mt_info[unit].TapeCheck = 0;
+    mt_info[unit].recsize = uptr->u3; // save current unwind medium
     uptr->u3 = 0;
     uptr->u5 = 0;
     mt_info[unit].numrec = 0;
