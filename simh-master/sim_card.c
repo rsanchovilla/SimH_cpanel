@@ -52,6 +52,19 @@
                 Bit 5-0 of second character are lower 6 bits
                         of card.
 
+    ASCII mode recognizes some additional forms of input which allows the
+    intermixing of binary cards with text cards. 
+
+    Lines beginning with ~raw are taken as a number of 4 digit octal values
+    with represent each column of the card from 12 row down to 9 row. If there
+    is not enough octal numbers to span a full card the remainder of the 
+    card will not be punched.
+
+    Also ~eor, will generate a 7/8/9 punch card. An ~eof will gernerate a
+    6/7/9 punch card, and a ~eoi will generate a 6/7/8/9 punch.
+
+    A single line of ~ will set the EOF flag when that card is read.
+
     For autodetection of card format, there can be no parity errors.
     All undeterminate formats are treated as ASCII.
 
@@ -140,7 +153,7 @@ static const uint16          ascii_to_hol_026[128] = {
    /*   p      q      r      s      t      u      v      w */
     0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
    /*   x      y      z      {      |      }      ~    del */
-   /*                     T79     Y78   Y79     79         */
+   /*                     T79     X78   Y79     79         */
     0x604, 0x602, 0x601, 0x406, 0x806, 0x805, 0x005, 0xf000
 };
 
@@ -164,7 +177,7 @@ static const uint16          ascii_to_hol_029[128] = {
    /* T      1      2      3      4      5      6      7   */
     0x200, 0x100, 0x080, 0x040, 0x020, 0x010, 0x008, 0x004,
    /*   8      9      :      ;      <      =      >      ? */
-   /* 8      9      28     Y68    X48     68    T68     28 */
+   /* 8      9      28     Y68    X48     68    T68    T78 */
     0x002, 0x001, 0x082, 0x40A, 0x822, 0x00A, 0x20A, 0x206,
    /*   @      A      B      C      D      E      F      G */
    /*  48    X1     X2     X3     X4     X5     X6     X7  */
@@ -176,18 +189,64 @@ static const uint16          ascii_to_hol_029[128] = {
    /* Y7     Y8     Y9     T2     T3     T4     T5     T6  */
     0x404, 0x402, 0x401, 0x280, 0x240, 0x220, 0x210, 0x208,
    /*   X      Y      Z      [      \      ]      ^      _ */
-   /* T7     T8     T9     X0     T28    Y28    T78    T58 */
-    0x204, 0x202, 0x201, 0xA00, 0x282, 0x882, 0x406, 0x212,
+   /* T7     T8     T9   TY028    T28  TY038    Y78    T58 */
+    0x204, 0x202, 0x201, 0xE82, 0x282, 0xE42, 0x406, 0x212,
    /*   `      a      b      c      d      e      f      g */
-    0xf000,0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,     /* 140 - 177 */
+    0x102 ,0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,     /* 140 - 177 */
    /*   h      i      j      k      l      m      n      o */
     0xA02, 0xA01, 0xD00, 0xC80, 0xC40, 0xC20, 0xC10, 0xC08,
    /*   p      q      r      s      t      u      v      w */
     0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
    /*   x      y      z      {      |      }      ~    del */
-   /*                     Y78     YT     78    X78         */
-    0x604, 0x602, 0x601, 0x405, 0x600, 0x805, 0x806,0xf000
+   /*                      Y78    X78    X79  XTY18        */
+    0x604, 0x602, 0x601, 0x406, 0x806, 0x805, 0xF02,0xf000
 };
+
+/* Set for DEC 029 codes */
+static const uint16          ascii_to_dec_029[128] = {
+   /* Control                              */
+    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,    /*0-37*/
+   /*Control*/
+    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
+   /*Control*/
+    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
+   /*Control*/
+    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
+   /*  sp      !      "      #      $      %      &      ' */
+   /* none   Y28    78      38    Y38    T48    X      58  */
+    0x000, 0x482, 0x006, 0x042, 0x442, 0x222, 0x800, 0x012,     /* 40 - 77 */
+   /*   (      )      *      +      ,      -      .      / */
+   /* X58    Y58    Y48    X68    T38    Y      X38    T1  */
+    0x812, 0x412, 0x422, 0x80A, 0x242, 0x400, 0x842, 0x300,
+   /*   0      1      2      3      4      5      6      7 */
+   /* T      1      2      3      4      5      6      7   */
+    0x200, 0x100, 0x080, 0x040, 0x020, 0x010, 0x008, 0x004,
+   /*   8      9      :      ;      <      =      >      ? */
+   /* 8      9      28     Y68    X48     68    T68    T78 */
+    0x002, 0x001, 0x082, 0x40A, 0x822, 0x00A, 0x20A, 0x206,
+   /*   @      A      B      C      D      E      F      G */
+   /*  48    X1     X2     X3     X4     X5     X6     X7  */
+    0x022, 0x900, 0x880, 0x840, 0x820, 0x810, 0x808, 0x804,     /* 100 - 137 */
+   /*   H      I      J      K      L      M      N      O */
+   /* X8     X9     Y1     Y2     Y3     Y4     Y5     Y6  */
+    0x802, 0x801, 0x500, 0x480, 0x440, 0x420, 0x410, 0x408,
+   /*   P      Q      R      S      T      U      V      W */
+   /* Y7     Y8     Y9     T2     T3     T4     T5     T6  */
+    0x404, 0x402, 0x401, 0x280, 0x240, 0x220, 0x210, 0x208,
+   /*   X      Y      Z      [      \      ]      ^      _ */
+   /* T7     T8     T9     X28    Y78    T28    X78    T58 */
+    0x204, 0x202, 0x201, 0x882, 0x406, 0x282, 0x806, 0x212,
+   /*   `      a      b      c      d      e      f      g */
+    0x102 ,0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,     /* 140 - 177 */
+   /*   h      i      j      k      l      m      n      o */
+    0xA02, 0xA01, 0xD00, 0xC80, 0xC40, 0xC20, 0xC10, 0xC08,
+   /*   p      q      r      s      t      u      v      w */
+    0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
+   /*   x      y      z      {      |      }      ~    del */
+   /*                       XT     XY     YT    YT1        */
+    0x604, 0x602, 0x601, 0xA00, 0xC00, 0x600, 0x700,0xf000
+};
+
 
 static const uint16          ascii_to_hol_ebcdic[128] = {
    /* Control                              */
@@ -220,17 +279,17 @@ static const uint16          ascii_to_hol_ebcdic[128] = {
    /* Y7     Y8     Y9     T2     T3     T4     T5     T6  */
     0x404, 0x402, 0x401, 0x280, 0x240, 0x220, 0x210, 0x208,
    /*   X      Y      Z      [      \      ]      ^      _ */
-   /* T7     T8     T9     X28    X68    T28    T78    X58 */
+   /* T7     T8     T9     X28    X68    Y28    Y78    X58 */
     0x204, 0x202, 0x201, 0x882, 0x20A, 0x482, 0x406, 0x212,
    /*   `      a      b      c      d      e      f      g */
-    0x212, 0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,     /* 140 - 177 */
+    0x102, 0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,     /* 140 - 177 */
    /*   h      i      j      k      l      m      n      o */
     0xA02, 0xA01, 0xD00, 0xC80, 0xC40, 0xC20, 0xC10, 0xC08,
    /*   p      q      r      s      t      u      v      w */
     0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
    /*   x      y      z      {      |      }      ~    del */
-   /*                     Y78     X78    78     79         */
-    0x604, 0x602, 0x601, 0x406, 0x806,0x0006,0x0005,0xf000
+   /*                     X18     X78    Y18  XYT18        */
+    0x604, 0x602, 0x601, 0x902, 0x806, 0x502, 0xF02,0xf000
 };
 
 const char          sim_ascii_to_six[128] = {
@@ -269,11 +328,11 @@ const char          sim_ascii_to_six[128] = {
 };
 
 static uint16 ebcdic_to_hol[256] = {
- /*  T0918   T91    T92    T93    T94    T95    T96   T97   0x0x */
+ /*  T918    T91    T92    T93    T94    T95    T96   T97   0x0x */
    0xB03,  0x901, 0x881, 0x841, 0x821, 0x811, 0x809, 0x805,
- /*  T98,    T918 , T928,  T938,  T948,  T958,  T968, T978   */
+ /*  T98,   T189 , T289,  T389,  T489,  T589,  T689, T789   */
    0x803,  0x903, 0x883, 0x843, 0x823, 0x813, 0x80B, 0x807,
- /*  TE918   E91    E92    E93    E94    E95    E96   E97   0x1x */
+ /* TE189    E91    E92    E93    E94    E95    E96   E97   0x1x */
    0xD03,  0x501, 0x481, 0x441, 0x421, 0x411, 0x409, 0x405,
  /*  E98     E918   E928   E938   E948   E958   E968  E978   */
    0x403,  0x503, 0x483, 0x443, 0x423, 0x413, 0x40B, 0x407,
@@ -283,15 +342,15 @@ static uint16 ebcdic_to_hol[256] = {
    0x203,  0x303, 0x283, 0x243, 0x223, 0x213, 0x20B, 0x207,
  /* TE0918   91    92     93      94     95     96     97   0x3x */
    0xF03,  0x101, 0x081, 0x041, 0x021, 0x011, 0x009, 0x005,
- /*  98      918   928    938     948    958   968     978   */
+ /*  98      189    289    389    489    589    689    789   */
    0x003,  0x103, 0x083, 0x043, 0x023, 0x013, 0x00B, 0x007,
  /*          T091  T092   T093   T094   T095   T096    T097  0x4x */
    0x000,  0xB01, 0xA81, 0xA41, 0xA21, 0xA11, 0xA09, 0xA05,
- /* T098     T18   T28    T38    T48    T58    T68     T78    */
+ /* T098     T18    T28    T38    T48    T58    T68    T78    */
    0xA03,  0x902, 0x882, 0x842, 0x822, 0x812, 0x80A, 0x806,
  /* T        TE91  TE92   TE93   TE94   TE95   TE96    TE97  0x5x */
    0x800,  0xD01, 0xC81, 0xC41, 0xC21, 0xC11, 0xC09, 0xC05,
- /* TE98     E18   E28    E38    E48    E58    E68     E78    */
+ /* TE98     E18    E28    E38    E48    E58    E68    E78   */
    0xC03,  0x502, 0x482, 0x442, 0x422, 0x412, 0x40A, 0x406,
  /* E        01    E092   E093   E094   E095   E096    E097  0x6x */
    0x400,  0x300, 0x681, 0x641, 0x621, 0x611, 0x609, 0x605,
@@ -317,7 +376,7 @@ static uint16 ebcdic_to_hol[256] = {
    0xF02,  0xF00, 0xE80, 0xE40, 0xE20, 0xE10, 0xE08, 0xE04,
  /* TE08     TE09   TE028  TE038  TE048  TE058  TE068  TE078  */
    0xE02,  0xE01, 0xE82, 0xE42, 0xE22, 0xE12, 0xE0A, 0xE06,
- /* T0       T1     T2     T3     T4     T5     T6     T7    0xcx */
+ /*  T0      T1     T2     T3     T4     T5     T6     T7    0xcx */
    0xA00,  0x900, 0x880, 0x840, 0x820, 0x810, 0x808, 0x804,
  /* T8       T9     T0928  T0938  T0948  T0958  T0968  T0978  */
    0x802,  0x801, 0xA83, 0xA43, 0xA23, 0xA13, 0xA0B, 0xA07,
@@ -326,7 +385,7 @@ static uint16 ebcdic_to_hol[256] = {
  /* E8       E9     TE928  TE938  TE948  TE958  TE968  TE978  */
    0x402,  0x401, 0xC83, 0xC43, 0xC23, 0xC13, 0xC0B, 0xC07,
  /* 028      E091   02     03     04     05     06     07    0xex  */
-   0x182,  0x701, 0x280, 0x240, 0x220, 0x210, 0x208, 0x204,
+   0x282,  0x701, 0x280, 0x240, 0x220, 0x210, 0x208, 0x204,
  /* 08       09     E0928  E0938  E0948  E0958  E0968  E0978  */
    0x202,  0x201, 0x683, 0x643, 0x623, 0x613, 0x60B, 0x607,
  /* 0        1      2      3      4      5      6      7     0xfx */
@@ -563,6 +622,7 @@ sim_read_card(UNIT * uptr, uint16 image[80])
              }
          }
     }
+
     if ((*img)[0] & CARD_EOF)
         r = CDSE_EOF;
     else if ((*img)[0] & CARD_ERR)
@@ -617,7 +677,7 @@ static int _cmpcard(const uint8 *p, const char *s) {
 
 t_stat
 _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*image)[80]) {
-    int                   mode;
+    unsigned int          mode;
     uint16                temp;
     int                   i;
     char                  c;
@@ -756,8 +816,8 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
                     case MODE_029:
                            temp = ascii_to_hol_029[(int)c];
                            break;
-                    case MODE_EBCDIC:
-                           temp = ascii_to_hol_ebcdic[(int)c];
+                    case MODE_DEC29:
+                           temp = ascii_to_dec_029[(int)c];
                            break;
                     }
                     if (temp & 0xf000)
@@ -1179,11 +1239,11 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
     int                  eof = 0;
     struct card_context *data;
     char                 gbuf[30];
-    int                  i;
+    unsigned int         i;
     char                *saved_filename;
-    t_bool              was_attached = (uptr->flags & UNIT_ATT);
-    t_addr              saved_pos;
-    static int          ebcdic_init = 0;
+    t_bool               was_attached = (uptr->flags & UNIT_ATT);
+    t_addr               saved_pos;
+    static int           ebcdic_init = 0;
 
     if ((uptr->flags & UNIT_RO) &&      /* Attaching a Reader */
             strchr (cptr, ',')) {       /* Restoring Attach list of files? */
@@ -1267,6 +1327,9 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
          case MODE_029:
               temp = ascii_to_hol_029[i];
               break;
+         case MODE_DEC29:
+              temp = ascii_to_dec_029[i];
+              break;
          }
          if ((temp & 0xf000) == 0) {
             data->hol_to_ascii[temp] = i;
@@ -1291,7 +1354,10 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
 
         /* Go read the deck */
         r = _sim_read_deck(uptr, eof);
-
+        /* Remove added eof from count */
+        if (eof) {
+            previous_cards++;
+        }
         uptr->pos = saved_pos;
         detach_unit(uptr);
         if (was_attached) {
@@ -1300,7 +1366,7 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
         }
         if (r == SCPE_OK) {
             const char    *fmt = "AUTO";
-            int            mode = uptr->flags & UNIT_CARD_MODE;
+            unsigned int   mode = uptr->flags & UNIT_CARD_MODE;
             for (i = 0; fmts[i].name != 0; i++) {
                 if (fmts[i].mode == mode) {
                     fmt = fmts[i].name;
@@ -1354,27 +1420,39 @@ sim_card_detach(UNIT * uptr)
 
 t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-    fprintf (st, "%s Card %sAttach Help\n\n", dptr->name, (uptr->flags & UNIT_RO) ? "Reader " : "Punch ");
+    uint32 i, readers = 0, punches = 0;
+
+    for (i=0; i < dptr->numunits; ++i)
+        if (dptr->units[i].flags & UNIT_ATTABLE) {
+            readers += ((dptr->units[i].flags & UNIT_RO) != 0);
+            punches += ((dptr->units[i].flags & UNIT_RO) == 0);
+            }
+    if (uptr == NULL)
+        uptr = dptr->units;
+    fprintf (st, "%s Card %s%s%sAttach Help\n\n", dptr->name, 
+                 readers ? "Reader " : "", readers & punches ? "& " : "", punches ? "Punch ": "");
     if (0 == (uptr-dptr->units)) {
         if (dptr->numunits > 1) {
             uint32 i;
 
             for (i=0; i < dptr->numunits; ++i)
                 if (dptr->units[i].flags & UNIT_ATTABLE)
-                    fprintf (st, "  sim> ATTACH {switches} %s%d carddeck\n\n", dptr->name, i);
+                    fprintf (st, "  sim> ATTACH {switches} %s carddeck%s\n", sim_uname (&dptr->units[i]), ((dptr->units[i].flags & UNIT_RO) != 0) ? "{,extra-cards,...}" : "");
+            fprintf (st, "\n");
             }
         else
-            fprintf (st, "  sim> ATTACH {switches} %s carddeck\n\n", dptr->name);
+            fprintf (st, "  sim> ATTACH {switches} %s carddeck%s\n\n", sim_uname (uptr), ((dptr->units[0].flags & UNIT_RO) != 0) ? "{,extra-cards,...}" : "");
         }
     else
-        fprintf (st, "  sim> ATTACH {switches} %s carddeck\n\n", dptr->name);
+        fprintf (st, "  sim> ATTACH {switches} %s carddeck%s\n\n", sim_uname (uptr), (readers > 0) ? "{,extra-cards,...}" : "");
     fprintf (st, "Attach command switches\n");
     fprintf (st, "    -F          Open the indicated card deck in a specific format (default\n");
-    fprintf (st, "                is AUTO, alternatives are BIN, TEXT, BCD and CBN)\n");
-    if ((uptr->flags & UNIT_RO) == 0) {
+    fprintf (st, "                is AUTO, alternatives are BIN, TEXT, BCD, CBN and EBCDIC)\n");
+    if (punches != 0) {
         fprintf (st, "    -N          Create a new punch output file (default is to append to\n");
         fprintf (st, "                an existing file if it exists)\n");
-    } else {
+    }
+    if (readers != 0) {
         fprintf (st, "    -E          Return EOF after deck read\n");
         fprintf (st, "    -S          Append deck to cards currently waiting to be read\n");
     }
@@ -1400,7 +1478,7 @@ return SCPE_OK;
 t_stat sim_card_test (DEVICE *dptr)
 {
 t_stat stat = SCPE_OK;
-#if defined(USE_SIM_CARD) && defined(SIM_CARD_API)
+#if defined(USE_SIM_CARD) && defined(SIM_CARD_API) && (SIM_MAJOR > 3)
 char cmd[CBUFSIZE];
 char saved_filename[4*CBUFSIZE];
 uint16 card_image[80];

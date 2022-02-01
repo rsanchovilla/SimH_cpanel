@@ -1078,7 +1078,7 @@ void scsi_space (SCSI_BUS *bus, uint8 *data, uint32 len)
 UNIT *uptr = bus->dev[bus->target];
 uint32 code, skipped;
 t_seccnt sects;
-t_stat r;
+t_stat r = 0;
 
 code = data[1] & 0x7;
 sects = GETW (data, 3) | (data[2] << 16);
@@ -1578,6 +1578,9 @@ bus->dev[id] = uptr;
 void scsi_set_unit (SCSI_BUS *bus, UNIT *uptr, SCSI_DEV *dev)
 {
 uptr->up7 = (void *)dev;
+
+if (dev->devtype == SCSI_CDROM)
+    set_writelock (uptr, 1, NULL, NULL);
 }
 
 /* Reset a unit */
@@ -1677,19 +1680,23 @@ switch (dev->devtype) {
 
 t_stat scsi_set_wlk (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-return SCPE_OK;
+SCSI_DEV *dev = (SCSI_DEV *)uptr->up7;
+
+if ((dev->devtype == SCSI_CDROM) && (val == 0))
+    return sim_messagef (SCPE_ARG, "%s: Can't write enable CDROM device\n", sim_uname (uptr));
+return set_writelock (uptr, val, cptr, desc);
 }
 
 /* Show write lock status */
 
 t_stat scsi_show_wlk (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-return SCPE_OK;
+return show_writelock (st, uptr, val, desc);
 }
 
 /* Attach device */
 
-t_stat scsi_attach (UNIT *uptr, CONST char *cptr)
+t_stat scsi_attach_ex (UNIT *uptr, CONST char *cptr, const char **drivetypes)
 {
 SCSI_DEV *dev = (SCSI_DEV *)uptr->up7;
 
@@ -1700,12 +1707,17 @@ switch (dev->devtype) {
     case SCSI_DISK:
     case SCSI_WORM:
     case SCSI_CDROM:
-        return sim_disk_attach (uptr, cptr, dev->block_size, sizeof (uint8), (uptr->flags & SCSI_NOAUTO), SCSI_DBG_DSK, dev->name, 0, 0);
+        return sim_disk_attach_ex (uptr, cptr, dev->block_size, sizeof (uint16), (uptr->flags & SCSI_NOAUTO), SCSI_DBG_DSK, dev->name, 0, 0, drivetypes);
     case SCSI_TAPE:
-        return sim_tape_attach (uptr, cptr);
+        return sim_tape_attach_ex (uptr, cptr, SCSI_DBG_TAP, 0);
     default:
         return SCPE_NOFNC;
         }
+}
+
+t_stat scsi_attach (UNIT *uptr, CONST char *cptr)
+{
+return scsi_attach_ex (uptr, cptr, NULL);
 }
 
 /* Dettach device */

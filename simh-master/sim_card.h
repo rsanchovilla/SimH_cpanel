@@ -55,6 +55,19 @@
     For autodetection of BCD card format, there can be no parity errors.
     All undeterminate formats are treated as ASCII.
 
+    ASCII mode recognizes some additional forms of input which allows the
+    intermixing of binary cards with text cards. 
+
+    Lines beginning with ~raw are taken as a number of 4 digit octal values
+    with represent each column of the card from 12 row down to 9 row. If there
+    is not enough octal numbers to span a full card the remainder of the 
+    card will not be punched.
+
+    Also ~eor, will generate a 7/8/9 punch card. An ~eof will gernerate a
+    6/7/9 punch card, and a ~eoi will generate a 6/7/8/9 punch.
+
+    A single line of ~ will set the EOF flag when that card is read.
+
     Auto output format is ASCII if card has only printable characters
     or card format binary.
 */
@@ -84,6 +97,7 @@ extern "C" {
 #define MODE_LOWER      (8 << UNIT_V_CARD_MODE)
 #define MODE_026        (0x10 << UNIT_V_CARD_MODE)
 #define MODE_029        (0x20 << UNIT_V_CARD_MODE)
+#define MODE_DEC29      (0x30 << UNIT_V_CARD_MODE)
 #define MODE_CHAR       (0x70 << UNIT_V_CARD_MODE)
 
 
@@ -126,9 +140,9 @@ t_stat   sim_card_show_fmt (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat   sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 
 /* Translation tables */
-extern CONST char      sim_six_to_ascii[64];        /* Map BCD to ASCII */
-extern CONST char      sim_ascii_to_six[128];       /* Map 7 bit ASCII to BCD */
-extern CONST uint8     sim_parity_table[64];        /* 64 entry odd parity table */
+extern const char      sim_six_to_ascii[64];        /* Map BCD to ASCII */
+extern const char      sim_ascii_to_six[128];       /* Map 7 bit ASCII to BCD */
+extern const uint8     sim_parity_table[64];        /* 64 entry odd parity table */
 
 /* Unit test routine */
 extern t_stat sim_card_test (DEVICE *dptr);

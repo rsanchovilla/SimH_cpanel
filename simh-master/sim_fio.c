@@ -44,12 +44,14 @@
    sim_fwrite        -       endian independent write (formerly fxwrite)
    sim_fseek         -       conditionally extended (>32b) seek (
    sim_fseeko        -       extended seek (>32b if available)
+   sim_can_seek      -       test for seekable (regular file)
    sim_fsize         -       get file size
    sim_fsize_name    -       get file size of named file
    sim_fsize_ex      -       get file size as a t_offset
    sim_fsize_name_ex -       get file size as a t_offset of named file
    sim_buf_copy_swapped -    copy data swapping elements along the way
-   sim_buf_swap_data -       swap data elements inplace in buffer
+   sim_buf_swap_data -       swap data elements inplace in buffer if needed
+   sim_byte_swap_data -      swap data elements inplace in buffer
    sim_shmem_open            create or attach to a shared memory region
    sim_shmem_close           close a shared memory region
 
@@ -58,6 +60,8 @@
    sim_fsize is always a 32b routine (it is used only with small capacity random
    access devices like fixed head disks and DECtapes).
 */
+
+#define IN_SIM_FIO_C 1              /* Include from sim_fio.c */
 
 #include "sim_defs.h"
 
@@ -106,7 +110,15 @@ sim_taddr_64 = sim_toffset_64 && (sizeof(t_addr) > sizeof(int32));
 return sim_end;
 }
 
+/* Copy little endian data to local buffer swapping if needed */
 void sim_buf_swap_data (void *bptr, size_t size, size_t count)
+{
+if (sim_end || (count == 0) || (size == sizeof (char)))
+    return;
+sim_byte_swap_data (bptr, size, count);
+}
+
+void sim_byte_swap_data (void *bptr, size_t size, size_t count)
 {
 uint32 j;
 int32 k;
@@ -235,20 +247,126 @@ uint32 sim_fsize (FILE *fp)
 return (uint32)(sim_fsize_ex (fp));
 }
 
+t_bool sim_can_seek (FILE *fp)
+{
+struct stat statb;
+
+if ((0 != fstat (fileno (fp), &statb)) ||
+    (0 == (statb.st_mode & S_IFREG)))
+    return FALSE;
+return TRUE;
+}
+
+static char *_sim_expand_homedir (const char *file, char *dest, size_t dest_size)
+{
+uint8 *without_quotes = NULL;
+uint32 dsize = 0;
+
+errno = 0;
+if (((*file == '"') && (file[strlen (file) - 1] == '"')) ||
+    ((*file == '\'') && (file[strlen (file) - 1] == '\''))) {
+    without_quotes = (uint8*)malloc (strlen (file) + 1);
+    if (without_quotes == NULL)
+        return NULL;
+    if (SCPE_OK != sim_decode_quoted_string (file, without_quotes, &dsize)) {
+        free (without_quotes);
+        errno = EINVAL;
+        return NULL;
+    }
+    file = (const char*)without_quotes;
+}
+
+if (memcmp (file, "~/", 2) != 0)
+    strlcpy (dest, file, dest_size);
+else {
+    char *cptr = getenv("HOME");
+    char *cptr2;
+
+    if (cptr == NULL) {
+        cptr = getenv("HOMEPATH");
+        cptr2 = getenv("HOMEDRIVE");
+        }
+    else
+        cptr2 = NULL;
+    if (cptr && (dest_size > strlen (cptr) + strlen (file) + 3))
+        snprintf(dest, dest_size, "%s%s%s%s", cptr2 ? cptr2 : "", cptr, strchr (cptr, '/') ? "/" : "\\", file + 2);
+    else
+        strlcpy (dest, file, dest_size);
+    while ((strchr (dest, '\\') != NULL) && ((cptr = strchr (dest, '/')) != NULL))
+        *cptr = '\\';
+    }
+free (without_quotes);
+return dest;
+}
+
+#if defined(_WIN32)
+#include <direct.h>
+#include <io.h>
+#include <fcntl.h>
+#else
+#include <unistd.h>
+#endif
+
+int sim_stat (const char *fname, struct stat *stat_str)
+{
+char namebuf[PATH_MAX + 1];
+
+if (NULL == _sim_expand_homedir (fname, namebuf, sizeof (namebuf)))
+    return -1;
+return stat (namebuf, stat_str);
+}
+
+int sim_chdir(const char *path)
+{
+char pathbuf[PATH_MAX + 1];
+
+if (NULL == _sim_expand_homedir (path, pathbuf, sizeof (pathbuf)))
+    return -1;
+return chdir (pathbuf);
+}
+
+int sim_mkdir(const char *path)
+{
+char pathbuf[PATH_MAX + 1];
+
+if (NULL == _sim_expand_homedir (path, pathbuf, sizeof (pathbuf)))
+    return -1;
+#if defined(_WIN32)
+return mkdir (pathbuf);
+#else
+return mkdir (pathbuf, 0777);
+#endif
+}
+
+int sim_rmdir(const char *path)
+{
+char pathbuf[PATH_MAX + 1];
+
+if (NULL == _sim_expand_homedir (path, pathbuf, sizeof (pathbuf)))
+    return -1;
+return rmdir (pathbuf);
+}
+
+
 /* OS-dependent routines */
 
 /* Optimized file open */
-
-FILE *sim_fopen (const char *file, const char *mode)
+FILE* sim_fopen (const char *file, const char *mode)
 {
+FILE *f;
+char namebuf[PATH_MAX + 1];
+
+if (NULL == _sim_expand_homedir (file, namebuf, sizeof (namebuf)))
+    return NULL;
 #if defined (VMS)
-return fopen (file, mode, "ALQ=32", "DEQ=4096",
-        "MBF=6", "MBC=127", "FOP=cbt,tef", "ROP=rah,wbh", "CTX=stm");
+f = fopen (namebuf, mode, "ALQ=32", "DEQ=4096",
+                          "MBF=6", "MBC=127", "FOP=cbt,tef", "ROP=rah,wbh", "CTX=stm");
 #elif (defined (__linux) || defined (__linux__) || defined (__hpux) || defined (_AIX)) && !defined (DONT_DO_LARGEFILE)
-return fopen64 (file, mode);
+f = fopen64 (namebuf, mode);
 #else
-return fopen (file, mode);
+f = fopen (namebuf, mode);
 #endif
+return f;
 }
 
 #if !defined (DONT_DO_LARGEFILE)
@@ -379,7 +497,13 @@ return szMsgBuffer;
 
 t_stat sim_copyfile (const char *source_file, const char *dest_file, t_bool overwrite_existing)
 {
-if (CopyFileA (source_file, dest_file, !overwrite_existing))
+char sourcename[PATH_MAX + 1], destname[PATH_MAX + 1];
+
+if (NULL == _sim_expand_homedir (source_file, sourcename, sizeof (sourcename)))
+    return sim_messagef (SCPE_ARG, "Error Copying - Problem Parsing Source Filename '%s'\n", source_file);
+if (NULL == _sim_expand_homedir (dest_file, destname, sizeof (destname)))
+    return sim_messagef (SCPE_ARG, "Error Copying - Problem Parsing Destination Filename '%s'\n", dest_file);
+if (CopyFileA (sourcename, destname, !overwrite_existing))
     return SCPE_OK;
 return sim_messagef (SCPE_ARG, "Error Copying '%s' to '%s': %s\n", source_file, dest_file, sim_get_os_error_text (GetLastError ()));
 }
@@ -527,7 +651,7 @@ if (fOut)
 if (st == SCPE_OK) {
     struct stat statb;
 
-    if (!stat (source_file, &statb)) {
+    if (!sim_stat (source_file, &statb)) {
         struct utimbuf utim;
 
         utim.actime = statb.st_atime;
@@ -557,7 +681,7 @@ if ((stbuf.st_mode & S_IFIFO)) {
 return -1;
 }
 
-#if defined (__linux__) || defined (__APPLE__)
+#if defined (__linux__) || defined (__APPLE__) || defined (__CYGWIN__) || defined (__FreeBSD__)
 #include <sys/mman.h>
 
 struct SHMEM {
@@ -569,7 +693,7 @@ struct SHMEM {
 
 t_stat sim_shmem_open (const char *name, size_t size, SHMEM **shmem, void **addr)
 {
-#ifdef HAVE_SHM_OPEN
+#if defined (HAVE_SHM_OPEN) && defined (__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4)
 *shmem = (SHMEM *)calloc (1, sizeof(**shmem));
 mode_t orig_mask;
 
@@ -609,7 +733,7 @@ else {
     struct stat statb;
 
     if ((fstat ((*shmem)->shm_fd, &statb)) ||
-        (statb.st_size != (*shmem)->shm_size)) {
+        ((size_t)statb.st_size != (*shmem)->shm_size)) {
         sim_shmem_close (*shmem);
         *shmem = NULL;
         return sim_messagef (SCPE_OPENERR, "Shared Memory segment '%s' is %d bytes instead of %d\n", name, (int)(statb.st_size), (int)size);
@@ -626,26 +750,31 @@ if ((*shmem)->shm_base == MAP_FAILED) {
 *addr = (*shmem)->shm_base;
 return SCPE_OK;
 #else
+*shmem = NULL;
 return SCPE_NOFNC;
 #endif
 }
 
 void sim_shmem_close (SHMEM *shmem)
 {
+#if defined (HAVE_SHM_OPEN)
 if (shmem == NULL)
     return;
 if (shmem->shm_base != MAP_FAILED)
     munmap (shmem->shm_base, shmem->shm_size);
-if (shmem->shm_fd != -1)
+if (shmem->shm_fd != -1) {
+    shm_unlink (shmem->shm_name);
     close (shmem->shm_fd);
+    }
 free (shmem->shm_name);
 free (shmem);
+#endif
 }
 
 int32 sim_shmem_atomic_add (int32 *p, int32 v)
 {
-#if defined (HAVE_GCC_SYNC_BUILTINS)
-return __sync_add_and_fetch((int *) p, v);
+#if defined (__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4)
+return __sync_add_and_fetch ((int *) p, v);
 #else
 return *p + v;
 #endif
@@ -653,7 +782,7 @@ return *p + v;
 
 t_bool sim_shmem_atomic_cas (int32 *ptr, int32 oldv, int32 newv)
 {
-#if defined (HAVE_GCC_SYNC_BUILTINS)
+#if defined (__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4)
 return __sync_bool_compare_and_swap (ptr, oldv, newv);
 #else
 if (*ptr == oldv) {
@@ -737,50 +866,40 @@ return getcwd (buf, buf_size);
 char *sim_filepath_parts (const char *filepath, const char *parts)
 {
 size_t tot_len = 0, tot_size = 0;
-char *tempfilepath = NULL;
 char *fullpath = NULL, *result = NULL;
 char *c, *name, *ext;
 char chr;
 const char *p;
 char filesizebuf[32] = "";
 char filedatetimebuf[32] = "";
+char namebuf[PATH_MAX + 1];
 
-if (((*filepath == '\'') || (*filepath == '"')) &&
-    (filepath[strlen (filepath) - 1] == *filepath)) {
-    size_t temp_size = 1 + strlen (filepath);
 
-    tempfilepath = (char *)malloc (temp_size);
-    if (tempfilepath == NULL)
-        return NULL;
-    strlcpy (tempfilepath, 1 + filepath, temp_size);
-    tempfilepath[strlen (tempfilepath) - 1] = '\0';
-    filepath = tempfilepath;
-    }
+/* Expand ~/ home directory */
+if (NULL == _sim_expand_homedir (filepath, namebuf, sizeof (namebuf)))
+    return NULL;
+filepath = namebuf;
+
+/* Check for full or current directory relative path */
 if ((filepath[1] == ':')  ||
     (filepath[0] == '/')  || 
     (filepath[0] == '\\')){
         tot_len = 1 + strlen (filepath);
         fullpath = (char *)malloc (tot_len);
-        if (fullpath == NULL) {
-            free (tempfilepath);
+        if (fullpath == NULL)
             return NULL;
-            }
         strcpy (fullpath, filepath);
     }
-else {
+else {          /* Need to prepend current directory */
     char dir[PATH_MAX+1] = "";
     char *wd = sim_getcwd(dir, sizeof (dir));
 
-    if (wd == NULL) {
-        free (tempfilepath);
+    if (wd == NULL)
         return NULL;
-        }
     tot_len = 1 + strlen (filepath) + 1 + strlen (dir);
     fullpath = (char *)malloc (tot_len);
-    if (fullpath == NULL) {
-        free (tempfilepath);
+    if (fullpath == NULL)
         return NULL;
-        }
     strlcpy (fullpath, dir, tot_len);
     if ((dir[strlen (dir) - 1] != '/') &&       /* if missing a trailing directory separator? */
         (dir[strlen (dir) - 1] != '\\'))
@@ -818,8 +937,9 @@ if (ext == NULL)
     ext = name + strlen (name);
 tot_size = 0;
 if (*parts == '\0')             /* empty part specifier means strip only quotes */
-    tot_size = strlen (tempfilepath);
-if (strchr (parts, 't') || strchr (parts, 'z')) {
+    tot_size = strlen (filepath);
+if (strchr (parts, 't') ||      /* modification time or */
+    strchr (parts, 'z')) {      /* or size requested? */
     struct stat filestat;
     struct tm *tm;
 
@@ -888,7 +1008,6 @@ for (p = parts; *p; p++) {
         }
     }
 free (fullpath);
-free (tempfilepath);
 return result;
 }
 
@@ -901,7 +1020,8 @@ WIN32_FIND_DATAA File;
 struct stat filestat;
 char WildName[PATH_MAX + 1];
 
-strlcpy (WildName, cptr, sizeof(WildName));
+if (NULL == _sim_expand_homedir (cptr, WildName, sizeof (WildName)))
+    return SCPE_ARG;
 cptr = WildName;
 sim_trim_endspc (WildName);
 if ((hFind =  FindFirstFileA (cptr, &File)) != INVALID_HANDLE_VALUE) {
@@ -959,15 +1079,20 @@ DIR *dir;
 int found_count = 0;
 struct stat filestat;
 char *c;
-char DirName[PATH_MAX + 1], WholeName[PATH_MAX + 1], WildName[PATH_MAX + 1];
+char DirName[PATH_MAX + 1], WholeName[PATH_MAX + 1], WildName[PATH_MAX + 1], MatchName[PATH_MAX + 1];
 
 memset (DirName, 0, sizeof(DirName));
 memset (WholeName, 0, sizeof(WholeName));
-strlcpy (WildName, cptr, sizeof(WildName));
+memset (MatchName, 0, sizeof(MatchName));
+if (NULL == _sim_expand_homedir (cptr, WildName, sizeof (WildName)))
+    return SCPE_ARG;
 cptr = WildName;
 sim_trim_endspc (WildName);
 c = sim_filepath_parts (cptr, "f");
 strlcpy (WholeName, c, sizeof (WholeName));
+free (c);
+c = sim_filepath_parts (cptr, "nx");
+strlcpy (MatchName, c, sizeof (MatchName));
 free (c);
 c = strrchr (WholeName, '/');
 if (c) {
@@ -987,9 +1112,7 @@ if (dir) {
 #endif
     t_offset FileSize;
     char *FileName;
-    const char *MatchName = 1 + strrchr (cptr, '/');
-    char *p_name;
-    struct tm *local;
+     char *p_name;
 #if defined (HAVE_GLOB)
     size_t i;
 #endif
@@ -1034,3 +1157,241 @@ else
     return SCPE_ARG;
 }
 #endif /* !defined(_WIN32) */
+
+/* Trim trailing spaces from a string
+
+    Inputs:
+        cptr    =       pointer to string
+    Outputs:
+        cptr    =       pointer to string
+*/
+
+char *sim_trim_endspc (char *cptr)
+{
+char *tptr;
+
+tptr = cptr + strlen (cptr);
+while ((--tptr >= cptr) && sim_isspace (*tptr))
+    *tptr = 0;
+return cptr;
+}
+
+int sim_isspace (int c)
+{
+return ((c < 0) || (c >= 128)) ? 0 : isspace (c);
+}
+
+int sim_islower (int c)
+{
+return (c >= 'a') && (c <= 'z');
+}
+
+int sim_isupper (int c)
+{
+return (c >= 'A') && (c <= 'Z');
+}
+
+int sim_toupper (int c)
+{
+return ((c >= 'a') && (c <= 'z')) ? ((c - 'a') + 'A') : c;
+}
+
+int sim_tolower (int c)
+{
+return ((c >= 'A') && (c <= 'Z')) ? ((c - 'A') + 'a') : c;
+}
+
+int sim_isalpha (int c)
+{
+return ((c < 0) || (c >= 128)) ? 0 : isalpha (c);
+}
+
+int sim_isprint (int c)
+{
+return ((c < 0) || (c >= 128)) ? 0 : isprint (c);
+}
+
+int sim_isdigit (int c)
+{
+return ((c >= '0') && (c <= '9'));
+}
+
+int sim_isgraph (int c)
+{
+return ((c < 0) || (c >= 128)) ? 0 : isgraph (c);
+}
+
+int sim_isalnum (int c)
+{
+return ((c < 0) || (c >= 128)) ? 0 : isalnum (c);
+}
+
+/* strncasecmp() is not available on all platforms */
+int sim_strncasecmp (const char* string1, const char* string2, size_t len)
+{
+size_t i;
+unsigned char s1, s2;
+
+for (i=0; i<len; i++) {
+    s1 = (unsigned char)string1[i];
+    s2 = (unsigned char)string2[i];
+    s1 = (unsigned char)sim_toupper (s1);
+    s2 = (unsigned char)sim_toupper (s2);
+    if (s1 < s2)
+        return -1;
+    if (s1 > s2)
+        return 1;
+    if (s1 == 0)
+        return 0;
+    }
+return 0;
+}
+
+/* strcasecmp() is not available on all platforms */
+int sim_strcasecmp (const char *string1, const char *string2)
+{
+size_t i = 0;
+unsigned char s1, s2;
+
+while (1) {
+    s1 = (unsigned char)string1[i];
+    s2 = (unsigned char)string2[i];
+    s1 = (unsigned char)sim_toupper (s1);
+    s2 = (unsigned char)sim_toupper (s2);
+    if (s1 == s2) {
+        if (s1 == 0)
+            return 0;
+        i++;
+        continue;
+        }
+    if (s1 < s2)
+        return -1;
+    if (s1 > s2)
+        return 1;
+    }
+return 0;
+}
+
+int sim_strwhitecasecmp (const char *string1, const char *string2, t_bool casecmp)
+{
+unsigned char s1 = 1, s2 = 1;   /* start with equal, but not space */
+
+while ((s1 == s2) && (s1 != '\0')) {
+    if (s1 == ' ') {            /* last character was space? */
+        while (s1 == ' ') {     /* read until not a space */
+            s1 = *string1++;
+            if (sim_isspace (s1))
+                s1 = ' ';       /* all whitespace is a space */
+            else {
+                if (casecmp)
+                    s1 = (unsigned char)sim_toupper (s1);
+                }
+            }
+        }
+    else {                      /* get new character */
+        s1 = *string1++;
+        if (sim_isspace (s1))
+            s1 = ' ';           /* all whitespace is a space */
+        else {
+            if (casecmp)
+                s1 = (unsigned char)sim_toupper (s1);
+            }
+        }
+    if (s2 == ' ') {            /* last character was space? */
+        while (s2 == ' ') {     /* read until not a space */
+            s2 = *string2++;
+            if (sim_isspace (s2))
+                s2 = ' ';       /* all whitespace is a space */
+            else {
+                if (casecmp)
+                    s2 = (unsigned char)sim_toupper (s2);
+                }
+            }
+        }
+    else {                      /* get new character */
+        s2 = *string2++;
+        if (sim_isspace (s2))
+            s2 = ' ';           /* all whitespace is a space */
+        else {
+            if (casecmp)
+                s2 = (unsigned char)sim_toupper (s2);
+            }
+        }
+    if (s1 == s2) {
+        if (s1 == 0)
+            return 0;
+        continue;
+        }
+    if (s1 < s2)
+        return -1;
+    if (s1 > s2)
+        return 1;
+    }
+return 0;
+}
+
+/* strlcat() and strlcpy() are not available on all platforms */
+/* Copyright (c) 1998 Todd C. Miller <Todd.Miller@courtesan.com> */
+/*
+ * Appends src to string dst of size siz (unlike strncat, siz is the
+ * full size of dst, not space left).  At most siz-1 characters
+ * will be copied.  Always NUL terminates (unless siz <= strlen(dst)).
+ * Returns strlen(src) + MIN(siz, strlen(initial dst)).
+ * If retval >= siz, truncation occurred.
+ */
+size_t sim_strlcat(char *dst, const char *src, size_t size)
+{
+char *d = dst;
+const char *s = src;
+size_t n = size;
+size_t dlen;
+
+/* Find the end of dst and adjust bytes left but don't go past end */
+while (n-- != 0 && *d != '\0')
+    d++;
+dlen = d - dst;
+n = size - dlen;
+
+if (n == 0)
+    return (dlen + strlen(s));
+while (*s != '\0') {
+    if (n != 1) {
+        *d++ = *s;
+        n--;
+        }
+    s++;
+    }
+*d = '\0';
+
+return (dlen + (s - src));          /* count does not include NUL */
+}
+
+/*
+ * Copy src to string dst of size siz.  At most siz-1 characters
+ * will be copied.  Always NUL terminates (unless siz == 0).
+ * Returns strlen(src); if retval >= siz, truncation occurred.
+ */
+size_t sim_strlcpy (char *dst, const char *src, size_t size)
+{
+char *d = dst;
+const char *s = src;
+size_t n = size;
+
+/* Copy as many bytes as will fit */
+if (n != 0) {
+    while (--n != 0) {
+        if ((*d++ = *s++) == '\0')
+            break;
+        }
+    }
+
+    /* Not enough room in dst, add NUL and traverse rest of src */
+    if (n == 0) {
+        if (size != 0)
+            *d = '\0';              /* NUL-terminate dst */
+        while (*s++)
+            ;
+        }
+return (s - src - 1);               /* count does not include NUL */
+}
+

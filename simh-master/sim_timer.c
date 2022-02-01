@@ -312,7 +312,7 @@ if (!timedout) {
     AIO_UPDATE_QUEUE;
     }
 sim_timespec_diff (&delta_time, &done_time, &start_time);
-delta_ms = (uint32)((delta_time.tv_sec * 1000) + (delta_time.tv_nsec / 1000000));
+delta_ms = (uint32)((delta_time.tv_sec * 1000) + ((delta_time.tv_nsec + 500000) / 1000000));
 return delta_ms;
 }
 #else
@@ -2188,6 +2188,17 @@ sim_debug (DBG_GET, &sim_timer_dev, "sim_rtcn_get_time(tmr=%d)\n", tmr);
 clock_gettime (CLOCK_REALTIME, now);
 }
 
+time_t sim_get_time (time_t *now)
+{
+struct timespec ts_now;
+
+sim_debug (DBG_GET, &sim_timer_dev, "sim_get_time()\n");
+sim_rtcn_get_time (&ts_now, 0);
+if (now)
+    *now = ts_now.tv_sec;
+return ts_now.tv_sec;
+}
+
 /* 
  * If the host system has a relatively large clock tick (as compared to
  * the desired simulated hz) ticks will naturally be scheduled late and
@@ -3446,10 +3457,12 @@ while (*cmd)
      exdep_cmd (EX_D, *(cmd++));
 sim_switches = saved_switches;
 sim_cancel (&SIM_INTERNAL_UNIT);
-sim_activate (&precalib_unit, sim_precalibrate_ips);
 start = sim_os_msec();
-sim_instr();
-end = sim_os_msec();
+do {
+    sim_activate (&precalib_unit, sim_precalibrate_ips);
+    sim_instr();
+    end = sim_os_msec();
+    } while ((end - start) < SIM_PRE_CALIBRATE_MIN_MS);
 sim_precalibrate_ips = (int32)(1000.0 * (sim_precalibrate_ips / (double)(end - start)));
 
 for (tmr=0; tmr<=SIM_NTIMERS; tmr++) {

@@ -28,6 +28,8 @@
 #define _SIM_SCSI_H_     0
 
 #include "sim_defs.h"
+#include "sim_disk.h"
+#include "sim_tape.h"
 
 /* SCSI device states */
 
@@ -63,11 +65,11 @@
 #define SCSI_DBG_MSG    0x02000000                      /* SCSI messages */
 #define SCSI_DBG_BUS    0x04000000                      /* bus activity */
 #define SCSI_DBG_DSK    0x08000000                      /* disk activity */
+#define SCSI_DBG_TAP    0x10000000                      /* disk activity */
 
-#define SCSI_V_WLK      (UNIT_V_UF + 5)                 /* hwre write lock */
-#define SCSI_V_NOAUTO   (UNIT_V_UF + 6)                 /* noautosize */
-#define SCSI_V_UF       (UNIT_V_UF + 7)
-#define SCSI_WLK        (1 << SCSI_V_WLK)
+#define SCSI_V_NOAUTO   ((DKUF_V_UF > MTUF_V_UF) ? DKUF_V_UF : MTUF_V_UF)/* noautosize */
+#define SCSI_V_UF       (SCSI_V_NOAUTO + 1)
+#define SCSI_WLK        (UNIT_WLK|UNIT_RO)              /* hwre write lock */
 #define SCSI_NOAUTO     (1 << SCSI_V_NOAUTO)
 
 
@@ -127,6 +129,7 @@ t_stat scsi_set_wlk (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat scsi_show_fmt (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat scsi_show_wlk (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat scsi_attach (UNIT *uptr, CONST char *cptr);
+t_stat scsi_attach_ex (UNIT *uptr, CONST char *cptr, const char **drivetypes);
 t_stat scsi_detach (UNIT *uptr);
 t_stat scsi_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 
