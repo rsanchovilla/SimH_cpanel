@@ -2417,7 +2417,6 @@ t_stat sim_instr(void)
     // post-run refresh
     if ((cpanel_on) && (reason != SCPE_EXIT)) {
         // terminate in-progress I/O card/disk/tape if any
-        extern int Refresh_Frames_Count; // frames done counter. At 60 FPS. Wraps after 9942 hours
         extern uint32 tm0CardInReadStacker;
         extern uint32 tm0CardInPunchStacker;
         extern int bTapeAnimInProgress;
@@ -2450,7 +2449,7 @@ t_stat sim_instr(void)
             if (sim_os_msec() - tnow > 2000) break; // sanity check: max 2000 msec (2 sec wall time clock) waiting for animation to end
             if (bIOInProgress) continue;                           // some animation in progress, do not exit yet
             if (RefreshCount0 == 0) {                              // draw 2 frames after animation ends to allow
-               RefreshCount0 = Refresh_Frames_Count;               // for light to terminate the tickcount based partial 
+               RefreshCount0 = Refresh_Frames_Count;                  // for light to terminate the tickcount based partial 
                if (bShowInfo) bShowInfo=2;                         // assure show 0 ips if info has been enabled with ^I
                continue;                                           // illumination
             }
@@ -2681,4 +2680,11 @@ t_stat cpu_show_speed(FILE *st, UNIT *uptr, int32 value, CONST void *desc)
 const char * cpu_description (DEVICE *dptr) {
     return "IBM 650 CPU";
 }
+
+
+
+// update disk arm image acording to this video:
+// IBM 355 disc arm moving (very high quality image)
+// https://www.youtube.com/watch?v=irPw9oyAju8
+// Minute 0806
 

@@ -1322,6 +1322,20 @@ cdr_attach(UNIT * uptr, CONST char *file)
     t_stat              r;
     int ncdr, ic1, ic2, i;
 
+    ncdr = uptr - &cdr_unit[1];         // ncdr is the card reader: 0 for cdr1, 1 for cdr2, 2 for cdr3
+
+    if (((sim_switches & SWMASK ('S')) != 0) && (uptr->flags & UNIT_ATT)) { 
+        // attach -s -> add cards to current deck
+        // just update deck count
+        r = sim_card_attach(uptr, file);
+        if (SCPE_BARE_STATUS(r) != SCPE_OK) return r;
+        if (ncdr==0) {
+            nCardInReadHopper = nCardInReadHopperMax = sim_card_input_hopper_count(uptr);
+            nCardInReadStacker = sim_card_output_hopper_count(uptr);
+        }
+        return SCPE_OK; 
+    }
+
     if (uptr->flags & UNIT_ATT)         // remove current deck in read hopper before attaching
        sim_card_detach(uptr);           // the new one
 
@@ -1335,7 +1349,6 @@ cdr_attach(UNIT * uptr, CONST char *file)
          uptr->u5 |= URCSTA_SOAPSYMB;
     }
     // clear read card take hopper buffer 
-    ncdr = uptr - &cdr_unit[1];         // ncdr is the card reader: 0 for cdr1, 1 for cdr2, 2 for cdr3
     if ((ncdr >= 0) && (ncdr < 3)) {   // safety check, not needed (should allways be true) but just to be sure
         // reset last read card number
         ReadStakerLast[ncdr] = 0;

@@ -89,17 +89,20 @@ void IBM650_Init(void);
 void IBM650_Reset(void);
 void IBM650_TickIntensityCount(void);
 void IBM650_Refresh(void);
+void IBM650_DropFile(int CId, char * FileName);
 void IBM650_OnClick_Sw(void);
 void IBM650_OnClick_BTN(void);
+void IBM650_OnClick_BTN2(void);
 
 // cpanel types constants
 #define IS_IBM650	1	// define CP type contants. must start on 1
 
 // control panel available types
-CP_TYPE cp_types[] = {
-    { "IBM650", IS_IBM650, IBM650_cp, &IBM650_Refresh, &IBM650_Init, &IBM650_Reset, &IBM650_TickIntensityCount},
-    { NULL }
- };
+CP_TYPE cp_types = {
+    IBM650_cp, 
+    &IBM650_Init, NULL, &IBM650_Reset, 
+    &IBM650_Refresh, &IBM650_TickIntensityCount, &IBM650_DropFile
+};
 
 // struct to hold the GUI controls Ids
 static struct {
@@ -130,6 +133,7 @@ static struct {
    // IBM 533 card Read Punch
    int ReadHopper, ReadHopperRear, ReadHopperFront, InputDeck; 
    int ReadStacker, ReadDeck, PunchStacker, OutputDeck;
+   int Drop_InputDeckFile; 
    // IBM 355 RAMAC
    int ArmRunArea, Arm, ArmWires, ArmWireRunArea;
    int VerticalBarGuide1, VerticalBarGuide2, DiskStackMoire, ArmShadow, ArmWiresShadow, MovingHeadBarShadow;
@@ -138,159 +142,173 @@ static struct {
    int MT[6], MT_num[6], MT_lights[6], MT_head[6];
    int MT_L[6], MT_R[6], MT_L_VacCol[6], MT_R_VacCol[6];
    int MT_VacColumn, MT_VacColMedium; 
-} IBM650;
+   int MT_BTN_UnLoad[6], Drop_MT_File[6];
+} IBM650 = {0}; // must be init to zero
 
 // mapping variables that holds the control Id with control name and event handler
 // the name identifies the control in the definition file
 CP_DEF IBM650_cp[] = {
-    { &IBM650.CtrlInfoPanel,          "CtrlInfoPanel",                     NULL,     0 },
-    { &IBM650.Reg_DISP_0T9,           "Reg_DISP_0T9",                      NULL,     0 },
-    { &IBM650.Reg_DISP_N,             "Reg_DISP_N",                        NULL,     0 },
-    { &IBM650.Reg_OP_0T9,             "Reg_OP_0T9",                        NULL,     0 },
-    { &IBM650.Reg_OP_N,               "Reg_OP_N",                          NULL,     0 },
-    { &IBM650.Reg_AR_0T9,             "Reg_AR_0T9",                        NULL,     0 },
-    { &IBM650.Reg_AR_N,               "Reg_AR_N",                          NULL,     0 },
-    { &IBM650.OperatingPanel,         "OperatingPanel",                    NULL,     0 },
-    { &IBM650.Reg_OPER,               "Reg_OPER",                          NULL,     0 },
-    { &IBM650.Reg_CHK,                "Reg_CHK",                           NULL,     0 },
-    { &IBM650.DispSw[10],             "DispSW_10",                         &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSw[9],              "DispSW_9",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSw[8],              "DispSW_8",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSw[7],              "DispSW_7",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSw[6],              "DispSW_6",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSw[5],              "DispSW_5",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSw[4],              "DispSW_4",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSw[3],              "DispSW_3",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSw[2],              "DispSW_2",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSw[1],              "DispSW_1",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSwSgn,              "DispSW_SGN",                        &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DispSwNum[10],          "DispSwNum_10",                      NULL,     0 },
-    { &IBM650.DispSwNum[9],           "DispSwNum_9",                       NULL,     0 },
-    { &IBM650.DispSwNum[8],           "DispSwNum_8",                       NULL,     0 },
-    { &IBM650.DispSwNum[7],           "DispSwNum_7",                       NULL,     0 },
-    { &IBM650.DispSwNum[6],           "DispSwNum_6",                       NULL,     0 },
-    { &IBM650.DispSwNum[5],           "DispSwNum_5",                       NULL,     0 },
-    { &IBM650.DispSwNum[4],           "DispSwNum_4",                       NULL,     0 },
-    { &IBM650.DispSwNum[3],           "DispSwNum_3",                       NULL,     0 },
-    { &IBM650.DispSwNum[2],           "DispSwNum_2",                       NULL,     0 },
-    { &IBM650.DispSwNum[1],           "DispSwNum_1",                       NULL,     0 },
-    { &IBM650.ProgSw,                 "ProgSw",                            &IBM650_OnClick_Sw,     0 },
-    { &IBM650.HalfCycleSw,            "HalfCycleSw",                       &IBM650_OnClick_Sw,     0 },
-    { &IBM650.AddrSw[4],              "AddrSw_4",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.AddrSw[3],              "AddrSw_3",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.AddrSw[2],              "AddrSw_2",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.AddrSw[1],              "AddrSw_1",                          &IBM650_OnClick_Sw,     0 },
-    { &IBM650.AddrSwNum[4],           "AddrSwNum_4",                       NULL,     0 },
-    { &IBM650.AddrSwNum[3],           "AddrSwNum_3",                       NULL,     0 },
-    { &IBM650.AddrSwNum[2],           "AddrSwNum_2",                       NULL,     0 },
-    { &IBM650.AddrSwNum[1],           "AddrSwNum_1",                       NULL,     0 },
-    { &IBM650.CtrlSw,                 "CtrlSw",                            &IBM650_OnClick_Sw,     0 },
-    { &IBM650.DisplaySw,              "DisplaySw",                         &IBM650_OnClick_Sw,     0 },
-    { &IBM650.OverflowSw,             "OverflowSw",                        &IBM650_OnClick_Sw,     0 },
-    { &IBM650.ErrorSw,                "ErrorSw",                           &IBM650_OnClick_Sw,     0 },
-    { &IBM650.BTN_Power,              "BTN_Power",                         &IBM650_OnClick_BTN,    0 },
-    { &IBM650.BTN_Transfer,           "BTN_Transfer",                      &IBM650_OnClick_BTN,    0 },
-    { &IBM650.BTN_ProgStart,          "BTN_ProgStart",                     &IBM650_OnClick_BTN,    0 },
-    { &IBM650.BTN_ProgStop,           "BTN_ProgStop",                      &IBM650_OnClick_BTN,    0 },
-    { &IBM650.BTN_ProgReset,          "BTN_ProgReset",                     &IBM650_OnClick_BTN,    0 },
-    { &IBM650.BTN_ComputerReset,      "BTN_ComputerReset",                 &IBM650_OnClick_BTN,    0 },
-    { &IBM650.BTN_AccumReset,         "BTN_AccumReset",                    &IBM650_OnClick_BTN,    0 },
-    { &IBM650.BTN_ErrorReset,         "BTN_ErrorReset",                    &IBM650_OnClick_BTN,    0 },
-    { &IBM650.BTN_ErrorSenseReset,    "BTN_ErrorSenseReset",               &IBM650_OnClick_BTN,    0 },
-    { &IBM650.BTN_Switch_Power,       "BTN_Switch_Power",                  &IBM650_OnClick_BTN,    0 },
+    { &IBM650.CtrlInfoPanel,          "CtrlInfoPanel",                     NULL},
+    { &IBM650.Reg_DISP_0T9,           "Reg_DISP_0T9",                      NULL},
+    { &IBM650.Reg_DISP_N,             "Reg_DISP_N",                        NULL},
+    { &IBM650.Reg_OP_0T9,             "Reg_OP_0T9",                        NULL},
+    { &IBM650.Reg_OP_N,               "Reg_OP_N",                          NULL},
+    { &IBM650.Reg_AR_0T9,             "Reg_AR_0T9",                        NULL},
+    { &IBM650.Reg_AR_N,               "Reg_AR_N",                          NULL},
+    { &IBM650.OperatingPanel,         "OperatingPanel",                    NULL},
+    { &IBM650.Reg_OPER,               "Reg_OPER",                          NULL},
+    { &IBM650.Reg_CHK,                "Reg_CHK",                           NULL},
+    { &IBM650.DispSw[10],             "DispSW_10",                         &IBM650_OnClick_Sw},
+    { &IBM650.DispSw[9],              "DispSW_9",                          &IBM650_OnClick_Sw},
+    { &IBM650.DispSw[8],              "DispSW_8",                          &IBM650_OnClick_Sw},
+    { &IBM650.DispSw[7],              "DispSW_7",                          &IBM650_OnClick_Sw},
+    { &IBM650.DispSw[6],              "DispSW_6",                          &IBM650_OnClick_Sw},
+    { &IBM650.DispSw[5],              "DispSW_5",                          &IBM650_OnClick_Sw},
+    { &IBM650.DispSw[4],              "DispSW_4",                          &IBM650_OnClick_Sw},
+    { &IBM650.DispSw[3],              "DispSW_3",                          &IBM650_OnClick_Sw},
+    { &IBM650.DispSw[2],              "DispSW_2",                          &IBM650_OnClick_Sw},
+    { &IBM650.DispSw[1],              "DispSW_1",                          &IBM650_OnClick_Sw},
+    { &IBM650.DispSwSgn,              "DispSW_SGN",                        &IBM650_OnClick_Sw},
+    { &IBM650.DispSwNum[10],          "DispSwNum_10",                      NULL},
+    { &IBM650.DispSwNum[9],           "DispSwNum_9",                       NULL},
+    { &IBM650.DispSwNum[8],           "DispSwNum_8",                       NULL},
+    { &IBM650.DispSwNum[7],           "DispSwNum_7",                       NULL},
+    { &IBM650.DispSwNum[6],           "DispSwNum_6",                       NULL},
+    { &IBM650.DispSwNum[5],           "DispSwNum_5",                       NULL},
+    { &IBM650.DispSwNum[4],           "DispSwNum_4",                       NULL},
+    { &IBM650.DispSwNum[3],           "DispSwNum_3",                       NULL},
+    { &IBM650.DispSwNum[2],           "DispSwNum_2",                       NULL},
+    { &IBM650.DispSwNum[1],           "DispSwNum_1",                       NULL},
+    { &IBM650.ProgSw,                 "ProgSw",                            &IBM650_OnClick_Sw},
+    { &IBM650.HalfCycleSw,            "HalfCycleSw",                       &IBM650_OnClick_Sw},
+    { &IBM650.AddrSw[4],              "AddrSw_4",                          &IBM650_OnClick_Sw},
+    { &IBM650.AddrSw[3],              "AddrSw_3",                          &IBM650_OnClick_Sw},
+    { &IBM650.AddrSw[2],              "AddrSw_2",                          &IBM650_OnClick_Sw},
+    { &IBM650.AddrSw[1],              "AddrSw_1",                          &IBM650_OnClick_Sw},
+    { &IBM650.AddrSwNum[4],           "AddrSwNum_4",                       NULL},
+    { &IBM650.AddrSwNum[3],           "AddrSwNum_3",                       NULL},
+    { &IBM650.AddrSwNum[2],           "AddrSwNum_2",                       NULL},
+    { &IBM650.AddrSwNum[1],           "AddrSwNum_1",                       NULL},
+    { &IBM650.CtrlSw,                 "CtrlSw",                            &IBM650_OnClick_Sw},
+    { &IBM650.DisplaySw,              "DisplaySw",                         &IBM650_OnClick_Sw},
+    { &IBM650.OverflowSw,             "OverflowSw",                        &IBM650_OnClick_Sw},
+    { &IBM650.ErrorSw,                "ErrorSw",                           &IBM650_OnClick_Sw},
+    { &IBM650.BTN_Power,              "BTN_Power",                         &IBM650_OnClick_BTN},
+    { &IBM650.BTN_Transfer,           "BTN_Transfer",                      &IBM650_OnClick_BTN},
+    { &IBM650.BTN_ProgStart,          "BTN_ProgStart",                     &IBM650_OnClick_BTN},
+    { &IBM650.BTN_ProgStop,           "BTN_ProgStop",                      &IBM650_OnClick_BTN},
+    { &IBM650.BTN_ProgReset,          "BTN_ProgReset",                     &IBM650_OnClick_BTN},
+    { &IBM650.BTN_ComputerReset,      "BTN_ComputerReset",                 &IBM650_OnClick_BTN},
+    { &IBM650.BTN_AccumReset,         "BTN_AccumReset",                    &IBM650_OnClick_BTN},
+    { &IBM650.BTN_ErrorReset,         "BTN_ErrorReset",                    &IBM650_OnClick_BTN},
+    { &IBM650.BTN_ErrorSenseReset,    "BTN_ErrorSenseReset",               &IBM650_OnClick_BTN},
+    { &IBM650.BTN_Switch_Power,       "BTN_Switch_Power",                  &IBM650_OnClick_BTN},
     // IBM 653
-    { &IBM650.Reg_IAS_OPER,           "Reg_IAS_OPER",                      NULL,                   0, "ibm653/1"  },
-    { &IBM650.Reg_IAS_BLOCK_N,        "Reg_IAS_BLOCK_N",                   NULL,                   0, "ibm653/1"  },
-    { &IBM650.Reg_IAS_WORD_N,         "Reg_IAS_WORD_N",                    NULL,                   0, "ibm653/1"  },
+    { &IBM650.Reg_IAS_OPER,           "Reg_IAS_OPER",                      NULL,               "ibm653/1"  },
+    { &IBM650.Reg_IAS_BLOCK_N,        "Reg_IAS_BLOCK_N",                   NULL,               "ibm653/1"  },
+    { &IBM650.Reg_IAS_WORD_N,         "Reg_IAS_WORD_N",                    NULL,               "ibm653/1"  },
     // IBM 652
-    { &IBM650.Reg_MT_SEL_N,           "Reg_MT_SEL_N",                      NULL,                   0, "ibm652/1"  },
-    { &IBM650.Reg_MT_OPER,            "Reg_MT_OPER",                       NULL,                   0, "ibm652/1"  },
-    { &IBM650.Reg_INQUIRY,            "Reg_INQUIRY",                       NULL,                   0, "ibm652/1"  },
-    { &IBM650.Reg_DS_UNIT_N,          "Reg_DS_UNIT_N",                     NULL,                   0, "ibm652/1"  },
-    { &IBM650.Reg_DS_DISK_N,          "Reg_DS_DISK_N",                     NULL,                   0, "ibm652/1"  },
-    { &IBM650.Reg_DS_TRACK_N,         "Reg_DS_TRACK_N",                    NULL,                   0, "ibm652/1"  },
-    { &IBM650.Reg_DS_ARM_N,           "Reg_DS_ARM_N",                      NULL,                   0, "ibm652/1"  },
-    { &IBM650.Reg_DS_OPER,            "Reg_DS_OPER",                       NULL,                   0, "ibm652/1"  },
-    { &IBM650.DsUnitSw[1],            "DsUnitSw",                          &IBM650_OnClick_Sw,     0, "ibm652/1"  },
-    { &IBM650.DsUnitSwNum[1],         "DsUnitSwNum",                       NULL,                   0, "ibm652/1"  },
-    { &IBM650.DsArmSw[1],             "DsArmSw",                           &IBM650_OnClick_Sw,     0, "ibm652/1"  },
-    { &IBM650.DsArmSwNum[1],          "DsArmSwNum",                        NULL,                   0, "ibm652/1"  },
+    { &IBM650.Reg_MT_SEL_N,           "Reg_MT_SEL_N",                      NULL,               "ibm652/1"  },
+    { &IBM650.Reg_MT_OPER,            "Reg_MT_OPER",                       NULL,               "ibm652/1"  },
+    { &IBM650.Reg_INQUIRY,            "Reg_INQUIRY",                       NULL,               "ibm652/1"  },
+    { &IBM650.Reg_DS_UNIT_N,          "Reg_DS_UNIT_N",                     NULL,               "ibm652/1"  },
+    { &IBM650.Reg_DS_DISK_N,          "Reg_DS_DISK_N",                     NULL,               "ibm652/1"  },
+    { &IBM650.Reg_DS_TRACK_N,         "Reg_DS_TRACK_N",                    NULL,               "ibm652/1"  },
+    { &IBM650.Reg_DS_ARM_N,           "Reg_DS_ARM_N",                      NULL,               "ibm652/1"  },
+    { &IBM650.Reg_DS_OPER,            "Reg_DS_OPER",                       NULL,               "ibm652/1"  },
+    { &IBM650.DsUnitSw[1],            "DsUnitSw",                          &IBM650_OnClick_Sw, "ibm652/1"  },
+    { &IBM650.DsUnitSwNum[1],         "DsUnitSwNum",                       NULL,               "ibm652/1"  },
+    { &IBM650.DsArmSw[1],             "DsArmSw",                           &IBM650_OnClick_Sw, "ibm652/1"  },
+    { &IBM650.DsArmSwNum[1],          "DsArmSwNum",                        NULL,               "ibm652/1"  },
     // IBM 407 Print out
-    { &IBM650.Paper,                  "Paper",                             NULL,                   0, "ibm407/1"  },
-    { &IBM650.PaperBackground,        "PaperBackground",                   NULL,                   0, "ibm407/1"  },
-    { &IBM650.PrinterCharSet,         "PrinterCharSet",                    NULL,                   0, "ibm407/1"  },
+    { &IBM650.Paper,                  "Paper",                             NULL,               "ibm407/1"  },
+    { &IBM650.PaperBackground,        "PaperBackground",                   NULL,               "ibm407/1"  },
+    { &IBM650.PrinterCharSet,         "PrinterCharSet",                    NULL,               "ibm407/1"  },
     // IBM 533 Card Read Punch
-    { &IBM650.InputDeck,              "InputDeck",                         NULL,                   0, "ibm533/1"  },
-    { &IBM650.ReadHopper,             "ReadHopper",                        NULL,                   0, "ibm533/1"  },
-    { &IBM650.ReadHopperRear,         "ReadHopperRear",                    NULL,                   0, "ibm533/1"  },
-    { &IBM650.ReadHopperFront,        "ReadHopperFront",                   NULL,                   0, "ibm533/1"  },
-    { &IBM650.ReadDeck,               "ReadDeck",                          NULL,                   0, "ibm533/1"  },
-    { &IBM650.ReadStacker,            "ReadStacker",                       NULL,                   0, "ibm533/1"  },
-    { &IBM650.PunchStacker,           "PunchStacker",                      NULL,                   0, "ibm533/1"  },
-    { &IBM650.OutputDeck,             "OutputDeck",                        NULL,                   0, "ibm533/1"  },
+    { &IBM650.InputDeck,              "InputDeck",                         NULL,               "ibm533/1"  },
+    { &IBM650.ReadHopper,             "ReadHopper",                        NULL,               "ibm533/1"  },
+    { &IBM650.ReadHopperRear,         "ReadHopperRear",                    NULL,               "ibm533/1"  },
+    { &IBM650.ReadHopperFront,        "ReadHopperFront",                   NULL,               "ibm533/1"  },
+    { &IBM650.ReadDeck,               "ReadDeck",                          NULL,               "ibm533/1"  },
+    { &IBM650.ReadStacker,            "ReadStacker",                       NULL,               "ibm533/1"  },
+    { &IBM650.PunchStacker,           "PunchStacker",                      NULL,               "ibm533/1"  },
+    { &IBM650.OutputDeck,             "OutputDeck",                        NULL,               "ibm533/1"  },
+    { &IBM650.Drop_InputDeckFile,     "Drop_InputDeckFile",                NULL,               "ibm533/1"  },
     // IBM 355 RAMAC
-    { &IBM650.ArmRunArea,             "ArmRunArea",                        NULL,                   0, "ibm355/1"  },
-    { &IBM650.Arm,                    "Arm",                               NULL,                   0, "ibm355/1"  },
-    { &IBM650.ArmWires,               "ArmWires",                          NULL,                   0, "ibm355/1"  },
-    { &IBM650.ArmWireRunArea,         "ArmWireRunArea",                    NULL,                   0, "ibm355/1"  },
-    { &IBM650.VerticalBarGuide1,      "VerticalBarGuide1",                 NULL,                   0, "ibm355/1"  },
-    { &IBM650.VerticalBarGuide2,      "VerticalBarGuide2",                 NULL,                   0, "ibm355/1"  },
-    { &IBM650.DiskStackMoire,         "DiskStackMoire",                    NULL,                   0, "ibm355/1"  },
-    { &IBM650.ArmShadow,              "ArmShadow",                         NULL,                   0, "ibm355/1"  },
-    { &IBM650.ArmWiresShadow,         "ArmWiresShadow",                    NULL,                   0, "ibm355/1"  },
-    { &IBM650.MovingHeadBarShadow,    "MovingHeadBarShadow",               NULL,                   0, "ibm355/1"  },    
+    { &IBM650.ArmRunArea,             "ArmRunArea",                        NULL,               "ibm355/1"  },
+    { &IBM650.Arm,                    "Arm",                               NULL,               "ibm355/1"  },
+    { &IBM650.ArmWires,               "ArmWires",                          NULL,               "ibm355/1"  },
+    { &IBM650.ArmWireRunArea,         "ArmWireRunArea",                    NULL,               "ibm355/1"  },
+    { &IBM650.VerticalBarGuide1,      "VerticalBarGuide1",                 NULL,               "ibm355/1"  },
+    { &IBM650.VerticalBarGuide2,      "VerticalBarGuide2",                 NULL,               "ibm355/1"  },
+    { &IBM650.DiskStackMoire,         "DiskStackMoire",                    NULL,               "ibm355/1"  },
+    { &IBM650.ArmShadow,              "ArmShadow",                         NULL,               "ibm355/1"  },
+    { &IBM650.ArmWiresShadow,         "ArmWiresShadow",                    NULL,               "ibm355/1"  },
+    { &IBM650.MovingHeadBarShadow,    "MovingHeadBarShadow",               NULL,               "ibm355/1"  },    
     // IBM 727
-    { &IBM650.MT_InfoPanel,           "MT_InfoPanel",                      NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT[0],                  "MT_0",                              NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_num[0],              "MT_0_number",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_lights[0],           "MT_0_lights",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_L[0],                "MT_0_L",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_R[0],                "MT_0_R",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_head[0],             "MT_0_head",                         NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_L_VacCol[0],        "MT_0_L_VacCol",                  NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_R_VacCol[0],        "MT_0_R_VacCol",                  NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT[1],                  "MT_1",                              NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_num[1],              "MT_1_number",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_lights[1],           "MT_1_lights",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_L[1],                "MT_1_L",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_R[1],                "MT_1_R",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_head[1],             "MT_1_head",                         NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_L_VacCol[1],        "MT_1_L_VacCol",                  NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_R_VacCol[1],        "MT_1_R_VacCol",                  NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT[2],                  "MT_2",                              NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_num[2],              "MT_2_number",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_lights[2],           "MT_2_lights",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_L[2],                "MT_2_L",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_R[2],                "MT_2_R",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_head[2],             "MT_2_head",                         NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_L_VacCol[2],        "MT_2_L_VacCol",                  NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_R_VacCol[2],        "MT_2_R_VacCol",                  NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT[3],                  "MT_3",                              NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_num[3],              "MT_3_number",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_lights[3],           "MT_3_lights",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_L[3],                "MT_3_L",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_R[3],                "MT_3_R",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_head[3],             "MT_3_head",                         NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_L_VacCol[3],        "MT_3_L_VacCol",                  NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_R_VacCol[3],        "MT_3_R_VacCol",                  NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT[4],                  "MT_4",                              NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_num[4],              "MT_4_number",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_lights[4],           "MT_4_lights",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_L[4],                "MT_4_L",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_R[4],                "MT_4_R",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_head[4],             "MT_4_head",                         NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_L_VacCol[4],        "MT_4_L_VacCol",                  NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_R_VacCol[4],        "MT_4_R_VacCol",                  NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT[5],                  "MT_5",                              NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_num[5],              "MT_5_number",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_lights[5],           "MT_5_lights",                       NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_L[5],                "MT_5_L",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_R[5],                "MT_5_R",                            NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_head[5],             "MT_5_head",                         NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_L_VacCol[5],        "MT_5_L_VacCol",                  NULL,                   0, "ibm727/1"  },
-        { &IBM650.MT_R_VacCol[5],        "MT_5_R_VacCol",                  NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_VacColumn,           "MT_VacColumn",                      NULL,                   0, "ibm727/1"  },
-    { &IBM650.MT_VacColMedium,        "MT_VacColMedium",                   NULL,                   0, "ibm727/1"  },
+    { &IBM650.MT_InfoPanel,           "MT_InfoPanel",                      NULL,               "ibm727/1"  },
+    { &IBM650.MT[0],                  "MT_0",                              NULL,               "ibm727/1"  },
+    { &IBM650.MT_num[0],              "MT_0_number",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_lights[0],           "MT_0_lights",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_L[0],                "MT_0_L",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_R[0],                "MT_0_R",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_head[0],             "MT_0_head",                         NULL,               "ibm727/1"  },
+    { &IBM650.Drop_MT_File[0],           "Drop_MT0_File",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_L_VacCol[0],        "MT_0_L_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_R_VacCol[0],        "MT_0_R_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_BTN_UnLoad[0],      "MT_0_BTN_UnLoad",              &IBM650_OnClick_BTN2, "ibm727/1"  },
+    { &IBM650.MT[1],                  "MT_1",                              NULL,               "ibm727/1"  },
+    { &IBM650.MT_num[1],              "MT_1_number",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_lights[1],           "MT_1_lights",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_L[1],                "MT_1_L",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_R[1],                "MT_1_R",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_head[1],             "MT_1_head",                         NULL,               "ibm727/1"  },
+    { &IBM650.Drop_MT_File[1],           "Drop_MT1_File",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_L_VacCol[1],        "MT_1_L_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_R_VacCol[1],        "MT_1_R_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_BTN_UnLoad[1],      "MT_1_BTN_UnLoad",              &IBM650_OnClick_BTN2, "ibm727/1"  },
+    { &IBM650.MT[2],                  "MT_2",                              NULL,               "ibm727/1"  },
+    { &IBM650.MT_num[2],              "MT_2_number",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_lights[2],           "MT_2_lights",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_L[2],                "MT_2_L",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_R[2],                "MT_2_R",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_head[2],             "MT_2_head",                         NULL,               "ibm727/1"  },
+    { &IBM650.Drop_MT_File[2],           "Drop_MT2_File",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_L_VacCol[2],        "MT_2_L_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_R_VacCol[2],        "MT_2_R_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_BTN_UnLoad[2],      "MT_2_BTN_UnLoad",              &IBM650_OnClick_BTN2, "ibm727/1"  },
+    { &IBM650.MT[3],                  "MT_3",                              NULL,               "ibm727/1"  },
+    { &IBM650.MT_num[3],              "MT_3_number",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_lights[3],           "MT_3_lights",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_L[3],                "MT_3_L",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_R[3],                "MT_3_R",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_head[3],             "MT_3_head",                         NULL,               "ibm727/1"  },
+    { &IBM650.Drop_MT_File[3],           "Drop_MT3_File",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_L_VacCol[3],        "MT_3_L_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_R_VacCol[3],        "MT_3_R_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_BTN_UnLoad[3],      "MT_3_BTN_UnLoad",              &IBM650_OnClick_BTN2, "ibm727/1"  },
+    { &IBM650.MT[4],                  "MT_4",                              NULL,               "ibm727/1"  },
+    { &IBM650.MT_num[4],              "MT_4_number",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_lights[4],           "MT_4_lights",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_L[4],                "MT_4_L",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_R[4],                "MT_4_R",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_head[4],             "MT_4_head",                         NULL,               "ibm727/1"  },
+    { &IBM650.Drop_MT_File[4],           "Drop_MT4_File",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_L_VacCol[4],        "MT_4_L_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_R_VacCol[4],        "MT_4_R_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_BTN_UnLoad[4],      "MT_4_BTN_UnLoad",              &IBM650_OnClick_BTN2, "ibm727/1"  },
+    { &IBM650.MT[5],                  "MT_5",                              NULL,               "ibm727/1"  },
+    { &IBM650.MT_num[5],              "MT_5_number",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_lights[5],           "MT_5_lights",                       NULL,               "ibm727/1"  },
+    { &IBM650.MT_L[5],                "MT_5_L",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_R[5],                "MT_5_R",                            NULL,               "ibm727/1"  },
+    { &IBM650.MT_head[5],             "MT_5_head",                         NULL,               "ibm727/1"  },
+    { &IBM650.Drop_MT_File[5],           "Drop_MT5_File",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_L_VacCol[5],        "MT_5_L_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_R_VacCol[5],        "MT_5_R_VacCol",                  NULL,               "ibm727/1"  },
+        { &IBM650.MT_BTN_UnLoad[5],      "MT_5_BTN_UnLoad",              &IBM650_OnClick_BTN2, "ibm727/1"  },
+    { &IBM650.MT_VacColumn,           "MT_VacColumn",                      NULL,               "ibm727/1"  },
+    { &IBM650.MT_VacColMedium,        "MT_VacColMedium",                   NULL,               "ibm727/1"  },
     { NULL }
 };
 
@@ -331,18 +349,18 @@ int hPaperBackgroundOffset;          // offset of background image on paper imag
 
 // for tape cabinet
 #define MT_anim_sequence_len   500        // max number of animation sequence steps for tape
-struct mtcabrec {                         // mtcab[0..5].reel[0..1] is arecord that holds the tape reel states
+struct mtcabrec {                         // mtcab[0..5].reel[0..1] is a record that holds the tape reel states
    int mt_is;                             // current visual animation being done
    // state of tape elements
    int rew_u3;                            // amount of tape medium on R reel during rewind operation (used to show info with ^I)
    int rw_tm0, rw_msec, rw_recsize;       // r/w operation start (sim_os_msec time), duration left (msec), record size left (x1000 inch)
    struct mtreelrec {               
-       int color;                         // reel colors
+       int color;                         // reel color
        int VacCol_h;                      // ammount of medium (x1000 inch) in vacuum column. 0=no medium, >0 medium loop going down into the vaccol in direction of upper sensor
        double rpm;                        // reel current revolutions per second (0=stopped, <0=backwards)
        int ang;                           // reel current angular position (but NOT normalizaed to 0..360 degrees! normalize before using)
        int motor;                         // reel motor operation in progress (-1=accelerate backwards, 0=decelerate, 1=accelerate forward)
-       int n;                             // vale of reel control state n 
+       int n;                             // value of reel control state n 
        int tm0;                           // timestamp when reel motor start accelerating/decelerating (in sim_os_msec time). =0 when motor stoped
        double rpm0;                       // revolutions per second (0=stopped, <0=backwards) when reel motor start accelerating/decelerating 
        int ang0;                          // reel angular position (0..360 degrees) when reel motor start accelerating/decelerating
@@ -1217,11 +1235,12 @@ void Refresh_Ramac(void)
 }
 
 
-#define     MT_is_loading_tape  1
-#define     MT_is_rewinding     2
-#define     MT_is_using_tape    3
+#define     MT_is_loading_tape      1
+#define     MT_is_rewinding         2
+#define     MT_is_unloading_tape    3
 
 
+int PARAM_MaxSlice_msec  =   100;  // max time considered for tape hop calculations
 int PARAM_Reel_Diameter  =   267;  // reel diameter in mm
 int PARAM_RPM            =  1140;  // reel forward/backwards motor revolutions per minute
 int PARAM_VacCol_h_Low   = 15000;  // upper vacuum colum sensor (inches x 1000) triggers reel load medium on colum 
@@ -1243,6 +1262,7 @@ int PARAM_HiSpeedRwdSpeed =  500;  // High Speed rewind at 500 inches/sec
 #define     MT_anim_step_rw         1             // read/write tape animation step 
 #define     MT_anim_step_HiRew      2             // High Speed Rewind animation step 
 #define     MT_anim_finished       99             // this is the final step that signals the animation sequence has finished
+#define     MT_anim_no_change    (1<<30)          // no change the current value.
 
 void mt_reels_mov(int unit, int cmd, 
                   int * L_VacColMedium_h, int * R_VacColMedium_h, 
@@ -1256,6 +1276,7 @@ int mt_do_animation_seq(int unit,
                   int * MT_Reel_Amount, int * MT_head)
 {
     int time, nseq, msec, hint, recsize, ang, n, m, n1, n2, u3, u3_dec, p; 
+    int L_inc, R_inc, L_into_col, R_into_col; 
     int tnow = Refresh_tnow; 
 
     time = tnow - mtcab[unit].nseq_tm0;
@@ -1284,18 +1305,53 @@ int mt_do_animation_seq(int unit,
             // This is incremental animation step, should be done allways.
             // Execute it and mark as done to avoid issuing it more than once
             mtcab[unit].seq[nseq].hint=MT_anim_step_nop; 
-            // apply this step reel angular increment to reels 
-            ang = mtcab[unit].reel[0].ang + mtcab[unit].seq[nseq].L_ang_inc; 
-            ang = ang % 360; if (ang < 0) ang +=360;
-            mtcab[unit].reel[0].ang = ang; 
-            ang = mtcab[unit].reel[1].ang + mtcab[unit].seq[nseq].R_ang_inc; 
-            ang = ang % 360; if (ang < 0) ang +=360;
-            mtcab[unit].reel[1].ang = ang; 
             // apply this step tape medium increment into vacuum cols
-            mtcab[unit].reel[0].VacCol_h += mtcab[unit].seq[nseq].L_VacCol_inc; 
-            mtcab[unit].reel[1].VacCol_h += mtcab[unit].seq[nseq].R_VacCol_inc; 
+            L_inc=mtcab[unit].seq[nseq].L_VacCol_inc; // how much tape medium enters (if >0) or are removed (if <0) from VacCol
+            R_inc=mtcab[unit].seq[nseq].R_VacCol_inc;
+            L_into_col= (mtcab[unit].reel[0].VacCol_h < 0) ? 0:1; // =0 if no tape medium into vacuum column
+            R_into_col= (mtcab[unit].reel[1].VacCol_h < 0) ? 0:1; 
+            if ((L_inc < 0) && (R_inc < 0)) {
+                // removing medium from column, determine if one col is empty
+                if ((L_into_col) && (R_into_col)) {
+                    // both columns with tape medium inside
+                } else if (L_into_col) { 
+                    // R column empty, all movement goes to column L
+                    L_inc += R_inc; R_inc=0; 
+                } else if (R_into_col) { 
+                    // L column empty, all movement goes to column R
+                    R_inc += L_inc; L_inc=0; 
+                } else { 
+                    // L and R columns empty -> terminate tape unloading from columns
+                    // So mark as done any following step inc that still ask to remove medium from VacCol
+                    for (n=nseq+1;;n++) {
+                        if (mtcab[unit].seq[n].hint != MT_anim_step_inc) break; // not an incremental animation step
+                        if ((mtcab[unit].seq[n].L_VacCol_inc >= 0) || (mtcab[unit].seq[n].R_VacCol_inc >=0)) break; // not removing medium from vaccol  
+                        mtcab[unit].seq[n].hint=MT_anim_step_nop; // mark as done
+                        mtcab[unit].seq[n].msec=1; // only stands for 1 msec
+                    }
+                    // set to zero to avoid negative values
+                    mtcab[unit].reel[0].VacCol_h = L_inc = 0; 
+                    mtcab[unit].reel[1].VacCol_h = R_inc = 0; 
+                }
+            } 
+            // apply this step tape medium increment into vacuum cols
+            mtcab[unit].reel[0].VacCol_h += L_inc; 
+            mtcab[unit].reel[1].VacCol_h += R_inc; 
+            // apply this step angular increment to reels 
+            // (but only if thereis some medium into vaccol to be moved)
+            if (L_into_col) {
+                ang = mtcab[unit].reel[0].ang + mtcab[unit].seq[nseq].L_ang_inc; 
+                ang = ang % 360; if (ang < 0) ang +=360;
+                mtcab[unit].reel[0].ang = ang; 
+            }
+            if (R_into_col) {
+                ang = mtcab[unit].reel[1].ang + mtcab[unit].seq[nseq].R_ang_inc; 
+                ang = ang % 360; if (ang < 0) ang +=360;
+                mtcab[unit].reel[1].ang = ang; 
+            }
             // set the tape position of its elements
-            *MT_Reel_Amount = mtcab[unit].seq[nseq].MT_Reel_Amount; 
+            if (MT_anim_no_change & mtcab[unit].seq[nseq].MT_Reel_Amount) *MT_Reel_Amount = (int) GetState(IBM650.MT[unit]); 
+            else *MT_Reel_Amount = mtcab[unit].seq[nseq].MT_Reel_Amount; 
             if (mtcab[unit].reel[0].color == 1) {
                *MT_L_Rot = mtcab[unit].reel[0].n = (mtcab[unit].reel[0].ang % 120) * 24 / 120;
             } else {
@@ -1344,7 +1400,8 @@ int mt_do_animation_seq(int unit,
             m  = msec+time;  // m=msec+time = time elapsed in this step. msec = this step duration
             time = tnow - mtcab[unit].seq[nseq].MT_Reel_Amount;
             mtcab[unit].seq[nseq].MT_Reel_Amount = tnow;
-            if ((time < 0) || (time > 1000)) time=0; // skip this step because is not init yet/invalid                
+            // max time considered between refreshes 
+            if ((time < 0) || (time > PARAM_MaxSlice_msec)) time=PARAM_MaxSlice_msec; 
             n=mtcab[unit].seq[nseq].MT_head; 
             recsize  = n * time * PARAM_RWSpeed; // inches x1000, 
             recsize = recsize / 2; 
@@ -1436,8 +1493,7 @@ int mt_do_animation_seq(int unit,
             }
             // check fast mode
             if (CpuSpeed_Acceleration == -1) {
-                // if Key Control-F (^F, Ctrl F) being pressed and remains more that 500 msec
-                // to finish this step, then set duration to 500 msec
+                // if Key Control-F (^F, Ctrl F) being pressed then set duration to 400 msec
                 mtcab[unit].seq[nseq].msec = 400;
                 n1=56; // make L reel transparent
             }
@@ -1498,8 +1554,7 @@ void AddSeq(int unit, int msec, int hint,
 }
 
 // add to the current animation sequence the load animation:
-//    - spin reels slowly to load medium on vacuum columns
-//    - close r/w head
+//    - spin reels slowly to load medium on vacuum columns while closing r/w head
 void mt_add_load_seq(int unit)
 {
     int MT_Reel_Amount,  MT_head; // state of controls at end of of redraw
@@ -1535,44 +1590,34 @@ void mt_add_load_seq(int unit)
         MT_head = 1 + 10 * (nHead-i) / nHead; 
         if (MT_head<1) MT_head=1;
         // reel rotation
-        if (R_h <= PARAM_VacCol_h_Low) {
-            // medium loop on vaccol R not passed yet over upper sensor. Both reels feeds column R
-            AddSeq(unit, msec, MT_anim_step_inc, 
-                0 /* L_VacCol_inc */, L_inc_h + R_inc_h /* R_VacCol_inc */, 
+        AddSeq(unit, msec, MT_anim_step_inc, 
+                L_inc_h  /* L_VacCol_inc */, R_inc_h /* R_VacCol_inc */, 
                 +ang_inc /* L_ang_inc */, -ang_inc /* R_ang_inc */, 
-                MT_Reel_Amount, MT_head);       
-            R_h += L_inc_h + R_inc_h; 
-        } else if (L_h <= PARAM_VacCol_h_Low) {
-            // medium on R col passed over upper sensor. Each reel feeds its own column
-            AddSeq(unit, msec, MT_anim_step_inc, 
-                L_inc_h /* L_VacCol_inc */, R_inc_h /* R_VacCol_inc */, 
-                +ang_inc /* L_ang_inc */, -ang_inc /* R_ang_inc */, 
-                MT_Reel_Amount, MT_head);        
-            L_h += L_inc_h; 
-            R_h += R_inc_h; 
-        } else {
-            // both cols feeded. Stop take motor
-            AddSeq(unit, msec, MT_anim_step_inc, 
-                L_inc_h /* L_VacCol_inc */, R_inc_h /* R_VacCol_inc */, 
-                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-                MT_Reel_Amount, MT_head);        
-            // when vaccol L tape loop pass over upper sensor, load is finished
-            // if head close, all the operation is finished
-            if (MT_head==1) break;
-        }
+                MT_Reel_Amount /* MT_Reel_Amount */, MT_head /* MT_head */ );       
+        L_h += L_inc_h; 
+        R_h += R_inc_h; 
+        if ((R_h > PARAM_VacCol_h_Low) && (L_h > PARAM_VacCol_h_Low)) break; 
     }
 }
 
 // add to the current animation sequence the un load animation:
 // u3 param is the ammount (inches x1000) of tape medium on reel R   
-//    - spin reels slowly to un load medium on vacuum columns
+//    - spin reels slowly to un load medium on vacuum columns 
+//    - open r/w head
+//    (if u3<0, also ...)
+//    - remove left reel, no tape medium on it
+//    - close r/w head
 void mt_add_unload_seq(int unit, int u3)
 {
-    int MT_Reel_Amount, MT_head; // state of controls 
+    int MT_head; // state of controls 
     int i, L_h, R_h, L_inc_h, R_inc_h, msec, ang_inc, r1, r2, rL, rR, p;
+    int bUnLoadReel = 0; 
 
-    MT_Reel_Amount = 3 + (int) (20 * (u3 / (mt_unit[unit].u4*1000.0))); 
     MT_head        = 1;    // head closed
+
+    if (u3<0) {
+        u3=0; bUnLoadReel=1; 
+    }
 
     // calc percent 0..100 of L reel 
     p = (int) ((u3 / (mt_unit[unit].u4*1000.0))*100); 
@@ -1594,28 +1639,19 @@ void mt_add_unload_seq(int unit, int u3)
     L_inc_h = L_inc_h  / 2;                            // tape loop position is half on medium loaded
     R_inc_h = R_inc_h  / 2; 
 
-    // take tape medium from Vacuum Columns until one col empty
-    L_h = mtcab[unit].reel[0].VacCol_h;  // amount of tape medium in each column
-    R_h = mtcab[unit].reel[1].VacCol_h;
+    L_h = R_h = (int) (PARAM_VacCol_h_Low * 1.1 * 1.2); // maximum teorical value of tape medium in vacCol + 20% of safety margin
 
-    for(;;) {
-        AddSeq(unit, msec, 0, 
-                -L_inc_h /* L_VacCol_inc */, -R_inc_h /* R_VacCol_inc */, 
+    // remove tape medium from both vac cols. 
+    // terminates when both are empty
+    for(i=0;;i++) {
+        // reel rotation
+        AddSeq(unit, msec, MT_anim_step_inc, 
+                -L_inc_h  /* L_VacCol_inc */, -R_inc_h /* R_VacCol_inc */, 
                 -ang_inc /* L_ang_inc */, +ang_inc /* R_ang_inc */, 
-                MT_Reel_Amount, MT_head);        
-        L_h -= L_inc_h; // both columns stil have tape medium into 
-        R_h -= R_inc_h;
-        if ((L_h > 0) && (R_h > 0)) {
-            continue;             // both columns stil have tape medium into 
-        } else if (R_h > 0) {
-            R_inc_h += L_inc_h;   // only R column has medium. Taken faster
-            L_inc_h = 0;          // as now L reel also take medium from this column
-        } else if (L_h > 0) {
-            L_inc_h += R_inc_h;   // only L column has medium. Taken faster
-            R_inc_h = 0;          // as now R reel also take medium from this column
-        } else {
-            break;                // both vac col are empty
-        }
+                MT_anim_no_change /* MT_Reel_Amount */, 1 /* MT_head closed */ );       
+        L_h -= L_inc_h; 
+        R_h -= R_inc_h; 
+        if ((R_h < 0) && (L_h < 0)) break; 
     }
 
     // spin both reels forward 45gr to retension tape
@@ -1623,7 +1659,7 @@ void mt_add_unload_seq(int unit, int u3)
         AddSeq(unit, msec, 0, 
             0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
             +ang_inc /* L_ang_inc */, +ang_inc /* R_ang_inc */, 
-            MT_Reel_Amount, MT_head);        
+            MT_anim_no_change, 1 /* MT_head closed */ );       
     }
 
     // pause 0.5 sec
@@ -1631,7 +1667,7 @@ void mt_add_unload_seq(int unit, int u3)
     AddSeq(unit, msec, MT_anim_step_inc, 
             0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
             0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-            MT_Reel_Amount, MT_head);        
+            MT_anim_no_change, 1 /* MT_head closed */ );       
 
     // now open r/w head
     msec = PARAM_HeadOpenTime / 10; 
@@ -1639,90 +1675,32 @@ void mt_add_unload_seq(int unit, int u3)
         AddSeq(unit, msec, MT_anim_step_inc, 
                 0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
                 0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-                MT_Reel_Amount, MT_head);        
+                MT_anim_no_change, MT_head);        
         MT_head++;
     }
-}
 
-// calculate and store in animation array the load animation when a reel 
-// in mounted (attached) to tape unit. If cmode = 'F' or 'B' load
-// animation will be move all medium forwards/backwards
-void mt_set_load_seq(int unit, char cmode)
-{
-    int MT_Reel_Amount, MT_head; // state of controls at end of of redraw
-    int n, msec, r, R_h;
+    // check if unload terminated with same reel, r/w open
+    if (bUnLoadReel==0) return; 
 
-    MT_Reel_Amount   = 1;    // all tape medium on L tape
-    MT_head          = 11;   // head full open
-
-    // on load, reels rotates at low speed to feed vacuum columns with tape medium
-    // while r/w head is closing. Then goes backwards to read read record backwards 
-    // (locate the load point)
-
-    mtcab[unit].nseq=0;                 // init sequence
-    mtcab[unit].nseq_tm0=Refresh_tnow; // when animation starts
-
-    if ((cmode == 'F') || (cmode == 'B')) {
-        // forward all tape sequence
-        msec = mt_unit[unit].u4 * 1000 / PARAM_RWSpeed;
-        if (cmode == 'B') {
-            mt_unit[unit].u3 = mt_unit[unit].u4 * 1000;
-            n=-1; 
-        } else {
-            n= 1;
-        }
-        AddSeq(unit, msec, MT_anim_step_rw,  mt_unit[unit].u4 * 1000 ,1,
-                                             0,0,0, n /* read fwd/bckwrd */); 
-        // end sequence
-        AddSeq(unit,    0, MT_anim_finished, 0,0,0,0,0,0); 
-        return; 
+    // close r/w head
+    msec = PARAM_HeadOpenTime / 10; 
+    MT_head=11; // open head
+    for(;;) {
+        AddSeq(unit, msec, MT_anim_step_inc, 
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                0, MT_head);     // no tape medium on reels   
+        if (MT_head==2) break; 
+        // last value set it MT_head=2 (about to close), so at NoTapeAttached label 
+        // will enter first time to set the tape cabinet as detached (and terminate closing tape head)
+        MT_head--;
     }
 
 
-    // normal load sequence
-    // start delay depends on other loads already in progress 
-    // This is done to avoid all load animation to be synchonized
-    msec=0;
-    for (n=0;n<6;n++) {
-        if (mtcab[n].mt_is == MT_is_loading_tape) msec += 750;          
-    }
-    AddSeq(unit, msec, MT_anim_step_inc, 
-            0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
-            0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-            MT_Reel_Amount, MT_head);        
-    
-    // make sure no medium on vac col
-    mtcab[unit].reel[0].VacCol_h = 0;  // amount of tape medium in each column
-    mtcab[unit].reel[1].VacCol_h = 0;
-
-    // add the load animation:
-    //    - spin reels slowly to load medium on vacuum columns
-    //    - close r/w head
-    mt_add_load_seq(unit);
-    MT_head        = 1;    // head closed
-
-    // Now sense load point by reading backwards
-    // Duration of it  depends on how much the user has spinned reel R when 
-    // preparing the tape for load
-    // when reel is empty, it holds aprox 29,6 inches of tape medium in each revolution
-    // r/w heads moves the tape medium at 75 inches/sec -> each revolution done by
-    // the user will need 400 msec
-    r=(50 * PARAM_Reel_Diameter / 2) / 100;  // radius when reel empty
-    r=(int) (0.0393701 * r * 1000);          // reel radius in inches x 1000
-    R_h = (int) (r * 2 * 3.1416);            // ammount to medium on R reel circunference. 
-    msec = R_h / PARAM_RWSpeed;              // time to read medium on reel circunference. 
-
-    // Asume user has done 5-15 rev when preparing the tape
-    msec = 5 * msec + 10 * msec * (sim_rand() & 0xFF) / 256;
-    AddSeq(unit, msec, MT_anim_step_rw,  0,0,0,0,0, 
-                                         -1 /* read backwards */); 
-
-    // end sequence
-    AddSeq(unit,    0, MT_anim_finished, 0,0,0,0,0,0); 
 }
 
 // calculate and store in animation array the animation sequence for rewind
-void mt_set_rew_seq(int unit)
+void mt_set_rew_seq(int unit, int bStartEndSeqFlag)
 {
     int MT_Reel_Amount,  MT_head;    // state of controls at end of of redraw
     int u3 = mt_info[unit].recsize;  // use recsize to get u3 value on rewind start 
@@ -1732,8 +1710,13 @@ void mt_set_rew_seq(int unit)
     if (MT_Reel_Amount > 23) MT_Reel_Amount = 23;
     MT_head        = 1;    // head closed
 
-    mtcab[unit].nseq=0;                 // init sequence
-    mtcab[unit].nseq_tm0=Refresh_tnow;  // when animation starts
+    if (bStartEndSeqFlag) {
+        mtcab[unit].nseq=0;                 // init sequence
+        mtcab[unit].nseq_tm0=Refresh_tnow;  // when animation starts
+    } else if (u3==0) {
+        // nothing to rewind, so exit
+        return; 
+    }
 
     bHi=0; // flag high/low speed rew
     mtcab[unit].rew_u3 = u3; // amount on tape medium (inch x1000) in reel R that should be rewinded
@@ -1825,24 +1808,133 @@ void mt_set_rew_seq(int unit)
     AddSeq(unit, msec, MT_anim_step_rw,  u3 /* update recsize */,0,0,0,0, 
                                          -1 /* read backwards */); 
 
-    // end sequence
-    AddSeq(unit, 0,  MT_anim_finished, 0,0,0,0,0,0); 
+    if (bStartEndSeqFlag) {
+        // end sequence
+        AddSeq(unit, 0,  MT_anim_finished, 0,0,0,0,0,0); 
+    }
 
     // log on debug precise rew time 
     {
-       DEVICE *dptr = find_dev_from_unit(&mt_unit[unit]);
-       int i; 
-       time = 0; 
-       for (i=0;i<MT_anim_sequence_len;i++) {
-           msec = mtcab[unit].seq[i].msec; 
-           if ((msec == 0) || (mtcab[unit].seq[i].hint == MT_anim_finished)) break;
-           time += msec;
-       }
-       sim_debug(DEBUG_CMD, dptr, "Tape unit %d: %s rewind time needed (%d sec)\n", 
+        DEVICE *dptr = find_dev_from_unit(&mt_unit[unit]);
+        int i; 
+        time = 0; 
+        for (i=0;i<MT_anim_sequence_len;i++) {
+            msec = mtcab[unit].seq[i].msec; 
+            if ((msec == 0) || (mtcab[unit].seq[i].hint == MT_anim_finished)) break;
+            time += msec;
+        }
+        sim_debug(DEBUG_CMD, dptr, "Tape unit %d: %s rewind time needed (%d sec)\n", 
                                    unit, (bHi ? "High Speed":"Low Speed"), time/1000);
     }
 
     // mt_dump_animation_seq(unit);
+}
+
+
+// calculate and store in animation array the animation for reels
+// if cmode = 'L' -> load animation: tape is mounted (attached) to tape unit. 
+// If cmode = 'F' or 'B' load animation will be move all medium forwards/backwards
+// if cmode = 'U' -> unload animation: tape is dismounted (detached) to tape unit. 
+// during animations, from simulated cpu point of wiew: the tape is at its final state
+//                                                      animation can be interrupted at any moment by tape command
+void mt_set_anim_seq(int unit, char cmode)
+{
+    int n, msec, r, R_h;
+    int tm0, tm1; 
+
+    // on load, reels rotates at low speed to feed vacuum columns with tape medium
+    // while r/w head is closing. Then goes backwards to read read record backwards 
+    // (locate the load point)
+
+    mtcab[unit].nseq=0;                 // init sequence
+    mtcab[unit].nseq_tm0=Refresh_tnow; // when animation starts
+
+    if ((cmode == 'F') || (cmode == 'B')) {
+        // forward all tape sequence
+        msec = mt_unit[unit].u4 * 1000 / PARAM_RWSpeed;
+        if (cmode == 'B') {
+            mt_unit[unit].u3 = mt_unit[unit].u4 * 1000;
+            n=-1; 
+        } else {
+            n= 1;
+        }
+        AddSeq(unit, msec, MT_anim_step_rw,  mt_unit[unit].u4 * 1000 ,1,
+                                             0,0,0, n /* read fwd/bckwrd */); 
+        // end sequence
+        AddSeq(unit,    0, MT_anim_finished, 0,0,0,0,0,0); 
+        return; 
+    }
+
+    // start delay depends on other loads/unloads already in progress 
+    // This is done to avoid animations to be synchonized
+    // determine when last animation started
+    tm0=0;
+    for (n=0;n<6;n++) {
+        if (n==unit) continue; 
+        if (((mtcab[n].mt_is == MT_is_loading_tape) || (mtcab[n].mt_is == MT_is_unloading_tape)) &&
+             (mtcab[n].seq[0].MT_head == 0)) {
+            // load/unload anim in progress in unit n. Let's know when it started
+            tm1=mtcab[n].nseq_tm0; 
+            if (mtcab[n].seq[0].MT_head==0) tm1 += mtcab[n].seq[0].msec; // add initial wait if any
+            if (tm0 < tm1) {
+                tm0 = tm1; // time when last anim started (after any initial wait time)
+            }
+        }
+    }
+    // determine wait time to start
+    msec=0; 
+    if (tm0) {
+        // there is an ongoing animation started (after initial wait) at tm0
+        tm0 += 1750; // add delay to anim to not be sync with previous one 
+        if (tm0 > mtcab[unit].nseq_tm0) {
+            // should wait 
+            msec = tm0 - mtcab[unit].nseq_tm0; 
+        }
+    }
+    if (msec == 0) msec=10; // min waiting time. Needed to identify it is an unload/load waiting
+    AddSeq(unit, msec, MT_anim_step_inc, 
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                (cmode == 'U') ? MT_anim_no_change:0  /* MT_Reel_Amount */, 
+                (cmode == 'U') ? 1:11 /* MT_head */ ); 
+
+    if (cmode == 'U') {
+        mt_set_rew_seq(unit, 0); 
+        mt_add_unload_seq(unit, -1);
+        // end sequence
+        AddSeq(unit,    0, MT_anim_finished, 0,0,0,0,0,0); 
+        return; 
+    }
+
+    // normal load sequence (asumed cmode = 'L')
+    
+    // make sure no medium on vac col
+    mtcab[unit].reel[0].VacCol_h = 0;  // amount of tape medium in each column
+    mtcab[unit].reel[1].VacCol_h = 0;
+
+    // add the load animation:
+    //    - spin reels slowly to load medium on vacuum columns
+    //    - close r/w head
+    mt_add_load_seq(unit);
+
+    // Now sense load point by reading backwards
+    // Duration of it  depends on how much the user has spinned reel R when 
+    // preparing the tape for load
+    // when reel is empty, it holds aprox 29,6 inches of tape medium in each revolution
+    // r/w heads moves the tape medium at 75 inches/sec -> each revolution done by
+    // the user will need 400 msec
+    r=(50 * PARAM_Reel_Diameter / 2) / 100;  // radius when reel empty
+    r=(int) (0.0393701 * r * 1000);          // reel radius in inches x 1000
+    R_h = (int) (r * 2 * 3.1416);            // ammount to medium on R reel circunference. 
+    msec = R_h / PARAM_RWSpeed;              // time to read medium on reel circunference. 
+
+    // Asume user has done 5-15 rev when preparing the tape
+    msec = 5 * msec + 10 * msec * (sim_rand() & 0xFF) / 256;
+    AddSeq(unit, msec, MT_anim_step_rw,  0,0,0,0,0, 
+                                         -1 /* read backwards */); 
+
+    // end sequence
+    AddSeq(unit,    0, MT_anim_finished, 0,0,0,0,0,0); 
 }
 
 // tape r/w head & reels & vacuum columns simulation
@@ -1901,6 +1993,12 @@ void mt_reels_mov(int unit, int cmd,
         mtcab[unit].rw_msec    -= time; 
         mtcab[unit].rw_tm0      = tnow;
         // take/give medium to vacuum columns
+        // the maximun time slice allowed to avoid too big hops on tape medium is PARAM_MaxSlice_msec
+        // PARAM_RWSpeed is the inches per second tape head moves the medium when reading/writing
+        // this means the maximum linear increment reading or writing (in inches x1000) is
+        n=PARAM_RWSpeed * PARAM_MaxSlice_msec;
+        if (recsize > n) recsize = n;
+        if (recsize < -n) recsize = -n;
         recsize = recsize / 2; // when adding/removing medium, loop position in vacuum colum moves half distance
         mtcab[unit].reel[0].VacCol_h -= recsize;
         mtcab[unit].reel[1].VacCol_h += recsize;
@@ -1988,6 +2086,12 @@ void mt_reels_mov(int unit, int cmd,
         mtcab[unit].reel[ireel].ang  = ang;  // save current angular position
         // calc radius of reel based on how much tape medium stored is in it 
         r=r1*100 + (r2-r1)* ( (ireel==0) ? 100-p:p);     // reel current radius in inches x 1000
+        // the maximun time slice allowed to avoid too big hops on tape medium is PARAM_MaxSlice_msec
+        // rpsMax = (PARAM_RPM * 2.0 / 5.0) / 60  is reel revolutions per second at full speed
+        // this means the maximum angular increment at full motor rpm is
+        ang = (int) (360 * rpsMax * PARAM_MaxSlice_msec / 1000); 
+        if (ang_inc > ang) ang_inc = ang; 
+        if (ang_inc < -ang) ang_inc = -ang; 
         // calc medium (in inches x1000) that has been moved from/to reel
         recsize = (int) (r * 2 * 3.1416 * ang_inc / 360);
         recsize = recsize / 2; // when adding/removing medium, loop position in vacuum column moves half distance
@@ -2117,7 +2221,7 @@ void mt_VacColSetDynamicState(int VacColMedium_h, int * VacColMedium_h0, int CId
     *VacColMedium_h0 = VacColMedium_h; 
 
     // calculate h
-    // control has upper sensor on y=30, lower sensor on y=100, 
+    // control has upper sensor on h=30, lower sensor on h=100, 
     // even if colum control is 151 pixels heigh, only visible a height of 114
     h= 30 + ((100-30) * (VacColMedium_h-PARAM_VacCol_h_Low) / (PARAM_VacCol_h_Hi-PARAM_VacCol_h_Low));
     if (h<0) h=0; 
@@ -2178,20 +2282,37 @@ void Refresh_MagTape(void)
         // check if unit disabled
         if (uptr->flags & UNIT_DIS) {
             SetState(IBM650.MT_num[unit], 10);     // yes, unit disabled -> tape number no lit on cabinet
-        NoTapeAttached:
-            SetState(IBM650.MT[unit], 0);          // no magnetic medium on reels
-            SetState(IBM650.MT_L[unit], 64);       // default gray reels
-            SetState(IBM650.MT_R[unit], 64);                           
-            SetState(IBM650.MT_lights[unit], 0);   // lights off
-            SetState(IBM650.MT_head[unit], 11);    // r/w tape head wide open
-            SetState(IBM650.MT_L_VacCol[unit], 0); // no magnetic medium on vacuum col
-            SetState(IBM650.MT_R_VacCol[unit], 0); // no magnetic medium on vacuum col
+           NoTapeAttached:
+            if ((GetState(IBM650.MT[unit]) == 0) && (GetState(IBM650.MT_head[unit])==1)) continue; 
+            cpanel_ControlRedrawNeeded = 1; SetState(IBM650.MT[unit], 0);          // no magnetic medium on reels
+            n=(GetState(IBM650.MT_L[unit]) & 31); if (n>23) n=0;                   // keep current angular position 0..23 for left reel
+            n=n+(GetState(IBM650.MT_L[unit]) & (64+128));                          // keep current color for  leftreel
+            cpanel_ControlRedrawNeeded = 1; SetState(IBM650.MT_L[unit], n);        // Left reel defaults to grey 
+            n=(GetState(IBM650.MT_R[unit]) & 31); if (n>23) n=0;                   // keep current angular position 0..23 for right reel
+            n=n+(GetState(IBM650.MT_R[unit]) & (64+128));                          // keep current color for  right reel
+            cpanel_ControlRedrawNeeded = 1; SetState(IBM650.MT_R[unit], n);                           
+            cpanel_ControlRedrawNeeded = 1; SetState(IBM650.MT_lights[unit], 0);   // lights off
+            cpanel_ControlRedrawNeeded = 1; SetState(IBM650.MT_head[unit], 1);     // r/w tape head closed
+            cpanel_ControlRedrawNeeded = 1; SetState(IBM650.MT_L_VacCol[unit], 0); // no magnetic medium on vacuum col
+            cpanel_ControlRedrawNeeded = 1; SetState(IBM650.MT_R_VacCol[unit], 0); // no magnetic medium on vacuum col
             continue; 
         } 
         // unit enabled
         SetState(IBM650.MT_num[unit], unit);     // unit enabled -> its number is lit on tape
         // check if tape file attached
-        if ((uptr->flags & UNIT_ATT) == 0) goto NoTapeAttached; // no file attached -> clean up tape 
+        if ((uptr->flags & UNIT_ATT) == 0) {
+            if (mt_info[unit].justdetached==1)  {  // 1 -> just detached -> should start unload animation
+                if (mtcab[unit].mt_is == MT_is_unloading_tape) {
+                    // unload amination in progress, continue
+                } else {
+                    // start unload amination
+                    mtcab[unit].mt_is = MT_is_unloading_tape; 
+                    mt_set_anim_seq(unit, 'U'); 
+                }
+            } else {
+                goto NoTapeAttached; // no file attached -> clean up tape 
+            }
+        }
         // tape has file attached (=tape reel mounted)
         // check if just being attached
         if (mt_info[unit].justattached) {  // 1 -> just attached -> should read reel tape options, if any 
@@ -2222,6 +2343,7 @@ void Refresh_MagTape(void)
                     if ((c == 'R') || (c == 'F') || (c == 'B')) {
                         cmode = c; // load animation will be Forward/backwards all reel, or *R
                     }
+                    RemoveOption(MT_cab_opt); // remove this option, as it is being executed now so will not apply on next attach of tape
                 }                
             }
             // reel color set. 
@@ -2235,12 +2357,18 @@ void Refresh_MagTape(void)
             mtcab[unit].mt_is = MT_is_loading_tape; 
             if (cmode != 'R') {
                 // normal load animation, *F or *B 
-                 mt_set_load_seq(unit, cmode);
+                 mt_set_anim_seq(unit, cmode);
             } else {
                 // *R rewind animation 
-                // start hi speed rewind. Whis is nice!
+                // position of medium on vaccol as it should be at end of write forward
+                mtcab[unit].reel[0].VacCol_h = (int) (PARAM_VacCol_h_Low * 1.1); 
+                mtcab[unit].reel[1].VacCol_h = (int) (PARAM_VacCol_h_Hi  * 0.9); 
+                // put all medium on right reel
+                mt_unit[unit].u3 = mt_unit[unit].u4 * 1000;
+                SetState(IBM650.MT[unit], 23); 
+                // start hi speed rewind. This is nice!
                 mt_info[unit].recsize = mt_unit[unit].u4 * 1000;
-                mt_set_rew_seq(unit);
+                mt_set_rew_seq(unit, 1);
             }
         }
         // tape is about to be painted on cpanel
@@ -2268,7 +2396,7 @@ void Refresh_MagTape(void)
         cmd = get_mt_current_command(unit, &mt_indicator_light); // current tape cmd being executed: -1=rew, 0=idle, 1=read/write
         mt_is =  mtcab[unit].mt_is;         // the current animation being done (visual state of tape)
 
-        // check if load/rew animation in progress should be aborted
+        // check if load/unload/rew animation in progress should be aborted
         if (mt_is == MT_is_loading_tape) {
             if (mt_info[unit].numrw > 0) {
                 // if any mt r/w command issued by cpu then abort any load animation in progress
@@ -2277,6 +2405,8 @@ void Refresh_MagTape(void)
                 mtcab[unit].reel[0].VacCol_h = (int) (PARAM_VacCol_h_Hi  * 0.9); 
                 mtcab[unit].reel[1].VacCol_h = (int) (PARAM_VacCol_h_Low * 1.1); 
             }
+        } else if (mt_is == MT_is_unloading_tape) {
+            // no reason to abort unload anim. if tape attached, mt_is will be set to MT_is_loading
         } else if (mt_is == MT_is_rewinding) {
             if (  (cmd == 1) || (mt_ready(unit)==1) ) {
                 // any mt r/w command in progress terminates any rew animation in progress
@@ -2292,7 +2422,7 @@ void Refresh_MagTape(void)
         if ((mt_is == 0) && (cmd < 0) && (mt_ready(unit)==0)) {
                // if (no animation in progress) and (last tape cmd is rew) and (last cmd in execution) 
                mtcab[unit].mt_is = mt_is = MT_is_rewinding;
-               mt_set_rew_seq(unit);
+               mt_set_rew_seq(unit, 1);
         }
 
         // advance animation if any 
@@ -2303,10 +2433,14 @@ void Refresh_MagTape(void)
                          &MT_Reel_Amount, &MT_head);
             if (n==1) {
                 mtcab[unit].mt_is = 0; // normal animation termination
-                // if rew terminates, notify mt_svr 
                 if (mt_is == MT_is_rewinding) {
+                    // if rew terminates, notify mt_svr 
                     sim_cancel(&mt_unit[unit]);
                     sim_activate(&mt_unit[unit], 1);
+                } else if (mt_is == MT_is_unloading_tape) {
+                    // if unload terminates, clear justdetached flag
+                    mt_info[unit].justdetached=0;
+                    continue; // skip tape state update, just continue so next frame will show no tape mounted
                 }
                 mt_is = 0;
             }
@@ -2352,7 +2486,7 @@ void Refresh_MagTape(void)
     }
 }
 
-int PARAM_char_ww2       =    13;  // horizontal spacing between charswidth beween first pixel of a char and first pixel of next char in next char same line
+int PARAM_char_ww2       =    13;  // horizontal spacing between first pixel of a char and first pixel of next char in next char same line
 int PARAM_char_hh2       =    23;  // height between top line of one char and top line of char in next text line
 int PARAM_xPaperMargin   =    50;  // left and right margin on printed paper
 int PARAM_ink0           =   255;  // ammount of ink on top of char (0..255, 0=no ink, 255=full black)
@@ -2498,29 +2632,25 @@ void Refresh_PrintOut(void)
 
 void process_HotKeys(void)
 {
-    if (cpvid.kev_key == SIM_KEY_F) { 
-        if ((cpvid.kev_state == SIM_KEYPRESS_DOWN) && (cpvid.kev_modifier & 2) && // kev_modifier -> bit0=shift presseed, bit1=cntrl pressed
-            (CpuSpeed_Acceleration != -1)) { 
-            // Key Control-F (^F, Ctrl F) being pressed -> accelerate to max speed max while keydown
+    if (vid_keyb.KeyPress == 'f'-'a'+1) { // Control-F (^F) is being pressed
+        if (CpuSpeed_Acceleration != -1) { 
+            // accelerate to max speed max while keydown
             CpuSpeed_Acceleration_save = CpuSpeed_Acceleration;
             CpuSpeed_Acceleration=-1;        // set cpu speed=max & set cpu fast
-            cpvid.kev_key=0; // mark as processed
             Measure_CpuSpeed(0); ShowInfoTm0 = 0; // reset speed measurement because ^F pressed
             sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: init because ^F pressed\n");
-        } else if ((cpvid.kev_state == SIM_KEYPRESS_UP) && 
-            (CpuSpeed_Acceleration == -1))  {
-            // return to previos cpu speed setting
-            CpuSpeed_Acceleration = CpuSpeed_Acceleration_save;
-            CpuSpeed_Acceleration_save=0; 
-            // return to previous fast/realtime setting
-            cpvid.kev_key=0; // mark as processed
-            Measure_CpuSpeed(0); ShowInfoTm0 = 0; // reset speed measurement because ^F released
-            sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: init because ^F released\n");
         }
+    } else if (CpuSpeed_Acceleration == -1) {
+        // return to previos cpu speed setting
+        CpuSpeed_Acceleration = CpuSpeed_Acceleration_save;
+        CpuSpeed_Acceleration_save=0; 
+        // return to previous fast/realtime setting
+        Measure_CpuSpeed(0); ShowInfoTm0 = 0; // reset speed measurement because ^F released
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: init because ^F released\n");
     }
-    if (cpvid.last_char ==  ('I'-'A'+1)) {
-        // Control-I -> toggle show Info on GUI (^I)
-        cpvid.last_char = 0; // clear key as it is processed
+    if (vid_keyb.LastKeyPress ==  ('i'-'a'+1)) { // Tab/Control-I (^I) has been pressed
+        // toggle show Info on GUI 
+        vid_keyb.LastKeyPress = 0; // clear key as it is processed
         bShowInfo = (bShowInfo) ? 0:1; // toggle value
         if (bShowInfo==0) {
             // put again background thus removing info from gui
@@ -2537,9 +2667,11 @@ void process_HotKeys(void)
 void ShowInfo_DrawText(int CId, char * buf)
 {
     int scale, ww,hh,ww2,hh2, chrsz;
+    int ncp; 
 
     GetControlSurface(CId, 1, &ww, &hh);
-    scale = cpanel_scale(0); 
+    ncp=GetControlInfo(CId, CINFO_NCP);  // control panel window number where info is displayed
+    scale=cpanel_scale(ncp,0);           // get scale of control panel window 
     if (scale >= 100) {
         ww2 = ww/2; hh2=hh/2; chrsz=1; // use half panel
     } else {
@@ -2564,11 +2696,13 @@ void ShowInfo_DrawText(int CId, char * buf)
     SetState(CId, 1);      
 }
 
-void Refresh_ShowInfo(void) 
+void Refresh_ShowInfo(int bOnlyInit) 
 {
     char buf[300];
     int WordTimeCountPerSec; 
     int InstrExecPerSec, n, fps; 
+    int ips_unit; double ips; 
+    int wps_unit; int wps; 
     uint32 msec; 
 
     // set dynamic contents of CtrlInfoPanel and MT_InfoPanel
@@ -2583,21 +2717,40 @@ void Refresh_ShowInfo(void)
             n = Measure_CpuSpeed(2)- InstrExec0;
             if (n<0) n=0;
             InstrExecPerSec = n * 1000 / msec;
-            n = vid_frames_count - FramesCount0;
+            n = Refresh_Frames_Count - FramesCount0;
             fps             = n * 1000 / msec;
             if (fps>60) fps=60;
             if (fps<0) fps=0;
         }
         ShowInfoTm0 = Refresh_tnow;
         InstrExec0  = Measure_CpuSpeed(2); 
-        FramesCount0 = vid_frames_count; 
+        FramesCount0 = Refresh_Frames_Count; 
+    }
+    if (bOnlyInit) return; // only init values for Next call 
+
+    if (WordTimeCountPerSec > 1000 * 1000) {
+        wps = WordTimeCountPerSec / 1000000; wps_unit = 2; // unit MIPS if ips > 0.5 MIPS
+    } else if (WordTimeCountPerSec > 50000) {
+        wps = WordTimeCountPerSec / 1000; wps_unit = 1;    // unit KIPS if ips > 1.0 KPIS
+    } else {
+        wps = WordTimeCountPerSec; wps_unit = 0; 
+    }
+
+    if (InstrExecPerSec > 500 * 1000) {
+        ips = InstrExecPerSec / 1000000.0; ips_unit = 2; // unit MIPS if ips > 0.5 MIPS
+    } else if (InstrExecPerSec >1000) {
+        ips = InstrExecPerSec / 1000.0; ips_unit = 1;    // unit KIPS if ips > 1.0 KPIS
+    } else {
+        ips = InstrExecPerSec; ips_unit = 0; 
     }
 
     sprintf(buf, "FPS: %d \n"
-        "Cpu Speed: %d (x%0.1f) %d IPS\n"
+        "Cpu Speed: %d%s (x%0.1f) %0.1f %s\n"
         "Cards in read hopper: %d", 
         fps, 
-        WordTimeCountPerSec,  WordTimeCountPerSec / 10416.0, InstrExecPerSec, 
+        wps, (wps_unit == 2) ? "M" : (wps_unit == 1) ? "K" : "",
+        WordTimeCountPerSec / 10416.0, 
+        ips, (ips_unit == 2) ? "MIPS" : (ips_unit == 1) ? "KIPS" : "IPS",
         nCardInReadHopper);
 
     ShowInfo_DrawText(IBM650.CtrlInfoPanel, buf);
@@ -2610,12 +2763,15 @@ void Refresh_ShowInfo(void)
 
         for(i=0;i<6;i++) { 
             c = ' ';
-            if ((mt_unit[i].flags & UNIT_DIS) || ((mt_unit[i].flags & UNIT_ATT) == 0)) {
+            if (((mt_unit[i].flags & UNIT_DIS) || ((mt_unit[i].flags & UNIT_ATT) == 0)) &&
+                 (mtcab[i].mt_is != MT_is_unloading_tape)) {
                 n = 0;
             } else if ((mtcab[i].mt_is == MT_is_rewinding) || 
-                       ((mtcab[i].mt_is == MT_is_loading_tape) && (mtcab[i].rew_u3 > 0))) {
+                       ((mtcab[i].mt_is == MT_is_loading_tape) && (mtcab[i].rew_u3 > 0)) ||
+                       ((mtcab[i].mt_is == MT_is_unloading_tape) && (mtcab[i].rew_u3 > 0))  ) {
                 // if rewinding then the ammount of tape medium used is in variable recsize, not in u3
-                // if loading tape AND rew_u3 > 0 then the tape is showing a nice rew animation started with *R
+                // if loading tape AND rew_u3 > 0 then the tape is showing a nice rew animation started with R
+                // if rewinding the ammount of tape medium used is in variable recsize, not in u3
                 n = mtcab[i].rew_u3; 
                 c = 'R';
             } else {
@@ -2752,14 +2908,73 @@ void IBM650_Refresh(void)
         Refresh_Ramac();
     }
     
-    // process HotKeys on Control Panel GUI window (Hot Keys)
-    process_HotKeys();
-
     // show info
     if (  ((bShowInfo) && ((Refresh_Frames_Count % 8)==0)) || (bShowInfo==2)  ) {
         // show info for ^I (Ctrl I) at 60 FPS / 8 -> 8 FPS
         // if (bShowInfo==2) ips will be shown each frame
-        Refresh_ShowInfo();
+        Refresh_ShowInfo(0);
+    }
+    // process HotKeys on Control Panel GUI window (Hot Keys)
+    process_HotKeys();
+    // Must be called after Refresh_ShowInfo. when ^F is pressed it resets speed measurement vars
+    // so if Refresh_ShowInfo is called inmedatelly after, a no tickcount are yet executed will display a speed of zero 
+    if ((bShowInfo==1) && (ShowInfoTm0==0)) Refresh_ShowInfo(1);
+}
+
+// drag and drop a file handling. Called when a file of given filename is droped on given CId control 
+void IBM650_DropFile(int CId, char * FileName)
+{
+    extern t_addr   sim_card_input_hopper_count(UNIT *uptr);
+    extern t_stat   cdr_attach(UNIT *, CONST char *);
+    extern t_stat   mt_attach(UNIT * uptr, CONST char *file);
+    int32  sv; 
+    int n; 
+
+    if (CId ==IBM650.Drop_InputDeckFile) {
+        // drag and drop a file on card reader -> attach it
+        sv=sim_switches; // save current switches
+        sim_switches = SWMASK ('Q'); // set switch -Q (quiet) 
+        // if already cards in reader, stack the new ones on the top
+        if (sim_card_input_hopper_count(&cdr_unit[1]) > 0) sim_switches |= SWMASK ('S'); 
+        cdr_attach(&cdr_unit[1], FileName);
+        sim_switches=sv; 
+    } else for (n=0;n<6;n++) if (CId == IBM650.Drop_MT_File[n]) {
+        // drag and drop a file on tape -> attach it
+        sv=sim_switches; // save current switches
+        sim_switches = SWMASK ('Q'); // set switch -Q (quiet) 
+        mt_attach(&mt_unit[n], FileName);
+        sim_switches=sv; 
+    }
+}
+
+// buttons for tape detach
+void IBM650_OnClick_BTN2(void)
+{
+    extern t_stat   mt_detach(UNIT * uptr);
+    int n; 
+    int32  sv; 
+
+    if (CP_Click.KeyPress_KeyRelease == 1) {
+        // press mouse button -> press button -> set state to 1
+        SetState(CP_Click.CId, 1);
+        return;
+    }
+    // set button to unpressed state (except Power Button, that remains pressed)
+    SetState(CP_Click.CId, 0);
+
+    // to detach a tape, must click on unload button
+    for (n=0;n<6;n++) {
+        if (CP_Click.CId == IBM650.MT_BTN_UnLoad[n]) {
+            // click to detach tape
+            if ((mt_unit[n].flags & UNIT_ATT) == 0) {
+                // already detached. Do not detach again
+                return; 
+            }
+            sv=sim_switches; // save current switches
+            sim_switches = SWMASK ('Q'); // set switch -Q (quiet) 
+            mt_detach(&mt_unit[n]);
+            sim_switches=sv; 
+        }
     }
 }
 

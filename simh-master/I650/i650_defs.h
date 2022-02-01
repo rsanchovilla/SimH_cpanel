@@ -188,6 +188,7 @@ extern int          LastDiskCmd;
 // extended info for tapes
 typedef struct {
     int justattached;                       // 1=just attached. Set to 1 by attach
+    int justdetached;                       // 1=just detached. Set to 1 by detach
     int numrw;                              // number of read/write cmds exec on tape on attached reel
     int numrec;                             // recorn number where the tape is positioned on (+1 on r/w, -1 on backspace)
     int recsize;                            // record size (inches x1000), <0 if reading backwards
