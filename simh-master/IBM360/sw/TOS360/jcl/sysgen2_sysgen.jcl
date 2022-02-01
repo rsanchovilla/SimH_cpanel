@@ -1,0 +1,206 @@
+LISTIO ALL
+// JOB INITAPES
+/* write some tape marks on tapes and rewind so 
+/* they hay something written in it if they were empty
+// MTC   REW,SYS001
+// MTC   WTM,SYS001
+// MTC   WTM,SYS001
+// MTC   REW,SYS001
+// MTC   REW,SYS002
+// MTC   WTM,SYS002
+// MTC   WTM,SYS002
+// MTC   REW,SYS002
+// MTC   REW,SYS003
+// MTC   WTM,SYS003
+// MTC   WTM,SYS003
+// MTC   REW,SYS003
+// MTC   REW,SYSLNK
+// MTC   WTM,SYSLNK
+// MTC   WTM,SYSLNK
+// MTC   REW,SYSLNK
+/*
+/&
+// JOB SYSGEN ASSEMBLE AND CATALOG NEW SUPERVISOR, CATAL PROGRAMS
+/* Assemble a new supervisor with all the useful features.  This will
+/*   increase the size of the supervisor from 6K to 8K.
+/* A new macro (SUPVRGEN) is used temporarily to contain all the
+/*   supervisor macros.  This way all the macros and operands we used
+/*   will be listed together on the first page of the output listing.
+/* All permitted supervisor macro operands are listed though those
+/*   that make no sense in TOS are commented out (.*) in the macro,
+/*   e.g.  DASDFP will only accept a NO for obvious reasons.
+// OPTION LOG,LIST,NODECK,CATAL
+// EXEC ASSEMBLY
+         MACRO
+         SUPVRGEN
+         SUPVR MPS=YES,            MULTIPROGRAMMING OPTION             -
+               SYSTEM=TAPE         TAPE OPERATING SYSTEM
+.*             ERP=1,              ERROR RECOVERY
+.*             TP=NO               NO TELEPROCESSING IN TOS              
+         CONFG DEC=YES,            DECIMAL FEATURE                     -
+               FP=YES,             FLOATING POINT FEATURE              -
+               MODEL=30,           CPU MODEL                           -
+               SP=YES,             STORAGE PROTECT                     -
+               TIMER=YES           PROCESSOR TIMER
+         STDJC CHARSET=48C,        PL/I CHARACTER SET                  -
+               DATE=MDY,           FORMAT OF DATE (MDY OR YMD)         -
+               DECK=NO,            OBJECT TO SYSPCH                    -
+               DUMP=NO,            AUTO-DUMP DUE TO ABEND              -
+               ERRS=YES,           COMPILER ERRORS ON SYSLST           -
+               LOG=YES,            LIST CONTROL STATEMENTS ON SYSLST   -
+               LINES=56,           LINES PER PAGE ON SYSLST            -
+               LIST=YES,           SOURCE LISTINGS ON SYSLST           -
+               LISTX=NO,           OBJECT LISTINGS ON SYSLST           -
+               SYM=NO,             SYMBOL & OFFSET LIST ON SYSLST      -
+               XREF=YES            CROSS-REFERENCE ON SYSLST
+         FOPT  CCHAIN=YES,         COMMAND CHAINING RETRY              - 
+               IT=BG,              INTERVAL TIMER OWNER                -
+               OC=YES,             STXIT OPERATOR CONSOLE SUPPORT      -
+               PC=YES,             STXIT PROGRAM CHECK SUPPORT         -
+               TEB=8               TAPE ERROR BLOCKS
+.*             DASDFP=NO,          NO DASD FILE PROTECT IN TOS
+.*             SYSFIL=NO,          NO SYSTEM FILES ON DISK IN TOS
+         PIOCS BMPX=NO,            BURST MODE DEVICES ON BYTE CHANNEL  -
+               CHANSW=NO,          TAPE CHANNEL SWITCHING              -
+               SELCH=YES,          SELECTOR CHANNEL SUPPORT            -
+               TAPE=9              SUPPORT 9 TRACK TAPE
+         ALLOC F1=4K,              INITIAL SIZE OF F1                  - 
+               F2=4K               INITIAL SIZE OF F2
+         IOTAB BGPGR=14,           BG SYSNNN ASSGNS                    -
+               F1PGR=6,            F1 SYSNNN ASSGNS                    -
+               F2PGR=6,            F2 SYSNNN ASSGNS                    -
+               IODEV=15,           NUMBER OF DEVICES SUPPORTED         -
+               JIB=12,             NUMBER OF JOB INFORMATION BLOCKS    -
+               CHANQ=12            NUMBER OF CHANNEL QUEUE ENTRIES
+** DEFAULT DEVICE DEFINITIONS
+*  DEVICES ON CHANNEL 0
+         DVCGEN CHUN=X'00C',DVCTYP=2501
+         DVCGEN CHUN=X'00D',DVCTYP=2540P
+         DVCGEN CHUN=X'00E',DVCTYP=1403
+         DVCGEN CHUN=X'01F',DVCTYP=1050A
+*  DEVICES ON CHANNEL 1
+         DVCGEN CHUN=X'180',DVCTYP=2400T9
+         DVCGEN CHUN=X'181',DVCTYP=2400T9
+         DVCGEN CHUN=X'182',DVCTYP=2400T9
+         DVCGEN CHUN=X'183',DVCTYP=2400T9
+         DVCGEN CHUN=X'184',DVCTYP=2400T9
+         DVCGEN CHUN=X'185',DVCTYP=2400T9
+         DVCGEN CHUN=X'186',DVCTYP=2400T9
+         DVCGEN CHUN=X'187',DVCTYP=2400T9
+** DEFAULT LOGICAL DEVICE ASSIGNMENTS (BG)
+         ASSGN SYSLOG,X'01F'
+         ASSGN SYSRDR,X'00C'
+         ASSGN SYSIPT,X'00C'
+         ASSGN SYSPCH,X'00D'
+         ASSGN SYSLST,X'00E'
+         ASSGN SYS001,X'181'
+         ASSGN SYS002,X'182'
+         ASSGN SYS003,X'183'
+         ASSGN SYSLNK,X'184'
+         SEND  X'2000'
+         MEND
+         EJECT
+         SUPVRGEN
+         END
+/*
+// EXEC LNKEDT
+* CATALOGING OF THE FOLLOWING PROGRAMS IS REQUIRED ONLY IF A   
+*   SUPERVISOR WITH A DIFFERENT SEND ADDRESS IS BEING CATALOGED. 
+* MUST BE IN PHASE NAME ORDER
+* $$BATST1 (AUTOTEST)
+ INCLUDE IJVSS110
+// EXEC LNKEDT
+* $$BZTIME (OLTEP)
+ INCLUDE IJZATIME
+// EXEC LNKEDT
+* PL/I RUN-TIME TRANSIENTS
+* NOT NORMALLY NECESSARY TO RECATALOG,
+*   ALREADY SELF-RELOCATING
+* INCLUDE IJXSALL
+* // EXEC LNKEDT
+* IPL ROUTINE
+ INCLUDE IJAIPL
+// EXEC LNKEDT
+* JOB CONTROL
+ INCLUDE IJAJC
+// EXEC LNKEDT
+* LINKAGE EDITOR
+ INCLUDE IJALE
+// EXEC LNKEDT
+* ASSEMBLY-14K VARIANT-32K MACHINE
+ INCLUDE IJQT32
+// EXEC LNKEDT
+* AUTOTEST
+ INCLUDE IJVPT
+// EXEC LNKEDT
+* CDPP - CARD TO PRINTER/PUNCH UTILITY
+ INCLUDE IJWCP
+ PHASE CDPP5,IJWCPCS2,NOAUTO
+ INCLUDE IJWLAB
+// EXEC LNKEDT
+* CDTP - CARD TO TAPE UTILITY
+ INCLUDE IJWCT
+ PHASE CDTP5,IJWCTCS2,NOAUTO
+ INCLUDE IJWLAB
+// LBLTYP TAPE(1)
+// EXEC LNKEDT
+* COBOL AND DEBUG
+ INCLUDE IJSCBL     COBOL-D COMPILER
+// EXEC LNKEDT
+ INCLUDE IJSDBG     DEBUG
+// EXEC LNKEDT
+* DSERV - DIRECTORY LISTING
+ INCLUDE IJASL1
+// EXEC LNKEDT
+* FORTRAN - BASIC FORTRAN IV COMPILER
+ INCLUDE IJTFO
+// EXEC LNKEDT
+* OLTEP - ONLINE TEST EXECUTIVE PROGRAM
+ INCLUDE IJZABOOK
+// EXEC LNKEDT
+* MAINT - LIBRARY MAINTENANCE
+ INCLUDE IJASL2
+// EXEC LNKEDT
+* PL/I - PROGRAMMING LANGUAGE ONE COMPILER
+ INCLUDE IJXALL
+// EXEC LNKEDT
+* RPG - REPORT PROGRAM GENERATOR COMPILER
+ INCLUDE IJRRG
+// EXEC LNKEDT
+* RSERV - RELOCATABLE LIBRARY LISTING/PUNCH
+ INCLUDE IJASL3
+// EXEC LNKEDT
+* SSERV - SOURCE STATEMENT LIBRARY LISTING/PUNCH
+ INCLUDE IJASL4
+// EXEC LNKEDT
+* TPCD - TAPE TO CARD UTILITY
+ INCLUDE IJWTC
+ PHASE TPCD5,IJWTCCS2,NOAUTO
+ INCLUDE IJWLAB
+// LBLTYP TAPE(1)
+// EXEC LNKEDT
+* TPCP - TAPE COMPARE UTILITY
+ PHASE TPCP,*,NOAUTO
+ INCLUDE IJWTCP
+ INCLUDE IJJCP0
+ INCLUDE IJWXIT
+ INCLUDE IJWTPCP
+// EXEC LNKEDT
+* TPPR - TAPE TO PRINTER UTILITY
+ INCLUDE IJWTP
+ PHASE TPPR5,IJWTPCS2,NOAUTO
+ INCLUDE IJWLAB
+// LBLTYP TAPE(1)
+// EXEC LNKEDT
+* TPTP - TAPE TO TAPE UTILITY
+ INCLUDE IJWTT
+ PHASE TPTP5,IJWTTCS2,NOAUTO
+ INCLUDE IJWLAB
+// LBLTYP TAPE(2)
+// EXEC LNKEDT
+* TSRT - TAPE SORT
+ INCLUDE IJPSM
+// LBLTYP TAPE(10)  (9 MAX FOR IN, 1 FOR OUT)
+// EXEC LNKEDT
+/* X'182' (sys002.aws) now has a production SYSRES
+/&

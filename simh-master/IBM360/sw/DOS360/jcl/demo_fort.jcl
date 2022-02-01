@@ -1,0 +1,148 @@
+// JOB DEMOGRPH PRINT GRAPH OF A FUNCTION
+// OPTION LINK,LISTX,NOXREF
+// EXEC FFORTRAN
+// FTC NAME=GRAPH,LINECNT=80
+C  GRAPH - PRINT THE GRAPH OF A FUNCTION
+C    PRINT ONE GRAPH ON AN 14 7/8" X 11" PIECE OF PAPER AT 8LPI
+C  DEMONSTRATES THE USE OF COMMON FOR A GLOBAL SWITCH
+C  DEMONSTRATES CALLING AN ASSEMBLER SUBROUTINE
+C  DEMONSTRATES USING A FORTRAN FUNCTION
+C
+      DIMENSION TODAY(2), TITLE(12), COORD(101,2), LINE(101)
+      LOGICAL GLBLSW
+      COMMON GLBLSW
+      DATA IASTR/'*'/, IPLUS/'+'/, IHYPH/'-'/, IBLNK/' '/,
+     -     LETRI/'I'/, LETRX/'X'/, LETRY/'Y'/
+      CALL DATE(TODAY)
+C
+C  READ SCALES AND TITLE TO BE USED ON GRAPH
+   10 READ (1,1,END=999) XAXIS, YAXIS, TITLE
+      GLBLSW = .FALSE.
+C--CALCULATE 'X' VALUES BASED ON LENGTH OF X-AXIS
+      DO 20 I = 1, 101
+        R = I - 1
+        COORD(I,1) = -(XAXIS - R * XAXIS / 50.)
+   20 CONTINUE
+C--CALCULATE 'Y' VALUES FROM 'X' VALUES
+      DO 30 I = 1, 101
+        X = COORD(I,1)
+        COORD(I,2) = EQU(X)
+   30 CONTINUE
+C--CONVERT X,Y VALUES TO PRINT POSITIONS (X) OR LINE NUMBER (Y)
+      DO 40 I = 1, 101
+        COORD(I,1) = I
+        IF (ABS(COORD(I,2)) .LE. YAXIS) GO TO 41
+        COORD(I,2) = 0.
+        GO TO 40
+   41   Z = 40. * (COORD(I,2) / YAXIS+1.)
+        IF (COORD(I,2) .GE. 0.) GO TO 46
+        N = Z + 1.49
+        GO TO 47
+   46   N = Z + 1.5
+   47   COORD(I,2) = 82 - N
+   40 CONTINUE
+C--PRINT THE GRAPH
+C    PRINT TITLE OR COMMENTS
+      PRINT 2, TODAY, TITLE
+C    PRINT 'Y' AND LENGTH AT TOP OF Y-AXIS
+      PRINT 3, LETRY, YAXIS
+      DO 90 I = 1, 81
+C    INITIALIZE PRINT AREA TO BLANKS
+        DO 51 J = 1, 101
+          LINE(J) = IBLNK
+   51   CONTINUE
+C    CHECK FOR X-AXIS
+        IF (I .NE. 41) GO TO 52
+        DO 55 J = 2, 100
+          LINE(J) = IHYPH
+   55   CONTINUE
+        DO 57 J = 6, 96, 5
+          LINE(J) = IPLUS
+   57   CONTINUE
+        LINE(1) = LETRX
+        LINE(101) = LETRX
+   52   LINE(51) = LETRI
+C    CHECK FOR 1/2" Y-AXIS MARKERS
+        IF (MOD(I,4) .NE. 1) GO TO 60
+        LINE(51) = IPLUS
+C    PLOT POINTS FROM EQUATION
+   60   DO 70 J = 1, 101
+          T = I
+          IF (COORD(J,2) .NE. T) GO TO 70
+          M = COORD(J,1)
+          LINE(M) = IASTR
+   70   CONTINUE
+C    IF X-AXIS, PRINT SCALES AT EACH END
+        IF (I .EQ. 41) GO TO 81
+        PRINT 4, LINE
+        GO TO 90
+   81   XAXISM = -XAXIS
+        PRINT 5, XAXISM, LINE, XAXIS
+   90 CONTINUE
+C  PRINT BOTTOM 'Y' ON Y-AXIS
+      YAXIS = -YAXIS
+      PRINT 3, LETRY, YAXIS
+      GO TO 10
+C
+  999 STOP
+    1 FORMAT (2F10.0, 12A4)
+    2 FORMAT (1H1, 2A4, 27X, 12A4)
+    3 FORMAT (1H , 60X, A1, F10.4)
+    4 FORMAT (1H , 10X, 101A1)
+    5 FORMAT (1H , F9.4, 1X, 101A1, F10.4)
+      END
+C FUNCTION FOR F(X)
+      FUNCTION EQU(X)
+      DIMENSION C(8)
+      LOGICAL GLBLSW
+      COMMON GLBLSW
+C
+C FUNCTION FOR A GENERAL POLYNOMIAL
+      IF (GLBLSW) GO TO 10
+      READ (1,1) C
+    1 FORMAT (8F10.0)
+      GLBLSW = .TRUE.
+   10 X2 = X * X
+      X4 = X2 * X2
+      EQU = C(1) + C(2)*X + C(3)*X2 +
+     -      C(4)*X2*X + C(5)*X4 +
+     -      C(6)*X4*X + C(7)*X4*X2 +
+     -      C(8)*X4*X2*X
+C
+C FUNCTION FOR TRIGONOMETRY
+C      T = SIN(X)
+C   OPTIONAL-MULTIPLY BY AN AMPLITUDE
+C      EQU = 4 * T
+C
+      RETURN
+      END
+/*
+// EXEC ASSEMBLY
+         TITLE 'GET CURRENT DATE FOR FFORTRAN'
+DATE     CSECT
+R1       EQU   1
+R2       EQU   2
+R12      EQU   12
+R13      EQU   13
+R14      EQU   14
+R15      EQU   15
+         USING *,R15
+         STM   R14,R12,12(R13)
+         L     R2,0(R1)
+         COMRG
+         MVC   0(8,R2),0(R1)
+         LM    R14,R12,12(R13)
+         BR    R14
+         END
+/*
+// EXEC LNKEDT
+// EXEC
+10.       10.       Y = X
+0.        1.
+10.       10.       Y = X ** 2
+0.        0.        1.
+10.       10.       Y = X ** 3
+0.        0.        0.        1.
+/*
+/* 10.       10.       Y = SIN(X)
+/&
