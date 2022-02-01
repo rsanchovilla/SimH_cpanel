@@ -2013,7 +2013,6 @@ t_stat sim_instr(void)
     // post-run refresh
     if ((cpanel_on) && (reason != SCPE_EXIT)) {
         // terminate in-progress I/O printer/tape if any
-        extern int Refresh_Frames_Count; // frames done counter. At 60 FPS. Wraps after 9942 hours
         extern int bTapeAnimInProgress;
         extern int bShowInfo;
         extern uint32 ShowInfoTm0; 
@@ -2042,7 +2041,7 @@ t_stat sim_instr(void)
             if (sim_os_msec() - tnow > 2000) break; // sanity check: max 2000 msec (2 sec wall time clock) waiting for animation to end
             if (bIOInProgress) continue;                           // some animation in progress, do not exit yet
             if (RefreshCount0 == 0) {                              // draw 2 frames after animation ends to allow
-               RefreshCount0 = Refresh_Frames_Count;               // for light to terminate the tickcount based partial 
+               RefreshCount0 = Refresh_Frames_Count;                  // for light to terminate the tickcount based partial 
                if (bShowInfo) bShowInfo=2;                         // assure show 0 ips if info has been enabled with ^I
                continue;                                           // illumination
             }
@@ -2258,12 +2257,6 @@ const char * cpu_description (DEVICE *dptr) {
 }   
  
 
-/*
-
-manual de consola
-
-
-*/
 
     
    

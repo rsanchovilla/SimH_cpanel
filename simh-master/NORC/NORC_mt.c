@@ -84,7 +84,7 @@ MTAB                mt_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",              &sim_tape_set_fmt, &sim_tape_show_fmt, NULL, 
                                                                                 "Set/Display tape format (SIMH, E11, TPC, P7B)"},
     {MTAB_XTD | MTAB_VUN, 0, "LENGTH", "LENGTH",              &mt_set_len, &mt_show_len, NULL,
-                                                                                "Set tape medium length (50 to 10000 foot)" },
+                                                                                "Set tape medium length (50 to 10000 feet)" },
     {MTAB_XTD | MTAB_VUN, 0, NULL,     "REWIND",              &mt_rew, NULL, NULL, "Rewind tape"},
     {0}
 };
@@ -827,9 +827,11 @@ t_stat mt_attach(UNIT * uptr, CONST char *file)
     uptr->u3 = 0;
     uptr->u5 = MT_RDY ;
     mt_info[unit].justattached = 1; 
+    mt_info[unit].justdetached = 0; 
     mt_info[unit].numrw = 0;
     mt_info[unit].numrec = 0;
     mt_info[unit].result1 = 0; 
+    mt_info[unit].recsize = 0;
     return SCPE_OK;
 }
 
@@ -838,6 +840,9 @@ t_stat mt_detach(UNIT * uptr)
     DEVICE             *dptr = find_dev_from_unit(uptr);
     int                 unit = (uptr - dptr->units);
 
+    mt_info[unit].justattached = 0; 
+    mt_info[unit].justdetached = 1; 
+    mt_info[unit].recsize = uptr->u3; // save current unwind medium
     uptr->u3 = 0;
     uptr->u5 = 0;
     mt_info[unit].numrec = 0;

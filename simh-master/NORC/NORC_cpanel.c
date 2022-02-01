@@ -105,18 +105,21 @@ void NORC_Done(void);
 void NORC_Reset(void);
 void NORC_TickIntensityCount(void);
 void NORC_Refresh(void);
+void NORC_DropFile(int CId, char * FileName);
 void NORC_OnClick_Sw(void);
 void NORC_OnClick_Sw2(void);
 void NORC_OnClick_BTN(void);
+void NORC_OnClick_BTN2(void);
 
 // cpanel types constants
 #define IS_NORC	1	// define CP type contants. must start on 1
 
 // control panel available types
-CP_TYPE cp_types[] = {
-    { "NORC", IS_NORC, NORC_cp, &NORC_Refresh, &NORC_Init, &NORC_Reset, &NORC_TickIntensityCount, &NORC_Done},
-    { NULL }
- };
+CP_TYPE cp_types = {
+    NORC_cp, 
+    &NORC_Init, &NORC_Done, &NORC_Reset, 
+    &NORC_Refresh, &NORC_TickIntensityCount, &NORC_DropFile
+};
 
 // struct to hold the GUI controls Ids
 static struct {
@@ -197,320 +200,329 @@ static struct {
    int MT_head[9], MT_head_actuator[9];
    int MT_L[9], MT_R[9], MT_L_VacCol[9], MT_R_VacCol[9];
    int MT_VacColumn, MT_VacColMedium; 
+   int Drop_MT_File[9];
    // printer
    int Paper, PaperBackground, PrinterCharSet;
-} NORC;
+} NORC = {0}; // must be init to zero
 
 // mapping variables that holds the control Id with control name and event handler
 // the name identifies the control in the definition file
 CP_DEF NORC_cp[] = {
-    { &NORC.CtrlInfoPanel,            "CtrlInfoPanel",                     NULL,     0 },
-    { &NORC.DispNumber,               "DispNumber",                        NULL,     0 },
-    { &NORC.Reg_V,                    "Reg_V",                             NULL,     0 },
-    { &NORC.Reg_U,                    "Reg_U",                             NULL,     0 },
-    { &NORC.Reg_M8,                   "Reg_M8",                            NULL,     0 },
-    { &NORC.Reg_M6,                   "Reg_M6",                            NULL,     0 },
-    { &NORC.Reg_M4,                   "Reg_M4",                            NULL,     0 },
-    { &NORC.Reg_IREG_D17,             "Reg_IREG_D17",                      NULL,     0 },
-    { &NORC.Reg_IREG_D1613,           "Reg_IREG_D1613",                    NULL,     0 },
-    { &NORC.Reg_IREG_D1209,           "Reg_IREG_D1209",                    NULL,     0 },
-    { &NORC.Reg_IREG_D0805,           "Reg_IREG_D0805",                    NULL,     0 },
-    { &NORC.Reg_IREG_D0401,           "Reg_IREG_D0401",                    NULL,     0 },
-    { &NORC.Reg_REG1_D1817,           "Reg_REG1_D1817",                    NULL,     0 },
-    { &NORC.Reg_REG1_D1613,           "Reg_REG1_D1613",                    NULL,     0 },
-    { &NORC.Reg_REG1_D1209,           "Reg_REG1_D1209",                    NULL,     0 },
-    { &NORC.Reg_REG1_D0805,           "Reg_REG1_D0805",                    NULL,     0 },
-    { &NORC.Reg_REG1_D0401,           "Reg_REG1_D0401",                    NULL,     0 },
-    { &NORC.Reg_REG2_D17,             "Reg_REG2_D17",                      NULL,     0 },
-    { &NORC.Reg_REG2_D1613,           "Reg_REG2_D1613",                    NULL,     0 },
-    { &NORC.Reg_REG2_D1209,           "Reg_REG2_D1209",                    NULL,     0 },
-    { &NORC.Reg_REG2_D0805,           "Reg_REG2_D0805",                    NULL,     0 },
-    { &NORC.Reg_REG2_D0401,           "Reg_REG2_D0401",                    NULL,     0 },
-    { &NORC.LI_printer_Operative,     "LI_printer_Operative",              NULL,     0 },
-    { &NORC.BTN_printer_reset,        "BTN_printer_reset",                 &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_CRT_reset,            "BTN_CRT_reset",                     &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Reset_InterLock,      "BTN_Reset_InterLock",               &NORC_OnClick_BTN,     0 },
-    { &NORC.SW_printer,               "SW_printer",                        &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_CRT,                   "SW_CRT",                            &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_Program,               "SW_Program",                        &NORC_OnClick_Sw,      0 },
-    { &NORC.LI_Printer_Check,         "LI_Printer_Check",                  NULL,     0 },
-    { &NORC.LI_Special_Function,      "LI_Special_Function",               NULL,     0 },
-    { &NORC.LI_Printer_Instr_A,       "LI_Printer_Instr_A",                NULL,     0 },
-    { &NORC.LI_Printer_Instr_B,       "LI_Printer_Instr_B",                NULL,     0 },
-    { &NORC.BTN_Carriage_A,           "BTN_Carriage_A",                    &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Carriage_B,           "BTN_Carriage_B",                    &NORC_OnClick_BTN,     0 },
-    { &NORC.LI_Word_Check,            "LI_Word_Check",                     NULL,     0 },
-    { &NORC.BTN_CRT_Check_Reset,      "BTN_CRT_Check_Reset",               &NORC_OnClick_BTN,     0 },
-    { &NORC.LI_Index_Check,           "LI_Index_Check",                    NULL,     0 },
-    { &NORC.LI_Sign_Check,            "LI_Sign_Check",                     NULL,     0 },
-    { &NORC.BTN_Index_Reset,          "BTN_Index_Reset",                   &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Sign_Reset,           "BTN_Sign_Reset",                    &NORC_OnClick_BTN,     0 },
-    { &NORC.LI_Operation_Code_Check,  "LI_Operation_Code_Check",           NULL,     0 },
-    { &NORC.LI_EOT_Check,             "LI_EOT_Check",                      NULL,     0 },
-    { &NORC.LI_NonZeroDiv_Check,      "LI_NonZeroDiv_Check",               NULL,     0 },
-    { &NORC.LI_Tape_Oprv_Check,       "LI_Tape_Oprv_Check",                NULL,     0 },
-    { &NORC.LI_Printer_Oprv_Check,    "LI_Printer_Oprv_Check",             NULL,     0 },
-    { &NORC.BTN_ProgCheck_Reset,      "BTN_ProgCheck_Reset",               &NORC_OnClick_BTN,     0 },
-    { &NORC.LI_6468,                  "LI_6468",                           NULL,     0 },
-    { &NORC.BTN_6468,                 "BTN_6468",                          &NORC_OnClick_BTN,     0 },
-    { &NORC.LI_7479,                  "LI_7479",                           NULL,     0 },
-    { &NORC.BTN_7479,                 "BTN_7479",                          &NORC_OnClick_BTN,     0 },
-    { &NORC.SW_Overflow,              "SW_Overflow",                       &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_AdjustIndex,           "SW_AdjustIndex",                    &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_ZeroResult,            "SW_ZeroResult",                     &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_EndOfFile,             "SW_EndOfFile",                      &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_TapeCheck,             "SW_TapeCheck",                      &NORC_OnClick_Sw,      0 },
-    { &NORC.LI_OV,                    "LI_OV",                             NULL,     0 },
-    { &NORC.LI_IA,                    "LI_IA",                             NULL,     0 },
-    { &NORC.LI_ZR,                    "LI_ZR",                             NULL,     0 },
-    { &NORC.LI_TEOF,                  "LI_TEOF",                           NULL,     0 },
-    { &NORC.LI_TCHK,                  "LI_TCHK",                           NULL,     0 },
-    { &NORC.BTN_OV,                   "BTN_OV",                            &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_IA,                   "BTN_IA",                            &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_ZR,                   "BTN_ZR",                            &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_TEOF,                 "BTN_TEOF",                          &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_TCHK,                 "BTN_TCHK",                          &NORC_OnClick_BTN,     0 },
-    { &NORC.LI_PADV_TMOV,             "LI_PADV_TMOV",                      NULL,     0 },
-    { &NORC.LI_PSTOP,                 "LI_PSTOP",                          NULL,     0 },
-    { &NORC.LI_CHKSTOP,               "LI_CHKSTOP",                        NULL,     0 },
-    { &NORC.BTN_SubOp_Reset,          "BTN_SubOp_Reset",                   &NORC_OnClick_BTN,     0 },
-    { &NORC.LI_Manual_Read,           "LI_Manual_Read",                    NULL,     0 },
-    { &NORC.SW_Source_of_intructions, "SW_Source_of_intructions",          &NORC_OnClick_Sw,      0 },
-    { &NORC.BTN_Start,                "BTN_Start",                         &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Stop,                 "BTN_Stop",                          &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Operation_Start,      "BTN_Operation_Start",               &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Tape_Stop,            "BTN_Tape_Stop",                     &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_SubOp_Start,          "BTN_SubOp_Start",                   &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_SubOp_Stop,           "BTN_SubOp_Stop",                    &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_V_to_U,               "BTN_V_to_U",                        &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_V_entry_to_V,         "BTN_V_entry_to_V",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_U_to_V,               "BTN_U_to_V",                        &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_U1_to_V,              "BTN_U1_to_V",                       &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_V_to_M4,              "BTN_V_to_M4",                       &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_V_to_M6,              "BTN_V_to_M6",                       &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_V_to_M8,              "BTN_V_to_M8",                       &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_REG1_to_IREG,         "BTN_REG1_to_IREG",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.SW_V_Entry[4],            "SW_V_Entry_D4",                     &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_V_Entry[3],            "SW_V_Entry_D3",                     &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_V_Entry[2],            "SW_V_Entry_D2",                     &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_V_Entry[1],            "SW_V_Entry_D1",                     &NORC_OnClick_Sw2,     0 },
-    { &NORC.SWNum_V_Entry[4],         "SWNum_V_Entry_D4",                  NULL,     0 },
-    { &NORC.SWNum_V_Entry[3],         "SWNum_V_Entry_D3",                  NULL,     0 },
-    { &NORC.SWNum_V_Entry[2],         "SWNum_V_Entry_D2",                  NULL,     0 },
-    { &NORC.SWNum_V_Entry[1],         "SWNum_V_Entry_D1",                  NULL,     0 },
-    { &NORC.SW_74[0],                 "SW_74",                             &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_74[1],                 "SW_75",                             &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_74[2],                 "SW_76",                             &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_74[3],                 "SW_77",                             &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_74[4],                 "SW_78",                             &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_74[5],                 "SW_79",                             &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_Floated_index,         "SW_Floated_index",                  &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_Write_Output,          "SW_Write_Output",                   &NORC_OnClick_Sw,      0 },
-    { &NORC.SW_Reg1_CRT_Addr[4],      "SW_Reg1_CRT_Addr_D4",               &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Reg1_CRT_Addr[3],      "SW_Reg1_CRT_Addr_D3",               &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Reg1_CRT_Addr[2],      "SW_Reg1_CRT_Addr_D2",               &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Reg1_CRT_Addr[1],      "SW_Reg1_CRT_Addr_D1",               &NORC_OnClick_Sw2,     0 },
-    { &NORC.SWNum_Reg1_CRT_Addr[4],   "SWNum_Reg1_CRT_Addr_D4",            NULL,     0 },
-    { &NORC.SWNum_Reg1_CRT_Addr[3],   "SWNum_Reg1_CRT_Addr_D3",            NULL,     0 },
-    { &NORC.SWNum_Reg1_CRT_Addr[2],   "SWNum_Reg1_CRT_Addr_D2",            NULL,     0 },
-    { &NORC.SWNum_Reg1_CRT_Addr[1],   "SWNum_Reg1_CRT_Addr_D1",            NULL,     0 },
-    { &NORC.BTN_Reg1_to_CRT,          "BTN_Reg1_to_CRT",                   &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Reg1_from_CRT,        "BTN_Reg1_from_CRT",                 &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Reg1_from_REG2,       "BTN_Reg1_from_REG2",                &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Reg1_Reset,           "BTN_Reg1_Reset",                    &NORC_OnClick_BTN,     0 },
-    { &NORC.SW_Keyboard_Entry,        "SW_Keyboard_Entry",                 &NORC_OnClick_Sw,      0 },
-    { &NORC.BTN_Reg2_to_CRT,          "BTN_Reg2_to_CRT",                   &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Reg2_from_CRT,        "BTN_Reg2_from_CRT",                 &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Reg2_from_REG1,       "BTN_Reg2_from_REG1",                &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Reg2_Reset,           "BTN_Reg2_Reset",                    &NORC_OnClick_BTN,     0 },
-    { &NORC.SW_Reg2_CRT_Addr[4],      "SW_Reg2_CRT_Addr_D4",               &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Reg2_CRT_Addr[3],      "SW_Reg2_CRT_Addr_D3",               &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Reg2_CRT_Addr[2],      "SW_Reg2_CRT_Addr_D2",               &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Reg2_CRT_Addr[1],      "SW_Reg2_CRT_Addr_D1",               &NORC_OnClick_Sw2,     0 },
-    { &NORC.SWNum_Reg2_CRT_Addr[4],   "SWNum_Reg2_CRT_Addr_D4",            NULL,     0 },
-    { &NORC.SWNum_Reg2_CRT_Addr[3],   "SWNum_Reg2_CRT_Addr_D3",            NULL,     0 },
-    { &NORC.SWNum_Reg2_CRT_Addr[2],   "SWNum_Reg2_CRT_Addr_D2",            NULL,     0 },
-    { &NORC.SWNum_Reg2_CRT_Addr[1],   "SWNum_Reg2_CRT_Addr_D1",            NULL,     0 },
-    { &NORC.SW_Tape_Addr[1],          "SW_Tape_Addr_01",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[2],          "SW_Tape_Addr_02",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[3],          "SW_Tape_Addr_03",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[4],          "SW_Tape_Addr_04",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[5],          "SW_Tape_Addr_05",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[6],          "SW_Tape_Addr_06",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[7],          "SW_Tape_Addr_07",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[8],          "SW_Tape_Addr_08",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[9],          "SW_Tape_Addr_09",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[10],         "SW_Tape_Addr_10",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[11],         "SW_Tape_Addr_11",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SW_Tape_Addr[12],         "SW_Tape_Addr_12",                   &NORC_OnClick_Sw2,     0 },
-    { &NORC.SWNum_Tape_Addr[1],       "SWNum_Tape_Addr_01",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[2],       "SWNum_Tape_Addr_02",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[3],       "SWNum_Tape_Addr_03",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[4],       "SWNum_Tape_Addr_04",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[5],       "SWNum_Tape_Addr_05",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[6],       "SWNum_Tape_Addr_06",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[7],       "SWNum_Tape_Addr_07",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[8],       "SWNum_Tape_Addr_08",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[9],       "SWNum_Tape_Addr_09",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[10],      "SWNum_Tape_Addr_10",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[11],      "SWNum_Tape_Addr_11",                NULL,     0 },
-    { &NORC.SWNum_Tape_Addr[12],      "SWNum_Tape_Addr_12",                NULL,     0 },
-    { &NORC.BTN_Tape_Reset[1],        "BTN_Tape_1_Reset",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Tape_Reset[2],        "BTN_Tape_2_Reset",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Tape_Reset[3],        "BTN_Tape_3_Reset",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Tape_Reset[4],        "BTN_Tape_4_Reset",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Tape_Reset[5],        "BTN_Tape_5_Reset",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Tape_Reset[6],        "BTN_Tape_6_Reset",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Tape_Reset[7],        "BTN_Tape_7_Reset",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Tape_Reset[8],        "BTN_Tape_8_Reset",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Read_Forward,         "BTN_Read_Forward",                  &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Read_Backward,        "BTN_Read_Backward",                 &NORC_OnClick_BTN,     0 },
-    { &NORC.BTN_Rewind,               "BTN_Rewind",                        &NORC_OnClick_BTN,     0 },
-    { &NORC.SW_Tape_Unit_Selector[1], "SW_Tape_Unit_Selector",             &NORC_OnClick_Sw2,     0 },
-    { &NORC.SWNum_Tape_Unit_Selector[1],   "SWNum_Tape_Unit_Selector",          NULL,     0 },
-    { &NORC.BTN_Power_Off,            "BTN_Power_Off",                     &NORC_OnClick_BTN,     0 },    
-    { &NORC.LI_IND_PADV_TMOV,         "LI_IND_PADV_TMOV",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_PSTOP,             "LI_IND_PSTOP",                      NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_CHKSTOP,           "LI_IND_CHKSTOP",                    NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_Printer_Check,     "LI_IND_Printer_Check",              NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_CRT_Check,         "LI_IND_CRT_Check",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_Program_Check,     "LI_IND_Program_Check",              NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_OV,                "LI_IND_OV",                         NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_IA,                "LI_IND_IA",                         NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_ZR,                "LI_IND_ZR",                         NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_TEOF,              "LI_IND_TEOF",                       NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_TCHK,              "LI_IND_TCHK",                       NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_3600_Spots,        "LI_IND_3600_Spots",                 NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_NOT_PADV_TMOV,     "LI_IND_NOT_PADV_TMOV",              NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_SUBOP,             "LI_IND_SUBOP",                      NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Power_On[1],        "LI_TU1_Power_On",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Power_On[2],        "LI_TU2_Power_On",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Power_On[3],        "LI_TU3_Power_On",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Power_On[4],        "LI_TU4_Power_On",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Power_On[5],        "LI_TU5_Power_On",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Power_On[6],        "LI_TU6_Power_On",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Power_On[7],        "LI_TU7_Power_On",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Power_On[8],        "LI_TU8_Power_On",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Operative[1],       "LI_TU1_Operative",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Operative[2],       "LI_TU2_Operative",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Operative[3],       "LI_TU3_Operative",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Operative[4],       "LI_TU4_Operative",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Operative[5],       "LI_TU5_Operative",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Operative[6],       "LI_TU6_Operative",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Operative[7],       "LI_TU7_Operative",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Operative[8],       "LI_TU8_Operative",                  NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Moving,             "LI_TU_Moving",                      NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Rewind[1],          "LI_TU1_Rewind",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Rewind[2],          "LI_TU2_Rewind",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Rewind[3],          "LI_TU3_Rewind",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Rewind[4],          "LI_TU4_Rewind",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Rewind[5],          "LI_TU5_Rewind",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Rewind[6],          "LI_TU6_Rewind",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Rewind[7],          "LI_TU7_Rewind",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_Rewind[8],          "LI_TU8_Rewind",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_EOT[1],             "LI_TU1_EOT",                        NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_EOT[2],             "LI_TU2_EOT",                        NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_EOT[3],             "LI_TU3_EOT",                        NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_EOT[4],             "LI_TU4_EOT",                        NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_EOT[5],             "LI_TU5_EOT",                        NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_EOT[6],             "LI_TU6_EOT",                        NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_EOT[7],             "LI_TU7_EOT",                        NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_TU_EOT[8],             "LI_TU8_EOT",                        NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_BITS_D0801,            "LI_BITS_D0801",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_BITS_D1709,            "LI_BITS_D1709",                     NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_WordLen,           "LI_IND_WordLen",                    NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_BitCount,          "LI_IND_BitCount",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_BlockLen,          "LI_IND_BlockLen",                   NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_GtThan9,           "LI_IND_GtThan9",                    NULL,     0, "IndicatorPanel/1" },
-    { &NORC.LI_IND_BlockNum,          "LI_IND_BlockNum",                   NULL,     0, "IndicatorPanel/1" },
+    { &NORC.CtrlInfoPanel,            "CtrlInfoPanel",                     NULL},
+    { &NORC.DispNumber,               "DispNumber",                        NULL},
+    { &NORC.Reg_V,                    "Reg_V",                             NULL},
+    { &NORC.Reg_U,                    "Reg_U",                             NULL},
+    { &NORC.Reg_M8,                   "Reg_M8",                            NULL},
+    { &NORC.Reg_M6,                   "Reg_M6",                            NULL},
+    { &NORC.Reg_M4,                   "Reg_M4",                            NULL},
+    { &NORC.Reg_IREG_D17,             "Reg_IREG_D17",                      NULL},
+    { &NORC.Reg_IREG_D1613,           "Reg_IREG_D1613",                    NULL},
+    { &NORC.Reg_IREG_D1209,           "Reg_IREG_D1209",                    NULL},
+    { &NORC.Reg_IREG_D0805,           "Reg_IREG_D0805",                    NULL},
+    { &NORC.Reg_IREG_D0401,           "Reg_IREG_D0401",                    NULL},
+    { &NORC.Reg_REG1_D1817,           "Reg_REG1_D1817",                    NULL},
+    { &NORC.Reg_REG1_D1613,           "Reg_REG1_D1613",                    NULL},
+    { &NORC.Reg_REG1_D1209,           "Reg_REG1_D1209",                    NULL},
+    { &NORC.Reg_REG1_D0805,           "Reg_REG1_D0805",                    NULL},
+    { &NORC.Reg_REG1_D0401,           "Reg_REG1_D0401",                    NULL},
+    { &NORC.Reg_REG2_D17,             "Reg_REG2_D17",                      NULL},
+    { &NORC.Reg_REG2_D1613,           "Reg_REG2_D1613",                    NULL},
+    { &NORC.Reg_REG2_D1209,           "Reg_REG2_D1209",                    NULL},
+    { &NORC.Reg_REG2_D0805,           "Reg_REG2_D0805",                    NULL},
+    { &NORC.Reg_REG2_D0401,           "Reg_REG2_D0401",                    NULL},
+    { &NORC.LI_printer_Operative,     "LI_printer_Operative",              NULL},
+    { &NORC.BTN_printer_reset,        "BTN_printer_reset",                 &NORC_OnClick_BTN},
+    { &NORC.BTN_CRT_reset,            "BTN_CRT_reset",                     &NORC_OnClick_BTN},
+    { &NORC.BTN_Reset_InterLock,      "BTN_Reset_InterLock",               &NORC_OnClick_BTN},
+    { &NORC.SW_printer,               "SW_printer",                        &NORC_OnClick_Sw},
+    { &NORC.SW_CRT,                   "SW_CRT",                            &NORC_OnClick_Sw},
+    { &NORC.SW_Program,               "SW_Program",                        &NORC_OnClick_Sw},
+    { &NORC.LI_Printer_Check,         "LI_Printer_Check",                  NULL},
+    { &NORC.LI_Special_Function,      "LI_Special_Function",               NULL},
+    { &NORC.LI_Printer_Instr_A,       "LI_Printer_Instr_A",                NULL},
+    { &NORC.LI_Printer_Instr_B,       "LI_Printer_Instr_B",                NULL},
+    { &NORC.BTN_Carriage_A,           "BTN_Carriage_A",                    &NORC_OnClick_BTN},
+    { &NORC.BTN_Carriage_B,           "BTN_Carriage_B",                    &NORC_OnClick_BTN},
+    { &NORC.LI_Word_Check,            "LI_Word_Check",                     NULL},
+    { &NORC.BTN_CRT_Check_Reset,      "BTN_CRT_Check_Reset",               &NORC_OnClick_BTN},
+    { &NORC.LI_Index_Check,           "LI_Index_Check",                    NULL},
+    { &NORC.LI_Sign_Check,            "LI_Sign_Check",                     NULL},
+    { &NORC.BTN_Index_Reset,          "BTN_Index_Reset",                   &NORC_OnClick_BTN},
+    { &NORC.BTN_Sign_Reset,           "BTN_Sign_Reset",                    &NORC_OnClick_BTN},
+    { &NORC.LI_Operation_Code_Check,  "LI_Operation_Code_Check",           NULL},
+    { &NORC.LI_EOT_Check,             "LI_EOT_Check",                      NULL},
+    { &NORC.LI_NonZeroDiv_Check,      "LI_NonZeroDiv_Check",               NULL},
+    { &NORC.LI_Tape_Oprv_Check,       "LI_Tape_Oprv_Check",                NULL},
+    { &NORC.LI_Printer_Oprv_Check,    "LI_Printer_Oprv_Check",             NULL},
+    { &NORC.BTN_ProgCheck_Reset,      "BTN_ProgCheck_Reset",               &NORC_OnClick_BTN},
+    { &NORC.LI_6468,                  "LI_6468",                           NULL},
+    { &NORC.BTN_6468,                 "BTN_6468",                          &NORC_OnClick_BTN},
+    { &NORC.LI_7479,                  "LI_7479",                           NULL},
+    { &NORC.BTN_7479,                 "BTN_7479",                          &NORC_OnClick_BTN},
+    { &NORC.SW_Overflow,              "SW_Overflow",                       &NORC_OnClick_Sw},
+    { &NORC.SW_AdjustIndex,           "SW_AdjustIndex",                    &NORC_OnClick_Sw},
+    { &NORC.SW_ZeroResult,            "SW_ZeroResult",                     &NORC_OnClick_Sw},
+    { &NORC.SW_EndOfFile,             "SW_EndOfFile",                      &NORC_OnClick_Sw},
+    { &NORC.SW_TapeCheck,             "SW_TapeCheck",                      &NORC_OnClick_Sw},
+    { &NORC.LI_OV,                    "LI_OV",                             NULL},
+    { &NORC.LI_IA,                    "LI_IA",                             NULL},
+    { &NORC.LI_ZR,                    "LI_ZR",                             NULL},
+    { &NORC.LI_TEOF,                  "LI_TEOF",                           NULL},
+    { &NORC.LI_TCHK,                  "LI_TCHK",                           NULL},
+    { &NORC.BTN_OV,                   "BTN_OV",                            &NORC_OnClick_BTN},
+    { &NORC.BTN_IA,                   "BTN_IA",                            &NORC_OnClick_BTN},
+    { &NORC.BTN_ZR,                   "BTN_ZR",                            &NORC_OnClick_BTN},
+    { &NORC.BTN_TEOF,                 "BTN_TEOF",                          &NORC_OnClick_BTN},
+    { &NORC.BTN_TCHK,                 "BTN_TCHK",                          &NORC_OnClick_BTN},
+    { &NORC.LI_PADV_TMOV,             "LI_PADV_TMOV",                      NULL},
+    { &NORC.LI_PSTOP,                 "LI_PSTOP",                          NULL},
+    { &NORC.LI_CHKSTOP,               "LI_CHKSTOP",                        NULL},
+    { &NORC.BTN_SubOp_Reset,          "BTN_SubOp_Reset",                   &NORC_OnClick_BTN},
+    { &NORC.LI_Manual_Read,           "LI_Manual_Read",                    NULL},
+    { &NORC.SW_Source_of_intructions, "SW_Source_of_intructions",          &NORC_OnClick_Sw},
+    { &NORC.BTN_Start,                "BTN_Start",                         &NORC_OnClick_BTN},
+    { &NORC.BTN_Stop,                 "BTN_Stop",                          &NORC_OnClick_BTN},
+    { &NORC.BTN_Operation_Start,      "BTN_Operation_Start",               &NORC_OnClick_BTN},
+    { &NORC.BTN_Tape_Stop,            "BTN_Tape_Stop",                     &NORC_OnClick_BTN},
+    { &NORC.BTN_SubOp_Start,          "BTN_SubOp_Start",                   &NORC_OnClick_BTN},
+    { &NORC.BTN_SubOp_Stop,           "BTN_SubOp_Stop",                    &NORC_OnClick_BTN},
+    { &NORC.BTN_V_to_U,               "BTN_V_to_U",                        &NORC_OnClick_BTN},
+    { &NORC.BTN_V_entry_to_V,         "BTN_V_entry_to_V",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_U_to_V,               "BTN_U_to_V",                        &NORC_OnClick_BTN},
+    { &NORC.BTN_U1_to_V,              "BTN_U1_to_V",                       &NORC_OnClick_BTN},
+    { &NORC.BTN_V_to_M4,              "BTN_V_to_M4",                       &NORC_OnClick_BTN},
+    { &NORC.BTN_V_to_M6,              "BTN_V_to_M6",                       &NORC_OnClick_BTN},
+    { &NORC.BTN_V_to_M8,              "BTN_V_to_M8",                       &NORC_OnClick_BTN},
+    { &NORC.BTN_REG1_to_IREG,         "BTN_REG1_to_IREG",                  &NORC_OnClick_BTN},
+    { &NORC.SW_V_Entry[4],            "SW_V_Entry_D4",                     &NORC_OnClick_Sw2},
+    { &NORC.SW_V_Entry[3],            "SW_V_Entry_D3",                     &NORC_OnClick_Sw2},
+    { &NORC.SW_V_Entry[2],            "SW_V_Entry_D2",                     &NORC_OnClick_Sw2},
+    { &NORC.SW_V_Entry[1],            "SW_V_Entry_D1",                     &NORC_OnClick_Sw2},
+    { &NORC.SWNum_V_Entry[4],         "SWNum_V_Entry_D4",                  NULL},
+    { &NORC.SWNum_V_Entry[3],         "SWNum_V_Entry_D3",                  NULL},
+    { &NORC.SWNum_V_Entry[2],         "SWNum_V_Entry_D2",                  NULL},
+    { &NORC.SWNum_V_Entry[1],         "SWNum_V_Entry_D1",                  NULL},
+    { &NORC.SW_74[0],                 "SW_74",                             &NORC_OnClick_Sw},
+    { &NORC.SW_74[1],                 "SW_75",                             &NORC_OnClick_Sw},
+    { &NORC.SW_74[2],                 "SW_76",                             &NORC_OnClick_Sw},
+    { &NORC.SW_74[3],                 "SW_77",                             &NORC_OnClick_Sw},
+    { &NORC.SW_74[4],                 "SW_78",                             &NORC_OnClick_Sw},
+    { &NORC.SW_74[5],                 "SW_79",                             &NORC_OnClick_Sw},
+    { &NORC.SW_Floated_index,         "SW_Floated_index",                  &NORC_OnClick_Sw},
+    { &NORC.SW_Write_Output,          "SW_Write_Output",                   &NORC_OnClick_Sw},
+    { &NORC.SW_Reg1_CRT_Addr[4],      "SW_Reg1_CRT_Addr_D4",               &NORC_OnClick_Sw2},
+    { &NORC.SW_Reg1_CRT_Addr[3],      "SW_Reg1_CRT_Addr_D3",               &NORC_OnClick_Sw2},
+    { &NORC.SW_Reg1_CRT_Addr[2],      "SW_Reg1_CRT_Addr_D2",               &NORC_OnClick_Sw2},
+    { &NORC.SW_Reg1_CRT_Addr[1],      "SW_Reg1_CRT_Addr_D1",               &NORC_OnClick_Sw2},
+    { &NORC.SWNum_Reg1_CRT_Addr[4],   "SWNum_Reg1_CRT_Addr_D4",            NULL},
+    { &NORC.SWNum_Reg1_CRT_Addr[3],   "SWNum_Reg1_CRT_Addr_D3",            NULL},
+    { &NORC.SWNum_Reg1_CRT_Addr[2],   "SWNum_Reg1_CRT_Addr_D2",            NULL},
+    { &NORC.SWNum_Reg1_CRT_Addr[1],   "SWNum_Reg1_CRT_Addr_D1",            NULL},
+    { &NORC.BTN_Reg1_to_CRT,          "BTN_Reg1_to_CRT",                   &NORC_OnClick_BTN},
+    { &NORC.BTN_Reg1_from_CRT,        "BTN_Reg1_from_CRT",                 &NORC_OnClick_BTN},
+    { &NORC.BTN_Reg1_from_REG2,       "BTN_Reg1_from_REG2",                &NORC_OnClick_BTN},
+    { &NORC.BTN_Reg1_Reset,           "BTN_Reg1_Reset",                    &NORC_OnClick_BTN},
+    { &NORC.SW_Keyboard_Entry,        "SW_Keyboard_Entry",                 &NORC_OnClick_Sw},
+    { &NORC.BTN_Reg2_to_CRT,          "BTN_Reg2_to_CRT",                   &NORC_OnClick_BTN},
+    { &NORC.BTN_Reg2_from_CRT,        "BTN_Reg2_from_CRT",                 &NORC_OnClick_BTN},
+    { &NORC.BTN_Reg2_from_REG1,       "BTN_Reg2_from_REG1",                &NORC_OnClick_BTN},
+    { &NORC.BTN_Reg2_Reset,           "BTN_Reg2_Reset",                    &NORC_OnClick_BTN},
+    { &NORC.SW_Reg2_CRT_Addr[4],      "SW_Reg2_CRT_Addr_D4",               &NORC_OnClick_Sw2},
+    { &NORC.SW_Reg2_CRT_Addr[3],      "SW_Reg2_CRT_Addr_D3",               &NORC_OnClick_Sw2},
+    { &NORC.SW_Reg2_CRT_Addr[2],      "SW_Reg2_CRT_Addr_D2",               &NORC_OnClick_Sw2},
+    { &NORC.SW_Reg2_CRT_Addr[1],      "SW_Reg2_CRT_Addr_D1",               &NORC_OnClick_Sw2},
+    { &NORC.SWNum_Reg2_CRT_Addr[4],   "SWNum_Reg2_CRT_Addr_D4",            NULL},
+    { &NORC.SWNum_Reg2_CRT_Addr[3],   "SWNum_Reg2_CRT_Addr_D3",            NULL},
+    { &NORC.SWNum_Reg2_CRT_Addr[2],   "SWNum_Reg2_CRT_Addr_D2",            NULL},
+    { &NORC.SWNum_Reg2_CRT_Addr[1],   "SWNum_Reg2_CRT_Addr_D1",            NULL},
+    { &NORC.SW_Tape_Addr[1],          "SW_Tape_Addr_01",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[2],          "SW_Tape_Addr_02",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[3],          "SW_Tape_Addr_03",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[4],          "SW_Tape_Addr_04",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[5],          "SW_Tape_Addr_05",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[6],          "SW_Tape_Addr_06",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[7],          "SW_Tape_Addr_07",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[8],          "SW_Tape_Addr_08",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[9],          "SW_Tape_Addr_09",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[10],         "SW_Tape_Addr_10",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[11],         "SW_Tape_Addr_11",                   &NORC_OnClick_Sw2},
+    { &NORC.SW_Tape_Addr[12],         "SW_Tape_Addr_12",                   &NORC_OnClick_Sw2},
+    { &NORC.SWNum_Tape_Addr[1],       "SWNum_Tape_Addr_01",                NULL},
+    { &NORC.SWNum_Tape_Addr[2],       "SWNum_Tape_Addr_02",                NULL},
+    { &NORC.SWNum_Tape_Addr[3],       "SWNum_Tape_Addr_03",                NULL},
+    { &NORC.SWNum_Tape_Addr[4],       "SWNum_Tape_Addr_04",                NULL},
+    { &NORC.SWNum_Tape_Addr[5],       "SWNum_Tape_Addr_05",                NULL},
+    { &NORC.SWNum_Tape_Addr[6],       "SWNum_Tape_Addr_06",                NULL},
+    { &NORC.SWNum_Tape_Addr[7],       "SWNum_Tape_Addr_07",                NULL},
+    { &NORC.SWNum_Tape_Addr[8],       "SWNum_Tape_Addr_08",                NULL},
+    { &NORC.SWNum_Tape_Addr[9],       "SWNum_Tape_Addr_09",                NULL},
+    { &NORC.SWNum_Tape_Addr[10],      "SWNum_Tape_Addr_10",                NULL},
+    { &NORC.SWNum_Tape_Addr[11],      "SWNum_Tape_Addr_11",                NULL},
+    { &NORC.SWNum_Tape_Addr[12],      "SWNum_Tape_Addr_12",                NULL},
+    { &NORC.BTN_Tape_Reset[1],        "BTN_Tape_1_Reset",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_Tape_Reset[2],        "BTN_Tape_2_Reset",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_Tape_Reset[3],        "BTN_Tape_3_Reset",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_Tape_Reset[4],        "BTN_Tape_4_Reset",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_Tape_Reset[5],        "BTN_Tape_5_Reset",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_Tape_Reset[6],        "BTN_Tape_6_Reset",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_Tape_Reset[7],        "BTN_Tape_7_Reset",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_Tape_Reset[8],        "BTN_Tape_8_Reset",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_Read_Forward,         "BTN_Read_Forward",                  &NORC_OnClick_BTN},
+    { &NORC.BTN_Read_Backward,        "BTN_Read_Backward",                 &NORC_OnClick_BTN},
+    { &NORC.BTN_Rewind,               "BTN_Rewind",                        &NORC_OnClick_BTN},
+    { &NORC.SW_Tape_Unit_Selector[1], "SW_Tape_Unit_Selector",             &NORC_OnClick_Sw2},
+    { &NORC.SWNum_Tape_Unit_Selector[1],   "SWNum_Tape_Unit_Selector",     NULL},
+    { &NORC.BTN_Power_Off,            "BTN_Power_Off",                     &NORC_OnClick_BTN},    
+    { &NORC.LI_IND_PADV_TMOV,         "LI_IND_PADV_TMOV",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_PSTOP,             "LI_IND_PSTOP",                      NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_CHKSTOP,           "LI_IND_CHKSTOP",                    NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_Printer_Check,     "LI_IND_Printer_Check",              NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_CRT_Check,         "LI_IND_CRT_Check",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_Program_Check,     "LI_IND_Program_Check",              NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_OV,                "LI_IND_OV",                         NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_IA,                "LI_IND_IA",                         NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_ZR,                "LI_IND_ZR",                         NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_TEOF,              "LI_IND_TEOF",                       NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_TCHK,              "LI_IND_TCHK",                       NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_3600_Spots,        "LI_IND_3600_Spots",                 NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_NOT_PADV_TMOV,     "LI_IND_NOT_PADV_TMOV",              NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_SUBOP,             "LI_IND_SUBOP",                      NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Power_On[1],        "LI_TU1_Power_On",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Power_On[2],        "LI_TU2_Power_On",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Power_On[3],        "LI_TU3_Power_On",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Power_On[4],        "LI_TU4_Power_On",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Power_On[5],        "LI_TU5_Power_On",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Power_On[6],        "LI_TU6_Power_On",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Power_On[7],        "LI_TU7_Power_On",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Power_On[8],        "LI_TU8_Power_On",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Operative[1],       "LI_TU1_Operative",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Operative[2],       "LI_TU2_Operative",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Operative[3],       "LI_TU3_Operative",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Operative[4],       "LI_TU4_Operative",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Operative[5],       "LI_TU5_Operative",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Operative[6],       "LI_TU6_Operative",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Operative[7],       "LI_TU7_Operative",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Operative[8],       "LI_TU8_Operative",                  NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Moving,             "LI_TU_Moving",                      NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Rewind[1],          "LI_TU1_Rewind",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Rewind[2],          "LI_TU2_Rewind",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Rewind[3],          "LI_TU3_Rewind",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Rewind[4],          "LI_TU4_Rewind",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Rewind[5],          "LI_TU5_Rewind",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Rewind[6],          "LI_TU6_Rewind",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Rewind[7],          "LI_TU7_Rewind",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_Rewind[8],          "LI_TU8_Rewind",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_EOT[1],             "LI_TU1_EOT",                        NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_EOT[2],             "LI_TU2_EOT",                        NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_EOT[3],             "LI_TU3_EOT",                        NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_EOT[4],             "LI_TU4_EOT",                        NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_EOT[5],             "LI_TU5_EOT",                        NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_EOT[6],             "LI_TU6_EOT",                        NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_EOT[7],             "LI_TU7_EOT",                        NULL, "IndicatorPanel/1" },
+    { &NORC.LI_TU_EOT[8],             "LI_TU8_EOT",                        NULL, "IndicatorPanel/1" },
+    { &NORC.LI_BITS_D0801,            "LI_BITS_D0801",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_BITS_D1709,            "LI_BITS_D1709",                     NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_WordLen,           "LI_IND_WordLen",                    NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_BitCount,          "LI_IND_BitCount",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_BlockLen,          "LI_IND_BlockLen",                   NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_GtThan9,           "LI_IND_GtThan9",                    NULL, "IndicatorPanel/1" },
+    { &NORC.LI_IND_BlockNum,          "LI_IND_BlockNum",                   NULL, "IndicatorPanel/1" },
 
-    { &NORC.MT_InfoPanel,             "MT_InfoPanel",                      NULL,     0, "tape/1"  },
-    { &NORC.MT_panel[1],              "MT_1_panel",                        NULL,     0, "tape/1"  },
-    { &NORC.MT[1],                    "MT_1",                              NULL,     0, "tape/1"  },
-    { &NORC.MT_L[1],                  "MT_1_L",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_R[1],                  "MT_1_R",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_head[1],               "MT_1_head",                         NULL,     0, "tape/1"  },
-    { &NORC.MT_head_actuator[1],      "MT_1_head_actuator",                NULL,     0, "tape/1"  },
-        { &NORC.MT_L_VacCol[1],       "MT_1_L_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_R_VacCol[1],       "MT_1_R_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_DoorHandle[1],     "MT_1_DoorHandle",                   NULL,     0, "tape/1"  },
-        { &NORC.MT_BTN_DoorOpen[1],   "MT_1_BTN_DoorOpen",                 &NORC_OnClick_BTN,     0, "tape/1"  },
-    { &NORC.MT_panel[2],              "MT_2_panel",                        NULL,     0, "tape/1"  },
-    { &NORC.MT[2],                    "MT_2",                              NULL,     0, "tape/1"  },
-    { &NORC.MT_L[2],                  "MT_2_L",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_R[2],                  "MT_2_R",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_head[2],               "MT_2_head",                         NULL,     0, "tape/1"  },
-    { &NORC.MT_head_actuator[2],      "MT_2_head_actuator",                NULL,     0, "tape/1"  },
-        { &NORC.MT_L_VacCol[2],       "MT_2_L_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_R_VacCol[2],       "MT_2_R_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_DoorHandle[2],     "MT_2_DoorHandle",                   NULL,     0, "tape/1"  },
-        { &NORC.MT_BTN_DoorOpen[2],   "MT_2_BTN_DoorOpen",                 &NORC_OnClick_BTN,     0, "tape/1"  },
-    { &NORC.MT_panel[3],              "MT_3_panel",                        NULL,     0, "tape/1"  },
-    { &NORC.MT[3],                    "MT_3",                              NULL,     0, "tape/1"  },
-    { &NORC.MT_L[3],                  "MT_3_L",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_R[3],                  "MT_3_R",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_head[3],               "MT_3_head",                         NULL,     0, "tape/1"  },
-    { &NORC.MT_head_actuator[3],      "MT_3_head_actuator",                NULL,     0, "tape/1"  },
-        { &NORC.MT_L_VacCol[3],       "MT_3_L_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_R_VacCol[3],       "MT_3_R_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_DoorHandle[3],     "MT_3_DoorHandle",                   NULL,     0, "tape/1"  },
-        { &NORC.MT_BTN_DoorOpen[3],   "MT_3_BTN_DoorOpen",                 &NORC_OnClick_BTN,     0, "tape/1"  },
-    { &NORC.MT_panel[4],              "MT_4_panel",                        NULL,     0, "tape/1"  },
-    { &NORC.MT[4],                    "MT_4",                              NULL,     0, "tape/1"  },
-    { &NORC.MT_L[4],                  "MT_4_L",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_R[4],                  "MT_4_R",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_head[4],               "MT_4_head",                         NULL,     0, "tape/1"  },
-    { &NORC.MT_head_actuator[4],      "MT_4_head_actuator",                NULL,     0, "tape/1"  },
-        { &NORC.MT_L_VacCol[4],       "MT_4_L_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_R_VacCol[4],       "MT_4_R_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_DoorHandle[4],     "MT_4_DoorHandle",                   NULL,     0, "tape/1"  },
-        { &NORC.MT_BTN_DoorOpen[4],   "MT_4_BTN_DoorOpen",                 &NORC_OnClick_BTN,     0, "tape/1"  },
-    { &NORC.MT_panel[5],              "MT_5_panel",                        NULL,     0, "tape/1"  },
-    { &NORC.MT[5],                    "MT_5",                              NULL,     0, "tape/1"  },
-    { &NORC.MT_L[5],                  "MT_5_L",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_R[5],                  "MT_5_R",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_head[5],               "MT_5_head",                         NULL,     0, "tape/1"  },
-    { &NORC.MT_head_actuator[5],      "MT_5_head_actuator",                NULL,     0, "tape/1"  },
-        { &NORC.MT_L_VacCol[5],       "MT_5_L_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_R_VacCol[5],       "MT_5_R_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_DoorHandle[5],     "MT_5_DoorHandle",                   NULL,     0, "tape/1"  },
-        { &NORC.MT_BTN_DoorOpen[5],   "MT_5_BTN_DoorOpen",                 &NORC_OnClick_BTN,     0, "tape/1"  },
-    { &NORC.MT_panel[6],              "MT_6_panel",                        NULL,     0, "tape/1"  },
-    { &NORC.MT[6],                    "MT_6",                              NULL,     0, "tape/1"  },
-    { &NORC.MT_L[6],                  "MT_6_L",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_R[6],                  "MT_6_R",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_head[6],               "MT_6_head",                         NULL,     0, "tape/1"  },
-    { &NORC.MT_head_actuator[6],      "MT_6_head_actuator",                NULL,     0, "tape/1"  },
-        { &NORC.MT_L_VacCol[6],       "MT_6_L_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_R_VacCol[6],       "MT_6_R_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_DoorHandle[6],     "MT_6_DoorHandle",                   NULL,     0, "tape/1"  },
-        { &NORC.MT_BTN_DoorOpen[6],   "MT_6_BTN_DoorOpen",                 &NORC_OnClick_BTN,     0, "tape/1"  },
-    { &NORC.MT_panel[7],              "MT_7_panel",                        NULL,     0, "tape/1"  },
-    { &NORC.MT[7],                    "MT_7",                              NULL,     0, "tape/1"  },
-    { &NORC.MT_L[7],                  "MT_7_L",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_R[7],                  "MT_7_R",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_head[7],               "MT_7_head",                         NULL,     0, "tape/1"  },
-    { &NORC.MT_head_actuator[7],      "MT_7_head_actuator",                NULL,     0, "tape/1"  },
-        { &NORC.MT_L_VacCol[7],       "MT_7_L_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_R_VacCol[7],       "MT_7_R_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_DoorHandle[7],     "MT_7_DoorHandle",                   NULL,     0, "tape/1"  },
-        { &NORC.MT_BTN_DoorOpen[7],   "MT_7_BTN_DoorOpen",                 &NORC_OnClick_BTN,     0, "tape/1"  },
-    { &NORC.MT_panel[8],              "MT_8_panel",                        NULL,     0, "tape/1"  },
-    { &NORC.MT[8],                    "MT_8",                              NULL,     0, "tape/1"  },
-    { &NORC.MT_L[8],                  "MT_8_L",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_R[8],                  "MT_8_R",                            NULL,     0, "tape/1"  },
-    { &NORC.MT_head[8],               "MT_8_head",                         NULL,     0, "tape/1"  },
-    { &NORC.MT_head_actuator[8],      "MT_8_head_actuator",                NULL,     0, "tape/1"  },
-        { &NORC.MT_L_VacCol[8],       "MT_8_L_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_R_VacCol[8],       "MT_8_R_VacCol",                     NULL,     0, "tape/1"  },
-        { &NORC.MT_DoorHandle[8],     "MT_8_DoorHandle",                   NULL,     0, "tape/1"  },
-        { &NORC.MT_BTN_DoorOpen[8],   "MT_8_BTN_DoorOpen",                 &NORC_OnClick_BTN,     0, "tape/1"  },
-    { &NORC.MT_VacColumn,             "MT_VacColumn",                      NULL,     0, "tape/1"  },
-    { &NORC.MT_VacColMedium,          "MT_VacColMedium",                   NULL,     0, "tape/1"  },
+    { &NORC.MT_InfoPanel,             "MT_InfoPanel",                      NULL, "tape/1"  },
+    { &NORC.MT_panel[1],              "MT_1_panel",                        NULL, "tape/1"  },
+    { &NORC.MT[1],                    "MT_1",                              NULL, "tape/1"  },
+    { &NORC.MT_L[1],                  "MT_1_L",                            NULL, "tape/1"  },
+    { &NORC.MT_R[1],                  "MT_1_R",                            NULL, "tape/1"  },
+    { &NORC.MT_head[1],               "MT_1_head",                         NULL, "tape/1"  },
+    { &NORC.MT_head_actuator[1],      "MT_1_head_actuator",                NULL, "tape/1"  },
+    { &NORC.Drop_MT_File[1],          "Drop_MT1_File",                     NULL, "tape/1"  },
+        { &NORC.MT_L_VacCol[1],       "MT_1_L_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_R_VacCol[1],       "MT_1_R_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_DoorHandle[1],     "MT_1_DoorHandle",                   &NORC_OnClick_BTN2, "tape/1"  },
+        { &NORC.MT_BTN_DoorOpen[1],   "MT_1_BTN_DoorOpen",                 &NORC_OnClick_BTN, "tape/1"  },
+    { &NORC.MT_panel[2],              "MT_2_panel",                        NULL, "tape/1"  },
+    { &NORC.MT[2],                    "MT_2",                              NULL, "tape/1"  },
+    { &NORC.MT_L[2],                  "MT_2_L",                            NULL, "tape/1"  },
+    { &NORC.MT_R[2],                  "MT_2_R",                            NULL, "tape/1"  },
+    { &NORC.MT_head[2],               "MT_2_head",                         NULL, "tape/1"  },
+    { &NORC.MT_head_actuator[2],      "MT_2_head_actuator",                NULL, "tape/1"  },
+    { &NORC.Drop_MT_File[2],          "Drop_MT2_File",                     NULL, "tape/1"  },
+        { &NORC.MT_L_VacCol[2],       "MT_2_L_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_R_VacCol[2],       "MT_2_R_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_DoorHandle[2],     "MT_2_DoorHandle",                   &NORC_OnClick_BTN2, "tape/1"  },
+        { &NORC.MT_BTN_DoorOpen[2],   "MT_2_BTN_DoorOpen",                 &NORC_OnClick_BTN, "tape/1"  },
+    { &NORC.MT_panel[3],              "MT_3_panel",                        NULL, "tape/1"  },
+    { &NORC.MT[3],                    "MT_3",                              NULL, "tape/1"  },
+    { &NORC.MT_L[3],                  "MT_3_L",                            NULL, "tape/1"  },
+    { &NORC.MT_R[3],                  "MT_3_R",                            NULL, "tape/1"  },
+    { &NORC.MT_head[3],               "MT_3_head",                         NULL, "tape/1"  },
+    { &NORC.MT_head_actuator[3],      "MT_3_head_actuator",                NULL, "tape/1"  },
+    { &NORC.Drop_MT_File[3],          "Drop_MT3_File",                     NULL, "tape/1"  },
+        { &NORC.MT_L_VacCol[3],       "MT_3_L_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_R_VacCol[3],       "MT_3_R_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_DoorHandle[3],     "MT_3_DoorHandle",                   &NORC_OnClick_BTN2, "tape/1"  },
+        { &NORC.MT_BTN_DoorOpen[3],   "MT_3_BTN_DoorOpen",                 &NORC_OnClick_BTN, "tape/1"  },
+    { &NORC.MT_panel[4],              "MT_4_panel",                        NULL, "tape/1"  },
+    { &NORC.MT[4],                    "MT_4",                              NULL, "tape/1"  },
+    { &NORC.MT_L[4],                  "MT_4_L",                            NULL, "tape/1"  },
+    { &NORC.MT_R[4],                  "MT_4_R",                            NULL, "tape/1"  },
+    { &NORC.MT_head[4],               "MT_4_head",                         NULL, "tape/1"  },
+    { &NORC.MT_head_actuator[4],      "MT_4_head_actuator",                NULL, "tape/1"  },
+    { &NORC.Drop_MT_File[4],          "Drop_MT4_File",                     NULL, "tape/1"  },
+        { &NORC.MT_L_VacCol[4],       "MT_4_L_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_R_VacCol[4],       "MT_4_R_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_DoorHandle[4],     "MT_4_DoorHandle",                   &NORC_OnClick_BTN2, "tape/1"  },
+        { &NORC.MT_BTN_DoorOpen[4],   "MT_4_BTN_DoorOpen",                 &NORC_OnClick_BTN, "tape/1"  },
+    { &NORC.MT_panel[5],              "MT_5_panel",                        NULL, "tape/1"  },
+    { &NORC.MT[5],                    "MT_5",                              NULL, "tape/1"  },
+    { &NORC.MT_L[5],                  "MT_5_L",                            NULL, "tape/1"  },
+    { &NORC.MT_R[5],                  "MT_5_R",                            NULL, "tape/1"  },
+    { &NORC.MT_head[5],               "MT_5_head",                         NULL, "tape/1"  },
+    { &NORC.MT_head_actuator[5],      "MT_5_head_actuator",                NULL, "tape/1"  },
+    { &NORC.Drop_MT_File[5],          "Drop_MT5_File",                     NULL, "tape/1"  },
+        { &NORC.MT_L_VacCol[5],       "MT_5_L_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_R_VacCol[5],       "MT_5_R_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_DoorHandle[5],     "MT_5_DoorHandle",                   &NORC_OnClick_BTN2, "tape/1"  },
+        { &NORC.MT_BTN_DoorOpen[5],   "MT_5_BTN_DoorOpen",                 &NORC_OnClick_BTN, "tape/1"  },
+    { &NORC.MT_panel[6],              "MT_6_panel",                        NULL, "tape/1"  },
+    { &NORC.MT[6],                    "MT_6",                              NULL, "tape/1"  },
+    { &NORC.MT_L[6],                  "MT_6_L",                            NULL, "tape/1"  },
+    { &NORC.MT_R[6],                  "MT_6_R",                            NULL, "tape/1"  },
+    { &NORC.MT_head[6],               "MT_6_head",                         NULL, "tape/1"  },
+    { &NORC.MT_head_actuator[6],      "MT_6_head_actuator",                NULL, "tape/1"  },
+    { &NORC.Drop_MT_File[6],          "Drop_MT6_File",                     NULL, "tape/1"  },
+        { &NORC.MT_L_VacCol[6],       "MT_6_L_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_R_VacCol[6],       "MT_6_R_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_DoorHandle[6],     "MT_6_DoorHandle",                   &NORC_OnClick_BTN2, "tape/1"  },
+        { &NORC.MT_BTN_DoorOpen[6],   "MT_6_BTN_DoorOpen",                 &NORC_OnClick_BTN, "tape/1"  },
+    { &NORC.MT_panel[7],              "MT_7_panel",                        NULL, "tape/1"  },
+    { &NORC.MT[7],                    "MT_7",                              NULL, "tape/1"  },
+    { &NORC.MT_L[7],                  "MT_7_L",                            NULL, "tape/1"  },
+    { &NORC.MT_R[7],                  "MT_7_R",                            NULL, "tape/1"  },
+    { &NORC.MT_head[7],               "MT_7_head",                         NULL, "tape/1"  },
+    { &NORC.MT_head_actuator[7],      "MT_7_head_actuator",                NULL, "tape/1"  },
+    { &NORC.Drop_MT_File[7],          "Drop_MT7_File",                     NULL, "tape/1"  },
+        { &NORC.MT_L_VacCol[7],       "MT_7_L_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_R_VacCol[7],       "MT_7_R_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_DoorHandle[7],     "MT_7_DoorHandle",                   &NORC_OnClick_BTN2, "tape/1"  },
+        { &NORC.MT_BTN_DoorOpen[7],   "MT_7_BTN_DoorOpen",                 &NORC_OnClick_BTN, "tape/1"  },
+    { &NORC.MT_panel[8],              "MT_8_panel",                        NULL, "tape/1"  },
+    { &NORC.MT[8],                    "MT_8",                              NULL, "tape/1"  },
+    { &NORC.MT_L[8],                  "MT_8_L",                            NULL, "tape/1"  },
+    { &NORC.MT_R[8],                  "MT_8_R",                            NULL, "tape/1"  },
+    { &NORC.MT_head[8],               "MT_8_head",                         NULL, "tape/1"  },
+    { &NORC.MT_head_actuator[8],      "MT_8_head_actuator",                NULL, "tape/1"  },
+    { &NORC.Drop_MT_File[8],          "Drop_MT8_File",                     NULL, "tape/1"  },
+        { &NORC.MT_L_VacCol[8],       "MT_8_L_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_R_VacCol[8],       "MT_8_R_VacCol",                     NULL, "tape/1"  },
+        { &NORC.MT_DoorHandle[8],     "MT_8_DoorHandle",                   &NORC_OnClick_BTN2, "tape/1"  },
+        { &NORC.MT_BTN_DoorOpen[8],   "MT_8_BTN_DoorOpen",                 &NORC_OnClick_BTN, "tape/1"  },
+    { &NORC.MT_VacColumn,             "MT_VacColumn",                      NULL, "tape/1"  },
+    { &NORC.MT_VacColMedium,          "MT_VacColMedium",                   NULL, "tape/1"  },
 
-    { &NORC.Paper,                    "Paper",                             NULL,     0, "printer/1"  },
-    { &NORC.PaperBackground,          "PaperBackground",                   NULL,     0, "printer/1"  },
-    { &NORC.PrinterCharSet,           "PrinterCharSet",                    NULL,     0, "printer/1"  },
+    { &NORC.Paper,                    "Paper",                             NULL, "printer/1"  },
+    { &NORC.PaperBackground,          "PaperBackground",                   NULL, "printer/1"  },
+    { &NORC.PrinterCharSet,           "PrinterCharSet",                    NULL, "printer/1"  },
 
     { NULL }  
 };
@@ -1178,7 +1190,11 @@ void Refresh_Console(void)
     // register crt address
     SetSwitchNum(3, &NORC.SW_Reg1_CRT_Addr[0], &NORC.SWNum_Reg1_CRT_Addr[0], &Console_Sw_Reg1_CRTAddr, 4);
     SetSwitchNum(3, &NORC.SW_Reg2_CRT_Addr[0], &NORC.SWNum_Reg2_CRT_Addr[0], &Console_Sw_Reg2_CRTAddr, 4);
+
+    n=Console_Sw_KeyboardEntry; 
     SetSwitch(3, NORC.SW_Keyboard_Entry, &Console_Sw_KeyboardEntry, "LUR"); 
+    // if KeyboardEnntry switch changes, then clears the input buffer
+    if (n!=Console_Sw_KeyboardEntry) cpvid[0].keyb_buf_len; 
 
     // tape address
     for (n=1; n<=12; n++) {
@@ -1189,17 +1205,18 @@ void Refresh_Console(void)
     SetSwitchNum(3, &NORC.SW_Tape_Unit_Selector[0], &NORC.SWNum_Tape_Unit_Selector[0], &Console_Sw_TapeUnitSelector, 1);
 }
 
-#define     MT_is_loading_tape  1
-#define     MT_is_rewinding     2
-#define     MT_is_using_tape    3
+#define     MT_is_loading_tape      1
+#define     MT_is_rewinding         2
+#define     MT_is_unloading_tape    3
 
+int PARAM_MaxSlice_msec  =   100;  // max time considered for tape hop calculations
 int PARAM_Reel_Diameter  =   267;  // reel diameter in mm 
 int PARAM_RPM            =  1600;  // reel forward/backwards motor revolutions per minute
 int PARAM_VacCol_h_Low   = 19200;  // upper vacuum colum sensor (inches x 1000) triggers reel load medium on colum 
 int PARAM_VacCol_h_Hi    = 32000;  // lower vacuum colum sensor (inches x 1000) triggers reel take medium from colum 
 int PARAM_RWSpeed        =   140;  // tape head operates at 140 inches per sec
-int PARAM_AccelTime      =   105;  // accel time in msec. clutch must obtain 2/3 of maximum speed in 0.135-0.150 seconds with a full reel of tape
-int PARAM_DecelTime      =   115;  // decel time in msec. the stop clutch must stop a full reel of tape from full speed in 0.145-0.160 sec
+int PARAM_AccelTime      =    95;  // accel time in msec. clutch must obtain 2/3 of maximum speed in 0.135-0.150 seconds with a full reel of tape
+int PARAM_DecelTime      =   105;  // decel time in msec. the stop clutch must stop a full reel of tape from full speed in 0.145-0.160 sec
                                    // note: the accel/decel time increases when tape unit
                                    // get used. Lower values makes jerky spins with thigh 
                                    // oscilation of tape loop in vacuum columns. Higher values
@@ -1212,6 +1229,7 @@ int PARAM_TakeMotor_RPM  =    40;  // take motor revolutions per minute
 #define     MT_anim_step_inc        0             // incremental animation step
 #define     MT_anim_step_rw         1             // read/write tape animation step 
 #define     MT_anim_finished       99             // this is the final step that signals the animation sequence has finished
+#define     MT_anim_no_change    (1<<30)          // no change the current value.
 
 void mt_reels_mov(int unit, int cmd, 
                   int * L_VacColMedium_h, int * R_VacColMedium_h, 
@@ -1225,6 +1243,7 @@ int mt_do_animation_seq(int unit,
                   int * MT_Reel_Amount, int * MT_head_actuator)
 {
     int time, nseq, msec, hint, recsize, ang, n, m, u3, p; 
+    int L_inc, R_inc, L_into_col, R_into_col; 
     int tnow = Refresh_tnow; 
 
     time = tnow - mtcab[unit].nseq_tm0;
@@ -1253,18 +1272,53 @@ int mt_do_animation_seq(int unit,
             // This is incremental animation step, should be done allways.
             // Execute it and mark as done to avoid issuing it more than once
             mtcab[unit].seq[nseq].hint=MT_anim_step_nop; 
-            // apply this step reel angular increment to reels 
-            ang = mtcab[unit].reel[0].ang + mtcab[unit].seq[nseq].L_ang_inc; 
-            ang = ang % 360; if (ang < 0) ang +=360;
-            mtcab[unit].reel[0].ang = ang; 
-            ang = mtcab[unit].reel[1].ang + mtcab[unit].seq[nseq].R_ang_inc; 
-            ang = ang % 360; if (ang < 0) ang +=360;
-            mtcab[unit].reel[1].ang = ang; 
             // apply this step tape medium increment into vacuum cols
-            mtcab[unit].reel[0].VacCol_h += mtcab[unit].seq[nseq].L_VacCol_inc; 
-            mtcab[unit].reel[1].VacCol_h += mtcab[unit].seq[nseq].R_VacCol_inc; 
+            L_inc=mtcab[unit].seq[nseq].L_VacCol_inc; // how much tape medium enters (if >0) or are removed (if <0) from VacCol
+            R_inc=mtcab[unit].seq[nseq].R_VacCol_inc;
+            L_into_col= (mtcab[unit].reel[0].VacCol_h < 0) ? 0:1; // =0 if no tape medium into vacuum column
+            R_into_col= (mtcab[unit].reel[1].VacCol_h < 0) ? 0:1; 
+            if ((L_inc < 0) && (R_inc < 0)) {
+                // removing medium from column, determine if one col is empty
+                if ((L_into_col) && (R_into_col)) {
+                    // both columns with tape medium inside
+                } else if (L_into_col) { 
+                    // R column empty, all movement goes to column L
+                    L_inc += R_inc; R_inc=0; 
+                } else if (R_into_col) { 
+                    // L column empty, all movement goes to column R
+                    R_inc += L_inc; L_inc=0; 
+                } else { 
+                    // L and R columns empty -> terminate tape unloading from columns
+                    // So mark as done any following step inc that still ask to remove medium from VacCol
+                    for (n=nseq+1;;n++) {
+                        if (mtcab[unit].seq[n].hint != MT_anim_step_inc) break; // not an incremental animation step
+                        if ((mtcab[unit].seq[n].L_VacCol_inc >= 0) || (mtcab[unit].seq[n].R_VacCol_inc >=0)) break; // not removing medium from vaccol  
+                        mtcab[unit].seq[n].hint=MT_anim_step_nop; // mark as done
+                        mtcab[unit].seq[n].msec=1; // only stands for 1 msec
+                    }
+                    // set to zero to avoid negative values
+                    mtcab[unit].reel[0].VacCol_h = L_inc = 0; 
+                    mtcab[unit].reel[1].VacCol_h = R_inc = 0; 
+                }
+            } 
+            // apply this step tape medium increment into vacuum cols
+            mtcab[unit].reel[0].VacCol_h += L_inc; 
+            mtcab[unit].reel[1].VacCol_h += R_inc; 
+            // apply this step angular increment to reels 
+            // (but only if thereis some medium into vaccol to be moved)
+            if (L_into_col) {
+                ang = mtcab[unit].reel[0].ang + mtcab[unit].seq[nseq].L_ang_inc; 
+                ang = ang % 360; if (ang < 0) ang +=360;
+                mtcab[unit].reel[0].ang = ang; 
+            }
+            if (R_into_col) {
+                ang = mtcab[unit].reel[1].ang + mtcab[unit].seq[nseq].R_ang_inc; 
+                ang = ang % 360; if (ang < 0) ang +=360;
+                mtcab[unit].reel[1].ang = ang; 
+            }
             // set the tape position of its elements
-            *MT_Reel_Amount = mtcab[unit].seq[nseq].MT_Reel_Amount; 
+            if (MT_anim_no_change & mtcab[unit].seq[nseq].MT_Reel_Amount) *MT_Reel_Amount = (int) GetState(NORC.MT[unit]); 
+            else *MT_Reel_Amount = mtcab[unit].seq[nseq].MT_Reel_Amount; 
             *MT_L_Rot = mtcab[unit].reel[0].n = (mtcab[unit].reel[0].ang % 60) * 12 / 60;
             *MT_R_Rot = mtcab[unit].reel[1].n = (mtcab[unit].reel[1].ang % 60) * 12 / 60;
             *MT_head_actuator  = mtcab[unit].seq[nseq].MT_head_actuator; 
@@ -1286,7 +1340,7 @@ int mt_do_animation_seq(int unit,
             // step until we arrive at the current animantion step
             if (time < 0) return 0; // exit after step execution. tnow is in this step
         } else if ((hint == MT_anim_step_rw) && (time < 0)) {
-            // this step is regular tape mevement made by the r/w header, either stoped, backwards
+            // this step is regular tape movement made by the r/w header, either stoped, backwards
             // or forwards, at 140 inch/sec. Simulate also reel spinning to take/load medium in vac col
             // animation variables usage
             //     temporary: seq[nseq].MT_Reel_Amount
@@ -1305,7 +1359,8 @@ int mt_do_animation_seq(int unit,
             m  = msec+time;  // m=msec+time = time elapsed in this step. msec = this step duration
             time = tnow - mtcab[unit].seq[nseq].MT_Reel_Amount;
             mtcab[unit].seq[nseq].MT_Reel_Amount = tnow;
-            if ((time < 0) || (time > 1000)) time=0; // skip this step because is not init yet/invalid                
+            // max time considered between refreshes 
+            if ((time < 0) || (time > PARAM_MaxSlice_msec)) time=PARAM_MaxSlice_msec; 
             n=mtcab[unit].seq[nseq].MT_head_actuator; 
             recsize  = n * time * PARAM_RWSpeed; // inches x1000, 
             recsize = recsize / 2; 
@@ -1404,7 +1459,7 @@ void mt_add_load_seq(int unit)
     MT_Reel_Amount   = 1;    // all tape medium on L tape
     MT_head_actuator = 19;   // head full open
 
-    // user needs needs time to move head actuator from right to left to close the r/w head
+    // user needs time to move head actuator from right to left to close the r/w head
     // prepare animation sequence each given msec
     msec= PARAM_HeadOpenTime / MT_head_actuator; // time for animation step 
     for(i=0;;i++) {
@@ -1447,18 +1502,152 @@ void mt_add_load_seq(int unit)
         R_h += R_inc_h; 
         if ((R_h > PARAM_VacCol_h_Low) && (L_h > PARAM_VacCol_h_Low)) break; 
     }
+
+    // make a small read backwards so left reel starts to move and remove tape medium from column
+    msec = 30;
+    AddSeq(unit, msec, MT_anim_step_rw,  0,0,0,0,0, 
+                                         1 /* read forward */); 
+
+}
+
+// add to the current animation sequence the load animation:
+//    - spin reels slowly to unload medium from vacuum columns
+//    - open r/w head
+void mt_add_unload_seq(int unit)
+{
+    int u3 = mt_info[unit].recsize;  // use recsize to get u3 value on rewind start 
+    int i, L_h, R_h, L_inc_h, R_inc_h, msec, ang_inc, r1, r2;
+    int MT_head_actuator = 19;   
+
+    // rewind tape if necessary
+    if (u3 > 0) {
+
+        mtcab[unit].rew_u3 = u3; // amount on tape medium (inch x1000) in reel R that should be rewinded
+                                 // original mt_unit[].u3 is set to 0 on OP_REWIND command start in mt_cmd()
+        msec = u3 / PARAM_RWSpeed;              // time to rewind tape in msec
+        AddSeq(unit, msec, MT_anim_step_rw,  u3 /* update recsize */,0,0,0,0, 
+                                             -1 /* read backwards */); 
+    }
+
+    // prepare animation sequence each given msec
+    msec=33;                                   // time for animation step 
+    ang_inc = (msec * PARAM_TakeMotor_RPM * 360) / (60 * 1000); // angle reel spins on each animation step
+
+    // calculate the amount of tape medium that reel unloads into vaccol on each step given reel rotation
+    r1=(50 * PARAM_Reel_Diameter / 2) / 100;   // radius when reel empty
+    r2=(90 * PARAM_Reel_Diameter / 2) / 100;   // radius when reel full
+    r1=(int) (0.0393701 * r1 * 1000);          // reel radius in inches x 1000
+    r2=(int) (0.0393701 * r2 * 1000);            
+    L_inc_h = (int) (r2 * 2 * 3.1416 * ang_inc / 360); // beacuse L reel is full. 
+    R_inc_h = (int) (r1 * 2 * 3.1416 * ang_inc / 360); // beacuse R reel is empty
+    L_inc_h = L_inc_h  / 2;                            // tape loop position is half on medium loaded
+    R_inc_h = R_inc_h  / 2; 
+
+    L_h = R_h = (int) (PARAM_VacCol_h_Low * 1.1 * 1.2); // maximum teorical value of tape medium in vacCol + 20% of safety margin
+
+    // remove tape medium from both vac cols. 
+    // terminates when both are empty
+    for(i=0;;i++) {
+        // reel rotation
+        AddSeq(unit, msec, MT_anim_step_inc, 
+                -L_inc_h  /* L_VacCol_inc */, -R_inc_h /* R_VacCol_inc */, 
+                -ang_inc /* L_ang_inc */, +ang_inc /* R_ang_inc */, 
+                1 /* MT_Reel_Amount */, 0 /* MT_head_actuator */ );       
+        L_h -= L_inc_h; 
+        R_h -= R_inc_h; 
+        if ((R_h < 0) && (L_h < 0)) break; 
+    }
+
+    MT_head_actuator = 0;   // head closed
+
+    // user needs time to move head actuator from left to right to open the r/w head
+    // prepare animation sequence each given msec
+    msec= PARAM_HeadOpenTime / 19; // time for animation step 
+    for(i=0;;i++) {
+        AddSeq(unit, msec, MT_anim_step_inc, 
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                1 /* MT_Reel_Amount */, MT_head_actuator);       
+        if (MT_head_actuator==19) break; 
+        MT_head_actuator++;
+    }
+
+    // remove reels
+    AddSeq(unit, 500, MT_anim_step_inc, 
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                0 /* MT_Reel_Amount */, 18);       
+
+    // move again head actuator from right to left to close again r/w head
+    MT_head_actuator=17; 
+    for(i=0;;i++) {
+        AddSeq(unit, msec, MT_anim_step_inc, 
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                0 /* MT_Reel_Amount */, MT_head_actuator);       
+        if (MT_head_actuator==0) break; 
+        MT_head_actuator--;
+    }
+
+}
+
+// calculate and store in animation array the animation sequence for rewind
+void mt_set_rew_seq(int unit, int bStartEndSeqFlag)
+{
+    int MT_Reel_Amount;    // state of controls at end of of redraw
+    int u3 = mt_info[unit].recsize;  // use recsize to get u3 value on rewind start 
+    int msec, time; 
+
+    MT_Reel_Amount = 1 + (int) (23 * (u3 / (mt_unit[unit].u4*1000.0))); 
+    if (MT_Reel_Amount > 24) MT_Reel_Amount = 24;
+
+    if (bStartEndSeqFlag) {
+        mtcab[unit].nseq=0;                 // init sequence
+        mtcab[unit].nseq_tm0=Refresh_tnow;  // when animation starts
+    } else if (u3==0) {
+        // nothing to rewind, so exit
+        return; 
+    }
+
+    mtcab[unit].rew_u3 = u3; // amount on tape medium (inch x1000) in reel R that should be rewinded
+                             // original mt_unit[].u3 is set to 0 on OP_RWD command start in mt_cmd()
+    msec = u3 / PARAM_RWSpeed;              // time to rewind tape in msec
+
+    AddSeq(unit, msec, MT_anim_step_rw,  u3 /* update recsize */,0,0,0,0, 
+                                         -1 /* read backwards */); 
+
+    if (bStartEndSeqFlag) {
+        // end sequence
+        AddSeq(unit, 0,  MT_anim_finished, 0,0,0,0,0,0); 
+    }
+
+    // log on debug precise rew time 
+    {
+       DEVICE *dptr = find_dev_from_unit(&mt_unit[unit]);
+       int i; 
+       time = 0; 
+       for (i=0;i<MT_anim_sequence_len;i++) {
+           msec = mtcab[unit].seq[i].msec; 
+           if ((msec == 0) || (mtcab[unit].seq[i].hint == MT_anim_finished)) break;
+           time += msec;
+       }
+       sim_debug(DEBUG_CMD, dptr, "Tape unit %d: rewind time needed (%d sec)\n", 
+                                   unit, time/1000);
+    }
+
+    // mt_dump_animation_seq(unit);
 }
 
 // calculate and store in animation array the load animation when a reel 
-// in mounted (attached) to tape unit. If cmode = 'F' or 'B' load
-// animation will be move all medium forwards/backwards
-void mt_set_load_seq(int unit, char cmode)
+// if cmode = 'L' -> load animation: tape is mounted (attached) to tape unit. 
+// If cmode = 'F' or 'B' load animation will be move all medium forwards/backwards
+// if cmode = 'U' -> unload animation: tape is dismounted (detached) to tape unit. 
+// during animations, from simulated cpu point of wiew: the tape is at its final state
+//                                                      animation can be interrupted at any moment by tape command
+void mt_set_anim_seq(int unit, char cmode)
 {
-    int MT_Reel_Amount, MT_head_actuator; // state of controls at end of of redraw
     int n, msec, r, R_h;
-
-    MT_Reel_Amount   = 1;    // all tape medium on L tape
-    MT_head_actuator = 19;   // head actuator handle pointing to the right -> head full opem
+    int tm0, tm1; 
 
     // on load, user places the medium over vacuum columns, and manually moves the 
     // head actuator handle from right to left. Then the reels turns slowly to
@@ -1484,18 +1673,50 @@ void mt_set_load_seq(int unit, char cmode)
         return; 
     }
 
-    // normal load sequence
-    // start delay depends on other loads already in progress 
-    // This is done to avoid all load animation to be synchonized
-    msec=0;
-    for (n=1;n<8;n++) {
-        if (mtcab[n].mt_is == MT_is_loading_tape) msec += 750;          
+    // start delay depends on other loads/unloads already in progress 
+    // This is done to avoid animations to be synchonized
+    // determine when last animation started
+    tm0=0;
+    for (n=1;n<=8;n++) {
+        if (n==unit) continue; 
+        if (((mtcab[n].mt_is == MT_is_loading_tape) || (mtcab[n].mt_is == MT_is_unloading_tape)) &&
+             (mtcab[n].seq[0].MT_head_actuator == 0)) {
+            // load/unload anim in progress in unit n. Let's know when it started
+            tm1=mtcab[n].nseq_tm0; 
+            if (mtcab[n].seq[0].MT_head_actuator==0) tm1 += mtcab[n].seq[0].msec; // add initial wait if any
+            if (tm0 < tm1) {
+                tm0 = tm1; // time when last anim started (after any initial wait time)
+            }
+        }
     }
+    // determine wait time to start
+    msec=0; 
+    if (tm0) {
+        // there is an ongoing animation started (after initial wait) at tm0
+        tm0 += 1750; // add delay to anim to not be sync with previous one 
+        if (tm0 > mtcab[unit].nseq_tm0) {
+            // should wait 
+            msec = tm0 - mtcab[unit].nseq_tm0; 
+        }
+    }
+    if (msec == 0) msec=10; // min waiting time. Needed to identify it is an unload/load waiting
     AddSeq(unit, msec, MT_anim_step_inc, 
-            0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
-            0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-            MT_Reel_Amount, MT_head_actuator);        
-    
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                (cmode == 'U') ? MT_anim_no_change:0 /* MT_Reel_Amount */, 
+                0 /* MT_head-actuator */ ); // no need to diferentiate on load/unload: in both cases, actuator starts on left
+
+
+    if (cmode == 'U') {
+        mt_set_rew_seq(unit,0);
+        mt_add_unload_seq(unit);
+        // end sequence
+        AddSeq(unit,    0, MT_anim_finished, 0,0,0,0,0,0); 
+        return; 
+    }
+
+    // normal load sequence (asumed cmode = 'L')
+
     // make sure no medium on vac col
     mtcab[unit].reel[0].VacCol_h = 0;  // amount of tape medium in each column
     mtcab[unit].reel[1].VacCol_h = 0;
@@ -1504,7 +1725,6 @@ void mt_set_load_seq(int unit, char cmode)
     //    - close r/w head
     //    - spin reels slowly to load medium on vacuum columns
     mt_add_load_seq(unit);
-    MT_head_actuator = 0;    // head closed
 
     // Now sense load point by reading backwards
     // Duration of it  depends on how much the user has spinned reel R when 
@@ -1523,46 +1743,6 @@ void mt_set_load_seq(int unit, char cmode)
 
     // end sequence
     AddSeq(unit,    0, MT_anim_finished, 0,0,0,0,0,0); 
-}
-
-// calculate and store in animation array the animation sequence for rewind
-void mt_set_rew_seq(int unit)
-{
-    int MT_Reel_Amount;    // state of controls at end of of redraw
-    int u3 = mt_info[unit].recsize;  // use recsize to get u3 value on rewind start 
-    int msec, time; 
-
-    MT_Reel_Amount = 1 + (int) (23 * (u3 / (mt_unit[unit].u4*1000.0))); 
-    if (MT_Reel_Amount > 24) MT_Reel_Amount = 24;
-
-    mtcab[unit].nseq=0;                 // init sequence
-    mtcab[unit].nseq_tm0=Refresh_tnow;  // when animation starts
-
-    mtcab[unit].rew_u3 = u3; // amount on tape medium (inch x1000) in reel R that should be rewinded
-                             // original mt_unit[].u3 is set to 0 on OP_RWD command start in mt_cmd()
-    msec = u3 / PARAM_RWSpeed;              // time to rewind tape in msec
-
-    AddSeq(unit, msec, MT_anim_step_rw,  u3 /* update recsize */,0,0,0,0, 
-                                         -1 /* read backwards */); 
-
-    // end sequence
-    AddSeq(unit, 0,  MT_anim_finished, 0,0,0,0,0,0); 
-
-    // log on debug precise rew time 
-    {
-       DEVICE *dptr = find_dev_from_unit(&mt_unit[unit]);
-       int i; 
-       time = 0; 
-       for (i=0;i<MT_anim_sequence_len;i++) {
-           msec = mtcab[unit].seq[i].msec; 
-           if ((msec == 0) || (mtcab[unit].seq[i].hint == MT_anim_finished)) break;
-           time += msec;
-       }
-       sim_debug(DEBUG_CMD, dptr, "Tape unit %d: rewind time needed (%d sec)\n", 
-                                   unit, time/1000);
-    }
-
-    // mt_dump_animation_seq(unit);
 }
 
 // tape r/w head & reels & vacuum columns simulation
@@ -1621,6 +1801,12 @@ void mt_reels_mov(int unit, int cmd,
         mtcab[unit].rw_msec    -= time; 
         mtcab[unit].rw_tm0      = tnow;
         // take/give medium to vacuum columns
+        // the maximun time slice allowed to avoid too big hops on tape medium is PARAM_MaxSlice_msec
+        // PARAM_RWSpeed is the inches per second tape head moves the medium when reading/writing
+        // this means the maximum linear increment reading or writing (in inches x1000) is
+        n=PARAM_RWSpeed * PARAM_MaxSlice_msec;
+        if (recsize > n) recsize = n;
+        if (recsize < -n) recsize = -n;
         recsize = recsize / 2; // when adding/removing medium, loop position in vacuum colum moves half distance
         mtcab[unit].reel[0].VacCol_h -= recsize;
         mtcab[unit].reel[1].VacCol_h += recsize;
@@ -1708,6 +1894,12 @@ void mt_reels_mov(int unit, int cmd,
         mtcab[unit].reel[ireel].ang  = ang;  // save current angular position
         // calc radius of reel based on how much tape medium stored is in it 
         r=r1*100 + (r2-r1)* ( (ireel==0) ? 100-p:p);     // reel current radius in inches x 1000
+        // the maximun time slice allowed to avoid too big hops on tape medium is PARAM_MaxSlice_msec
+        // rpsMax = (PARAM_RPM * 2.0 / 5.0) / 60  is reel revolutions per second at full speed
+        // this means the maximum angular increment at full motor rpm is
+        ang = (int) (360 * rpsMax * PARAM_MaxSlice_msec / 1000); 
+        if (ang_inc > ang) ang_inc = ang; 
+        if (ang_inc < -ang) ang_inc = -ang; 
         // calc medium (in inches x1000) that has been moved from/to reel
         recsize = (int) (r * 2 * 3.1416 * ang_inc / 360);
         recsize = recsize / 2; // when adding/removing medium, loop position in vacuum column moves half distance
@@ -1845,7 +2037,7 @@ void mt_VacColSetDynamicState(int VacColMedium_h, int * VacColMedium_h0, int CId
     }
 
     // tape medium control is 243 pixels height
-    // on vac col y=93 -> upper sensor, y=153 -> lower sensor (y=0 -> top) 
+    // on vac col h=93 -> upper sensor, h=153 -> lower sensor (h=0 -> top) 
     h= (243-153) + ((153-93) * (VacColMedium_h-PARAM_VacCol_h_Low) / (PARAM_VacCol_h_Hi-PARAM_VacCol_h_Low));
     if (h<0) h=0; 
     // h is vertical position of tape loop base, convert to y coord
@@ -1936,16 +2128,26 @@ void Refresh_MagTape(void)
         uptr=&mt_unit[unit];
         // check if unit disabled/no file attached
         if ((uptr->flags & UNIT_DIS) || ((uptr->flags & UNIT_ATT) == 0)) {
-            if (GetState(NORC.MT[unit])==0) continue; 
-            SetState(NORC.MT[unit], 0);          // no magnetic medium on reels
-            SetState(NORC.MT_head[unit], 0);     // head transparent (seen as closed)
-            SetState(NORC.MT_L[unit], 0);          
-            SetState(NORC.MT_R[unit], 0);    
-            mtcab[unit].L_VacColMedium_h0=0;
-            mtcab[unit].R_VacColMedium_h0=0;
-            SetState(NORC.MT_head_actuator[unit], 0); // tape head actuator set to left
-            set_mt_cabinet_redraw_needed(unit);
-            continue; 
+            if (mt_info[unit].justdetached==1)  {  // 1 -> just detached -> should start unload animation
+                if (mtcab[unit].mt_is == MT_is_unloading_tape) {
+                    // unload amination in progress, continue
+                } else {
+                    // start unload amination
+                    mtcab[unit].mt_is = MT_is_unloading_tape; 
+                    mt_set_anim_seq(unit, 'U'); 
+                }
+            } else {
+                if (GetState(NORC.MT[unit])==0) continue; 
+                SetState(NORC.MT[unit], 0);          // no magnetic medium on reels
+                SetState(NORC.MT_head[unit], 0);     // head transparent (seen as closed)
+                SetState(NORC.MT_L[unit], GetState(NORC.MT_L[unit]) % 12); // keep the angular position of reel          
+                SetState(NORC.MT_R[unit], GetState(NORC.MT_R[unit]) % 12);          
+                mtcab[unit].L_VacColMedium_h0=0;
+                mtcab[unit].R_VacColMedium_h0=0;
+                SetState(NORC.MT_head_actuator[unit], 0); // tape head actuator set to left
+                set_mt_cabinet_redraw_needed(unit);
+                continue; 
+            }
         } 
         // tape has file attached (=tape reel mounted)
         // check if just being attached
@@ -1979,6 +2181,7 @@ void Refresh_MagTape(void)
                     if ((c == 'R') || (c == 'F')) {
                         cmode = c; // load animation will be Forward/backwards all reel, or *R
                     }
+                    RemoveOption(MT_cab_opt); // remove this option, as it is being executed now so will not apply on next attach of tape
                 }
             }
             // tape cabinet options set. 
@@ -1992,12 +2195,12 @@ void Refresh_MagTape(void)
             mtcab[unit].mt_is = MT_is_loading_tape; 
             if (cmode != 'R') {
                 // normal load animation, *F 
-                 mt_set_load_seq(unit, cmode);
+                 mt_set_anim_seq(unit, cmode);
             } else {
                 // *R rewind animation 
                 // start rewind. Whis is nice!
                 mt_info[unit].recsize = mt_unit[unit].u4 * 1000;
-                mt_set_rew_seq(unit);
+                mt_set_rew_seq(unit,1);
             }
         }
         // tape is about to be painted on cpanel
@@ -2029,7 +2232,7 @@ void Refresh_MagTape(void)
         cmd = get_mt_current_command(unit); // current tape cmd being executed: -1=rew, 0=idle, 1=read/write
         mt_is =  mtcab[unit].mt_is;         // the current animation being done (visual state of tape)
 
-        // check if load/rew animation in progress should be aborted
+        // check if load/unload/rew animation in progress should be aborted
         if (mt_is == MT_is_loading_tape) {
             if (mt_info[unit].numrw > 0) {
                 // if any mt r/w command issued by cpu then abort any load animation in progress
@@ -2038,6 +2241,8 @@ void Refresh_MagTape(void)
                 mtcab[unit].reel[0].VacCol_h = (int) (PARAM_VacCol_h_Hi  * 0.9); 
                 mtcab[unit].reel[1].VacCol_h = (int) (PARAM_VacCol_h_Low * 1.1); 
             }
+        } else if (mt_is == MT_is_unloading_tape) {
+            // no reason to abort unload anim. if tape attached, mt_is will be set to MT_is_loading
         } else if (mt_is == MT_is_rewinding) {
             if (  (cmd == 1) || (mt_ready(unit)==1) ) {
                 // any mt r/w command in progress terminates any rew animation in progress
@@ -2053,7 +2258,7 @@ void Refresh_MagTape(void)
         if ((mt_is == 0) && (cmd < 0) && (mt_ready(unit)==0)) {
                // if (no animation in progress) and (last tape cmd is rew) and (last cmd in execution) 
                mtcab[unit].mt_is = mt_is = MT_is_rewinding;
-               mt_set_rew_seq(unit);
+               mt_set_rew_seq(unit,1);
         }
 
         // advance animation if any 
@@ -2064,12 +2269,16 @@ void Refresh_MagTape(void)
                          &MT_Reel_Amount, &MT_head_actuator);
             if (n==1) {
                 mtcab[unit].mt_is = 0; // normal animation termination
-                // if rew terminates, notify mt_svr 
                 if (mt_is == MT_is_rewinding) {
+                    // if rew terminates, notify mt_svr 
                     sim_cancel(&mt_unit[unit]);
                     sim_activate(&mt_unit[unit], 1);
+                } else if (mt_is == MT_is_unloading_tape) {
+                    // if unload terminates, clear justdetached flag
+                    mt_info[unit].justdetached=0;
+                    continue; // skip tape state update, just continue so next frame will show no tape mounted
                 }
-                mt_is = 0;
+                mt_is = 0; // set to zero to allow normal tape processing
             }
         }
 
@@ -2112,7 +2321,7 @@ void Refresh_MagTape(void)
 
 }
 
-int PARAM_char_ww2       =    13;  // horizontal spacing between charswidth beween first pixel of a char and first pixel of next char in next char same line
+int PARAM_char_ww2       =    13;  // horizontal spacing between first pixel of a char and first pixel of next char in next char same line
 int PARAM_char_hh2       =    23;  // height between top line of one char and top line of char in next text line
 int PARAM_xPaperMargin   =    50;  // left and right margin on printed paper
 int PARAM_ink0           =   255;  // ammount of ink on top of char (0..255, 0=no ink, 255=full black)
@@ -2258,29 +2467,27 @@ void Refresh_PrintOut(void)
 
 void process_HotKeys(void)
 {
-    if (cpvid.kev_key == SIM_KEY_F) { 
-        if ((cpvid.kev_state == SIM_KEYPRESS_DOWN) && (cpvid.kev_modifier & 2) && // kev_modifier -> bit0=shift presseed, bit1=cntrl pressed
-            (CpuSpeed_Acceleration != -1)) { 
-            // Key Control-F (^F, Ctrl F) being pressed -> accelerate to max speed max while keydown
+    char c; 
+
+    if (vid_keyb.KeyPress == 'f'-'a'+1) { // Control-F (^F) is being pressed
+        if (CpuSpeed_Acceleration != -1) { 
+            // accelerate to max speed max while keydown
             CpuSpeed_Acceleration_save = CpuSpeed_Acceleration;
             CpuSpeed_Acceleration=-1;        // set cpu speed=max & set cpu fast
-            cpvid.kev_key=0; // mark as processed
             Measure_CpuSpeed(0); ShowInfoTm0 = 0; // reset speed measurement because ^F pressed
             sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: init because ^F pressed\n");
-        } else if ((cpvid.kev_state == SIM_KEYPRESS_UP) && 
-            (CpuSpeed_Acceleration == -1))  {
-            // return to previos cpu speed setting
-            CpuSpeed_Acceleration = CpuSpeed_Acceleration_save;
-            CpuSpeed_Acceleration_save=0; 
-            // return to previous fast/realtime setting
-            cpvid.kev_key=0; // mark as processed
-            Measure_CpuSpeed(0); ShowInfoTm0 = 0; // reset speed measurement because ^F released
-            sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: init because ^F released\n");
         }
+    } else if (CpuSpeed_Acceleration == -1) {
+        // return to previos cpu speed setting
+        CpuSpeed_Acceleration = CpuSpeed_Acceleration_save;
+        CpuSpeed_Acceleration_save=0; 
+        // return to previous fast/realtime setting
+        Measure_CpuSpeed(0); ShowInfoTm0 = 0; // reset speed measurement because ^F released
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: init because ^F released\n");
     }
-    if (cpvid.last_char ==  ('I'-'A'+1)) {
-        // Control-I -> toggle show Info on GUI (^I)
-        cpvid.last_char = 0; // clear key as it is processed
+    if (vid_keyb.LastKeyPress ==  ('i'-'a'+1)) { // Tab/Control-I (^I) has been pressed
+        // toggle show Info on GUI 
+        vid_keyb.LastKeyPress = 0; // clear key as it is processed
         bShowInfo = (bShowInfo) ? 0:1; // toggle value
         if (bShowInfo==0) {
             // put again background thus removing info from gui
@@ -2290,41 +2497,23 @@ void process_HotKeys(void)
             // init IPS measurement
             ShowInfoTm0 = 0;
         }
-    }
-    if ((cpvid.kev_state == SIM_KEYPRESS_DOWN) && (cpvid.kev_modifier == 0) && // kev_modifier -> bit0=shift presseed, bit1=cntrl pressed
-        (sim_is_running==0) && (Console_Sw_KeyboardEntry)) {
-        char c = 0; 
-        // check to convert keypad keys to its digit
-        if (cpvid.kev_key == SIM_KEY_KP_END)       c='1'; else
-        if (cpvid.kev_key == SIM_KEY_KP_DOWN)      c='2'; else
-        if (cpvid.kev_key == SIM_KEY_KP_PAGE_DOWN) c='3'; else
-        if (cpvid.kev_key == SIM_KEY_KP_LEFT)      c='4'; else
-        if (cpvid.kev_key == SIM_KEY_KP_5)         c='5'; else
-        if (cpvid.kev_key == SIM_KEY_KP_RIGHT)     c='6'; else
-        if (cpvid.kev_key == SIM_KEY_KP_HOME)      c='7'; else
-        if (cpvid.kev_key == SIM_KEY_KP_UP)        c='8'; else
-        if (cpvid.kev_key == SIM_KEY_KP_PAGE_UP)   c='9'; else
-        if (cpvid.kev_key == SIM_KEY_KP_INSERT)    c='0'; 
-        if (c) {
-            cpvid.last_char=c;
-            cpvid.kev_key=200;
-        }
-    }
-    if (((cpvid.last_char >=  '0') && (cpvid.last_char <=  '9')) || (cpvid.last_char == 127)) {
+    } else if ((((c=cpvid_getkey(0)) >= '0') && (c <=  '9')) || (c==8)) {
         // digits 0..9, BackSpace -> NORC console keyboard keys
+        // use ncp=0 on cpvid_getkey as norc has only one control panel
+        // used getkey instead of LastKeyPress because LastKeyPress returns ScanCode for KeyPad keys
+        // instead of the keypad digit
         // processed if cpu not running and Keyboard entry switch set to REG1 or REG2
         if ((sim_is_running==0) && (Console_Sw_KeyboardEntry)) {
             t_int64 d; 
             d = (Console_Sw_KeyboardEntry == 1) ? REG1 : REG2; 
-            if (cpvid.last_char==127) {
+            if (c==8) {
                 Shift_Digits(&d, -1); // BackSpace shift one digit to right
             } else {
                 Shift_Digits(&d, 1);
-                d = d + cpvid.last_char - '0';
+                d = d + c - '0';
             }
             if (Console_Sw_KeyboardEntry == 1) REG1=d; else REG2=d; 
         }
-        cpvid.last_char = 0; // clear key as it is processed
     }
 }
 
@@ -2333,9 +2522,11 @@ void process_HotKeys(void)
 void ShowInfo_DrawText(int CId, char * buf)
 {
     int scale, ww,hh,ww2,hh2, chrsz;
+    int ncp; 
 
     GetControlSurface(CId, 1, &ww, &hh);
-    scale = cpanel_scale(0); 
+    ncp=GetControlInfo(CId, CINFO_NCP);  // control panel window number where info is displayed
+    scale=cpanel_scale(ncp,0);           // get scale of control panel window 
     if (scale >= 100) {
         ww2 = ww/2; hh2=hh/2; chrsz=1; // use half panel
     } else {
@@ -2360,11 +2551,12 @@ void ShowInfo_DrawText(int CId, char * buf)
     SetState(CId, 1);      
 }
 
-void Refresh_ShowInfo(void) 
+void Refresh_ShowInfo(int bOnlyInit) 
 {
     char buf[300];
     int TickCountPerSec; 
     int InstrExecPerSec, n, fps; 
+    int ips_unit; double ips; 
     uint32 msec; 
 
     // set dynamic contents of CtrlInfoPanel and MT_InfoPanel
@@ -2379,14 +2571,23 @@ void Refresh_ShowInfo(void)
             n = Measure_CpuSpeed(2)- InstrExec0;
             if (n<0) n=0;
             InstrExecPerSec = n * 1000 / msec;
-            n = vid_frames_count - FramesCount0;
+            n = Refresh_Frames_Count - FramesCount0;
             fps             = n * 1000 / msec;
             if (fps>60) fps=60;
             if (fps<0) fps=0;
         }
         ShowInfoTm0 = Refresh_tnow;
         InstrExec0  = Measure_CpuSpeed(2); 
-        FramesCount0 = vid_frames_count; 
+        FramesCount0 = Refresh_Frames_Count; 
+    }
+    if (bOnlyInit) return; // only init values for Next call 
+
+    if (InstrExecPerSec > 500 * 1000) {
+        ips = InstrExecPerSec / 1000000.0; ips_unit = 2; // unit MIPS if ips > 0.5 MIPS
+    } else if (InstrExecPerSec >1000) {
+        ips = InstrExecPerSec / 1000.0; ips_unit = 1;    // unit KIPS if ips > 1.0 KPIS
+    } else {
+        ips = InstrExecPerSec; ips_unit = 0; 
     }
 
     // Info show:
@@ -2435,9 +2636,10 @@ void Refresh_ShowInfo(void)
             fps, 
             TickCountPerSec / 1000000.0, msec);
     } else {
-        sprintf(buf, "FPS: %d Cpu Speed: x%0.2f (%d IPS)\n", 
+        sprintf(buf, "FPS: %d Cpu Speed: x%0.2f (%0.1f %s)\n",
             fps, 
-            TickCountPerSec / 1000000.0,  InstrExecPerSec);
+            TickCountPerSec / 1000000.0,  
+            ips, (ips_unit == 2) ? "MIPS" : (ips_unit == 1) ? "KIPS" : "IPS");
     }
 
     ShowInfo_DrawText(NORC.CtrlInfoPanel, buf);
@@ -2449,10 +2651,12 @@ void Refresh_ShowInfo(void)
         char c; 
         for(i=1;i<=8;i++) { 
             c = ' ';
-            if ((mt_unit[i].flags & UNIT_DIS) || ((mt_unit[i].flags & UNIT_ATT) == 0)) {
+            if (((mt_unit[i].flags & UNIT_DIS) || ((mt_unit[i].flags & UNIT_ATT) == 0)) &&
+                 (mtcab[i].mt_is != MT_is_unloading_tape)) {
                 n = 0;
             } else if ((mtcab[i].mt_is == MT_is_rewinding) || 
-                       ((mtcab[i].mt_is == MT_is_loading_tape) && (mtcab[i].rew_u3 > 0))) {
+                       ((mtcab[i].mt_is == MT_is_loading_tape) && (mtcab[i].rew_u3 > 0)) ||
+                       ((mtcab[i].mt_is == MT_is_unloading_tape) && (mtcab[i].rew_u3 > 0))  ) {
                 // if rewinding then the ammount of tape medium used is in variable recsize, not in u3
                 // if loading tape AND rew_u3 > 0 then the tape is showing a nice rew animation started with *R
                 // if rewinding the ammount of tape medium used is in variable recsize, not in u3
@@ -2492,14 +2696,61 @@ void NORC_Refresh(void)
         Refresh_PrintOut();
     }
 
-    // process HotKeys on Control Panel GUI window (Hot Keys)
-    process_HotKeys();
-
     // show info
     if (  ((bShowInfo) && ((Refresh_Frames_Count % 8)==0)) || (bShowInfo==2)  ) {
         // show info for ^I (Ctrl I) at 60 FPS / 8 -> 8 FPS
         // if (bShowInfo==2) ips will be shown each frame
-        Refresh_ShowInfo();
+        Refresh_ShowInfo(0);
+    }
+    // process HotKeys on Control Panel GUI window (Hot Keys)
+    process_HotKeys();
+    // Must be called after Refresh_ShowInfo. when ^F is pressed it resets speed measurement vars
+    // so if Refresh_ShowInfo is called inmedatelly after, a no tickcount are yet executed will display a speed of zero 
+    if ((bShowInfo==1) && (ShowInfoTm0==0)) Refresh_ShowInfo(1);
+}
+
+// drag and drop a file handling. Called when a file of given filename is droped on given CId control 
+void NORC_DropFile(int CId, char * FileName)
+{
+    extern t_stat   mt_attach(UNIT * uptr, CONST char *file);
+    int32  sv; 
+    int n; 
+
+    for (n=1;n<=8;n++) if (CId == NORC.Drop_MT_File[n]) {
+        // drag and drop a file on tape -> attach it
+        sv=sim_switches; // save current switches
+        sim_switches = SWMASK ('Q'); // set switch -Q (quiet) 
+        mt_attach(&mt_unit[n], FileName);
+        sim_switches=sv; 
+    }
+}
+
+// buttons for tape detach
+void NORC_OnClick_BTN2(void)
+{
+    extern t_stat   mt_detach(UNIT * uptr);
+    int n; 
+    int32  sv; 
+
+    if (CP_Click.KeyPress_KeyRelease == 1) {
+        // press mouse button -> press door handle
+        // return now because Door handle has no states to set 
+        return;
+    }
+
+    // to detach a tape, must click unload button
+    for (n=1;n<=8;n++) {
+        if (CP_Click.CId == NORC.MT_DoorHandle[n]) {
+            if ((mt_unit[n].flags & UNIT_ATT) == 0) {
+                // already detached. Do not detach again
+                return; 
+            }
+            // click to detach tape
+            sv=sim_switches; // save current switches
+            sim_switches = SWMASK ('Q'); // set switch -Q (quiet) 
+            mt_detach(&mt_unit[n]);
+            sim_switches=sv; 
+        }
     }
 }
 
