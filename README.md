@@ -1,7 +1,7 @@
 # SimH_cpanel
 
 
-**NEW!: IBM 701 Simulator**
+**NEW!: IBM 360 Simulator**
 
 The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
@@ -95,7 +95,7 @@ Press power button to quit the simulator.
 
 ### Model 30 
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM 360_BOS360.zip) to download BOS/360 test run.
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM360_BOS360.zip) to download BOS/360 test run.
 
 Once uncompressed, you will find several ready to run .bat files: 
 
@@ -111,7 +111,7 @@ Once uncompressed, you will find several ready to run .bat files:
 
 ### Model 40 
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM 360_TOS360.zip) to download TOS/360 test run.
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360_TOS360.zip) to download TOS/360 test run.
 
 Once uncompressed, you will find several ready to run .bat files: 
 
@@ -128,7 +128,7 @@ Once uncompressed, you will find several ready to run .bat files:
 
 ### Model 50 
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM 360_DOS360.zip) to download DOS/360 test run.
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360_DOS360.zip) to download DOS/360 test run.
 
 Once uncompressed, you will find several ready to run .bat files: 
 
