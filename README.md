@@ -14,12 +14,16 @@ i701, i650 and NORC work is based on my own SimH simulators
 <table>
 <thead>
 <tr>
+<th>IBM 360</th>
 <th>IBM 701</th>
 <th>IBM 650</th>
 </tr>
 </thead>
 <tbody>
 <tr>
+<td>
+<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360_animated.gif" alt="IBM360" title="IBM 360" /></p>
+</td>
 <td>
 <p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701_animated.gif" alt="IBM701" title="IBM 701" /></p>
 </td>
@@ -33,7 +37,9 @@ i701, i650 and NORC work is based on my own SimH simulators
 Currently supports visuals emulation for:
 
 * IBM 360 (JAN/2022)
-  * IBM 2415 and 2401 tapes, IBM 2450 card reader punch, IBM 1403 printer
+  * IBM 2415 and 2401 tapes
+  * IBM 2450 card reader punch
+  * IBM 1403 printer
   * IBM 2314 and 3330 DASD
   * CPU Model 30, 40 and 50
 
