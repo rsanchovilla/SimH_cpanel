@@ -95,7 +95,7 @@ Press power button to quit the simulator.
 
 ### Model 30 
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM360_BOS360.zip) to download BOS/360 test run.
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360_BOS360.zip) to download BOS/360 test run.
 
 Once uncompressed, you will find several ready to run .bat files: 
 
