@@ -8,7 +8,7 @@ The aim of this project is to add visuals to SimH emulator/simulator on an inter
 The visuals covers interactive control panels (lights, switches, buttons) but also
 other devices: tapes, card readers, disk, etc.
 
-i7000 work is based on Richard Cornwell own's SimH fork, and is implemented using SimH own SDL based modules. 
+IBM360 and i7000 work is based on Richard Cornwell own's SimH fork, and is implemented using SimH own SDL based modules. 
 i701, i650 and NORC work is based on my own SimH simulators
 
 <table>
