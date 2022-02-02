@@ -32,7 +32,15 @@ i701, i650 and NORC work is based on my own SimH simulators
 
 Currently supports visuals emulation for:
 
-* IBM 701 Electronic Data Processing Machine (NEW JUL/2021)
+* IBM 360 (JAN/2022)
+  * IBM 2415 and 2401 tapes, IBM 2450 card reader punch, IBM 1403 printer
+  * IBM 2314 and 3330 DASD
+  * CPU Model 30, 40 and 50
+
+  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20360%20Panels%20Screen%20Shots.png) to preview control panels.
+   Source code in simh-master folder
+
+* IBM 701 Electronic Data Processing Machine (JUL/2021)
   * IBM 726 tapes, IBM 711 card reader, IBM 721 card punch, IBM 716 printer
   * Main console (as in 1953), Early console model (as in Early 1952)
 
@@ -82,6 +90,61 @@ Hot keys are available when GUI window has the focus:
 
 Press power button to quit the simulator.
 (On i7000 control panels, only ^E, ^Y and ^T available)
+
+## IBM 360
+
+### Model 30 
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM 360_BOS360.zip) to download BOS/360 test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM 360 BOS360 sysgen (64KB).bat` batch file to sysgen the operating system at real hw speed. Will need 1h30m aprox
+* execute `run CPanel IBM 360 BOS360 (1966).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
+* execute `run IBM 360 BOS360 Assembler 16K (1966).bat` batch file to run a sample program (no control panel, max speed)
+* execute `run IBM 360 BOS360 COBOL-D (1966).bat` same as above
+* execute `run IBM 360 BOS360 FORTRAN IV (1966).bat` same as above
+* execute `run IBM 360 BOS360 RPG 16K V1.L0 (1966).bat` same as above
+* execute `run IBM 360 BOS360 sysgen (64KB).bat` to sysgen the system at max speed, no control panel. Will need 1min aprox
+ 
+  ![IBM 360 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360M30.png)
+
+### Model 40 
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM 360_TOS360.zip) to download TOS/360 test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM 360 TOS360 r14 sysgen (64K).bat` batch file to sysgen the operating system at real hw speed. Will need 7h aprox. Be patient!
+* execute `run CPanel IBM 360 TOS360 r14 (1973).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
+* execute `run IBM 360 TOS360 r14 Assembler (1973).bat` batch file to run a sample program (no control panel, max speed)
+* execute `run IBM 360 TOS360 r14 Basic FORTRAN IV (1973).bat` same as above
+* execute `run IBM 360 TOS360 r14 COBOL-D (1973).bat` same as above
+* execute `run IBM 360 TOS360 r14 PLI (1973).bat` same as above
+* execute `run IBM 360 TOS360 r14 RPG (1973).bat` same as above
+* execute `run IBM 360 TOS360 r14 sysgen (64K).bat` to sysgen the system at max speed, no control panel. Will need 3min aprox
+ 
+  ![IBM 360 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360M40.png)
+
+### Model 50 
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM 360_DOS360.zip) to download DOS/360 test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM 360 DOS360 r26.2 sysgen (256KB).bat` batch file to sysgen the operating system at real hw speed. Will need 3h aprox
+* execute `run CPanel IBM 360 DOS360 r26.2 (1975).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
+* execute `run IBM 360 DOS360 r26.2 Assembler (1975).bat` batch file to run a sample program (no control panel, max speed)
+* execute `run IBM 360 DOS360 r26.2 ANS COBOL (1975).bat` same as above
+* execute `run IBM 360 DOS360 r26.2 COBOL-D (1975).bat` same as above
+* execute `run IBM 360 DOS360 r26.2 FORTRAN IV (1975).bat` same as above
+* execute `run IBM 360 DOS360 r26.2 IVP Basic FORTRAN (1975).bat` same as above
+* execute `run IBM 360 DOS360 r26.2 PLI-D (1975).bat` same as above
+* execute `run IBM 360 DOS360 r26.2 RPG (1975).bat` same as above
+* execute `run IBM 360 DOS360 r26.2 sysgen (256KB).bat` to sysgen the system at max speed, no control panel. Will need 45min aprox
+ 
+  ![IBM 360 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360M50.png)
+
 
 ## IBM 701
 
