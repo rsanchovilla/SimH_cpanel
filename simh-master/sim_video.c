@@ -1,3 +1,4 @@
+
 /* sim_video.c: Bitmap video output 
 
    Copyright (c) 2011-2013, Matt Burke
@@ -629,9 +630,9 @@ while (1) {
         if (event.type == SDL_USEREVENT) {
             if (event.user.code == EVENT_EXIT)
                 break;
-            if (event.user.code == EVENT_OPEN)
+            if (event.user.code == EVENT_OPEN) {
                 vid_video_events ((VID_DISPLAY *)event.user.data1);
-            else {
+            } else {
                 if (event.user.code == EVENT_SHOW)
                     vid_show_video_event ();
                 else {
@@ -665,19 +666,27 @@ int wait_count = 0;
 SDL_Event user_event;
 
 vptr->vid_ready = FALSE;
+vptr->vid_window = NULL; // safety
 user_event.type = SDL_USEREVENT;
 user_event.user.code = EVENT_OPEN;
 user_event.user.data1 = vptr;
 user_event.user.data2 = NULL;
+
 SDL_PushEvent (&user_event);
 
 sim_debug(CP_SDL, vptr->vid_dev, "SimH Thread: vid_create_window '%', w %d, h %d, vptr %x -> Push EVENT_OPEN to Main Thread\n", 
           vptr->vid_title, vptr->vid_width, vptr->vid_height, vptr);
 
-while ((!vptr->vid_ready) && (++wait_count < 20))
+// wait for event processed. Safety: max wait: 30 sec
+while ((!vptr->vid_ready) && (++wait_count < 300))  
     sim_os_ms_sleep (100);
-if (!vptr->vid_ready) {
-    vid_close ();
+
+if ((!vptr->vid_ready) || (vptr->vid_window == NULL)) {
+    // EVENT_OPEN processing has taken more than max wait secs allowed OR error
+    // has ocurred while opening window. Instead of closing the window
+    // just notify the error
+    fprintf (stderr, "EVENT_OPEN processing timeout. vid_create_window failed \r\n");
+    //vid_close ();
     return SCPE_OPENERR;
     }
 return SCPE_OK;
@@ -842,6 +851,7 @@ t_stat r;
 *vptr = (VID_DISPLAY *)calloc (1, sizeof (VID_DISPLAY));
 if (*vptr == NULL)
     return SCPE_NXM;
+
 (*vptr)->next = vid_first.next;
 vid_first.next = *vptr;
 r = vid_init_window (*vptr, dptr, title, width, height, flags);
@@ -2537,6 +2547,7 @@ static int vid_new_window (VID_DISPLAY *vptr)
 
 #if defined(CPANEL)
     sim_debug_cp("SDL Thread: vid_new_window vptr %x \n", vptr);
+    vptr->vid_window = NULL; // init as not done
 #endif
 
     r=SDL_CreateWindowAndRenderer (vptr->vid_width, vptr->vid_height, SDL_WINDOW_SHOWN, 
@@ -2816,7 +2827,6 @@ sim_os_set_thread_priority (PRIORITY_ABOVE_NORMAL);
 if (!vid_new_window (vptr0)) {
     return 0;
     }
-
 vid_beep_setup (400, 660);
 vid_controllers_setup (vptr0->vid_dev);
 
@@ -2840,7 +2850,7 @@ vid_controllers_setup (vptr0->vid_dev);
     tooltip.surface = NULL;
     tooltip.parent_vptr = NULL;
 
-    //YYY SDL_RaiseWindow(vptr0->vid_window);
+    SDL_RaiseWindow(vptr0->vid_window);
     { 
         VID_DISPLAY *vptr = vptr0;
         sim_debug_cp ("vid_thread() - Started\n");
@@ -2849,9 +2859,6 @@ vid_controllers_setup (vptr0->vid_dev);
 
 sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vptr0->vid_dev, "vid_thread() - Started\n");
 
-// vptr0->vid_ready = TRUE must be just above "while(vid_active) { status = SDL_WaitEvent (&event) } loop
-// there is a potential race condition if another windows event is sent just before entering this loop
-// this event will be processed erroneously by the main event loop (the caller), not by this event loop
 vptr0->vid_ready = TRUE;
 
 while (vid_active) {
