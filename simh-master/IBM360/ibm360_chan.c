@@ -286,9 +286,9 @@ uint32 get_chan_info(int nChan, int mode)
         chan = chan_ctl;
     }
     switch (mode) {
-        case 0: return chan->ccw_count;
-        case 1: return (((uint32)(chan->chan_data_rw)) << 16) | (((uint32)(chan->ccw_key)) << 8) | (chan->ccw_cmd);
-        case 2: return (((uint32)(chan->ccw_flags)) << 16) | (chan->chan_status);
+        case 0: return chan->ccw_count;  // 16 bits
+        case 1: return (((uint32)(chan->chan_data_rw)) << 16) | (((uint32)(chan->ccw_key)) << 8) | (chan->ccw_cmd); // 8bits + 8bits + 8bits
+        case 2: return (((uint32)(chan->ccw_flags)) << 16) | (chan->chan_status); //16bits + 16bits
     }
     return 0;
 }
@@ -533,6 +533,7 @@ start_cmd:
              return 1;
          chan->chan_status &= 0xff;
          chan->chan_status |= dibp->start_cmd(uptr, chan->ccw_cmd) << 8;
+         /* If device is busy, check if last was CC, then mark pending */
          if (chan->chan_status & STATUS_BUSY) {
              sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x busy %d\n",
                      chan->daddr, cc);
@@ -542,6 +543,7 @@ start_cmd:
              return 0;
          }
 
+         /* Check if any errors from initial command */
          if (chan->chan_status & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
              sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x abort %04x\n",
                      chan->daddr, chan->chan_status);
@@ -1254,6 +1256,10 @@ t_stat chan_boot(uint16 addr, DEVICE *dptyr) {
     int             status;
     int             i;
 
+#if defined(CPANEL)
+    extern int IPLaddr; 
+    IPLaddr=addr; 
+#endif
     for (i = 0; i < (MAX_CHAN * 256); i++)
         dev_status[i] = 0;
     chan_set_devs();

@@ -147,6 +147,13 @@ static struct {
    int Reg_CPU_L, Reg_CPU_R, Reg_SDR_L, Reg_SDR_R, Reg_IAR_L, Reg_IAR_R; 
    int BTN_PSW_Restart; 
    int SW_Lamp_Test, Shdw_Lamp_Test; 
+   // IBM 360 Model 65 cpu panel
+   int Reg_Roller5_L, Reg_Roller6_L;
+   int Reg_Roller5_R, Reg_Roller6_R;
+   int Label_Roller5_L, Label_Roller6_L;
+   int Label_Roller5_R, Label_Roller6_R;
+   int BTN_Roller5, BTN_Roller6;
+   int Reg_Stor_Proc_CHK;
    // odometer
    int Odo[7], OdoDigitWhite;
    // ocp (operator control panel) lights
@@ -252,6 +259,39 @@ CP_DEF IBM360_cp[] = {
     { &S360.Reg_SDR_R,             "Reg_SDR_R",                         NULL, "CpuType/2050"}, 
     { &S360.Reg_IAR_L,             "Reg_IAR_L",                         NULL, "CpuType/2050"}, 
     { &S360.Reg_IAR_R,             "Reg_IAR_R",                         NULL, "CpuType/2050"}, 
+    // IBM 360 Model 65 cpu panel
+    { &S360.Reg_Volt,              "Reg_Volt",                          NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller1_L,         "Reg_Roller1_L",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller2_L,         "Reg_Roller2_L",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller3_L,         "Reg_Roller3_L",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller4_L,         "Reg_Roller4_L",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller5_L,         "Reg_Roller5_L",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller6_L,         "Reg_Roller6_L",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller1_R,         "Reg_Roller1_R",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller2_R,         "Reg_Roller2_R",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller3_R,         "Reg_Roller3_R",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller4_R,         "Reg_Roller4_R",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller5_R,         "Reg_Roller5_R",                     NULL, "CpuType/2065"}, 
+    { &S360.Reg_Roller6_R,         "Reg_Roller6_R",                     NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller1_L,       "Label_Roller1_L",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller2_L,       "Label_Roller2_L",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller3_L,       "Label_Roller3_L",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller4_L,       "Label_Roller4_L",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller5_L,       "Label_Roller5_L",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller6_L,       "Label_Roller6_L",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller1_R,       "Label_Roller1_R",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller2_R,       "Label_Roller2_R",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller3_R,       "Label_Roller3_R",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller4_R,       "Label_Roller4_R",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller5_R,       "Label_Roller5_R",                   NULL, "CpuType/2065"}, 
+    { &S360.Label_Roller6_R,       "Label_Roller6_R",                   NULL, "CpuType/2065"}, 
+    { &S360.BTN_Roller1,           "BTN_Roller1",                       &IBM360_OnClick_BTN, "CpuType/2065"},
+    { &S360.BTN_Roller2,           "BTN_Roller2",                       &IBM360_OnClick_BTN, "CpuType/2065"},
+    { &S360.BTN_Roller3,           "BTN_Roller3",                       &IBM360_OnClick_BTN, "CpuType/2065"},
+    { &S360.BTN_Roller4,           "BTN_Roller4",                       &IBM360_OnClick_BTN, "CpuType/2065"},
+    { &S360.BTN_Roller5,           "BTN_Roller5",                       &IBM360_OnClick_BTN, "CpuType/2065"},
+    { &S360.BTN_Roller6,           "BTN_Roller6",                       &IBM360_OnClick_BTN, "CpuType/2065"},
+    { &S360.Reg_Stor_Proc_CHK,     "Reg_Stor_Proc_CHK",                 NULL, "CpuType/2065"}, 
     // odometer
     { &S360.Odo[1],                "Odo1",                              NULL}, 
     { &S360.Odo[2],                "Odo2",                              NULL}, 
@@ -483,6 +523,7 @@ int bCardReadHopperBackgroundSet     = 0; // flag to allow grabbing background b
 // for main cpu
 int bCpuModelIs                = 2030; // cpu model being displayed in control panel gui
 int bSystemResetKeyPressed     = 0; // set when system reset key is pressed
+int IPLaddr                    = 0; // IPL addr when channel starts IPL (triggered by boot scp command)
 int bRegBA_display             = 0; // signal reg B A displays PC when stopped, =1 will display MSDR
 struct {                            // odometer values
    int tnow;
@@ -498,7 +539,7 @@ int InstrCycles0               = 0; // instr cycles executed on ShowInfoTm0
 int FramesCount0               = 0; // num of frames on ShowInfoTm0
 
 // for tape cabinet
-#define MT_anim_sequence_len   500          // max number of animation sequence steps for tape
+#define MT_anim_sequence_len  1500          // max number of animation sequence steps for tape
 struct mtcabrec {                           // mtcab[0..7].reel[0..1] is a record that holds the tape reel states for MTA0..7 units
    int mt_is;                               // current visual animation being done
    // state of tape elements
@@ -514,6 +555,9 @@ struct mtcabrec {                           // mtcab[0..7].reel[0..1] is a recor
        double rpm0;                         // revolutions per second (0=stopped, <0=backwards) when reel motor start accelerating/decelerating 
        int ang0;                            // reel angular position (0..360 degrees) when reel motor start accelerating/decelerating
        double revs;                         // reel revoltions done after motor start accel/decel (1 revolution = 360 gr)
+       int hasblur;                         // flag that indicates if reel image in cpanel has blur (0=no blur, 1=slow blur, 2=high blur)
+       int angblur;                         // blur reel image angle draw 
+       char debug_text[100];                // debug text (if any) to be draw in reels hub on refresh
    } reel[2];
    // last value of heigh of tape medium into vaccum colum used to detect h has changed respect 
    // previous refresh frame and redraw it
@@ -630,7 +674,9 @@ void IBM360_Init(void)
     int unit; 
 
     // process the control panel lights to add backlight when state is > 15
-    if (IsOption("CpuType/2050")) {
+    if (IsOption("CpuType/2065")) {
+       bCpuModelIs=2065; 
+    } else if (IsOption("CpuType/2050")) {
        bCpuModelIs=2050; 
     } else if (IsOption("CpuType/2040")) {
        bCpuModelIs=2040; 
@@ -652,6 +698,7 @@ void IBM360_Init(void)
        SetBoxLights(S360.Reg_Status_Checks);
     }
 
+    IPLaddr=0;
     bCardReadPunchVisible = 0;
     bPrintOutVisible = 0;
     bDasdVisible = 0;
@@ -729,11 +776,11 @@ void IBM360_Init(void)
         // set the reel hub's in green reel images
         for (n=0; n<24; n++) { // slow blur
             CopyControlImage(S360.MT_green_reel_hub, n,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
-                             S360.MT_green_reel,     n+30,  98, 98);     // ToCId, ToState,     x1, y1
+                             S360.MT_green_reel,     n+42,  98, 98);     // ToCId, ToState,     x1, y1
         }
         for (n=0; n<8; n++) { // high blur
             CopyControlImage(S360.MT_green_reel_hub, n+24,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
-                             S360.MT_green_reel,     n+56,  98, 98);     // ToCId, ToState,     x1, y1
+                             S360.MT_green_reel,     n+68,  98, 98);     // ToCId, ToState,     x1, y1
         }
 
     }
@@ -888,7 +935,14 @@ void IBM360M30_SetCpuPanelLights(int mode)
         SetState(S360.LI_Manual, (sim_is_running) ? 0:1); 
         n=((int)GetState(S360.SW_Rate) ? 1:0) || ((int)GetState(S360.SW_Addr_Compare) ? 1:0);
         SetState(S360.LI_Test, (n!=0) ? 1:0); 
-        SetState(S360.LI_Load, (loading) ? 1:0); 
+        SetState(S360.LI_Load, (loading) ? 1:0);
+        if (IPLaddr) {
+            // scp boot command has been issued
+            // Set the rotating switches according to booted addr from
+            SetState(S360.SW_J, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(S360.SW_H, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(S360.SW_G, IPLaddr & 0x7); IPLaddr=0;
+        }
     }
 
     // as microarch is not simulated, lights are set with general
@@ -1052,6 +1106,11 @@ void IBM360M40_SetCpuPanelLights(int mode)
         n=(int)(GetState(S360.SW_Rate) ? 1:0); // M40 does not have Addr compare control defined
         SetState(S360.LI_Test, (n!=0) ? 1:0); 
         SetState(S360.LI_Load, (loading) ? 1:0); 
+        if (IPLaddr) {
+            SetState(S360.SW_C, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(S360.SW_B, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(S360.SW_A, IPLaddr & 0x7); IPLaddr=0;
+        }
     }
 
     // as microarch is not simulated, lights are set with general
@@ -1081,15 +1140,15 @@ void IBM360M40_SetCpuPanelLights(int mode)
     else SetStateWithIntensity(S360.Reg_LSAR_ROAR, n); 
 
     // roller gets real data, even if it is not the microarch ones
-    switch ((int) GetState(S360.Label_Roller1_L)) {
-       case 0: n=PC; break; 
-       case 1: n=regs[0]; break; 
-       case 2: n=regs[0] >> 16; break; 
-       case 3: n=regs[1]; break; 
-       case 4: n=regs[1] >> 16; break; 
-       case 5: n=regs[2]; break; 
-       case 6: n=regs[2] >> 16; break; 
-       default: n=0; break; 
+    switch (1+((int) GetState(S360.Label_Roller1_L) & 7)) {
+       case 1: n = get_chan_info(1, 0); break; // return count bytes in channel 1 to be displayed in control panel
+       case 2: n = get_chan_info(1, 1); break; // last data byte read/write, key and command
+       case 3: n = get_chan_info(1, 2); break; // flags/status
+       case 4: n = get_chan_info(2, 0); break; // same for channel 2
+       case 5: n = get_chan_info(2, 1); break; // 
+       case 6: n = get_chan_info(2, 2); break; // 
+       case 7: n=InstrCycles; break; // count of intructions loops executed so far (if cpu waiting, do get incremented)
+       case 8: n=InstrExec; break; // count of intructions executed so far (real instr, if cpu waiting, InstrExec do NO get incremented)
     }
     n1 = n & 0x1FFFFF; 
     p1=calculateParity(n1);  
@@ -1097,15 +1156,16 @@ void IBM360M40_SetCpuPanelLights(int mode)
     if (mode==0) TickCount(S360.Reg_Roller1_16b, n); 
     else SetStateWithIntensity(S360.Reg_Roller1_16b, n); 
 
-    switch ((int) GetState(S360.Label_Roller2_L)) {
-       case 0: n = get_chan_info(1, 0); break; // return count bytes in channel 1 to be displayed in control panel
-       case 1: n = get_chan_info(1, 1); break; // last data byte read/write, key and command
-       case 2: n = get_chan_info(1, 2); break; // flags/status
-       case 3: n = get_chan_info(2, 0); break; // same for channel 2
-       case 4: n = get_chan_info(2, 1); break; // 
-       case 5: n = get_chan_info(2, 2); break; // 
-       case 6: n = get_chan_info(2, 0); break; // same for channel 0 (mpx channel)
-       case 7: n = get_chan_info(2, 1); break; // 
+    switch (1+((int) GetState(S360.Label_Roller2_L) & 7)) {
+       case 1: n=PC; break; 
+       case 2: n=regs[0]; break; 
+       case 3: n=regs[0] >> 16; break; 
+       case 4: n=regs[1]; break; 
+       case 5: n=regs[1] >> 16; break; 
+       case 6: n = get_chan_info(0, 0); break; // same for channel 0 (mpx channel)
+       case 7: n = get_chan_info(0, 1); break; // 
+       case 8: n = get_chan_info(0, 2); break; // 
+       default: n=0; break; 
     }
     n1 = n & 0x1FFFFF; 
     p1=calculateParity(n1);  
@@ -1147,12 +1207,12 @@ void IBM360M50_SetCpuPanelLights(int mode)
         // this switch is only available for Model 50
         SetState(S360.Reg_Volt, AllOnes);
         SetState(S360.Reg_Roller1_L, AllOnes);
-        SetState(S360.Reg_Roller2_L, AllOnes);
-        SetState(S360.Reg_Roller3_L, AllOnes);
-        SetState(S360.Reg_Roller4_L, AllOnes);
         SetState(S360.Reg_Roller1_R, AllOnes);
+        SetState(S360.Reg_Roller2_L, AllOnes);
         SetState(S360.Reg_Roller2_R, AllOnes);
+        SetState(S360.Reg_Roller3_L, AllOnes);
         SetState(S360.Reg_Roller3_R, AllOnes);
+        SetState(S360.Reg_Roller4_L, AllOnes);
         SetState(S360.Reg_Roller4_R, AllOnes);
         SetState(S360.Reg_CPU_L, AllOnes);
         SetState(S360.Reg_CPU_R, AllOnes); 
@@ -1178,11 +1238,15 @@ void IBM360M50_SetCpuPanelLights(int mode)
         n=(int)(GetState(S360.SW_Rate) ? 1:0); // M50 does not have Addr compare control defined
         SetState(S360.LI_Test, (n!=0) ? 1:0); 
         SetState(S360.LI_Load, (loading) ? 1:0); 
+        if (IPLaddr) {
+            SetState(S360.SW_C, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(S360.SW_B, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(S360.SW_A, IPLaddr & 0x7); IPLaddr=0;
+        }
     }
 
     // clear voltage check
     if (mode) SetState(S360.Reg_Volt, 0);
-
 
     // Storage Data register -> contents of data read from mem when running
     if (cpu_mem_data & (1<<31)) { // memory access
@@ -1225,22 +1289,193 @@ void IBM360M50_SetCpuPanelLights(int mode)
     }
 
     // roller data is described in detail again in 
-    // http://www.bitsavers.org/pdf/ibm/360/fe/2050/SY22-2832-4_360-50Maint.pdf, page 162 and follwing
+    // http://www.bitsavers.org/pdf/ibm/360/fe/2050/SY22-2832-4_360-50Maint.pdf, page 162 and following
 
-    // roller 1 - position 1
+    // roller gets real data, even if it is not the microarch ones
+    // roller 1 is channel info
+    switch (1+((int) GetState(S360.Label_Roller1_L) & 7)) {
+       case 1: n = get_chan_info(1, 0) << 16; break; // return count bytes in channel 1 to be displayed in control panel
+       case 2: n = get_chan_info(1, 1) << 8; break; // last data byte read/write, key and command
+       case 3: n = get_chan_info(1, 2); break; // flags/status
+       case 4: n = get_chan_info(2, 0) << 16; break; // same for channel 2
+       case 5: n = get_chan_info(2, 1) << 8; break; // 
+       case 6: n = get_chan_info(2, 2); break; // 
+       case 7: n=0; break; 
+       case 8: n=0; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller1_L, n >> 18); TickCount(S360.Reg_Roller1_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller1_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller1_R, n & 0x3FFFF); }
+
+    switch (1+((int) GetState(S360.Label_Roller2_L) & 7)) {
+       case 1: n=regs[0]; break; 
+       case 2: n=regs[1]; break; 
+       case 3: n=regs[2]; break; 
+       case 4: n=regs[3]; break; 
+       case 5: n=regs[4]; break; 
+       case 6: n=regs[5]; break; 
+       case 7: n=0; break; 
+       case 8: n=0; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller2_L, n >> 18); TickCount(S360.Reg_Roller2_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller2_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller2_R, n & 0x3FFFF); }
+
+    switch (1+((int) GetState(S360.Label_Roller3_L) & 7)) {
+       case 1: n=regs[6]; break; 
+       case 2: n=regs[7]; break; 
+       case 3: n=regs[8]; break; 
+       case 4: n=regs[9]; break; 
+       case 5: n=regs[10]; break; 
+       case 6: n=regs[11]; break; 
+       case 7: n=0; break; 
+       case 8: n=cpu_mem_addr; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller3_L, n >> 18); TickCount(S360.Reg_Roller3_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller3_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller3_R, n & 0x3FFFF); }
+
+    switch (1+((int) GetState(S360.Label_Roller4_L) & 7)) {
+       case 1: n=regs[12]; break; 
+       case 2: n=regs[13]; break; 
+       case 3: n=regs[16]; break; 
+       case 4: n=regs[15]; break; 
+       case 5: n=InstrCycles << 4; break; // count of intructions loops executed so far (if cpu waiting, do get incremented)
+       case 6: n=InstrExec << 9; break; // count of intructions executed so far (real instr, if cpu waiting, InstrExec do NO get incremented)
+       case 7: n=(sim_rand() & 0x1FFF) << 18; break; // ROS addr
+       case 8: n=(sim_rand() & 0x1FFF) << 18; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller4_L, n >> 18); TickCount(S360.Reg_Roller4_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller4_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller4_R, n & 0x3FFFF); }
+}
 
 
+// set cpu panel lights for Model 65
+// if mode=0 set TickCount (for tickcount callback)
+//         1 set SetStateWithIntensity (for refresh callback)
+//         2 set al lights to 1 (while lamp test button is pressed)
+void IBM360M65_SetCpuPanelLights(int mode)
+{
+    t_uint64 AllOnes = (t_uint64)(-1);
+    static int flip_flop = 0;
 
-    SetState(S360.Reg_Roller1_L, 0);
-    SetState(S360.Reg_Roller2_L, 0);
-    SetState(S360.Reg_Roller3_L, 0);
-    SetState(S360.Reg_Roller4_L, 0);
-    SetState(S360.Reg_Roller1_R, 0);
-    SetState(S360.Reg_Roller2_R, 0);
-    SetState(S360.Reg_Roller3_R, 0);
-    SetState(S360.Reg_Roller4_R, 0);
+    uint32 n;  
 
+    if (mode==2) {
+        // set all to ones, is lamp test
+        // this switch is only available for Model 50
+        SetState(S360.Reg_Volt, AllOnes);
+        SetState(S360.Reg_Roller1_L, AllOnes);
+        SetState(S360.Reg_Roller1_R, AllOnes);
+        SetState(S360.Reg_Roller2_L, AllOnes);
+        SetState(S360.Reg_Roller2_R, AllOnes);
+        SetState(S360.Reg_Roller3_L, AllOnes);
+        SetState(S360.Reg_Roller3_R, AllOnes);
+        SetState(S360.Reg_Roller4_L, AllOnes);
+        SetState(S360.Reg_Roller4_R, AllOnes);
+        SetState(S360.Reg_Roller5_L, AllOnes);
+        SetState(S360.Reg_Roller5_R, AllOnes);
+        SetState(S360.Reg_Roller6_L, AllOnes);
+        SetState(S360.Reg_Roller6_R, AllOnes);
+        SetState(S360.Reg_Stor_Proc_CHK, AllOnes);
+        SetState(S360.LI_System, 1); 
+        SetState(S360.LI_Manual, 1); 
+        SetState(S360.LI_Wait, 1); 
+        SetState(S360.LI_Test, 1); 
+        SetState(S360.LI_Load, 1); 
+        return; 
+    }
+    // Inside Cpu Panel, Operator Console Panel (ocp) lights are realistic
+    n= (((flags & WAIT)!=0) && (sim_is_running!=0)) ? 1:0;
+    if (mode==0) TickCount(S360.LI_Wait, n); 
+    else SetStateWithIntensity(S360.LI_Wait, n); 
+    if (mode) {
+        // set light on refresh, but no need to set them on TickCount
+        SetState(S360.LI_System, (sim_is_running) ? 1:0); 
+        SetState(S360.LI_Manual, (sim_is_running) ? 0:1); 
+        n=(int)(GetState(S360.SW_Rate) ? 1:0); // M65 does not have Addr compare control defined
+        SetState(S360.LI_Test, (n!=0) ? 1:0); 
+        SetState(S360.LI_Load, (loading) ? 1:0); 
+        if (IPLaddr) {
+            SetState(S360.SW_C, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(S360.SW_B, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(S360.SW_A, IPLaddr & 0x7); IPLaddr=0;
+        }
+    }
 
+    if (mode) SetState(S360.Reg_Volt, 0);
+    if (mode) SetState(S360.Reg_Stor_Proc_CHK, 0);
+
+    // roller data is sumarized in 
+    // http://www.bitsavers.org/pdf/ibm/360/fe/2065/Y25-0501-2_System_360_Model_65_Field_Engineering_Handbook_Oct1969.pdf, 
+    // page 17 and following
+
+    // roller gets real data, even if it is not the microarch ones
+    // roller 1 is channel info
+    switch (1+((int) GetState(S360.Label_Roller1_L) & 7)) {
+       case 1: n = get_chan_info(1, 0) << 16; break; // return count bytes in channel 1 to be displayed in control panel
+       case 2: n = get_chan_info(1, 1) << 8; break; // last data byte read/write, key and command
+       case 3: n = get_chan_info(1, 2); break; // flags/status
+       case 4: n = get_chan_info(2, 0) << 16; break; // same for channel 2
+       case 5: n = get_chan_info(2, 1) << 8; break; // 
+       case 6: n = get_chan_info(2, 2); break; // 
+       default: n=0; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller1_L, n >> 18); TickCount(S360.Reg_Roller1_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller1_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller1_R, n & 0x3FFFF); }
+
+    switch (1+((int) GetState(S360.Label_Roller2_L) & 7)) {
+       case 1: n=regs[0]; break; 
+       case 2: n=regs[1]; break; 
+       case 3: n=regs[2]; break; 
+       case 4: n=regs[3]; break; 
+       case 5: n=regs[4]; break; 
+       case 6: n=regs[5]; break; 
+       default: n=0; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller2_L, n >> 18); TickCount(S360.Reg_Roller2_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller2_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller2_R, n & 0x3FFFF); }
+
+    switch (1+((int) GetState(S360.Label_Roller3_L) & 7)) {
+       case 1: n=regs[6]; break; 
+       case 2: n=regs[7]; break; 
+       case 3: n=regs[8]; break; 
+       case 4: n=regs[9]; break; 
+       case 5: n=regs[10]; break; 
+       case 6: n=regs[11]; break; 
+       default: n=0; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller3_L, n >> 18); TickCount(S360.Reg_Roller3_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller3_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller3_R, n & 0x3FFFF); }
+
+    switch (1+((int) GetState(S360.Label_Roller4_L) & 7)) {
+       case 1: n=cpu_mem_addr; break; 
+       case 2: n=regs[12]; break; 
+       case 3: n=regs[13]; break; 
+       case 4: n=regs[14]; break; 
+       case 5: n=regs[15]; break; 
+       default: n=0; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller4_L, n >> 18); TickCount(S360.Reg_Roller4_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller4_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller4_R, n & 0x3FFFF); }
+
+    switch (1+((int) GetState(S360.Label_Roller5_L) & 7)) {
+       case 1: n=cpu_mem_data; break; 
+       case 2: n = InstrCycles << 4; break; // count of intructions loops executed so far (if cpu waiting, do get incremented)
+       case 3: n = InstrExec << 9; break; // count of intructions executed so far (real instr, if cpu waiting, InstrExec do NO get incremented)
+       default: n=0; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller5_L, n >> 18); TickCount(S360.Reg_Roller5_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller5_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller5_R, n & 0x3FFFF); }
+
+    switch (1+((int) GetState(S360.Label_Roller6_L) & 7)) {
+       case 1: n=PC; break; 
+       case 2: n = get_chan_info(0, 0) << 16; break; // mpx channel 0
+       case 3: n = get_chan_info(0, 1) << 8; break; // 
+       case 4: n = get_chan_info(0, 2); break; // 
+       case 5: n=0; break; 
+       case 6: n=(int) AllOnes; break; // lamp test
+       default: n=0; break; 
+    }
+    if (mode==0) { TickCount(S360.Reg_Roller6_L, n >> 18); TickCount(S360.Reg_Roller6_R, n & 0x3FFFF); }
+    else { SetStateWithIntensity(S360.Reg_Roller6_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller6_R, n & 0x3FFFF); }
 }
 
 
@@ -1369,7 +1604,7 @@ int mt_do_animation_seq(int unit,
                 ang=mtcab[unit].reel[ireel].ang; 
                 switch(mtcab[unit].reel[ireel].color) {
                     case 1: n = 36 * ang / 360; break; // red reel  
-                    case 2: n = 24 * ang / 360; break; // green reel  
+                    case 2: n = 36 * ang / 360; break; // green reel  
                    default: n = 72 * ang / 360; break; // blue reel
                 }
                 if (ireel==0) *MT_L_Rot=n; else *MT_R_Rot =n; 
@@ -1489,10 +1724,10 @@ int mt_do_animation_seq(int unit,
                                 ang=(n-48) * 40;
                                 break; 
                         case 2: n -= ((m<msec/4) ? 1 : (m<2*msec/4) ? 2 : (m<3*msec/4) ? 3 : 5); // green reel  
-                                while (n<30) n+=24; while(n>53) n-=24;
-                                ang=(n-30) * 15; 
+                                while (n<42) n+=24; while(n>65) n-=24;
+                                ang=(n-42) * 15; 
                                 break;
-                        default: n -= ((m<msec/3) ? 1 : (m<2*msec/3) ? 3 : 5); // blue reel
+                        default: n -= ((m<msec/3) ? 1 : (m<2*msec/3) ? 2 : 3); // blue reel
                                 while (n<73) n+=18; while(n>90) n-=18;
                                 ang=(n-73) * 20;
                                 break; 
@@ -1508,7 +1743,7 @@ int mt_do_animation_seq(int unit,
                                 while (n<57) n+=18+5; while(n>74) n-=18;
                                 break; 
                         case 2: n -= 3; // green reel  
-                                while (n<56) n+=8; while(n>63) n-=8;
+                                while (n<68) n+=8; while(n>75) n-=8; 
                                 break;
                         default: n += 5; // blue reel
                                 while (n<91) n+=18; while(n>108) n-=18;
@@ -2010,7 +2245,7 @@ void mt_reels_mov(int unit, int cmd,
     uint32 tnow = Refresh_tnow;   
     static uint32 old_tnow = 0; 
 
-    int time, time1, recsize, ireel, r, r1, r2, p, h,
+    int time, time1, recsize, ireel, r, r1, r2, p, h, dir, 
         ang_inc, ang, n, tm0, msec, motor, old_motor[2], new_motor[2];
     double rpm, rpm0, rpmMax, rpsMax, a, am, revs; 
     
@@ -2260,8 +2495,45 @@ void mt_reels_mov(int unit, int cmd,
         h = mtcab[unit].reel[ireel].VacCol_h;  
         // set height of medium 
         if (ireel) *R_VacColMedium_h = h; else *L_VacColMedium_h = h;
-        // get angluar position of reel
+        // get angluar position of reel, and rotating direction (1-> ang incrments, -1 -> ang decrements)
         ang = mtcab[unit].reel[ireel].ang; 
+        dir = (old[ireel].ang_inc > 0) ? 1:-1; 
+
+        if (mtcab[unit].reel[ireel].color==10) {
+
+            mtcab[unit].reel[ireel].debug_text[0]=0;
+
+            if (abs(old[ireel].ang_inc) >= 20) {
+                if (mtcab[unit].reel[ireel].hasblur == 0) {
+                    ang = old[ireel].ang + dir * 30;  
+                    ang = (ang / 20) * 20;  
+                    mtcab[unit].reel[ireel].hasblur=1;
+                    sprintf(&mtcab[unit].reel[ireel].debug_text[strlen(mtcab[unit].reel[ireel].debug_text)], " no blur -> blur \n old ang %d \n", old[ireel].ang);
+                } else {
+                    ang = mtcab[unit].reel[ireel].angblur;  
+                    ang = ang + dir * 20;  
+                }
+                if (ang<0) ang += 360; else if (ang >= 360) ang -= 360; 
+                mtcab[unit].reel[ireel].angblur = ang; 
+                n=73 + 18 * ang / 360;
+                sprintf(&mtcab[unit].reel[ireel].debug_text[strlen(mtcab[unit].reel[ireel].debug_text)], " blur, \n ang %d, \n n %d", ang, n);
+            } else {
+                // no blur
+                if (mtcab[unit].reel[ireel].hasblur) {
+                    ang = mtcab[unit].reel[ireel].angblur;  
+                    ang = ang + dir * 30;  
+                    sprintf(&mtcab[unit].reel[ireel].debug_text[strlen(mtcab[unit].reel[ireel].debug_text)], " blur -> no blur, \n dir %d \n", dir);
+                } else {
+
+                }
+                if (ang<0) ang += 360; else if (ang >= 360) ang -= 360; 
+                mtcab[unit].reel[ireel].ang=ang; 
+                n = 72 * ang / 360;
+                mtcab[unit].reel[ireel].hasblur=0;
+                sprintf(&mtcab[unit].reel[ireel].debug_text[strlen(mtcab[unit].reel[ireel].debug_text)], " no blur, \n ang %d, \n n %d", ang, n);
+            }
+        } else 
+
         // calc state that match angular position of reel and blur
         {
             static struct {
@@ -2273,25 +2545,28 @@ void mt_reels_mov(int unit, int cmd,
                  2*20, 73, 18, 72}, 
                 {3*40, 57, 9,      // color 1 -> red reel 
                  2*40, 48, 9, 36}, 
-                {2*45, 56, 8,      // color 2 -> green reel 
-                 2*15, 30, 24, 24}, 
+                {2*45, 68, 8,      // color 2 -> green reel 
+                 2*15, 42, 24, 36}, 
             };
             int c=mtcab[unit].reel[ireel].color; 
             // check if blur 
             if (abs(old[ireel].ang_inc) >= rcol[c].ang_inc_high_blur) {
                 // high blur, set reel control at previous reel blur angular position respect rotation direction. 
-                ang = ang + ((old[ireel].ang_inc > 0) ? -rcol[c].ang_inc_high_blur:rcol[c].ang_inc_high_blur) / 2; 
+                ang = ang + dir * rcol[c].ang_inc_high_blur / 2; 
                 while (ang < 360) ang += 360; while (ang >= 360) ang -= 360; 
                 n = rcol[c].state0_high_blur + rcol[c].nStates_high_blur * ang / 360; 
+                mtcab[unit].reel[ireel].hasblur=2; 
                 bTapeAnimInProgress=1;  // signal reel blur started 
             } else if (abs(old[ireel].ang_inc) >= rcol[c].ang_inc_slow_blur) {
                 // slow blur, set reel control at previous reel blur angular position respect rotation direction. 
-                ang = ang + ((old[ireel].ang_inc > 0) ? -rcol[c].ang_inc_slow_blur:rcol[c].ang_inc_slow_blur) / 2; 
+                ang = ang + dir * rcol[c].ang_inc_slow_blur / 2; 
                 while (ang < 360) ang += 360; while (ang >= 360) ang -= 360; 
                 n = rcol[c].state0_slow_blur + rcol[c].nStates_slow_blur * ang / 360; 
+                mtcab[unit].reel[ireel].hasblur=1; 
                 bTapeAnimInProgress=1;  // signal reel blur started 
             } else {
                 // no blur
+                mtcab[unit].reel[ireel].hasblur=0; 
                 n = rcol[c].nStates_no_blur * ang / 360;
             } 
         } 
@@ -2695,11 +2970,13 @@ void mt_ReelsSetDynamicState(int unit, int MT_head, int MT_Reel_Amount, int MT_L
     }
     // if tape is 2415 and vaccol not visible -> do not draw tape up to top (would overdraw vaccol)
     if (bRedrawL) {
+        // draw tape medium for left reel
         CopyControlImage(S360.MT_reel_amount, nL,    0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
                          CId_MT, 0,                   x_reel, y_reel);       // ToCId, ToState,     x1, y1
         if (nL) mt_TapeMediumToReelDynamicState(surface, ww,  0, nL, col);      
     }
     if (bRedrawR) {
+        // draw tape medium for right reel
         CopyControlImage(S360.MT_reel_amount, nR,    0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
                          CId_MT, 0,                     285+x_reel, y_reel);       // ToCId, ToState,     x1, y1
         if (nR) mt_TapeMediumToReelDynamicState(surface, ww, 1, nR, col);
@@ -2721,8 +2998,37 @@ void mt_ReelsSetDynamicState(int unit, int MT_head, int MT_Reel_Amount, int MT_L
             case 2: CId_Reel = S360.MT_green_reel; break; 
            default: CId_Reel = S360.MT_blue_reel; break; 
         }
+        // draw reel on top of medium
+
+        if (0) { 
+            // debug mode -> will display one reel state at the time, cycling from 0 up to max number of states
+            // the current state for reel image show into the hub
+            // press Z/X key to incr/decr state number
+            char buf[10];
+            static int current_reel_state = 0; 
+            if (vid_keyb.LastKeyPress == 'z') {
+                vid_keyb.LastKeyPress = 0; current_reel_state++;
+            } else if (vid_keyb.LastKeyPress == 'x') {
+                vid_keyb.LastKeyPress = 0; current_reel_state--;
+            }
+            if (current_reel_state >= GetControlInfo(CId_Reel, CINFO_NSTATES)) current_reel_state=0;
+            else if (current_reel_state < 0) current_reel_state = GetControlInfo(CId_Reel, CINFO_NSTATES)-1; 
+            nL=current_reel_state; 
+            sprintf(buf, "%d", nL);
+            DrawTextImage   (CId_Reel, nL, 140,140, 0, 0,     // ToCId, ToState, x0, y0, w0, h0: where to draw text
+                               0,0,0,       // r, g, b: text color
+                               buf, 1);       // str to draw, char size
+
+        }
         CopyControlImage(CId_Reel, nL,     0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
                          CId_MT, 0,             x+x_reel, y_reel);  // ToCId, ToState,     x1, y1
+        // overprint debug text in reel if any
+        if (mtcab[unit].reel[ireel].debug_text[0]) {
+            DrawTextImage   (CId_MT, 0, x+5,100, 0, 0,     // ToCId, ToState, x0, y0, w0, h0: where to draw text
+                               255,255,255,       // r, g, b: text color
+                               mtcab[unit].reel[ireel].debug_text, 2);       // str to draw, char size
+
+        }
     }
     //  - Set dynamically generated image to be redraw 
     cpanel_ControlRedrawNeeded=1; 
@@ -2919,9 +3225,9 @@ void Refresh_MagTape(void)
         //          48..56 ( 9 states) -> reel rotated 0gr, 40gr ... 320gr but with some spin blur. To be used when reel is moving
         //          57..74 (18 states) -> reel rotated 0gr, 20gr ... 320gr whith greater spin blur. To be used when reel is rewinding at high Speed
         //   MT_green_reel
-        //          0 ..23 (24 states) -> reel rotated 0gr, 15gr, ... 345gr. To be used when reel is not spinning
-        //          30..53 (24 states) -> reel rotated 0gr, 15gr ... 345gr but with some spin blur. To be used when reel is moving
-        //          56..63 ( 8 states) -> reel rotated 0gr, 45gr ... 315gr whith greater spin blur. To be used when reel is rewinding at high Speed
+        //          0 ..35 (36 states) -> reel rotated 0gr, 10gr, ... 350gr. To be used when reel is not spinning
+        //          42..65 (24 states) -> reel rotated 0gr, 15gr ... 345gr but with some spin blur. To be used when reel is moving
+        //          68..75 ( 8 states) -> reel rotated 0gr, 45gr ... 315gr whith greater spin blur. To be used when reel is rewinding at high Speed
         // MT_head holds the position of r/w head
         //    =0  -> no head image
         //    =1  -> head closed, prepared to read or write tape medium
@@ -3310,7 +3616,9 @@ void Refresh_Dasd(void)
 
 void IBM360_TickIntensityCount(void)
 {
-    if (bCpuModelIs == 2050) {
+    if (bCpuModelIs == 2065) {
+        IBM360M65_SetCpuPanelLights(0); // set tickcount
+    } else if (bCpuModelIs == 2050) {
         IBM360M50_SetCpuPanelLights(0); // set tickcount
     } else if (bCpuModelIs == 2040) {
         IBM360M40_SetCpuPanelLights(0); // set tickcount
@@ -3663,7 +3971,15 @@ void Refresh_CardReadPunch(void)
 
 void Refresh_CpuPanel(void)
 {
-    if (bCpuModelIs == 2050) {
+    if (bCpuModelIs == 2065) {
+        if ((1+(int) GetState(S360.Label_Roller6_L)) == 6) {
+            // lamp test on -> lit everything!
+            IBM360M65_SetCpuPanelLights(2); 
+        } else {
+            // set register light in cpu panel
+            IBM360M65_SetCpuPanelLights(1); 
+        }  
+    } else if (bCpuModelIs == 2050) {
         if (GetState(S360.SW_Lamp_Test)==1) {
             // lamp test on -> lit everything!
             IBM360M50_SetCpuPanelLights(2); 
@@ -4349,24 +4665,40 @@ void IBM360_OnClick_BTN(void)
         // click on roller
         data=(int) GetState(S360.Label_Roller1_L);
         data = (data & 0xF8) | (((data & 7) + 1) & 7) ; 
+        if ((bCpuModelIs == 2065) && ((data & 7) > 5)) data = data & (~7); // 2065 roller only has 6 positions
         SetState(S360.Label_Roller1_L, data);
         SetState(S360.Label_Roller1_R, data);
     } else if (CP_Click.CId == S360.BTN_Roller2) {
         // click on roller
         data=(int) GetState(S360.Label_Roller2_L);
         data = (data & 0xF8) | (((data & 7) + 1) & 7) ; 
+        if ((bCpuModelIs == 2065) && ((data & 7) > 5)) data = data & (~7); // 2065 roller only has 6 positions
         SetState(S360.Label_Roller2_L, data);
         SetState(S360.Label_Roller2_R, data);
     } else if (CP_Click.CId == S360.BTN_Roller3) {
         data=(int) GetState(S360.Label_Roller3_L);
         data = (data & 0xF8) | (((data & 7) + 1) & 7) ; 
+        if ((bCpuModelIs == 2065) && ((data & 7) > 5)) data = data & (~7); // 2065 roller only has 6 positions
         SetState(S360.Label_Roller3_L, data);
         SetState(S360.Label_Roller3_R, data);
     } else if (CP_Click.CId == S360.BTN_Roller4) {
         data=(int) GetState(S360.Label_Roller4_L);
         data = (data & 0xF8) | (((data & 7) + 1) & 7) ; 
+        if ((bCpuModelIs == 2065) && ((data & 7) > 5)) data = data & (~7); // 2065 roller only has 6 positions
         SetState(S360.Label_Roller4_L, data);
         SetState(S360.Label_Roller4_R, data);
+    } else if (CP_Click.CId == S360.BTN_Roller5) {
+        data=(int) GetState(S360.Label_Roller5_L);
+        data = (data & 0xF8) | (((data & 7) + 1) & 7) ; 
+        if ((data & 7) > 5) data = data & (~7); // 2065 roller only has 6 positions
+        SetState(S360.Label_Roller5_L, data);
+        SetState(S360.Label_Roller5_R, data);
+    } else if (CP_Click.CId == S360.BTN_Roller6) {
+        data=(int) GetState(S360.Label_Roller6_L);
+        data = (data & 0xF8) | (((data & 7) + 1) & 7) ; 
+        if ((data & 7) > 5) data = data & (~7); // 2065 roller only has 6 positions
+        SetState(S360.Label_Roller6_L, data);
+        SetState(S360.Label_Roller6_R, data);
     }
 }
 
