@@ -6704,20 +6704,12 @@ cpu_description (DEVICE *dptr)
        return "IBM 360 CPU";
 }
 
-// ^F -> dasd
-// en dasd simulat tiempo real de seek y transfer de dato
-
-// bugs IBM360: con ^C (cancel) en consola: no deberia imprimir in CR?
-
 // en i650
-// poner letras botones consola inclinados, poner rueda rotatoria en ramac arm
 // nuevo sw: runcible
 
 // en NORC
 // poner en manual nombre de instr correctas
-// bajar velocidad del motor para que el bucle de la cinta en vaccol no llegue tan alto, ni se salga por abajo
 // nuevo sw: compiler (que aplique a los prog hechos en crossasembler)
-// SET MT0 DOOROPEN/DOORCLOSED to open/close tape cabinet
 
 // en i701
 // nuevo sw: pact compiler
@@ -6727,11 +6719,9 @@ cpu_description (DEVICE *dptr)
 // aunque se mantiene ^F pulsado, al cabo de unos segundos el modo fast se quita solo (eventos repeat?)
 // añadir modif fcb de github sims
 // ver porque falla con abend 314 en sysgen os360
-// set cpanel option=LoadUnLoadAnim -> hace que Load/UnLoad anim se hagan enteras en Attach/detach (usa busy flag de la cinta)
-// flag de ncp "canclose", hotkey para abrir la consola si está cerrada
 
-// tape
-// poner que rew desconecte a los 30msec para liberar el canal. Ahora en TOS no puede rebobinar 2 tapes a la vez
-// si maquina muy cargada primera ejecucion hace assert breakpoint creando ventana/no crea la ventana ppal 
-// stop durante rew -> rehace el rew
-
+// ibm360 .doc
+// ajustar velocidad de deceleracion despues de HiSpeed rew para reels verde, azul y roja
+// arreglar reel azul, roja. reel azul -> 10gr, un nivel mas de blur
+// hacer que me_ammount vaya de 0 a 200, y haya 60 estados generados con StateRbgCircle=n,r,g,b,x0,y0,rx[,ry]
+// en reels.png, poner solo 0..90 gr: 9xno blur, 10gr cada, 9xblur L, 9xblur M, 3xBlur H -> 120 estados por reel

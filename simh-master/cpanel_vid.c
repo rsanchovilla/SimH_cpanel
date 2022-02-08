@@ -232,7 +232,7 @@ void cpvid_sync(void)
         RectList = &cpvid[ncp].RectList; 
         vid_refresh_ex(vptr_cp_last_refreshed=vptr_cp, surface, RectList); 
     }
-    // indicates the end of updates on gui. Can refresh again
+    // indicates the end of updates on gui. Enable refresh again
     if (vptr_cp_last_refreshed) vid_refresh_ex(vptr_cp_last_refreshed, (void *) 1, NULL); 
    
 
