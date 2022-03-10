@@ -14,7 +14,7 @@ i701, i650 and NORC work is based on my own SimH simulators
 <table>
 <thead>
 <tr>
-<th>IBM 360</th>
+<th>IBM 360/370</th>
 <th>IBM 701</th>
 <th>IBM 650</th>
 </tr>
@@ -36,12 +36,13 @@ i701, i650 and NORC work is based on my own SimH simulators
 
 Currently supports visuals emulation for:
 
-* IBM 360 (FEB/2022)
-  * IBM 2415 and 2401 tapes
-  * IBM 2450 card reader punch
-  * IBM 1403 printer
+* IBM 360/370 (MAR/2022)
+  * IBM 2401, 2415 and 3420 tapes
+  * IBM 2450 and 3525 card reader punch
+  * IBM 1403 and 3203 printer
   * IBM 2314 and 3330 DASD
-  * CPU Model 30, 40, 50 and 65
+  * IBM 360 CPU Model 30, 40, 50 and 65
+  * IBM 370 CPU Model 145 and 148
 
   Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20360%20Panels%20Screen%20Shots.png) to preview control panels.
    Source code in simh-master folder
@@ -97,6 +98,46 @@ Hot keys are available when GUI window has the focus:
 Press power button to quit the simulator.
 (On i7000 control panels, only ^E, ^Y and ^T available)
 
+## IBM 370
+
+### Model 145
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM370_VM370.zip) to download VM/370 test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM 370-145 VM370 R6 sysgen (512KB).bat` batch file to sysgen the operating system at real hw speed. Will need 1h aprox
+* execute `run CPanel IBM 370-145 VM370 R6 CMS (1979).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
+* execute `run IBM 370 VM370 R6 CMS (1979).bat` batch file to run a CMS interactive session (no control panel, max speed)
+* execute `run IBM 370 VM370 R6 sysgen (512KB).bat` to sysgen the system at max speed, no control panel. Will need 30min aprox
+ 
+  ![IBM 370 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM370M145.png)
+
+### Model 148
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM370_OSVS1.zip) to download OS/VS1 Release 6 test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM 370-148 OSVS1 R6 sysgen (8MB).bat` batch file to sysgen the operating system at real hw speed. Will need 4h15min aprox
+* execute `run CPanel IBM 370-148 OSVS1 R6 (1976).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
+* execute `run IBM 370 OSVS1 R6 VS Assembler (1976).bat` batch file to run a sample program (no control panel, max speed)
+* execute `run IBM 370 OSVS1 R6 sysgen (8MB).bat` to sysgen the system at max speed, no control panel. Will need 1h20min aprox
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM370_OSVS1R67.zip) to download OS/VS1 Release 6.7 test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM 370-148 OSVS1 R6.7 sysgen (8MB).bat` batch file to sysgen the operating system at real hw speed. Will need 6h45 aprox
+* execute `run CPanel IBM 370-148 OSVS1 R6.7 (1979).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
+* execute `run IBM 370 OSVS1 R6.7 Stanford Pascal (1979).bat` batch file to run a sample program (no control panel, max speed)
+* execute `run IBM 370 OSVS1 R6.7 SNOBOL4.bat` same as above
+* execute `run IBM 370 OSVS1 R6.7 BASIC 360.bat` same as above
+* execute `run IBM 370 OSVS1 R6.7 sysgen (8MB).bat` to sysgen the system at max speed, no control panel. Will need 3h15min aprox
+* execute `run IBM 370 OSVS1 R6.7 VTP.bat` to open an interactive VTP session  (no control panel, max speed)
+ 
+  ![IBM 370 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM370M148.png)
+
 ## IBM 360
 
 ### Model 30 
@@ -105,8 +146,8 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IB
 
 Once uncompressed, you will find several ready to run .bat files: 
 
-* execute `run CPanel IBM 360-30 BOS360 sysgen (64KB).bat` batch file to sysgen the operating system at real hw speed. Will need 1h30m aprox
-* execute `run CPanel IBM 360-30 BOS360 (1966).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
+* execute `run CPanel IBM 360-30 BOS360 sysgen (64KB).bat` batch file to sysgen the operating system at real hw speed. Will need 5h aprox. 
+* execute `run CPanel IBM 360-30 BOS360 (1966).bat` batch file to IPL the system. Then drop jcl file into card reader and press Enter in console to run it.
 * execute `run IBM 360 BOS360 Assembler 16K (1966).bat` batch file to run a sample program (no control panel, max speed)
 * execute `run IBM 360 BOS360 COBOL-D (1966).bat` same as above
 * execute `run IBM 360 BOS360 FORTRAN IV (1966).bat` same as above
@@ -121,8 +162,8 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IB
 
 Once uncompressed, you will find several ready to run .bat files: 
 
-* execute `run CPanel IBM 360-40 TOS360 r14 sysgen (64K).bat` batch file to sysgen the operating system at real hw speed. Will need 7h aprox. Be patient!
-* execute `run CPanel IBM 360-40 TOS360 r14 (1973).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
+* execute `run CPanel IBM 360-40 TOS360 r14 sysgen (64K).bat` batch file to sysgen the operating system at real hw speed. Will need 9h aprox. Be patient!
+* execute `run CPanel IBM 360-40 TOS360 r14 (1973).bat` batch file to IPL the system. Then drop jcl file into card reader and press Enter in console to run it.
 * execute `run IBM 360 TOS360 r14 Assembler (1973).bat` batch file to run a sample program (no control panel, max speed)
 * execute `run IBM 360 TOS360 r14 Basic FORTRAN IV (1973).bat` same as above
 * execute `run IBM 360 TOS360 r14 COBOL-D (1973).bat` same as above
@@ -138,7 +179,7 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IB
 
 Once uncompressed, you will find several ready to run .bat files: 
 
-* execute `run CPanel IBM 360-50 DOS360 r26.2 sysgen (256KB).bat` batch file to sysgen the operating system at real hw speed. Will need 3h aprox
+* execute `run CPanel IBM 360-50 DOS360 r26.2 sysgen (256KB).bat` batch file to sysgen the operating system at real hw speed. Will need 4h aprox
 * execute `run CPanel IBM 360-50 DOS360 r26.2 (1975).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
 * execute `run IBM 360 DOS360 r26.2 Assembler (1975).bat` batch file to run a sample program (no control panel, max speed)
 * execute `run IBM 360 DOS360 r26.2 ANS COBOL (1975).bat` same as above
@@ -147,7 +188,7 @@ Once uncompressed, you will find several ready to run .bat files:
 * execute `run IBM 360 DOS360 r26.2 IVP Basic FORTRAN (1975).bat` same as above
 * execute `run IBM 360 DOS360 r26.2 PLI-D (1975).bat` same as above
 * execute `run IBM 360 DOS360 r26.2 RPG (1975).bat` same as above
-* execute `run IBM 360 DOS360 r26.2 sysgen (256KB).bat` to sysgen the system at max speed, no control panel. Will need 45min aprox
+* execute `run IBM 360 DOS360 r26.2 sysgen (256KB).bat` to sysgen the system at max speed, no control panel. Will need 40min aprox
  
   ![IBM 360 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360M50.png)
 
@@ -157,16 +198,15 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IB
 
 Once uncompressed, you will find several ready to run .bat files: 
 
-* execute `run CPanel IBM 360-65 OS360 MVT r21.8F sysgen (1MB).bat` batch file to sysgen the operating system at real hw speed. Will need 5h aprox
+* execute `run CPanel IBM 360-65 OS360 MVT r21.8F sysgen (1MB).bat` batch file to sysgen the operating system at real hw speed. Will need 7h15min aprox
 * execute `run CPanel IBM 360-65 OS360 MVT r21.8F (1974).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
 * execute `run IBM 360 OS360 MVT r21.8F Assembler F (1971).bat` batch file to run a sample program (no control panel, max speed)
 * execute `run IBM 360 OS360 MVT r21.8F ANS Cobol V2 LVL78 (1972).bat` same as above
 * execute `run IBM 360 OS360 MVT r21.8F Cobol E (1967).bat` same as above
-* execute `run IBM 360 OS360 MVT r21.8F Algol F Level 2.0 (1967)(not working).bat` same as above
 * execute `run IBM 360 OS360 MVT r21.8F Fortran H (1974).bat` same as above
 * execute `run IBM 360 OS360 MVT r21.8F PLI-F v5.5 (1968).bat` same as above
 * execute `run IBM 360 OS360 MVT r21.8F RPG V1M10 (1975).bat` same as above
-* execute `run IBM 360 OS360 MVT r21.8F (1974).bat` to sysgen the system at max speed, no control panel. Will need 1h30min aprox
+* execute `run IBM 360 OS360 MVT r21.8F sysgen (1MB).bat` to sysgen the system at max speed, no control panel. Will need 45min aprox
 * execute `run IBM 360 OS360 MVT r21.8F TSO (1974).bat` to open an interactive TSO session (max speed, no control panel)
  
   ![IBM 360 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360M65.png)
