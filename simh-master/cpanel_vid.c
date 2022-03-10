@@ -274,6 +274,19 @@ void cpvid_poll(void)
             }
         }
     }
+    // set RightButton var with the current state of mouse right button, even if
+    // cpanel window has not the focus. This is used to detect droping a file
+    // with the right button pressed
+    {
+        int n,x,y; 
+        n=SDL_GetGlobalMouseState(&x,&y);            
+        if (n & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+            vid_keyb.RightButton = 5; // neet 5 polls to get to zero
+        } else if (vid_keyb.RightButton > 0) {
+            vid_keyb.RightButton--;
+        }
+        if (n & SDL_BUTTON(SDL_BUTTON_LEFT)) vid_keyb.RightButton=0;
+    }
     if (DropFile_FileName[0]) {
         cpinput.DropFile.ncp=find_cpvid_by_vptr(DropFile_vptr); 
     }
