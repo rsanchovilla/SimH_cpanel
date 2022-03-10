@@ -272,6 +272,7 @@ static struct {                                     // Control Panel main data
     } CArray[MAX_CARRAYS];
     int CArrayCidItems[MAX_CARRAYITEMS];            // control id items inside CArray
     uint32 * surface;                               // raw pixel data for controls
+    int SurfaceCurrentMaxPixels;                    // max num of pixels that fits in surface on currently alloctated mem
     struct {
         char Name[32];                              // images loaded to be used for control's states
         uint32 * surface;                           // raw pixel data 
@@ -375,12 +376,20 @@ int AddControl(int ncp, char *Name, int nStates,
         CP.Control[CId].Name[i] = c;
         if (c == 0) break;
     }
-    // see if room for pixels of control, and get space for pixels
     CP.Control[CId].iPos_surface = CP.SurfaceItems;
     n = CP.SurfaceItems + nStates * W * H + 1;
-    if (n >= MAX_PIXELS) {
-        fprintf(stderr, "No room for control image\n");
-        return -1; // no room for pixels of control!
+    // expand CP.Surface to fit new controls if needed
+    while (n >= CP.SurfaceCurrentMaxPixels) {
+        if (n >= MAX_PIXELS) {
+            fprintf(stderr, "No room for control image\n");
+            return -1; // no room for pixels of control!
+        }
+        CP.SurfaceCurrentMaxPixels = CP.SurfaceCurrentMaxPixels * 2; 
+        CP.surface = (uint32 *)realloc (CP.surface, (CP.SurfaceCurrentMaxPixels+1)*sizeof(*CP.surface));
+    }
+    if (CP.surface == NULL) {
+        fprintf(stderr, "No mem alloc for control image\n");
+        return -1; 
     }
     for (i=CP.Control[CId].iPos_surface; i<n;i++) CP.surface[i] = 0;     // fill with transparent 
     CP.SurfaceItems = n; 
@@ -556,7 +565,7 @@ uint32 * GetControlSurface(int CId, int State, int * ww, int * hh)
     H = CP.Control[CId].H; if (hh) *hh=H;
     n = CP.Control[CId].iPos_surface;                                   // start of control's pixels
     n = n + State * W * H;                                              // start of this state 
-    if (n >= MAX_PIXELS) return 0;                                      // sanity check
+    if (n >= CP.SurfaceItems) return 0;                                 // sanity check
     return &CP.surface[n]; 
 }
 
@@ -733,7 +742,7 @@ uint32 AddControlPixel(int CId, int State, int X, int Y, uint32 col)
     n = CP.Control[CId].iPos_surface;                                   // start of control's pixels
     n = n + State * W * H;                                              // start of this state 
     n = n + Y * W + X;                                                  // pos of this pixel
-    if (n >= MAX_PIXELS) return 0;                                      // sanity check
+    if (n >= CP.SurfaceItems) return 0;                                 // sanity check
     if (col == 1) {
         return CP.surface[n]; 
     }
@@ -765,71 +774,73 @@ int CopyControlPixels(int OrgCId, int DestCId)
     return 0;
 }
 
-// draw circle
-int AddCircle(int CId, int State, int W, int H, uint32 col1)
+// add control pixel aliasing color over existing pixel
+// if nd=0.0 -> pixel keeps background exisiting pixel
+// if nd=1.0 -> pixels gest new color
+void AddControlPixelAliased(int CId, int State, int X, int Y, uint32 col, double nd)
 {
-    int i,x,y,r0,g0,b0,r1,g1,b1,rr,gg,bb, r, w2, h2;
-    int bAntiAliased; 
+    int r0,g0,b0,r1,g1,b1,rr,gg,bb;
     uint32 col0;
-    double nd, xd, yd;
+
+    get_surface_rgb_color(col, &r1, &g1, &b1);   
+    col0 = AddControlPixel(CId, State, X, Y, 1);  // get current color pixel
+    get_surface_rgb_color(col0, &r0, &g0, &b0);   
+    rr = (int) ((r1 - r0) * nd + r0);             // calc the color for antialiased pixel
+    gg = (int) ((g1 - g0) * nd + g0);
+    bb = (int) ((b1 - b0) * nd + b0);
+    col0 = surface_rgb_color(rr, gg, bb);
+    AddControlPixel(CId, State, X, Y, col0);
+}
+
+// draw aliased filled circle/elipse of color col1, width W, height H, with centre at coords x0, y0
+// draw on state State of control CId
+// note: cicle processing is not optimized ... can be made faster if needed (is it needed?)
+int AddCircle(int CId, int State, int W, int H, uint32 col1, int x0, int y0)
+{
+    int ix, iy, x,y, x_last, y_last;
+    double nd, xd, yd, a, b, a2, b2;
 
     if (CHK_CId(CId) < 0) return -1;                                // sanity check
     if (State >= CP.Control[CId].nStates) return -1;
     if (W > CP.Control[CId].W) return -1; 
     if (H > CP.Control[CId].H) return -1;
-    if ((W < 2) || (H < 2)) return -1;
-    col0 = AddControlPixel(CId, State, 0, 0, 1);                    // get the color under filled circle. Use control's pixel 0,0 
-    if (col0 == 0) {
-        bAntiAliased = 0;                                           // under circle no color (== 0 -> transparent) -> no antialiasing
-    } else {
-        get_surface_rgb_color(col0, &r0, &g0, &b0);                 // there is a color! convert it to rgb
-        bAntiAliased = 1; 
-    }
-    w2 = W / 2; h2 = H / 2; 
-    if (col1 == 0) {                                                // col==0 -> paint with transparent color
-        bAntiAliased = 0; 
-        r1 = g1 = b1 = 0;
-    } else {
-        get_surface_rgb_color(col1, &r1, &g1, &b1);                     // convert circle color to rgb
-    }
-    r = w2; 
-    for(x=0;x<2*r*0.35+1;x++) {
-        yd = sqrt((double)((r-1)*(r-1)-x*x)) * (double)(H) / (double)(W);
-        y  = (int) yd;
-        nd = (yd - y);                                              // antialiase to look great
-        if ((nd > 0) && (y > 0) && (y < H-1) && (bAntiAliased)) {   // there is an antialiased pixel and room for it
-            rr = (int) ((r1 - r0) * nd + r0);                       // calc the color for antialiased pixel
-            gg = (int) ((g1 - g0) * nd + g0);
-            bb = (int) ((b1 - b0) * nd + b0);
-            col0 = surface_rgb_color(rr, gg, bb);
-            AddControlPixel(CId, State, w2 + x, h2 + y + 1, col0);  // set antialiased pixel 
-            AddControlPixel(CId, State, w2 + x, h2 - y - 1, col0); 
-            AddControlPixel(CId, State, w2 - x, h2 + y + 1, col0); 
-            AddControlPixel(CId, State, w2 - x, h2 - y - 1, col0); 
+    if ((W < 5) || (H < 5)) return -1; // min size
+    // elipse equation: x^2/a^2 + y^2/b^2 = 1
+    a = W / 2; b = H / 2; 
+    b2= b*b; a2=a*a; 
+    x_last=(int) (a*0.7); // 0.7 aprox = cos(45)
+    for(x=0;x<=x_last;x++) {
+        yd = sqrt( b2 - b2 * x*x / a2 ); 
+        y  = (int) yd; y_last=y; 
+        nd = (yd - y);             // antialiase to look great
+        if (nd > 0) {              
+            AddControlPixelAliased(CId, State, x0 + x, y0 - y - 1, col1, nd);      
+            AddControlPixelAliased(CId, State, x0 + x, y0 + y + 1, col1, nd);      
+            AddControlPixelAliased(CId, State, x0 - x, y0 - y - 1, col1, nd);      
+            AddControlPixelAliased(CId, State, x0 - x, y0 + y + 1, col1, nd);      
         }
-        for (i=-y;i<=y;i++) { 
-            AddControlPixel(CId, State, w2 + x, h2 + i, col1);      // set pixel color 
-            AddControlPixel(CId, State, w2 - x, h2 + i, col1);      // set pixel color 
+        for (iy=-y;iy<=y;iy++) { 
+            AddControlPixel(CId, State, x0 + x, y0 + iy, col1);      
+            AddControlPixel(CId, State, x0 - x, y0 + iy, col1);      
         }
     }
-    r = h2; 
-    for(y=0;y<2*r*0.35+1;y++) {
-        xd = sqrt((double)((r-1)*(r-1)-y*y)) * (double)(W) / (double)(H);
+    // x_last, y_last = last pixel of elipse draw. Now complete the elipse iterating on y
+    for(y=0;y<=y_last;y++) {
+        xd = sqrt( a2 - a2 * y*y / b2 ); 
         x  = (int) xd;
         nd = (xd - x);                                              // antialiase to look great
-        if ((nd > 0) && (x > 0) && (x < W-1) && (bAntiAliased)) {   // there is an antialiased pixel and room for it
-            rr = (int) ((r1 - r0) * nd + r0);                       // calc the color for antialiased pixel
-            gg = (int) ((g1 - g0) * nd + g0);
-            bb = (int) ((b1 - b0) * nd + b0);
-            col0 = surface_rgb_color(rr, gg, bb);
-            AddControlPixel(CId, State, w2 + x + 1, h2 + y, col0);  // set antialiased pixel 
-            AddControlPixel(CId, State, w2 - x - 1, h2 + y, col0); 
-            AddControlPixel(CId, State, w2 + x + 1, h2 - y, col0); 
-            AddControlPixel(CId, State, w2 - x - 1, h2 - y, col0); 
+        if (nd > 0) {              
+            AddControlPixelAliased(CId, State, x0 + x + 1, y0 - y, col1, nd);      
+            AddControlPixelAliased(CId, State, x0 + x + 1, y0 + y, col1, nd);      
+            AddControlPixelAliased(CId, State, x0 - x - 1, y0 - y, col1, nd);      
+            AddControlPixelAliased(CId, State, x0 - x - 1, y0 + y, col1, nd);      
         }
-        for (i=-x;i<=x;i++) { 
-            AddControlPixel(CId, State, w2 + i, h2 + y, col1);      // set pixel color 
-            AddControlPixel(CId, State, w2 + i, h2 - y, col1);      // set pixel color 
+        if (x < x_last) break;
+        for (ix=x_last;ix<=x;ix++) { 
+            AddControlPixel(CId, State, x0 + ix, y0 + y, col1);      
+            AddControlPixel(CId, State, x0 + ix, y0 - y, col1);      
+            AddControlPixel(CId, State, x0 - ix, y0 + y, col1);      
+            AddControlPixel(CId, State, x0 - ix, y0 - y, col1);      
         }
     }
     return 0;
@@ -1010,9 +1021,8 @@ int IsOptionOrOptionParam(char * Name, int bAllowOptParam)
     }
 }
 
-// if Name contains '/' -> return 1 if Name=aaa/param found
-//         does not contains '/' -> return 1 if Name or Name/ found
-// return 1 if Name or Name/whatever is in options buffer.
+// if Name contains '/' -> return 1 if Name="aaa/param" found
+//         does not contains '/' -> return 1 if "Name" or "Name/xxx" found
 int IsOption(char * Name)
 {
     int i, len, param; 
@@ -1028,9 +1038,17 @@ int IsOption(char * Name)
 void RemoveOption(char * Name)
 {
     int i, n, c; 
+    char opt[256];
 
     if ((Name == NULL) || (Name[0] == 0)) return;
-    if (IsOption(Name)==0) return; 
+    // copy Option until end or until '/'
+    for (i=0;i<254;i++) {
+        if ((Name[i]==0) || (Name[i]=='/')) break; 
+        opt[i]=Name[i];
+    } 
+    opt[i]=0;
+
+    if (IsOption(opt)==0) return; 
 
     // option already present, remove it
     for (i=nIsOption;; i++) { // i points to start of option found 
@@ -1378,7 +1396,8 @@ void ControlPanelLoad(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr)
     // load internal font
     FontLoad(1);
     // alloc CP.Surface to its initial size
-    CP.surface = (uint32 *)malloc ((MAX_PIXELS)*sizeof(*CP.surface)); // 40M pixels x 4bytes = 160 Mb max
+    CP.SurfaceCurrentMaxPixels=MAX_PIXELS / 32; 
+    CP.surface = (uint32 *)malloc ((CP.SurfaceCurrentMaxPixels+1)*sizeof(*CP.surface)); 
     ControlName[0] = 0;     // current control name being defined
     CId = CArrayId = X = Y = W = H = n = col = wx = wy = r = g = b = i = -1; 
     nLin = 0; TransparentColor = 0;
@@ -1707,14 +1726,14 @@ process_tag:
                 }
                 break;
             case CPDF_TAG_STATERGB_AREA: 
-                // StateRgbArea=state number n, red color, green, blue, pos X, pos Y, Width, Heigh
+                // StateRgbArea=state number n, red color, green, blue
                 // sets the image for control state n. Pixels are set to given r,g,b color (values 0 up to 255)
                 // in an area from X,Y for given Width and Heigh. Pixels outside control W and H are ignored
             case CPDF_TAG_STATERGB_CIRCLE: 
-                // StateRgbCircle=state number n, red color, green, blue
+                // StateRgbCircle=state number n, red color, green, blue [ X, Y, W [, H ]]
                 // sets the image for control state n. Draw a filled circle with given r,g,b color (values 0 up to 255)
-                // up to the defined Width and Heigh of control. If state pixel 0,0 is 0 (transparent) no antialiasing is
-                // used. Else, the colour at pixel 0,0 is used to calc the antialiasing colour for circle border
+                // up to the defined Width and Heigh of control (or given W and H), centered in control (centered at X, Y)
+                // if W is indicated bute H is not present, H=W=radius is assumed
             case CPDF_TAG_STATERGB: 
                 // StateRgb=state number n, red color, green, blue
                 // sets the image for control state n. Pixels are set to given r,g,b color (values 0 up to 255)
@@ -1728,6 +1747,19 @@ process_tag:
                     Y = cpdf_num_param(lbuf);
                     W = cpdf_num_param(lbuf);
                     H = cpdf_num_param(lbuf);
+                } else if (tag == CPDF_TAG_STATERGB_CIRCLE) {
+                    X = cpdf_num_param(lbuf);
+                    if (X<0) {
+                        // no optional params. Make cicle centered and fit control
+                         W = CP.Control[CId].W;
+                         H = CP.Control[CId].H;
+                         X = W/2; Y = H/2;
+                    } else {
+                        Y = cpdf_num_param(lbuf);
+                        W = cpdf_num_param(lbuf);
+                        H = cpdf_num_param(lbuf);
+                        if (H<0) H=W; 
+                    }
                 } else {
                     W = CP.Control[CId].W;
                     H = CP.Control[CId].H;
@@ -1751,7 +1783,7 @@ process_tag:
                 }
                 // set pixels
                 if (tag==CPDF_TAG_STATERGB_CIRCLE) {
-                    AddCircle(CId, n, W, H, col);
+                    AddCircle(CId, n, W, H, col, X, Y); 
                 } else {
                     for (ix=X;ix<X+W;ix++) {
                         for (iy=Y;iy<Y+H;iy++) {
@@ -2867,7 +2899,7 @@ void ControlPanel_Refresh(void)
             for (ix=0;ix<W;ix++) {
                 xx=ix + X; 
                 if (xx >= xpixels) break;
-                if ((p >= xpixels * ypixels) || (n >= MAX_PIXELS)) break;
+                if ((p >= xpixels * ypixels) || (n >= CP.SurfaceItems)) break;
                 if (Mark==0) {                     // draw control on surface
                     if (nStates > 0) {
                         c = CP.surface[n];         // use pixel color if has one
@@ -3053,6 +3085,7 @@ int Refresh_needed(void)
     } else if ((tnowPerf - CP.LastTickIntensityDone) > CP.LastTickIntensityInterval) {
         // tickintensity is called 30K times per second, each 0.03 millisec (-> 1000 times per frame if FPS=30)
         CP.LastTickIntensityDone = tnowPerf; 
+        Refresh_tnow  = tnow; // save in tnow when tickcount starts (msec resolution)
         return -1; // return can call tick intensity callback
     }  
     return 0; 

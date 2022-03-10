@@ -125,6 +125,7 @@ extern int GetControlInfo(int Id, int mode);
 extern uint32 * GetControlSurface(int CId, int State, int * ww, int * hh);
 extern int CopyControlImage(int FromCId, int FromState, int x0, int y0, int w, int h, int ToCId, int ToState, int x1, int y1);
 extern int DrawTextImage   (int ToCId, int ToState, int x0, int y0, int w0, int h0, int rr, int gg, int bb, char * buf, int chrsz); 
+extern int AddCircle(int CId, int State, int W, int H, uint32 col1, int xctr, int yctr);
 // notify to sim actions requested by user using control panel at xxx_cpanel.c
 extern int DoClickEvent(int Id);
 extern void DoSCP(char *Name);
