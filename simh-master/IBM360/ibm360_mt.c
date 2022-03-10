@@ -370,7 +370,7 @@ void cpanel_tape_reclen_rw(UNIT * uptr, int reclen, int tape_dir)
             recsize=3750; // inches x1000
         } else {
             // density is 1600 bytes per inch -> each byte needs 0.000625 inches
-            // IRG (inter gap record) is 0.75 inch
+            // IRG (inter gap record) is 0.6 inch
             // scaled x1000 to use integer values
             recsize = (int32) ((reclen * 0.000625 + 0.6) * 1000);            
         }
@@ -707,7 +707,7 @@ t_stat mt_srv(UNIT * uptr)
 #if defined(CPANEL)
     if (cpanel_tape_cmd_in_progress(uptr)) {
         // operation still in progress ... check again later
-        sim_activate(uptr, 100);       
+        sim_activate(uptr, check_later_interval);       
         return SCPE_OK;
     }
 #endif
@@ -1388,6 +1388,7 @@ mt_attach(UNIT * uptr, CONST char *file)
     uint16              addr = GET_UADDR(uptr->CMD);
     t_stat              r;
 
+    uptr->flags &= ~UNIT_RO; // remove readonly flag
     if ((r = sim_tape_attach_ex(uptr, file, 0, 0)) != SCPE_OK)
        return r;
     set_devattn(addr, SNS_DEVEND);

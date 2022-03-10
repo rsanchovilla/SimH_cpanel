@@ -184,6 +184,10 @@ DEVICE              scoml_dev = {
     &scom_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug
 };
 
+#if defined(CPANEL)
+uint32 SComPoll_tm0 = 0;       // timestamp when last call to scom_scan() was done
+uint32 SComPoll_msec = 0;      // time remaining for next call to scom_scan() 
+#endif
 
 /*
  * Issue a scommand to the 2701 controller.
@@ -320,7 +324,7 @@ t_stat scoml_srv(UNIT * uptr)
                  }
                  uptr->CMD |= RECV;
              }
-             sim_activate(uptr, 200);
+             sim_activate(uptr, 200); 
          }
          break;
 
@@ -370,7 +374,7 @@ write:
                  tmxr_putc_ln( &scom_ldsc[unit], ch);
                  if (ch == IAC) 
                      tmxr_putc_ln( &scom_ldsc[unit], ch);
-                 sim_activate(uptr, 200);
+                 sim_activate(uptr, 200); 
              }
          }
          break;
@@ -399,7 +403,26 @@ t_stat scom_scan(UNIT * uptr)
     struct _line   *data;
     int             i;
 
+#if defined(CPANEL)
+
+    {
+        uint32 msec; 
+        msec = sim_os_msec() - SComPoll_tm0;
+        if ((SComPoll_tm0) && (msec < SComPoll_msec)) {
+            // do not poll yet ... check again later
+            sim_activate(uptr, check_later_interval);
+            return SCPE_OK;
+        } else {
+            // go ahead with poll. Set the timestamp
+            SComPoll_tm0 = sim_os_msec();
+            SComPoll_msec = 10; // poll data tx/data  rx/incoming connections each 50 msec 
+            sim_activate(uptr, check_later_interval);
+        }
+    }
+#else 
     sim_activate(uptr, tmxr_poll);          /* continue poll */
+#endif
+
     if ((uptr->flags & UNIT_ATT) == 0)              /* attached? */
         return SCPE_OK;
     ln = tmxr_poll_conn (&scom_desc);                 /* look for connect */
@@ -416,7 +439,7 @@ t_stat scom_scan(UNIT * uptr)
         line->CMD |= ENAB|DATA|INIT1;
         line->CMD &= ~(RECV|SEND);
         line->SNS = 0;
-        sim_activate(line, 20000);
+        sim_activate(line, 20000);  
     }
 
     /* See if a line is disconnected with no scommand on it. */

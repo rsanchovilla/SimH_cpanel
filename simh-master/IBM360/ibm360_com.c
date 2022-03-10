@@ -150,7 +150,11 @@ DEVICE              coml_dev = {
     NULL, NULL, NULL, NULL, NULL, NULL,
     &com_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug
 };
-
+
+#if defined(CPANEL)
+uint32 ComPoll_tm0 = 0;       // timestamp when last call to com_scan() was done
+uint32 ComPoll_msec = 0;      // time remaining for next call to com_scan() 
+#endif
 
  /* Cent = 0xa0 */
 static const uint8 com_2741_in[128] = {
@@ -277,13 +281,13 @@ uint8  coml_startcmd(UNIT *uptr,  uint8 cmd) {
     case 0x1:              /* Write command */
          uptr->CMD |= cmd;
          uptr->SNS = 0;
-         sim_activate(uptr, 200);
+         sim_activate(uptr, 10);
          return 0;
 
     case 0x0:               /* Status */
          if (cmd == 0x4) {  /* Sense */
             uptr->CMD |= cmd;
-            sim_activate(uptr, 200);
+            sim_activate(uptr, 10);
             return 0;
          }
          break;
@@ -345,7 +349,6 @@ t_stat coml_srv(UNIT * uptr)
     int                 unit = (uptr - dptr->units);
     int                 cmd = uptr->CMD & 0xff;
     uint8               ch;
-
 
     switch (cmd) {
     case 0:
@@ -466,7 +469,7 @@ t_stat coml_srv(UNIT * uptr)
                      if (ch == 0x5b || ch == 0xdb)
                          tmxr_putc_ln( &com_ldsc[unit], '\r');
                  }
-                 sim_activate(uptr, 2000);
+                 sim_activate(uptr, 200);
              }
          } else {
              sim_debug(DEBUG_CMD, dptr, "COM: unit=%d write error\n", unit);
@@ -613,7 +616,25 @@ t_stat com_scan(UNIT * uptr)
     UNIT      *line;
     int32      ln;
 
+#if defined(CPANEL)
+
+    {
+        uint32 msec; 
+        msec = sim_os_msec() - ComPoll_tm0;
+        if ((ComPoll_tm0) && (msec < ComPoll_msec)) {
+            // do not poll yet ... check again later
+            sim_activate(uptr, check_later_interval);
+            return SCPE_OK;
+        } else {
+            // go ahead with poll. Set the timestamp
+            ComPoll_tm0 = sim_os_msec();
+            ComPoll_msec = 50; // poll data tx/data  rx/incoming connections each 50 msec 
+            sim_activate(uptr, check_later_interval);
+        }
+    }
+#else 
     sim_activate(uptr, tmxr_poll);          /* continue poll */
+#endif
     if ((uptr->flags & UNIT_ATT) == 0)              /* attached? */
         return SCPE_OK;
     ln = tmxr_poll_conn (&com_desc);                 /* look for connect */

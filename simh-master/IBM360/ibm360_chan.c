@@ -189,11 +189,13 @@ struct _chanctl {
     uint8       chan_data_rw;          // save the byte read/write to be displayed on control panel
 #endif
 };
+
 #if defined(CPANEL)
 
 int                 chan0_dev = 0;         // last device accessed on mux channel 0
 extern uint32       cpu_mem_addr;         // save last accessed main storage addr accessed to be shown on control panel
 extern uint32       cpu_mem_data;         // save last data read/write from/to main storage to be shown on control panel 
+extern addrcomp_rec cpu_mem_comp;      // compare data to breakpoint execution if addr hit
 #endif
 
 uint8        dev_status[MAX_CHAN * 256]; /* Device status array */
@@ -338,6 +340,10 @@ readfull(struct _chanctl *chan, uint32 addr, uint32 *word) {
 #if defined(CPANEL)
      cpu_mem_addr = addr << 2; 
      cpu_mem_data = *word | (1<<31); 
+     if (cpu_mem_comp.match & 6) {
+         // check match on r/w addr for I/O, 
+         if (cpu_mem_addr == cpu_mem_comp.addr) cpu_mem_comp.hit=1; 
+     }
 #endif
     return 0;
 }
@@ -412,6 +418,10 @@ writebuff(struct _chanctl *chan) {
 #if defined(CPANEL)
      cpu_mem_addr = addr << 2; 
      cpu_mem_data = chan->chan_buf | (1<<31); 
+     if (cpu_mem_comp.match & 7) {
+         // check match on r/w addr for I/O, 
+         if (cpu_mem_addr == cpu_mem_comp.addr) cpu_mem_comp.hit=1; 
+     }
 #endif
     sim_debug(DEBUG_CDATA, &cpu_dev, "Channel readf %03x %06x %08x %08x '",
           chan->daddr, addr << 2, chan->chan_buf, chan->ccw_count);

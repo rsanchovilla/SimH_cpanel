@@ -411,7 +411,7 @@ lpr_srv(UNIT *uptr) {
         uint32 msec = sim_os_msec() - PrintLine_tm0;
         if (msec < PrintLine_msec) {
             // operation still in progress ... check again later
-            sim_activate(uptr, 100);       
+            sim_activate(uptr, check_later_interval);       
             return SCPE_OK;
         }
         // operation terminated. Clear the timestamp
@@ -496,14 +496,23 @@ lpr_srv(UNIT *uptr) {
        if (uptr->CMD & LPR_FULL || uptr->POS > 132) {
            uptr->CMD |= LPR_FULL;
            chan_end(addr, SNS_CHNEND);
+           idle_stop_tm0=0; // reset idle stop timer
 #if defined(CPANEL)
            if ((cpanel_on) && (bFastMode==0) && (uptr-lpr_unit==0)) {
+               extern int bCpuModelIs; 
                // The maximum printing speed of the IBM 1403 was 600 alphanumeric lines per minute
                // -> 10 lines per second -> print one line each 100 msec
+               // The maximum printing speed of the IBM 3203 was 1200 alphanumeric lines per minute
+               // -> 20 lines per second -> print one line each 50 msec
+               // 1403 is used on 360 line, 3203 on 370 line
                PrintLine_tm0  = sim_os_msec();          // set to sim_os_msec, checked by lpr_svr to simulate wallclock time needed by cdr to operate
-               PrintLine_msec = 100;                     // duration of lpr operation
+               if (bCpuModelIs > 3000) {
+                   PrintLine_msec = 50;                      // duration of lpr operation
+               } else {
+                   PrintLine_msec = 100;                     // duration of lpr operation
+               }
            } 
-           sim_activate(uptr, 100);       
+           sim_activate(uptr, 1000);       
 #else
            sim_activate(uptr, 5000);
 #endif

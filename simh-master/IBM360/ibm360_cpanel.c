@@ -26,15 +26,16 @@
    May-20    RSV     IBM 650 control panel support
    Jan-21    RSV     IBM NORC control panel support
    Jun-21    RSV     IBM 701 control panel support
-   Dic-21    RSV     IBM 360 Model 30 control panel support
+   Jan-22    RSV     IBM 360/370 control panel support
 
    This module implements the following control panels:
 
-   IBM 360 Model 30 Cpu Panel 
-   IBM 1052 Keyboard-printer console
-   IBM 2540 Card Read Punch
-   IBM 1403 Printer
-   IBM 2401 Magnetic Tape
+   IBM 360 Model 30/40/50/65 Cpu Panel 
+   IBM 370 Model 145/148 Cpu Panel 
+   IBM 1052/3210 Keyboard-printer console
+   IBM 2540/3525 Card Read Punch
+   IBM 1403/3203 Printer
+   IBM 2401/2415/3420 Magnetic Tape
    IBM 2314/3330 DASD
 */
 
@@ -49,14 +50,16 @@
 
 // cpu registers
 extern uint32       regs[16];             /* CPU Registers */
+extern uint32       fpregs[8];            /* Floating point registers */
 extern uint32       PC;                   /* Program counter */
 extern uint8        flags;                /* Misc flags */
 extern uint32       cpu_mem_addr;         // save last accessed main storage addr accessed to be shown on control panel
 extern uint32       cpu_mem_data;         // save last data read/write from/to main storage to be shown on control panel 
-extern int          cpu_mem_addr_stop;    // breakpoint on main storage addr. -1-> not set, -2->hit, >=0 -> set to this value
+extern addrcomp_rec cpu_mem_comp;         // compare data to breakpoint execution if addr hit
 extern int          cpu_psw_restart;      // =1 when operator requested a psw restart
 extern int          InstrExec;            // count of intructions executed so far (real instr, if cpu waiting, InstrExec do NO get incremented)
 extern int          InstrCycles;          // count of intructions loops executed so far (if cpu waiting, do get incremented)
+extern uint32       rtc_activate_usecs;   // usecs remaining to activate rtc_srv, set by cpanel TickCount
 extern int          ReadByte(uint32 addr, uint32 *data);
 extern int          WriteByte(uint32 addr, uint32 data);
 #define WAIT        0x02                  // wait mask in flags
@@ -109,6 +112,7 @@ void IBM360_TickIntensityCount(void);
 void IBM360_DropFile(int CId, char * FileName);
 void IBM360_OnClick_Sw(void);
 void IBM360_OnClick_Sw2(void);
+void IBM360_OnClick_Sw3(void);
 void IBM360_OnClick_BTN(void);
 void IBM360_OnClick_BTN2(void);
 
@@ -154,14 +158,22 @@ static struct {
    int Label_Roller5_R, Label_Roller6_R;
    int BTN_Roller5, BTN_Roller6;
    int Reg_Stor_Proc_CHK;
+   // IBM 370 Model 145 cpu panel
+   int SwitchHandle; 
+   int Reg_SysChk_L, Reg_SysChk_R, Reg_Cpu_Status, Reg_Cons_File;
+   int SW_Storage_Select; 
+   int BTN_Restart; 
+   int SW_Addr_Compare_Cntrl; 
+   // IBM 370 Model 148 cpu panel
+   int Reg_Sys_Status; 
    // odometer
    int Odo[7], OdoDigitWhite;
    // ocp (operator control panel) lights
    int LI_System, LI_Manual, LI_Wait, LI_Test, LI_Load;
    // Rotary switches
-   int SW_A, SW_B, SW_C, SW_D, SW_F, SW_G, SW_H, SW_J;
+   int SW_A, SW_B, SW_C, SW_D, SW_E, SW_F, SW_G, SW_H, SW_J;
    int SW_Rate, SW_Addr_Compare;
-   // Buttons OCP panelEmergency_Off;
+   // Buttons OCP panel;
    int BTN_Power_Off, BTN_Emergency_Off, Shdw_Emergency_Off;
    int BTN_Interrupt, BTN_Load;
    int BTN_System_Reset, BTN_Set_IC, BTN_Lamp_Test;
@@ -173,25 +185,34 @@ static struct {
    int LI_Ready_CardReader, LI_EOF_CardReader, LI_Check_CardReader;
    int LI_Ready_CardPunch, LI_Check_CardPunch;
    int Drop_InputDeckFile; 
-   // IBM 1403 printer
+   // IBM 3525 Card Punch
+   int PunchStacker1L, PunchStacker2L, PunchStacker1R, PunchStacker2R; 
+   int CardDeckInStacker, LStackerBackground;
+   // IBM 1403/3203 printer
    int Paper, PaperBackground, PrinterCharSet;
    int LI_Print_Ready, LI_Print_Check; 
    // IBM 1052 Printer Keyboard Console
    int ConsPaper, ConsPaperBackground, ConsPrinterCharSet, ConsGolfBall;
    int LI_Cons_Proceed, BTN_Cons_Request, BTN_Cons_NoFunction; 
+   // IBM 3210 Printer Keyboard Console
+   int LI_Cons_Req_Pending; 
+   int BTN_Cons_Cancel, BTN_Cons_End;
    // IBM 2314 DASD
    int DASD_addr_digit[8][4], DASD_LI_Ready[8], DASD_SW_StartStop[8];
    // IBM 2401 Tape
    int MT_head, MT_VacColumn, MT_VacColMedium;
-   int MT_reel_amount, MT_blue_reel, MT_blue_reel_hub;
-   int MT_red_reel, MT_green_reel, MT_green_reel_hub;
+   int MT_reel_amount, MT_blue_reel, MT_red_reel, MT_green_reel;
    int MT_panel[8], MT[8], MT_addr_digit[8][4]; 
    int MT_LI_Select[8], MT_LI_Ready[8], MT_LI_File_protect[8];
-   int MT_BTN_UnLoad[8];
+   int MT_BTN_LoadRew[8], MT_BTN_Start[8], MT_BTN_UnLoad[8], MT_BTN_Reset[8];
    int MT_L_VacCol[8], MT_R_VacCol[8];
    int MT_BTN_DoorOpen[8];
    // IBM 2415 Tape
    int MT_Head_Medium[8], MT_Head_pos[8]; 
+   // IBM 3420 Tape
+   int MT_ring, MT_ring_anchor, MT_GlassSlidingDoor, MT_no_reel; 
+   int MT_Take_reel_amount;
+   int MT_Take[8], MT_GlassDoor[8], MT_Drop_TapeFile[8]; 
 } S360 = {0}; // must be init to zero
 // S360 is for System/360. Cannot use IBM360 because this symbol is already defined
 
@@ -292,6 +313,32 @@ CP_DEF IBM360_cp[] = {
     { &S360.BTN_Roller5,           "BTN_Roller5",                       &IBM360_OnClick_BTN, "CpuType/2065"},
     { &S360.BTN_Roller6,           "BTN_Roller6",                       &IBM360_OnClick_BTN, "CpuType/2065"},
     { &S360.Reg_Stor_Proc_CHK,     "Reg_Stor_Proc_CHK",                 NULL, "CpuType/2065"}, 
+    // IBM 370 Model 145 cpu panel
+    { &S360.SwitchHandle,          "SwitchHandle",                      NULL, "CpuType/3145"}, 
+    { &S360.Reg_SysChk_L,          "Reg_SysChk_L",                      NULL, "CpuType/3145"}, 
+    { &S360.Reg_SysChk_R,          "Reg_SysChk_R",                      NULL, "CpuType/3145"}, 
+    { &S360.Reg_Cpu_Status,        "Reg_Cpu_Status",                    NULL, "CpuType/3145"}, 
+    { &S360.Reg_Cons_File,         "Reg_Cons_File",                     NULL, "CpuType/3145"}, 
+    { &S360.Reg_Roller1_L,         "Reg_Roller1_L",                     NULL, "CpuType/3145"}, 
+    { &S360.Reg_Roller1_R,         "Reg_Roller1_R",                     NULL, "CpuType/3145"}, 
+    { &S360.Reg_Roller2_L,         "Reg_Roller2_L",                     NULL, "CpuType/3145"}, 
+    { &S360.Reg_Roller2_R,         "Reg_Roller2_R",                     NULL, "CpuType/3145"}, 
+    { &S360.Label_Roller1_L,       "Label_Roller1_L",                   NULL, "CpuType/3145"}, 
+    { &S360.Label_Roller1_R,       "Label_Roller1_R",                   NULL, "CpuType/3145"}, 
+    { &S360.Label_Roller2_L,       "Label_Roller2_L",                   NULL, "CpuType/3145"}, 
+    { &S360.Label_Roller2_R,       "Label_Roller2_R",                   NULL, "CpuType/3145"}, 
+    { &S360.BTN_Roller1,           "BTN_Roller1",                       &IBM360_OnClick_BTN, "CpuType/3145"},
+    { &S360.BTN_Roller2,           "BTN_Roller2",                       &IBM360_OnClick_BTN, "CpuType/3145"},
+    // IBM 370 Model 148 cpu panel
+    { &S360.SwitchHandle,          "SwitchHandle",                      NULL, "CpuType/3148"}, 
+    { &S360.Reg_Sys_Status,        "Reg_Sys_Status",                    NULL, "CpuType/3148"}, 
+    { &S360.Reg_Roller1_L,         "Reg_Roller1_L",                     NULL, "CpuType/3148"}, 
+    { &S360.Reg_Roller1_R,         "Reg_Roller1_R",                     NULL, "CpuType/3148"}, 
+    { &S360.Reg_Roller2_L,         "Reg_Roller2_L",                     NULL, "CpuType/3148"}, 
+    { &S360.Reg_Roller2_R,         "Reg_Roller2_R",                     NULL, "CpuType/3148"}, 
+    { &S360.Label_Roller1_L,       "Label_Roller1_L",                   NULL, "CpuType/3148"}, 
+    { &S360.Label_Roller1_R,       "Label_Roller1_R",                   NULL, "CpuType/3148"}, 
+    { &S360.BTN_Roller1,           "BTN_Roller1",                       &IBM360_OnClick_BTN, "CpuType/3148"},
     // odometer
     { &S360.Odo[1],                "Odo1",                              NULL}, 
     { &S360.Odo[2],                "Odo2",                              NULL}, 
@@ -315,8 +362,25 @@ CP_DEF IBM360_cp[] = {
     { &S360.SW_G,                  "SW_G",                              &IBM360_OnClick_Sw, "CpuType/2030"},
     { &S360.SW_H,                  "SW_H",                              &IBM360_OnClick_Sw, "CpuType/2030"},
     { &S360.SW_J,                  "SW_J",                              &IBM360_OnClick_Sw, "CpuType/2030"},
+    { &S360.SW_D,                  "SW_D",                              &IBM360_OnClick_Sw, "CpuType/3145"},
+    { &S360.SW_E,                  "SW_E",                              &IBM360_OnClick_Sw, "CpuType/3145"},
+    { &S360.SW_F,                  "SW_F",                              &IBM360_OnClick_Sw, "CpuType/3145"},
+    { &S360.SW_G,                  "SW_G",                              &IBM360_OnClick_Sw, "CpuType/3145"},
+    { &S360.SW_H,                  "SW_H",                              &IBM360_OnClick_Sw, "CpuType/3145"},
+    { &S360.SW_D,                  "SW_D",                              &IBM360_OnClick_Sw, "CpuType/3148"},
+    { &S360.SW_E,                  "SW_E",                              &IBM360_OnClick_Sw, "CpuType/3148"},
+    { &S360.SW_F,                  "SW_F",                              &IBM360_OnClick_Sw, "CpuType/3148"},
+    { &S360.SW_G,                  "SW_G",                              &IBM360_OnClick_Sw, "CpuType/3148"},
+    { &S360.SW_H,                  "SW_H",                              &IBM360_OnClick_Sw, "CpuType/3148"},
     { &S360.SW_Rate,               "SW_Rate",                           &IBM360_OnClick_Sw2},
+    { &S360.SW_Rate,               "SW_Rate",                           &IBM360_OnClick_Sw3, "CpuType/3145"}, // redefine click event handler for 3145 cpu
     { &S360.SW_Addr_Compare,       "SW_Addr_Compare",                   &IBM360_OnClick_Sw2, "CpuType/2030"},
+    { &S360.SW_Addr_Compare,       "SW_Addr_Compare",                   &IBM360_OnClick_Sw3, "CpuType/3145"},
+    { &S360.SW_Addr_Compare_Cntrl, "SW_Addr_Compare_Cntrl",             &IBM360_OnClick_Sw2, "CpuType/3145"},
+    { &S360.SW_Storage_Select,     "SW_Storage_Select",                 &IBM360_OnClick_Sw3, "CpuType/3145"},
+    { &S360.SW_Addr_Compare,       "SW_Addr_Compare",                   &IBM360_OnClick_Sw3, "CpuType/3148"},
+    { &S360.SW_Addr_Compare_Cntrl, "SW_Addr_Compare_Cntrl",             &IBM360_OnClick_Sw2, "CpuType/3148"},
+    { &S360.SW_Storage_Select,     "SW_Storage_Select",                 &IBM360_OnClick_Sw2, "CpuType/3148"},
     // Buttons 
     { &S360.BTN_Power_Off,         "BTN_Power_Off",                     &IBM360_OnClick_BTN},
     { &S360.Shdw_Emergency_Off,    "Shdw_Emergency_Power_Off",          NULL               , "CpuType/2030"}, 
@@ -336,40 +400,67 @@ CP_DEF IBM360_cp[] = {
 //    { &S360.BTN_PSW_Restart,       "BTN_PSW_Restart",                   &IBM360_OnClick_BTN, "CpuType/2050"},
     { &S360.SW_Lamp_Test,          "SW_Lamp_Test",                      &IBM360_OnClick_BTN, "CpuType/2050"},
     { &S360.Shdw_Lamp_Test,        "Shdw_Lamp_Test",                    NULL               , "CpuType/2050"}, 
+    { &S360.BTN_Restart,           "BTN_Restart",                       &IBM360_OnClick_BTN, "CpuType/3145"},
+    { &S360.BTN_Set_IC,            "BTN_Set_IC",                        &IBM360_OnClick_BTN, "CpuType/3145"},
+    { &S360.BTN_Store,             "BTN_Store",                         &IBM360_OnClick_BTN, "CpuType/3145"},
+    { &S360.BTN_Display,           "BTN_Display",                       &IBM360_OnClick_BTN, "CpuType/3145"},
+    { &S360.SW_Lamp_Test,          "SW_Lamp_Test",                      &IBM360_OnClick_BTN, "CpuType/3145"},
+    { &S360.SW_Lamp_Test,          "SW_Lamp_Test",                      &IBM360_OnClick_BTN, "CpuType/3148"},
+    { &S360.BTN_Restart,           "BTN_Restart",                       &IBM360_OnClick_BTN, "CpuType/3148"},
+    { &S360.BTN_Set_IC,            "BTN_Set_IC",                        &IBM360_OnClick_BTN, "CpuType/3148"},
+    { &S360.BTN_Store,             "BTN_Store",                         &IBM360_OnClick_BTN, "CpuType/3148"},
+    { &S360.BTN_Display,           "BTN_Display",                       &IBM360_OnClick_BTN, "CpuType/3148"},
     // IBM 2540 Card Read Punch
-    { &S360.ReadHopper,            "ReadHopper",                        NULL,     "cardprinter/1" },
-    { &S360.InputDeckBody,         "InputDeckBody",                     NULL,     "cardprinter/1" },
-    { &S360.InputDeckTop,          "InputDeckTop",                      NULL,     "cardprinter/1" },
-    { &S360.ReadStacker,           "ReadStacker",                       NULL,     "cardprinter/1" },
-    { &S360.ReadStackerBack1,      "ReadStackerBack1",                  NULL,     "cardprinter/1" },
-    { &S360.ReadStackerBack2,      "ReadStackerBack2",                  NULL,     "cardprinter/1" },
-    { &S360.ReadStackerSeparator,  "ReadStackerSeparator",              NULL,     "cardprinter/1" },
-    { &S360.CardInReadStacker,     "CardInReadStacker",                 NULL,     "cardprinter/1" },
-    { &S360.PunchStacker,          "PunchStacker",                      NULL,     "cardprinter/1" },
-    { &S360.PunchStackerBack1,     "PunchStackerBack1",                 NULL,     "cardprinter/1" },
-    { &S360.PunchStackerBack2,     "PunchStackerBack2",                 NULL,     "cardprinter/1" },
-    { &S360.PunchStackerSeparator, "PunchStackerSeparator",             NULL,     "cardprinter/1" },
-    { &S360.CardInPunchStacker,    "CardInPunchStacker",                NULL,     "cardprinter/1" },
-    { &S360.LI_Ready_CardReader,   "LI_Ready_CardReader",               NULL,     "cardprinter/1" },
-    { &S360.LI_EOF_CardReader,     "LI_EOF_CardReader",                 NULL,     "cardprinter/1" },
-    { &S360.LI_Check_CardReader,   "LI_Check_CardReader",               NULL,     "cardprinter/1" },
-    { &S360.LI_Ready_CardPunch,    "LI_Ready_CardPunch",                NULL,     "cardprinter/1" },
-    { &S360.LI_Check_CardPunch,    "LI_Check_CardPunch",                NULL,     "cardprinter/1" },
-    { &S360.Drop_InputDeckFile,    "Drop_InputDeckFile",                NULL,     "cardprinter/1" },
-    // IBM 1403 Printer
+    { &S360.ReadHopper,            "ReadHopper",                        NULL,     "Card/2540" },
+    { &S360.InputDeckBody,         "InputDeckBody",                     NULL,     "Card/2540" },
+    { &S360.InputDeckTop,          "InputDeckTop",                      NULL,     "Card/2540" },
+    { &S360.ReadStacker,           "ReadStacker",                       NULL,     "Card/2540" },
+    { &S360.ReadStackerBack1,      "ReadStackerBack1",                  NULL,     "Card/2540" },
+    { &S360.ReadStackerBack2,      "ReadStackerBack2",                  NULL,     "Card/2540" },
+    { &S360.ReadStackerSeparator,  "ReadStackerSeparator",              NULL,     "Card/2540" },
+    { &S360.CardInReadStacker,     "CardInReadStacker",                 NULL,     "Card/2540" },
+    { &S360.PunchStacker,          "PunchStacker",                      NULL,     "Card/2540" },
+    { &S360.PunchStackerBack1,     "PunchStackerBack1",                 NULL,     "Card/2540" },
+    { &S360.PunchStackerBack2,     "PunchStackerBack2",                 NULL,     "Card/2540" },
+    { &S360.PunchStackerSeparator, "PunchStackerSeparator",             NULL,     "Card/2540" },
+    { &S360.CardInPunchStacker,    "CardInPunchStacker",                NULL,     "Card/2540" },
+    { &S360.LI_Ready_CardReader,   "LI_Ready_CardReader",               NULL,     "Card/2540" },
+    { &S360.LI_EOF_CardReader,     "LI_EOF_CardReader",                 NULL,     "Card/2540" },
+    { &S360.LI_Check_CardReader,   "LI_Check_CardReader",               NULL,     "Card/2540" },
+    { &S360.LI_Ready_CardPunch,    "LI_Ready_CardPunch",                NULL,     "Card/2540" },
+    { &S360.LI_Check_CardPunch,    "LI_Check_CardPunch",                NULL,     "Card/2540" },
+    { &S360.Drop_InputDeckFile,    "Drop_InputDeckFile",                NULL,     "Card/2540" },
+    // IBM 3525 Card Punch
+    { &S360.PunchStacker,          "PunchStacker",                      NULL,     "Card/3525" },
+    { &S360.PunchStacker1L,        "PunchStacker1L",                    NULL,     "Card/3525" },
+    { &S360.PunchStacker2L,        "PunchStacker2L",                    NULL,     "Card/3525" },
+    { &S360.PunchStackerSeparator, "PunchStackerSeparator",             NULL,     "Card/3525" },
+    { &S360.PunchStacker1R,        "PunchStacker1R",                    NULL,     "Card/3525" },
+    { &S360.PunchStacker2R,        "PunchStacker2R",                    NULL,     "Card/3525" },
+    { &S360.CardInPunchStacker,    "CardInPunchStacker",                NULL,     "Card/3525" },
+    { &S360.CardDeckInStacker,     "CardDeckInStacker",                 NULL,     "Card/3525" },
+    { &S360.LStackerBackground,    "LStackerBackground",                NULL,     "Card/3525" },
+    { &S360.LI_Ready_CardPunch,    "LI_Ready_CardPunch",                NULL,     "Card/3525" },
+    { &S360.LI_EOF_CardReader,     "LI_EOF_CardReader",                 NULL,     "Card/3525" },
+    { &S360.Drop_InputDeckFile,    "Drop_InputDeckFile",                NULL,     "Card/3525" },
+    // IBM 1403/3203 Printer
     { &S360.Paper,                 "Paper",                             NULL,     "cardprinter/1" },
     { &S360.PaperBackground,       "PaperBackground",                   NULL,     "cardprinter/1" },
     { &S360.PrinterCharSet,        "PrinterCharSet",                    NULL,     "cardprinter/1" },
     { &S360.LI_Print_Ready,        "LI_Print_Ready",                    NULL,     "cardprinter/1" },
     { &S360.LI_Print_Check,        "LI_Print_Check",                    NULL,     "cardprinter/1" },
     // IBM 1052 Printer Keyboard Console
-    { &S360.ConsPaper,             "ConsPaper",                         NULL,     "console/1" },
-    { &S360.ConsPaperBackground,   "ConsPaperBackground",               NULL,     "console/1" },
-    { &S360.ConsPrinterCharSet,    "ConsPrinterCharSet",                NULL,     "console/1" },
-    { &S360.ConsGolfBall,          "ConsGolfBall",                      NULL,     "console/1" },
-    { &S360.LI_Cons_Proceed,       "LI_Cons_Proceed",                   NULL,     "console/1" },
+    { &S360.ConsPaper,             "ConsPaper",                         NULL,     "console/1" },  // console/1 are control
+    { &S360.ConsPaperBackground,   "ConsPaperBackground",               NULL,     "console/1" },  // common to both consoles
+    { &S360.ConsPrinterCharSet,    "ConsPrinterCharSet",                NULL,     "console/1" },  // ConsType/nnnn are controls
+    { &S360.ConsGolfBall,          "ConsGolfBall",                      NULL,     "console/1" },  // specific of that console 
+    { &S360.LI_Cons_Proceed,       "LI_Cons_Proceed",                   NULL,     "console/1" },  // type 
     { &S360.BTN_Cons_Request,      "BTN_Cons_Request",                  &IBM360_OnClick_BTN,   "console/1" },
-    { &S360.BTN_Cons_NoFunction,   "BTN_Cons_NoFunction",               &IBM360_OnClick_BTN,   "console/1" },
+    { &S360.BTN_Cons_NoFunction,   "BTN_Cons_NoFunction",               &IBM360_OnClick_BTN,   "ConsType/1052"},
+    // IBM 3210 Printer Keyboard Console
+    { &S360.LI_Cons_Req_Pending,   "LI_Cons_Req_Pending",               NULL,     "ConsType/3210"},
+    { &S360.BTN_Cons_Cancel,       "BTN_Cons_Cancel",                   &IBM360_OnClick_BTN,   "ConsType/3210"},
+    { &S360.BTN_Cons_End,          "BTN_Cons_End",                      &IBM360_OnClick_BTN,   "ConsType/3210"},
     // IBM 2314 DASD 
     { &S360.DASD_addr_digit[0][1], "DASD_diskA_digit1",                 NULL,     "dasd/1" },
     { &S360.DASD_addr_digit[0][2], "DASD_diskA_digit2",                 NULL,     "dasd/1" },
@@ -411,106 +502,140 @@ CP_DEF IBM360_cp[] = {
     { &S360.DASD_addr_digit[7][3], "DASD_diskH_digit3",                 NULL,     "dasd/1" },
        { &S360.DASD_SW_StartStop[7],  "DASD_diskH_SW_StartStop",        NULL,     "dasd/1" },
        { &S360.DASD_LI_Ready[7],      "DASD_diskH_LI_Ready",            NULL,     "dasd/1" },
-    // IBM 2401 Tape
-    { &S360.MT_head, "MT_head",                                         NULL,     "tapecab/1" },
-    { &S360.MT_VacColumn, "MT_VacColumn",                               NULL,     "tapecab/1" },
-    { &S360.MT_VacColMedium, "MT_VacColMedium",                         NULL,     "tapecab/1" },
-    { &S360.MT_reel_amount, "MT_reel_amount",                           NULL,     "tapecab/1" },
-    { &S360.MT_blue_reel, "MT_blue_reel",                               NULL,     "tapecab/1" },
-    { &S360.MT_blue_reel_hub, "MT_blue_reel_hub",                       NULL,     "tapecab/1" },
-    { &S360.MT_red_reel, "MT_red_reel",                                 NULL,     "tapecab/1" },
-    { &S360.MT_green_reel, "MT_green_reel",                             NULL,     "tapecab/1" },
-    { &S360.MT_green_reel_hub, "MT_green_reel_hub",                     NULL,     "tapecab/1" },
-    { &S360.MT_panel[0],            "MT_0_panel",                       NULL,     "tape0/1" },
+    // IBM 2401, 2415, 3420 Tape
+    { &S360.MT_head,               "MT_head",                           NULL,     "tapecab/1" },
+    { &S360.MT_VacColumn,          "MT_VacColumn",                      NULL,     "tapecab/1" },
+    { &S360.MT_VacColMedium,       "MT_VacColMedium",                   NULL,     "tapecab/1" },
+    { &S360.MT_reel_amount,        "MT_reel_amount",                    NULL,     "tapecab/1" },
+    { &S360.MT_Take_reel_amount,   "MT_Take_reel_amount",               NULL,     "tapecab/1", "TapeType/3420" },
+    { &S360.MT_blue_reel,          "MT_blue_reel",                      NULL,     "tapecab/1" },
+    { &S360.MT_red_reel,           "MT_red_reel",                       NULL,     "tapecab/1" },
+    { &S360.MT_green_reel,         "MT_green_reel",                     NULL,     "tapecab/1" },
+    { &S360.MT_ring,               "MT_ring",                           NULL,     "tapecab/1", "TapeType/3420" },
+    { &S360.MT_no_reel,            "MT_no_reel",                        NULL,     "tapecab/1", "TapeType/3420" },
+    { &S360.MT_ring_anchor,        "MT_ring_anchor",                    NULL,     "tapecab/1", "TapeType/3420" },
+    { &S360.MT_GlassSlidingDoor,   "MT_GlassSlidingDoor",               NULL,     "tapecab/1", "TapeType/3420" },
+    { &S360.MT_panel[0],           "MT_0_panel",                        NULL,     "tape0/1" },
        { &S360.MT_addr_digit[0][1],   "MT_0_digit1",                    NULL,     "tape0/1" },
        { &S360.MT_addr_digit[0][2],   "MT_0_digit2",                    NULL,     "tape0/1" },
        { &S360.MT_addr_digit[0][3],   "MT_0_digit3",                    NULL,     "tape0/1" },
        { &S360.MT_LI_Select[0],       "MT_0_LI_Select",                 NULL,     "tape0/1" },
        { &S360.MT_LI_Ready[0],        "MT_0_LI_Ready",                  NULL,     "tape0/1" },
        { &S360.MT_LI_File_protect[0], "MT_0_LI_File_protect",           NULL,     "tape0/1" },
-       { &S360.MT[0],                 "MT_0",                           NULL,     "tape0/1" },
+       { &S360.MT_Take[0],            "MT_0_Take",                      NULL,     "tape0/1", "TapeType/3420" },
+       { &S360.MT_GlassDoor[0],       "MT_0_GlassSlidingDoor",          NULL,     "tape0/1", "TapeType/3420" },
+       { &S360.MT_Drop_TapeFile[0],   "MT_0_Drop_TapeFile",             NULL,     "tape0/1", "TapeType/3420" },
+          { &S360.MT[0],              "MT_0",                           NULL,     "tape0/1" },
           { &S360.MT_L_VacCol[0],     "MT_0_L_VacCol",                  NULL,     "tape0/1" },
           { &S360.MT_R_VacCol[0],     "MT_0_R_VacCol",                  NULL,     "tape0/1" },
-       { &S360.MT_BTN_UnLoad[0],      "MT_0_BTN_UnLoad",                &IBM360_OnClick_BTN2, "tape0/1"  },
+       { &S360.MT_BTN_LoadRew[0],     "MT_0_BTN_LoadRew",               &IBM360_OnClick_BTN2, "tape0/1"  },
+       { &S360.MT_BTN_Start[0],       "MT_0_BTN_Start",                 &IBM360_OnClick_BTN2, "tape0/1"  },
+       { &S360.MT_BTN_Reset[0],       "MT_0_BTN_Reset",                 &IBM360_OnClick_BTN2, "tape0/1"  },
        { &S360.MT_BTN_DoorOpen[0],    "MT_0_BTN_DoorOpen",              &IBM360_OnClick_BTN2, "tape0/1"  },
        { &S360.MT_Head_Medium[0],     "MT_0_Head_Medium",               NULL,     "tape0/1","TapeType/2415" },
        { &S360.MT_Head_pos[0],        "MT_0_Head",                      NULL,     "tape0/1","TapeType/2415" },
-    { &S360.MT_panel[1],            "MT_1_panel",                       NULL,     "tape1/1" },
+    { &S360.MT_panel[1],           "MT_1_panel",                        NULL,     "tape1/1" },
        { &S360.MT_addr_digit[1][1],   "MT_1_digit1",                    NULL,     "tape1/1" },
        { &S360.MT_addr_digit[1][2],   "MT_1_digit2",                    NULL,     "tape1/1" },
        { &S360.MT_addr_digit[1][3],   "MT_1_digit3",                    NULL,     "tape1/1" },
        { &S360.MT_LI_Select[1],       "MT_1_LI_Select",                 NULL,     "tape1/1" },
        { &S360.MT_LI_Ready[1],        "MT_1_LI_Ready",                  NULL,     "tape1/1" },
        { &S360.MT_LI_File_protect[1], "MT_1_LI_File_protect",           NULL,     "tape1/1" },
+       { &S360.MT_Take[1],            "MT_1_Take",                      NULL,     "tape1/1", "TapeType/3420" },
+       { &S360.MT_GlassDoor[1],       "MT_1_GlassSlidingDoor",          NULL,     "tape1/1", "TapeType/3420" },
+       { &S360.MT_Drop_TapeFile[1],   "MT_1_Drop_TapeFile",             NULL,     "tape1/1", "TapeType/3420" },
        { &S360.MT[1],                 "MT_1",                           NULL,     "tape1/1" },
           { &S360.MT_L_VacCol[1],     "MT_1_L_VacCol",                  NULL,     "tape1/1" },
           { &S360.MT_R_VacCol[1],     "MT_1_R_VacCol",                  NULL,     "tape1/1" },
-       { &S360.MT_BTN_UnLoad[1],      "MT_1_BTN_UnLoad",                &IBM360_OnClick_BTN2, "tape1/1"  },
+       { &S360.MT_BTN_LoadRew[1],     "MT_1_BTN_LoadRew",               &IBM360_OnClick_BTN2, "tape1/1"  },
+       { &S360.MT_BTN_Start[1],       "MT_1_BTN_Start",                 &IBM360_OnClick_BTN2, "tape1/1"  },
+       { &S360.MT_BTN_Reset[1],       "MT_1_BTN_Reset",                 &IBM360_OnClick_BTN2, "tape1/1"  },
        { &S360.MT_BTN_DoorOpen[1],    "MT_1_BTN_DoorOpen",              &IBM360_OnClick_BTN2, "tape1/1"  },
        { &S360.MT_Head_Medium[1],     "MT_1_Head_Medium",               NULL,     "tape1/1", "TapeType/2415" },
        { &S360.MT_Head_pos[1],        "MT_1_Head",                      NULL,     "tape1/1", "TapeType/2415" },
-    { &S360.MT_panel[2],            "MT_2_panel",                       NULL,     "tape23/1" },
+    { &S360.MT_panel[2],           "MT_2_panel",                        NULL,     "tape23/1" },
        { &S360.MT_addr_digit[2][1],   "MT_2_digit1",                    NULL,     "tape23/1" },
        { &S360.MT_addr_digit[2][2],   "MT_2_digit2",                    NULL,     "tape23/1" },
        { &S360.MT_addr_digit[2][3],   "MT_2_digit3",                    NULL,     "tape23/1" },
        { &S360.MT_LI_Select[2],       "MT_2_LI_Select",                 NULL,     "tape23/1" },
        { &S360.MT_LI_Ready[2],        "MT_2_LI_Ready",                  NULL,     "tape23/1" },
        { &S360.MT_LI_File_protect[2], "MT_2_LI_File_protect",           NULL,     "tape23/1" },
+       { &S360.MT_Take[2],            "MT_2_Take",                      NULL,     "tape23/1", "TapeType/3420" },
+       { &S360.MT_GlassDoor[2],       "MT_2_GlassSlidingDoor",          NULL,     "tape23/1", "TapeType/3420" },
+       { &S360.MT_Drop_TapeFile[2],   "MT_2_Drop_TapeFile",             NULL,     "tape23/1", "TapeType/3420" },
        { &S360.MT[2],                 "MT_2",                           NULL,     "tape23/1" },
           { &S360.MT_L_VacCol[2],     "MT_2_L_VacCol",                  NULL,     "tape23/1" },
           { &S360.MT_R_VacCol[2],     "MT_2_R_VacCol",                  NULL,     "tape23/1" },
-       { &S360.MT_BTN_UnLoad[2],      "MT_2_BTN_UnLoad",                &IBM360_OnClick_BTN2, "tape23/1"  },
+       { &S360.MT_BTN_LoadRew[2],     "MT_2_BTN_LoadRew",               &IBM360_OnClick_BTN2, "tape23/1"  },
+       { &S360.MT_BTN_Start[2],       "MT_2_BTN_Start",                 &IBM360_OnClick_BTN2, "tape23/1"  },
+       { &S360.MT_BTN_Reset[2],       "MT_2_BTN_Reset",                 &IBM360_OnClick_BTN2, "tape23/1"  },
        { &S360.MT_BTN_DoorOpen[2],    "MT_2_BTN_DoorOpen",              &IBM360_OnClick_BTN2, "tape23/1"  },
        { &S360.MT_Head_Medium[2],     "MT_2_Head_Medium",               NULL,     "tape23/1", "TapeType/2415" },
        { &S360.MT_Head_pos[2],        "MT_2_Head",                      NULL,     "tape23/1", "TapeType/2415" },
-    { &S360.MT_panel[3],            "MT_3_panel",                       NULL,     "tape23/1" },
+    { &S360.MT_panel[3],           "MT_3_panel",                        NULL,     "tape23/1" },
        { &S360.MT_addr_digit[3][1],   "MT_3_digit1",                    NULL,     "tape23/1" },
        { &S360.MT_addr_digit[3][2],   "MT_3_digit2",                    NULL,     "tape23/1" },
        { &S360.MT_addr_digit[3][3],   "MT_3_digit3",                    NULL,     "tape23/1" },
        { &S360.MT_LI_Select[3],       "MT_3_LI_Select",                 NULL,     "tape23/1" },
        { &S360.MT_LI_Ready[3],        "MT_3_LI_Ready",                  NULL,     "tape23/1" },
        { &S360.MT_LI_File_protect[3], "MT_3_LI_File_protect",           NULL,     "tape23/1" },
+       { &S360.MT_Take[3],            "MT_3_Take",                      NULL,     "tape23/1", "TapeType/3420" },
+       { &S360.MT_GlassDoor[3],       "MT_3_GlassSlidingDoor",          NULL,     "tape23/1", "TapeType/3420" },
+       { &S360.MT_Drop_TapeFile[3],   "MT_3_Drop_TapeFile",             NULL,     "tape23/1", "TapeType/3420" },
        { &S360.MT[3],                 "MT_3",                           NULL,     "tape23/1" },
           { &S360.MT_L_VacCol[3],     "MT_3_L_VacCol",                  NULL,     "tape23/1" },
           { &S360.MT_R_VacCol[3],     "MT_3_R_VacCol",                  NULL,     "tape23/1" },
-       { &S360.MT_BTN_UnLoad[3],      "MT_3_BTN_UnLoad",                &IBM360_OnClick_BTN2, "tape23/1"  },
+       { &S360.MT_BTN_LoadRew[3],     "MT_3_BTN_LoadRew",               &IBM360_OnClick_BTN2, "tape23/1"  },
+       { &S360.MT_BTN_Start[3],       "MT_3_BTN_Start",                 &IBM360_OnClick_BTN2, "tape23/1"  },
+       { &S360.MT_BTN_Reset[3],       "MT_3_BTN_Reset",                 &IBM360_OnClick_BTN2, "tape23/1"  },
        { &S360.MT_BTN_DoorOpen[3],    "MT_3_BTN_DoorOpen",              &IBM360_OnClick_BTN2, "tape23/1"  },
        { &S360.MT_Head_Medium[3],     "MT_3_Head_Medium",               NULL,     "tape23/1", "TapeType/2415" },
        { &S360.MT_Head_pos[3],        "MT_3_Head",                      NULL,     "tape23/1", "TapeType/2415" },
-    { &S360.MT_panel[4],            "MT_4_panel",                       NULL,     "tape45/1" },
+    { &S360.MT_panel[4],           "MT_4_panel",                        NULL,     "tape45/1" },
        { &S360.MT_addr_digit[4][1],   "MT_4_digit1",                    NULL,     "tape45/1" },
        { &S360.MT_addr_digit[4][2],   "MT_4_digit2",                    NULL,     "tape45/1" },
        { &S360.MT_addr_digit[4][3],   "MT_4_digit3",                    NULL,     "tape45/1" },
        { &S360.MT_LI_Select[4],       "MT_4_LI_Select",                 NULL,     "tape45/1" },
        { &S360.MT_LI_Ready[4],        "MT_4_LI_Ready",                  NULL,     "tape45/1" },
        { &S360.MT_LI_File_protect[4], "MT_4_LI_File_protect",           NULL,     "tape45/1" },
+       { &S360.MT_Take[4],            "MT_4_Take",                      NULL,     "tape45/1", "TapeType/3420" },
+       { &S360.MT_GlassDoor[4],       "MT_4_GlassSlidingDoor",          NULL,     "tape45/1", "TapeType/3420" },
+       { &S360.MT_Drop_TapeFile[4],   "MT_4_Drop_TapeFile",             NULL,     "tape45/1", "TapeType/3420" },
        { &S360.MT[4],                 "MT_4",                           NULL,     "tape45/1" },
           { &S360.MT_L_VacCol[4],     "MT_4_L_VacCol",                  NULL,     "tape45/1" },
           { &S360.MT_R_VacCol[4],     "MT_4_R_VacCol",                  NULL,     "tape45/1" },
-       { &S360.MT_BTN_UnLoad[4],      "MT_4_BTN_UnLoad",                &IBM360_OnClick_BTN2, "tape45/1"  },
+       { &S360.MT_BTN_LoadRew[4],     "MT_4_BTN_LoadRew",               &IBM360_OnClick_BTN2, "tape45/1"  },
+       { &S360.MT_BTN_Start[4],       "MT_4_BTN_Start",                 &IBM360_OnClick_BTN2, "tape45/1"  },
+       { &S360.MT_BTN_Reset[4],       "MT_4_BTN_Reset",                 &IBM360_OnClick_BTN2, "tape45/1"  },
        { &S360.MT_BTN_DoorOpen[4],    "MT_4_BTN_DoorOpen",              &IBM360_OnClick_BTN2, "tape45/1"  },
        { &S360.MT_Head_Medium[4],     "MT_4_Head_Medium",               NULL,     "tape45/1", "TapeType/2415" },
        { &S360.MT_Head_pos[4],        "MT_4_Head",                      NULL,     "tape45/1", "TapeType/2415" },
-    { &S360.MT_panel[5],            "MT_5_panel",                       NULL,     "tape45/1" },
+    { &S360.MT_panel[5],           "MT_5_panel",                        NULL,     "tape45/1" },
        { &S360.MT_addr_digit[5][1],   "MT_5_digit1",                    NULL,     "tape45/1" },
        { &S360.MT_addr_digit[5][2],   "MT_5_digit2",                    NULL,     "tape45/1" },
        { &S360.MT_addr_digit[5][3],   "MT_5_digit3",                    NULL,     "tape45/1" },
        { &S360.MT_LI_Select[5],       "MT_5_LI_Select",                 NULL,     "tape45/1" },
        { &S360.MT_LI_Ready[5],        "MT_5_LI_Ready",                  NULL,     "tape45/1" },
        { &S360.MT_LI_File_protect[5], "MT_5_LI_File_protect",           NULL,     "tape45/1" },
+       { &S360.MT_Take[5],            "MT_5_Take",                      NULL,     "tape45/1", "TapeType/3420" },
+       { &S360.MT_GlassDoor[5],       "MT_5_GlassSlidingDoor",          NULL,     "tape45/1", "TapeType/3420" },
+       { &S360.MT_Drop_TapeFile[5],   "MT_5_Drop_TapeFile",             NULL,     "tape45/1", "TapeType/3420" },
        { &S360.MT[5],                 "MT_5",                           NULL,     "tape45/1" },
           { &S360.MT_L_VacCol[5],     "MT_5_L_VacCol",                  NULL,     "tape45/1" },
           { &S360.MT_R_VacCol[5],     "MT_5_R_VacCol",                  NULL,     "tape45/1" },
-       { &S360.MT_BTN_UnLoad[5],      "MT_5_BTN_UnLoad",                &IBM360_OnClick_BTN2, "tape45/1"  },
+       { &S360.MT_BTN_LoadRew[5],     "MT_5_BTN_LoadRew",               &IBM360_OnClick_BTN2, "tape45/1"  },
+       { &S360.MT_BTN_Start[5],       "MT_5_BTN_Start",                 &IBM360_OnClick_BTN2, "tape45/1"  },
+       { &S360.MT_BTN_Reset[5],       "MT_5_BTN_Reset",                 &IBM360_OnClick_BTN2, "tape45/1"  },
        { &S360.MT_BTN_DoorOpen[5],    "MT_5_BTN_DoorOpen",              &IBM360_OnClick_BTN2, "tape45/1"  },
        { &S360.MT_Head_Medium[5],     "MT_5_Head_Medium",               NULL,     "tape45/1", "TapeType/2415" },
        { &S360.MT_Head_pos[5],        "MT_5_Head",                      NULL,     "tape45/1", "TapeType/2415" },
+       
     { NULL }  
 };
 
 int bCardReadPunchVisible;                    // ibm 2450 is visible
 int bPrintOutVisible;                         // printout visible
-int bTapesVisible, bTapeIs2415;               // tape visible; bTapeIs2415=1 -> using IBM 2415 
+int bTapesVisible;                            // tape visible
 int bDasdVisible;                             // dasd visible
 
 // animation state vars (for dynamic state draw)
@@ -521,7 +646,7 @@ int nCardsInPunchStacker             = 0; // number of cards alredy draw in punc
 int bCardReadHopperBackgroundSet     = 0; // flag to allow grabbing background behind read hopper
 
 // for main cpu
-int bCpuModelIs                = 2030; // cpu model being displayed in control panel gui
+int bCpuModelIs                = 2030; // cpu model being displayed in control panel gui. Can be 2030, 2040, 2050, 2065, 3145, 3148
 int bSystemResetKeyPressed     = 0; // set when system reset key is pressed
 int IPLaddr                    = 0; // IPL addr when channel starts IPL (triggered by boot scp command)
 int bRegBA_display             = 0; // signal reg B A displays PC when stopped, =1 will display MSDR
@@ -539,9 +664,11 @@ int InstrCycles0               = 0; // instr cycles executed on ShowInfoTm0
 int FramesCount0               = 0; // num of frames on ShowInfoTm0
 
 // for tape cabinet
-#define MT_anim_sequence_len  1500          // max number of animation sequence steps for tape
+int bTapeIs                    = 2401;      // bTapeIs can be 2401, 2415, 3420
+#define MT_anim_sequence_len     1500       // max number of animation sequence steps for tape
 struct mtcabrec {                           // mtcab[0..7].reel[0..1] is a record that holds the tape reel states for MTA0..7 units
    int mt_is;                               // current visual animation being done
+   int ResetPressed;                        // 1=reset button has been pressed on tape control panel 
    // state of tape elements
    int rew_u3;                              // amount of tape medium on R reel during rewind operation (used to show info with ^I)
    int rw_tm0, rw_msec, rw_dir;             // r/w operation start (sim_os_msec time), duration left (msec), tape direction (1->fwd, -1->backwrd)
@@ -555,8 +682,6 @@ struct mtcabrec {                           // mtcab[0..7].reel[0..1] is a recor
        double rpm0;                         // revolutions per second (0=stopped, <0=backwards) when reel motor start accelerating/decelerating 
        int ang0;                            // reel angular position (0..360 degrees) when reel motor start accelerating/decelerating
        double revs;                         // reel revoltions done after motor start accel/decel (1 revolution = 360 gr)
-       int hasblur;                         // flag that indicates if reel image in cpanel has blur (0=no blur, 1=slow blur, 2=high blur)
-       int angblur;                         // blur reel image angle draw 
        char debug_text[100];                // debug text (if any) to be draw in reels hub on refresh
    } reel[2];
    // last value of heigh of tape medium into vaccum colum used to detect h has changed respect 
@@ -589,6 +714,7 @@ int lptPrintOutDoneCount       = -1; // number of lines already printed on cpane
 int hPaperBackgroundOffset;          // offset of background image on paper image
 
 // for console printout in its own window 
+int bConsTypeIs                = 1052; // console model being displayed in control panel gui
 int ncp_console = -1;                // the console window 
 int ConsPrintOutDoneCount      = -1; // number of lines already printed on console paper
 int hConsPaperBackgroundOffset;      // offset of background image on paper image
@@ -667,20 +793,128 @@ void SetBoxLights(int CArrayId)
     }
 }
 
+void Rotate(int CId, int State0, int Rot, int xctr, int yctr, int State1)
+{
+    // will copy state0 image from control CId to State1 image on same control CId
+    // State0 and State1 cannot be the same
+    // rotating pixes 90, 180 or 270gr. Center of rotation is xctr, yctr;
+
+    int x,y,ww,hh,x0,y0,x1,y1;
+    uint32 * surface0; 
+    uint32 * surface1; 
+    uint32 col; 
+
+    surface0 = GetControlSurface(CId, State0, &ww, &hh);
+    surface1 = GetControlSurface(CId, State1, &ww, &hh);
+
+    for(y=-hh;y<hh;y++) {
+       for(x=-ww;x<ww;x++) {
+           x0=x+xctr; y0=y+yctr; 
+           if ((x0<0) || (x0>=ww)) continue;  // safety
+           if ((y0<0) || (y0>=hh)) continue;  
+           col=surface0[x0 + y0 * ww]; // source pixel
+           if (Rot== 90) { x1=xctr-y; y1=yctr+x; } else
+           if (Rot==180) { x1=xctr-x; y1=yctr-y; } else
+           {              x1=xctr+y; y1=yctr-x; }
+           if ((x1<0) || (x1>=ww)) continue;  // safety
+           if ((y1<0) || (y1>=hh)) continue;  
+           surface1[x1 + y1 * ww]=col; // source pixel          
+       }
+    }
+}
+
+// horizontal skew states in CId based on nSkew. add switch handle with given state image
+void SetRotatingSwitchSkew(int CId, int nSkew, int nSwitchHandle)
+{
+    int nState, nStates, ww,hh,n,x,y, rr,gg,bb, rr0,gg0,bb0, rr1,bb1,gg1; 
+    int dir, xint, xfrac, x_org;
+    int skew100; 
+    uint32 * surface0; 
+    uint32 col; 
+    uint32 xline[1000];
+
+    nStates=GetControlInfo(CId, CINFO_NSTATES);
+    dir = (nSkew > 0) ? 1:-1; // direction of skew
+
+    // for each state image in rotationg switch control
+    for (nState=0; nState<nStates; nState++) {
+        // add image for rotating switch handle 
+        CopyControlImage(S360.SwitchHandle, nSwitchHandle,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                         CId, nState,  0,0);                                  // ToCId, ToState,     x1, y1
+        // set image skew
+        if (nSkew==0) continue; // no skew
+
+        // nSkew=-100 -> skew 5 pixels to right on top of image
+        // nSkew=+100 -> skew 5 pixels to left on top of image
+        skew100=6; 
+        surface0 = GetControlSurface(CId, nState, &ww, &hh);
+        for(y=0;y<hh;y++) {
+            n=nSkew * (hh-y) / hh;    // skew depending on y pos
+            xint  = (n * skew100) / 100; // integer part of skew: number of pixels
+            xfrac = abs((n * skew100) - xint * 100); // frational (0..100) part of skew
+            //if (dir > 0) xfrac=100-xfrac;
+            // calc skewed xline 
+            for (x=0;x<ww;x++) {
+                xline[x]=0;
+                x_org=x - xint; 
+                if ((x_org < 0) || (x_org+dir < 0)) continue; 
+                if ((x_org >= ww) || (x_org+dir >= ww)) continue; 
+                col = surface0[x_org + y*ww];
+                if (col==0) continue;                           // keep transparent pixels
+                get_surface_rgb_color(col,&rr0,&gg0,&bb0);      // get first pixel to skew
+                col = surface0[x_org + dir + y*ww];
+                if (col==0) continue;                           // keep transparent pixels
+                get_surface_rgb_color(col,&rr1,&gg1,&bb1);      // get second pixel to skew
+                rr = rr1 + xfrac * (rr0-rr1) / 100;             // blend both pixels according to xfrac
+                gg = gg1 + xfrac * (gg0-gg1) / 100;
+                bb = bb1 + xfrac * (bb0-bb1) / 100;
+                xline[x]=surface_rgb_color(rr,gg,bb);
+            }
+            // put xline on control image
+            for (x=0;x<ww;x++) surface0[x + y*ww]=xline[x];
+        }
+    }
+}
 
 // Control Panel callbacks
 void IBM360_Init(void)
 {
     int unit; 
 
-    // process the control panel lights to add backlight when state is > 15
-    if (IsOption("CpuType/2065")) {
+    if (IsOption("CpuType/3145")) {
+       bCpuModelIs=3145; 
+       // process the rotating switches to add central handle and skew as needed
+       SetRotatingSwitchSkew(S360.SW_Addr_Compare,   0, 0); 
+       SetRotatingSwitchSkew(S360.SW_Storage_Select, 0, 2); 
+       SetRotatingSwitchSkew(S360.SW_Rate,           0, 4); 
+       SetRotatingSwitchSkew(S360.SW_A,   50, 3); 
+       SetRotatingSwitchSkew(S360.SW_B,   30, 4); 
+       SetRotatingSwitchSkew(S360.SW_C,   10, 4); 
+       SetRotatingSwitchSkew(S360.SW_D,  -10, 5); 
+       SetRotatingSwitchSkew(S360.SW_E,  -30, 5); 
+       SetRotatingSwitchSkew(S360.SW_F,  -50, 6); 
+       SetRotatingSwitchSkew(S360.SW_G,  -70, 7); 
+       SetRotatingSwitchSkew(S360.SW_H,  -90, 8); 
+    } else if (IsOption("CpuType/3148")) {
+       bCpuModelIs=3148; 
+       // process the rotating switches to add central handle and skew as needed
+       SetRotatingSwitchSkew(S360.SW_Addr_Compare,   0, 2); 
+       SetRotatingSwitchSkew(S360.SW_A,   50, 3); 
+       SetRotatingSwitchSkew(S360.SW_B,   30, 4); 
+       SetRotatingSwitchSkew(S360.SW_C,   10, 4); 
+       SetRotatingSwitchSkew(S360.SW_D,  -10, 5); 
+       SetRotatingSwitchSkew(S360.SW_E,  -30, 5); 
+       SetRotatingSwitchSkew(S360.SW_F,  -50, 6); 
+       SetRotatingSwitchSkew(S360.SW_G,  -70, 7); 
+       SetRotatingSwitchSkew(S360.SW_H,  -90, 8); 
+    } else if (IsOption("CpuType/2065")) {
        bCpuModelIs=2065; 
     } else if (IsOption("CpuType/2050")) {
        bCpuModelIs=2050; 
     } else if (IsOption("CpuType/2040")) {
        bCpuModelIs=2040; 
     } else {
+       // process the control panel lights to add backlight when state is > 15
        bCpuModelIs=2030; 
        SetBoxLights(S360.Reg_CN_X);
        SetBoxLights(S360.Reg_SA_CK);
@@ -702,7 +936,7 @@ void IBM360_Init(void)
     bCardReadPunchVisible = 0;
     bPrintOutVisible = 0;
     bDasdVisible = 0;
-    bTapesVisible = bTapeIs2415 = 0;
+    bTapesVisible = 0;
 
     nCardsInReadHopper=nCardsInReadStacker=nCardsInPunchStacker=0; // no cards draw in cdr/cdp
     bCardReadHopperBackgroundSet=0; // must grab background behind read hopper guide
@@ -722,22 +956,54 @@ void IBM360_Init(void)
         extern int PARAM_SensorsPerVacCol; 
         extern int PARAM_RWSpeed;
         extern int PARAM_AccelTime;
+        extern int PARAM_DecelTime;
+        extern int PARAM_HeadOpenTime; 
+        extern int PARAM_HiSpeedRwdTrigger;
+        extern int PARAM_HiSpeedRwdEnd;
         bTapesVisible=1;
-        if (IsOption("TapeType/2415")) {
-            // IBM 2415 tape
-            // 1 sensor in each vacuum column 
-            // tape speed: 18.75 inches per second
-            bTapeIs2415=1;  // using IBM 2415 tapes on cpanel gui
-            PARAM_SensorsPerVacCol=1; 
-            PARAM_RWSpeed=19;
-            PARAM_AccelTime=225*3;
-        } else {
-            // IBM 2401 Model 5 tape
-            // 2 sensor in each vacuum column 
-            // tape speed: 75 inches per second
+        if (bCpuModelIs > 3000) {
+            // ibm 360 tapes
+            // IBM 3420 Model 5 tape
+            // 4 sensor in each vacuum column 
+            // tape speed: 125 inches per second
+            // 1600 bits per inch
+            bTapeIs=3420;  // using IBM 3420 tapes on cpanel gui
             PARAM_SensorsPerVacCol=2; 
-            PARAM_RWSpeed=75; 
-            PARAM_AccelTime=225;
+            PARAM_RWSpeed=125; 
+            PARAM_AccelTime=110; // guessed value
+            PARAM_DecelTime=80;  // guessed value
+            PARAM_HeadOpenTime=1200; 
+            PARAM_HiSpeedRwdTrigger =  400; // guessed value
+            PARAM_HiSpeedRwdEnd     =  200; // guessed value
+        } else {
+            // ibm 360 tapes
+            if (IsOption("TapeType/2415")) {
+                // IBM 2415 tape
+                // 1 sensor in each vacuum column 
+                // tape speed: 18.75 inches per second
+                // 1600 bits per inch
+                bTapeIs=2415;  // using IBM 2415 tapes on cpanel gui
+                PARAM_SensorsPerVacCol=1; 
+                PARAM_RWSpeed=19;
+                PARAM_AccelTime=225*3; // guessed value
+                PARAM_DecelTime=180; // guessed value
+                PARAM_HeadOpenTime=700;  // guessed value
+                PARAM_HiSpeedRwdTrigger = 350; // guessed value
+                PARAM_HiSpeedRwdEnd     = 100; // guessed value
+            } else {
+                // IBM 2401 Model 5 tape
+                // 2 sensor in each vacuum column 
+                // tape speed: 75 inches per second
+                // 1600 bits per inch
+                bTapeIs=2401;  // using IBM 2401 tapes on cpanel gui
+                PARAM_SensorsPerVacCol=2; 
+                PARAM_RWSpeed=75; 
+                PARAM_AccelTime=225;
+                PARAM_DecelTime=160;
+                PARAM_HeadOpenTime=700; 
+                PARAM_HiSpeedRwdTrigger = 1500;
+                PARAM_HiSpeedRwdEnd     =  400;
+            }
         }
     }
 
@@ -756,33 +1022,84 @@ void IBM360_Init(void)
         mtcab[unit].state.MT_Head=-1; 
     }
     if (bTapesVisible) {
-        int n; 
-        // set the reel hub's in blue reel images
-        for (n=0; n<48; n++) { 
-            // no blur, States 0..23 already have the hub image for angles 0..120,
-            // now set hub for angles 120..360
-            CopyControlImage(S360.MT_blue_reel_hub,    n,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
-                             S360.MT_blue_reel,     n+24,  98, 98);     // ToCId, ToState,     x1, y1
-
+        int n;
+        uint32 col0a, col0b, col1; 
+        // set reel amount: medium winded on tape reel
+        col0a = surface_rgb_color(208, 209, 201); // fixation 1
+        col0b = surface_rgb_color(228, 219, 211); // fixation 2
+        col1 = surface_rgb_color(55, 55, 55); // medium color
+        for (n=1; n<=67; n++) {
+            // copy reel empty
+            CopyControlImage(S360.MT_reel_amount, 0,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.MT_reel_amount, n,  0,0);        // ToCId, ToState,     x1, y1
+            // add medium circle
+            AddCircle(S360.MT_reel_amount, n, 110+n*2, 110+n*2, col1, 149,149);
+            // add fixation circle1
+            AddCircle(S360.MT_reel_amount, n, 110, 110, col0a, 149,149);
+            // add fixation circle1
+            AddCircle(S360.MT_reel_amount, n,  80,  80, col0b, 149,149);
         }
-        for (n=0; n<18; n++) { // slow blur
-            CopyControlImage(S360.MT_blue_reel_hub, n+48,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
-                             S360.MT_blue_reel,     n+73,  98, 98);     // ToCId, ToState,     x1, y1
+        // fill tape reel state images rotated 90, 180 and 270 gr
+        // no blur images
+        for (n=0; n<9; n++) {
+            Rotate(S360.MT_blue_reel, n,  90, 149,149, n+ 9); // rotated  90gr -> states 9..17
+            Rotate(S360.MT_blue_reel, n, 180, 149,149, n+18); // rotated 180gr -> states 18..26
+            Rotate(S360.MT_blue_reel, n, 270, 149,149, n+27); // rotated 270gr -> states 27..35
+            Rotate(S360.MT_red_reel, n,  90, 149,149, n+ 9); // rotated  90gr -> states 9..17
+            Rotate(S360.MT_red_reel, n, 180, 149,149, n+18); // rotated 180gr -> states 18..26
+            Rotate(S360.MT_red_reel, n, 270, 149,149, n+27); // rotated 270gr -> states 27..35
+            Rotate(S360.MT_green_reel, n,  90, 149,149, n+ 9); // rotated  90gr -> states 9..17
+            Rotate(S360.MT_green_reel, n, 180, 149,149, n+18); // rotated 180gr -> states 18..26
+            Rotate(S360.MT_green_reel, n, 270, 149,149, n+27); // rotated 270gr -> states 27..35
         }
-        for (n=0; n<18; n++) { // high blur
-            CopyControlImage(S360.MT_blue_reel_hub, n+66,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
-                             S360.MT_blue_reel,     n+91,  98, 98);     // ToCId, ToState,     x1, y1
+        // slow blur images
+        for (n=0; n<6; n++) {
+            Rotate(S360.MT_blue_reel, n+36,  90, 149,149, n+36+ 6); 
+            Rotate(S360.MT_blue_reel, n+36, 180, 149,149, n+36+12); 
+            Rotate(S360.MT_blue_reel, n+36, 270, 149,149, n+36+18); 
+            Rotate(S360.MT_red_reel, n+36,  90, 149,149, n+36+ 6); 
+            Rotate(S360.MT_red_reel, n+36, 180, 149,149, n+36+12); 
+            Rotate(S360.MT_red_reel, n+36, 270, 149,149, n+36+18); 
+            Rotate(S360.MT_green_reel, n+36,  90, 149,149, n+36+ 6);
+            Rotate(S360.MT_green_reel, n+36, 180, 149,149, n+36+12);
+            Rotate(S360.MT_green_reel, n+36, 270, 149,149, n+36+18);
         }
-        // set the reel hub's in green reel images
-        for (n=0; n<24; n++) { // slow blur
-            CopyControlImage(S360.MT_green_reel_hub, n,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
-                             S360.MT_green_reel,     n+42,  98, 98);     // ToCId, ToState,     x1, y1
+        // fast blur images
+        for (n=0; n<2; n++) {
+            Rotate(S360.MT_blue_reel, n+60,  90, 149,149, n+60+ 2); 
+            Rotate(S360.MT_blue_reel, n+60, 180, 149,149, n+60+ 4); 
+            Rotate(S360.MT_blue_reel, n+60, 270, 149,149, n+60+ 6); 
+            Rotate(S360.MT_red_reel, n+60,  90, 149,149, n+60+ 2); 
+            Rotate(S360.MT_red_reel, n+60, 180, 149,149, n+60+ 4); 
+            Rotate(S360.MT_red_reel, n+60, 270, 149,149, n+60+ 6); 
+            Rotate(S360.MT_green_reel, n+60,  90, 149,149, n+60+ 2); 
+            Rotate(S360.MT_green_reel, n+60, 180, 149,149, n+60+ 4); 
+            Rotate(S360.MT_green_reel, n+60, 270, 149,149, n+60+ 6); 
         }
-        for (n=0; n<8; n++) { // high blur
-            CopyControlImage(S360.MT_green_reel_hub, n+24,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
-                             S360.MT_green_reel,     n+68,  98, 98);     // ToCId, ToState,     x1, y1
+        if (bTapeIs == 3420) {
+            // for 3420 tapes, do the follwing actions:
+            // 1- set reel hub on control images
+            for (n=0; n<68; n++) {
+                CopyControlImage(S360.MT_Take_reel_amount, 70,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                                 S360.MT_blue_reel, n,  0,0);                // ToCId, ToState,     x1, y1
+                CopyControlImage(S360.MT_Take_reel_amount, 70,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                                 S360.MT_red_reel, n,  0,0);                 // ToCId, ToState,     x1, y1
+                CopyControlImage(S360.MT_Take_reel_amount, 70,  0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                                 S360.MT_green_reel, n,  0,0);               // ToCId, ToState,     x1, y1
+            }
+            // 2- set the reel ammount for take reel
+            col1 = surface_rgb_color(55, 55, 55); // medium color
+            for (n=1; n<=67; n++) {
+                // copy empty take reel 
+                CopyControlImage(S360.MT_Take_reel_amount, 0, 0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                                 S360.MT_Take_reel_amount, n,  0,0);        // ToCId, ToState,     x1, y1
+                // add medium circle
+                AddCircle(S360.MT_Take_reel_amount, n, (int)(159+n*1.5), (int)(159+n*1.5), col1, 149,149);
+                // copy take reel central hub
+                CopyControlImage(S360.MT_Take_reel_amount, 68, 0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                                 S360.MT_Take_reel_amount, n,  0,0);        // ToCId, ToState,     x1, y1
+            }
         }
-
     }
     
     memset (dasdcab, 0, sizeof dasdcab);
@@ -790,9 +1107,20 @@ void IBM360_Init(void)
     lptPrintOutDoneCount=-1; // number of lines already printed on main cpanel printer paper
 
     if (IsOption("console/1")) {
+        extern int PARAM_GolfBall_char_ww2;  // Console printer horizontal spacing between first pixel of a char and first pixel of next char in next char same line
         // console window available. get its control panel window number
         // to get it, just ask to a control
         ncp_console=GetControlInfo(S360.ConsPaper, CINFO_NCP); 
+        // determine the hoeiz spacinf between chars depending on console type
+        
+        if (IsOption("ConsType/3210")) {
+            bConsTypeIs=3210;
+            PARAM_GolfBall_char_ww2 = 12; 
+        } else {
+            bConsTypeIs=1052;
+            PARAM_GolfBall_char_ww2 = 11;  
+        }
+
     } else {
         ncp_console=-1; // no console window
     }
@@ -887,11 +1215,44 @@ int calculateParity(uint32 n)
     return x & 1;
 }
 
+void SetOCPPanelLights(int mode, 
+                  int TestState, 
+                  int SW_IPL1, int SW_IPL2, int SW_IPL3)
+{
+    int n; 
+
+    n= (((flags & WAIT)!=0) && (sim_is_running!=0)) ? 1:0;
+    if (mode==0) TickCount(S360.LI_Wait, n); 
+    else SetStateWithIntensity(S360.LI_Wait, n); 
+    if (mode) {
+        // set light on refresh, but no need to set them on TickCount
+        SetState(S360.LI_System, (sim_is_running) ? 1:0); 
+        SetState(S360.LI_Manual, (sim_is_running) ? 0:1); 
+        SetState(S360.LI_Test, (TestState) ? 1:0); 
+        SetState(S360.LI_Load, (loading) ? 1:0);
+        if (IPLaddr) {
+            // scp boot command has been issued
+            // Set the rotating switches according to booted addr from
+            SetState(SW_IPL3, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(SW_IPL2, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
+            SetState(SW_IPL1, IPLaddr & 0x7); IPLaddr=0;
+        }
+        if ((GetState(S360.SW_Rate)!=0) && (sim_is_running) && (cpanel_stop_flag != 2)) {
+            // rate sw is set to instr step, but cpu is running whiout stop flag set -> 
+            // we are in regurlar run mode -> stop the cpu
+            cpanel_stop_flag = 2;
+            // and set interactive mode
+            cpanel_interactive=1; 
+        }
+    }
+}                  
+
+
 // set cpu panel lights for Model 30
 // if mode=0 set TickCount (for tickcount callback)
 //         1 set SetStateWithIntensity (for refresh callback)
 //         2 set al lights to 1 (while lamp test button is pressed)
-void IBM360M30_SetCpuPanelLights(int mode)
+void SetCpuPanelLights_M30(int mode)
 {
     t_uint64 AllOnes = (t_uint64)(-1);
     int bSelChan, bMpxChan, bAuxStorage;
@@ -926,24 +1287,8 @@ void IBM360M30_SetCpuPanelLights(int mode)
     }
 
     // Inside Cpu Panel, Operator Console Panel (ocp) lights are realistic
-    n= (((flags & WAIT)!=0) && (sim_is_running!=0)) ? 1:0;
-    if (mode==0) TickCount(S360.LI_Wait, n); 
-    else SetStateWithIntensity(S360.LI_Wait, n); 
-    if (mode) {
-        // set light on refresh, but no need to set them on TickCount
-        SetState(S360.LI_System, (sim_is_running) ? 1:0); 
-        SetState(S360.LI_Manual, (sim_is_running) ? 0:1); 
-        n=((int)GetState(S360.SW_Rate) ? 1:0) || ((int)GetState(S360.SW_Addr_Compare) ? 1:0);
-        SetState(S360.LI_Test, (n!=0) ? 1:0); 
-        SetState(S360.LI_Load, (loading) ? 1:0);
-        if (IPLaddr) {
-            // scp boot command has been issued
-            // Set the rotating switches according to booted addr from
-            SetState(S360.SW_J, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
-            SetState(S360.SW_H, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
-            SetState(S360.SW_G, IPLaddr & 0x7); IPLaddr=0;
-        }
-    }
+    n=((int)GetState(S360.SW_Rate) ? 1:0) || ((int)GetState(S360.SW_Addr_Compare) ? 1:0); // test state
+    SetOCPPanelLights(mode, n, S360.SW_G, S360.SW_H, S360.SW_J); 
 
     // as microarch is not simulated, lights are set with general
     // purpose register contents. This, even if not acurate, will provide a 
@@ -1033,7 +1378,7 @@ void IBM360M30_SetCpuPanelLights(int mode)
 
     flip_flop = 1-flip_flop; 
     n1 = (((flags & WAIT)==0) && (sim_is_running!=0)) ? flip_flop:0; // EX status
-    n2 = (cpu_mem_addr_stop==-2) ? 1:0; // MATCH status
+    n2 = (cpu_mem_comp.hit) ? 1:0; // MATCH status
     if (cpu_mem_data & (1<<31)) { // memory access
         n3=flip_flop; // ALLOW WRITE status
         cpu_mem_data &= ~(1<<31);
@@ -1091,27 +1436,13 @@ void IBM360M30_SetCpuPanelLights(int mode)
 // set cpu panel lights for Model 40
 // if mode=0 set TickCount (for tickcount callback)
 //         1 set SetStateWithIntensity (for refresh callback)
-void IBM360M40_SetCpuPanelLights(int mode)
+void SetCpuPanelLights_M40(int mode)
 {
     uint32 n, n1,n2,n3,p1,p2,p3; 
 
     // Inside Cpu Panel, Operator Console Panel (ocp) lights are realistic
-    n= (((flags & WAIT)!=0) && (sim_is_running!=0)) ? 1:0;
-    if (mode==0) TickCount(S360.LI_Wait, n); 
-    else SetStateWithIntensity(S360.LI_Wait, n); 
-    if (mode) {
-        // set light on refresh, but no need to set them on TickCount
-        SetState(S360.LI_System, (sim_is_running) ? 1:0); 
-        SetState(S360.LI_Manual, (sim_is_running) ? 0:1); 
-        n=(int)(GetState(S360.SW_Rate) ? 1:0); // M40 does not have Addr compare control defined
-        SetState(S360.LI_Test, (n!=0) ? 1:0); 
-        SetState(S360.LI_Load, (loading) ? 1:0); 
-        if (IPLaddr) {
-            SetState(S360.SW_C, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
-            SetState(S360.SW_B, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
-            SetState(S360.SW_A, IPLaddr & 0x7); IPLaddr=0;
-        }
-    }
+    n=(int)GetState(S360.SW_Rate);
+    SetOCPPanelLights(mode, n, S360.SW_A, S360.SW_B, S360.SW_C); 
 
     // as microarch is not simulated, lights are set with general
     // purpose register contents. This, even if not acurate, will provide a 
@@ -1194,7 +1525,7 @@ void IBM360M40_SetCpuPanelLights(int mode)
 // if mode=0 set TickCount (for tickcount callback)
 //         1 set SetStateWithIntensity (for refresh callback)
 //         2 set al lights to 1 (while lamp test button is pressed)
-void IBM360M50_SetCpuPanelLights(int mode)
+void SetCpuPanelLights_M50(int mode)
 {
     t_uint64 AllOnes = (t_uint64)(-1);
     static int flip_flop = 0;
@@ -1228,22 +1559,8 @@ void IBM360M50_SetCpuPanelLights(int mode)
         return; 
     }
     // Inside Cpu Panel, Operator Console Panel (ocp) lights are realistic
-    n= (((flags & WAIT)!=0) && (sim_is_running!=0)) ? 1:0;
-    if (mode==0) TickCount(S360.LI_Wait, n); 
-    else SetStateWithIntensity(S360.LI_Wait, n); 
-    if (mode) {
-        // set light on refresh, but no need to set them on TickCount
-        SetState(S360.LI_System, (sim_is_running) ? 1:0); 
-        SetState(S360.LI_Manual, (sim_is_running) ? 0:1); 
-        n=(int)(GetState(S360.SW_Rate) ? 1:0); // M50 does not have Addr compare control defined
-        SetState(S360.LI_Test, (n!=0) ? 1:0); 
-        SetState(S360.LI_Load, (loading) ? 1:0); 
-        if (IPLaddr) {
-            SetState(S360.SW_C, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
-            SetState(S360.SW_B, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
-            SetState(S360.SW_A, IPLaddr & 0x7); IPLaddr=0;
-        }
-    }
+    n=(int)GetState(S360.SW_Rate);
+    SetOCPPanelLights(mode, n, S360.SW_A, S360.SW_B, S360.SW_C); 
 
     // clear voltage check
     if (mode) SetState(S360.Reg_Volt, 0);
@@ -1278,7 +1595,7 @@ void IBM360M50_SetCpuPanelLights(int mode)
     if (mode==0) { TickCount(S360.Reg_IAR_L, nHi); TickCount(S360.Reg_IAR_R, nLo); }
     else { SetStateWithIntensity(S360.Reg_IAR_L, nHi); SetStateWithIntensity(S360.Reg_IAR_R, nLo); }
     
-    // CPU ligts (from p183 of http://www.bitsavers.org/pdf/ibm/360/fe/2050/SY22-2832-4_360-50Maint.pdf)
+    // CPU ligths (from p183 of http://www.bitsavers.org/pdf/ibm/360/fe/2050/SY22-2832-4_360-50Maint.pdf)
     // FLT on control panel is Fault Loading Test 
     // MODE ROS -> lit when normal instr execution
     // All clock lit -> has clock signal
@@ -1335,7 +1652,7 @@ void IBM360M50_SetCpuPanelLights(int mode)
     switch (1+((int) GetState(S360.Label_Roller4_L) & 7)) {
        case 1: n=regs[12]; break; 
        case 2: n=regs[13]; break; 
-       case 3: n=regs[16]; break; 
+       case 3: n=regs[14]; break; 
        case 4: n=regs[15]; break; 
        case 5: n=InstrCycles << 4; break; // count of intructions loops executed so far (if cpu waiting, do get incremented)
        case 6: n=InstrExec << 9; break; // count of intructions executed so far (real instr, if cpu waiting, InstrExec do NO get incremented)
@@ -1346,12 +1663,11 @@ void IBM360M50_SetCpuPanelLights(int mode)
     else { SetStateWithIntensity(S360.Reg_Roller4_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller4_R, n & 0x3FFFF); }
 }
 
-
 // set cpu panel lights for Model 65
 // if mode=0 set TickCount (for tickcount callback)
 //         1 set SetStateWithIntensity (for refresh callback)
 //         2 set al lights to 1 (while lamp test button is pressed)
-void IBM360M65_SetCpuPanelLights(int mode)
+void SetCpuPanelLights_M65(int mode)
 {
     t_uint64 AllOnes = (t_uint64)(-1);
     static int flip_flop = 0;
@@ -1360,7 +1676,7 @@ void IBM360M65_SetCpuPanelLights(int mode)
 
     if (mode==2) {
         // set all to ones, is lamp test
-        // this switch is only available for Model 50
+        // this switch is only available for Model 65
         SetState(S360.Reg_Volt, AllOnes);
         SetState(S360.Reg_Roller1_L, AllOnes);
         SetState(S360.Reg_Roller1_R, AllOnes);
@@ -1383,22 +1699,8 @@ void IBM360M65_SetCpuPanelLights(int mode)
         return; 
     }
     // Inside Cpu Panel, Operator Console Panel (ocp) lights are realistic
-    n= (((flags & WAIT)!=0) && (sim_is_running!=0)) ? 1:0;
-    if (mode==0) TickCount(S360.LI_Wait, n); 
-    else SetStateWithIntensity(S360.LI_Wait, n); 
-    if (mode) {
-        // set light on refresh, but no need to set them on TickCount
-        SetState(S360.LI_System, (sim_is_running) ? 1:0); 
-        SetState(S360.LI_Manual, (sim_is_running) ? 0:1); 
-        n=(int)(GetState(S360.SW_Rate) ? 1:0); // M65 does not have Addr compare control defined
-        SetState(S360.LI_Test, (n!=0) ? 1:0); 
-        SetState(S360.LI_Load, (loading) ? 1:0); 
-        if (IPLaddr) {
-            SetState(S360.SW_C, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
-            SetState(S360.SW_B, IPLaddr & 0xF); IPLaddr=IPLaddr>>4; 
-            SetState(S360.SW_A, IPLaddr & 0x7); IPLaddr=0;
-        }
-    }
+    n=(int)GetState(S360.SW_Rate);
+    SetOCPPanelLights(mode, n, S360.SW_A, S360.SW_B, S360.SW_C); 
 
     if (mode) SetState(S360.Reg_Volt, 0);
     if (mode) SetState(S360.Reg_Stor_Proc_CHK, 0);
@@ -1476,6 +1778,212 @@ void IBM360M65_SetCpuPanelLights(int mode)
     }
     if (mode==0) { TickCount(S360.Reg_Roller6_L, n >> 18); TickCount(S360.Reg_Roller6_R, n & 0x3FFFF); }
     else { SetStateWithIntensity(S360.Reg_Roller6_L, n >> 18); SetStateWithIntensity(S360.Reg_Roller6_R, n & 0x3FFFF); }
+}
+
+// set cpu panel lights for 370 Model 145
+// if mode=0 set TickCount (for tickcount callback)
+//         1 set SetStateWithIntensity (for refresh callback)
+//         2 set al lights to 1 (while lamp test button is pressed)
+void SetCpuPanelLights_M145(int mode)
+{
+    extern uint8        dat_en;           /* Translate addresses */
+    extern uint8        ec_mode;              /* EC mode PSW */
+    t_uint64 AllOnes = (t_uint64)(-1);
+    static int flip_flop = 0;
+
+    uint32 n;  
+    int n1, n2, n3, n4;
+
+    if (mode==2) {
+        // set all to ones, is lamp test
+        // this switch is only available for Model 145/148
+        SetState(S360.Reg_SysChk_L, AllOnes);
+        SetState(S360.Reg_SysChk_R, AllOnes);
+        SetState(S360.Reg_Cpu_Status, AllOnes);
+        SetState(S360.Reg_Cons_File, AllOnes);
+
+        SetState(S360.Reg_Roller1_L, AllOnes);
+        SetState(S360.Reg_Roller1_R, AllOnes);
+        SetState(S360.Reg_Roller2_L, AllOnes);
+        SetState(S360.Reg_Roller2_R, AllOnes);
+
+        SetState(S360.LI_System, 1); 
+        SetState(S360.LI_Manual, 1); 
+        SetState(S360.LI_Wait, 1); 
+        SetState(S360.LI_Test, 1); 
+        SetState(S360.LI_Load, 1); 
+        return; 
+    }
+    // Inside Cpu Panel, Operator Console Panel (ocp) lights are realistic
+    n=((int)GetState(S360.SW_Rate) ? 1:0) || ((int)GetState(S360.SW_Addr_Compare_Cntrl) ? 1:0);
+    SetOCPPanelLights(mode, n, S360.SW_F, S360.SW_G, S360.SW_H); 
+
+    SetState(S360.Reg_SysChk_L, 0);
+    SetState(S360.Reg_SysChk_R, 0);
+    SetState(S360.Reg_Cons_File, 0); 
+    
+    // EXE CPLT  Indicates CPU stopped state reached as result of:
+    //              1. Pressing the STOP key.
+    //              2. The RATE switch In the INSTRUCTION STEP position.
+    //              3. A match being detected while In the address match mode of operation.
+    // ADR COMP MATCH Indicates that the address (real or logical) being used to access
+    //              main storage matches the address set into switches CDEFGH during an 
+    //              address match operation. The action taken by the CPU
+    //              as a result of the match condition is controlled by the setting of
+    //              the ADDRESS COMPARE CONTROL switch.    
+    // ADR X-LATE MODE Indicates dat features active
+    // EC MODE      Indicates Enhanced control active (ir 370 mode, vs BC - Basic Control mode aka 360 mode)
+    n= (sim_is_running ? 0:(1<<17)) +      // EXEC CPLT
+       ((cpu_mem_comp.hit) ? (1<<16):0) +  // MATCH status
+       (dat_en ? (1<<5):0) +               // ADR X-LATE
+       (ec_mode ? (1<<7):0);               // EC-MODE
+
+    // STOR I lits on each Instr Cycle (flip flop), I lits on instr, 
+    // TRAP 1 list on irq pending
+    flip_flop = 1-flip_flop; 
+    n= n + (flip_flop << 13) + (irq_pend ? (1<<12):0) + ((InstrExec & 1) << 10) ; 
+
+    if (mode==0) TickCount(S360.Reg_Cpu_Status, n); 
+    else SetStateWithIntensity(S360.Reg_Cpu_Status, n); 
+
+    // control panel info is described in 
+    // http://bitsavers.informatik.uni-stuttgart.de/pdf/ibm/370/model145/GC38-0015-2_370_145_Operating_Procedures_sep72.pdf
+    // in the doc, in p13, it is said that roller 2 (A-Register) get on position 1 data from "manual store/display"
+    // in p61, it is said that roller 1 (dply asmblr) get on position 2 data from store/display
+    // is it not clear with one is the correct one. There we implement what is said in p61
+
+    // roller gets real data, even if it is not the microarch ones
+    // roller 1 is DPLY ASSEMBLER OUT
+    switch (1+((int) GetState(S360.Label_Roller1_L) & 7)) {
+       case 1: n=cpu_mem_addr; break; // this is realistic
+       case 2: n=cpu_mem_data; break; // this is realistic
+       case 3: n=regs[0]; break; 
+       case 4: n=regs[1]; break; 
+       case 5: n=regs[2]; break; 
+       case 6: n=regs[3]; break; 
+       case 7: n = InstrCycles << 4; break; // count of intructions loops executed so far (if cpu waiting, do get incremented)
+       case 8: n = InstrExec << 9; break; // count of intructions executed so far (real instr, if cpu waiting, InstrExec do NO get incremented)
+       default: n=0; break; 
+    }
+    n1= n & 0xFF; n1 |= (calculateParity(n1) << 8); n=n>>8; 
+    n2= n & 0xFF; n2 |= (calculateParity(n2) << 8); n=n>>8; 
+    n3= n & 0xFF; n3 |= (calculateParity(n3) << 8); n=n>>8; 
+    n4= n & 0xFF; n4 |= (calculateParity(n4) << 8); n=n>>8; 
+    n4=(n4 << 9) | n3; n2=(n2 << 9) | n1; 
+
+    if (mode==0) { TickCount(S360.Reg_Roller1_L, n4); TickCount(S360.Reg_Roller1_R, n2); }
+    else { SetStateWithIntensity(S360.Reg_Roller1_L, n4); SetStateWithIntensity(S360.Reg_Roller1_R, n2); }
+
+    // roller 2 is A REGISTER DISPLAY 
+    switch (1+((int) GetState(S360.Label_Roller2_L) & 7)) {
+       case 1: n=PC; break; // this is realistic
+       case 2: n=regs[4]; break; 
+       case 3: n = get_chan_info(1, 0) << 16; break; // return count bytes in channel 1 to be displayed in control panel
+       case 4: n = get_chan_info(1, 1) << 8; break; // last data byte read/write, key and command
+       case 5: n = get_chan_info(1, 2); break; // flags/status
+       case 6: n = get_chan_info(2, 0) << 16; break; // same for channel 2
+       case 7: n = get_chan_info(2, 1) << 8; break; // 
+       case 8: n = get_chan_info(2, 2); break; // 
+       default: n=0; break; 
+    }
+    n1= n & 0xFF; n1 |= (calculateParity(n1) << 8); n=n>>8; 
+    n2= n & 0xFF; n2 |= (calculateParity(n2) << 8); n=n>>8; 
+    n3= n & 0xFF; n3 |= (calculateParity(n3) << 8); n=n>>8; 
+    n4= n & 0xFF; n4 |= (calculateParity(n4) << 8); n=n>>8; 
+    n4=(n4 << 9) | n3; n2=(n2 << 9) | n1; 
+
+    if (mode==0) { TickCount(S360.Reg_Roller2_L, n4); TickCount(S360.Reg_Roller2_R, n2); }
+    else { SetStateWithIntensity(S360.Reg_Roller2_L, n4); SetStateWithIntensity(S360.Reg_Roller2_R, n2); }
+}
+
+
+// set cpu panel lights for 370 Model 148
+// if mode=0 set TickCount (for tickcount callback)
+//         1 set SetStateWithIntensity (for refresh callback)
+//         2 set al lights to 1 (while lamp test button is pressed)
+void SetCpuPanelLights_M148(int mode)
+{
+    t_uint64 AllOnes = (t_uint64)(-1);
+
+    uint32 n;  
+    int n1, n2, n3, n4;
+
+    if (mode==2) {
+        // set all to ones, is lamp test
+        // this switch is only available for Model 145/148
+        SetState(S360.Reg_Sys_Status, AllOnes);
+
+        SetState(S360.Reg_Roller1_L, AllOnes);
+        SetState(S360.Reg_Roller1_R, AllOnes);
+        SetState(S360.Reg_Roller2_L, AllOnes);
+        SetState(S360.Reg_Roller2_R, AllOnes);
+
+        SetState(S360.LI_System, 1); 
+        SetState(S360.LI_Manual, 1); 
+        SetState(S360.LI_Wait, 1); 
+        SetState(S360.LI_Test, 1); 
+        SetState(S360.LI_Load, 1); 
+        return; 
+    }
+    // Inside Cpu Panel, Operator Console Panel (ocp) lights are realistic
+    n=((int)GetState(S360.SW_Rate) ? 1:0) || ((int)GetState(S360.SW_Addr_Compare_Cntrl) ? 1:0);
+    SetOCPPanelLights(mode, n, S360.SW_F, S360.SW_G, S360.SW_H); 
+    
+    // EXE CPLT  Indicates CPU stopped state reached as result of:
+    //              1. Pressing the STOP key.
+    //              2. The RATE switch In the INSTRUCTION STEP position.
+    //              3. A match being detected while In the address match mode of operation.
+    // ADR COMP MATCH Indicates that the address (real or logical) being used to access
+    //              main storage matches the address set into switches CDEFGH during an 
+    //              address match operation. The action taken by the CPU
+    //              as a result of the match condition is controlled by the setting of
+    //              the ADDRESS COMPARE CONTROL switch.    
+    n= (sim_is_running ? 0:(1<<2)) +       // EXEC CPLT
+       ((cpu_mem_comp.hit) ? (1<<1):0);    // MATCH status
+
+    if (mode==0) TickCount(S360.Reg_Sys_Status, n); 
+    else SetStateWithIntensity(S360.Reg_Sys_Status, n); 
+
+    // no control panel info is available. Modeled after Model 145
+    // both machines seems to share the same (may be evolved) microarchitecture
+    // in real hw, most of light of Model 145 are hiden inside to panel, not shown in cpanel impementation
+    // into this top panel there is the roller handle for roller 2 (A register). In main panel only light
+    // are visible; roller and roller handle are hidden into top panel
+
+    // roller gets real data, even if it is not the microarch ones
+    // roller 1 is DPLY ASSEMBLER OUT
+    switch (1+((int) GetState(S360.Label_Roller1_L) & 7)) {
+       case 1: n=cpu_mem_addr; break; // this is realistic
+       case 2: n=cpu_mem_data; break; // this is realistic
+       case 3: n=regs[0]; break; 
+       case 4: n=regs[1]; break; 
+       case 5: n=regs[2]; break; 
+       case 6: n=PC; break; 
+       case 7: n = InstrCycles << 4; break; // count of intructions loops executed so far (if cpu waiting, do get incremented)
+       case 8: n = InstrExec << 9; break; // count of intructions executed so far (real instr, if cpu waiting, InstrExec do NO get incremented)
+       default: n=0; break; 
+    }
+    n1= n & 0xFF; n1 |= (calculateParity(n1) << 8); n=n>>8; 
+    n2= n & 0xFF; n2 |= (calculateParity(n2) << 8); n=n>>8; 
+    n3= n & 0xFF; n3 |= (calculateParity(n3) << 8); n=n>>8; 
+    n4= n & 0xFF; n4 |= (calculateParity(n4) << 8); n=n>>8; 
+    n4=(n4 << 9) | n3; n2=(n2 << 9) | n1; 
+
+    if (mode==0) { TickCount(S360.Reg_Roller1_L, n4); TickCount(S360.Reg_Roller1_R, n2); }
+    else { SetStateWithIntensity(S360.Reg_Roller1_L, n4); SetStateWithIntensity(S360.Reg_Roller1_R, n2); }
+
+    // roller 2 is unlabeled, and placed on top of roller 1 lights
+    // as roller 2 handle is hidden in top panel, the lights are set fixed to PC value
+    n=PC; // this is realistic
+
+    n1= n & 0xFF; n1 |= (calculateParity(n1) << 8); n=n>>8; 
+    n2= n & 0xFF; n2 |= (calculateParity(n2) << 8); n=n>>8; 
+    n3= n & 0xFF; n3 |= (calculateParity(n3) << 8); n=n>>8; 
+    n4= n & 0xFF; n4 |= (calculateParity(n4) << 8); n=n>>8; 
+    n4=(n4 << 9) | n3; n2=(n2 << 9) | n1; 
+
+    if (mode==0) { TickCount(S360.Reg_Roller2_L, n4); TickCount(S360.Reg_Roller2_R, n2); }
+    else { SetStateWithIntensity(S360.Reg_Roller2_L, n4); SetStateWithIntensity(S360.Reg_Roller2_R, n2); }
 }
 
 
@@ -1605,7 +2113,7 @@ int mt_do_animation_seq(int unit,
                 switch(mtcab[unit].reel[ireel].color) {
                     case 1: n = 36 * ang / 360; break; // red reel  
                     case 2: n = 36 * ang / 360; break; // green reel  
-                   default: n = 72 * ang / 360; break; // blue reel
+                   default: n = 36 * ang / 360; break; // blue reel
                 }
                 if (ireel==0) *MT_L_Rot=n; else *MT_R_Rot =n; 
             }
@@ -1719,18 +2227,18 @@ int mt_do_animation_seq(int unit,
                 for(ireel=0; ireel<2; ireel++) {
                     n= (ireel == 0) ? n1:n2; 
                     switch(mtcab[unit].reel[ireel].color) {
-                        case 1: n -= ((m<msec/3) ? 1 : (m<2*msec/3) ? 2 : 4); // red reel  
-                                while (n<48) n+=9; while(n>56) n-=9;
-                                ang=(n-48) * 40;
-                                break; 
-                        case 2: n -= ((m<msec/4) ? 1 : (m<2*msec/4) ? 2 : (m<3*msec/4) ? 3 : 5); // green reel  
-                                while (n<42) n+=24; while(n>65) n-=24;
-                                ang=(n-42) * 15; 
+                        case 1: n -= ((m<msec/3) ? 2 : (m<2*msec/3) ? 3 : 5); // red reel  
+                                while (n<36) n+=24; while(n>60) n-=24;
+                                ang=(n-36) * 15; 
                                 break;
-                        default: n -= ((m<msec/3) ? 1 : (m<2*msec/3) ? 2 : 3); // blue reel
-                                while (n<73) n+=18; while(n>90) n-=18;
-                                ang=(n-73) * 20;
-                                break; 
+                        case 2: n -= ((m<msec/4) ? 1 : (m<2*msec/4) ? 2 : (m<3*msec/4) ? 3 : 5); // green reel  
+                                while (n<36) n+=24; while(n>60) n-=24;
+                                ang=(n-36) * 15; 
+                                break;
+                        default: n -= ((m<msec/3) ? 2 : (m<2*msec/3) ? 3 : 5); // blue reel
+                                while (n<36) n+=24; while(n>60) n-=24;
+                                ang=(n-36) * 15; 
+                                break;
                     }
                     if (ireel==0) {n1=n; } else {n2=n; }
                     mtcab[unit].reel[ireel].ang=ang;
@@ -1740,13 +2248,13 @@ int mt_do_animation_seq(int unit,
                     n= (ireel == 0) ? n1:n2; 
                     switch(mtcab[unit].reel[ireel].color) {
                         case 1: n -= 3; // red reel  
-                                while (n<57) n+=18+5; while(n>74) n-=18;
+                                while (n<60) n+=8; while(n>67) n-=8; 
                                 break; 
                         case 2: n -= 3; // green reel  
-                                while (n<68) n+=8; while(n>75) n-=8; 
+                                while (n<60) n+=8; while(n>67) n-=8; 
                                 break;
-                        default: n += 5; // blue reel
-                                while (n<91) n+=18; while(n>108) n-=18;
+                        default: n -= 3; // blue reel
+                                while (n<60) n+=8; while(n>67) n-=8; 
                                 break; 
                     }
                     if (ireel==0) n1=n; else n2=n; 
@@ -1765,13 +2273,32 @@ int mt_do_animation_seq(int unit,
             if (bFastMode) {
                 // if Key Control-F (^F, Ctrl F) being pressed then set duration to 180 msec
                 mtcab[unit].seq[nseq].msec = 180;
-                n1=1000; // make L reel transparent
+                if (bTapeIs != 3420) n1=1000; // make L reel transparent for 24XX tapes
             }
-            *MT_head  = 16;               // head wide open
+            if (bTapeIs==3420) {
+                // 3420 tapes do in column rewind
+                 // so glass door closed, tape medium in columns
+                *MT_head  = 1;               
+                // oscilate tape medium loop in columns each n msec
+                p=mtcab[unit].rew_u3 / (mt_info[unit].MediumLen*10); 
+                if (p<0) p=0; if (p>100) p=100; 
+                m= msec+time; // time elapsed in this step
+                n=100 + (100-p) *2/3; 
+                n=abs((m % n) * 200 / n - 100) - 50; // tape loop oscilation amplitude -50..+50
+                *L_VacColMedium_h = (int) (PARAM_VacCol_h_Hi * (1.0 + n*1.2/1000.0)); 
+                n=100 + (p) *2/3; 
+                n=abs((m % n) * 200 / n - 100) - 50; // tape loop oscilation amplitude -50..+50
+                *R_VacColMedium_h = (int) (PARAM_VacCol_h_Low * (1.0 + n*1.2/1000.0)); 
+                // keep the values in vaccol when quitting HiRew animation
+                mtcab[unit].reel[0].VacCol_h = *L_VacColMedium_h; 
+                mtcab[unit].reel[1].VacCol_h = *R_VacColMedium_h; 
+            } else {
+                *MT_head  = 16;               // head wide open
+                *L_VacColMedium_h = 0;        // vac col empty
+                *R_VacColMedium_h = 0;        // vac col empty
+            }
             *MT_L_Rot = n1;
             *MT_R_Rot = n2;
-            *L_VacColMedium_h = 0;        // vac col empty
-            *R_VacColMedium_h = 0;        // vac col empty
             return 0; // exit after step execution. tnow is in this step
         }
         nseq++; 
@@ -1837,8 +2364,8 @@ void mt_add_load_seq(int unit)
     // reels rotates 360 + 90 + 45 gr during this time (take motor goes at 46 rpm)
     // prepare animation sequence each given msec
     msec=33;                                   // time for animation step 
-    ang_inc = (msec * PARAM_TakeMotor_RPM * 360) / (60 * 1000); // angle reel spins on each animation step
     nHead   = PARAM_HeadOpenTime / msec;      // number of steps in animation of head closing
+    ang_inc = (msec * PARAM_TakeMotor_RPM * 360) / (60 * 1000); // angle reel spins on each animation step
 
     // calculate the amount of tape medium that reel loads into vaccol on each step given reel rotation
     r1=(50 * PARAM_Reel_Diameter / 2) / 100;   // radius when reel empty
@@ -1853,14 +2380,56 @@ void mt_add_load_seq(int unit)
     L_h = 0;  // amount of tape medium in each column
     R_h = 0;
 
+    // on 3420, 
+    if (bTapeIs == 3420) {
+        // load sequence for 3420
+        // MT_Head=1 and MT_Reel_Amount=0 -> closed glass door, no data reel/ring is visible 
+        // MT_Head=2..15 and MT_Reel_Amount=0 -> glass door opening, no data reel/ring is visible 
+        // MT_Head=16 and MT_Reel_Amount=0 -> glass door full open, no data reel/ring is visible 
+        // MT_Head=16 and MT_Reel_Amount=1 -> glass door full open, data reel visible, reel ring visible and closed
+        // MT_Head=15..2 and MT_Reel_Amount=1 -> glass closing, data reel visible, reel ring opening
+        // MT_Head=1 and MT_Reel_Amount=1 -> glass door closed, data reel visible, reel ring full open
+
+        int msec = PARAM_HeadOpenTime / 16; 
+        MT_head=1; 
+        for(;;) {
+            AddSeq(unit, msec, MT_anim_step_inc, 
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                0, MT_head);     
+            if (MT_head==16) break; 
+            MT_head++;
+        }
+
+        // pause 0.8 sec
+        AddSeq(unit, 800 /* msec */, MT_anim_step_inc, 
+            0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+            0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+            0 /* MT_Reel_Amount */, 16 /* MT_head */);       
+        // Reel Amount=0 and MT_Head=16 -> head is closed with reel amount = 1, thas is, reel visible, seal ring is opened and glass door closes
+
+        MT_head=16; // open head
+        for(;;) {
+            AddSeq(unit, msec, MT_anim_step_inc, 
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                1 /* MT_Reel_Amount */, MT_head);     // all tape medium on data reel
+            if (MT_head==1) break; 
+            MT_head--;
+        }
+        nHead=0; // set to zero to inhibit MT_Head change during medium fed in columns
+    }
+
     if (PARAM_SensorsPerVacCol == 2) {
         // take motor moves both reels at same low angular speed. tape medium enters in col 
         // depending on reel diameter (L reel feeds faster beacuse it is full, R reel feeds slow beause
         // near empty). medium is fed until both tape loops pases over upper vaccol sensor
         for(i=0;;i++) {
             // head position 
-            MT_head = 16 * (nHead-i) / nHead; 
-            if (MT_head<1) MT_head=1;
+            if (nHead > 0) {
+                MT_head = 16 * (nHead-i) / nHead; 
+                if (MT_head<1) MT_head=1;
+            }
             // reel rotation
             AddSeq(unit, msec, MT_anim_step_inc, 
                     L_inc_h  /* L_VacCol_inc */, R_inc_h /* R_VacCol_inc */, 
@@ -1971,7 +2540,8 @@ void mt_add_unload_seq(int unit, int u3)
         MT_head++;
     }
 
-    // check if unload terminated with same reel, r/w open
+    // check if unload terminated with r/w open but keeping the reel mounted 
+    // (this is an unfload for rewind on 24XX)
     if (bUnLoadReel==0) return; 
 
     // pause 0.5 sec to remove reels
@@ -1982,7 +2552,7 @@ void mt_add_unload_seq(int unit, int u3)
             0, 16 /* MT_head open */ );       
 
     // close r/w head
-    msec = PARAM_HeadOpenTime / 10; 
+    msec = PARAM_HeadOpenTime / 16; 
     MT_head=16; // open head
     for(;;) {
         AddSeq(unit, msec, MT_anim_step_inc, 
@@ -1992,8 +2562,6 @@ void mt_add_unload_seq(int unit, int u3)
         if (MT_head==1) break; 
         MT_head--;
     }
-
-
 }
 
 // calculate and store in animation array the animation sequence for rewind
@@ -2001,7 +2569,7 @@ void mt_set_rew_seq(int unit, int bStartEndSeqFlag)
 {
     int MT_Reel_Amount,  MT_head;    // state of controls at end of of redraw
     int u3 = mt_info[unit].recsize;  // use recsize to get MediumPos value on rewind start 
-    int msec, time, bHi, u3_dec; 
+    int msec, time, bHi, u3_dec, msec_accel, msec_decel; 
 
     MT_Reel_Amount = 1 + (int) (99 * (u3 / (mt_info[unit].MediumLen*1000.0))); 
     if (MT_Reel_Amount > 99) MT_Reel_Amount = 99;
@@ -2023,18 +2591,29 @@ void mt_set_rew_seq(int unit, int bStartEndSeqFlag)
     if (u3 > PARAM_HiSpeedRwdTrigger * 1000) { //n has inches x1000 of tape medium used
         // yes, do high speed rew
         bHi=1; 
-        // add the unload animation:
-        //    - spin reels slowly to unload medium on vacuum columns
-        //    - open r/w head
-        mt_add_unload_seq(unit, u3);
-        MT_head        = 16;    // head open
+
+        if (bTapeIs==3420) {
+            // 3420 tapes do in column rewind
+            // so no need to unload tape
+            msec_accel = 500; // time needed to accel to hi speed
+            msec_decel = 500; // time to decel
+        } else {
+            // for 24XX tapes
+            // add the unload animation:
+            //    - spin reels slowly to unload medium on vacuum columns
+            //    - open r/w head
+            mt_add_unload_seq(unit, u3);
+            MT_head        = 16;    // head open
                 
-        // pause 0.5 sec
-        msec=500;
-        AddSeq(unit, msec, MT_anim_step_inc, 
-            0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
-            0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-            MT_Reel_Amount, MT_head);        
+            // pause 0.5 sec
+            msec=500;
+            AddSeq(unit, msec, MT_anim_step_inc, 
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                MT_Reel_Amount, MT_head); 
+            msec_accel = 1000; 
+            msec_decel = 3000; 
+        }
 
         // now start hi speed rew
         // rewind at 500 inch/sec (average) until 400 inches left
@@ -2045,10 +2624,10 @@ void mt_set_rew_seq(int unit, int bStartEndSeqFlag)
         // so min amount of reel rew at hi speed is 5000
         // this means 10 sec at 500 inc/sec
         // reduce this time with hi speed rew acceleration deceleration time
-        time = time - 1000 - 3000;
+        time = time - msec_accel - msec_decel;
 
         // 1000 msec to accelerate. This is an educated guess
-        msec = 1000; 
+        msec = msec_accel; 
         AddSeq(unit, msec, MT_anim_step_HiRew, 
                 0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
                 0 /* L_ang_inc */, 0 /* R_ang_inc */, 
@@ -2079,23 +2658,27 @@ void mt_set_rew_seq(int unit, int bStartEndSeqFlag)
         }
 
         // 3000 msec to decelerate. This is an educated guess
-        msec=3000;
+        msec=msec_decel;
         AddSeq(unit, msec, MT_anim_step_HiRew, 
                 0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
                 0 /* L_ang_inc */, 0 /* R_ang_inc */, 
                 MT_Reel_Amount, -1 /* acceleration flag: -1 decel, 0=full speed, -1=decelerate */ );        
 
-        // pause 0.5 sec
-        msec=500;
-        AddSeq(unit, msec, MT_anim_step_inc, 
-            0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
-            0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-            MT_Reel_Amount, MT_head);        
+        if (bTapeIs==3420) {
+            // 3420 tapes do in column rewind
+            // so no need to reload tape
+        } else {
+            // pause 0.5 sec
+            msec=500;
+            AddSeq(unit, msec, MT_anim_step_inc, 
+                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                0 /* L_ang_inc */, 0 /* R_ang_inc */, 
+                MT_Reel_Amount, MT_head);        
 
-        // load tape animation
-        mt_add_load_seq(unit);
+            // load tape animation
+            mt_add_load_seq(unit);
+        }
         MT_head        = 1;    // head closed
-        
         u3 = PARAM_HiSpeedRwdEnd*1000; // after hi speed rew, this is the amount of tape medium in reel
     }
     // finish rewinding at low speed
@@ -2133,7 +2716,7 @@ void mt_set_rew_seq(int unit, int bStartEndSeqFlag)
 //                                                      animation can be interrupted at any moment by tape command
 void mt_set_anim_seq(int unit, char cmode)
 {
-    int n, msec, r, R_h;
+    int n, msec, r, R_h, MT_head;
     int tm0, tm1; 
 
     // on load, reels rotates at low speed to feed vacuum columns with tape medium
@@ -2162,14 +2745,16 @@ void mt_set_anim_seq(int unit, char cmode)
     // start delay depends on other loads/unloads already in progress 
     // This is done to avoid animations to be synchonized
     // determine when last animation started
+
     tm0=0;
     for (n=0;n<8;n++) {
         if (n==unit) continue; 
-        if (((mtcab[n].mt_is == MT_is_loading_tape) || (mtcab[n].mt_is == MT_is_unloading_tape)) &&
-             (mtcab[n].seq[0].MT_head == 0)) {
+        if ((mtcab[n].mt_is == MT_is_loading_tape) || (mtcab[n].mt_is == MT_is_unloading_tape)) {
             // load/unload anim in progress in unit n. Let's know when it started
             tm1=mtcab[n].nseq_tm0; 
-            if (mtcab[n].seq[0].MT_head==0) tm1 += mtcab[n].seq[0].msec; // add initial wait if any
+            if ((mtcab[n].seq[0].L_VacCol_inc==-1) && (mtcab[n].seq[0].R_VacCol_inc==-1)) {
+                tm1 += mtcab[n].seq[0].msec; // add initial wait if any
+            }
             if (tm0 < tm1) {
                 tm0 = tm1; // time when last anim started (after any initial wait time)
             }
@@ -2179,18 +2764,27 @@ void mt_set_anim_seq(int unit, char cmode)
     msec=0; 
     if (tm0) {
         // there is an ongoing animation started (after initial wait) at tm0
-        tm0 += 1750; // add delay to anim to not be sync with previous one 
+        tm0 += PARAM_HeadOpenTime / 2; // add delay to anim to not be sync with previous one 
         if (tm0 > mtcab[unit].nseq_tm0) {
             // should wait 
             msec = tm0 - mtcab[unit].nseq_tm0; 
         }
     }
     if (msec == 0) msec=10; // min waiting time. Needed to identify it is an unload/load waiting
+    
+    if (bTapeIs == 3420) {
+        // on 3420, glass door is allways closed, at start of load and at start of UnLoad
+        MT_head=1; 
+    } else {
+        // on 24XX, head is closed on start of unload; head is open on start of load
+        MT_head=(cmode == 'U') ? 1:16; // MT_head full closed:open 
+    }
+
     AddSeq(unit, msec, MT_anim_step_inc, 
-                0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
+                -1 /* L_VacCol_inc */, -1 /* R_VacCol_inc */,  // to signal inital wait
                 0 /* L_ang_inc */, 0 /* R_ang_inc */, 
                 (cmode == 'U') ? MT_anim_no_change:0  /* MT_Reel_Amount */, 
-                (cmode == 'U') ? 1:16 /* MT_head full closed:open */ ); 
+                MT_head); 
 
     if (cmode == 'U') {
         mt_set_rew_seq(unit, 0); 
@@ -2212,20 +2806,30 @@ void mt_set_anim_seq(int unit, char cmode)
     mt_add_load_seq(unit);
 
     // Now sense load point by reading backwards
-    // Duration of it  depends on how much the user has spinned reel R when 
-    // preparing the tape for load
-    // when reel is empty, it holds aprox 29,6 inches of tape medium in each revolution
-    // r/w heads moves the tape medium at 75 inches/sec -> each revolution done by
-    // the user will need 400 msec
-    r=(50 * PARAM_Reel_Diameter / 2) / 100;  // radius when reel empty
-    r=(int) (0.0393701 * r * 1000);          // reel radius in inches x 1000
-    R_h = (int) (r * 2 * 3.1416);            // ammount to medium on R reel circunference. 
-    msec = R_h / PARAM_RWSpeed;              // time to read medium on reel circunference. 
+    if (bTapeIs == 3420) {
+        // On 3420, just go backwards 200gr fast, them 45 forward slow
+        msec = 400;
+        AddSeq(unit, msec, MT_anim_step_rw,  0,0,0,0,0, 
+                                             -1 /* read backwards */); 
+    } else {
+        // on 24XXX, Duration of it depends on how much the user has spinned reel R when 
+        // preparing the tape for load
+        // when reel is empty, it holds aprox 29,6 inches of tape medium in each revolution
+        // r/w heads moves the tape medium at 75 inches/sec -> each revolution done by
+        // the user will need 400 msec
+        r=(50 * PARAM_Reel_Diameter / 2) / 100;  // radius when reel empty
+        r=(int) (0.0393701 * r * 1000);          // reel radius in inches x 1000
+        R_h = (int) (r * 2 * 3.1416);            // ammount to medium on R reel circunference. 
+        msec = R_h / PARAM_RWSpeed;              // time to read medium on reel circunference. 
 
-    // Asume user has done 5-15 rev when preparing the tape
-    msec = 5 * msec + 10 * msec * (sim_rand() & 0xFF) / 256;
+        // Asume user has done 5-15 rev when preparing the tape
+        msec = 5 * msec + 10 * msec * (sim_rand() & 0xFF) / 256;
+        AddSeq(unit, msec, MT_anim_step_rw,  0,0,0,0,0, 
+                                             -1 /* read backwards */); 
+    }
+    msec = 400;
     AddSeq(unit, msec, MT_anim_step_rw,  0,0,0,0,0, 
-                                         -1 /* read backwards */); 
+                                         1 /* read forward */); 
 
     // end sequence
     AddSeq(unit,    0, MT_anim_finished, 0,0,0,0,0,0); 
@@ -2496,43 +3100,9 @@ void mt_reels_mov(int unit, int cmd,
         // set height of medium 
         if (ireel) *R_VacColMedium_h = h; else *L_VacColMedium_h = h;
         // get angluar position of reel, and rotating direction (1-> ang incrments, -1 -> ang decrements)
+        mtcab[unit].reel[ireel].debug_text[0]=0;
         ang = mtcab[unit].reel[ireel].ang; 
         dir = (old[ireel].ang_inc > 0) ? 1:-1; 
-
-        if (mtcab[unit].reel[ireel].color==10) {
-
-            mtcab[unit].reel[ireel].debug_text[0]=0;
-
-            if (abs(old[ireel].ang_inc) >= 20) {
-                if (mtcab[unit].reel[ireel].hasblur == 0) {
-                    ang = old[ireel].ang + dir * 30;  
-                    ang = (ang / 20) * 20;  
-                    mtcab[unit].reel[ireel].hasblur=1;
-                    sprintf(&mtcab[unit].reel[ireel].debug_text[strlen(mtcab[unit].reel[ireel].debug_text)], " no blur -> blur \n old ang %d \n", old[ireel].ang);
-                } else {
-                    ang = mtcab[unit].reel[ireel].angblur;  
-                    ang = ang + dir * 20;  
-                }
-                if (ang<0) ang += 360; else if (ang >= 360) ang -= 360; 
-                mtcab[unit].reel[ireel].angblur = ang; 
-                n=73 + 18 * ang / 360;
-                sprintf(&mtcab[unit].reel[ireel].debug_text[strlen(mtcab[unit].reel[ireel].debug_text)], " blur, \n ang %d, \n n %d", ang, n);
-            } else {
-                // no blur
-                if (mtcab[unit].reel[ireel].hasblur) {
-                    ang = mtcab[unit].reel[ireel].angblur;  
-                    ang = ang + dir * 30;  
-                    sprintf(&mtcab[unit].reel[ireel].debug_text[strlen(mtcab[unit].reel[ireel].debug_text)], " blur -> no blur, \n dir %d \n", dir);
-                } else {
-
-                }
-                if (ang<0) ang += 360; else if (ang >= 360) ang -= 360; 
-                mtcab[unit].reel[ireel].ang=ang; 
-                n = 72 * ang / 360;
-                mtcab[unit].reel[ireel].hasblur=0;
-                sprintf(&mtcab[unit].reel[ireel].debug_text[strlen(mtcab[unit].reel[ireel].debug_text)], " no blur, \n ang %d, \n n %d", ang, n);
-            }
-        } else 
 
         // calc state that match angular position of reel and blur
         {
@@ -2541,34 +3111,37 @@ void mt_reels_mov(int unit, int cmd,
                 int ang_inc_slow_blur, state0_slow_blur, nStates_slow_blur;
                 int nStates_no_blur; 
             } rcol[3] = {
-                {3*20, 91, 18,     // color 0 -> blue reel 
-                 2*20, 73, 18, 72}, 
-                {3*40, 57, 9,      // color 1 -> red reel 
-                 2*40, 48, 9, 36}, 
-                {2*45, 68, 8,      // color 2 -> green reel 
-                 2*15, 42, 24, 36}, 
+                {2*45, 60, 8,      // color 0 -> blue reel
+                 2*15, 36, 24, 36}, 
+                {2*45, 60, 8,      // color 1 -> red reel 
+                 2*15, 36, 24, 36}, 
+                {2*45, 60, 8,      // color 2 -> green reel 
+                 2*15, 36, 24, 36}, 
             };
             int c=mtcab[unit].reel[ireel].color; 
             // check if blur 
             if (abs(old[ireel].ang_inc) >= rcol[c].ang_inc_high_blur) {
                 // high blur, set reel control at previous reel blur angular position respect rotation direction. 
-                ang = ang + dir * rcol[c].ang_inc_high_blur / 2; 
+                ang = ang - old[ireel].ang_inc / 2; 
                 while (ang < 360) ang += 360; while (ang >= 360) ang -= 360; 
                 n = rcol[c].state0_high_blur + rcol[c].nStates_high_blur * ang / 360; 
-                mtcab[unit].reel[ireel].hasblur=2; 
                 bTapeAnimInProgress=1;  // signal reel blur started 
             } else if (abs(old[ireel].ang_inc) >= rcol[c].ang_inc_slow_blur) {
                 // slow blur, set reel control at previous reel blur angular position respect rotation direction. 
-                ang = ang + dir * rcol[c].ang_inc_slow_blur / 2; 
+                ang = ang - old[ireel].ang_inc / 2; 
                 while (ang < 360) ang += 360; while (ang >= 360) ang -= 360; 
                 n = rcol[c].state0_slow_blur + rcol[c].nStates_slow_blur * ang / 360; 
-                mtcab[unit].reel[ireel].hasblur=1; 
                 bTapeAnimInProgress=1;  // signal reel blur started 
             } else {
                 // no blur
-                mtcab[unit].reel[ireel].hasblur=0; 
                 n = rcol[c].nStates_no_blur * ang / 360;
             } 
+            // uncomment to display a debug message overprinted on reel
+            //
+            // sprintf(mtcab[unit].reel[ireel].debug_text, 
+            //    "ang0 %d, \n ang_inc %d, \n ang %d, \n blur %d, \n n%d",
+            //    mtcab[unit].reel[ireel].ang, old[ireel].ang_inc, ang, mtcab[unit].reel[ireel].hasblur, n);
+
         } 
         // set angular position state
         if (ireel) *MT_R_Rot = n; else *MT_L_Rot = n;
@@ -2606,6 +3179,7 @@ void mt_VacColSetDynamicState(int VacColMedium_h, int * VacColMedium_h0, int CId
 
     // Dynamically generate State 0 for CId_VacCol (=IBM360.MT_L|R_VacCol[unit])
     // control if door open
+
     if ((*VacColMedium_h0 == -1) || (VacColMedium_h == 0)) {
         // do a full redraw of backgound
         //  - Copy State 0 from control MT_VacColumn (background) to state 0 of CId (state displayed) 
@@ -2623,6 +3197,7 @@ void mt_VacColSetDynamicState(int VacColMedium_h, int * VacColMedium_h0, int CId
 
     //  - Copy State 0 from MT_VacColMedium (height dependes on medium position) on State 0 -> now vaccol with tape medium
     y_top= (bDoorOpen) ? 0:135; // upper top of VacCol is hidden under tape cabinet door if door is closed
+    if (bTapeIs==3420) y_top=0; // on 3420, medium is visible from this position
 
     if (VacColMedium_h) {
         CopyControlImage(S360.MT_VacColMedium, 0,    0, y_top+y, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
@@ -2638,7 +3213,7 @@ void mt_VacColSetDynamicState(int VacColMedium_h, int * VacColMedium_h0, int CId
 // dynamic draw of tape medium into vaccum column control CId_VacCol
 // if VacColMedium_h = 15000 = PARAM_VacCol_h_Low -> tape medium loop positioned over upper vacuum colum sensor
 // ireel=0 for left vaccol, =1 for right vaccol
-void mt_VacColSetDynamicState2415(int VacColMedium_h, int * VacColMedium_h0, int CId_VacCol, int ireel)
+void mt_VacColSetDynamicState_2415(int VacColMedium_h, int * VacColMedium_h0, int CId_VacCol, int ireel)
 {
     int d, x_base, x0, x1, w;
 
@@ -2701,7 +3276,12 @@ void mt_VacColSetDynamicState2415(int VacColMedium_h, int * VacColMedium_h0, int
 void mt_VacColSet(int unit, int L_VacColMedium_h, int R_VacColMedium_h)
 {
     // when door open changes its state, the caller must also set L|R_VacColMedium_h0 to -1 to force redraw
-    if (bTapeIs2415) {
+    if (bTapeIs==3420) {
+        // on 3420, Left reel is take reel (on 24XX, take reel is right reel)
+        // so we draw columns switched: Left column is draw on MT_R_VacCol control
+        mt_VacColSetDynamicState(L_VacColMedium_h, &mtcab[unit].L_VacColMedium_h0, S360.MT_R_VacCol[unit], 0);
+        mt_VacColSetDynamicState(R_VacColMedium_h, &mtcab[unit].R_VacColMedium_h0, S360.MT_L_VacCol[unit], 0);
+    } else if (bTapeIs==2415) {
         int CId_VacCol; 
         if (mtcab[unit].state.MT_DoorOpen == 0) {
             // vacuum column interior not visible. Metal cover not removed. Tape loop not visible :-(
@@ -2721,8 +3301,8 @@ void mt_VacColSet(int unit, int L_VacColMedium_h, int R_VacColMedium_h)
         // only one horizontal column (covers Left and Roght reel), set on S360.MT_L_VacCol[unit] control
         // S360.MT_R_VacCol[unit] is not used in 2415
         CId_VacCol=S360.MT_L_VacCol[unit]; 
-        mt_VacColSetDynamicState2415(L_VacColMedium_h, &mtcab[unit].L_VacColMedium_h0, CId_VacCol, 0);
-        mt_VacColSetDynamicState2415(R_VacColMedium_h, &mtcab[unit].R_VacColMedium_h0, CId_VacCol, 1);
+        mt_VacColSetDynamicState_2415(L_VacColMedium_h, &mtcab[unit].L_VacColMedium_h0, CId_VacCol, 0);
+        mt_VacColSetDynamicState_2415(R_VacColMedium_h, &mtcab[unit].R_VacColMedium_h0, CId_VacCol, 1);
     } else {
         mt_VacColSetDynamicState(L_VacColMedium_h, &mtcab[unit].L_VacColMedium_h0, S360.MT_L_VacCol[unit], mtcab[unit].state.MT_DoorOpen);
         mt_VacColSetDynamicState(R_VacColMedium_h, &mtcab[unit].R_VacColMedium_h0, S360.MT_R_VacCol[unit], mtcab[unit].state.MT_DoorOpen);
@@ -2733,8 +3313,9 @@ void mt_VacColSet(int unit, int L_VacColMedium_h, int R_VacColMedium_h)
 void cpanel_set_mt_door(int unit, int bDoorOpen)
 {
     // set cabinet state to open/closed
+    if (bTapeIs==3420) return; // 3420 door open not available
     mtcab[unit].state.MT_DoorOpen=bDoorOpen; 
-    if (bTapeIs2415) {
+    if (bTapeIs==2415) {
         // set state of vacuum colum metal cover. 0=metal cover visible (vac col interior not visible, tape loop not visible) 
         // 1=metal cover removed, vac col interior visible (but no tape loop draw)
         // next refresh will fill the interior with tape loop
@@ -2754,6 +3335,7 @@ void cpanel_set_mt_door(int unit, int bDoorOpen)
     // invalidate lights
     cpanel_ControlRedrawNeeded=1; SetState(S360.MT_LI_Ready[unit],GetState(S360.MT_LI_Ready[unit]));
     cpanel_ControlRedrawNeeded=1; SetState(S360.MT_LI_Select[unit],GetState(S360.MT_LI_Select[unit]));
+    cpanel_ControlRedrawNeeded=1; SetState(S360.MT_LI_File_protect[unit],GetState(S360.MT_LI_File_protect[unit]));
 }
 
 // return 1 if a rewin animation is in progress
@@ -2777,6 +3359,7 @@ void mt_TapeMediumToRwHeadDynamicState(uint32 * surface, int pitch, int x0, int 
     bStopAtCapstain = (slope > 0) ? 1:0;
     dy=0;
     if (slope==0) dyy=0; else dyy = 1000 * (slope+1) / len; 
+    // draw line (5 pixels wide)
     for (x=0;x<len;x++) {
         p=x0 + pitch * y0; 
         if (sgn > 0) p=p+x; else p=p-x; 
@@ -2794,82 +3377,102 @@ void mt_TapeMediumToRwHeadDynamicState(uint32 * surface, int pitch, int x0, int 
 }
 
 // dynamic draw tape medium from external vaccol capstain to left reel (if ireel=0), or right reel (if ireel=1) 
-// draw until hit reel with ammount of medium given by Reel_Amount (1..39)
+// draw until hit reel with ammount of medium given by Reel_Amount (1..67)
 void mt_TapeMediumToReelDynamicState(uint32 * surface, int pitch, int ireel, int Reel_Amount, uint32 col)
 {
     // tangent coords relative to reel centre
-    static int xytg[2][2*40] = { // for 2401 tape 
-                               0, 0,    55, 33,    56, 35,    57, 36,    57, 37,    58, 39,    59, 40,    59, 43,
-                             60, 44,    61, 46,    61, 48,    62, 49,    62, 51,    62, 54,    63, 55,    63, 57,
-                             63, 59,    64, 60,    64, 62,    64, 65,    64, 67,    64, 69,    65, 69,    65, 72,
-                             65, 73,    65, 76,    65, 78,    65, 80,    65, 82,    65, 84,    65, 85,    65, 87,
-                             65, 89,    64, 92,    64, 94,    64, 95,    64, 97,    63, 100,   63, 101,   63, 103, 
-                              // for 2415 tape
-                              0,  0,   -62, 20,   -64, 20,   -65, 19,   -67, 19,   -68, 19,   -70, 19,   -71, 18, 
-                            -73, 18,   -75, 18,   -76, 18,   -78, 17,   -79, 17,   -81, 17,   -83, 17,   -84, 16, 
-                            -86, 16,   -87, 16,   -89, 16,   -90, 15,   -92, 15,   -94, 15,   -95, 14,   -97, 14, 
-                            -98, 14,  -100, 14,  -101, 13,  -103, 13,  -105, 13,  -106, 13,  -108, 12,  -109, 12, 
-                           -111, 12,  -113, 12,  -114, 11,  -116, 11,  -117, 11,  -119, 11,  -120, 10,  -122, 10};
-    static int xycapstain[2][4]   = {115, 288, 434, 288,      // for 2401 tape
-                                       0,   0, 575,   0 };    // for 2415 tape
-    static int xyreelcentre[2][4] = {125, 123, 137+285, 123,  // for 2401 tape
-                                     145, 157, 145+285, 157}; // for 2415 tape
-    int p, x0, y0, x1, y1, x, y, dx, dy, dxx, dyy, len, yH, s; 
-    uint32 col_reel; 
+    static int xytg[4][2*6] = { // for 2401 tape 
+                               0, 0,    45, 33,    55, 45,    70, 52,     75, 72,    81, 91,
+                                // for 2415 tape
+                               0,  0,  -53, 20,   -67, 25,   -82, 30,   -101, 24,  -121, 19,
+                                // for 3420 tape. take reel (when ireel==0)
+                               0,  0,  -60, 42,   -61,  60,  -68,  69,  -74,  80,  -60, 107, 
+                                // for 3420 tape. data reel (when ireel==1)
+                               0,  0,  -45, 30,   -57,  40,  -74,  45,  -80,  65,  -70,  95 };
+    static int xycapstain[4][4]   = {115, 288, 434, 288,      // for 2401 tape
+                                       0,   0, 575,   0,      // for 2415 tape
+                                     160, 288,   0,   0,      // for 3420 tape, left (take) reel
+                                     0,   0,  120, 294};      // for 3420 tape, right (data) reel
+    static int xyreelcentre[4][4] = {125, 123, 137+285, 123,  // for 2401 tape
+                                     145, 157, 145+285, 157,  // for 2415 tape
+                                     145, 145,       0,   0,  // for 3420 tape, left (take) reel
+                                       0,   0,     145, 145}; // for 3420 tape, right (data) reel
+    int p, x0, y0, x1, y1, x, y, yH, dd, dx, dy, dxx, dyy, len, index, thick; 
+    uint32 col_reel, col_reel2, c; 
     int base; 
 
-    base = (bTapeIs2415 ? 1:0); 
+    if (bTapeIs == 3420) base=2 + ireel; else // for 3420 there are two sets, because reels are not symetric
+    if (bTapeIs == 2415) base=1; else 
+    base=0; // for 2401
+
+    // Reel_Amount:   0 | 1 .. 15 | 16 .. 31 |32 ...47 | 48 ..  67
+    // index in xytg: 0   1          2         3          4      5
+    if (Reel_Amount <= 16) {index=2; p=100*(Reel_Amount-1)/15; } else
+    if (Reel_Amount <= 32) {index=3; p=100*(Reel_Amount-16)/16; } else
+    if (Reel_Amount <= 48) {index=4; p=100*(Reel_Amount-32)/16; } else {index=5; p=100*(Reel_Amount-48)/19; }
 
     x0=  xycapstain[base][ireel*2]; 
     y0=  xycapstain[base][ireel*2+1];  
-    x1=xyreelcentre[base][ireel*2]  +xytg[base][Reel_Amount*2  ] * ( (ireel == 0) ? 1:-1);
-    y1=xyreelcentre[base][ireel*2+1]+xytg[base][Reel_Amount*2+1];
+    x1=xytg[base][index*2-2  ] + p*(xytg[base][index*2  ] - xytg[base][index*2-2])/100;
+    y1=xytg[base][index*2-2+1] + p*(xytg[base][index*2+1] - xytg[base][index*2-2+1])/100;
 
-    col_reel= surface_rgb_color(55, 55, 55) ; // color for tape medium winded on reel 
+    x1=xyreelcentre[base][ireel*2]  +x1 * ( (ireel == 0) ? 1:-1);
+    y1=xyreelcentre[base][ireel*2+1]+y1;
+
+    yH=max(y0, y1); 
+    // colors to not overdraw
+    col_reel= surface_rgb_color(55, 55, 55) ;  // color for tape medium winded on reel 
+    if (bTapeIs == 3420) {
+        col_reel2= surface_rgb_color(0, 0, 0) ; // color for central reel hub
+    } else {
+        col_reel2= surface_rgb_color(208, 209, 201) ; // color for reel fixation 1
+    }
         
-    if (y1>y0) {x=x0; x0=x1; x1=x; y=y0; y0=y1; y1=y; } // if line going down, exchange xy0 with xy1
     dx=x1-x0; 
-    dy=y1-y0; // allways <0
-    yH=y0; // highest y value 
+    dy=y1-y0; 
+
+    // draw line (10 pixels wide)
+    thick=10; 
 
     if (abs(dx)>=abs(dy)) {
         // iterate on x
-        dyy = 1000 * dy / abs(dx); dy=0;
         len=abs(dx); 
+        dyy = 1000 * dy / len; dd=0;
         for (x=0;x<len;x++) {
             p=x0 + pitch * y0; 
-            if (ireel == 0) p=p+x; else p=p-x; 
-            dy += dyy; 
-            if (dy < -1000) { dy += 1000; p-=pitch; y0--; }
-            p+=10*pitch;
-            for (y=0;y<10;y++) {
-                if (y0+10-y < yH) {
-                    if (col_reel != surface[p]) surface[p] = col;
-                }
-                p-=pitch; 
+            for (y=0;y<thick;y++) {
+                if (y0+y > yH) break;
+                c=surface[p];
+                // do not overprint reel fixation nor reel winded medium
+                if ((col_reel != c) && (col_reel2 != c)) surface[p] = col;
+                p+=pitch; 
             }
+            if (dx > 0) x0++; else x0--; 
+            dd += dyy; 
+            if (dd < -1000) { dd += 1000; y0--; } else 
+            if (dd >  1000) { dd -= 1000; y0++; }  
         }
     } else {
-        // iterate in y
-        dxx = 1000 * dx / dy; dx=0;
+        // iterate on y
         len=abs(dy); 
-        s = (ireel == 0) ? 1:-1; 
-        p=x0 + pitch * y0; 
+        dxx = 1000 * dx / len; dd=0;
         for (y=0;y<len;y++) {
-            dx -= dxx; 
-            if (dx < -1000) { dx += 1000; p--; x0--; } else
-            if (dx > 1000) { dx -= 1000; p++; x0++; }
-            p+= (10 * s);
-            for (x=0;x<10;x++) {
-                if (col_reel != surface[p]) surface[p] = col;
-                p-=s; 
+            p=x0 + pitch * y0; 
+            for (x=0;x<thick;x++) {
+                c=surface[p];
+                // do not overprint reel fixation nor reel winded medium
+                if ((col_reel != c) && (col_reel2 != c)) surface[p] = col;
+                if (dx > 0) p++; else p--;
             }
-            p-=pitch; 
+            if (dy > 0) y0++; else y0--; 
+            dd += dxx; 
+            if (dd < -1000) { dd += 1000; x0--; } else
+            if (dd >  1000) { dd -= 1000; x0++; }
         }
     }
 }
 
-// dynamic draw reels and head and tape medium 
+// dynamic draw reels and head and tape medium for 24XX tapes
 void mt_ReelsSetDynamicState(int unit, int MT_head, int MT_Reel_Amount, int MT_L_Rot, int MT_R_Rot, 
                              int L_VacCol_empty, int R_VacCol_empty, int CId_MT)
 {
@@ -2882,7 +3485,7 @@ void mt_ReelsSetDynamicState(int unit, int MT_head, int MT_Reel_Amount, int MT_L
     surface=GetControlSurface(CId_MT, 0, &ww, &hh); 
     x0 = GetControlInfo(S360.MT[0], CINFO_X) - GetControlInfo(S360.MT_panel[0], CINFO_X);
     y0 = GetControlInfo(S360.MT[0], CINFO_Y) - GetControlInfo(S360.MT_panel[0], CINFO_Y);
-    col = surface_rgb_color(20, 20, 20) ; // tape medium color (near black)
+    col = surface_rgb_color(20, 20, 20) ; // for 24XX tape medium color is near black
 
     bRedrawL= (mtcab[unit].state.MT_L_Rot != MT_L_Rot) ? 1:0; 
     bRedrawR= (mtcab[unit].state.MT_R_Rot != MT_R_Rot) ? 1:0; 
@@ -2906,7 +3509,7 @@ void mt_ReelsSetDynamicState(int unit, int MT_head, int MT_Reel_Amount, int MT_L
                          CId_MT, 0,                         0,  0);           // ToCId, ToState,     x1, y1
                          
         if (MT_head < 1) MT_head=1; // closed head 
-        if (bTapeIs2415) {
+        if (bTapeIs==2415) {
             // set head state
             if (MT_head > 8) MT_head=8; // open head 
             SetState(S360.MT_Head_pos[unit], MT_head);
@@ -2915,7 +3518,7 @@ void mt_ReelsSetDynamicState(int unit, int MT_head, int MT_Reel_Amount, int MT_L
             CopyControlImage(S360.MT_head, MT_head,        50, 10, 260, 115,  // FromCId, FromState, x0, y0, w, h, 
                              CId_MT, 0,                         291-x0, 517-y0);             // ToCId, ToState,     x1, y1      
         }
-        if (bTapeIs2415) {
+        if (bTapeIs==2415) {
             // - Set state to show tape medium lines from vacuum column top capstains to r/w head
             SetState(S360.MT_Head_Medium[unit], (MT_Reel_Amount > 0) ? 1:0);
         } else {
@@ -2945,7 +3548,7 @@ void mt_ReelsSetDynamicState(int unit, int MT_head, int MT_Reel_Amount, int MT_L
     }
 
     // position of reel in CId_MT control
-    if (bTapeIs2415) {
+    if (bTapeIs==2415) {
         x_reel=-4; y_reel=9; 
     } else {
         x_reel=-18; y_reel=-18;
@@ -2959,14 +3562,14 @@ void mt_ReelsSetDynamicState(int unit, int MT_head, int MT_Reel_Amount, int MT_L
         // state: 0=empty, 1=few medium on reel, 99=reel full
         nL=100-MT_Reel_Amount;    
         nR=MT_Reel_Amount;       
-        // map MT_Reel_Amount value 1..99 into 1..39 available states
+        // map MT_Reel_Amount value 1..99 into 1..79 available states
         // the mapping is non-linear, as radius grows fast when reel has not much medium (radius is small)
         // and then radius grows slow when reel gets full (radius is big)
-        if (nL < 25) {nL=nL*2;} else if (nL < 50) {nL=nL+25;} else {nL = 75 + (nL-50) / 2;} nL=40*nL/100; 
-        if (nR < 25) {nR=nR*2;} else if (nR < 50) {nR=nR+25;} else {nR = 75 + (nR-50) / 2;} nR=40*nR/100;  
+        if (nL < 25) {nL=nL*2;} else if (nL < 50) {nL=nL+25;} else {nL = 75 + (nL-50) / 2;} nL=67*nL/100; 
+        if (nR < 25) {nR=nR*2;} else if (nR < 50) {nR=nR+25;} else {nR = 75 + (nR-50) / 2;} nR=67*nR/100;  
         // safety
-        if (nL<1) nL=1; if (nL>39) nL=39; 
-        if (nR<1) nR=1; if (nR>39) nR=39; 
+        if (nL<1) nL=1; if (nL>67) nL=67; 
+        if (nR<1) nR=1; if (nR>67) nR=67; 
     }
     // if tape is 2415 and vaccol not visible -> do not draw tape up to top (would overdraw vaccol)
     if (bRedrawL) {
@@ -3035,18 +3638,261 @@ void mt_ReelsSetDynamicState(int unit, int MT_head, int MT_Reel_Amount, int MT_L
     SetState(CId_MT, 0);
 }
 
+// dynamic draw reels and head and tape medium for 3420 tapes
+void mt_ReelsSetDynamicState_3420(int unit, int MT_head, int MT_Reel_Amount, int MT_Data_Rot, 
+                                  int Data_VacCol_empty, int Take_VacCol_empty, 
+                                  int CId_MT_Data, int CId_MT_Take)
+{
+    uint32 * surface;       // reels, head, medium dynamicaly generated into MT control
+    int x0, y0, ww, hh, h;  // MT control pos and size
+    int nR, nL, CId_Reel, TapeWinded; 
+    int bRedrawData, bRedrawTake, bRedrawGlassDoor; 
+    uint32 col; 
+
+    // On 3420, Right reel is the mounted data reel     
+    // Left reel is the take reel
+    // outside this routine MT_L is data reel
+    
+    // lets draw the data reel
+    surface=GetControlSurface(CId_MT_Data, 0, &ww, &hh); 
+    col = surface_rgb_color(55, 55, 55) ; // tape medium color 
+
+    // MT_Head holds the state of reel seal & state of glass door
+    bRedrawTake=0;
+    bRedrawData=(mtcab[unit].state.MT_L_Rot != MT_Data_Rot) ? 1:0; 
+    if ((mtcab[unit].state.MT_Reel_Ammount != MT_Reel_Amount) || 
+        (mtcab[unit].state.MT_Reel_Ammount < 0) || 
+        (mtcab[unit].state.MT_Head != MT_head) ||
+        (mtcab[unit].state.MT_Head < 0)) {        
+        bRedrawData=bRedrawTake=1; // redraw all
+    } else {
+        if (bRedrawData==0) return; // nothing to update
+    }
+    // is glass door moving?
+    bRedrawGlassDoor=((mtcab[unit].state.MT_Head != MT_head) || (mtcab[unit].state.MT_Head < 0)) ? 1:0; 
+
+    // is tape medium winded on take reel?
+    if (Data_VacCol_empty && Take_VacCol_empty) TapeWinded=0; else TapeWinded=1; 
+
+    if (mtcab[unit].state.MT_R_Rot != TapeWinded) {
+        bRedrawData=bRedrawTake=1; // redraw 
+    }
+
+    mtcab[unit].state.MT_Head=MT_head; 
+    mtcab[unit].state.MT_Reel_Ammount=MT_Reel_Amount;
+    mtcab[unit].state.MT_L_Rot=MT_Data_Rot;
+    mtcab[unit].state.MT_R_Rot=TapeWinded; // save the tape winded state here
+
+    // Dynamically generate State 0 for CId_MT_Data (=IBM360.MT[unit])
+    if (bRedrawData) {
+        if (MT_Reel_Amount == 0) {
+            // no tape medium -> no reels visible
+            //  - Copy State 0 from control MT_no_reel to state 0 of CId_MT (state displayed) 
+            CopyControlImage(S360.MT_no_reel, 0,          0, 0, 0, 0,   // FromCId, FromState, x0, y0, w, h, 
+                             CId_MT_Data, 0,                    0, 0);  // ToCId, ToState,     x1, y1
+        } else {
+            //  - Copy State 0 from control MT_Panel (background) to state 0 of CId_MT (state displayed) 
+            x0 = GetControlInfo(S360.MT[0], CINFO_X) - GetControlInfo(S360.MT_panel[0], CINFO_X);
+            y0 = GetControlInfo(S360.MT[0], CINFO_Y) - GetControlInfo(S360.MT_panel[0], CINFO_Y);
+            CopyControlImage(S360.MT_panel[0], 0,          x0, y0, ww, hh,   // FromCId, FromState, x0, y0, w, h, 
+                             CId_MT_Data, 0,                       0,  0);           // ToCId, ToState,     x1, y1
+                         
+            // MT_head 1..9 -> sets MT_ring/MT_ring_anchor 1..9
+            //         1..15 -> sets MT_GlassDoor
+            if (MT_head <= 1) { 
+                // closed head -> tape medium mounted -> open reel seal ring -> MT_ring state=1
+                nL=1; 
+            } else if (MT_head >= 9) {
+                // open head  -> tape medium NOT mounted -> closed reel seal ring -> MT_ring state=9
+                nL=9;
+            } else {
+                nL=MT_head; 
+            }
+            // - Copy seal ring image
+            CopyControlImage(S360.MT_ring, nL,                0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             CId_MT_Data,  0,                     6, 182);             // ToCId, ToState,     x1, y1      
+            // - Copy seal anchor image
+            CopyControlImage(S360.MT_ring_anchor, nL,         0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             CId_MT_Data,  0,                      -9, 42);             // ToCId, ToState,     x1, y1      
+        }
+    }
+
+    if (MT_Reel_Amount < 1) {
+        nL=0; nR=0;
+    } else {
+        // MT_Reel_Amount=1 -> all medium on Data reel (nL)
+        // state: 0=empty, 1=few medium on reel, 99=reel full
+        nL=100-MT_Reel_Amount;    
+        nR=MT_Reel_Amount;       
+        // map MT_Reel_Amount value 1..99 into 1..79 available states
+        // the mapping is non-linear, as radius grows fast when reel has not much medium (radius is small)
+        // and then radius grows slow when reel gets full (radius is big)
+        if (nL < 25) {nL=nL*2;} else if (nL < 50) {nL=nL+25;} else {nL = 75 + (nL-50) / 2;} nL=67*nL/100; 
+        if (nR < 25) {nR=nR*2;} else if (nR < 50) {nR=nR+25;} else {nR = 75 + (nR-50) / 2;} nR=67*nR/100;  
+        // safety
+        if (nL<1) nL=1; if (nL>67) nL=67; 
+        if (nR<1) nR=1; if (nR>67) nR=67; 
+    }
+    if ((bRedrawData) && (nL)) {
+        // draw tape medium for Data reel
+        CopyControlImage(S360.MT_reel_amount, nL,    0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                         CId_MT_Data, 0,                   2, -2);       // ToCId, ToState,     x1, y1
+        if (TapeWinded) {
+            mt_TapeMediumToReelDynamicState(surface, ww,  1, nL, col);   
+            // redraw lower ring, as previous routine has overwritten it
+            CopyControlImage(S360.MT_ring, 10,    0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             CId_MT_Data, 0,         112,250);       // ToCId, ToState,     x1, y1
+        }
+    }
+    if (bRedrawTake) {
+        //  - Copy State 0 from control MT_Panel (background) to state 0 of CId_MT_Take (state displayed) 
+        surface=GetControlSurface(CId_MT_Take, 0, &ww, &hh); 
+        x0 = GetControlInfo(S360.MT_Take[0], CINFO_X) - GetControlInfo(S360.MT_panel[0], CINFO_X);
+        y0 = GetControlInfo(S360.MT_Take[0], CINFO_Y) - GetControlInfo(S360.MT_panel[0], CINFO_Y);
+        CopyControlImage(S360.MT_panel[0], 0,          x0, y0, ww, hh,   // FromCId, FromState, x0, y0, w, h, 
+                         CId_MT_Take, 0,                       0,  0);           // ToCId, ToState,     x1, y1
+        if ((TapeWinded) && (nR)) {
+            CopyControlImage(S360.MT_Take_reel_amount, nR,    0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             CId_MT_Take, 0,                       -3,-2);       // ToCId, ToState,     x1, y1
+            mt_TapeMediumToReelDynamicState(surface, ww, 0, nR, col);
+        }
+    }
+    if ((bRedrawData) && (MT_Reel_Amount)) {
+        // - Copy Left and Right reel and its hub
+        // nL = state for reel
+        nL=MT_Data_Rot;
+        switch(mtcab[unit].reel[1].color) {
+            case 1: CId_Reel = S360.MT_red_reel; break; 
+            case 2: CId_Reel = S360.MT_green_reel; break; 
+           default: CId_Reel = S360.MT_blue_reel; break; 
+        }
+        // draw reel on top of medium
+        if (0) { 
+            // debug mode -> will display one reel state at the time, cycling from 0 up to max number of states
+            // the current state for reel image show into the hub
+            // press Z/X key to incr/decr state number
+            char buf[10];
+            static int current_reel_state = 0; 
+            if (vid_keyb.LastKeyPress == 'z') {
+                vid_keyb.LastKeyPress = 0; current_reel_state++;
+            } else if (vid_keyb.LastKeyPress == 'x') {
+                vid_keyb.LastKeyPress = 0; current_reel_state--;
+            }
+            if (current_reel_state >= GetControlInfo(CId_Reel, CINFO_NSTATES)) current_reel_state=0;
+            else if (current_reel_state < 0) current_reel_state = GetControlInfo(CId_Reel, CINFO_NSTATES)-1; 
+            nL=current_reel_state; 
+            sprintf(buf, "%d", nL);
+            DrawTextImage   (CId_Reel, nL, 140,140, 0, 0,     // ToCId, ToState, x0, y0, w0, h0: where to draw text
+                               0,0,0,       // r, g, b: text color
+                               buf, 1);       // str to draw, char size
+
+        }
+        CopyControlImage(CId_Reel, nL,     0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                         CId_MT_Data, 0,         2, -2);  // ToCId, ToState,     x1, y1
+        // overprint debug text in reel if any
+        if (mtcab[unit].reel[0].debug_text[0]) {
+            DrawTextImage   (CId_MT_Data, 0, 5,100, 0, 0,     // ToCId, ToState, x0, y0, w0, h0: where to draw text
+                               255,255,255,       // r, g, b: text color
+                               mtcab[unit].reel[0].debug_text, 2);       // str to draw, char size
+
+        }
+    }
+
+    if (bRedrawGlassDoor) {
+        // glass control overlaps both reels. Upper part of vaccols overlaps glass
+        // So reels should be drawn again on glass, and vaccols should be invalidated to be redrawn by refresh routine
+        cpanel_ControlRedrawNeeded=1; SetState(S360.MT_L_VacCol[unit], GetState(S360.MT_L_VacCol[unit])); 
+        cpanel_ControlRedrawNeeded=1; SetState(S360.MT_R_VacCol[unit], GetState(S360.MT_R_VacCol[unit])); 
+        // draw glass door background: upper part: reels background
+        surface=GetControlSurface(S360.MT_GlassDoor[unit], 0, &ww, &hh); 
+        x0 = GetControlInfo(S360.MT_GlassDoor[0], CINFO_X) - GetControlInfo(S360.MT_panel[0], CINFO_X);
+        y0 = GetControlInfo(S360.MT_GlassDoor[0], CINFO_Y) - GetControlInfo(S360.MT_panel[0], CINFO_Y);
+        CopyControlImage(S360.MT_panel[0], 0,          x0, y0, ww, 356,   // FromCId, FromState, x0, y0, w, h, 
+                         S360.MT_GlassDoor[unit], 0,            0,   0);           // ToCId, ToState,     x1, y1
+        // redraw reels as glass background will overprint them
+        x0 = GetControlInfo(S360.MT_Take[0], CINFO_X) - GetControlInfo(S360.MT_GlassDoor[0], CINFO_X);
+        y0 = GetControlInfo(S360.MT_Take[0], CINFO_Y) - GetControlInfo(S360.MT_GlassDoor[0], CINFO_Y);
+        CopyControlImage(CId_MT_Take, 0,                0, 0, 0, 0,   // FromCId, FromState, x0, y0, w, h, 
+                         S360.MT_GlassDoor[unit], 0,        x0, y0);           // ToCId, ToState,     x1, y1
+        x0 = GetControlInfo(S360.MT[0], CINFO_X) - GetControlInfo(S360.MT_GlassDoor[0], CINFO_X);
+        y0 = GetControlInfo(S360.MT[0], CINFO_Y) - GetControlInfo(S360.MT_GlassDoor[0], CINFO_Y);
+        CopyControlImage(CId_MT_Data, 0,                0, 0, 0, 0,   // FromCId, FromState, x0, y0, w, h, 
+                         S360.MT_GlassDoor[unit], 0,        x0, y0);           // ToCId, ToState,     x1, y1
+        if (MT_head <= 1) {
+            // Copy glass door closed
+            CopyControlImage(S360.MT_GlassSlidingDoor, 0,         0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.MT_GlassDoor[unit],  0,         0, 356);       // ToCId, ToState,     x1, y1      
+        } else {
+            // draw glass door background: lower part: vaccol top
+            CopyControlImage(S360.MT_GlassSlidingDoor, 1,         0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.MT_GlassDoor[unit],  0,         0, 356);       // ToCId, ToState,     x1, y1      
+            // copy glass door sides at current position (given by MT_head)
+            // MT_head == 16 -> glass door fully open -> h=full height
+            // MT_head == 1  -> glass door closed -> h=380
+            h= 380 + (MT_head) * (hh-380) / 14; 
+            if (h>hh-45) h=hh-45; 
+            y0=hh-h; 
+            CopyControlImage(S360.MT_GlassSlidingDoor, 2,         0, y0, 0, h,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.MT_GlassDoor[unit],  0,         0, 380);       // ToCId, ToState,     x1, y1      
+            // draw blue frontal 
+            CopyControlImage(S360.MT_GlassSlidingDoor, 0,       194, 0, 354, 90,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.MT_GlassDoor[unit],  0,       194, h-64);       // ToCId, ToState,     x1, y1      
+            // draw glass door top edge
+            y0=h-380;
+            col = surface_rgb_color(55, 55, 55) ; // top border
+            for (x0=0; x0<ww;x0++) surface[x0 + ww*y0]=col; 
+            y0++;
+            col = surface_rgb_color(230, 230, 230); 
+            for (x0=0; x0<ww;x0++) surface[x0 + ww*y0]=col; 
+            y0++;
+            col = surface_rgb_color(128, 128, 128); 
+            for (x0=0; x0<ww;x0++) surface[x0 + ww*y0]=col; 
+            y0++;
+            col = surface_rgb_color(64, 64, 64); 
+            for (x0=0; x0<ww;x0++) surface[x0 + ww*y0]=col; 
+            y0++;
+            col = surface_rgb_color(32, 32, 32); 
+            for (x0=0; x0<ww;x0++) surface[x0 + ww*y0]=col; 
+            y0++;
+            col = surface_rgb_color(16, 16, 16); 
+            for (x0=0; x0<ww;x0++) surface[x0 + ww*y0]=col; 
+        }
+    }
+
+
+    //  - Set dynamically generated image to be redraw 
+    if (bRedrawData) {
+       cpanel_ControlRedrawNeeded=1; 
+       SetState(CId_MT_Data, 0);
+    }
+    if (bRedrawTake) {
+       cpanel_ControlRedrawNeeded=1; 
+       SetState(CId_MT_Take, 0);
+    }
+    if (bRedrawGlassDoor) {
+       cpanel_ControlRedrawNeeded=1; 
+       SetState(S360.MT_GlassDoor[unit], 0);
+    }
+}
+
 // dynamic draw of L and R Reels, medium and head for given unit 
 void mt_ReelsSet(int unit, int MT_head, int MT_Reel_Amount, int MT_L_Rot, int MT_R_Rot, 
                            int L_VacColMedium_h, int R_VacColMedium_h)
 {
-    mt_ReelsSetDynamicState(unit, MT_head, MT_Reel_Amount, MT_L_Rot, MT_R_Rot, 
-                            (L_VacColMedium_h > 0) ? 0:1, (R_VacColMedium_h > 0) ? 0:1, 
-                            S360.MT[unit]);
+    if (bTapeIs==3420) {
+        mt_ReelsSetDynamicState_3420(unit, MT_head, MT_Reel_Amount, MT_L_Rot, 
+                                     (L_VacColMedium_h > 0) ? 0:1, (R_VacColMedium_h > 0) ? 0:1, 
+                                     S360.MT[unit], S360.MT_Take[unit]);
+    } else {
+        mt_ReelsSetDynamicState(unit, MT_head, MT_Reel_Amount, MT_L_Rot, MT_R_Rot, 
+                                (L_VacColMedium_h > 0) ? 0:1, (R_VacColMedium_h > 0) ? 0:1, 
+                                S360.MT[unit]);
+    }
 }
 
 void IBM360_SetTapesSelectLight(int mode)
 {
-    int unit, cmd, cmd_rw; 
+    int unit, cmd, cmd_rw, ready; 
 
     for (unit=0; unit<8; unit++) {
         if (S360.MT[unit]>0) {
@@ -3067,9 +3913,13 @@ void IBM360_SetTapesSelectLight(int mode)
             if (mode==0) TickCount(S360.MT_LI_Select[unit], cmd_rw); 
             else SetStateWithIntensity(S360.MT_LI_Select[unit], cmd_rw); 
             // set ready light. 
-            if (mode == 0) TickCount(S360.MT_LI_Ready[unit], cmd ? 0:1);
-            else if ((mta_unit[unit].flags & UNIT_DIS) || ((mta_unit[unit].flags & UNIT_ATT) == 0)) SetState(S360.MT_LI_Ready[unit], 0);
-            else SetStateWithIntensity(S360.MT_LI_Ready[unit], cmd ? 0:1);
+            ready = cmd ? 0:1; // ready if no tape command execution
+            if ((mta_unit[unit].flags & UNIT_DIS) ||                  // if unit disabled, 
+                ((mta_unit[unit].flags & UNIT_ATT) == 0) ||           // no tape file attached, 
+                (mtcab[unit].ResetPressed) ||                         // reset button has been pressed
+                (mtcab[unit].mt_is==MT_is_loading_tape)) ready=0;     // or is loading in progress -> not ready
+            if (mode == 0) TickCount(S360.MT_LI_Ready[unit], ready);
+            else SetStateWithIntensity(S360.MT_LI_Ready[unit], ready);
         }
     }
 }
@@ -3189,6 +4039,7 @@ void Refresh_MagTape(void)
             mtcab[unit].reel[1].ang = (sim_rand() & 511) % 360;
             mtcab[unit].L_VacColMedium_h0 = -1; // init to -1 last state to force redraw of vaccol 
             mtcab[unit].R_VacColMedium_h0 = -1; 
+            mtcab[unit].state.MT_Reel_Ammount=-1; // init to -1 to force redraw of reels
             // ... signal the load animation can begin
             mtcab[unit].mt_is = MT_is_loading_tape; 
             if (cmode != 'R') {
@@ -3202,7 +4053,6 @@ void Refresh_MagTape(void)
                                                                                (int) (PARAM_VacCol_h_Low  * 0.9); 
                 // put all medium on right reel
                 mt_info[unit].MediumPos = mt_info[unit].MediumLen * 1000;
-                mtcab[unit].state.MT_Reel_Ammount=99;
                 // start hi speed rewind. This is nice!
                 mt_info[unit].recsize = mt_info[unit].MediumLen * 1000;
                 mt_set_rew_seq(unit, 1);
@@ -3213,21 +4063,13 @@ void Refresh_MagTape(void)
         // MT_reel_amount sets the quantity of tape medium into the reel
         //    =0  -> no tape medium winded on reel, reel empt
         //    =1 -> reel just start entering the reel 
-        //    =39 -> reel full of tape medium 
+        //    =67 -> reel full of tape medium 
         //    =1 -> all tape on Left reel, 99 -> all tape on Right reel
-        // MT_colour holds the rotational position of reel, the speed ot reel, and the reel's colour
-        //   MT_blue_reel
-        //          0 ..71  (72 states) -> reel rotated 0gr, 5gr, ... 355gr. To be used when reel is not spinning
-        //          73..90  (18 states) -> reel rotated 0gr, 20gr ... 340gr but with some spin blur. To be used when reel is moving
-        //          91..108 (18 states) -> reel rotated 0gr, 20gr ... 340gr whith greater spin blur. To be used when reel is rewinding at high Speed
-        //   MT_red_reel (no needs hub separate control)
+        // MT_blue_reel, MT_red_reel, MT_green_reel holds the rotational position of reel, the speed of reel, 
+        // and the reel's colour
         //          0 ..35 (36 states) -> reel rotated 0gr, 10gr, ... 350gr. To be used when reel is not spinning
-        //          48..56 ( 9 states) -> reel rotated 0gr, 40gr ... 320gr but with some spin blur. To be used when reel is moving
-        //          57..74 (18 states) -> reel rotated 0gr, 20gr ... 320gr whith greater spin blur. To be used when reel is rewinding at high Speed
-        //   MT_green_reel
-        //          0 ..35 (36 states) -> reel rotated 0gr, 10gr, ... 350gr. To be used when reel is not spinning
-        //          42..65 (24 states) -> reel rotated 0gr, 15gr ... 345gr but with some spin blur. To be used when reel is moving
-        //          68..75 ( 8 states) -> reel rotated 0gr, 45gr ... 315gr whith greater spin blur. To be used when reel is rewinding at high Speed
+        //          36..60 (24 states) -> reel rotated 0gr, 15gr ... 345gr but with some spin blur. To be used when reel is moving
+        //          60..67 ( 8 states) -> reel rotated 0gr, 45gr ... 315gr whith greater spin blur. To be used when reel is rewinding at high Speed
         // MT_head holds the position of r/w head
         //    =0  -> no head image
         //    =1  -> head closed, prepared to read or write tape medium
@@ -3340,7 +4182,7 @@ void lpt_set_paper_background(int paper_y0, int paper_y1,
 void lpt_print_line(int y0, char * sLin, 
                     int CId_Paper, int CId_PrinterCharSet, int char_ww2)
 {
-    static char sCharSet[70] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,.()=*+-/$@&?!'\";:%\\|#[]<>";
+    static char sCharSet[128] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,.()=*+-/$@&?!'\";:%\\|#[]<>_abcdefghijklmnopqrstuvwxyz";
     uint32 * surface0;      // printed paper dynamicaly generated 
     uint32 * surface1;      // character to be printed on paper
     int paper_ww, paper_hh; // printed paper control size
@@ -3499,6 +4341,9 @@ void Refresh_PrinterConsole(void)
     uint32 msec; 
 
     SetState(S360.LI_Cons_Proceed, bProceed); // console proceed light 
+    if (bConsTypeIs==3210) {
+        SetState(S360.LI_Cons_Req_Pending, bRequestPending); // console request pending light 
+    }
 
     // if ConsPrintOutDoneCount==-1, it is just the first refresh of a just created windoe
     // so set ConsSomethingPrinted=1 to guarantee the controls are refreshed
@@ -3614,16 +4459,66 @@ void Refresh_Dasd(void)
     IBM360_SetDasdReadyLights(1); 
 }
 
+// handle RTC timer using TickCount 
+void SetRtcTimer()
+{
+    static uint32 rtc_activate_msec = 0; 
+    static int    catchup_usec = 0; 
+    static int    catchup_Instr = 0;
+    uint32 n; 
+
+    // this function is called at TickCount rate -> 30K per second -> each 33.33 usec
+    // but if set cpu realtime is active, time will be yied to host with sim_os_ms_sleep()
+    // so the frequence of calls to ticckount will decrease
+    // this is not a problem as rtc_svr will be called based on corrent msec value change
+    // if more than one msec has elapsed, the lost rtc_svr calls will be catch-up 
+
+    // lets calc rtc_activate_usecs = usecs remaining to activate rtc_srv
+    rtc_activate_usecs = (rtc_activate_usecs & 0xffff) - 33; 
+    if (rtc_activate_usecs > 10000) rtc_activate_usecs = 3333; // reset counter
+
+    // clac n= number of msec elapsed
+    n=Refresh_tnow - rtc_activate_msec; 
+    rtc_activate_msec=Refresh_tnow;
+
+    if (n==0) {
+        // nothing new to catch-up
+    } else if (n < 1000) {
+        // allow to catchup up to 1000 msec 
+        catchup_usec += n * 1000; 
+        if (catchup_usec > 10 * 1000 * 1000) catchup_usec=0; // too much to catchup. Forget it
+    } else { 
+        // too much to catchup. Forget it
+        catchup_usec=0;
+    }
+    // call rtc_svr to catchup (each 1000 instr cycles)
+    if ((catchup_usec > 0) && ((uint32)(InstrCycles - catchup_Instr) > 1000)) {
+        catchup_usec -= 3333; 
+        rtc_activate_usecs = 3333; 
+        // schedulle catchup rtc_svr call
+        sim_cancel(&cpu_unit[0]);
+        sim_activate(&cpu_unit[0], 1);
+        catchup_Instr=InstrCycles; 
+    }
+    // notify that a catchup is in progress, so cpu cannot sleep
+    if (catchup_usec > 0) rtc_activate_usecs |= 0x10000;
+}
+
+
 void IBM360_TickIntensityCount(void)
 {
-    if (bCpuModelIs == 2065) {
-        IBM360M65_SetCpuPanelLights(0); // set tickcount
+    if (bCpuModelIs == 3148) {
+        SetCpuPanelLights_M148(0); // set tickcount
+    } else if (bCpuModelIs == 3145) {
+        SetCpuPanelLights_M145(0); // set tickcount
+    } else if (bCpuModelIs == 2065) {
+        SetCpuPanelLights_M65(0); // set tickcount
     } else if (bCpuModelIs == 2050) {
-        IBM360M50_SetCpuPanelLights(0); // set tickcount
+        SetCpuPanelLights_M50(0); // set tickcount
     } else if (bCpuModelIs == 2040) {
-        IBM360M40_SetCpuPanelLights(0); // set tickcount
+        SetCpuPanelLights_M40(0); // set tickcount
     } else {
-        IBM360M30_SetCpuPanelLights(0); // set tickcount
+        SetCpuPanelLights_M30(0); // set tickcount
     }
     if (bDasdVisible) {
         IBM360_SetDasdReadyLights(0); 
@@ -3631,6 +4526,7 @@ void IBM360_TickIntensityCount(void)
     if (bTapesVisible) {
         IBM360_SetTapesSelectLight(0); 
     }
+    SetRtcTimer(); 
 }
 
 void IBM360_SetOdoMeter(void)
@@ -3644,7 +4540,7 @@ void IBM360_SetOdoMeter(void)
     }
     msec = Refresh_tnow - OdoMeter.tnow; if ((msec<0) || (msec > 1000)) msec=1000;
     OdoMeter.tnow = Refresh_tnow;                                   
-    if (sim_is_running == 0) return; // if not runnung, do not update meter
+    if (sim_is_running == 0) return; // if not running, do not update meter
     OdoMeter.msec += msec;
     if (OdoMeter.msec < 1000) return; // not yet a second measured
     OdoMeter.msec -= 1000;
@@ -3665,6 +4561,7 @@ void IBM360_SetOdoMeter(void)
         OdoMeter.hour_changed_flag=0; 
     }
 drawOdo:
+
     // set the odometer for black digits (hours)
     SetState(S360.Odo[2], OdoMeter.hours / 100);
     SetState(S360.Odo[3], (OdoMeter.hours / 10) % 10);
@@ -3710,7 +4607,7 @@ int PARAM_nCardInReadHopperMax   = 1500; // Should be 3100, not 1500. Not so rea
 int PARAM_nCardInStackerMax      = 700;  // Should be 1350, not 700. Not so realistic, but allow nicer looking
 int PARAM_CardDropTime_msec      = 200;  // educated guess. Time in msec needed for a card to drop on stacker
 
-void Refresh_CardReadPunch(void)
+void Refresh_CardReadPunch_2540(void)
 {
     int CId, nState, msec;
     int x1, y1, x0, y0, x, y, h, n, nCards, ncp; 
@@ -3805,7 +4702,7 @@ void Refresh_CardReadPunch(void)
         // and no card animation in progress
         // so no need to generate a new dynamic state image
     } else { 
-        // draw animation of call falling into stacker
+        // draw animation of card falling into stacker
         //  - Copy State 0 (background) to state 1 (state displayed) to start with an empty image
         CopyControlImage(S360.ReadStacker, 0,       0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
                          S360.ReadStacker, 1,       0, 0);       // ToCId, ToState,     x1, y1
@@ -3821,7 +4718,7 @@ void Refresh_CardReadPunch(void)
                 // drop first card
                 CId    = S360.ReadStackerBack1; 
                 nState = 4 * msec / PARAM_CardDropTime_msec;
-            } else if (nCards - nCardsInReadStacker == 1) {
+            } else if (nCards - nCardsInReadStacker <= 1) {
                 // drop one more card
                 CId    = S360.ReadStackerBack2; 
                 nState = 4 * msec / PARAM_CardDropTime_msec;
@@ -3893,7 +4790,7 @@ void Refresh_CardReadPunch(void)
         // and no card animation in progress
         // so no need to generate a new dynamic state image
     } else { 
-        // draw animation of call falling into stacker
+        // draw animation of card falling into stacker
         //  - Copy State 0 (background) to state 1 (state displayed) to start with an empty image
         CopyControlImage(S360.PunchStacker, 0,       0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
                          S360.PunchStacker, 1,       0, 0);       // ToCId, ToState,     x1, y1
@@ -3909,7 +4806,7 @@ void Refresh_CardReadPunch(void)
                 // drop first card
                 CId    = S360.PunchStackerBack1; 
                 nState = 4 * msec / PARAM_CardDropTime_msec;
-            } else if (nCards - nCardsInPunchStacker == 1) {
+            } else if (nCards - nCardsInPunchStacker <= 1) {
                 // drop one more card
                 CId    = S360.PunchStackerBack2; 
                 nState = 4 * msec / PARAM_CardDropTime_msec;
@@ -3922,7 +4819,7 @@ void Refresh_CardReadPunch(void)
             }
             // draw card dropping to stacker
             if (CId) { 
-                CopyControlImage(CId, nState,                     0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                CopyControlImage(CId, nState,                0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
                                  S360.PunchStacker, 1,      50, 0);       // ToCId, ToState,     x1, y1
 
             }
@@ -3969,33 +4866,220 @@ void Refresh_CardReadPunch(void)
     }
 }
 
+
+void Refresh_CardReadPunch_3525(void)
+{
+    int CId, nState, msec;
+    int x1, y1, x0, y0, x, y, h, n, nCardsL, nCardsR; 
+
+    // Ready light on -> device ready to process i/o commands (either cdr, cdp or both)
+    n= (((cdr_unit[0].flags & UNIT_DIS) || ((cdr_unit[0].flags & UNIT_ATT) == 0)) ? 0:1) |
+       (((cdp_unit[0].flags & UNIT_DIS) || ((cdp_unit[0].flags & UNIT_ATT) == 0)) ? 0:1);
+    SetState(S360.LI_Ready_CardPunch, n);
+    SetState(S360.LI_EOF_CardReader, bCardReadEOFset ? 1:0); 
+
+    // from bitsavers GA21-9124-1_3505_Card_Reader_and_3525_Card_Punch_Subsystem_Mar71
+    // The 3525 [...] each stacker [...] holds about 1200 cards
+    // card read feature provides the punch with an optical-punched hole sensing station
+  
+    // in cpanel, left stacker receives punched cards, right stacker receives read cards
+
+    // animation sequence: as right stacker hides partially left stacker, a card arriving to any 
+    // stacker makes both to be redraw
+    // duration of card animation: 200 msec this value is a guess; used because it looks good
+
+    // right stacker = cards read
+    nCardsR = sim_card_output_hopper_count(&cdr_unit[0]) - 1; // minus one because last card still into the read station, not yet out
+    if (nCardsR <0) nCardsR=0;
+    // break big deck in clunches
+    if (nCardsR > PARAM_nCardInStackerMax) {
+        nCardsR = nCardsR % PARAM_nCardInStackerMax;
+    }
+    // left stacker = punched cards 
+    nCardsL = sim_card_output_hopper_count(&cdp_unit[0]); 
+    // break big deck in clunches
+    if (nCardsL > PARAM_nCardInStackerMax) {
+        nCardsL = nCardsL % PARAM_nCardInStackerMax;
+    }
+
+    if ((nCardsInReadStacker == nCardsR) && (tm0CardInReadStacker==0) &&
+        (nCardsInPunchStacker == nCardsL) && (tm0CardInPunchStacker==0) ) {
+        // both L and R decks are already draw with needed number of cards. 
+        // and no card animation in progress
+        // so no need to generate a new dynamic state image
+    } else { 
+        // draw animation of card falling into LEFT stacker
+        //  - Copy State 0 (background) to state 1 (state displayed) to start with an empty image
+        CopyControlImage(S360.PunchStacker, 0,       0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                         S360.PunchStacker, 1,       0, 0);       // ToCId, ToState,     x1, y1
+
+        if (nCardsL>0) {
+            // hide left card stick
+            CopyControlImage(S360.LStackerBackground, 0,   0,  0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.PunchStacker, 1,       113, 24);       // ToCId, ToState,     x1, y1
+
+        }
+
+        // first draw Left stacker (with punched cards)
+        if (tm0CardInPunchStacker) {
+            // card dropping to stacker animation in progress
+            CId=nState=0;
+            msec = Refresh_tnow - tm0CardInPunchStacker; 
+            if ((msec < 0) || (msec >= PARAM_CardDropTime_msec)) {
+               // animation ended
+               tm0CardInPunchStacker=0;
+            } else if (nCardsL==1) {
+                // drop first card
+                CId    = S360.PunchStacker1L; 
+                nState = 4 * msec / PARAM_CardDropTime_msec;
+            } else if (nCardsL - nCardsInPunchStacker <= 1) {
+                // drop one more card
+                CId    = S360.PunchStacker2L; 
+                nState = 4 * msec / PARAM_CardDropTime_msec;
+            } else {
+                // drop multiple cards at fast pace
+                CId    = S360.PunchStacker2L; 
+                nState = 4 * msec / PARAM_CardDropTime_msec;
+                // change states 0,1,2,3 to 0,4,1,5
+                { static int st[4] = {0,4,1,5};  nState = st[nState]; }
+            }
+            // draw card dropping to stacker
+            if (CId) { 
+                CopyControlImage(CId, nState,                     0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                                 S360.PunchStacker, 1,            0, 0);       // ToCId, ToState,     x1, y1
+            }
+        }
+        // now, draw the deck of processed cards sitting into LEFT stacker
+        if (nCardsL<=0) {
+            // no cards to draw, empty stacker
+            nCardsL=0;
+        } else {
+            if (nCardsL > PARAM_nCardInStackerMax) nCardsL=PARAM_nCardInStackerMax; // safety
+            // stacker at its maximum capacity -> n=1000;
+            n = nCardsL * 1000 / PARAM_nCardInStackerMax; 
+            // draw output deck into leftmost output stacker
+            h = 31 * n / 1000; 
+            CopyControlImage(S360.CardDeckInStacker, 0,     21-h, 0, 0, 0,      // FromCId, FromState, x0, y0, w, h, 
+                             S360.PunchStacker, 1,          41-h, 73);        // ToCId, ToState,     x1, y1
+            // draw last card of deck (topmost one)
+            x0=30; y0=71; // position tomost card visible when stacker is empty 
+            x1= 0; y1=77; // position tomost card visible when stacker is full
+            x = x0 + (x1 - x0) * n / 1000; 
+            y = y0 + (y1 - y0) * n / 1000; 
+            CopyControlImage(S360.CardInPunchStacker, 0,    0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.PunchStacker, 1,          x, y);       // ToCId, ToState,     x1, y1
+            // draw stacker separator between Left and right stacker
+            CopyControlImage(S360.PunchStackerSeparator, 0,    0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.PunchStacker, 1,             0, 0);       // ToCId, ToState,     x1, y1
+
+        }
+        // then draw RIGHT stacker (with read cards)
+        if (tm0CardInReadStacker) {
+            // card dropping to Right stacker animation in progress
+            CId=nState=0;
+            msec = Refresh_tnow - tm0CardInReadStacker; 
+            if ((msec < 0) || (msec >= PARAM_CardDropTime_msec)) {
+               // animation ended
+               tm0CardInReadStacker=0;
+            } else if (nCardsR==1) {
+                // drop first card
+                CId    = S360.PunchStacker1R; 
+                nState = 4 * msec / PARAM_CardDropTime_msec;
+            } else if (nCardsR - nCardsInReadStacker <= 1) {
+                // drop one more card
+                CId    = S360.PunchStacker2R; 
+                nState = 4 * msec / PARAM_CardDropTime_msec;
+            } else {
+                // drop multiple cards at fast pace
+                CId    = S360.PunchStacker2R; 
+                nState = 4 * msec / PARAM_CardDropTime_msec;
+                // change states 0,1,2,3 to 0,4,1,5
+                { static int st[4] = {0,4,1,5};  nState = st[nState]; }
+            }
+            // draw card dropping to stacker
+            if (CId) {
+                CopyControlImage(CId, nState,               0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                                 S360.PunchStacker, 1,     139, 0);       // ToCId, ToState,     x1, y1
+
+            }
+        }
+        // draw the deck of processed cards sitting into RIGHT stacker
+        if (nCardsR<=0) {
+            // no cards to draw, empty stacker
+            nCardsR=0;
+        } else {
+            if (nCardsR > PARAM_nCardInStackerMax) nCardsR=PARAM_nCardInStackerMax; // safety
+            // stacker at its maximum capacity -> n=1000;
+            n = nCardsR * 1000 / PARAM_nCardInStackerMax; 
+            // draw output deck into leftmost output stacker
+            h = 31 * n / 1000; 
+            CopyControlImage(S360.CardDeckInStacker, 0,     26-h, 0, 0, 0,      // FromCId, FromState, x0, y0, w, h, 
+                             S360.PunchStacker, 1,            135-h, 73);        // ToCId, ToState,     x1, y1
+
+            // draw last card of deck (topmost one)
+            x0=124; y0=71; // position tomost card visible when stacker is empty 
+            x1= 93; y1=77; // position tomost card visible when stacker is full
+            x = x0 + (x1 - x0) * n / 1000; 
+            y = y0 + (y1 - y0) * n / 1000; 
+            CopyControlImage(S360.CardInPunchStacker, 0,    0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.PunchStacker, 1,          x, y);       // ToCId, ToState,     x1, y1
+            // draw stacker separator between right stacker and cabinet
+            CopyControlImage(S360.PunchStackerSeparator, 1,    0, 0, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+                             S360.PunchStacker, 1,             0, 0);       // ToCId, ToState,     x1, y1
+
+        }
+        // to force redraw of control 
+        cpanel_ControlRedrawNeeded=1; 
+        SetState(S360.PunchStacker, 1);
+        nCardsInPunchStacker = nCardsL;   
+        nCardsInReadStacker = nCardsR;
+    }
+}
+
+
 void Refresh_CpuPanel(void)
 {
-    if (bCpuModelIs == 2065) {
-        if ((1+(int) GetState(S360.Label_Roller6_L)) == 6) {
+    if (bCpuModelIs == 3148) {
+        if (GetState(S360.SW_Lamp_Test)==1) {
             // lamp test on -> lit everything!
-            IBM360M65_SetCpuPanelLights(2); 
+            SetCpuPanelLights_M148(2); 
         } else {
             // set register light in cpu panel
-            IBM360M65_SetCpuPanelLights(1); 
+            SetCpuPanelLights_M148(1); 
+        }  
+    } else if (bCpuModelIs == 3145) {
+        if (GetState(S360.SW_Lamp_Test)==1) {
+            // lamp test on -> lit everything!
+            SetCpuPanelLights_M145(2); 
+        } else {
+            // set register light in cpu panel
+            SetCpuPanelLights_M145(1); 
+        }  
+    } else if (bCpuModelIs == 2065) {
+        if ((1+(int) GetState(S360.Label_Roller6_L)) == 6) {
+            // lamp test on -> lit everything!
+            SetCpuPanelLights_M65(2); 
+        } else {
+            // set register light in cpu panel
+            SetCpuPanelLights_M65(1); 
         }  
     } else if (bCpuModelIs == 2050) {
         if (GetState(S360.SW_Lamp_Test)==1) {
             // lamp test on -> lit everything!
-            IBM360M50_SetCpuPanelLights(2); 
+            SetCpuPanelLights_M50(2); 
         } else {
             // set register light in cpu panel
-            IBM360M50_SetCpuPanelLights(1); 
+            SetCpuPanelLights_M50(1); 
         }  
     } else if (bCpuModelIs == 2040) {
-        IBM360M40_SetCpuPanelLights(1); 
+        SetCpuPanelLights_M40(1); 
     } else {
         if (GetState(S360.BTN_Lamp_Test)==1) {
             // lamp test on -> lit everything!
-            IBM360M30_SetCpuPanelLights(2); 
+            SetCpuPanelLights_M30(2); 
         } else {
             // set register light in cpu panel
-            IBM360M30_SetCpuPanelLights(1); 
+            SetCpuPanelLights_M30(1); 
         }  
     } 
     // calculate time elapsed for odometer
@@ -4054,7 +5138,8 @@ void process_HotKeys(void)
            // add key to console keyb buffer
            n=strlen(ConsKeybBuffer); 
            if (n >= sizeof(ConsKeybBuffer)-2) break; // console keyb buf full
-           ConsKeybBuffer[n]=sim_toupper(c); 
+           if (bConsTypeIs==1052) c=sim_toupper(c);  // 1052 only uppercase
+           ConsKeybBuffer[n]=c; 
            ConsKeybBuffer[n+1]=0; 
         }
     }
@@ -4151,7 +5236,11 @@ void Refresh_ShowInfo(int bOnlyInit)
     //       IPS = Instructions Per Second -> Instr executed each sec (when waiting, does not count on IPS)
 
     // set the aprox speed of real hardware model 30. 40, 50, 65 to show the relative speed
-    if (bCpuModelIs == 2065) {
+    if (bCpuModelIs == 3148) {
+        RealHwIPS = 34500.0 * 3 * 4 * 1.25; // model 148 performance is 1.25 times of a system / 370 model 145
+    } else if (bCpuModelIs == 3145) {
+        RealHwIPS = 34500.0 * 3 * 4; // model 145 is five times faster than the IBM System/360 Model 40
+    } else if (bCpuModelIs == 2065) {
         RealHwIPS = 34500.0 * 10 * 3.5; // model 65 has more than 3 times performance of model 50
     } else if (bCpuModelIs == 2050) {
         RealHwIPS = 34500.0 * 10; // model 50 has aprox 10 times performance of model 30
@@ -4248,8 +5337,8 @@ void Refresh_ShowInfo(int bOnlyInit)
         MT_DASD_InfoPanel_Size++;
         sprintf(buf, "         %3x-MTA0  %3x-MTA1  %3x-MTA2  %3x-MTA3  %3x-MTA4  %3x-MTA5 \n"  // 68 chars long
                      " cmd      %7s   %7s   %7s   %7s   %7s   %7s \n"
-                     " block    %s   %s   %s   %s   %s   %s \n"
-                     " %% unwind   %s    %s    %s    %s    %s    %s ",
+                     " block    %7s   %7s   %7s   %7s   %7s   %7s \n"
+                     " %% unwind   %6s    %6s    %6s    %6s    %6s    %6s ",
             addr, addr+1, addr+2, addr+3, addr+4, addr+5, 
             scmd[0], scmd[1], scmd[2], scmd[3], scmd[4], scmd[5],
             sblk[0], sblk[1], sblk[2], sblk[3], sblk[4], sblk[5], 
@@ -4308,8 +5397,8 @@ void Refresh_ShowInfo(int bOnlyInit)
         sprintf(&buf[strlen(buf)], 
                      "          %7s   %7s   %7s   %7s   %7s   %7s \n"
                      " cmd      %7s   %7s   %7s   %7s   %7s   %7s \n"
-                     " cyl      %s   %s   %s   %s   %s   %s \n"
-                     " head     %s   %s   %s   %s   %s   %s ", 
+                     " cyl      %7s   %7s   %7s   %7s   %7s   %7s \n"
+                     " head     %7s   %7s   %7s   %7s   %7s   %7s ", 
             dasd_addr_name[0], dasd_addr_name[1], dasd_addr_name[2], dasd_addr_name[3], dasd_addr_name[4], dasd_addr_name[5], 
             DASD_STR(0, cmd_name[0]), DASD_STR(1, cmd_name[1]), DASD_STR(2, cmd_name[2]), DASD_STR(3, cmd_name[3]), DASD_STR(4, cmd_name[4]), DASD_STR(5, cmd_name[5]),
             DASD_STR(0, scyl[0]),     DASD_STR(1, scyl[1]),     DASD_STR(2, scyl[2]),     DASD_STR(3, scyl[3]),     DASD_STR(4, scyl[4]),     DASD_STR(5, scyl[5]), 
@@ -4350,7 +5439,11 @@ void IBM360_Refresh(void)
 
     // IBM 2540
     if (bCardReadPunchVisible) {
-        Refresh_CardReadPunch(); 
+        if (bCpuModelIs > 3000) {
+            Refresh_CardReadPunch_3525(); // IBM 370 uses 3525
+        } else {
+            Refresh_CardReadPunch_2540(); // IBM 360 uses 2540
+        }
     }
     // IBM 1403
     if (bPrintOutVisible) {
@@ -4399,10 +5492,13 @@ void IBM360_DropFile(int CId, char * FileName)
         if (sim_card_input_hopper_count(&cdr_unit[0]) > 0) sim_switches |= SWMASK ('S'); 
         cdr_attach(&cdr_unit[0], FileName);
         sim_switches=sv; 
-    } else for (n=0;n<8;n++) if (CId == S360.MT[n]) {
+    } else for (n=0;n<8;n++) if ((CId == S360.MT[n]) || (CId == S360.MT_Drop_TapeFile[n])) {
         // drag and drop a file on tape -> attach it
         sv=sim_switches; // save current switches
         sim_switches = SWMASK ('Q'); // set switch -Q (quiet) 
+        if (vid_keyb.RightButton) {
+            sim_switches |= SWMASK ('R'); // set switch -R (read only) 
+        }
         mt_attach(&mta_unit[n], FileName);
         sim_switches=sv; 
     }
@@ -4428,14 +5524,21 @@ void IBM360_OnClick_BTN2(void)
         return; 
     }
 
-    // to detach a tape, must click on unload button
+    // to detach a tape, must click on reset button, then on load-rew
     for (n=0;n<8;n++) {
-        if (CP_Click.CId == S360.MT_BTN_UnLoad[n]) {
+        if (CP_Click.CId == S360.MT_BTN_Reset[n]) {
+            // click on tape reset 
+            mtcab[n].ResetPressed=1;
+        } else if (CP_Click.CId == S360.MT_BTN_Start[n]) {
+            // click on tape start 
+            mtcab[n].ResetPressed=0;
+        } else if (CP_Click.CId == S360.MT_BTN_LoadRew[n]) {
             // click to detach tape
-            if ((mta_unit[n].flags & UNIT_ATT) == 0) {
-                // already detached. Do not detach again
-                return; 
-            }
+            // reset not pressed. Must press reset before load-rew to unload a tape
+            if (mtcab[n].ResetPressed==0) return;
+            mtcab[n].ResetPressed=0; // clear reset flag
+            // already detached. Do not detach again
+            if ((mta_unit[n].flags & UNIT_ATT) == 0) return; 
             sv=sim_switches; // save current switches
             sim_switches = SWMASK ('Q'); // set switch -Q (quiet) 
             mt_detach(&mta_unit[n]);
@@ -4449,27 +5552,48 @@ void IBM360_OnClick_BTN2(void)
     }
 }
 
-int GetSwitchNum(int SW_A, int SW_B, int SW_C, int SW_D) 
+int GetSwitchNum2(int SW_A, int SW_B) 
 {
     int n=0; 
+    if (SW_A) n+=((int) (GetState(SW_A)) & 0xF) * 16;
+    if (SW_B) n+=((int) (GetState(SW_B)) & 0xF);
+    return n; 
+}
 
-    if (SW_A) n+=((int) (GetState(SW_A)) & 0xF) * 0x1000;
-    if (SW_B) n+=((int) (GetState(SW_B)) & 0xF) * 0x0100;
-    if (SW_C) n+=((int) (GetState(SW_C)) & 0xF) * 0x0010;
-    if (SW_D) n+=((int) (GetState(SW_D)) & 0xF) * 0x0001;
-    return n;
+int GetSwitchNum4(int SW_A, int SW_B, int SW_C, int SW_D) 
+{
+    return GetSwitchNum2(SW_A, SW_B) * 256 + GetSwitchNum2(SW_C, SW_D); 
+}
+
+int GetSwitchNum6(int SW_A, int SW_B, int SW_C, int SW_D, int SW_E, int SW_F) 
+{
+    return GetSwitchNum2(SW_A, SW_B) * 256 * 256 + GetSwitchNum4(SW_C, SW_D, SW_E, SW_F); 
 }
 
 void SetAddrBreakPoint(void)
 {
-    if (GetState(S360.SW_Addr_Compare)) {
-        // must set breakpoint
-        cpu_mem_addr_stop = GetSwitchNum(S360.SW_A, S360.SW_B, S360.SW_C, S360.SW_D); 
-        // and set interactive mode
-        cpanel_interactive=1; 
-    } else {
-        cpu_mem_addr_stop = -1; // disable breakpoint
-        cpanel_interactive=0;  // disable inteactive mode
+    cpu_mem_comp.match = 0; // disable match addr breakpoint
+    if (bCpuModelIs == 2030) {
+        if (GetState(S360.SW_Addr_Compare)) {
+            cpu_mem_comp.addr = GetSwitchNum4(S360.SW_A, S360.SW_B, S360.SW_C, S360.SW_D); 
+            cpu_mem_comp.match = 3; // Addr compare SAR -> compare any read/write addr
+        }
+    } else if ((bCpuModelIs == 3145) || (bCpuModelIs == 3148))  {
+        if (GetState(S360.SW_Addr_Compare_Cntrl)) {
+            cpu_mem_comp.addr = GetSwitchNum6(S360.SW_C, S360.SW_D, S360.SW_E, S360.SW_F, S360.SW_G, S360.SW_H); 
+            cpu_mem_comp.matchbyte = GetSwitchNum2(S360.SW_A, S360.SW_B);
+            switch (GetState(S360.SW_Addr_Compare)) {
+               case 0: cpu_mem_comp.match = 3; break; // Addr compare ANY real -> compare read/write addr
+               case 1: cpu_mem_comp.match = 1; break; // Addr compare Data Store real -> compare write addr
+               case 2: cpu_mem_comp.match = 4; break; // Addr compare I/O real -> compare on chan r/w addr
+               case 3: cpu_mem_comp.match = 8; break; // Addr compare I counter real -> compare on PC addr at fetch instr
+               case 4: cpu_mem_comp.match = 9; break; // data comp trap -> compare writting byte to real mem 
+               case 8: cpu_mem_comp.match = 8; break; // Addr compare I counter virtual -> compare on PC addr at fetch instr
+               case 9: cpu_mem_comp.match = 16+3; break; // Addr compare ANY virtual -> compare virtual read/write addr
+            }
+            // note: addr compare on PC allways is on virtual addres, not in real address
+            // when addr is matched, the breackpoint occurs after the current inst is exec, as in real HW
+        }
     }
 }
 
@@ -4501,16 +5625,58 @@ void IBM360_OnClick_Sw(void)
     SetState(CP_Click.CId, n);
     if (bCpuModelIs==2030) {
         SetAddrBreakPoint();
+    } else if ((bCpuModelIs == 3145) || (bCpuModelIs == 3148))  {
+        SetAddrBreakPoint();
     }
 }
 
-// handle Rotating Switch 0-1
-void IBM360_OnClick_Sw2(void)
+
+// handle Rotating Switch 0-9 for Rate/Addr compare/Storage select on model 370 cpu's
+void IBM360_OnClick_Sw3(void)
 {
     int n; 
 
     if (CP_Click.KeyPress_KeyRelease == 1) {
         // press button -> start switch rotation motion
+        n = (int) (GetState(CP_Click.CId));
+        n = (n % 10) + 10;
+        SetState(CP_Click.CId, n);
+        return;
+    }
+    // set new position
+    n = (int) (GetState(CP_Click.CId));
+    n = (n % 10) + 1; if (n==10) n=0;
+    SetState(CP_Click.CId, n);
+
+    if (CP_Click.CId == S360.SW_Rate) {
+        if (GetState(CP_Click.CId) == 0) return; //  rate is  at "proceed" -> nothing to do
+        SetState(CP_Click.CId, 9); // only states 0 (proceed) and 9 (inst step) allowed 
+        if (sim_is_running == 0) return; // cpu is not running -> nothing to do
+        // set rate to instr while cpu is running -> stop cpu
+        cpanel_stop_flag = 2;
+        // and set interactive mode
+        cpanel_interactive=1; 
+        return;
+    } else if (CP_Click.CId == S360.SW_Addr_Compare) {
+        n=(int)GetState(CP_Click.CId);
+        if ((n > 4) && (n < 8)) SetState(CP_Click.CId, 8); // skip non-implemented states 5..7
+        SetAddrBreakPoint(); // this is addr compare handling for 3145 (model 145) and 3148 (model 148)
+    } else if (CP_Click.CId == S360.SW_Storage_Select) {
+        if (GetState(CP_Click.CId) < 2) SetState(CP_Click.CId, 2); 
+        else SetState(CP_Click.CId, 0); // only states 0 (main storage) and 2 (local storage) allowed 
+    }
+}
+
+// handle Rotating Switch 0-1 (with sprin initiated states states 2 and 3)
+// and handle Up/Down switch 0-1 (with no intermediate states)
+void IBM360_OnClick_Sw2(void)
+{
+    int n; 
+
+    if (CP_Click.KeyPress_KeyRelease == 1) {
+        // if is a up/down switch, ignore keypress; processing is done on keyrelease
+        if (GetControlInfo(CP_Click.CId, CINFO_NSTATES) == 2) return; 
+        // start switch rotation motion
         n = (int) (GetState(CP_Click.CId));
         n = (n & 1) + 2;
         SetState(CP_Click.CId, n);
@@ -4522,7 +5688,7 @@ void IBM360_OnClick_Sw2(void)
     SetState(CP_Click.CId, n);
 
     if (CP_Click.CId == S360.SW_Rate) {
-        if (GetState(CP_Click.CId) != 1) return; // set rate set to proceed -> nothing to do
+        if (GetState(CP_Click.CId) != 1) return; // rate set to proceed -> nothing to do
         if (sim_is_running == 0) return; // cpu is not running -> nothing to do
         // set rate to instr while cpu is running -> stop cpu
         cpanel_stop_flag = 2;
@@ -4530,14 +5696,18 @@ void IBM360_OnClick_Sw2(void)
         cpanel_interactive=1; 
         return;
     } else if (CP_Click.CId == S360.SW_Addr_Compare) {
+        SetAddrBreakPoint(); // this is addr compare handling for 2030 model 30 
+    } else if (CP_Click.CId == S360.SW_Addr_Compare_Cntrl) {
         SetAddrBreakPoint();
+    } else if (CP_Click.CId == S360.SW_Storage_Select) {
+        // nothing more to do. State has changed, that's all       
     }
 }
 
 // Handle Button
 void IBM360_OnClick_BTN(void)
 {
-    uint32 addr, data; 
+    uint32 addr, data, n; 
     UNIT * uptr; 
     char buf[80];
 
@@ -4576,8 +5746,8 @@ void IBM360_OnClick_BTN(void)
             // and set interactive mode
             cpanel_interactive=1; 
         }
-        bSystemResetKeyPressed=1; // signal system reset pressed
-        DoSCP("reset"); 
+        if (bCpuModelIs==2030) bSystemResetKeyPressed=1; // signal system reset pressed
+        DoSCP("reset cpu"); 
         return;
     } else if (CP_Click.CId == S360.BTN_Start) {
         if (sim_is_running != 0) {
@@ -4587,13 +5757,14 @@ void IBM360_OnClick_BTN(void)
             // now cpu runs the microprogram tests (not simulated) and stops
             bSystemResetKeyPressed=2; 
         } else if (bSystemResetKeyPressed == 3) {
+            // on 2030 (model 30)
             // Start pressed again after system reset -> psw restart ->the PSW located 
             // at address 0000 is loaded into circuitry, and processing starts
             bSystemResetKeyPressed=0; 
             cpu_psw_restart=1;
             // send command to scp
             DoSCP("go"); 
-        } else if (GetState(S360.SW_Rate) == 1) {
+        } else if (GetState(S360.SW_Rate)) {
             // Rate Switch is set to INSTR STEP
             cpanel_interactive=1;  // set interactive mode
             // send command to scp
@@ -4603,10 +5774,12 @@ void IBM360_OnClick_BTN(void)
             // disable interactive mode so when 
             // terminating prog the script can continue
             cpanel_interactive=0; 
-            SetAddrBreakPoint();
             // send command to scp
             DoSCP("go"); 
         }
+        // check switches to see if addr compare set. if so, set al cpanel_interactive to 1 
+        // so if breakpoint reached, control will return to user via cpanel 
+        SetAddrBreakPoint();
         return; 
     }
     bSystemResetKeyPressed=0; // clear signal system reset pressed flag
@@ -4617,36 +5790,98 @@ void IBM360_OnClick_BTN(void)
         cpanel_stop_flag = 2;
         // and set interactive mode
         cpanel_interactive=1; 
+    } else if (CP_Click.CId == S360.BTN_Restart) {
+        extern void storepsw(uint32 addr, uint16 ircode);
+        storepsw(ICCW1, 0); // doc does not details the irqcode stpred in PSW at addr 0x8
+        cpu_psw_restart=1;
+        // restars key is active when cpu is stoped or running
+        // if stoped, issue a go command to start exec from psw at addr zerp
+        if (sim_is_running == 0) DoSCP("go"); 
     } else if (CP_Click.CId == S360.BTN_Store) {
         if (sim_is_running != 0) return; // store while cpu is running is ignored
-        // Rotating switch E is not simulated; store key allways write data into Main Storage
-        addr = GetSwitchNum(S360.SW_A, S360.SW_B, S360.SW_C, S360.SW_D);
-        data = GetSwitchNum(             0,              0, S360.SW_H, S360.SW_J);
-        WriteByte(addr, data);
-        cpu_mem_data=data; 
-        cpu_mem_addr=addr; 
-        bRegBA_display=1; // set Reg BA will display data stored
+        if (bCpuModelIs==2030) {
+            // Rotating switch E (storage select) is not simulated; store key allways write data into Main Storage
+           addr = GetSwitchNum4(S360.SW_A, S360.SW_B, S360.SW_C, S360.SW_D);
+           data = GetSwitchNum2(S360.SW_H, S360.SW_J);
+           WriteByte(addr, data);
+           cpu_mem_data=data; 
+           cpu_mem_addr=addr; 
+           bRegBA_display=1; // set Reg BA will display data stored
+        } else if ((bCpuModelIs==3145) ||(bCpuModelIs==3148)) {
+            data = GetSwitchNum2(S360.SW_A, S360.SW_B);
+            if (GetState(S360.SW_Storage_Select)) {
+                // local storage selected. retrieve reg 32bit contents
+                addr = GetSwitchNum2(S360.SW_F, S360.SW_G);
+                if (addr < 16) n=regs[addr]; // get 32bit value from reg
+                else if ((addr >= 0x30) && (addr <= 0x37)) n=fpregs[addr - 0x30]; else n=0;
+                // alter selected byte in switch H
+                switch(GetState(S360.SW_F) & 3) {
+                    case 0: n=(n & (~0x000000ff)) | data; break; 
+                    case 1: n=(n & (~0x0000ff00)) | (data << 8); break; 
+                    case 2: n=(n & (~0x00ff0000)) | (data << 16); break; 
+                    case 3: n=(n & (~0xff000000)) | (data << 24); break; 
+                }
+                if (addr < 16) regs[addr]=n; // set back 32bit result into reg
+                else if ((addr >= 0x30) && (addr <= 0x37)) fpregs[addr - 0x30]=n; else addr=-1; // invalid value selected in sw F G 
+                if (addr >=0) {
+                    cpu_mem_data=n; 
+                    cpu_mem_addr=addr; 
+                }
+            } else {
+                // main storage selected
+                addr = GetSwitchNum6(S360.SW_C, S360.SW_D, S360.SW_E, S360.SW_F, S360.SW_G, S360.SW_H);
+                WriteByte(addr, data);
+                cpu_mem_data=data; 
+                cpu_mem_addr=addr; 
+            }
+        }
     } else if (CP_Click.CId == S360.BTN_Display) {
         if (sim_is_running != 0) return; // display while cpu is running is ignored
-        // Rotating switch E is not simulated; display key allways read data from Main Storage
-        addr = GetSwitchNum(S360.SW_A, S360.SW_B, S360.SW_C, S360.SW_D);
-        ReadByte(addr, &data);
-        cpu_mem_data=data; 
-        cpu_mem_addr=addr; 
+        if (bCpuModelIs==2030) {
+            // Rotating switch E (storage select) is not simulated; store key allways write data into Main Storage
+            addr = GetSwitchNum4(S360.SW_A, S360.SW_B, S360.SW_C, S360.SW_D);
+            ReadByte(addr, &data);
+            cpu_mem_data=data; 
+            cpu_mem_addr=addr; 
+        } else if ((bCpuModelIs==3145) ||(bCpuModelIs==3148)) {
+            if (GetState(S360.SW_Storage_Select)) {
+                // local storage selected. retrieve reg 32bit contents
+                addr = GetSwitchNum2(S360.SW_F, S360.SW_G);
+                if (addr < 16) n=regs[addr]; // get 32bit value from reg
+                else if ((addr >= 0x30) && (addr <= 0x37)) n=fpregs[addr - 0x30]; else addr=-1; // invalid value selected in sw F G 
+                if (addr >=0) {
+                    cpu_mem_data=n; 
+                    cpu_mem_addr=addr; 
+                }
+            } else {
+                // main storage selected
+                addr = GetSwitchNum6(S360.SW_C, S360.SW_D, S360.SW_E, S360.SW_F, S360.SW_G, S360.SW_H);
+                ReadByte(addr, &data);
+                cpu_mem_data=data; 
+                cpu_mem_addr=addr; 
+            }
+        }
     } else if (CP_Click.CId == S360.BTN_Set_IC) {
         if (sim_is_running != 0) return; // if cpu is running key is ignored
-        PC = GetSwitchNum(S360.SW_F, S360.SW_G, S360.SW_H, S360.SW_J);
+        if (bCpuModelIs == 2030) {
+            PC = GetSwitchNum4(S360.SW_F, S360.SW_G, S360.SW_H, S360.SW_J);
+        } else if ((bCpuModelIs==3145) ||(bCpuModelIs==3148)) {
+            PC = GetSwitchNum6(S360.SW_C, S360.SW_D, S360.SW_E, S360.SW_F, S360.SW_G, S360.SW_H);
+        }
     } else if (CP_Click.CId == S360.BTN_Interrupt) {
         // this key is available when cpu is running or stopped
         post_extirq();
     } else if (CP_Click.CId == S360.BTN_Load) {
         if (sim_is_running != 0) return; // if cpu is running key is ignored
-        if ((bCpuModelIs==2040) || (bCpuModelIs==2050)) {
-            // Model 40, 50 gets load addr from rotating switches A B C 
-           addr = GetSwitchNum(0, S360.SW_A, S360.SW_B, S360.SW_C);
-        } else {
+        if ((bCpuModelIs==3145) ||(bCpuModelIs==3148)) {
+            // Model 145 gets load addr from rotating switches F G H 
+           addr = GetSwitchNum4(0, S360.SW_F, S360.SW_G, S360.SW_H);
+        } else if ((bCpuModelIs==2040) || (bCpuModelIs==2050) || (bCpuModelIs==2065)) {
+            // Model 40, 50, 65 gets load addr from rotating switches A B C 
+           addr = GetSwitchNum4(0, S360.SW_A, S360.SW_B, S360.SW_C);
+        } else if (bCpuModelIs==2030) {
             // Model 30 gets load addr from rotating switches G H J 
-           addr = GetSwitchNum(0, S360.SW_G, S360.SW_H, S360.SW_J);
+           addr = GetSwitchNum4(0, S360.SW_G, S360.SW_H, S360.SW_J);
         }
         uptr = unit_name_at_addr(addr);
         if (uptr == NULL) {
@@ -4657,10 +5892,23 @@ void IBM360_OnClick_BTN(void)
         sprintf(buf, "boot %s", uptr->uname);
         DoSCP(buf); 
     } else if (CP_Click.CId == S360.BTN_Cons_Request) {
-        // request button on 1052 console
+        // request button on 1052/3210 console
         if ((con_unit[0].CMD & 0x0f) != 0x0a) {
             con_unit[0].CMD |= CON_REQ; 
         }
+    } else if (CP_Click.CId == S360.BTN_Cons_Cancel) {
+        // Cancel button on 3210 console
+        if (bProceed==0) return; // console keyboard locked (proceed light off) -> key disabled
+        ConsKeybBuffer[0]=0x03; // put ^C char as first char in keyboard buffer
+        ConsKeybBuffer[1]=0;    // and clear any pending char in keyb buffer
+    } else if (CP_Click.CId == S360.BTN_Cons_End) {
+        // End (EOB - End of block) button on 3210 console
+        // add ^B char as last char in keyboard buffer
+        if (bProceed==0) return; // console keyboard locked (proceed light off) -> key disabled
+        n=strlen(ConsKeybBuffer); 
+        if (n >= sizeof(ConsKeybBuffer)-2) return; // console keyb buf full
+        ConsKeybBuffer[n]=0x02; 
+        ConsKeybBuffer[n+1]=0; 
     } else if (CP_Click.CId == S360.BTN_Roller1) {
         // click on roller
         data=(int) GetState(S360.Label_Roller1_L);

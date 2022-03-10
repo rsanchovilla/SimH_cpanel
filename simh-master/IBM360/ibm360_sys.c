@@ -113,6 +113,7 @@ DEBTAB              cpu_debug[] = {
     {"CDATA", DEBUG_CDATA, "Show channel data"},
     {"TRACE", DEBUG_TRACE, "Show instruction history"},
     {"VMA", DEBUG_VMA, "Show assist history"},
+    {"IRQ", DEBUG_IRQ, "Show assist history"},
     {0, 0}
 };
 

@@ -451,7 +451,7 @@ int cpanel_dasd_cmd_in_progress(UNIT * uptr)
     struct dasd_t      *data = (struct dasd_t *)(uptr->up7);
     uint32 msec; 
 
-    if ((uptr == NULL) || (data == NULL)) return 0; // disck with no file attached have data=NULL
+    if ((uptr == NULL) || (data == NULL)) return 0; // disk with no file attached have data=NULL
 
     // determine tape unit, check it is mta
     if (cpanel_on == 0) return 0; 
@@ -599,6 +599,8 @@ uint8  dasd_startcmd(UNIT *uptr,  uint8 cmd) {
         if (data) data->last_cmd=cmd & 0xff; // save the command sent to dasd das last command executed
     }
 #endif
+    idle_stop_tm0=0; // dasd cmd start -> reset idle stop timer
+
     switch (cmd & 0x3) {
     case 0x3:              /* Control */
          if ((cmd & 0xfc) == 0 ||  cmd == DK_RELEASE)
@@ -725,7 +727,7 @@ t_stat dasd_srv(UNIT * uptr)
 #if defined(CPANEL)
     if (cpanel_dasd_cmd_in_progress(uptr)) { 
         // operation still in progress ... check again later
-        sim_activate(uptr, 100);       
+        sim_activate(uptr, check_later_interval);       
         return SCPE_OK;
     }
 #endif
@@ -988,7 +990,7 @@ ntrack:
          data->count = 0;
          data->klen = 0;
          data->dlen = 0;
-         sim_activate(uptr, 10);   // was 50
+         sim_activate(uptr, 50);   
          break;
     case DK_POS_SEEK:                  /* In seek */
          /* Compute delay based of difference. */
@@ -996,7 +998,7 @@ ntrack:
          i = (uptr->CCH >> 8) - data->cyl;
          sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d %d %d s=%x\n", unit, uptr->CCH >> 8, i, data->state);
 #if defined(CPANEL)
-         cpanel_start_dasd_seek_cmd(uptr, i);
+         cpanel_start_dasd_seek_cmd(uptr, i); // wait for seek to terminate
          data->cyl = (uptr->CCH >> 8); 
          i=0;
 #endif

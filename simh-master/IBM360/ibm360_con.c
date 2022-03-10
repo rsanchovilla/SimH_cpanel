@@ -135,6 +135,9 @@ uint32 ConsPrint_msec = 0;         // duration of device operation
 uint32 ConsPollKeyb_tm0 = 0;       // timestamp when last call to sim_poll_kbd() was done
 uint32 ConsPollKeyb_msec = 0;      // time remaining for next call to sim_poll_kbd() 
 
+extern int ncp_console;                // the console window, defined in ibm360_cpanel
+extern int cpanel_visible(int ncp); 
+
 // same as sim_putchar, to print a char in control panel 
 void cpanel_putchar(char c)
 { 
@@ -205,10 +208,7 @@ void cpanel_putchar(char c)
     } 
 }
 
-extern uint32       idle_stop_tm0;          // sim_os_msec when start counting for idle time
-                                            // used on CP_PUTCHAR to reset idle countdown because a char is printed on console
-
-#define CP_PUTCHAR(c)     idle_stop_tm0=0; if ((cpanel_on) && (uptr - con_unit == 0)) cpanel_putchar(c);  // add char to console control panel's array of chars to print
+#define CP_PUTCHAR(c)     idle_stop_tm0=0; if ((cpanel_on) && (uptr - con_unit == 0) && (cpanel_visible(ncp_console))) cpanel_putchar(c);  // add char to console control panel's array of chars to print
 #else
 #define CP_PUTCHAR(c)    {}  // do nothing
 #endif
@@ -369,8 +369,8 @@ con_srv(UNIT *uptr) {
         ConsPollKeyb_tm0=0; // send ongoing -> clear tm0 to poll keyboard 
     }
 
-    if ((cpanel_on) && (bFastMode==0) && (uptr-con_unit==0) && (ConsPrint_tm0)) {
-        // if cpanel GUI visible, and fastmode not selected, and device operation has a start timestamp ...
+    if ((cpanel_on) && (cpanel_visible(ncp_console) && (bFastMode==0) && (uptr-con_unit==0) && (ConsPrint_tm0))) {
+        // if console cpanel GUI visible, and fastmode not selected, and device operation has a start timestamp ...
         uint32 msec = sim_os_msec() - ConsPrint_tm0;
         if (msec < ConsPrint_msec) {
             // operation still in progress ... check again later
@@ -503,7 +503,7 @@ KeybPoll:
 
     if (r & SCPE_KFLAG) {
        ch = r & 0377;
-       if (ch == 030) { /* ^X Post external interrupt */  //YYY
+       if (ch == 030) { /* ^X Post external interrupt */  
            sim_debug(DEBUG_CMD, &con_dev, "Console %d: ^X Key (external interrupt)\n", u);
            post_extirq();
            goto EndOfKbdPoll;
@@ -511,14 +511,18 @@ KeybPoll:
        if ((uptr->CMD & CON_INPUT) == 0) {
           /* Handle end of buffer */
           switch (ch) {
+          case 02: /* ^B End of Block */
+                sim_debug(DEBUG_DATA, &con_dev, "Console %d: EOB (^B) Key\n", u);
+                goto eob; 
           case '\r':
           case '\n':
                 sim_debug(DEBUG_DATA, &con_dev, "Console %d: Enter Key\n", u);
+                sim_putchar('\r');
+                sim_putchar('\n'); CP_PUTCHAR(13); 
+               eob:
                 uptr->CMD |= CON_INPUT;
                 uptr->CMD |= CON_CR;
                 uptr->CMD &= ~CON_OUTPUT;
-                sim_putchar('\r');
-                sim_putchar('\n'); CP_PUTCHAR(13); 
                 
                 // compose line user has typed on console and will be sent to cpu
                 for (i=0;i<(int)(con_data[u].inptr);i++) {
@@ -529,7 +533,7 @@ KeybPoll:
                 sim_debug(DEBUG_DETAIL, &con_dev, "Console %d typed by user: %s\n", u, console_lin);
                /* Fall through */
 
-          case 033: /* request key */
+          case 033: /* Attention Key on console (= request key)  */
                 if (cmd != CON_RD) {
                     sim_debug(DEBUG_CMD, &con_dev, "Console %d: Esc Key (request)\n", u);
                     uptr->CMD |= CON_REQ;
@@ -544,12 +548,14 @@ KeybPoll:
                      sim_putchar('\b'); CP_PUTCHAR('\b'); 
                 }
                 break;
-           case 03:  /* ^C */
+           case 03:  /* ^C cancel */
+                sim_debug(DEBUG_DATA, &con_dev, "Console %d: Cancel (^C) Key\n", u);
                 uptr->CMD |= CON_CANCEL|CON_INPUT;
                 CP_PUTCHAR(13); 
                 break;
 
            case 025: /* ^U clear line */
+                sim_debug(DEBUG_DATA, &con_dev, "Console %d: Clear Line (^U) Key\n", u);
                 for (i = con_data[u].inptr; i> 0; i--) {
                     sim_putchar('\b');
                     sim_putchar(' ');

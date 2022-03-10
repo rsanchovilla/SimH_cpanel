@@ -194,6 +194,7 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
                  tm0CardInReadStacker = sim_os_msec();  // this is the time stamp (in real word msec) when starts the animation of read-card entering card-read-stacker) 
              }
 #endif
+             idle_stop_tm0=0; // card read activity -> reset idle stop timer
              return SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP;
          }
          /* Check if no more cards left in deck */
@@ -254,7 +255,7 @@ cdr_srv(UNIT *uptr) {
         uint32 msec = sim_os_msec() - CardFeed_tm0;
         if (msec < CardFeed_msec) {
             // operation still in progress ... check again later
-            sim_activate(uptr, 100);       
+            sim_activate(uptr, check_later_interval);       
             return SCPE_OK;
         }
         // operation terminated. Clear the timestamp
@@ -291,6 +292,7 @@ cdr_srv(UNIT *uptr) {
                 tm0CardInReadStacker = sim_os_msec();  // this is the time stamp (in real word msec) when starts the animation of read-card entering card-read-stacker) 
             }
 #endif
+            idle_stop_tm0=0; // card read activity -> reset idle stop timer
             uptr->CMD |= CDR_CARD;
             /* Fall through */
        case CDSE_EMPTY:
@@ -342,12 +344,20 @@ feed:
         chan_end(addr, SNS_CHNEND);
 #if defined(CPANEL)
         if ((cpanel_on) && (bFastMode==0) && (uptr-cdr_unit==0)) {
+            extern int bCpuModelIs; 
             // The IBM 2540 [...] maximum reading speed of 1000 cards per minute 
             // -> 16.6 cards per second -> read one card each 60 msec
+            // IBM 3505 model B2 reading speed of 1200 cards per minute
+            // -> 20 cards per second -> read one card each 50 msec
+            // 2540 is used on 360 line, 3505 on 370 line
             CardFeed_tm0  = sim_os_msec();          // set to sim_os_msec, checked by cdr_svr to simulate wallclock time needed by cdr to operate
-            CardFeed_msec = 60;                     // duration of cdr operation
+            if (bCpuModelIs > 3000) {
+               CardFeed_msec = 50;                     
+            } else {
+               CardFeed_msec = 60;                     // duration of cdr operation
+            }
         } 
-        sim_activate(uptr, 150);       // Feed the card. Less than 150 makes DOS360 to not recognize chars read
+        sim_activate(uptr, 1000);       // Feed the card. Less than 150 makes DOS360 to not recognize chars read
 #else
         sim_activate(uptr, 10000);       /* Feed the card */
 #endif
@@ -386,7 +396,7 @@ cdr_attach(UNIT * uptr, CONST char *file)
     if (uptr->up7 == NULL)
         uptr->up7 = malloc(sizeof(uint16)*80);
 
-    if ((sim_switches & SWMASK ('S')) != 0) { //YYY
+    if ((sim_switches & SWMASK ('S')) != 0) { 
         // stacking cards on an already existing deck. 
         // keep current cdr state
         return SCPE_OK;

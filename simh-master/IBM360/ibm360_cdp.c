@@ -204,7 +204,7 @@ cdp_srv(UNIT *uptr) {
         uint32 msec = sim_os_msec() - CardPunch_tm0;
         if (msec < CardPunch_msec) {
             // operation still in progress ... check again later
-            sim_activate(uptr, 100);       
+            sim_activate(uptr, check_later_interval);       
             return SCPE_OK;
         }
         // operation terminated. Clear the timestamp
@@ -240,6 +240,7 @@ cdp_srv(UNIT *uptr) {
             tm0CardInPunchStacker = sim_os_msec();  // this is the time stamp (in real word msec) when starts the animation of punched-card entering card-punch-stacker) 
         }
 #endif
+        idle_stop_tm0=0; // card punch activity -> reset idle stop timer
         return SCPE_OK;
     }
 
@@ -263,10 +264,11 @@ cdp_srv(UNIT *uptr) {
             if ((cpanel_on) && (bFastMode==0) && (uptr-cdp_unit==0)) {
                 // The IBM 2540 [...]  maximum punching speed of 300 cards per minute
                 // -> 5 cards per second -> punch one card each 200 msec
+                // IBM 3525 model P3 punching speed of 300 cards per minute
                 CardPunch_tm0  = sim_os_msec();          // set to sim_os_msec, checked by cdp_svr to simulate wallclock time needed by cdr to operate
                 CardPunch_msec = 200;                     // duration of cdp operation
             } 
-            sim_activate(uptr, 100);       // Feed the card very fast
+            sim_activate(uptr, 1000);       // Feed the card very fast
 #else
             sim_activate(uptr, 80000);
 #endif

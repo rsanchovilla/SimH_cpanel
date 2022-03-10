@@ -367,7 +367,7 @@ extern const uint8 ebcdic_to_ascii[256];
 #define DEBUG_EXP       0x0000008       /* Show error conditions */
 #define DEBUG_POS       0x0000010       /* Show dasd position data */
 #define DEBUG_INST      0x0000020       /* Show instruction execution */
-#define DEBUG_IRQ       0x0000100       /* Show IRQ requests */
+#define DEBUG_IRQ       0x0000100       /* Show IRQ requests, wait states */
 #define DEBUG_CDATA     0x0000200       /* Show channel data */
 #define DEBUG_TRACE     0x0000400       /* Show instruction trace */
 #define DEBUG_VMA       0x0000800       /* Show VM Assist functions */
@@ -402,8 +402,11 @@ extern DEVICE cp_dev;
 #define CONS_LPT_COLUMNS    100    // colums in console printer. 
 #define ConsPrintOutMAX      20    // last lptPrintOutMAX lines printed will be saved on circular buffer lptPrintOut
 
-extern int bFastMode;            // =1 to allow cdr, cdp, mt, to work as fast has host cpu can. =0 to reproduce the real device orinal speed
-extern int cpanel_on;            // =1 if cpanel visible
+extern int bFastMode;              // =1 to allow cdr, cdp, mt, to work as fast has host cpu can. =0 to reproduce the real device orinal speed
+extern int cpanel_on;              // =1 if cpanel visible
+extern uint32 idle_stop_tm0;       // sim_os_msec when start counting for idle time
+
+#define check_later_interval 1000  // value for sim_activate when waiting for cmd completition
 
 // extended info for tapes
 typedef struct {
@@ -423,8 +426,18 @@ typedef struct {
 // extended info for tapes. Holds detailed info of tape command operation
 mtinforec mt_info[8];
 
-
-
+// addr compare info
+typedef struct {
+    uint32 addr;                     // addr to compare with
+    int    matchbyte;                // byte to compare with
+    int    match;                    // what to compare:  0-> disabled, 1-> write addr
+                                     //                                 3-> read/write addr, 
+                                     //                                 4-> r/w addr for I/O, 
+                                     //                                 8-> read addr for PC (fetch)
+                                     //                                 9-> write matchbyte to addr
+                                     //                              16+3-> read/write virtual addr, 
+    int    hit;                      // set to 1 if addr match, Set to 0 on start of main instr exec loop
+} addrcomp_rec;
 
 #endif
 

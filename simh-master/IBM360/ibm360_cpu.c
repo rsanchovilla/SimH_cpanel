@@ -74,6 +74,7 @@
 
 #include "ibm360_defs.h"                        /* simulator defns */
 #if defined(CPANEL)
+#include "sim_tmxr.h"
 #include "cpanel.h"
 #endif
 
@@ -135,15 +136,17 @@ int          timer_tics;           /* Interval Timer is ever 3 tics */
 uint32       idle_stop_msec = 0;     // msec allowed after before stop cpu if idle
 uint32       idle_stop_tm0;          // sim_os_msec when start counting for idle time
 int          idle_stop_quiet_flag=0; // if set to 0 -> break reporting PSW. if set to 1 -> cpu stop withput message
+uint32       cpu_start_tm0 = 0;      // timestamp for cpu start. used to compute %runtime% env var
 
 #if defined(CPANEL)
 uint32       cpu_mem_addr = 0;       // save last accessed main storage addr accessed to be shown on control panel
 uint32       cpu_mem_data = 0;       // save last data read/write from/to main storage to be shown on control panel. Bit 31 signals value set
-int          cpu_mem_addr_stop = -1; // breakpoint on main storage addr. -1-> not set, -2->hit, >=0 -> set to this value
+addrcomp_rec cpu_mem_comp = {0};     // compare data to breakpoint execution if addr hit
 int          cpu_psw_restart = 0;    // =1 when operator requested a psw restart
 int          InstrExec = 0;          // count of intructions executed so far (real instr, if cpu waiting, InstrExec do NO get incremented)
-int          InstrCycles;            // count of intructions loops executed so far (if cpu waiting, do get incremented)
+int          InstrCycles = 0;        // count of intructions loops executed so far (if cpu waiting, do get incremented)
 int          bFastMode = 0;          // =1 to allow cdr, cdp, mt, to work as fast has host cpu can. =0 to reproduce the real device orinal speed (only when cpanel is visible)
+uint32       rtc_activate_usecs;     // bits 0..15=usecs remaining to activate rtc_srv, set by cpanel TickCount. bit16=is catching up time
 #endif
 
 #define CLOCK_UNSET   0            /* Clock not set */
@@ -752,7 +755,11 @@ ReadFull(uint32 addr, uint32 *data)
 #if defined(CPANEL)
      cpu_mem_addr = addr; 
      cpu_mem_data = *data | (1<<31); 
-     if (cpu_mem_addr_stop == cpu_mem_addr) cpu_mem_addr_stop=-2; // breakpoint hit
+     if (cpu_mem_comp.match & 2) {
+         // check match on read address
+         int ad = ((cpu_mem_comp.match & 16) ? addr:pa); // use either virtual addr or physical addr
+         if (ad == cpu_mem_comp.addr) cpu_mem_comp.hit=1; 
+     }
 #endif
 
      return 0;
@@ -824,13 +831,13 @@ int
 WriteFull(uint32 addr, uint32 data)
 {
      int        offset;
-     uint32     pa;
+     uint32     pa, pa0;
      uint32     pa2;
 
      /* Validate address */
      if (TransAddr(addr, &pa))
          return 1;
-
+     pa0=pa; 
      /* Check if in storage area */
      if (per_en && (cregs[9] & 0x20000000) != 0) {
          if (cregs[10] <= cregs[11]) {
@@ -928,7 +935,13 @@ WriteFull(uint32 addr, uint32 data)
 #if defined(CPANEL)
      cpu_mem_addr = addr;
      cpu_mem_data = data | (1<<31); 
-     if (cpu_mem_addr_stop == cpu_mem_addr) cpu_mem_addr_stop=-2; // breakpoint hit
+     if (cpu_mem_comp.match & 1) {
+         // check match on write address
+         int ad = ((cpu_mem_comp.match & 16) ? addr:pa0); // use either virtual addr or physical addr
+         if ((cpu_mem_comp.match == 9) && ((data & 0xff) != cpu_mem_comp.matchbyte)) {
+             // not matching byte written
+         } else if (ad == cpu_mem_comp.addr) cpu_mem_comp.hit=1; 
+     }
 #endif
      return 0;
 }
@@ -942,12 +955,13 @@ int
 WriteByte(uint32 addr, uint32 data)
 {
      uint32     mask;
-     uint32     pa;
+     uint32     pa, pa0;
      int        offset;
 
      /* Validate address */
      if (TransAddr(addr, &pa))
          return 1;
+     pa0=pa; 
 
      /* Check if in storage area */
      if (per_en && (cregs[9] & 0x20000000) != 0) {
@@ -992,7 +1006,13 @@ WriteByte(uint32 addr, uint32 data)
 #if defined(CPANEL)
      cpu_mem_addr = addr;
      cpu_mem_data = data | (1<<31); 
-     if (cpu_mem_addr_stop == cpu_mem_addr) cpu_mem_addr_stop=-2; // breakpoint hit
+     if (cpu_mem_comp.match & 1) {
+         // check match on write address
+         int ad = ((cpu_mem_comp.match & 16) ? addr:pa0); // use either virtual addr or physical addr
+         if ((cpu_mem_comp.match == 9) && ((data & 0xff) != cpu_mem_comp.matchbyte)) {
+             // not matching byte written
+         } else if (ad == cpu_mem_comp.addr) cpu_mem_comp.hit=1; 
+     }
 #endif
      return 0;
 }
@@ -1007,12 +1027,13 @@ WriteHalf(uint32 addr, uint32 data)
 {
      uint32     mask;
      uint32     pa;
-     uint32     pa2;
+     uint32     pa2, pa0;
      int        offset;
 
      /* Validate address */
      if (TransAddr(addr, &pa))
          return 1;
+     pa0=pa; 
 
      /* Check if in storage area */
      if (per_en && (cregs[9] & 0x20000000) != 0) {
@@ -1114,7 +1135,13 @@ WriteHalf(uint32 addr, uint32 data)
 #if defined(CPANEL)
      cpu_mem_addr = addr;
      cpu_mem_data = data | (1<<31); 
-     if (cpu_mem_addr_stop == cpu_mem_addr) cpu_mem_addr_stop=-2; // breakpoint hit
+     if (cpu_mem_comp.match & 1) {
+         // check match on write address
+         int ad = ((cpu_mem_comp.match & 16) ? addr:pa0); // use either virtual addr or physical addr
+         if ((cpu_mem_comp.match == 9) && ((data & 0xff) != cpu_mem_comp.matchbyte)) {
+             // not matching byte written
+         } else if (ad == cpu_mem_comp.addr) cpu_mem_comp.hit=1; 
+     }
 #endif
      return 0;
 }
@@ -1148,7 +1175,6 @@ int CanSleep(uint32 msec_wait)
     extern uint32 ConsPollKeyb_msec;
     extern uint32 TapeCmd_tm0[8];
     extern uint32 TapeCmd_msec[8];
-    extern uint32 TapeCmd_msec_tentative[8]; 
     extern uint32 DasdCmd_tm0[8*4];
     extern uint32 DasdCmd_msec[8*4];
 
@@ -1158,10 +1184,14 @@ int CanSleep(uint32 msec_wait)
     extern UNIT con_unit[]; 
     extern UNIT mta_unit[]; 
     extern UNIT dda_unit[]; 
+    extern UNIT dda_unit[]; 
 
+    extern t_bool sim_runlimit_enabled; 
     SEND *snd;
     uint32 tnow=sim_os_msec(); 
     uint32 msec, unit, msec_min, cmd; 
+
+    extern uint32 rtc_activate_usecs;
 
     // cpu is NOT waiting, cannot sleep
     if (idle_stop_tm0==0) return 0; 
@@ -1169,10 +1199,17 @@ int CanSleep(uint32 msec_wait)
     // if FastMode active, cannot wait
     if (bFastMode) return 0; 
 
+    // rtc has time to catch-up, cannot sleep
+    if (rtc_activate_usecs & 0x10000) return 0; 
+
     // check if there is a scp SEND command with chars pending to be sent to console
     // (they are polled into sim_poll_kbd()). If so -> do not wait
     snd = sim_cons_get_send ();
     if ((snd) && (snd->extoff < snd->insoff)) return 0; 
+
+    // ckeck if there is a scp RUNLIMIT set.
+    // If so -> do not wait to not mess up (==delay) the scp time clculations
+    if (sim_runlimit_enabled) return 0; 
 
     // calc min wait time common to all devices waiting
     msec_min=msec_wait; 
@@ -1220,15 +1257,9 @@ int CanSleep(uint32 msec_wait)
         if (msec > 1000) return 0; // command has no valid waiting time -> cannot wait 
         if (msec < msec_min) msec_min=msec; 
     } 
-
     for (unit=1; unit<NUM_DEVS_CON; unit++) {
         if (con_unit[unit].u3 & 0x0f) return 0; 
     }
-
-    // console poll keyb allways active
-    msec = (ConsPollKeyb_tm0 + ConsPollKeyb_msec) - tnow;
-    if (msec > 1000) return 0; // command has no valid waiting time -> cannot wait 
-    if (msec < msec_min) msec_min=msec; 
 
     // check if tapes can wait 
     for (unit=0;unit<8;unit++) if (mta_unit[unit].u3 & 0x3f) {
@@ -1282,22 +1313,25 @@ int CanSleep(uint32 msec_wait)
         }
     }
 
-    // msec_min has the min time all devices in operation are waiting
-    // now subtract this time from device waiting time
+    // check if coml can wait
+//ZZZ    for (unit=0; unit<NUM_UNITS_COM; unit++) {
+//ZZZ        if ((com_ldsc[unit].txbpi != com_ldsc[unit].txbpr) ||   // check is someting is pending to be sent to terminal emulator
+//ZZZ            (com_ldsc[unit].rxbpi != com_ldsc[unit].rxbpr)) {   // check is someting has been received from terminal emulator
+//ZZZ            return 0; // if so -> cannot wait
+//ZZZ        }
+//ZZZ        if (sim_is_active(&coml_unit[unit])) {
+//ZZZ            // line is active, if some command in execution (other than waiting for char) -> cannot wait
+//ZZZ            cmd = coml_unit[unit].u3 & 0xff; 
+//ZZZ            if ((cmd) && (cmd != 2) && (cmd != 0xa)) return 0;
+//ZZZ        }
+//ZZZ    }
 
-    if (CardFeed_msec)     { CardFeed_msec     -= msec_min; if (CardFeed_msec     > (1<<24)) CardFeed_msec=0;     }
-    if (CardPunch_msec)    { CardPunch_msec    -= msec_min; if (CardPunch_msec    > (1<<24)) CardPunch_msec=0;    }
-    if (PrintLine_msec)    { PrintLine_msec    -= msec_min; if (PrintLine_msec    > (1<<24)) PrintLine_msec=0;    }
-    if (ConsPrint_msec)    { ConsPrint_msec    -= msec_min; if (ConsPrint_msec    > (1<<24)) ConsPrint_msec=0;    }
-    if (ConsPollKeyb_msec) { ConsPollKeyb_msec -= msec_min; if (ConsPollKeyb_msec > (1<<24)) ConsPollKeyb_msec=0; }
-    for (unit=0;unit<8;unit++) if (TapeCmd_msec[unit]) {
-        TapeCmd_msec[unit] -= msec_min; if (TapeCmd_msec[unit] > (1<<24)) TapeCmd_msec[unit]=0;
-    }
-    for (unit=0;unit<8*4;unit++) if (DasdCmd_msec[unit]) {
-        DasdCmd_msec[unit] -= msec_min; if (DasdCmd_msec[unit] > (1<<24)) DasdCmd_msec[unit]=0;
-    }
+
+    // msec_min has the min time all devices in operation are waiting
     return (int) msec_min; 
 }
+
+
 #endif
 
 
@@ -1386,6 +1420,9 @@ sim_instr(void)
 
     while (reason == SCPE_OK) {
 wait_loop:
+#if defined(CPANEL)
+        cpu_mem_comp.hit=0; // new instr exec starts. Clear addr match hit flag (can be set on sim_interval) 
+#endif
         if (sim_interval <= 0) {
             reason = sim_process_event();
             if (reason != SCPE_OK)
@@ -1400,8 +1437,10 @@ wait_loop:
            if (reason != SCPE_OK) {
                break; // exit sim_inst main while loop
            }
-           if (cpu_mem_addr_stop == -2) {
-                // main storage addr breakpoint hit 
+           if ((cpu_mem_comp.hit) && (cpu_mem_comp.match)) {
+                // addr compare breakpoint hit 
+                // set interactive mode 
+                cpanel_interactive = 1;
                 reason=STOP_IBKPT;
                 break; // exit sim_inst main while loop
            } else if (cpu_psw_restart) {
@@ -1414,16 +1453,13 @@ wait_loop:
            }
            // ckeck for devices waiting so we can sleep
            if (check_sleep_interval-- <0) {
-               static int msec_sleep_remaining = 15; 
-               int msec_sleep_dev; 
+               int msec_sleep; 
                check_sleep_interval=100; // check every 100 instr                 
-               msec_sleep_dev = CanSleep(15); // active devices will be all waiting for at least msec_sleep 
-               if (msec_sleep_dev > 0) {
-                   msec_sleep_remaining -= msec_sleep_dev; 
-                   if (msec_sleep_remaining < 0) {
-                       sim_os_ms_sleep(15); 
-                       msec_sleep_remaining += 15; 
-                   }
+               // check active devices operation in progress. returns min waiting time (or 15 if min waiting time > 15)
+               msec_sleep = CanSleep(15); 
+               if (msec_sleep >= 4) {
+                   // if cpu is waiting for device more than 4 msec -> yield time to host
+                   sim_os_ms_sleep(msec_sleep);                    
                }
            }
         }
@@ -1438,8 +1474,10 @@ wait_loop:
                irqcode = irq;
                loading = 0;
                irqaddr = 0;
-            } else
+            } else {
+               sim_debug(DEBUG_IRQ, &cpu_dev, "IRQ Dev %03x\n", irq);
                storepsw(OIOPSW, irq);
+            }
             goto supress;
         }
 
@@ -1452,6 +1490,7 @@ wait_loop:
                     ilc = 0;
                     cpu_unit[0].flags &= ~EXT_IRQ;
                     storepsw(OEPSW, 0x40);
+                    sim_debug(DEBUG_IRQ, &cpu_dev, "IRQ External interrupt\n");
                     goto supress;
                 }
             }
@@ -1463,18 +1502,21 @@ wait_loop:
                 ilc = 0;
                 interval_irq = 0;
                 storepsw(OEPSW, 0x80);
+                sim_debug(DEBUG_IRQ, &cpu_dev, "IRQ Timer\n");
                 goto supress;
             }
             if (clk_irq && intval_en) {
                 ilc = 0;
                 clk_irq = 0;
                 storepsw(OEPSW, 0x1005);
+                sim_debug(DEBUG_IRQ, &cpu_dev, "IRQ Timer CLK\n");
                 goto supress;
             }
             if (tod_irq && tod_en) {
                 ilc = 0;
                 tod_irq = 0;
                 storepsw(OEPSW, 0x1004);
+                sim_debug(DEBUG_IRQ, &cpu_dev, "IRQ Clock TOD CLK\n");
                 goto supress;
             }
         }
@@ -1503,7 +1545,6 @@ wait_loop:
         }
         /* reset idle countdown because some activity  */
         idle_stop_tm0=0;
-
         if (sim_brk_summ && sim_brk_test(PC, SWMASK('E'))) {
            reason=STOP_IBKPT;
            break; // exit sim_inst main while loop
@@ -1547,6 +1588,12 @@ wait_loop:
         iPC = PC;
         ilc = 0;
 
+#if defined(CPANEL)
+        if (cpu_mem_comp.match == 8) {
+            // check match on fetch address
+            if (PC == cpu_mem_comp.addr) cpu_mem_comp.hit=1; 
+        }
+#endif
         /* Fetch the next instruction */
         if (ReadHalf(PC, &dest))
             goto supress;
@@ -3392,9 +3439,12 @@ save_dbl:
                    case 0x5: /* STCK */
                               /* Store TOD clock in location */
                               src1 = tod_clock[0];
-                              src1h = tod_clock[1];
+                              src1h = tod_clock[1]; 
                               if (clk_state && sim_is_active(&cpu_unit[0])) {
                                   double us = (1000000.0/(double)rtc_tps);
+#if defined(CPANEL)
+                                  if (cpanel_on) us -= (rtc_activate_usecs & 0xffff); else
+#endif
                                   us -= sim_activate_time_usecs(&cpu_unit[0]);
                                   dest = src1h + (((int)us) << 12);
                                   if (dest < src1h)
@@ -3432,8 +3482,12 @@ save_dbl:
                                  goto supress;
                               cpu_timer[0] = src1;
                               cpu_timer[1] = src1h;
-                              if (sim_is_active(&cpu_unit[0])) {
-                                  double nus = sim_activate_time_usecs(&cpu_unit[0]);
+                              if (sim_is_active(&cpu_unit[0])) { 
+                                  double nus; 
+#if defined(CPANEL)
+                                  if (cpanel_on) nus = (rtc_activate_usecs & 0xffff); else
+#endif
+                                  nus = sim_activate_time_usecs(&cpu_unit[0]);
                                   timer_tics = (int)(nus);
                               }
                               clk_irq = (cpu_timer[0] & MSIGN) != 0;
@@ -3442,9 +3496,14 @@ save_dbl:
                               /* Store the CPU timer in double word */
                               src1 = cpu_timer[0];
                               src1h = cpu_timer[1];
-                              if (sim_is_active(&cpu_unit[0])) {
-                                  double nus = sim_activate_time_usecs(&cpu_unit[0]);
-                                  int   tics = (int)(timer_tics - nus) ;
+                              if (sim_is_active(&cpu_unit[0])) { 
+                                  double nus;
+                                  int   tics; 
+#if defined(CPANEL)
+                                  if (cpanel_on) nus = (rtc_activate_usecs & 0xffff); else
+#endif
+                                  nus = sim_activate_time_usecs(&cpu_unit[0]);
+                                  tics = (int)(timer_tics - nus) ;
                                   dest = src1h - (tics << 12);
                                   if (dest > src1h) {
                                      src1--;
@@ -5879,6 +5938,16 @@ lpsw:
         sim_debug(DEBUG_DETAIL, &cpu_dev, "End Wait for %s animation (%d msec)\n",
             buf, sim_os_msec() - tnow);
     }
+    // set env variable with accumulated total time elapsed from last set cpu nnK command
+    if (cpu_start_tm0) {
+        uint32 n, sec, min;
+        char sbuf[40];
+        n = (sim_os_msec() - cpu_start_tm0) / 1000; 
+        sec = n % 60; n=n/60; 
+        min = n % 60; n=n/60; 
+        sprintf(sbuf, "RUNTIME=%02d:%02d:%02d", n, min, sec);
+        sim_set_environment (0, sbuf); 
+    }
     #endif
     return reason;
 }
@@ -6323,8 +6392,16 @@ cpu_reset (DEVICE *dptr)
 t_stat
 rtc_srv(UNIT * uptr)
 {
-    (void)sim_rtcn_calb (rtc_tps, TMR_RTC);
-    sim_activate_after(uptr, 1000000/rtc_tps);
+#if defined(CPANEL)
+    if (cpanel_on) {
+        // using cpanel TickCount to provide precise RTC timer
+        sim_activate(uptr, 50000); // keep unit active. 
+    } else 
+#endif
+    {
+       (void)sim_rtcn_calb (rtc_tps, TMR_RTC);
+       sim_activate_after(uptr, 1000000/rtc_tps);
+    }
     if ((M[0x50>>2] & 0xfffff00) == 0)  {
         sim_debug(DEBUG_INST, &cpu_dev, "TIMER IRQ %08x\n", M[0x50>>2]);
         interval_irq = 1;
@@ -6553,6 +6630,7 @@ cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     fprintf(stderr, "Mem size=%x\r\n", val);
     MEMSIZE = val;
     reset_all (0);
+    cpu_start_tm0 = sim_os_msec(); // timestamp for cpu start. used to compute %runtime% env var
     return SCPE_OK;
 }
 
@@ -6714,14 +6792,6 @@ cpu_description (DEVICE *dptr)
 // en i701
 // nuevo sw: pact compiler
 
-// en ibm360
-// si se hace click muy rapido, pierde event de mouse button release
-// aunque se mantiene ^F pulsado, al cabo de unos segundos el modo fast se quita solo (eventos repeat?)
-// añadir modif fcb de github sims
-// ver porque falla con abend 314 en sysgen os360
+// en swtpc: 
+// fdos, minidos de deramp.com
 
-// ibm360 .doc
-// ajustar velocidad de deceleracion despues de HiSpeed rew para reels verde, azul y roja
-// arreglar reel azul, roja. reel azul -> 10gr, un nivel mas de blur
-// hacer que me_ammount vaya de 0 a 200, y haya 60 estados generados con StateRbgCircle=n,r,g,b,x0,y0,rx[,ry]
-// en reels.png, poner solo 0..90 gr: 9xno blur, 10gr cada, 9xblur L, 9xblur M, 3xBlur H -> 120 estados por reel
