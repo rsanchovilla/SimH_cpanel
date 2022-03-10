@@ -284,11 +284,12 @@ typedef struct {
 extern int vid_refresh_in_progress; 
 
 typedef struct {
-    int Cntrl; // 1=control key is pressed right now
+    int Cntrl; // 1=control key is pressed right now. Value updated by key event processing, when the window has the focus
     int Shift; // 1=Shift key is pressed right now
     int KeyPress; // this key is pressed right now. 0=no key pressed. If < 256 is an ascii value. if Bit30=1 is a scan code
     int LastKeyPress; // last value of KeyPress (but no set to zero on key release)
     VID_DISPLAY *vptr; // windows that has focus when key was pressed
+    int RightButton; // >0 -> right mouse button currently pressed
 } vidkeyb; 
 extern vidkeyb vid_keyb; 
 

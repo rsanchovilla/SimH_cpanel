@@ -2945,7 +2945,7 @@ while (vid_active) {
                         DropFile_vptr = NULL; 
                         break; 
                     }
-                    SDL_GetGlobalMouseState(&x,&y);                    // get global pos of mouse
+                    SDL_GetGlobalMouseState(&x,&y);                  // get global pos of mouse
                     SDL_GetWindowPosition(vptr->vid_window, &x0, &y0); // get pos of dropped in window
                     DropFile_vptr = vptr; 
                     DropFile_x_pos=x-x0; DropFile_y_pos=y-y0;  // this is is x,y the position where the file is dropped in vptr's window coordinates
