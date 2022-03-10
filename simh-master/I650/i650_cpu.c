@@ -2682,9 +2682,3 @@ const char * cpu_description (DEVICE *dptr) {
 }
 
 
-
-// update disk arm image acording to this video:
-// IBM 355 disc arm moving (very high quality image)
-// https://www.youtube.com/watch?v=irPw9oyAju8
-// Minute 0806
-
