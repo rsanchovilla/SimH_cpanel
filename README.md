@@ -41,7 +41,7 @@ Currently supports visuals emulation for:
   * IBM 2450 and 3525 card reader punch
   * IBM 1403 and 3203 printer
   * IBM 2314 and 3330 DASD
-  * IBM 1052 and 3210 printer-Keyboard Console
+  * IBM 1052 and 3210 Printer-Keyboard Console
   * IBM 360 CPU Model 30, 40, 50 and 65
   * IBM 370 CPU Model 145 and 148
 
