@@ -1,0 +1,54 @@
+
+        NAM     MITS
+
+*	TO PATCH ALTAIR 680 BASIC FOR SWTP 6800
+*	WITH ACIA AT PORT 1
+*	JAN 11 1978  MICHAEL HOLLEY
+*	REV 4   SEPT 4, 1978
+*	JAN 29 2020  ROBERTO SANCHO
+*	ADAPTED FOR SIMH SWTPC 6800 (40KB MEMORY)
+
+        ORG     $7F16
+
+ACIACS  EQU     $8004
+ACIADA  EQU     $8005
+
+*       POLE FOR CHARACTER
+*       SETS CARRY IF CHARACTER IS IN BUFFER
+*       CLOBBERS B REG
+POLCAT  LDA B   ACIACS          ACIA STATUS TO B
+        ASR B                   ROTATE RDRF BIT INTO CARRY
+        RTS                     RETURN
+
+*       INPUT ONE CHARACTER ACC B
+INCH    BSR     POLCAT
+        BCC     INCH
+        LDA B   ACIADA          GET CHAR
+        RTS
+
+*       OUTCH OUTPUT CHARACTER ACC A
+OUTCH   BSR POLCAT
+        ASR B
+        BCC     OUTCH
+        PSH A
+        AND A   #$7F
+        STA A   ACIADA OUTPUT
+        PUL A
+        RTS
+
+*       PATCHES TO MITS BASIC
+        ORG     $041F
+        JSR     INCH
+
+        ORG     $0618
+        JSR     POLCAT
+
+        ORG     $08AD
+        JSR     OUTCH
+
+        ORG     $1923
+        LDX     #$7F00           END OF MEM FOR BASIC
+        JMP     $1946
+
+        END
+

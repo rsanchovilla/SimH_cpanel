@@ -1,0 +1,668 @@
+0001                         NAM MINIDOS
+0002                         * MINIDOS (TM) 6800 REV 1.5?
+0003                         * COPYRIGHT 1978 PERCOM DATA CO.
+0004                         * WRITTEN BY H.A. MAUCH
+0005                         * REVISED 8-20-78 (unknown)
+0006                         * 
+0007                         * RECREATED FROM MINIDOS FOR 6809 SOURCE FILE
+0008                         * AND UPDATED TO MATCH THE MINIDOS PROM ON MY
+0009                         * PERCOM CONTROLLER WHICH IS SLIGHTLY DIFFERENT
+0010                         * THAN THE VERSION 1.4 SHOWN IN THE PERCOMD
+0011                         * LFD-400 MANUAL. MAYBE VERSION 1.5?
+0012                         *
+0013                         * MIKE DOUGLAS 3/8/2020
+0014                         *
+0015                         * VERSION 1.5 UPDATES:
+0016                         *    CHANGE TRKLMT TO 40 TRACKS VS 35,
+0017                         *    CHANGE SETTLE DELAY FROM 30MS TO 15MS,
+0018                         *    CHANGE STEP DELAY FROM 20MS TO 25MS,
+0019                         *    LOOK  FOR  WRTBIT FALSE (1) IN RDRV,
+0020                         *    CHANGE 1MS DELAY ROUTINE (DELAY) TO
+0021                         *    USE 166 VS 148 TO BE CLOSER TO 1MS.
+0022                         *
+0023                         
+0024 c000                    BASE    EQU $C000
+0025                         *MONITOR LINKS
+0026 a07f                    STACK   EQU $A07F          STACK LOCATION
+0027 a048                    XFER    EQU $A048          MONITOR TRANSFER ADDRESS
+0028 e047                    BADDR   EQU $E047          BUILD ADDRESS
+0029 e06b                    OUTHR   EQU $E06B          PRINT RIGHT HEX DIGIT
+0030 e07e                    PDATA1  EQU $E07E          PRINT CHARACTER STRING
+0031 e0cc                    OUTS    EQU $E0CC          PRINT SPACE CHARACTER
+0032 e0e3                    MONITR  EQU $E0E3          MONITOR RE-ENTRY POINT
+0033 e1ac                    INEEE   EQU $E1AC          INPUT A CHARACTER
+0034                         *INPUT PORTS ASSIGNMENT
+0035 cc00                    STATUS  EQU $CC00          CONTROLLER STATUS
+0036 cc01                    RDDTA   EQU $CC01          RECEIVED DATA
+0037 cc02                    SECTOR  EQU $CC02          SECTOR COUNTER
+0038 cc03                    DVSTAT  EQU $CC03          DRIVE STATUS
+0039 cc04                    RRSRT   EQU $CC04          RECEIVER RESTART PULSE
+0040 cc05                    MOTON   EQU $CC05          MOTOR ON PULSE
+0041 cc06                    MOTOFF  EQU $CC06          MOTOR OFF PULSE
+0042                         *OUTPUT PORTS ASSIGNMENT
+0043 cc00                    SYNC    EQU $CC00          SYNC WORD PORT
+0044 cc01                    WRTDTA  EQU $CC01          WRITE DATA PORT
+0045 cc02                    FILL    EQU $CC02          FILL WORD PORT
+0046 cc03                    DRVSLT  EQU $CC03          DRIVE AND TRACK SELECT
+0047 cc04                    WRTPLS  EQU $CC04          WRITE PULSE
+0048                         *DRIVE STATUS BITS (DVSTAT)
+0049 0001                    WTPBIT  EQU $1             WRITE PROTECT BIT
+0050 0002                    TRKBIT  EQU $2             TRACK ZERO BIT
+0051 0004                    MTRBIT  EQU $4             MOTOR TEST BIT
+0052 0008                    WRTBIT  EQU $8             WRITE GATE BIT
+0053 0010                    SECBIT  EQU $10            SECTOR PULSE BIT
+0054 0020                    IDXBIT  EQU $20            INDEX PULSE BIT
+0055                         *DRIVE LIMITS
+0056 0027                    TRKLMT  EQU 39             USE 76 FOR MICROPOLIS DRIVES
+0057 003f                    TRKMSK  EQU $3F            USE $7F FOR     "        "
+0058 0009                    SECLMT  EQU 9              USE 15 IF DOUBLE DENSITY
+0059                                         
+0060 0000                            ORG 0
+0061                         *SECTOR HEADER TEMPORY STORAGE
+0062 0000                    HEADER  EQU *
+0063 0000                    DRV     RMB 1              DESIRED DRIVE (MOST SIGNIFICANT 2 BITS)
+0064 0001                    TRKSEC  EQU *
+0065 0001                    TRK     RMB 1              DESIRED TRACK
+0066 0002                    SCTR    RMB 1              DESIRED SECTOR
+0067 0003                    BAKLNK  RMB 2              BACKWARD LINK
+0068 0005                    FWDLNK  RMB 2              FORWARD LINK
+0069 0007                    BYTCNT  RMB 1              SECTOR BYTE COUNT
+0070 0008                    ADDRES  RMB 2              DATA ADDRESS VECTOR
+0071 000a                    FILTYP  RMB 1              FILE TYPE CODE
+0072                                        
+0073 000b                    CKSUM   RMB 2              CHECKSUM
+0074 000d                    POSTAM  RMB 2              POSTAMBLE
+0075                                       
+0076 000f                    CRNTRK  RMB 5              CRNT TRK AND TRK HISTORY
+0077 0014                    TA      RMB 2              CONTINUATION ADDRESS
+0078 0016                    TW      RMB 2              ALTERNATE TARGET ADDRESS
+0079 0018                    XTEMP   RMB 2              INDEX REGISTER STORAGE
+0080 001a                    RETRY   EQU *              RETRY COUNTER
+0081 001a                    EXEC    RMB 2              PROG STRT ADDRESS
+0082 001c                    TEMP    RMB 2              TEMP STORAGE
+0083 001e                    ENDA    RMB 2              END ADDRESS
+0084                                         
+0085 c000                            ORG BASE
+0086                         *INTERNAL FUNCTION JUMP TABLE
+0087 c000 7e c3 9f                   JMP MINDOS         MINIDOS CMD PROCESSOR
+0088 c003 7e c3 6b                   JMP CVTDTS         CONVERT DSSS TO PHYSICAL SECTOR
+0089 c006 7e c2 67           RESTORE JMP GTK0X          GO TO TRACK ZERO
+0090 c009 7e c2 3f           SEEK    JMP SEEKX          SEEK TRACK
+0091 c00c 7e c0 34           RDSEC   JMP RDSECX         READ SECTOR
+0092 c00f 7e c1 15           WTSEC   JMP WTSECX         WRITE SECTOR
+0093 c012 7e c1 6f           SLTDRV  JMP DCHECK         SLT DRV, START MTR, CK DISK, SEEK TRK
+0094 c015 7e c1 d2           STMTR   JMP START          START MOTOR (DELAY IF NECESSARY)
+0095 c018 7e c2 dc           SAVE    JMP SAVEX          SAVE A MEMORY IMAGE FILE
+0096 c01b 7e c2 cb           LOAD    JMP LOADX          LOAD A MEMORY IMAGE FILE
+0097 c01e 7e c3 53           TYPERR  JMP TYPERX         TYPE ERROR MESSAGES
+0098 c021 7e c2 b3           FWDCAL  JMP FWDCLX         CALCULATE FORWARD LINK
+0099 c024 7e c3 dc           LENGTH  JMP LNTH           CALCULATE BLOCK LENGTH
+0100 c027 86 ff              INITRK  LDAA #$FF          INITIALIZE TRACK REGISTERS
+0101 c029 97 0f                      STAA CRNTRK
+0102 c02b 97 10                      STAA CRNTRK+1      DRIVE 0 TRACK
+0103 c02d 97 11                      STAA CRNTRK+2      DRIVE 1 TRACK
+0104 c02f 97 12                      STAA CRNTRK+3      DRIVE 2 TRACK
+0105 c031 97 13                      STAA CRNTRK+4      DRIVE 3 TRACK
+0106 c033 39                 RDRTN   RTS
+0107                                              
+0108                         *READ SECTOR-3X3 RETRIES WITH JOGS
+0109 c034 bd c1 6f           RDSECX  JSR DCHECK         CHECK PARAMETERS
+0110 c037 25 fa                      BCS RDRTN          RETURN IF ERROR
+0111 c039 8d 19                      BSR RD3
+0112 c03b 24 f6                      BCC RDRTN          RETURN IF OK
+0113 c03d 27 f4                      BEQ RDRTN          RETURN IF DISK MISSING
+0114 c03f bd c2 7f                   JSR TKIN           JOG HEAD
+0115 c042 bd c2 7b                   JSR TKOT
+0116 c045 bd c2 5d                   JSR SETTLE         15 MSEC DELAY
+0117 c048 8d 0a                      BSR RD3
+0118 c04a 24 e7                      BCC RDRTN          RETURN IF OK
+0119 c04c 27 e5                      BEQ RDRTN          RETURN IF DISK MISSING
+0120 c04e bd c2 67                   JSR GTK0X          HOME HEAD
+0121 c051 bd c2 3f                   JSR SEEKX          SEEK TRACK
+0122                                              
+0123                         *READ THREE TIMES
+0124 c054 86 03              RD3     LDAA #3
+0125 c056 97 1a                      STAA RETRY         SETUP RETRY CNTR
+0126 c058 86 fb                      LDAA #$FB          SET SYNC CODE
+0127 c05a b7 cc 00                   STAA SYNC
+0128 c05d bd c2 0c           READ    JSR GTSEC          GET SCTR    .*m01-02:rd_tr_sect
+0129 c060 25 d1                      BCS RDRTN          BRANCH IF DISK MISSING (A=0)
+0130 c062 36                         PSHA               SAVE CCR
+0131 c063 86 1e                      LDAA #30           SHORT DELAY (180-200 USEC)
+0132 c065 4a                 R1      DECA
+0133 c066 26 fd                      BNE R1
+0134 c068 b6 cc 04                   LDAA RRSRT         START RCVR
+0135 c06b 8d 62                      BSR IN             GET SYNC CHAR
+0136 c06d 24 45                      BCC RDERR          BRANCH IF EMPTY SCTR
+0137 c06f 8d 5e                      BSR IN             GET TRK
+0138 c071 16                         TAB                SAVE A COPY
+0139 c072 98 01                      EORA TRK           CK FOR PROPER TRK
+0140 c074 84 3f                      ANDA #TRKMSK
+0141 c076 26 3c                      BNE RDERR          BR IF SEEK ERR (C IS SET)
+0142 c078 d7 01                      STAB TRK
+0143 c07a 8d 53                      BSR IN             GET SECTOR
+0144 c07c 91 02                      CMPA SCTR          CK FOR PROPER SCTR
+0145 c07e 0d                         SEC                SET ERROR FLAG
+0146 c07f 26 33                      BNE RDERR          BR IF SEEK ERR
+0147 c081 ce 00 03                   LDX #BAKLNK        GET REST OF HDR
+0148 c084 c6 08                      LDAB #8
+0149 c086 8d 5c                      BSR INPUT
+0150 c088 de 16                      LDX TW             CHK FOR ALT TRGT 
+0151 c08a 8c ff ff                   CPX #$FFFF         
+0152 c08d 26 02                      BNE R2      .*m03-8:header_bkln_fwln__nn_ldadr_typ
+0153 c08f de 08                      LDX ADDRES         
+0154 c091 d6 07              R2      LDAB BYTCNT        .*echo load_addr:x
+0155 c093 8d 4f                      BSR INPUT          INPUT DATA
+0156 c095 df 14                      STX TA             SAVE LAST ADDRESS
+0157 c097 ce 00 0b                   LDX #CKSUM         INPUT CKSUM & POSTAMBLE
+0158 c09a c6 04                      LDAB #4      
+0159 c09c 8d 46                      BSR INPUT
+0160 c09e 32                         PULA               RESTORE CCR (TURN ON INT)
+0161 c09f 06                         TAP                .*m0b-4:chksum_post
+0162 c0a0 de 16                      LDX TW             CHK FOR ALT TRGT
+0163 c0a2 8c ff ff                   CPX #$FFFF
+0164 c0a5 26 02                      BNE R3
+0165 c0a7 de 08                      LDX ADDRES
+0166 c0a9 8d 49              R3      BSR CRC            CHEC CRC
+0167 c0ab 9c 0b                      CPX CKSUM          .*echo calc_chksum:x
+0168 c0ad 0d                         SEC
+0169 c0ae 26 06                      BNE RDERRX         BRANCH IF ERROR
+0170 c0b0 8d 13                      BSR TWTA
+0171 c0b2 0c                         CLC
+0172 c0b3 39                         RTS
+0173 c0b4 32                 RDERR   PULA               RESTORE CCR
+0174 c0b5 06                         TAP
+0175 c0b6 7a 00 1a           RDERRX  DEC RETRY
+0176 c0b9 26 a2                      BNE READ
+0177 c0bb 8d 08                      BSR TWTA
+0178 c0bd 86 05                      LDAA #5            READ ERROR (A=5)
+0179 c0bf 25 03                      BCS RDERTN
+0180 c0c1 86 03                      LDAA #3            EMPTY SECTOR (A=3)
+0181 c0c3 0d                         SEC
+0182 c0c4 39                         RDERTN RTS
+0183                                       
+0184 c0c5 de 16              TWTA    LDX TW
+0185 c0c7 8c ff ff                   CPX #$FFFF
+0186 c0ca 27 02                      BEQ R5
+0187 c0cc de 14                      LDX TA
+0188 c0ce 39                 R5      RTS
+0189                                       
+0190 c0cf b6 cc 00           IN      LDAA STATUS
+0191 c0d2 46                         RORA
+0192 c0d3 25 0b                      BCS IN1
+0193 c0d5 b6 cc 02                   LDAA SECTOR        STILL IN THIS SCTR?
+0194 c0d8 84 0f                      ANDA #$0F
+0195 c0da 91 02                      CMPA SCTR
+0196 c0dc 27 f1                      BEQ IN             BR IF YES
+0197 c0de 0c                         CLC
+0198 c0df 39                         RTS
+0199 c0e0 b6 cc 01           IN1     LDAA RDDTA         (CARRY IS SET)
+0200 c0e3 39                         RTS
+                                     
+0201 c0e4 b6 cc 00           INPUT   LDAA STATUS
+0202 c0e7 46                         RORA
+0203 c0e8 24 fa                      BCC INPUT
+0204 c0ea b6 cc 01                   LDAA RDDTA
+0205 c0ed a7 00                      STAA 0,X
+0206 c0ef 08                         INX
+0207 c0f0 5a                         DECB
+0208 c0f1 26 f1                      BNE INPUT
+0209 c0f3 39                         RTS
+0210                                               
+0211                         *CALCULATE CRC CODE - TAKES 8 MSEC (1MHZ CLOCK)
+0212 c0f4 d6 07              CRC     LDAB BYTCNT
+0213 c0f6 4f                         CLRA
+0214 c0f7 97 19                      STAA XTEMP+1
+0215 c0f9 8d 0c                      BSR CX
+0216 c0fb ce 00 01                   LDX #TRK
+0217 c0fe c6 0a                      LDAB #$A
+0218 c100 8d 05                      BSR CX
+0219 c102 97 18                      STAA XTEMP
+0220 c104 de 18                      LDX XTEMP
+0221 c106 39                         RTS
+0222 c107 a8 00              CX      EORA 0,X
+0223 c109 48                         ASLA
+0224 c10a 79 00 19                   ROL XTEMP+1
+0225 c10d 24 01                      BCC C1
+0226 c10f 4c                         INCA
+0227 c110 08                 C1      INX
+0228 c111 5a                         DECB
+0229 c112 26 f3                      BNE CX
+0230 c114 39                         RTS
+0231                                         
+0232                         *WRITE A SECTOR
+0233 c115 bd c1 6f           WTSECX  JSR DCHECK         SELECT AND CHECK DRIVE
+0234 c118 25 40                      BCS WTERR
+0235 c11a 86 01                      LDAA #1
+0236 c11c b5 cc 03                   BITA DVSTAT        TEST WRITE PROTECT
+0237 c11f 26 02                      BNE WT1            BRANCH IF NOT PROTECTED
+0238 c121 0d                         SEC                WRITE PROTECTED (A=1)
+0239 c122 39                         RTS                RETURN IF DISK PROTECTED
+0240 c123 de 14              WT1     LDX TA
+0241 c125 8d cd                      BSR CRC
+0242 c127 df 0b                      STX CKSUM
+0243 c129 86 ff                      LDAA #$FF
+0244 c12b b7 cc 02                   STAA FILL          SET FILL WORD
+0245 c12e bd c2 0c                   JSR GTSEC          GET SCTR
+0246 c131 25 27                      BCS WTERR          BRANCH IF DISK MISSING (A=0)
+0247 c133 36                         PSHA               SAVE CONDITION CODE REGISTER
+0248 c134 b7 cc 04                   STAA WRTPLS        TURN ON WRITE
+0249                         *WRITE  THE LEADER
+0250 c137 c6 10                      LDAB #16           WRITE 16 NULL CODES
+0251 c139 4f                         CLRA
+0252 c13a 8d 28              WS3     BSR OUT
+0253 c13c 5a                         DECB
+0254 c13d 26 fb                      BNE WS3
+0255                         *WRITE  THE SECTOR HEADER
+0256 c13f 86 fb                      LDAA #$FB          SYNC BYTE
+0257 c141 ce 00 00                   LDX #HEADER
+0258 c144 c6 0b                      LDAB #$B
+0259 c146 8d 15                      BSR OUTPUT+2
+0260                         *WRITE  THE DATA
+0261 c148 de 14                      LDX TA
+0262 c14a d6 07                      LDAB BYTCNT        BYTE COUNT
+0263 c14c 8d 0d                      BSR OUTPUT
+0264 c14e df 14                      STX TA
+0265                         *WRITE  THE POSTAMBLE
+0266 c150 ce 00 0b                   LDX #CKSUM
+0267 c153 c6 04                      LDAB #4
+0268 c155 8d 04                      BSR OUTPUT
+0269 c157 32                         PULA               RESTORE CCR
+0270 c158 06                         TAP
+0271 c159 0c                         CLC
+0272 c15a 39                 WTERR   RTS
+0273                                         
+0274 c15b a6 00              OUTPUT  LDAA 0,X
+0275 c15d 8d 05                      BSR OUT
+0276 c15f 08                         INX
+0277 c160 5a                         DECB
+0278 c161 26 f8                      BNE OUTPUT
+0279 c163 39                         RTS
+0280 c164 36                 OUT     PSHA
+0281 c165 b6 cc 00           OUT1    LDAA STATUS
+0282 c168 2a fb                      BPL OUT1
+0283 c16a 32                         PULA
+0284 c16b b7 cc 01                   STAA WRTDTA
+0285 c16e 39                         RTS
+0286                                              
+0287                         *CHECK DISK PARAMETERS
+0288 c16f 86 02              DCHECK  LDAA #2
+0289 c171 d6 02                      LDAB SCTR          SECTOR = [0,S]
+0290 c173 c1 09                      CMPB #9
+0291 c175 22 0a                      BHI DCKER2         BRANCH IF ERROR
+0292 c177 d6 01                      LDAB TRK           TRACK = [0,T]
+0293 c179 c4 3f                      ANDB #TRKMSK       MASK OFF DRIVE BITS
+0294 c17b c1 27                      CMPB #TRKLMT
+0295 c17d 23 0d                      BLS DRIVE          BRANCH IF OK
+0296 c17f 4c                 DCKER1  INCA               DISK OVERRUN (A=4)
+0297 c180 4c                         INCA
+0298 c181 0d                 DCKER2  SEC                INVALID PARAMETER (A=2)
+0299 c182 39                         RTS
+0300                                        
+0301 c183 0c                 POS     CLC
+0302 c184 59                         ROLB
+0303 c185 59                         ROLB
+0304 c186 59                         ROLB
+0305 c187 08                 P1      INX
+0306 c188 5a                         DECB
+0307 c189 2a fc                      BPL P1
+0308 c18b 39                         RTS
+0309                                        
+0310                         *SELECT DRIVE, START MOTOR, CHECK DISK, SEEK TRACK
+0311 c18c 86 c0              DRIVE   LDAA #$C0          DRIVE BITS MASK
+0312 c18e 16                         TAB
+0313 c18f b4 cc 03                   ANDA DVSTAT        GET CURRENT DRIVE #
+0314 c192 d4 00                      ANDB DRV           GET DESIRED DRIVE #
+0315 c194 11                         CBA                COMPARE
+0316 c195 26 07                      BNE D0             BRANCH IF NOT SAME
+0317 c197 96 0f                      LDAA CRNTRK        CHECK IF DRIVE IS INITIALIZED
+0318 c199 43                         COMA
+0319 c19a 27 24                      BEQ D1             BRANCH IF NOT
+0320 c19c 20 2e                      BRA D2
+0321 c19e 37                 D0      PSHB
+0322 c19f 37                         PSHB
+0323 c1a0 36                         PSHA
+0324 c1a1 ce 00 0f                   LDX #CRNTRK
+0325 c1a4 a6 00                      LDAA 0,X           GET CURRENT TRK
+0326 c1a6 33                         PULB               FIND PROPER PIDGEON HOLE
+0327 c1a7 8d da                      BSR POS
+0328 c1a9 a7 00                      STAA 0,X           STORE CURRENT TRK
+0329 c1ab ce 00 0f                   LDX #CRNTRK        RETRIEVE TRK FOR NEW DRV
+0330 c1ae 33                         PULB
+0331 c1af 8d d2                      BSR POS
+0332 c1b1 a6 00                      LDAA 0,X
+0333 c1b3 97 0f                      STAA CRNTRK
+0334 c1b5 b6 cc 03           DA      LDAA DVSTAT
+0335 c1b8 85 08                      BITA #WRTBIT       CHECK WRITE GATE
+0336 c1ba 27 f9                      BEQ DA             WAIT UNTIL GATE TURNS OFF
+0337 c1bc 32                         PULA               SELECT NEW DRIVE
+0338 c1bd b7 cc 03                   STAA DRVSLT
+0339 c1c0 8d 24              D1      BSR DRVTST         DISK MISSING TEST
+0340 c1c2 25 0d                      BCS D3             BRANCH IF DISK MISSING
+0341 c1c4 96 0f                      LDAA CRNTRK        CHECK IF DRIVE IS ON LINE
+0342 c1c6 43                         COMA
+0343 c1c7 26 03                      BNE D2             BRANCH IF ON LINE
+0344 c1c9 bd c2 67                   JSR GTK0X          RESTORE DRIVE
+0345 c1cc 8d 04              D2      BSR START          START MOTOR
+0346 c1ce 8d 6f                      BSR SEEKX          SEEK TRACK
+0347 c1d0 0c                         CLC
+0348 c1d1 39                 D3      RTS
+0349                                       
+0350                         *START MOTOR (DELAY IF NECESSARY)
+0351 c1d2 b6 cc 03           START   LDAA DVSTAT        TEST MOTOR BIT
+0352 c1d5 85 04                      BITA #MTRBIT
+0353 c1d7 27 09                      BEQ START1         BRANCH IF ALREADY ON
+0354 c1d9 7d cc 05                   TST MOTON          TRIGGER MOTOR ONE-SHOT
+0355 c1dc ce 03 e8                   LDX #1000          SET UP ONE SEC DELAY
+0356 c1df bd c2 a8                   JSR DELAY
+0357 c1e2 7d cc 05           START1  TST MOTON          RETRIGGER MOTOR
+0358 c1e5 39                         RTS
+0359                                              
+0360                         *CHECK IF DISK MISSING
+0361 c1e6 8d ea              DRVTST  BSR START          START MOTOR
+0362 c1e8 ce 00 00                   LDX #0             SET TIME LIMIT (1 SEC)
+0363 c1eb c6 0b                      LDAB #11           SECTORS TO SYNC COUNTER
+0364 c1ed 86 10                      LDAA #SECBIT       SECTOR BIT MASK
+0365 c1ef b5 cc 03           DVTST1  BITA DVSTAT        SECTOR PULSE=0?
+0366 c1f2 27 05                      BEQ DVTST2
+0367 c1f4 09                         DEX CHECK          TIME LIMIT
+0368 c1f5 26 f8                      BNE DVTST1
+0369 c1f7 20 08                      BRA DVTST3         BRANCH IF TIME LIMIT
+0370 c1f9 b5 cc 03           DVTST2  BITA DVSTAT        SECTOR PULSE=1?
+0371 c1fc 26 09                      BNE DVTST4         BRANCH IF YES
+0372 c1fe 09                         DEX CHECK          TIME LIMIT
+0373 c1ff 26 f8                      BNE DVTST2
+0374 c201 86 ff              DVTST3  LDAA #$FF          DISK MISSING
+0375 c203 97 0f                      STAA CRNTRK        FLAG DRIVE OFF LINE
+0376 c205 43                         COMA               THIS CLEARS A AND SETS CARRY
+0377 c206 39                         RTS
+0378 c207 5a                 DVTST4  DECB               END OF TEST?
+0379 c208 26 e5                      BNE DVTST1         BRANCH IF NOT
+0380 c20a 0c                         CLC                DRIVE IS READY
+0381 c20b 39                         RTS
+0382                                       
+0383                         *LOCATE DESIRED SECTOR AND MASK INTERRUPT
+0384 c20c ce 6f ff           GTSEC   LDX #$6FFF         SET TIME LIMIT (1 SEC)
+0385 c20f 20 05                      BRA GT2
+0386 c211 32                 GT1     PULA               RESTORE CCR
+0387 c212 06                         TAP
+0388 c213 09                         DEX                DISK MISSING TIME OUT
+0389 c214 27 eb                      BEQ DVTST3         DISK MISSING
+0390 c216 07                 GT2     TPA                SET INTERRUPT MASK (FLAGS TO ACC A)
+0391 c217 36                         PSHA               (SAVE FLAGS IN STACK)
+0392 c218 01                         NOP
+0393 c219 0f                         SEI                (DISABLE IRQ)
+0394 c21a 86 10                      LDAA #SECBIT       IS ONE-SHOT OFF?
+0395 c21c b5 cc 03                   BITA DVSTAT
+0396 c21f 27 f0                      BEQ GT1            BRANCH IF NOT
+0397 c221 96 02                      LDAA SCTR          GET DESIRED SECTOR
+0398 c223 4a                         DECA               SET TO N-1
+0399 c224 2a 02                      BPL GT3
+0400 c226 86 09                      LDAA #9            FORCE SECTOR 9
+0401 c228 f6 cc 02           GT3     LDAB SECTOR        ARE WE IN SECTOR N-1?
+0402 c22b c4 0f                      ANDB #$0F
+0403 c22d 11                         CBA
+0404 c22e 26 e1                      BNE GT1            BRANCH IF NOT
+0405 c230 86 10                      LDAA #SECBIT       IS ONE-SHOT STILL ON?
+0406 c232 b5 cc 03                   BITA DVSTAT
+0407 c235 27 da                      BEQ GT1            BRANCH IF NOT
+0408 c237 b5 cc 03           GT4     BITA DVSTAT        ARE WE IN SECTOR N?
+0409 c23a 26 fb                      BNE GT4            LOOP UNTIL WE ARE
+0410 c23c 32                         PULA
+0411 c23d 0c                         CLC
+0412 c23e 39                         RTS
+0413                                              
+0414                         *LOCATE DESIRED TRACK
+0415 c23f d6 01              SEEKX   LDAB TRK           LOAD TRACK TO SEEK IN B
+0416 c241 c4 3f                      ANDB #TRKMSK
+0417 c243 d1 0f                      CMPB CRNTRK        IS THE CURRENT TRACK?
+0418 c245 27 1f                      BEQ S2             YES, RETURN
+0419 c247 23 0b                      BLS STPOUT         BRANCH IF SEEK TRACK IS LESS THAN CURRENT
+0420 c249 8d 34              STPIN   BSR TKIN
+0421 c24b 7c 00 0f                   INC CRNTRK
+0422 c24e d1 0f                      CMPB CRNTRK
+0423 c250 26 f7                      BNE STPIN
+0424 c252 20 09                      BRA SETTLE         15 MSEC DELAY
+0425 c254 8d 25              STPOUT  BSR TKOT
+0426 c256 7a 00 0f                   DEC CRNTRK
+0427 c259 d1 0f                      CMPB CRNTRK
+0428 c25b 26 f7                      BNE STPOUT
+0429 c25d df 18              SETTLE  STX XTEMP
+0430 c25f ce 00 0f                   LDX #15            15 MSEC DELAY
+0431 c262 8d 44                      BSR DELAY
+0432 c264 de 18                      LDX XTEMP
+0433 c266 39                 S2      RTS
+0434                                        
+0435                         *GO TO TRK 0 (HOME-RESTORE HEAD)
+0436 c267 8d 16              GTK0X   BSR TKIN
+0437 c269 8d 14                      BSR TKIN
+0438 c26b 8d 12                      BSR TKIN
+0439 c26d 8d 0c              G0      BSR TKOT
+0440 c26f b6 cc 03                   LDAA DVSTAT
+0441 c272 46                         RORA
+0442 c273 46                         RORA
+0443 c274 25 f7                      BCS G0
+0444 c276 7f 00 0f                   CLR CRNTRK
+0445 c279 20 e2                      BRA SETTLE         15 MSEC DELAY
+0446 c27b 8d 17              TKOT    BSR RDRV           TRACK OUT -> DECREMENT TRACK NUMBER
+0447 c27d 20 04                      BRA T1
+0448 c27f 8d 13              TKIN    BSR RDRV           TRACK IN -> INCR TRACK NUMBER
+0449 c281 8a 10                      ORAA #$10          SET DIR BIT
+0450 c283 8a 20              T1      ORAA #$20          SET STEP BIT
+0451 c285 b7 cc 03                   STAA  DVSTAT
+0452 c288 84 df                      ANDA #$DF          RESET STP BIT
+0453 c28a b7 cc 03                   STAA  DVSTAT
+0454 c28d df 18                      STX XTEMP
+0455 c28f 8d 14                      BSR DEL            DELAY 25 MSEC
+0456 c291 de 18                      LDX XTEMP
+0457 c293 39                         RTS
+0458 c294 7d cc 05           RDRV    TST MOTON          RETRIGGER MOTOR 
+0459 c297 b6 cc 03           RDRVWT  LDAA DVSTAT
+0460 c29a 85 08                      BITA #WRTBIT       CHECK WRITE GATE
+0461 c29c 27 f9                      BEQ RDRVWT         WAIT UNTIL GATE TURNS OFF
+0462 c29e 84 cf                      ANDA #$CF          GET DRV
+0463 c2a0 39                         RTS
+0464 c2a1 ff ff ff ff                FCB $FF,$FF,$FF,$FF UNUSED BYTES
+0465                                              
+0466 c2a5 ce 00 19           DEL     LDX #25 25 MSEC DELAY
+0467                         *DELAY ONE MSEC PER INC OF X REG
+0468 c2a8 36                 DELAY   PSHA
+0469 c2a9 86 a6              DLY1    LDAA #166          ADJUST FOR CPU CLOCK
+0470 c2ab 4a                 DLY2    DECA
+0471 c2ac 26 fd                      BNE DLY2
+0472 c2ae 09                         DEX
+0473 c2af 26 f8                      BNE DLY1
+0474 c2b1 32                         PULA
+0475 c2b2 39                         RTS
+0476                                       
+0477                         *CALCULATE FWD LNK
+0478 c2b3 96 06              FWDCLX LDAA FWDLNK+1       GET SCTR
+0479 c2b5 81 08                      CMPA #8
+0480 c2b7 27 0c                      BEQ F2             BRANCH IF SCTR 8
+0481 c2b9 22 04                      BHI F1             BR IF SCTR 9
+0482 c2bb 8b 02                      ADDA #2
+0483 c2bd 20 08                      BRA F3
+0484 c2bf 7c 00 05           F1      INC FWDLNK         INC FWD TRK
+0485 c2c2 4f                         CLRA
+0486 c2c3 20 02                      BRA F3
+0487 c2c5 86 01              F2      LDAA #1
+0488 c2c7 97 06              F3      STAA FWDLNK+1      UPDATE FWD SCTR
+0489 c2c9 0c                 F4      CLC
+0490 c2ca 39                 F5      RTS
+0491                                       
+0492                         *LOAD A MEMORY IMAGE FILE
+0493 c2cb bd c0 34           LOADX   JSR RDSECX         LOAD A FILE
+0494 c2ce df 16                      STX TW
+0495 c2d0 25 f8                      BCS F5
+0496 c2d2 de 05                      LDX FWDLNK         CK FOR LST BLK
+0497 c2d4 27 f4                      BEQ F5             (CARRY IS CLEAR)
+0498 c2d6 df 01                      STX TRKSEC         SETUP NEXT TRACK AND SECTOR
+0499 c2d8 de 16                      LDX TW             POTENTIAL DINOSAUR
+0500 c2da 20 ef                      BRA LOADX
+0501                                              
+0502                         *SAVE A MEMORY IMAGE FILE
+0503 c2dc ce 00 00           SAVEX   LDX #0             CLEAR BACK LINK
+0504 c2df df 03                      STX BAKLNK         BK LNK
+0505 c2e1 df 0d                      STX POSTAM         CLEAR POSTAMBLE
+0506 c2e3 de 01                      LDX TRKSEC
+0507 c2e5 df 05                      STX FWDLNK
+0508 c2e7 8d ca              W3      BSR FWDCLX         CALC FWD LNK
+0509 c2e9 de 14                      LDX TA
+0510 c2eb df 08                      STX ADDRES         TARGET ADDRESS
+0511 c2ed bd c3 dc                   JSR LNTH           CALCULATE BLK LNTH
+0512 c2f0 bd c1 15           W4      JSR WTSECX         WRITE SECTOR
+0513 c2f3 25 d5                      BCS F5             BRANCH IF ERROR
+0514 c2f5 de 14                      LDX TA
+0515 c2f7 09                         DEX
+0516 c2f8 9c 1e                      CPX ENDA
+0517 c2fa 27 cd                      BEQ F4             BRANCH IF YES
+0518 c2fc de 01                      LDX TRKSEC         SETUP BACK LINK
+0519 c2fe df 03                      STX BAKLNK
+0520 c300 de 05                      LDX FWDLNK         SETUP NXT TRK/SEC
+0521 c302 df 01                      STX TRKSEC
+0522 c304 20 e1                      BRA W3
+0523                                        
+0524 c306 8d 55              SAV     BSR IN4HS          GET BEG ADD
+0525 c308 df 14                      STX TA             INIT CONT ADD
+0526 c30a 8d 51                      BSR IN4HS          GET END ADD
+0527 c30c df 1e                      STX ENDA
+0528 c30e 8d 4d                      BSR IN4HS          GET EXEC ADD
+0529 c310 df 1a                      STX EXEC
+0530 c312 8d 55                      BSR INDTS          GET DRIVE & SECTOR
+0531 c314 25 3d                      BCS TYPERX
+0532 c316 7f 00 0a                   CLR FILTYP         INIT HEADER
+0533 c319 8d 48                      BSR CRLF
+0534 c31b 8d bf                      BSR SAVEX
+0535                         *REPORT LAST SECTOR USED
+0536 c31d 25 34                      BCS TYPERX
+0537 c31f ce c3 f7           RPTSEX  LDX #LSTSEC
+0538 c322 8d 42                      BSR PD
+0539 c324 d6 01                      LDAB TRK           GET TRK
+0540 c326 c4 3f                      ANDB #TRKMSK       MASK OFF DRV
+0541 c328 4f                         CLRA
+0542 c329 20 01                      BRA LS1            CONVERT BINARY TO DEC
+0543 c32b 4c                 LS2     INCA
+0544 c32c c0 0a              LS1     SUBB #10
+0545 c32e 2a fb                      BPL LS2
+0546 c330 cb 0a                      ADDB #10
+0547 c332 bd e0 6b                   JSR OUTHR
+0548 c335 17                         TBA
+0549 c336 bd e0 6b                   JSR OUTHR
+0550 c339 96 02                      LDAA SCTR
+0551 c33b 44                         LSRA               CONVERT ALT SCT TO SEQ SEC
+0552 c33c 24 02                      BCC LS3
+0553 c33e 8b 05                      ADDA #5
+0554 c340 bd e0 6b           LS3     JSR OUTHR
+0555 c343 39                 LS4     RTS
+0556                                               
+0557 c344 2a 2a 2a 45        ER      FCC /***ERROR /
+          52 52 4f 52 20            
+0558 c34d 04                         FCB 4
+0559 c34e 0d 0a 00 00 04     MCRLF   FCB $0D,$0A,0,0,4
+0560                                              
+0561                         *TYPE OUT ERROR MESSAGES
+0562 c353 36                 TYPERX  PSHA
+0563 c354 ce c3 44                   LDX #ER
+0564 c357 8d 0d                      BSR PD
+0565 c359 32                         PULA
+0566 c35a 7e e0 6b                   JMP OUTHR
+0567                                       
+0568 c35d bd e0 cc           IN4HS   JSR OUTS
+0569 c360 7e e0 47                   JMP BADDR
+0570                                              
+0571                         *OUTPUT CR-LF
+0572 c363 ce c3 4e           CRLF    LDX #MCRLF         POINT TO CRLF MSSG
+0573 c366 7e e0 7e           PD      JMP PDATA1
+0574                                              
+0575                         *INPUT & CONVERT DTS
+0576 c369 8d f2              INDTS   BSR IN4HS
+0577 c36b df 01              CVTDTS  STX TRKSEC         SAVE DSSS IN TRK-SEC TEMPORARILY
+0578 c36d 96 02                      LDAA SCTR          GET LS SEC DIG
+0579 c36f 16                         TAB                SAVE COPY
+0580 c370 c4 0f                      ANDB #$F           ISOLATE REAL SECTOR
+0581 c372 c1 09                      CMPB #9            CK FOR INVALID SECTOR
+0582 c374 22 25                      BHI INVSEC
+0583                         *CONVERT SEQ SCTR TO ALT SCTR
+0584 c376 c1 04                      CMPB #4            LESS THAN 4?
+0585 c378 23 06                      BLS W1             DO IT DIFFERENTLY
+0586 c37a c0 05                      SUBB #5
+0587 c37c 58                         ASLB               MULT BY 2
+0588 c37d 5c                         INCB               ADD 1
+0589 c37e 20 01                      BRA W2
+0590 c380 58                 W1      ASLB               MULT BY 2
+0591 c381 d7 02              W2      STAB SCTR          STORE SECTOR
+0592 c383 44                         LSRA               GET NEXT DIGIT
+0593 c384 44                         LSRA               INTO POSITION
+0594 c385 44                         LSRA
+0595 c386 44                         LSRA
+0596 c387 81 09                      CMPA #9            CK FOR INVALID NUMBER
+0597 c389 22 10                      BHI INVSEC
+0598 c38b d6 01                      LDAB TRK           GET DRV & MS SCTR DIG
+0599 c38d 58                         ASLB               DEC TO BIN CONVERT
+0600 c38e 58                         ASLB               4B+A+4B+2B=10B+A
+0601 c38f d7 00                      STAB DRV           STORE DRIVE NUMBER
+0602 c391 c4 3c                      ANDB #$3C
+0603 c393 1b                         ABA
+0604 c394 1b                         ABA
+0605 c395 54                         LSRB
+0606 c396 1b                         ABA
+0607 c397 97 01                      STAA TRK
+0608 c399 0c                         CLC
+0609 c39a 39                         RTS
+0610 c39b 86 02              INVSEC  LDAA #2            INVALID SCTR MSG
+0611 c39d 0d                         SEC
+0612 c39e 39                         RTS
+0613                                              
+0614                         *MINIDOS COMMAND PROCESSOR
+0615 c39f 8e a0 7f           MINDOS  LDS #STACK
+0616 c3a2 b6 c4 00                   LDAA $C400         CHK FOR ROM EXTENSION
+0617 c3a5 81 7e                      CMPA #$7E
+0618 c3a7 26 03                      BNE MIN0
+0619 c3a9 bd c4 00                   JSR $C400          JUMP TO IT
+0620 c3ac bd c0 27           MIN0    JSR INITRK         INITIALIZE TRACK REGISTERS
+0621 c3af 8d 03                      BSR MIN2
+0622 c3b1 7e e0 e3           MIN1    JMP MONITR
+0623 c3b4 bd e1 ac           MIN2    JSR INEEE          INPUT COMMAND
+0624 c3b7 81 4c                      CMPA #'L
+0625 c3b9 27 07                      BEQ LOD
+0626 c3bb 81 53                      CMPA #'S
+0627 c3bd 26 f2                      BNE MIN1
+0628 c3bf 7e c3 06                   JMP SAV
+0629 c3c2 8d a5              LOD     BSR INDTS          GET DISK LOCATION
+0630 c3c4 25 8d                      BCS TYPERX
+0631 c3c6 8d 95                      BSR IN4HS          GET TARGET ADDRESS
+0632 c3c8 df 16                      STX TW
+0633 c3ca 8d 97                      BSR CRLF
+0634 c3cc bd c2 cb                   JSR LOADX          LOAD BINARY FILE
+0635 c3cf 25 82                      BCS TYPERX
+0636 c3d1 de 0d                      LDX POSTAM
+0637 c3d3 8c ff ff                   CPX #$FFFF
+0638 c3d6 27 03                      BEQ MIN3
+0639 c3d8 ff a0 48                   STX XFER
+0640 c3db 39                 MIN3    RTS
+0641                                              
+0642                         *CALCULATE BLOCK LENGTH
+0643 c3dc 96 1f              LNTH    LDAA ENDA+1
+0644 c3de 90 09                      SUBA ADDRES+1      TARGET ADDRESS LSB
+0645 c3e0 d6 1e                      LDAB ENDA
+0646 c3e2 d2 08                      SBCB ADDRES        TARGET ADDRESS MSB
+0647 c3e4 27 04                      BEQ L1             LAST BLK IF B=0
+0648 c3e6 4f                         CLRA
+0649 c3e7 97 07                      STAA BYTCNT        BYTE COUNT
+0650 c3e9 39                         RTS
+0651 c3ea 4c                 L1      INCA
+0652 c3eb 97 07                      STAA BYTCNT
+0653 c3ed 4f                         CLRA               CLEAR FWD LNK
+0654 c3ee 97 05                      STAA FWDLNK
+0655 c3f0 97 06                      STAA FWDLNK+1
+0656 c3f2 de 1a                      LDX EXEC           GET EXECTION ADDRESS
+0657 c3f4 df 0d                      STX POSTAM         SINCE THIS IS LAST BLK
+0658 c3f6 39                         RTS
+0659                                     
+0660 c3f7 4c 53 54 20        LSTSEC  FCC /LST SEC=/     LAST SECTOR MESSAGE
+          53 45 43 3d               
+0661 c3ff 04                         FCB 4
+0662                                 END
+                                    
+                                    
+Number of errors 0                  

@@ -1,0 +1,258 @@
+ 00001                  NAM SWTPIO
+ 00002                  ********* VERSION 1.0 ************
+ 00003                  * WRITTEN BY R.H. UITERWYK
+ 00004                        
+ 00005      2600        DOS    EQU $2600
+ 00006      8014        DRVREG EQU $8014
+ 00007      8018        COMREG EQU $8018
+ 00008      8019        TRKREG EQU $8019
+ 00009      801A        SECREG EQU $801A
+ 00010      801B        DATREG EQU $801B
+ 00011                    
+ 00012      0000               ORG $0000
+ 00013                    
+ 00014 0000 0001        TRACK  RMB 1
+ 00015 0001 0001        SECTOR RMB 1
+ 00016 0002 0001        STATUS RMB 1
+ 00017 0003 0001        ERRCNT RMB 1
+ 00018 0004 0001        BMEMH  RMB 1
+ 00019 0005 0001        BMEML  RMB 1
+ 00020 0006 0001        EMEMH  RMB 1
+ 00021 0007 0001        EMEML  RMB 1
+ 00022 0008 0001        NOSECT RMB 1
+ 00023 0009 0002        SAVEX  RMB 2
+ 00024 000B 0002        PROGX  RMB 2
+ 00025 000D 0001        NDRIVE RMB 1
+ 00026 000E 0004        ATRACK RMB 4
+ 00027 0012 0002        PRELEX RMB 2
+ 00028                    
+ 00029      2400               ORG $2400
+ 00030                    
+ 00031 2400 BD 240C     START  JSR BOOT
+ 00032 2403 DE 0B       RESTRT LDX PROGX
+ 00033 2405 8E A049            LDS #$A049
+ 00034 2408 AD 00              JSR 0,X
+ 00035 240A 20 F7              BRA RESTRT
+ 00036 240C CE 240C     BOOT   LDX #BOOT
+ 00037 240F DF 0B              STX PROGX
+ 00038 2411 4F                 CLR A
+ 00039 2412 97 0D              STA A NDRIVE
+ 00040 2414 97 00              STA A TRACK
+ 00041 2416 86 02              LDA A #2
+ 00042 2418 97 01              STA A SECTOR
+ 00043 241A CE 2FFF            LDX #$2FFF
+ 00044 241D DF 06              STX EMEMH
+ 00045 241F CE 2600            LDX #DOS
+ 00046 2422 8D 07              BSR READ
+ 00047 2424 CE 2600            LDX #DOS
+ 00048 2427 DF 0B              STX PROGX
+ 00049 2429 6E 00              JMP 0,X
+ 00050 242B BD 2523     READ   JSR PRELIM
+ 00051 242E BD 250E     READ0  JSR SEEK
+ 00052 2431 DF 04       READ2  STX BMEMH
+ 00053 2433 7F 0003            CLR ERRCNT
+ 00054 2436 DE 04       READ3  LDX BMEMH
+ 00055 2438 D6 01              LDA B SECTOR
+ 00056 243A F7 801A            STA B SECREG
+ 00057 243D BD 2489            JSR RETURN
+ 00058 2440 C6 9C              LDA B #$9C   MULTIPLE READ W/LOAD
+ 00059 2442 F7 8018            STA B COMREG
+ 00060 2445 BD 2489            JSR RETURN   DELAY 14 CYCLES
+ 00061 2448 BD 2489            JSR RETURN
+ 00062 244B BD 2489            JSR RETURN
+ 00063 244E F6 8018     READ4  LDA B COMREG
+ 00064 2451 C5 01              BIT B #1      BUSY FLAG
+ 00065 2453 27 10              BEQ READ6
+ 00066 2455 C5 02       READ5  BIT B #2  DRQ FLAG
+ 00067 2457 27 F5              BEQ READ4
+ 00068 2459 B6 801B            LDA A DATREG
+ 00069 245C A7 00              STA A 0,X
+ 00070 245E 9C 06              CPX EMEMH
+ 00071 2460 27 0C              BEQ READ7
+ 00072 2462 08                 INX
+ 00073 2463 20 E9              BRA READ4
+ 00074 2465 8D 0F       READ6  BSR CHKERR
+ 00075 2467 26 CD              BNE READ3
+ 00076 2469 BD 24F8            JSR INCSEC  
+ 00077 246C 20 C0              BRA READ0
+ 00078 246E 8D 06       READ7  BSR CHKERR
+ 00079 2470 26 C4              BNE READ3
+ 00080 2472 BD 24F8            JSR INCSEC
+ 00081 2475 39                 RTS
+ 00082 2476 F6 8018     CHKERR LDA B COMREG
+ 00083 2479 D7 02              STA B STATUS
+ 00084 247B 86 D0              LDA A #$D0   FORCE INTERRUPT
+ 00085 247D B7 8018            STA A COMREG
+ 00086 2480 BD 25D7            JSR DONE
+ 00087 2483 D6 02              LDA B STATUS
+ 00088 2485 C4 1C              AND B #$1C
+ 00089 2487 26 01              BNE CHKER1
+ 00090 2489 39          RETURN RTS
+ 00091 248A C4 10       CHKER1 AND B #$10
+ 00092 248C 27 09              BEQ CHKER3
+ 00093 248E F6 801A            LDA B SECREG
+ 00094 2491 C1 0A              CMP B #10
+ 00095 2493 26 02              BNE CHKER3
+ 00096 2495 5F                 CLR B
+ 00097 2496 39                 RTS
+ 00098 2497 D6 03       CHKER3 LDA B ERRCNT
+ 00099 2499 5C                 INC B
+ 00100 249A D7 03              STA B ERRCNT
+ 00101 249C C1 06              CMP B #6
+ 00102 249E 26 E9              BNE RETURN
+ 00103 24A0 F6 801A            LDA B SECREG
+ 00104 24A3 D7 01              STA B SECTOR
+ 00105 24A5 CE 0000            LDX #TRACK
+ 00106 24A8 8D 4B              BSR OUT4HS
+ 00107 24AA 8D 49              BSR OUT4HS
+ 00108 24AC CE 24D4            LDX #CRLF
+ 00109 24AF 8D 41              BSR PDATA
+ 00110 24B1 CE 24BE            LDX #CHKMSG
+ 00111 24B4 8D 3C       ERROR  BSR PDATA
+ 00112 24B6 CE 24C7            LDX #ERRMSG
+ 00113 24B9 8D 37              BSR PDATA
+ 00114 24BB 7E 2403            JMP RESTRT
+ 00115                    
+ 00116 24BE 0D 0A 15    CHKMSG FCB $0D,$0A,$15
+ 00117 24C1 43 48 45 43        FCC /CHECK/
+ 00118 24C6 04                 FCB 4
+ 00119 24C7 20 2D 20 44 ERRMSG FCC / - DISK ERROR/
+ 00120 24D4 0D 0A 15 04 CRLF   FCB $0D,$0A,$15,4
+ 00121 24D8 0D 0A 15    RDYMSG FCB $0D,$0A,$15
+ 00122 24DB 4E 4F 54 20        FCC /NOT READY/
+ 00123 24E4 04                 FCB 4
+ 00124 24E5 0D 0A 15    PROMSG FCB $0D,$0A,$15
+ 00125 24E8 50 52 4F 54        FCC /PROTECTED/
+ 00126 24F1 04                 FCB 4
+ 00127                    
+ 00128 24F2 7E E07E     PDATA  JMP $E07E
+ 00129 24F5 7E E0C8     OUT4HS JMP $E0C8
+ 00130 24F8 37          INCSEC PSH B
+ 00131 24F9 F6 801A            LDA B SECREG
+ 00132 24FC C1 0A              CMP B #10
+ 00133 24FE 26 07              BNE INSE2
+ 00134 2500 7C 0000            INC TRACK
+ 00135 2503 BD 250E            JSR SEEK
+ 00136 2506 5F                 CLR B
+ 00137 2507 D7 01       INSE2  STA B SECTOR
+ 00138 2509 F7 801A            STA B SECREG
+ 00139 250C 33                 PUL B
+ 00140 250D 39                 RTS
+ 00141 250E D6 00       SEEK   LDA B TRACK
+ 00142 2510 F7 801B            STA B DATREG
+ 00143 2513 BD 2489            JSR RETURN
+ 00144 2516 C6 1B              LDA B #$1B  LOAD & SEEK
+ 00145 2518 F7 8018            STA B COMREG
+ 00146 251B BD 25D7            JSR DONE
+ 00147 251E C5 10              BIT B #$10
+ 00148 2520 26 EC              BNE SEEK
+ 00149 2522 39                 RTS
+ 00150 2523 36          PRELIM PSH A
+ 00151 2524 96 0D              LDA A NDRIVE
+ 00152 2526 BD 25AC            JSR DRIVE
+ 00153 2529 32                 PUL A
+ 00154 252A DF 12              STX PRELEX
+ 00155 252C F6 8018            LDA B COMREG
+ 00156 252F CE 4FFF            LDX #$4FFF          **troff before delay loop
+ 00157 2532 08          PREL25 INX
+ 00158 2533 09                 DEX
+ 00159 2534 09                 DEX
+ 00160 2535 26 FB              BNE PREL25
+ 00161 2537 C6 0B              LDA B #$0B   LOAD + RESTORE            **tron
+ 00162 2539 F7 8018            STA B COMREG
+ 00163 253C BD 25D7            JSR DONE
+ 00164 253F CE 4000            LDX #$4000
+ 00165 2542 F6 8018     PREL35 LDA B COMREG
+ 00166 2545 09                 DEX
+ 00167 2546 27 11              BEQ PREL4
+ 00168 2548 C5 02              BIT B #$02
+ 00169 254A 26 F6              BNE PREL35
+ 00170 254C F6 8018     PREL36 LDA B COMREG
+ 00171 254F 09                 DEX
+ 00172 2550 27 07              BEQ PREL4
+ 00173 2552 C5 02              BIT B #$02
+ 00174 2554 27 F6              BEQ PREL36
+ 00175 2556 DE 12              LDX PRELEX
+ 00176 2558 39                 RTS
+ 00177 2559 CE 24D8     PREL4  LDX #RDYMSG
+ 00178 255C 7E 24B4     PREL45 JMP ERROR
+ 00179 255F 8D C2       WRITE  BSR PRELIM
+ 00180 2561 8D AB       WRITE0 BSR SEEK
+ 00181 2563 7F 0003     WRITE1 CLR ERRCNT
+ 00182 2566 DF 04              STX BMEMH
+ 00183 2568 DE 04       WRITE2 LDX BMEMH
+ 00184 256A D6 01              LDA B SECTOR
+ 00185 256C F7 801A            STA B SECREG
+ 00186 256F BD 2489            JSR RETURN
+ 00187 2572 C6 BC              LDA B #$BC  MULTIPLE WRITE W/LOAD
+ 00188 2574 F7 8018            STA B COMREG
+ 00189 2577 BD 2489            JSR RETURN
+ 00190 257A BD 2489            JSR RETURN
+ 00191 257D BD 2489            JSR RETURN
+ 00192 2580 F6 8018     WRITE3 LDA B COMREG
+ 00193 2583 C5 01              BIT B #1    BUSY FLAG
+ 00194 2585 27 10              BEQ WRITE6
+ 00195 2587 C5 02       WRITE4 BIT B #2  DRQ FLAG
+ 00196 2589 27 F5              BEQ WRITE3
+ 00197 258B A6 00              LDA A 0,X
+ 00198 258D B7 801B            STA A DATREG
+ 00199 2590 9C 06              CPX EMEMH
+ 00200 2592 27 11              BEQ WRITE7
+ 00201 2594 08                 INX
+ 00202 2595 20 E9              BRA WRITE3
+ 00203 2597 C5 40       WRITE6 BIT B #$40
+ 00204 2599 27 05              BEQ *+7
+ 00205 259B CE 24E5            LDX #PROMSG
+ 00206 259E 20 BC              BRA PREL45
+ 00207 25A0 BD 24F8            JSR INCSEC
+ 00208 25A3 20 BE              BRA WRITE1
+ 00209 25A5 BD 25D7     WRITE7 JSR DONE
+ 00210 25A8 BD 24F8            JSR INCSEC
+ 00211 25AB 39                 RTS
+ 00212 25AC 84 03       DRIVE  AND A #$03
+ 00213 25AE 36                 PSH A
+ 00214 25AF DF 12              STX PRELEX
+ 00215 25B1 CE 000D            LDX #ATRACK-1
+ 00216 25B4 4C                 INC A
+ 00217 25B5 16                 TAB
+ 00218 25B6 96 0D              LDA A NDRIVE
+ 00219 25B8 4C                 INC A
+ 00220 25B9 08          DRIVE0 INX
+ 00221 25BA 4A                 DEC A
+ 00222 25BB 26 FC              BNE DRIVE0
+ 00223 25BD B6 8019            LDA A TRKREG
+ 00224 25C0 A7 00              STA A 0,X
+ 00225 25C2 CE 000D            LDX #ATRACK-1
+ 00226 25C5 08          DRIVE1 INX
+ 00227 25C6 5A                 DEC B
+ 00228 25C7 26 FC              BNE DRIVE1
+ 00229 25C9 A6 00              LDA A 0,X
+ 00230 25CB B7 8019            STA A TRKREG
+ 00231 25CE 32                 PUL A
+ 00232 25CF 97 0D              STA A NDRIVE
+ 00233 25D1 B7 8014            STA A DRVREG
+ 00234 25D4 DE 12              LDX PRELEX
+ 00235 25D6 39                 RTS
+ 00236 25D7 BD 2489     DONE   JSR RETURN
+ 00237 25DA BD 2489            JSR RETURN
+ 00238 25DD F6 8018            LDA B COMREG
+ 00239 25E0 C5 01              BIT B #1
+ 00240 25E2 26 F3              BNE DONE
+ 00241 25E4 39                 RTS
+ 00242 25E5                    END
+ 
+                               * RSV MAR/2022: This routine is not in .ASM, but is on disk boot sectors
+                               * seems a last minute patch
+                               
+       247D:	               JSR  $25E6  WAIT SECTOR CHANGE BEFORE ISSUING FORCE INTERRUPT
+       
+       25E6:	               LDAA $801A  (SECREG) WAIT FOR 
+       25E9:	               LDAB #$23            CURRENT SECTOR
+       25EB:	               CMPA $801A  (SECREG) TO
+       25EE:	               BNE  $25F3           CHANGE
+       25F0:	               DECB
+       25F1:	               BNE  $25EB
+       25F3:	               LDAA #$D0   FORCE INTERRUPT
+       25F5:	               STAA $8018  (COMREG)
+       25F8:	               RTS 
+       

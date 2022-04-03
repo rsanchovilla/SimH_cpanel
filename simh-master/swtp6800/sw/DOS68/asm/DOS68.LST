@@ -1,0 +1,2290 @@
+
+
+
+                                           QSWC     EQU 3      WRITE CLOSE sequential file
+
+C080:	BD DC95         JSR  $DC95
+C083:	BD DC2D         JSR  $DC2D
+C086:	C6 02           LDAB #$02
+C088:	BD DC4E         JSR  $DC4E
+C08B:	6F 0D           CLR  13,X
+C08D:	BD DC68         JSR  $DC68
+C090:	BD DF4D         JSR  $DF4D
+C093:	BD DA09         JSR  $DA09
+C096:	24 09           BCC  $C0A1
+C098:	BD DC01         JSR  $DC01
+C09B:	BD DD17         JSR  $DD17
+C09E:	7E D994         JMP  $D994
+C0A1:	86 03           LDAA #$03
+C0A3:	7E D7DC         JMP  $D7DC
+
+                                           QLOGD    EQU 16     LOG IN A SYSTEM DRIVE
+
+C0A6:	FE C4CC         LDX  CURFCB          Current FCB 
+C0A9:	E6 02           LDAB 2,X             B=Unit number
+C0AB:	F1 D790         CMPB MAXDSK          Max number of drivers=4
+C0AE:	25 03           BCS  $C0B3
+C0B0:	7E D7DA         JMP  $D7DA
+C0B3:	F7 C4FF         STAB $C4FF
+C0B6:	39              RTS 
+
+                                           QLOGE    EQU 17     EXAMINE SYSTEM DRIVE NUMBER - Exar:tine losged drive number
+
+C0B7:	F6 C4FF         LDAB $C4FF
+C0BA:	FE C4CC         LDX  CURFCB          Current FCB 
+C0BD:	E7 02           STAB 2,X             Store Unit number=B
+C0BF:	39              RTS 
+
+                                           QSSR     EQU 18     SINGLE SECTOR READ
+
+C0C0:	CE DD35         LDX  #RDSECT       X=Address of read disk sector routine
+C0C3:	20 03           BRA  $C0C8
+
+                                           QSSW     EQU 19     SINGLE SECTOR WRITE
+
+C0C5:	CE DD30         LDX  #WRSECT       X=Address of write disk sector routine
+C0C8:	FF C4DE         STX  $C4DE         Save in C4DE/F = X = the I/O routine to call
+C0CB:	FE C4CC         LDX  CURFCB        Current FCB 
+C0CE:	C6 26           LDAB #$26
+C0D0:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+C0D3:	FF A07E         STX  DSKBUF        DSKBUF=addr of buffer for data to wr/rd from disk=FCB + 38 (dec)
+C0D6:	FE C4CC         LDX  CURFCB        Current FCB 
+C0D9:	A6 1E           LDAA 30,X          Get A=Current track number (80..)
+C0DB:	84 7F           ANDA #$7F
+C0DD:	B1 D791         CMPA MAXTRK        =35 dec = Number of tracks
+C0E0:	22 21           BHI  $C103         branch if current track in A is invalid
+C0E2:	B7 A07C         STAA TRACK         A07C=Track in disc (0..34)
+C0E5:	A6 1F           LDAA 31,X          Get A=Current sector number (40..)
+C0E7:	84 1F           ANDA #$1F             
+C0E9:	B1 D792         CMPA MAXSEC
+C0EC:	22 15           BHI  $C103         branch if current sector in A is invalid
+C0EE:	A6 1F           LDAA 31,X          load again A=Current sector number (40..)
+C0F0:	84 3F           ANDA #$3F
+C0F2:	B7 A07D         STAA SECTOR        A07D=Sector in disc (0..17)
+C0F5:	BD DC95         JSR  $DC95
+C0F8:	FE C4DE         LDX  $C4DE         X=C4DE/F = I/O routine to jump to 
+C0FB:	AD 00           JSR X 0,X          Call I/O routine
+C0FD:	FE C4CC         LDX  CURFCB        Current FCB 
+C100:	E7 01           STAB 1,X           Store Error Status=B
+C102:	39              RTS 
+C103:	86 0B           LDAA #$0B
+C105:	7E D7DC         JMP  $D7DC
+
+                                           QFREE    EQU 0      REPORT FREE SPACE ON DISC
+
+C108:	BD DC95         JSR  $DC95
+C10B:	BD D96F         JSR  $D96F
+C10E:	FE C4D0         LDX  $C4D0
+C111:	A6 05           LDAA 5,X
+C113:	E6 06           LDAB 6,X
+C115:	30              TSX 
+C116:	A7 02           STAA 2,X
+C118:	E7 03           STAB 3,X
+C11A:	7E D994         JMP  $D994
+
+                                           QDIRI    EQU 10     DIRECTORY INITIALIZATION - Open a disk directory
+
+C11D:	BD DC95         JSR  $DC95
+C120:	86 04           LDAA #$04
+C122:	B7 C4FA         STAA $C4FA
+C125:	B7 C4EB         STAA $C4EB
+C128:	BD D976         JSR  $D976
+C12B:	BD D994         JSR  $D994
+C12E:	CE C801         LDX  #$C801
+C131:	FF C4D8         STX  $C4D8
+C134:	39              RTS 
+
+                                           QDIRT    EQU 11     DIRECTORY TRANSFER - Retrieve a file name from directory
+
+C135:	7D C4FA         TST  $C4FA
+C138:	27 30           BEQ  $C16A
+C13A:	7A C4EB         DEC  $C4EB
+C13D:	2A 16           BPL  $C155
+C13F:	86 04           LDAA #$04
+C141:	B7 C4EB         STAA $C4EB
+C144:	CE C7E9         LDX  #$C7E9
+C147:	FF C4D8         STX  $C4D8
+C14A:	7D C7E1         TST  $C7E1
+C14D:	2A 1E           BPL  $C16D
+C14F:	BD DC95         JSR  $DC95
+C152:	BD DD01         JSR  $DD01
+C155:	FE C4CC         LDX  CURFCB          Current FCB 
+C158:	C6 03           LDAB #$03
+C15A:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+C15D:	C6 19           LDAB #$19
+C15F:	BD DBFA         JSR  $DBFA
+C162:	FE C4CC         LDX  CURFCB          Current FCB 
+C165:	6D 03           TST  3,X             test First Char of filename
+C167:	27 D1           BEQ  $C13A
+C169:	39              RTS 
+C16A:	7E D7D7         JMP  $D7D7
+C16D:	7F C4EB         CLR  $C4EB
+C170:	86 06           LDAA #$06
+C172:	7E D7DC         JMP  $D7DC
+
+                                           QSO4R    EQU 4      OPEN FOR READ sequential file
+
+C175:	BD DC95         JSR  $DC95
+C178:	BD DC3D         JSR  $DC3D
+C17B:	BD DC23         JSR  $DC23
+C17E:	BD D9D5         JSR  $D9D5
+C181:	24 0F           BCC  $C192
+C183:	FE C4E8         LDX  $C4E8
+C186:	A6 0D           LDAA 13,X
+C188:	84 0F           ANDA #$0F
+C18A:	81 01           CMPA #$01
+C18C:	27 04           BEQ  $C192
+C18E:	86 04           LDAA #$04
+C190:	20 07           BRA  $C199
+C192:	BD DA09         JSR  $DA09
+C195:	25 05           BCS  $C19C
+C197:	86 05           LDAA #$05
+C199:	7E D7DC         JMP  $D7DC
+C19C:	BD DA7D         JSR  $DA7D
+C19F:	A6 0C           LDAA 12,X
+C1A1:	84 0F           ANDA #$0F
+C1A3:	81 02           CMPA #$02
+C1A5:	27 08           BEQ  $C1AF
+C1A7:	81 01           CMPA #$01
+C1A9:	27 04           BEQ  $C1AF
+C1AB:	86 10           LDAA #$10
+C1AD:	20 EA           BRA  $C199
+C1AF:	86 01           LDAA #$01
+C1B1:	A7 0D           STAA 13,X
+C1B3:	6F 23           CLR  35,X
+C1B5:	7E DC5A         JMP  $DC5A
+
+                                           QSREAD   EQU 5      READ sequential file
+
+C1B8:	BD DC2D         JSR  $DC2D
+C1BB:	C6 01           LDAB #$01
+C1BD:	BD DC4E         JSR  $DC4E
+C1C0:	A6 23           LDAA 35,X
+C1C2:	27 06           BEQ  $C1CA
+C1C4:	86 20           LDAA #$20
+C1C6:	6C 23           INC  35,X
+C1C8:	20 3B           BRA  $C205
+C1CA:	E6 1D           LDAB 29,X
+C1CC:	C1 80           CMPB #$80
+C1CE:	26 19           BNE  $C1E9
+C1D0:	6D 26           TST  38,X
+C1D2:	2C 35           BGE  $C209
+C1D4:	A6 26           LDAA 38,X
+C1D6:	E6 27           LDAB 39,X
+C1D8:	A7 1E           STAA 30,X
+C1DA:	E7 1F           STAB 31,X
+C1DC:	BD DCC0         JSR  $DCC0
+C1DF:	1E              ???
+C1E0:	00              ???
+C1E1:	26 FE           BNE  $C1E1
+C1E3:	C4 CC           ANDB #$CC
+C1E5:	C6 04           LDAB #$04
+C1E7:	E7 1D           STAB 29,X
+C1E9:	6C 1D           INC  29,X
+C1EB:	6F 23           CLR  35,X
+C1ED:	CB 26           ADDB #$26
+C1EF:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+C1F2:	A6 00           LDAA 0,X
+C1F4:	2A 0F           BPL  $C205
+C1F6:	FE C4CC         LDX  CURFCB          Current FCB 
+C1F9:	E6 0C           LDAB 12,X            B=File type
+C1FB:	C4 0F           ANDB #$0F
+C1FD:	C1 01           CMPB #$01
+C1FF:	26 04           BNE  $C205
+C201:	A7 23           STAA 35,X
+C203:	20 BF           BRA  $C1C4
+C205:	30              TSX 
+C206:	A7 02           STAA 2,X
+C208:	39              RTS 
+C209:	86 06           LDAA #$06
+C20B:	7E D7DC         JMP  $D7DC
+
+                                           QSRC     EQU 6      READ CLOSE sequential file
+
+C20E:	BD DC95         JSR  $DC95
+C211:	BD DC2D         JSR  $DC2D
+C214:	C6 01           LDAB #$01
+C216:	BD DC4E         JSR  $DC4E
+C219:	6F 0D           CLR  13,X
+C21B:	BD DC68         JSR  $DC68
+C21E:	7E D994         JMP  $D994
+
+                                           QRAFC    EQU 13     READ ACTIVE FCB CHAIN
+
+C221:	FE C4CC         LDX  CURFCB          Current FCB 
+C224:	E6 03           LDAB 3,X             B=First char of filename
+C226:	FE C4F8         LDX  $C4F8
+C229:	27 07           BEQ  $C232
+C22B:	5A              DECB
+C22C:	2B 04           BMI  $C232
+C22E:	EE 1B           LDX  27,X
+C230:	20 F7           BRA  $C229
+C232:	FF C4DE         STX  $C4DE
+C235:	FE C4CC         LDX  CURFCB          Current FCB 
+C238:	B6 C4DE         LDAA $C4DE           
+C23B:	F6 C4DF         LDAB $C4DF
+C23E:	A7 04           STAA 4,X             Store Second char of filename
+C240:	E7 05           STAB 5,X             Store 3rd char of filename
+C242:	39              RTS 
+
+                                           QPRF     EQU 22     POSITION A RF
+
+C243:	8D 47           BSR  $C28C
+C245:	8D 12           BSR  $C259
+C247:	25 07           BCS  $C250
+C249:	86 01           LDAA #$01
+C24B:	A7 34           STAA 52,X
+C24D:	6F 35           CLR  53,X
+C24F:	39              RTS 
+C250:	86 FF           LDAA #$FF
+C252:	A7 35           STAA 53,X
+C254:	86 06           LDAA #$06
+C256:	7E D7DC         JMP  $D7DC
+C259:	BD C4C1         JSR  $C4C1
+C25C:	27 16           BEQ  $C274
+C25E:	E6 1D           LDAB 29,X
+C260:	E1 14           CMPB 20,X
+C262:	22 0E           BHI  $C272
+C264:	25 06           BCS  $C26C
+C266:	E6 1E           LDAB 30,X
+C268:	E1 15           CMPB 21,X
+C26A:	24 06           BCC  $C272
+C26C:	E6 1F           LDAB 31,X
+C26E:	E1 16           CMPB 22,X
+C270:	25 18           BCS  $C28A
+C272:	0D              SEC 
+C273:	39              RTS 
+C274:	E6 1D           LDAB 29,X
+C276:	E1 14           CMPB 20,X
+C278:	22 F8           BHI  $C272
+C27A:	25 0E           BCS  $C28A
+C27C:	E6 1E           LDAB 30,X
+C27E:	E1 15           CMPB 21,X
+C280:	22 F0           BHI  $C272
+C282:	25 06           BCS  $C28A
+C284:	E6 1F           LDAB 31,X
+C286:	E1 16           CMPB 22,X
+C288:	24 E8           BCC  $C272
+C28A:	0C              CLC 
+C28B:	39              RTS 
+C28C:	BD DC2D         JSR  $DC2D
+C28F:	A6 0C           LDAA 12,X
+C291:	84 0F           ANDA #$0F
+C293:	81 04           CMPA #$04
+C295:	27 F4           BEQ  $C28B
+C297:	81 05           CMPA #$05
+C299:	27 F0           BEQ  $C28B
+C29B:	86 10           LDAA #$10
+C29D:	7E D7DC         JMP  $D7DC
+
+                                           QRRF     EQU 23     READ A RF
+                                           QWRF     EQU 24     WRITE A RF
+
+C2A0:	8D EA           BSR  $C28C
+C2A2:	E6 34           LDAB 52,X
+C2A4:	2B 6A           BMI  $C310
+C2A6:	26 07           BNE  $C2AF
+C2A8:	E6 35           LDAB 53,X
+C2AA:	26 A4           BNE  $C250
+C2AC:	7E C365         JMP  $C365
+C2AF:	81 04           CMPA #$04
+C2B1:	26 0E           BNE  $C2C1
+C2B3:	A6 1D           LDAA 29,X
+C2B5:	A7 39           STAA 57,X
+C2B7:	A6 1E           LDAA 30,X
+C2B9:	A7 3A           STAA 58,X
+C2BB:	A6 1F           LDAA 31,X
+C2BD:	A7 3B           STAA 59,X
+C2BF:	20 03           BRA  $C2C4
+C2C1:	BD C464         JSR  $C464
+C2C4:	BD C497         JSR  $C497
+C2C7:	A6 26           LDAA 38,X
+C2C9:	26 17           BNE  $C2E2
+C2CB:	A6 0E           LDAA 14,X
+C2CD:	27 81           BEQ  $C250
+C2CF:	E6 0F           LDAB 15,X
+C2D1:	A7 27           STAA 39,X
+C2D3:	E7 28           STAB 40,X
+C2D5:	BD DCC0         JSR  $DCC0
+C2D8:	27 00           BEQ  $C2DA
+C2DA:	40              NEGA
+C2DB:	FE C4CC         LDX  CURFCB          Current FCB 
+C2DE:	86 FF           LDAA #$FF
+C2E0:	A7 26           STAA 38,X            Start of buffer=$FF
+C2E2:	A6 37           LDAA 55,X
+C2E4:	A0 49           SUBA 73,X
+C2E6:	A7 29           STAA 41,X
+C2E8:	A6 36           LDAA 54,X
+C2EA:	A2 48           SBCA 72,X
+C2EC:	24 12           BCC  $C300
+C2EE:	A6 46           LDAA 70,X
+C2F0:	E6 47           LDAB 71,X
+C2F2:	A7 27           STAA 39,X
+C2F4:	E7 28           STAB 40,X
+C2F6:	6F 26           CLR  38,X
+C2F8:	BD DCC0         JSR  $DCC0
+C2FB:	27 00           BEQ  $C2FD
+C2FD:	40              NEGA
+C2FE:	20 DB           BRA  $C2DB
+C300:	A6 4B           LDAA 75,X
+C302:	A0 37           SUBA 55,X
+C304:	A6 4A           LDAA 74,X
+C306:	A2 36           SBCA 54,X
+C308:	24 06           BCC  $C310
+C30A:	A6 44           LDAA 68,X
+C30C:	E6 45           LDAB 69,X
+C30E:	20 E2           BRA  $C2F2
+C310:	6F 34           CLR  52,X
+C312:	E6 29           LDAB 41,X
+C314:	58              ASLB
+C315:	4F              CLRA
+C316:	CB 50           ADDB #$50
+C318:	89 00           ADCA #$00
+C31A:	FB C4CD         ADDB CURFCB+1
+C31D:	B9 C4CC         ADCA CURFCB          Current FCB 
+C320:	A7 2A           STAA 42,X
+C322:	E7 2B           STAB 43,X
+C324:	EE 2A           LDX  42,X
+C326:	A6 00           LDAA 0,X
+C328:	E6 01           LDAB 1,X
+C32A:	FE C4CC         LDX  CURFCB          Current FCB 
+C32D:	A7 32           STAA 50,X
+C32F:	E7 33           STAB 51,X
+C331:	A1 2D           CMPA 45,X
+C333:	26 0A           BNE  $C33F
+C335:	E1 2E           CMPB 46,X
+C337:	26 06           BNE  $C33F
+C339:	A6 2C           LDAA 44,X
+C33B:	26 28           BNE  $C365
+C33D:	20 19           BRA  $C358
+C33F:	A6 2F           LDAA 47,X
+C341:	27 06           BEQ  $C349
+C343:	BD DCCA         JSR  $DCCA
+C346:	2D 00           BLT  $C348
+C348:	C0 FE           SUBB #$FE
+C34A:	C4 CC           ANDB #$CC
+C34C:	6F 2F           CLR  47,X
+C34E:	6F 2C           CLR  44,X
+C350:	A6 32           LDAA 50,X
+C352:	E6 33           LDAB 51,X
+C354:	A7 2D           STAA 45,X
+C356:	E7 2E           STAB 46,X
+C358:	BD DCC0         JSR  $DCC0
+C35B:	2D 00           BLT  $C35D
+C35D:	C0 FE           SUBB #$FE
+C35F:	C4 CC           ANDB #$CC
+C361:	86 FF           LDAA #$FF
+C363:	A7 2C           STAA 44,X
+C365:	E6 38           LDAB 56,X
+C367:	4F              CLRA
+C368:	CB C4           ADDB #$C4
+C36A:	89 00           ADCA #$00
+C36C:	FB C4CD         ADDB CURFCB+1
+C36F:	B9 C4CC         ADCA CURFCB          Current FCB 
+C372:	A7 30           STAA 48,X
+C374:	E7 31           STAB 49,X
+C376:	A6 00           LDAA 0,X
+C378:	81 18           CMPA #$18
+C37A:	26 52           BNE  $C3CE
+C37C:	A6 0C           LDAA 12,X
+C37E:	85 10           BITA #$10
+C380:	26 47           BNE  $C3C9
+C382:	A6 17           LDAA 23,X
+C384:	81 FF           CMPA #$FF
+C386:	26 08           BNE  $C390
+C388:	A1 18           CMPA 24,X
+C38A:	26 04           BNE  $C390
+C38C:	A1 19           CMPA 25,X
+C38E:	27 12           BEQ  $C3A2
+C390:	A1 1D           CMPA 29,X
+C392:	26 0C           BNE  $C3A0
+C394:	A6 18           LDAA 24,X
+C396:	A1 1E           CMPA 30,X
+C398:	26 06           BNE  $C3A0
+C39A:	A6 19           LDAA 25,X
+C39C:	A1 1F           CMPA 31,X
+C39E:	27 12           BEQ  $C3B2
+C3A0:	22 10           BHI  $C3B2
+C3A2:	86 FF           LDAA #$FF
+C3A4:	A7 25           STAA 37,X
+C3A6:	A6 1D           LDAA 29,X
+C3A8:	A7 17           STAA 23,X
+C3AA:	A6 1E           LDAA 30,X
+C3AC:	A7 18           STAA 24,X
+C3AE:	A6 1F           LDAA 31,X
+C3B0:	A7 19           STAA 25,X
+C3B2:	30              TSX 
+C3B3:	A6 02           LDAA 2,X
+C3B5:	FE C4CC         LDX  CURFCB          Current FCB 
+C3B8:	EE 30           LDX  48,X
+C3BA:	A1 00           CMPA 0,X
+C3BC:	27 17           BEQ  $C3D5
+C3BE:	A7 00           STAA 0,X
+C3C0:	FE C4CC         LDX  CURFCB          Current FCB 
+C3C3:	86 FF           LDAA #$FF
+C3C5:	A7 2F           STAA 47,X
+C3C7:	20 0C           BRA  $C3D5
+C3C9:	86 12           LDAA #$12
+C3CB:	7E D7DC         JMP  $D7DC
+C3CE:	EE 30           LDX  48,X
+C3D0:	A6 00           LDAA 0,X
+C3D2:	30              TSX 
+C3D3:	A7 02           STAA 2,X
+C3D5:	BD C4C1         JSR  $C4C1
+C3D8:	07              TPA 
+C3D9:	E6 20           LDAB 32,X
+C3DB:	27 38           BEQ  $C415
+C3DD:	2B 49           BMI  $C428
+C3DF:	06              TAP 
+C3E0:	26 34           BNE  $C416
+C3E2:	6C 1F           INC  31,X
+C3E4:	26 06           BNE  $C3EC
+C3E6:	6C 1E           INC  30,X
+C3E8:	26 02           BNE  $C3EC
+C3EA:	6C 1D           INC  29,X
+C3EC:	BD C259         JSR  $C259
+C3EF:	24 05           BCC  $C3F6
+C3F1:	C6 01           LDAB #$01
+C3F3:	E7 35           STAB 53,X
+C3F5:	39              RTS 
+C3F6:	6C 38           INC  56,X
+C3F8:	A6 38           LDAA 56,X
+C3FA:	81 7C           CMPA #$7C
+C3FC:	26 17           BNE  $C415
+C3FE:	6F 38           CLR  56,X
+C400:	6C 37           INC  55,X
+C402:	26 02           BNE  $C406
+C404:	6C 36           INC  54,X
+C406:	6C 29           INC  41,X
+C408:	A6 29           LDAA 41,X
+C40A:	81 38           CMPA #$38
+C40C:	25 03           BCS  $C411
+C40E:	86 01           LDAA #$01
+C410:	8C 86FF         CPX  #$86FF
+C413:	A7 34           STAA 52,X
+C415:	39              RTS 
+C416:	6C 1F           INC  31,X
+C418:	A6 1F           LDAA 31,X
+C41A:	A1 16           CMPA 22,X
+C41C:	25 D8           BCS  $C3F6
+C41E:	6F 1F           CLR  31,X
+C420:	6C 1E           INC  30,X
+C422:	26 C8           BNE  $C3EC
+C424:	6C 1D           INC  29,X
+C426:	20 C4           BRA  $C3EC
+C428:	C6 FF           LDAB #$FF
+C42A:	06              TAP 
+C42B:	26 2A           BNE  $C457
+C42D:	6A 1F           DEC  31,X
+C42F:	E1 1F           CMPB 31,X
+C431:	26 0C           BNE  $C43F
+C433:	6A 1E           DEC  30,X
+C435:	E1 1E           CMPB 30,X
+C437:	26 06           BNE  $C43F
+C439:	6A 1D           DEC  29,X
+C43B:	E1 1D           CMPB 29,X
+C43D:	27 B4           BEQ  $C3F3
+C43F:	6A 38           DEC  56,X
+C441:	E1 38           CMPB 56,X
+C443:	26 D0           BNE  $C415
+C445:	86 7B           LDAA #$7B
+C447:	A7 38           STAA 56,X
+C449:	6A 37           DEC  55,X
+C44B:	E1 37           CMPB 55,X
+C44D:	26 02           BNE  $C451
+C44F:	6A 36           DEC  54,X
+C451:	6A 29           DEC  41,X
+C453:	2A BC           BPL  $C411
+C455:	20 B7           BRA  $C40E
+C457:	6A 1F           DEC  31,X
+C459:	E1 1F           CMPB 31,X
+C45B:	26 E2           BNE  $C43F
+C45D:	A6 16           LDAA 22,X
+C45F:	4A              DECA
+C460:	A7 1F           STAA 31,X
+C462:	20 CF           BRA  $C433
+C464:	8D 0F           BSR  $C475
+C466:	E6 1F           LDAB 31,X
+C468:	EB 3B           ADDB 59,X
+C46A:	E7 3B           STAB 59,X
+C46C:	24 06           BCC  $C474
+C46E:	6C 3A           INC  58,X
+C470:	26 02           BNE  $C474
+C472:	6C 39           INC  57,X
+C474:	39              RTS 
+C475:	FE C4CC         LDX  CURFCB          Current FCB 
+C478:	C6 08           LDAB #$08
+C47A:	E7 3E           STAB 62,X
+C47C:	E6 16           LDAB 22,X
+C47E:	E7 3F           STAB 63,X
+C480:	4F              CLRA
+C481:	5F              CLRB
+C482:	64 3F           LSR  63,X
+C484:	24 04           BCC  $C48A
+C486:	EB 1E           ADDB 30,X
+C488:	A9 1D           ADCA 29,X
+C48A:	46              RORA
+C48B:	56              RORB
+C48C:	66 3B           ROR  59,X
+C48E:	6A 3E           DEC  62,X
+C490:	26 F0           BNE  $C482
+C492:	A7 39           STAA 57,X
+C494:	E7 3A           STAB 58,X
+C496:	39              RTS 
+C497:	A6 3A           LDAA 58,X
+C499:	A7 36           STAA 54,X
+C49B:	A6 3B           LDAA 59,X
+C49D:	A7 37           STAA 55,X
+C49F:	A6 39           LDAA 57,X
+C4A1:	C6 12           LDAB #$12
+C4A3:	80 F8           SUBA #$F8
+C4A5:	24 06           BCC  $C4AD
+C4A7:	8B F8           ADDA #$F8
+C4A9:	0C              CLC 
+C4AA:	7E C4AE         JMP  $C4AE
+C4AD:	0D              SEC 
+C4AE:	69 37           ROL  55,X
+C4B0:	69 36           ROL  54,X
+C4B2:	5A              DECB
+C4B3:	27 08           BEQ  $C4BD
+C4B5:	49              ROLA
+C4B6:	24 EB           BCC  $C4A3
+C4B8:	80 F8           SUBA #$F8
+C4BA:	7E C4AD         JMP  $C4AD
+C4BD:	44              LSRA
+C4BE:	A7 38           STAA 56,X
+C4C0:	39              RTS 
+C4C1:	FE C4CC         LDX  CURFCB        Current FCB 
+C4C4:	E6 0C           LDAB 12,X
+C4C6:	C4 0F           ANDB #$0F
+C4C8:	C1 04           CMPB #$04
+C4CA:	39              RTS 
+
+C4CC:   CURFCB          RMB 2              Current FCB in use
+C4CE:   SVSTACKP        RMB 2              Save Stack Pointer
+
+C880:   DOSFCB          DOS FCB ADDRESS
+
+C99F:   SYSSTK          SYSTEM STACK TOP
+
+                        EXTENDED DOS LOGIC
+
+CA00:	EXTDOS          FCC 03, 02,      LEN OF COMMAND (1-6), MIN NUM OF CHARS FOR A MATCH
+                            CA, 58,      Command Address
+                           'GET',        Command name
+
+CA07:	                FCC 03, 02
+     	                    CA, 24 
+                            'RUN'
+
+CA0E:	                FCC 04, 01,
+                            D2, 8C,
+                            'EXIT'
+
+
+CA16:	                FCC 04, 02, 
+                            CA, 51, 
+                            'GOTO'
+
+CA1E:	                FCC 01, 01
+                            CB, 50, 
+                            'P'
+
+CA23:	                FCC 00            End of table
+
+
+                                          RUN command
+
+CA24:	BD D294         JSR  ZGCHAR       Get current character from the line buffer
+CA27:	81 0D           CMPA #$0D
+CA29:	27 02           BEQ  $CA2D        branch if <CR>
+CA2B:	8D 2B           BSR  GETCMD       Perform GET command
+CA2D:	B6 D32A         LDAA YLOADE       LOAD ERROR FLAG
+CA30:	26 0F           BNE  NOTLD
+CA32:	B6 D32B         LDAA YTAFLG       VALID TRANSFER ADDRESS FLAG
+CA35:	27 05           BEQ  NOTTA
+CA37:	FE D32C         LDX  YTADDR       X=Program Transfer Address
+CA3A:	6E 00           JMP  0,X          jump to it to start the program
+CA3C:	CE CBF2  NOTTA  LDX  #Msg_NOTA    'NO TA' No transfer Addr to start the loaded program
+CA3F:	20 03           BRA  $CA44
+CA41:	CE CBFD  NOTLD  LDX  #Msg_CMDNF   'CMD NOT FOUND', 
+CA44:	7E D29D         JMP  ZDIE         Print comnand string, error message, and exit
+CA47:	CE CBB2         LDX  #Msg_INVFN   'INVALID FILE NAME'
+CA4A:	20 F8           BRA  $CA44
+CA4C:	CE CBE6         LDX  #Msg_NOHEX   'NOT HEX NUM'
+CA4F:	20 F3           BRA  $CA44
+
+                                          GOTO command
+
+CA51:	BD D2A0         JSR  ZGETHN       GET A HEX VALUE
+CA54:	25 F6           BCS  $CA4C
+CA56:	6E 00           JMP  0,X
+
+                                          GET command 
+
+CA58:	CE C880  GETCMD LDX  #DOSFCB      DOS FCB ADDRESS
+CA5B:	BD D291         JSR  ZFLSPC       GET A FILE SPECIFICATION
+CA5E:	25 E7           BCS  $CA47
+CA60:	BD D2A0         JSR  ZGETHN       GET A HEX VALUE
+CA63:	25 E7           BCS  $CA4C
+CA65:	FF D32E         STX  YOFSET       OFFSET FOR FILE LOAD
+CA68:	7F D32B         CLR  YTAFLG       VALID TRANSFER ADDRESS FLAG
+CA6B:	7F D32A         CLR  YLOADE       LOAD ERROR FLAG
+CA6E:	CE C880         LDX  #DOSFCB      DOS FCB ADDRESS
+CA71:	86 04           LDAA #QSO4R       4=OPEN FOR READ
+CA73:	A7 00           STAA XFC,X        X+0=Store as DFM function code
+CA75:	BD D786         JSR  DFM          Do DFM Operation
+CA78:	27 0C           BEQ  $CA86
+CA7A:	7C D32A         INC  YLOADE       LOAD ERROR FLAG
+CA7D:	B6 D329         LDAA YCFLG        COMMAND LOAD FLAG
+CA80:	26 03           BNE  $CA85
+CA82:	BD D2A9         JSR  ZTYPDE       TYPE THE DISC ERROR MESSAGE
+CA85:	39              RTS 
+CA86:	6C 00           INC  0,X
+
+                                           ZLOAD   EXTERNAL CALL LOADER
+
+CA88:	FF CB0E         STX  $CB0E
+CA8B:	8D 7D    RDFNXT BSR  GETFBYT      Get next byte from file
+CA8D:	7F CB17         CLR  CHKSUM+1     Cleadr checksum
+CA90:	81 42           CMPA #$42         is a data record?
+CA92:	27 27           BEQ  DATREC       yes, branch to process it
+CA94:	81 47           CMPA #$47         is a transfer addr record?    
+CA96:	26 F3           BNE  RDFNXT       no, ignore current byte, go to read next
+CA98:	8D 70           BSR  GETFBYT      Get byte from file = Transfer Address, Hi part
+CA9A:	B7 CAE2         STAA $CAE2
+CA9D:	8D 6B           BSR  GETFBYT      Get byte from file= Transfer Address, Lo part
+CA9F:	F6 CAE2         LDAB $CAE2        Now B=TA Hi, A=TA Lo
+CAA2:	C1 FF           CMPB #$FF         if TA=FFFF, ignore it
+CAA4:	26 04           BNE  $CAAA
+CAA6:	81 FF           CMPA #$FF
+CAA8:	27 E1           BEQ  RDFNXT
+CAAA:	BB D32F         ADDA YOFSET+1     Add offset to transfer address retrieved from disc file record
+CAAD:	F9 D32E         ADCB YOFSET       OFFSET FOR FILE LOAD
+CAB0:	B7 D32D         STAA YTADDR+1     Store Program Transfer Address (Lo part)
+CAB3:	F7 D32C         STAB YTADDR       Store Program Transfer Address (Hi part)
+CAB6:	7C D32B         INC  YTAFLG       VALID TRANSFER ADDRESS FLAG
+CAB9:	20 D0           BRA  RDFNXT
+CABB:	8D 4D    DATREC BSR  GETFBYT      Get byte from file (=last byte used in rec)
+CABD:	4C              INCA              A=Number of data bytes in record (0=256)
+CABE:	B7 CC0C         STAA LEN          $CC0C LEN = Number of bytes inf record to be loaded from file
+CAC1:	8D 47           BSR  GETFBYT      Get byte from file (=load addr, hi part)
+CAC3:	BB D32E         ADDA YOFSET       OFFSET FOR FILE LOAD
+CAC6:	B7 CC0E         STAA LOADADR      Save initial load addr (Hi part)
+CAC9:	B7 CAE2         STAA DATLPTR+1    store at load ptr
+CACC:	8D 3C           BSR  GETFBYT      Get byte from file (=load addr, lo part)
+CACE:	BB D32F         ADDA YOFSET+1     OFFSET FOR FILE LOAD
+CAD1:	B7 CC0F         STAA LOADADR+1    Save initial load addr (Lo part)
+CAD4:	B7 CAE3         STAA DATLPTR+2
+CAD7:	24 06           BCC  RDBNXT
+CAD9:	7C CAE2         INC  DATLPTR+1
+CADC:	7C CC0E         INC  LOADADR
+CADF:	8D 29   RDBNXT  BSR  GETFBYT      Get byte from file (=next data byte from file)
+CAE1:	CE CAE2 DATLPTR LDX  #*           X=Addr in mem where byte for file is to be load 
+CAE4:	A7 00           STAA 0,X          store load byte fro file in datlptr address
+CAE6:	08              INX 
+CAE7:	FF CAE2         STX  $CAE2
+CAEA:	7A CC0C         DEC  LEN
+CAED:	26 F0           BNE  RDBNXT
+CAEF:	8D 19           BSR  GETFBYT      Get byte from file (=checksum)
+CAF1:	7C CB17         INC  CHKSUM+1
+CAF4:	27 95           BEQ  RDFNXT       if checksum=0, it is ok
+CAF6:	CE CBCF         LDX  #Msg_CSERR    'CS ERR: ' print cheksum error
+CAF9:	BD D2A6         JSR  ZOUTST       Print a String
+CAFC:	CE CC0E         LDX  LOADADR      X=Load address of data record
+CAFF:	BD D2AF         JSR  ZOUTHA       PRINT AN ADDR IN HEX
+CB02:	BD D4CA         JSR  $D4CA
+CB05:	7C D32A         INC  YLOADE       LOAD ERROR FLAG
+CB08:	20 1F           BRA  $CB29
+
+                                          Get Byte in A from file
+
+CB0A:	FF D6B4 GETFBYT STX  $D6B4        Save X
+CB0D:	CE CB0E         LDX  #$CB0E
+CB10:	BD D786         JSR  DFM          Do DFM Operation
+CB13:	26 0A           BNE  $CB1F
+CB15:	16              TAB 
+CB16:	CB 00   CHKSUM  ADDB #$00         Update the checksum
+CB18:	F7 CB17         STAB CHKSUM+1     as ADDB instr imn operand
+CB1B:	FE D6B4         LDX  $D6B4        Restore X
+CB1E:	39              RTS 
+
+CB1F:	32              PULA
+CB20:	32              PULA
+CB21:	E6 01           LDAB 1,X
+CB23:	C1 06           CMPB #$06
+CB25:	27 02           BEQ  $CB29
+CB27:	8D 0C           BSR  $CB35
+CB29:	FE CB0E         LDX  $CB0E
+CB2C:	86 06           LDAA #$06
+CB2E:	A7 00           STAA 0,X
+CB30:	BD D786         JSR  DFM          Do DFM Operation
+CB33:	27 E9           BEQ  $CB1E
+CB35:	7C D32A         INC  YLOADE       LOAD ERROR FLAG
+CB38:	7E D2A9         JMP  ZTYPDE         TYPE THE DISC ERROR MESSAGE
+CB3B:	BD D783         JSR  CDFM         CLOSE DFM
+CB3E:	4D              TSTA
+CB3F:	27 0E           BEQ  $CB4F
+CB41:	37              PSHB
+CB42:	36              PSHA
+CB43:	CE CBD8         LDX  #Msg_CLOSEERR  'CLOSE ERR:'
+CB46:	BD D2A6         JSR  ZOUTST       Print a String
+CB49:	30              TSX 
+CB4A:	BD D2AF         JSR  ZOUTHA       PRINT AN ADDR IN HEX
+CB4D:	33              PULB
+CB4E:	33              PULB
+CB4F:	39              RTS 
+ 
+                                             P command
+
+CB50:	FE D319         LDX  YPPORT          PRINTER I/O PORT 0=DISABLED
+CB53:	27 06           BEQ  $CB5B
+CB55:	BD D30F         JSR  ZHCINT          HARD COPY INITIALIZE
+CB58:	7C D31E         INC  YHCFLG          Set 1 HARD-COPY ENABLE FLAG
+CB5B:	7E D3FE         JMP  $D3FE
+
+                                           ZSTEXT  SET FILE EXTENSION
+
+CB5E:	BD D464         JSR  $D464
+CB61:	A6 01           LDAA 1,X
+CB63:	85 04           BITA #$04
+CB65:	26 1F           BNE  $CB86
+CB67:	C1 09           CMPB #$09
+CB69:	22 1B           BHI  $CB86
+CB6B:	CE D362         LDX  #EXTTBL         FILE EXTENSION TABLE (BIN TXT SRC ...)
+CB6E:	17              TBA 
+CB6F:	48              ASLA
+CB70:	1B              ABA 
+CB71:	16              TAB 
+CB72:	BD D2A3         JSR  ZADDX           ADD THE B REG TO THE X REG
+CB75:	A6 00           LDAA 0,X
+CB77:	36              PSHA
+CB78:	E6 01           LDAB 1,X
+CB7A:	A6 02           LDAA 2,X
+CB7C:	FE D473         LDX  $D473
+CB7F:	A7 0B           STAA 11,X
+CB81:	E7 0A           STAB 10,X
+CB83:	32              PULA
+CB84:	A7 09           STAA 9,X
+CB86:	7E D46E         JMP  $D46E
+
+CB89:	Msg_DOS68       FCC  0D, 0A, 10, 16, 'DOS68 V5.1C', 0D, 0A, 00
+CB9B:	Txt_EXEC        FCC  'EXEC,START.UP, 0D, 00
+CBAA:	Txt_PROMPT      FCC  0D, 0A, 'DOS: ', 0
+CBB2:	Msg_INVFN       FCC  'INVALID FILE NAME', 0
+CBC4:	Msg_DISCERR     FCC  'DISC ERR: ', 0
+CBCF:	Msg_CSERR       FCC  'CS ERR: ', 0
+CBD8:	Msg_CLOSEERR    FCC  0D, 0A, 'CLOSE ERR: ', 0
+CBE6:	Msg_NOHEX       FCC  'NOT HEX NUM', 0
+CBF2:	Msg_NOTA        FCC  'NO TA', 0D, 0A, 00    No Transfer Addr to start a loaded program
+CBFA:	Txt_QM          FCC  '? ', 00
+CBFD:	Msg_CMDNF       FCC  'CMD NOT FOUND', 0 
+
+CC0E:   LOADADR         RMB  2    Binary file Data record load address   
+
+CD00:   LINBUF                    SYSTEM LINE INPUT BUFFER
+
+CD80:   TCA                       ORG OF TRANSIENT CMD AREA
+
+                                      MONITOR ENTRY POINTS
+
+D280:	7E D3AB ZCOLDS  JMP  ZCOLD0   DOS68 COLD START
+D283:	7E D3C8 ZWARMS  JMP  ZWARM0   DOS68 WARM START
+D286:	7E E1D1 ZOUTEE  JMP  $E1D1    CHARACTER OUTPUT ROUTINE (SWTBUG Monitor OUTEEE)
+D289:	7E E1AC ZINCH   JMP  $E1AC    SYSTEM MONITOR INPUT (INEEE)
+D28C:	7E E0E3 ZMON    JMP  $E0E3    JMP TO ROM MONITOR
+D28F:	        UCTBL   FCB  00 00    USER COMMAND TABLE POINTER
+D291:	7E D5E7 ZFLSPC  JMP  $D5E7    GET A FILE SPECIFICATION
+D294:	7E D53A ZGCHAR  JMP  ZGCHAR0  Get current character from the line buffer
+D297:	7E D550 ZGNCHR  JMP  $D550    GET NEXT CHAR
+D29A:	7E D56A ZANCHK  JMP  $D56A    CHECK FOR ALPHANUMERIC
+D29D:	7E D43F ZDIE    JMP  ZDIE0    Print comnand string, error message, and exit
+D2A0:	7E D59B ZGETHN  JMP  $D59B    GET A HEX VALUE
+D2A3:	7E D6CD ZADDX   JMP  $D6CD    ADD THE B REG TO THE X REG
+D2A6:	7E D528 ZOUTST  JMP  ZOUTST0  OUTPUT STRING AT X (END ON $00)
+D2A9:	7E D6DF ZTYPDE  JMP  $D6DF    TYPE THE DISC ERROR MESSAGE
+D2AC:	7E D586 ZOUTHX  JMP  $D586    PRINT A HEX BYTE
+D2AF:	7E D583 ZOUTHA  JMP  $D583    PRINT AN ADDR IN HEX
+D2B2:	7E D283         JMP  ZWARMS   DOS68 WARM START
+D2B5:	7E D6FA ZLINEI  JMP  $D6FA    LINE INPUT ROUNTINE
+D2B8:	7E D283 ZLP     JMP  ZWARMS   FORTRAN LINE PRINTER OUTPUT VECTOR (Points to DOS68 WARM START)
+D2BB:	7E D542 ZPEEK   JMP  $D542    PEEK AHEAD AT NEXT CHAR IN LINE BUFFER
+D2BE:	7E D286 ZOUTCH  JMP  ZOUTEE   USER ALTERABLE OUTPUT (Points to CHARACTER OUTPUT ROUTINE (SWTBUG Monitor OUTEEE))
+D2C1:	7E D480 ZPUTCH  JMP  $D480    DIRECTED OUTPUT VECTOR
+D2C4:	7E D476 ZGETCH  JMP  $D476    DIRECTED INPUT VECTOR
+D2C7:	7E D380 ZSTAT   JMP  $D380    TERMINAL INPUT STATUS
+D2CA:	7E D52D ZRESTR  JMP  ZREST0   Restore I/O vectors
+D2CD:	BD D3EE DCMDLN  JSR  $D3EE    Call DO processor (COMMAND LINE PROCESSOR)
+D2D0:	7E D3F7 ZEXCMD  JMP  ZEXCMD0  EXECUTE EXTERNAL COMMAND
+D2D3:	7E CA88 ZLOAD   JMP  $CA88    EXTERNAL CALL LOADER
+D2D6:	7E D283         JMP  ZWARMS   DOS68 WARM START
+D2D9:	7E D68A ZNAMEJ  JMP  $D68A    DECODE NAME AND JUMP
+D2DC:	7E D4CA ZCRLF   JMP  $D4CA    PRINT CR/LF STRING
+D2DF:	7E CB5E ZSTEXT  JMP  $CB5E    SET FILE EXTENSION
+D2E2:	7E D283         JMP  ZWARMS   DOS68 WARM START
+D2E5:	7E D283         JMP  ZWARMS   DOS68 WARM START
+D2E8:	7E D283         JMP  ZWARMS   DOS68 WARM START
+
+                                           PARAMETER TABLE
+
+D300:	PARTBL          FCB  50 02           DISK MONITOR VERSION
+D302:	YMEMAX          FCB  00 00           USER MEMORY LIMIT
+D304:	YLINAD          FCB  00 00           LINE BUFFER ADDRESS
+D306:	YLINPT          FCB  00 00           LINE BUFFER RESET ADDR
+D308:	YBSCHR          FCB  08              BACKSPACE CHARACTER
+D309:	YDLINE          FCB  18              DELETE LINE CHARACTER
+D30A:	YLPAUS          FCB  1B              LINE PAUSE CHAR
+D30B:	YLCONT          FCB  1B              LINE PAUSE RESUME
+D30C:	YABORT          FCB  03              ABORT CHARACTER 
+D30D:	YABRTV          FCB  D2 83           ABORT VECTOR ADDRESS (DOS68 WARMS Warm Start)
+D30F:	ZHCINT          FCB  39 00           HARD COPY INITIALIZE
+
+D312:	ZHCOUT          FCB  00 39           HARD COPY CHAR OUTPUT
+
+D315:	YECHOC          FCB  00 00           MONITOR ECHO CONTROL ADR  (SET,ECHO=hhhh)
+D317:	YCPORT          FCB  00 00           CONTROL I/O PORT 0=DISABLED (SET,CRT=hhhh)
+D319:	YPPORT          FCB  00 00           PRINTER I/O PORT 0=DISABLED
+D31B:	YDEPTH          FCB  00              LINES/PAGE
+D31C:	YWIDTH          FCB  00              CHARACTERS/LINE
+D31D:	YNULLS          FCB  00              CR/LF NULLS
+D31E:	YHCFLG          FCB  00              HARD-COPY ENABLE (SET BY P COMMAND)
+D31F:	YEJECT          FCB  00              BLANK LINES END OF PAGE
+D320:	YPPPAS          FCB  00              POST PAGE-PAUSE,0=ON.#0=OFF
+D321:	YSYSDR          FCB  00              SYSTEM DRIVE NUMBER
+D322:	YWRKDR          FCB  00              WORK DRIVE NUMBER
+D323:	YCLINE          FCB  00              CURRENT LINE NUMBER
+D324:	YCCOL           FCB  00              CURRENT CHAR POSITION/COLUMN
+D325:	YUCSWT          FCB  00              UPPER CASE SHIFT LOCK 0=>NOT UC 
+D326:	YOSWT           FCB  00              OUTPUT CONTROL SWITCH
+D327:	YDCMDA          FCB  00              DO COMMAND PROCESSOR ACTIVE
+D328:	YERSWT          FCB  00              SYSTEM ERROR SWITCH
+D329:	YCFLG           FCB  00              COMMAND LOAD FLAG
+D32A:	YLOADE          FCB  00              LOAD ERROR FLAG
+D32B:	YTAFLG          FCB  00              VALID TRANSFER ADDRESS FLAG
+D32C:	YTADDR          FCB  00 00           TRANSFER ADDRESS 
+D32E:	YOFSET          FCB  00 00           OFFSET FOR FILE LOAD
+D330:	YDATE           FCC  'DAY MTH DD YYYY', 0     SYSTEM DATE STRING
+D340:	YTIME           FCC  'HH:MM:SS', 0            SYSTEM TIME STRING
+D362:	EXTTBL          FCC  'BIN',                   FILE EXTENSION TABLE
+                             'TXT', 'SRC', 'BAS', 
+                             'CTL', 'BAK', 'DAT', 
+                             'FOR', 'TMP', 0
+
+                                            BASIC DOS LOGIC
+
+                                           ZSTAT   TERMINAL INPUT STATUS
+
+D380:	0C              CLC 
+D381:	FE D317         LDX  YCPORT          CONTROL I/O PORT 0=DISABLED
+D384:	27 03           BEQ  NOCPORT
+D386:	A6 00           LDAA 0,X
+D388:	47              ASRA
+D389:	39      NOCPORT RTS 
+D38A:	FE D315         LDX  YECHOC          MONITOR ECHO CONTROL ADR
+D38D:	37              PSHB
+D38E:	E6 00           LDAB 0,X
+D390:	86 01           LDAA #$01
+D392:	A7 00           STAA 0,X
+D394:	BD D289         JSR  ZINCH           SYSTEM MONITOR INPUT (INEEE)
+D397:	E7 00           STAB 0,X
+D399:	33              PULB
+D39A:	84 7F           ANDA #$7F
+D39C:	7D D30C         TST  YABORT          ABORT CHARACTER 
+D39F:	27 E8           BEQ  $D389
+D3A1:	B1 D30C         CMPA YABORT          ABORT CHARACTER 
+D3A4:	26 E3           BNE  $D389
+D3A6:	FE D30D         LDX  YABRTV          ABORT VECTOR ADDRESS (DOS68 WARMS Warm Start)
+D3A9:	6E 00           JMP  0,X
+
+                                             DOS-68 Cold Start
+
+D3AB:	8E C9FF  ZCOLD0 LDS  #$C9FF          Init Stack
+D3AE:	BD D780         JSR  ODFM            OPEN DFM
+D3B1:	CE D315         LDX  #YECHOC         MONITOR ECHO CONTROL ADR
+D3B4:	C6 1A           LDAB #$1A
+D3B6:	BD D5E0         JSR  CLMEM           Clear Mem B bytes starting at X -> clear parameters
+D3B9:	CE CB89         LDX  #Msg_DOS68      'DOS-68 V5.1C'
+D3BC:	BD D2A6         JSR  ZOUTST          Print a String
+D3BF:	CE CB9B         LDX  #Txt_EXEC       'EXEC,START.UP'
+D3C2:	FF D304         STX  YLINAD          LINE BUFFER ADDRESS
+D3C5:	BD D2D0         JSR  ZEXCMD          EXECUTE EXTERNAL COMMAND
+
+                                             DOS-68 Warm Start
+
+D3C8:	8E C9FF  ZWARM0 LDS  #$C9FF          Init stack
+D3CB:	CE D283         LDX  #ZWARMS         DOS68 WARM START
+D3CE:	FF A048         STX  $A048
+D3D1:	FF A006         STX  $A006
+D3D4:	FF D30D         STX  YABRTV          ABORT VECTOR ADDRESS (DOS68 WARMS Warm Start)
+D3D7:	7F D329         CLR  YCFLG           COMMAND LOAD FLAG
+D3DA:	BD D2CA         JSR  ZRESTR          Restore I/O vectors
+D3DD:	BD CB3B         JSR  $CB3B
+D3E0:	CE CD00         LDX  #LINBUF         SYSTEM LINE INPUT BUFFER
+D3E3:	FF D304         STX  YLINAD          LINE BUFFER ADDRESS
+D3E6:	7D D327         TST  YDCMDA          DO COMMAND PROCESSOR ACTIVE
+D3E9:	2A 03           BPL  $D3EE
+D3EB:	7E D2CD         JMP  DCMDLN          Call DO processor
+
+                                           DCMDLN  Call DO processor (COMMAND LINE PROCESSOR)
+
+D3EE:	CE CBAA         LDX  #Txt_PROMPT     'DOS: '
+D3F1:	BD D2A6         JSR  ZOUTST          Print a String
+D3F4:	BD D2B5         JSR  ZLINEI          LINE INPUT ROUNTINE
+
+                                           ZEXCMD  EXECUTE EXTERNAL COMMAND
+
+D3F7:	FE D304 ZEXCMD0 LDX  YLINAD          LINE BUFFER ADDRESS
+D3FA:	09              DEX 
+D3FB:	FF D306         STX  YLINPT          LINE BUFFER RESET ADDR
+D3FE:	CE C880         LDX  #DOSFCB         DOS FCB ADDRESS
+D401:	BD D291         JSR  ZFLSPC          GET A FILE SPECIFICATION
+D404:	25 36           BCS  INVFNER         If spec not valid, go to prt msg+die
+D406:	E6 01           LDAB XES,X           B=FCB ERROR STATUS
+D408:	C5 04           BITB #$04
+D40A:	26 30           BNE  $D43C           If error go to prt msg+die
+D40C:	86 24           LDAA #'$'
+D40E:	A7 09           STAA XFE,X           Set $ as first char of extension in FCB
+D410:	C5 02           BITB #$02
+D412:	27 4D           BEQ  $D461           
+D414:	57              ASRB
+D415:	25 17           BCS  $D42E
+D417:	B6 D321         LDAA YSYSDR          SYSTEM DRIVE NUMBER
+D41A:	A7 02           STAA XUN,X           Store in FCB unit number 
+D41C:	CE CA00         LDX  #EXTDOS         EXTENDED DOS LOGIC
+D41F:	BD D2D9         JSR  ZNAMEJ          DECODE NAME AND JUMP
+D422:	24 3D           BCC  $D461
+D424:	FE D28F         LDX  UCTBL           USER COMMAND TABLE POINTER
+D427:	27 05           BEQ  $D42E
+D429:	BD D2D9         JSR  ZNAMEJ          DECODE NAME AND JUMP
+D42C:	24 33           BCC  $D461
+D42E:	73 D329         COM  YCFLG           COMMAND LOAD FLAG
+D431:	CE 0000         LDX  #$0000
+D434:	BD CA65         JSR  $CA65
+D437:	BD CA2D         JSR  $CA2D
+D43A:	20 25           BRA  $D461
+
+D43C:	CE CBB2 INVFNER LDX  #Msg_INVFN   'INVALID FILE NAME'
+
+                                          ZDIE - Print comnand string, error message, and exit
+
+D43F:	86 81     ZDIE0 LDAA #$81
+D441:	B7 D328         STAA YERSWT       SYSTEM ERROR SWITCH
+D444:	FF D45C         STX  $D45C
+D447:	BD D2CA         JSR  ZRESTR       Restore I/O vectors
+D44A:	FE D306         LDX  YLINPT          LINE BUFFER RESET ADDR
+D44D:	6F 00           CLR  0,X
+D44F:	FE D304         LDX  YLINAD          LINE BUFFER ADDRESS
+D452:	BD D2A6         JSR  ZOUTST  Print a String
+D455:	CE CBFA         LDX  #Txt_QM     '? '
+D458:	BD D2A6         JSR  ZOUTST  Print a String
+D45B:	CE 0000         LDX  #$0000
+D45E:	BD D2A6         JSR  ZOUTST  Print a String
+D461:	7E D283         JMP  ZWARMS  DOS68 WARM START
+
+D464:	F7 D471         STAB $D471
+D467:	B7 D46F         STAA $D46F
+D46A:	FF D473         STX  $D473
+D46D:	39              RTS 
+D46E:	86 00           LDAA #$00
+D470:	C6 00           LDAB #$00
+D472:	CE 0000         LDX  #$0000
+D475:	39              RTS 
+
+                                           ZGETCH  DIRECTED INPUT VECTOR
+
+D476:	8D EC           BSR  $D464
+D478:	BD D38A         JSR  $D38A
+D47B:	7F D323         CLR  YCLINE          CURRENT LINE NUMBER
+D47E:	20 F0           BRA  $D470
+
+                                           ZPUTCH  DIRECTED OUTPUT VECTOR
+
+D480:	8D E2           BSR  $D464
+D482:	B6 D31C         LDAA $D31C
+D485:	27 07           BEQ  $D48E
+D487:	B1 D324         CMPA YCCOL           CURRENT CHAR POSITION/COLUMN
+D48A:	26 02           BNE  $D48E
+D48C:	8D 3C           BSR  $D4CA
+D48E:	BD D2C7         JSR  ZSTAT           TERMINAL INPUT STATUS
+D491:	24 0B           BCC  $D49E
+D493:	BD D38A         JSR  $D38A
+D496:	B1 D30A         CMPA YLPAUS          LINE PAUSE CHAR
+D499:	26 03           BNE  $D49E
+D49B:	7C CC0B         INC  $CC0B
+D49E:	8D CE           BSR  $D46E
+D4A0:	81 0D           CMPA #$0D
+D4A2:	27 3D           BEQ  $D4E1
+D4A4:	81 0A           CMPA #$0A
+D4A6:	27 24           BEQ  $D4CC
+D4A8:	81 1F           CMPA #$1F
+D4AA:	2F 03           BLE  $D4AF
+D4AC:	7C D324         INC  YCCOL           CURRENT CHAR POSITION/COLUMN
+D4AF:	7D D325         TST  YUCSWT          UPPER CASE SHIFT LOCK 0=>NOT UC 
+D4B2:	27 03           BEQ  $D4B7
+D4B4:	BD D676         JSR  $D676
+D4B7:	7D D326         TST  YOSWT           OUTPUT CONTROL SWITCH
+D4BA:	26 0B           BNE  $D4C7
+D4BC:	7D D31E         TST  YHCFLG          HARD-COPY ENABLE (SET BY P COMMAND)
+D4BF:	27 03           BEQ  $D4C4
+D4C1:	7E D312         JMP  ZHCOUT          HARD COPY CHAR OUTPUT
+D4C4:	7E D2BE         JMP  ZOUTCH          USER ALTERABLE OUTPUT (Points to CHARACTER OUTPUT ROUTINE (SWTBUG Monitor OUTEEE))
+D4C7:	7E D286         JMP  ZOUTEE          CHARACTER OUTPUT ROUTINE (SWTBUG Monitor OUTEEE)
+
+                                           ZCRLF   PRINT CR/LF STRING
+
+D4CA:	8D 15           BSR  $D4E1
+D4CC:	7C D323         INC  YCLINE          CURRENT LINE NUMBER
+D4CF:	86 0A           LDAA #$0A
+D4D1:	8D DC           BSR  $D4AF
+D4D3:	B6 D31D         LDAA $D31D
+D4D6:	27 08           BEQ  $D4E0
+D4D8:	36              PSHA
+D4D9:	4F              CLRA
+D4DA:	8D D3           BSR  $D4AF
+D4DC:	32              PULA
+D4DD:	4A              DECA
+D4DE:	26 F8           BNE  $D4D8
+D4E0:	39              RTS 
+D4E1:	FF D4F5         STX  $D4F5
+D4E4:	7D CC0B         TST  $CC0B
+D4E7:	27 0B           BEQ  $D4F4
+D4E9:	7F CC0B         CLR  $CC0B
+D4EC:	BD D38A         JSR  $D38A
+D4EF:	B1 D30B         CMPA YLCONT          LINE PAUSE RESUME
+D4F2:	26 F8           BNE  $D4EC
+D4F4:	CE 0000         LDX  #$0000
+D4F7:	B6 D31B         LDAA $D31B
+D4FA:	27 20           BEQ  $D51C
+D4FC:	B1 D323         CMPA YCLINE          CURRENT LINE NUMBER
+D4FF:	2E 1B           BGT  $D51C
+D501:	B6 D31F         LDAA $D31F
+D504:	27 09           BEQ  $D50F
+D506:	36              PSHA
+D507:	8D 13           BSR  $D51C
+D509:	8D C1           BSR  $D4CC
+D50B:	32              PULA
+D50C:	4A              DECA
+D50D:	26 F7           BNE  $D506
+D50F:	7F D323         CLR  YCLINE          CURRENT LINE NUMBER
+D512:	7D D31E         TST  YHCFLG          HARD-COPY ENABLE (SET BY P COMMAND)
+D515:	26 05           BNE  $D51C
+D517:	7D D320         TST  $D320
+D51A:	26 D0           BNE  $D4EC
+D51C:	86 0D           LDAA #$0D
+D51E:	8D 8F           BSR  $D4AF
+D520:	7F D324         CLR  YCCOL           CURRENT CHAR POSITION/COLUMN
+D523:	39              RTS 
+
+                                           ZOUTST  OUTPUT STRING AT X (END ON $00)
+
+D524:	BD D2C1 ZOUTST1 JSR  ZPUTCH          DIRECTED OUTPUT VECTOR
+D527:	08              INX 
+D528:	A6 00   ZOUTST0 LDAA 0,X
+D52A:	26 F8           BNE  ZOUTST1
+D52C:	39              RTS 
+
+                                           ZRESTR  restore I/O Vectors
+
+D52D:	CE D286 ZREST0  LDX  #$ZOUTEE        Set ZOUTCH User alterable output vector
+D530:	FF D2BF         STX  $D2BF           to use terminal ZOUTEE Character output routine 
+D533:	7F D326         CLR  YOSWT           OUTPUT CONTROL SWITCH
+D536:	7F D31E         CLR  YHCFLG          clear HARD-COPY ENABLE (SET BY P COMMAND)
+D539:	39              RTS 
+
+                                           ZGCHAR  Get current character from the line buffer
+
+D53A:	FF D45C ZGCHAR0 STX  $D45C
+D53D:	FE D306         LDX  YLINPT          LINE BUFFER RESET ADDR
+D540:	20 20           BRA  $D562
+
+                                           ZPEEK   PEEK AHEAD AT NEXT CHAR IN LINE BUFFER
+
+D542:	FF D473         STX  $D473
+D545:	FE D306         LDX  YLINPT          LINE BUFFER RESET ADDR
+D548:	8D 06           BSR  $D550
+D54A:	FF D306         STX  YLINPT          LINE BUFFER RESET ADDR
+D54D:	7E D472         JMP  $D472
+
+                                           ZGNCHR  GET NEXT CHAR
+
+D550:	FF D45C         STX  $D45C
+D553:	FE D306         LDX  YLINPT          LINE BUFFER RESET ADDR
+D556:	A6 00           LDAA 0,X
+D558:	08              INX 
+D559:	81 0D           CMPA #$0D
+D55B:	26 05           BNE  $D562
+D55D:	BC D304         CPX  YLINAD          LINE BUFFER ADDRESS
+D560:	26 05           BNE  $D567
+D562:	A6 00           LDAA 0,X
+D564:	FF D306         STX  YLINPT          LINE BUFFER RESET ADDR
+D567:	FE D45C         LDX  $D45C
+
+                                           ZANCHK  CHECK FOR ALPHANUMERIC
+
+D56A:	81 30           CMPA #$30
+D56C:	2D 13           BLT  $D581
+D56E:	81 39           CMPA #$39
+D570:	2F 0C           BLE  $D57E
+D572:	36              PSHA
+D573:	84 DF           ANDA #$DF
+D575:	81 41           CMPA #$41
+D577:	2D 07           BLT  $D580
+D579:	81 5A           CMPA #$5A
+D57B:	22 03           BHI  $D580
+D57D:	32              PULA
+D57E:	0C              CLC 
+D57F:	39              RTS 
+D580:	32              PULA
+D581:	0D              SEC 
+D582:	39              RTS 
+
+                                           ZOUTHA  PRINT AN ADDR IN HEX
+
+D583:	8D 01           BSR  $D586
+D585:	08              INX 
+
+                                           ZOUTHX  PRINT A HEX BYTE
+
+D586:	A6 00           LDAA 0,X
+D588:	44              LSRA
+D589:	44              LSRA
+D58A:	44              LSRA
+D58B:	44              LSRA
+D58C:	8D 02           BSR  $D590
+D58E:	A6 00           LDAA 0,X
+
+D590:	84 0F           ANDA #$0F
+D592:	8B 90           ADDA #$90
+D594:	19              DAA            
+D595:	89 40           ADCA #$40
+D597:	19              DAA 
+D598:	7E D2C1         JMP  ZPUTCH          DIRECTED OUTPUT VECTOR
+
+                                           ZGETHN  GET A HEX VALUE
+
+D59B:	5F              CLRB
+D59C:	CE 0000         LDX  #$0000
+D59F:	8D AF           BSR  $D550
+D5A1:	81 20           CMPA #$20
+D5A3:	27 FA           BEQ  $D59F
+D5A5:	8D 93           BSR  $D53A
+D5A7:	20 02           BRA  $D5AB
+D5A9:	8D A5           BSR  $D550
+D5AB:	25 D1           BCS  $D57E
+D5AD:	8D 1D           BSR  $D5CC
+D5AF:	25 CE           BCS  $D57F
+D5B1:	5C              INCB
+D5B2:	FF D45C         STX  $D45C
+D5B5:	CE D45C         LDX  #$D45C
+D5B8:	37              PSHB
+D5B9:	C6 04           LDAB #$04
+D5BB:	68 01           ASL  1,X
+D5BD:	69 00           ROL  0,X
+D5BF:	5A              DECB
+D5C0:	26 F9           BNE  $D5BB
+D5C2:	FE D45C         LDX  $D45C
+D5C5:	16              TAB 
+D5C6:	BD D2A3         JSR  ZADDX           ADD THE B REG TO THE X REG
+D5C9:	33              PULB
+D5CA:	20 DD           BRA  $D5A9
+D5CC:	80 30           SUBA #$30
+D5CE:	25 0F           BCS  $D5DF
+D5D0:	8B E9           ADDA #$E9
+D5D2:	25 0B           BCS  $D5DF
+D5D4:	8B 06           ADDA #$06
+D5D6:	2A 04           BPL  $D5DC
+D5D8:	8B 07           ADDA #$07
+D5DA:	25 03           BCS  $D5DF
+D5DC:	8B 0A           ADDA #$0A
+D5DE:	0C              CLC 
+D5DF:	39              RTS 
+
+D5E0:	6F 00   CLMEM   CLR  0,X   Clear Mem B bytes starting at X
+D5E2:	08              INX 
+D5E3:	5A              DECB
+D5E4:	26 FA           BNE  CLMEM
+D5E6:	39              RTS 
+
+                                             ZFLSPC  GET A FILE SPECIFICATION
+
+D5E7:	FF D614         STX  $D614
+D5EA:	C6 26           LDAB #$26
+D5EC:	8D F2           BSR  CLMEM           Clear Mem B bytes starting at X
+D5EE:	BD D662         JSR  $D662
+D5F1:	FE D306         LDX  YLINPT          LINE BUFFER RESET ADDR
+D5F4:	BD D297         JSR  ZGNCHR          GET NEXT CHAR
+D5F7:	81 20           CMPA #$20
+D5F9:	27 F3           BEQ  $D5EE
+D5FB:	16              TAB 
+D5FC:	C0 30           SUBB #$30
+D5FE:	2D 0B           BLT  $D60B
+D600:	81 33           CMPA #$33
+D602:	22 07           BHI  $D60B
+D604:	BD D297         JSR  ZGNCHR          GET NEXT CHAR
+D607:	81 3A           CMPA #$3A
+D609:	27 08           BEQ  $D613
+D60B:	FF D306         STX  YLINPT          LINE BUFFER RESET ADDR
+D60E:	8D 52           BSR  $D662
+D610:	F6 D322         LDAB YWRKDR          WORK DRIVE NUMBER
+D613:	CE D614         LDX  #$D614
+D616:	E7 02           STAB 2,X
+D618:	78 D66E         ASL  $D66E
+D61B:	C6 07           LDAB #$07
+D61D:	F7 CC0C         STAB $CC0C
+D620:	7F CC0D         CLR  $CC0D
+D623:	BD D297         JSR  ZGNCHR          GET NEXT CHAR
+D626:	81 24           CMPA #$24
+D628:	27 07           BEQ  $D631
+D62A:	BD D29A         JSR  ZANCHK          CHECK FOR ALPHANUMERIC
+D62D:	25 0D           BCS  $D63C
+D62F:	8D 45           BSR  $D676
+D631:	7C CC0D         INC  $CC0D
+D634:	A7 03           STAA 3,X
+D636:	08              INX 
+D637:	5A              DECB
+D638:	26 E9           BNE  $D623
+D63A:	0D              SEC 
+D63B:	39              RTS 
+D63C:	7D CC0D         TST  $CC0D
+D63F:	27 02           BEQ  $D643
+D641:	8D 24           BSR  $D667
+D643:	81 2E           CMPA #$2E
+D645:	26 16           BNE  $D65D
+D647:	B6 D66E         LDAA $D66E
+D64A:	81 02           CMPA #$02
+D64C:	26 EC           BNE  $D63A
+D64E:	78 D66E         ASL  $D66E
+D651:	FE D614         LDX  $D614
+D654:	C6 06           LDAB #$06
+D656:	BD D2A3         JSR  ZADDX           ADD THE B REG TO THE X REG
+D659:	C6 04           LDAB #$04
+D65B:	20 C6           BRA  $D623
+D65D:	FE D614         LDX  $D614
+D660:	0C              CLC 
+D661:	39              RTS 
+D662:	C6 01           LDAB #$01
+D664:	F7 D66E         STAB $D66E
+D667:	BD D46A         JSR  $D46A
+D66A:	FE D614         LDX  $D614
+D66D:	C6 00           LDAB #$00
+D66F:	E8 01           EORB 1,X
+D671:	E7 01           STAB 1,X
+D673:	7E D472         JMP  $D472
+D676:	81 61           CMPA #$61
+D678:	25 C0           BCS  $D63A
+D67A:	81 7A           CMPA #$7A
+D67C:	22 BC           BHI  $D63A
+D67E:	80 20           SUBA #$20
+D680:	39              RTS 
+D681:	CE D682         LDX  #$D682
+D684:	E6 00           LDAB 0,X
+D686:	CB 04           ADDB #$04
+D688:	8D 43           BSR  $D6CD
+
+                                           ZNAMEJ  DECODE NAME AND JUMP
+
+D68A:	FF D45C         STX  $D45C
+D68D:	FF D682         STX  $D682
+D690:	A6 00           LDAA 0,X
+D692:	27 A6           BEQ  $D63A
+D694:	B7 D66E         STAA $D66E
+D697:	5F              CLRB
+D698:	CE C880         LDX  #DOSFCB          DOS FCB ADDRESS
+D69B:	A6 03           LDAA XFN,X            A=First char of filename
+D69D:	27 25           BEQ  $D6C4
+D69F:	08              INX 
+D6A0:	FF D6B4         STX  $D6B4
+D6A3:	FE D45C         LDX  $D45C
+D6A6:	7A D66E         DEC  $D66E
+D6A9:	2B D6           BMI  $D681
+D6AB:	A1 04           CMPA 4,X
+D6AD:	26 D2           BNE  $D681
+D6AF:	08              INX 
+D6B0:	FF D45C         STX  $D45C
+D6B3:	CE D6B4         LDX  #$D6B4
+D6B6:	5C              INCB
+D6B7:	C1 06           CMPB #$06
+D6B9:	26 E0           BNE  $D69B
+D6BB:	FE D682         LDX  $D682
+D6BE:	EE 02           LDX  2,X
+D6C0:	AD 00           JSR X 0,X
+D6C2:	0C              CLC 
+D6C3:	39              RTS 
+D6C4:	FE D682         LDX  $D682
+D6C7:	E1 01           CMPB 1,X
+D6C9:	2C F0           BGE  $D6BB
+D6CB:	20 B4           BRA  $D681
+
+                                           ZADDX   ADD THE B REG TO THE X REG
+
+D6CD:	FF D6DC         STX  $D6DC
+D6D0:	FB D6DD         ADDB $D6DD
+D6D3:	F7 D6DD         STAB $D6DD
+D6D6:	24 03           BCC  $D6DB
+D6D8:	7C D6DC         INC  $D6DC
+D6DB:	CE D6DC         LDX  #$D6DC
+D6DE:	39              RTS 
+
+                                           ZTYPDE  TYPE THE DISC ERROR MESSAGE
+
+D6DF:	E6 01           LDAB 1,X
+D6E1:	F7 D328         STAB YERSWT          SYSTEM ERROR SWITCH
+D6E4:	BD D2CA         JSR  ZRESTR       Restore I/O vectors
+D6E7:	CE CBC4         LDX  #Msg_DISCERR     'DISC ERR: '
+D6EA:	BD D2A6         JSR  ZOUTST  Print a String
+D6ED:	37              PSHB
+D6EE:	30              TSX 
+D6EF:	BD D2AC         JSR  ZOUTHX          PRINT A HEX BYTE
+D6F2:	33              PULB
+D6F3:	7E D4CA         JMP  $D4CA
+D6F6:	8D 54           BSR  $D74C
+D6F8:	26 FC           BNE  $D6F6
+
+                                           ZLINEI  LINE INPUT ROUNTINE
+
+D6FA:	FE D304         LDX  YLINAD          LINE BUFFER ADDRESS
+D6FD:	09              DEX 
+D6FE:	FF D306         STX  YLINPT          LINE BUFFER RESET ADDR
+D701:	BD D2C4         JSR  ZGETCH          DIRECTED INPUT VECTOR
+D704:	81 0D           CMPA #$0D            IS <CR>?
+D706:	27 1A           BEQ  ZINCR           YES, BRANCH
+D708:	B1 D308         CMPA YBSCHR          BACKSPACE CHARACTER
+D70B:	26 04           BNE  $D711
+D70D:	8D 3D           BSR  $D74C
+D70F:	20 F0           BRA  $D701
+D711:	B1 D309         CMPA YDLINE          DELETE LINE CHARACTER
+D714:	27 E0           BEQ  $D6F6
+D716:	81 04           CMPA #$04
+D718:	27 21           BEQ  $D73B
+D71A:	81 01           CMPA #$01
+D71C:	27 24           BEQ  $D742
+D71E:	81 20           CMPA #$20
+D720:	2D 0C           BLT  $D72E
+D722:	A7 01     ZINCR STAA 1,X
+D724:	81 0D           CMPA #$0D
+D726:	27 0B           BEQ  $D733
+D728:	8C CD7E         CPX  #$CD7E
+D72B:	27 D4           BEQ  $D701
+D72D:	08              INX 
+D72E:	BD D2C1         JSR  ZPUTCH          ECHO TYPED CHAR 
+D731:	20 CE           BRA  $D701
+D733:	6F 02           CLR  2,X
+D735:	7A D323         DEC  YCLINE          CURRENT LINE NUMBER
+D738:	7E D4CA         JMP  $D4CA
+D73B:	08              INX 
+D73C:	BD D528         JSR  ZOUTST0   Print a String 
+D73F:	20 F4           BRA  $D735
+D741:	08              INX 
+D742:	A6 01           LDAA 1,X
+D744:	81 0D           CMPA #$0D
+D746:	27 B9           BEQ  $D701
+D748:	8D 19           BSR  $D763
+D74A:	20 F5           BRA  $D741
+D74C:	08              INX 
+D74D:	BC D304         CPX  YLINAD          LINE BUFFER ADDRESS
+D750:	26 03           BNE  $D755
+D752:	09              DEX 
+D753:	4F              CLRA
+D754:	39              RTS 
+D755:	09              DEX 
+D756:	09              DEX 
+D757:	8D 07           BSR  $D760
+D759:	86 20           LDAA #$20
+D75B:	8D 06           BSR  $D763
+D75D:	7A D324         DEC  YCCOL           CURRENT CHAR POSITION/COLUMN
+D760:	B6 D308         LDAA YBSCHR          BACKSPACE CHARACTER
+D763:	7E D4AF         JMP  $D4AF
+
+                                           Disk File Management - DFM ENTRY POINTS                                     
+
+D780:	7E DDCD  ODFM   JMP  $DDCD         OPEN DFM
+D783:	7E DDE7  CDFM   JMP  $DDE7         CLOSE DFM
+D786:	7E D79D  DFM    JMP  DFM0          DFM I/O
+
+D789:	F8 0810         EORB $0810
+D78C:	79 5E00         ROL  $5E00
+D78F:	00              ???
+D790:	         MAXDSK FCC  04            =4 = Max number of drivers
+D791:	         MAXTRK FCC  23            =35 decimal = Total Number of Track   
+D792:            MAXSEC FCC  24            =39 decimal = Max number of sectors
+D793:	00              ???
+D794:	00              ???
+D795:	00              ???
+D796:	00              ???
+D797:	00              ???
+D798:	00              ???
+D799:	00              ???
+D79A:	00              ???
+D79B:	00              ???
+D79C:	00              ???
+
+                                             DFM - Do DFM operation
+                                             On entry: X=FCB, on exit: BNE if error
+
+D79D:	37      DFM0    PSHB                 Preserve A and B regs
+D79E:	36              PSHA
+D79F:	FF C4CC         STX CURFCB           Save X as CURFCB
+D7A2:	BF C4CE         STS SVSTACKP         Save stack pointer 
+D7A5:	6F 01           CLR  1,X             FCB Error status=0 (no error)
+D7A7:	E6 00           LDAB 0,X             B=DFM Function code
+D7A9:	C1 25           CMPB #$25
+D7AB:	24 2A           BCC  $D7D7           goto error 01 (INVALID DFM FUNCTION CODE)      
+D7AD:	C1 0B           CMPB #$0B            DFM function 12 (retrieve disk type)
+D7AF:	27 03           BEQ  $D7B4
+D7B1:	7F C4FA         CLR  $C4FA
+D7B4:	17              TBA                  A=B*3
+D7B5:	58              ASLB
+D7B6:	1B              ABA 
+D7B7:	C6 D9           LDAB #$D9            Set C4DE/F = D900 + (DFM Func * 3) = DFM Func address in jump table
+D7B9:	F7 C4DE         STAB $C4DE
+D7BC:	B7 C4DF         STAA $C4DF
+D7BF:	FE C4DE         LDX  $C4DE           X=DFM Func address in jump table
+D7C2:	EE 00           LDX  0,X             X=first entry of jump table
+D7C4:	AD 00           JSR X 0,X            Call DFM funcion
+D7C6:	FE C4CC         LDX  CURFCB          Current FCB 
+D7C9:	32      DFMEXIT PULA                 Terminate DFM call: restore
+D7CA:	33              PULB                 registers
+D7CB:	6D 01           TST  1,X             Set NotZero flag if error 
+D7CD:	27 01           BEQ  DFMEX1
+D7CF:	0D              SEC                  Set carry flag if error           
+D7D0:	39      DFMEX1  RTS                  Exit DFM to caller
+D7D1:	86 21   DFMERN  LDAA #$21
+D7D3:	8C 8620         CPX  #$8620
+D7D6:	8C 8601         CPX  #$8601
+D7D9:	8C 860C         CPX  #$860C
+D7DC:	BE C4CE         LDS  SVSTACKP        Restore Stack pointer on DFM entry
+D7DF:	FE C4CC         LDX  CURFCB          Get Current FCB in X
+D7E2:	A7 01           STAA 1,X             Store FCB Error status=A
+D7E4:	20 E3           BRA  DFMEXIT         terminate DFM call
+
+                                           QAPP     EQU 9      APPEND - Append two files
+                                           QDEL     EQU 7      DELETE
+                                           QREN     EQU 8      RENAME
+                                           QCLSRF   EQU 25     CLOSE A RF
+                                           QCRF     EQU 20     CREATE A RANDOM ACCESS FILE (RF)
+                                           QERF     EQU 28     EXPAND RANDOM FILE SIZE
+                                           QORF     EQU 21     OPEN A RF
+
+D7E6:	FE C4CC         LDX  CURFCB          Current FCB 
+D7E9:	E6 00           LDAB 0,X
+D7EB:	F7 C4EE         STAB $C4EE
+D7EE:	F1 C500         CMPB $C500
+D7F1:	27 60           BEQ  $D853
+D7F3:	86 FF           LDAA #$FF
+D7F5:	B7 C500         STAA $C500
+D7F8:	B6 A07B         LDAA $A07B
+D7FB:	B7 C4F0         STAA $C4F0
+D7FE:	F6 C4FF         LDAB $C4FF
+D801:	BD DCA2         JSR  $DCA2
+D804:	FE C4DE         LDX  $C4DE
+D807:	E6 02           LDAB 2,X
+D809:	CE D8C3         LDX  #$D8C3
+D80C:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+D80F:	BD DA0C         JSR  $DA0C
+D812:	24 C0           BCC  $D7D4
+D814:	FE C4D4         LDX  $C4D4
+D817:	EE 0B           LDX  11,X
+D819:	27 B6           BEQ  $D7D1
+D81B:	FF C7E1         STX  $C7E1
+D81E:	CE C861         LDX  #$C861
+D821:	FF C4D8         STX  $C4D8
+D824:	7F C4F1         CLR  $C4F1
+D827:	8D 78           BSR  $D8A1
+D829:	7F C4F2         CLR  $C4F2
+D82C:	81 4C           CMPA #$4C
+D82E:	27 28           BEQ  $D858
+D830:	81 42           CMPA #$42
+D832:	27 3B           BEQ  $D86F
+D834:	81 47           CMPA #$47
+D836:	26 EF           BNE  $D827
+D838:	8D 67           BSR  $D8A1
+D83A:	B7 C4F3         STAA $C4F3
+D83D:	8D 62           BSR  $D8A1
+D83F:	B7 C4F4         STAA $C4F4
+D842:	B6 C4F1         LDAA $C4F1
+D845:	27 E0           BEQ  $D827
+D847:	F6 C4F0         LDAB $C4F0
+D84A:	BD DCA2         JSR  $DCA2
+D84D:	B6 C4EE         LDAA $C4EE
+D850:	B7 C500         STAA $C500
+D853:	FE C4F3         LDX  $C4F3
+D856:	6E 00           JMP  0,X
+D858:	8D 47           BSR  $D8A1
+D85A:	B7 C4EF         STAA $C4EF
+D85D:	8D 42           BSR  $D8A1
+D85F:	5C              INCB
+D860:	26 37           BNE  $D899
+D862:	B6 C4EF         LDAA $C4EF
+D865:	B1 C4EE         CMPA $C4EE
+D868:	26 BD           BNE  $D827
+D86A:	B7 C4F1         STAA $C4F1
+D86D:	20 B8           BRA  $D827
+D86F:	8D 30           BSR  $D8A1
+D871:	4C              INCA
+D872:	B7 C4F5         STAA $C4F5
+D875:	8D 2A           BSR  $D8A1
+D877:	B7 C4F6         STAA $C4F6
+D87A:	8D 25           BSR  $D8A1
+D87C:	B7 C4F7         STAA $C4F7
+D87F:	8D 20           BSR  $D8A1
+D881:	7D C4F1         TST  $C4F1
+D884:	27 09           BEQ  $D88F
+D886:	FE C4F6         LDX  $C4F6
+D889:	A7 00           STAA 0,X
+D88B:	08              INX 
+D88C:	FF C4F6         STX  $C4F6
+D88F:	7A C4F5         DEC  $C4F5
+D892:	26 EB           BNE  $D87F
+D894:	8D 0B           BSR  $D8A1
+D896:	5C              INCB
+D897:	27 8E           BEQ  $D827
+D899:	86 22           LDAA #$22
+D89B:	8C 8621         CPX  #$8621
+D89E:	7E D7DC         JMP  $D7DC
+D8A1:	FE C4D8         LDX  $C4D8
+D8A4:	8C C861         CPX  #$C861
+D8A7:	26 0F           BNE  $D8B8
+D8A9:	B6 C7E1         LDAA $C7E1
+D8AC:	26 04           BNE  $D8B2
+D8AE:	31              INS 
+D8AF:	31              INS 
+D8B0:	20 EA           BRA  $D89C
+D8B2:	BD DD01         JSR  $DD01
+D8B5:	CE C7E5         LDX  #$C7E5
+D8B8:	A6 00           LDAA 0,X
+D8BA:	08              INX 
+D8BB:	FF C4D8         STX  $C4D8
+D8BE:	16              TAB 
+D8BF:	FB C4F2         ADDB $C4F2
+D8C2:	F7 C4F2         STAB $C4F2
+D8C5:	39              RTS 
+
+D8C6:	                FCC  'DFM68O351'
+D8CF:	                FCC  'DFM68O352'
+D8D8:	                FCC  'DFM68O353'
+
+                                           DFM Functions Jump Table
+
+D900:	                FCB C1 08 00       QFREE    EQU 0      REPORT FREE SPACE ON DISC
+D903:	                FCB DE 66 00       QSO4W    EQU 1      OPEN FOR WRITE sequential file
+D906:	                FCB DE C4 00       QSWRIT   EQU 2      WRITE sequential file
+D909:	                FCB C0 80 00       QSWC     EQU 3      WRITE CLOSE sequential file
+D90C:	                FCB C1 75 00       QSO4R    EQU 4      OPEN FOR READ sequential file
+D90F:	                FCB C1 B8 00       QSREAD   EQU 5      READ sequential file
+D912:	                FCB C2 0E 00       QSRC     EQU 6      READ CLOSE sequential file
+D915:	                FCB D7 E6 09       QDEL     EQU 7      DELETE
+D918:	                FCB D7 E6 09       QREN     EQU 8      RENAME
+D91B:	                FCB D7 E6 09       QAPP     EQU 9      APPEND - Append two files
+D91E:	                FCB C1 1D 00       QDIRI    EQU 10     DIRECTORY INITIALIZATION - Open a disk directory
+D921:	                FCB C1 35 00       QDIRT    EQU 11     DIRECTORY TRANSFER - Retrieve a file name from directory
+D924:	                FCB D7 D7 00       QTYPE    EQU 12     Retrieve disk type byte
+D927:	                FCB C2 21 00       QRAFC    EQU 13     READ ACTIVE FCB CHAIN
+D92A:	                FCB D7 D7 00       reserved     14
+D92D:	                FCB D7 D7 00       reserved     15
+D930:	                FCB C0 A6 00       QLOGD    EQU 16     LOG IN A SYSTEM DRIVE
+D933:	                FCB C0 B7 00       QLOGE    EQU 17     EXAMINE SYSTEM DRIVE NUMBER - Exar:tine losged drive number
+D936:	                FCB C0 C0 00       QSSR     EQU 18     SINGLE SECTOR READ
+D939:	                FCB C0 C5 00       QSSW     EQU 19     SINGLE SECTOR WRITE
+D93C:	                FCB D7 E6 12       QCRF     EQU 20     CREATE A RANDOM ACCESS FILE (RF)
+D93F:	                FCB D7 E6 12       QORF     EQU 21     OPEN A RF
+D942:	                FCB C2 43 00       QPRF     EQU 22     POSITION A RF
+D945:	                FCB C2 A0 00       QRRF     EQU 23     READ A RF
+D948:	                FCB C2 A0 00       QWRF     EQU 24     WRITE A RF
+D94B:	                FCB D7 E6 12       QCLSRF   EQU 25     CLOSE A RF
+D94E:	                FCB D7 D7 00       reserved     26
+D951:	                FCB D7 D7 00       reserved     27
+D954:	                FCB D7 E6 12       QERF     EQU 28     EXPAND RANDOM FILE SIZE
+D957:	                FCB D7 D7 00       reserved     
+D95A:	                FCB D7 D7 00        
+D95D:	                FCB D7 D7 00        
+D960:	                FCB D7 D7 00        
+D963:	                FCB D7 D7 00        
+D966:	                FCB D7 D7 00        
+D969:	                FCB D7 D7 00        
+D96C:	                FCB D7 D7 00        
+
+D96F:	FE C4D0         LDX  $C4D0
+D972:	A6 00           LDAA 0,X
+D974:	2B 56           BMI  $D9CC
+D976:	CE 8041         LDX  #$8041
+D979:	FF C7E1         STX  $C7E1
+D97C:	BD DD01         JSR  $DD01
+D97F:	FE C4D0         LDX  $C4D0
+D982:	6D 00           TST  0,X
+D984:	26 46           BNE  $D9CC
+D986:	63 00           COM  0,X
+D988:	08              INX 
+D989:	FF C4DA         STX  $C4DA
+D98C:	CE C7F4         LDX  #$C7F4
+D98F:	C6 06           LDAB #$06
+D991:	7E DBEE         JMP  $DBEE
+D994:	FE C4D0         LDX  $C4D0
+D997:	A6 00           LDAA 0,X
+D999:	81 80           CMPA #$80
+D99B:	26 28           BNE  $D9C5
+D99D:	BD D976         JSR  $D976
+D9A0:	CE C7F4         LDX  #$C7F4
+D9A3:	FF C4DA         STX  $C4DA
+D9A6:	FE C4D0         LDX  $C4D0
+D9A9:	08              INX 
+D9AA:	8D E3           BSR  $D98F
+D9AC:	BD DD17         JSR  $DD17
+D9AF:	FE C4D0         LDX  $C4D0
+D9B2:	EE 01           LDX  1,X
+D9B4:	27 0F           BEQ  $D9C5
+D9B6:	FF C7E1         STX  $C7E1
+D9B9:	BD DD01         JSR  $DD01
+D9BC:	7F C7E3         CLR  $C7E3
+D9BF:	7F C7E4         CLR  $C7E4
+D9C2:	BD DD17         JSR  $DD17
+D9C5:	FE C4D0         LDX  $C4D0
+D9C8:	6F 00           CLR  0,X
+D9CA:	6F 07           CLR  7,X
+D9CC:	39              RTS 
+D9CD:	FE C4D0         LDX  $C4D0
+D9D0:	86 80           LDAA #$80
+D9D2:	A7 00           STAA 0,X
+D9D4:	39              RTS 
+D9D5:	CE C4DD         LDX  #$C4DD
+D9D8:	FF C4E6         STX  $C4E6
+D9DB:	EE 1B           LDX  27,X
+D9DD:	FF C4E8         STX  $C4E8
+D9E0:	0C              CLC 
+D9E1:	27 20           BEQ  $DA03
+D9E3:	FF C4E0         STX  $C4E0
+D9E6:	FE C4CC         LDX  CURFCB          Current FCB 
+D9E9:	C6 0A           LDAB #$0A
+D9EB:	A6 02           LDAA 2,X             A=Unit number
+D9ED:	08              INX 
+D9EE:	FF C4DE         STX  $C4DE
+D9F1:	FE C4E0         LDX  $C4E0
+D9F4:	A1 02           CMPA 2,X
+D9F6:	26 0C           BNE  $DA04
+D9F8:	08              INX 
+D9F9:	FF C4E0         STX  $C4E0
+D9FC:	FE C4DE         LDX  $C4DE
+D9FF:	5A              DECB
+DA00:	26 E9           BNE  $D9EB
+DA02:	0D              SEC 
+DA03:	39              RTS 
+DA04:	FE C4E8         LDX  $C4E8
+DA07:	20 CF           BRA  $D9D8
+DA09:	FE C4CC         LDX  CURFCB          Current FCB 
+DA0C:	FF C4DE         STX  $C4DE
+DA0F:	BD D976         JSR  $D976
+DA12:	7F C4EA         CLR  $C4EA
+DA15:	20 03           BRA  $DA1A
+DA17:	BD DD01         JSR  $DD01
+DA1A:	CE C7E9         LDX  #$C7E9
+DA1D:	FF C4D4         STX  $C4D4
+DA20:	86 05           LDAA #$05
+DA22:	B7 C4EB         STAA $C4EB
+DA25:	FE C4DE         LDX  $C4DE
+DA28:	FF C4E0         STX  $C4E0
+DA2B:	C6 09           LDAB #$09
+DA2D:	FE C4D4         LDX  $C4D4
+DA30:	A6 00           LDAA 0,X
+DA32:	2E 2A           BGT  $DA5E
+DA34:	2B 11           BMI  $DA47
+DA36:	7D C4EA         TST  $C4EA
+DA39:	26 0C           BNE  $DA47
+DA3B:	73 C4EA         COM  $C4EA
+DA3E:	FF C4DC         STX  $C4DC
+DA41:	FE A07C         LDX  TRACK           A07C=Track in disc (0..34)
+DA44:	FF C4D2         STX  $C4D2
+DA47:	FE C4D4         LDX  $C4D4
+DA4A:	C6 18           LDAB #$18
+DA4C:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+DA4F:	FF C4D4         STX  $C4D4
+DA52:	7A C4EB         DEC  $C4EB
+DA55:	26 CE           BNE  $DA25
+DA57:	B6 C7E1         LDAA $C7E1
+DA5A:	2B BB           BMI  $DA17
+DA5C:	0C              CLC 
+DA5D:	39              RTS 
+DA5E:	A6 00           LDAA 0,X
+DA60:	08              INX 
+DA61:	FF C4EC         STX  $C4EC
+DA64:	FE C4E0         LDX  $C4E0
+DA67:	A1 03           CMPA 3,X
+DA69:	26 DC           BNE  $DA47
+DA6B:	08              INX 
+DA6C:	FF C4E0         STX  $C4E0
+DA6F:	FE C4EC         LDX  $C4EC
+DA72:	5A              DECB
+DA73:	26 E9           BNE  $DA5E
+DA75:	FE C4D4         LDX  $C4D4
+DA78:	FF C4DC         STX  $C4DC
+DA7B:	0D              SEC 
+DA7C:	39              RTS 
+DA7D:	FE C4DE         LDX  $C4DE
+DA80:	C6 03           LDAB #$03
+DA82:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+DA85:	FF C4DA         STX  $C4DA
+DA88:	FE C4D4         LDX  $C4D4
+DA8B:	C6 18           LDAB #$18
+DA8D:	BD DBEE         JSR  $DBEE
+DA90:	FE C4DE         LDX  $C4DE
+DA93:	6F 28           CLR  40,X
+DA95:	6F 29           CLR  41,X
+DA97:	6F 1E           CLR  30,X
+DA99:	6F 1F           CLR  31,X
+DA9B:	86 80           LDAA #$80
+DA9D:	A7 1D           STAA 29,X
+DA9F:	A6 0F           LDAA 15,X
+DAA1:	A7 27           STAA 39,X
+DAA3:	A6 0E           LDAA 14,X
+DAA5:	A7 26           STAA 38,X
+DAA7:	39              RTS 
+DAA8:	7D C4EA         TST  $C4EA
+DAAB:	26 72           BNE  $DB1F
+DAAD:	FE A07C         LDX  TRACK           A07C=Track in disc (0..34)
+DAB0:	FF C4E2         STX  $C4E2
+DAB3:	BD DAE9         JSR  $DAE9
+DAB6:	FE C4E2         LDX  $C4E2
+DAB9:	FF C7E1         STX  $C7E1
+DABC:	BD DD01         JSR  $DD01
+DABF:	FE C4D6         LDX  $C4D6
+DAC2:	FF C7E1         STX  $C7E1
+DAC5:	FF C4D2         STX  $C4D2
+DAC8:	CE C7E9         LDX  #$C7E9
+DACB:	FF C4DC         STX  $C4DC
+DACE:	BD DD17         JSR  $DD17
+DAD1:	FE A07C         LDX  TRACK           A07C=Track in disc (0..34)
+DAD4:	FF C7E3         STX  $C7E3
+DAD7:	FE C7E1         LDX  $C7E1
+DADA:	FF A07C         STX  TRACK           A07C=Track in disc (0..34)
+DADD:	CE 0000         LDX  #$0000
+DAE0:	FF C7E1         STX  $C7E1
+DAE3:	BD DC77         JSR  $DC77
+DAE6:	7E DD17         JMP  $DD17
+DAE9:	BD D96F         JSR  $D96F
+DAEC:	FE C4D0         LDX  $C4D0
+DAEF:	EE 01           LDX  1,X
+DAF1:	FF C4D6         STX  $C4D6
+DAF4:	27 2A           BEQ  $DB20
+DAF6:	FF C7E1         STX  $C7E1
+DAF9:	BD DD01         JSR  $DD01
+DAFC:	FE C4D0         LDX  $C4D0
+DAFF:	86 80           LDAA #$80
+DB01:	A7 00           STAA 0,X
+DB03:	B6 C7E1         LDAA $C7E1
+DB06:	F6 C7E2         LDAB $C7E2
+DB09:	A7 01           STAA 1,X
+DB0B:	E7 02           STAB 2,X
+DB0D:	4D              TSTA
+DB0E:	26 07           BNE  $DB17
+DB10:	5D              TSTB
+DB11:	26 04           BNE  $DB17
+DB13:	6F 03           CLR  3,X
+DB15:	6F 04           CLR  4,X
+DB17:	6D 06           TST  6,X
+DB19:	26 02           BNE  $DB1D
+DB1B:	6A 05           DEC  5,X
+DB1D:	6A 06           DEC  6,X
+DB1F:	39              RTS 
+DB20:	86 07           LDAA #$07
+DB22:	7E D7DC         JMP  $D7DC
+DB25:	CE C7E9         LDX  #$C7E9
+DB28:	86 05           LDAA #$05
+DB2A:	E6 00           LDAB 0,X
+DB2C:	26 7C           BNE  $DBAA
+DB2E:	C6 18           LDAB #$18
+DB30:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+DB33:	4A              DECA
+DB34:	26 F4           BNE  $DB2A
+DB36:	FE A07C         LDX  TRACK           A07C=Track in disc (0..34)
+DB39:	FF C4E2         STX  $C4E2
+DB3C:	FE C7E3         LDX  $C7E3
+DB3F:	FF C4DE         STX  $C4DE
+DB42:	FE C7E1         LDX  $C7E1
+DB45:	26 08           BNE  $DB4F
+DB47:	7F A07C         CLR  TRACK           A07C=Track in disc (0..34)
+DB4A:	7F A07D         CLR  SECTOR          A07D=Sector in disc (0..17)
+DB4D:	20 0C           BRA  $DB5B
+DB4F:	BD DD01         JSR  $DD01
+DB52:	FE C4DE         LDX  $C4DE
+DB55:	FF C7E3         STX  $C7E3
+DB58:	BD DD17         JSR  $DD17
+DB5B:	FE C7E3         LDX  $C7E3
+DB5E:	FF C7E1         STX  $C7E1
+DB61:	FE A07C         LDX  TRACK           A07C=Track in disc (0..34)
+DB64:	FF C4DE         STX  $C4DE
+DB67:	BD DD01         JSR  $DD01
+DB6A:	FE C4DE         LDX  $C4DE
+DB6D:	FF C7E1         STX  $C7E1
+DB70:	BD DD17         JSR  $DD17
+DB73:	BD D96F         JSR  $D96F
+DB76:	FE C4D0         LDX  $C4D0
+DB79:	EE 03           LDX  3,X
+DB7B:	26 30           BNE  $DBAD
+DB7D:	FE C4D0         LDX  $C4D0
+DB80:	B6 C4E2         LDAA $C4E2
+DB83:	F6 C4E3         LDAB $C4E3
+DB86:	A7 01           STAA 1,X
+DB88:	E7 02           STAB 2,X
+DB8A:	A7 03           STAA 3,X
+DB8C:	E7 04           STAB 4,X
+DB8E:	B7 C7E1         STAA $C7E1
+DB91:	F7 C7E2         STAB $C7E2
+DB94:	86 80           LDAA #$80
+DB96:	A7 00           STAA 0,X
+DB98:	6F 05           CLR  5,X
+DB9A:	6F 06           CLR  6,X
+DB9C:	6C 06           INC  6,X
+DB9E:	BD DD01         JSR  $DD01
+DBA1:	CE 0000         LDX  #$0000
+DBA4:	FF C7E1         STX  $C7E1
+DBA7:	FF C7E3         STX  $C7E3
+DBAA:	7E DD17         JMP  $DD17
+DBAD:	FF C7E1         STX  $C7E1
+DBB0:	BD DD01         JSR  $DD01
+DBB3:	FE C4E2         LDX  $C4E2
+DBB6:	FF C7E1         STX  $C7E1
+DBB9:	BD DD17         JSR  $DD17
+DBBC:	FE A07C         LDX  TRACK           A07C=Track in disc (0..34)
+DBBF:	FF C4DE         STX  $C4DE
+DBC2:	BD DD01         JSR  $DD01
+DBC5:	CE 0000         LDX  #$0000
+DBC8:	FF C7E1         STX  $C7E1
+DBCB:	FE C4DE         LDX  $C4DE
+DBCE:	FF C7E3         STX  $C7E3
+DBD1:	BD DD17         JSR  $DD17
+DBD4:	FE C4D0         LDX  $C4D0
+DBD7:	B6 C4E2         LDAA $C4E2
+DBDA:	F6 C4E3         LDAB $C4E3
+DBDD:	A7 03           STAA 3,X
+DBDF:	E7 04           STAB 4,X
+DBE1:	BD D9CD         JSR  $D9CD
+DBE4:	6C 06           INC  6,X
+DBE6:	26 02           BNE  $DBEA
+DBE8:	6C 05           INC  5,X
+DBEA:	39              RTS 
+DBEB:	FE C4D8         LDX  $C4D8
+DBEE:	A6 00           LDAA 0,X
+DBF0:	08              INX 
+DBF1:	FF C4D8         STX  $C4D8
+DBF4:	FE C4DA         LDX  $C4DA
+DBF7:	A7 00           STAA 0,X
+DBF9:	08              INX 
+DBFA:	FF C4DA         STX  $C4DA
+DBFD:	5A              DECB
+DBFE:	26 EB           BNE  $DBEB
+DC00:	39              RTS 
+DC01:	FE C4DC         LDX  $C4DC
+DC04:	FF C4DA         STX  $C4DA
+DC07:	FE C4CC         LDX  CURFCB          Current FCB 
+DC0A:	C6 03           LDAB #$03
+DC0C:	8D 75           BSR  ADDXB         Reg X = Reg X + Reg B
+DC0E:	C6 18           LDAB #$18
+DC10:	20 DC           BRA  $DBEE
+DC12:	FE C4CC         LDX  CURFCB          Current FCB 
+DC15:	C6 03           LDAB #$03
+DC17:	8D 6A           BSR  ADDXB         Reg X = Reg X + Reg B
+DC19:	FF C4DA         STX  $C4DA
+DC1C:	FE C4D4         LDX  $C4D4
+DC1F:	C6 18           LDAB #$18
+DC21:	20 CB           BRA  $DBEE
+DC23:	FE C4CC         LDX  CURFCB          Current FCB 
+DC26:	86 09           LDAA #$09
+DC28:	E6 03           LDAB 3,X
+DC2A:	2F 1F           BLE  $DC4B
+DC2C:	39              RTS 
+DC2D:	CE C4DD         LDX  #$C4DD
+DC30:	FF C4E6         STX  $C4E6
+DC33:	EE 1B           LDX  27,X
+DC35:	27 12           BEQ  $DC49
+DC37:	BC C4CC         CPX  CURFCB          Current FCB 
+DC3A:	26 F4           BNE  $DC30
+DC3C:	39              RTS 
+DC3D:	CE C4DD         LDX  #$C4DD
+DC40:	EE 1B           LDX  27,X
+DC42:	27 32           BEQ  $DC76
+DC44:	BC C4CC         CPX  CURFCB          Current FCB 
+DC47:	26 F7           BNE  $DC40
+DC49:	86 08           LDAA #$08
+DC4B:	7E D7DC         JMP  $D7DC
+DC4E:	86 0A           LDAA #$0A
+DC50:	FE C4CC         LDX  CURFCB          Current FCB 
+DC53:	E8 0D           EORB 13,X
+DC55:	C4 0F           ANDB #$0F
+DC57:	26 F2           BNE  $DC4B
+DC59:	39              RTS 
+DC5A:	FE C4CC         LDX  CURFCB          Current FCB 
+DC5D:	B6 C4F8         LDAA $C4F8
+DC60:	F6 C4F9         LDAB $C4F9
+DC63:	FF C4F8         STX  $C4F8
+DC66:	20 0A           BRA  $DC72
+DC68:	FE C4CC         LDX  CURFCB          Current FCB 
+DC6B:	A6 1B           LDAA 27,X
+DC6D:	E6 1C           LDAB 28,X
+DC6F:	FE C4E6         LDX  $C4E6
+DC72:	A7 1B           STAA 27,X
+DC74:	E7 1C           STAB 28,X
+DC76:	39              RTS 
+DC77:	CE C7E5         LDX  #$C7E5
+DC7A:	C6 7C           LDAB #$7C
+DC7C:	6F 00           CLR  0,X
+DC7E:	08              INX 
+DC7F:	5A              DECB
+DC80:	26 FA           BNE  $DC7C
+DC82:	39              RTS 
+
+DC83:	FF C4E4   ADDXB STX  $C4E4         Reg X= Reg X+ Reg B
+DC86:	FB C4E5         ADDB $C4E5
+DC89:	F7 C4E5         STAB $C4E5
+DC8C:	24 03           BCC  $DC91
+DC8E:	7C C4E4         INC  $C4E4
+DC91:	FE C4E4         LDX  $C4E4
+DC94:	39              RTS 
+
+DC95:	FE C4CC         LDX  CURFCB          Current FCB 
+DC98:	E6 02           LDAB 2,X             B=Unit number
+DC9A:	F1 D790         CMPB MAXDSK          Max number of drivers=4
+DC9D:	25 03           BCS  $DCA2           branch if B=Unit number < Max
+DC9F:	7E D7DA         JMP  $D7DA           goto error
+DCA2:	36              PSHA   
+DCA3:	86 08           LDAA #$08 
+DCA5:	CE C501         LDX  #$C501
+DCA8:	5A              DECB
+DCA9:	2B 0A           BMI  $DCB5           branch if B=Unit number=0 
+DCAB:	48              ASLA
+DCAC:	37              PSHB
+DCAD:	C6 10           LDAB #$10
+DCAF:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+DCB2:	33              PULB
+DCB3:	20 F3           BRA  $DCA8
+DCB5:	B7 A07B         STAA $A07B         
+DCB8:	32              PULA
+DCB9:	FF C4D0         STX  $C4D0
+DCBC:	FE C4CC         LDX  CURFCB          Current FCB 
+DCBF:	39              RTS 
+DCC0:	8D D3           BSR  $DC95
+DCC2:	8D 15           BSR  $DCD9
+DCC4:	8D 6F           BSR  RDSECT          Read Sector
+DCC6:	26 4A           BNE  $DD12
+DCC8:	20 08           BRA  $DCD2
+DCCA:	8D C9           BSR  $DC95
+DCCC:	8D 0B           BSR  $DCD9
+DCCE:	8D 60           BSR  WRSECT          Write Sector
+DCD0:	26 50           BNE  $DD22
+DCD2:	30              TSX 
+DCD3:	EE 00           LDX  0,X
+DCD5:	31              INS 
+DCD6:	31              INS 
+DCD7:	6E 03           JMP  3,X
+DCD9:	30              TSX 
+DCDA:	EE 02           LDX  2,X
+DCDC:	E6 00           LDAB 0,X
+DCDE:	EE 01           LDX  1,X
+DCE0:	FF C4DE         STX  $C4DE
+DCE3:	FE C4CC         LDX  CURFCB          Current FCB 
+DCE6:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+DCE9:	EE 00           LDX  0,X
+DCEB:	FF A07C         STX  TRACK           A07C=Track in disc (0..34)
+DCEE:	B6 C4DE         LDAA $C4DE
+DCF1:	F6 C4DF         LDAB $C4DF
+DCF4:	FB C4CD         ADDB CURFCB+1
+DCF7:	B9 C4CC         ADCA CURFCB          Current FCB 
+DCFA:	B7 A07E         STAA DSKBUF        DSKBUF=addr of buffer for data to wr/rd form disk
+DCFD:	F7 A07F         STAB $A07F
+DD00:	39              RTS 
+DD01:	FE C7E1         LDX  $C7E1
+DD04:	FF A07C         STX  TRACK           A07C=Track in disc (0..34)
+DD07:	CE C7E1         LDX  #$C7E1
+DD0A:	FF A07E         STX  DSKBUF        DSKBUF=addr of buffer for data to wr/rd form disk
+DD0D:	BD DD35         JSR  RDSECT          Read Sector
+DD10:	27 EE           BEQ  $DD00
+DD12:	86 0E           LDAA #$0E
+DD14:	7E D7DC         JMP  $D7DC
+DD17:	CE C7E1         LDX  #$C7E1
+DD1A:	FF A07E         STX  DSKBUF        DSKBUF=addr of buffer for data to wr/rd form disk
+DD1D:	BD DD30         JSR  WRSECT          Write Sector
+DD20:	27 DE           BEQ  $DD00
+DD22:	86 0F           LDAA #$0F
+DD24:	C5 01           BITB #$01
+DD26:	26 06           BNE  $DD2E
+DD28:	C5 40           BITB #$40
+DD2A:	27 02           BEQ  $DD2E
+DD2C:	86 15           LDAA #$15
+DD2E:	20 E4           BRA  $DD14
+
+                                           Write Sector
+
+DD30:	CE 802C  WRSECT LDX  #$802C        SSB Write Sector routine
+DD33:	20 03           BRA  $DD38
+
+                                           Read Sector
+
+DD35:	CE 8029  RDSECT LDX  #$8029        SSB Read Sector routine 
+DD38:	FF A077         STX  IOCALL        Save I/O ROM Routine to call 
+DD3B:	B6 A07C         LDAA TRACK           A07C=Track in disc (0..34) 
+DD3E:	36              PSHA
+DD3F:	FE C4D0         LDX  $C4D0
+DD42:	A6 07           LDAA 7,X
+DD44:	36              PSHA
+DD45:	26 03           BNE  $DD4A
+DD47:	BD 8038         JSR  $8038         SSB Restore
+DD4A:	32              PULA
+DD4B:	B7 A07C         STAA TRACK           A07C=Track in disc (0..34)
+DD4E:	CE A07A         LDX  #$A07A
+DD51:	BD 806C         JSR  $806C         SSB Write track register
+DD54:	32              PULA
+DD55:	B7 A07C         STAA TRACK           A07C=Track in disc (0..34)
+DD58:	86 03           LDAA #$03
+DD5A:	36              PSHA
+DD5B:	86 08           LDAA #$08
+DD5D:	36              PSHA
+DD5E:	FE A077         LDX  IOCALL        Retrieve I/O ROM Routine to call
+DD61:	7D D794         TST  $D794
+DD64:	27 03           BEQ  $DD69
+DD66:	7C A07D         INC  SECTOR          A07D=Sector in disc (0..17)
+DD69:	07              TPA 
+DD6A:	84 10           ANDA #$10
+DD6C:	B7 C4CB         STAA $C4CB
+DD6F:	01              NOP 
+DD70:	0F              SEI 
+DD71:	AD 00           JSR X 0,X
+DD73:	07              TPA 
+DD74:	BA C4CB         ORAA $C4CB
+DD77:	06              TAP 
+DD78:	27 35           BEQ  $DDAF
+DD7A:	07              TPA 
+DD7B:	B7 C4FB         STAA $C4FB
+DD7E:	F7 C4FC         STAB $C4FC
+DD81:	C5 01           BITB #$01
+DD83:	26 10           BNE  $DD95
+DD85:	FE A077         LDX  IOCALL        Retrieve I/O ROM Routine to call
+DD88:	8C 8029         CPX  #$8029        SSB Read Sector routine 
+DD8B:	27 08           BEQ  $DD95
+DD8D:	C5 40           BITB #$40
+DD8F:	27 04           BEQ  $DD95
+DD91:	32              PULA
+DD92:	32              PULA
+DD93:	20 12           BRA  $DDA7
+DD95:	FE C4FD         LDX  $C4FD
+DD98:	08              INX 
+DD99:	FF C4FD         STX  $C4FD
+DD9C:	32              PULA
+DD9D:	4A              DECA
+DD9E:	26 BD           BNE  $DD5D
+DDA0:	BD 8038         JSR  $8038
+DDA3:	32              PULA
+DDA4:	4A              DECA
+DDA5:	26 B3           BNE  $DD5A
+DDA7:	B6 C4FB         LDAA $C4FB
+DDAA:	F6 C4FC         LDAB $C4FC
+DDAD:	20 03           BRA  $DDB2
+DDAF:	32              PULA
+DDB0:	32              PULA
+DDB1:	07              TPA 
+DDB2:	36              PSHA
+DDB3:	37              PSHB
+DDB4:	CE A07A         LDX  #$A07A
+DDB7:	BD 8072         JSR  $8072
+DDBA:	CA 80           ORAB #$80
+DDBC:	FE C4D0         LDX  $C4D0
+DDBF:	E7 07           STAB 7,X
+DDC1:	7D D794         TST  $D794
+DDC4:	27 03           BEQ  $DDC9
+DDC6:	7A A07D         DEC  SECTOR          A07D=Sector in disc (0..17)
+DDC9:	33              PULB
+DDCA:	32              PULA
+DDCB:	06              TAP 
+DDCC:	39              RTS 
+DDCD:	CE C4CB         LDX  #$C4CB
+DDD0:	6F 00           CLR  0,X
+DDD2:	08              INX 
+DDD3:	8C C861         CPX  #$C861
+DDD6:	26 F8           BNE  $DDD0
+DDD8:	73 C500         COM  $C500
+DDDB:	7F C4FF         CLR  $C4FF
+DDDE:	CE 0000         LDX  #$0000
+DDE1:	FF C4FD         STX  $C4FD
+DDE4:	7E 8026         JMP  $8026    SSB Initialize PIA routine
+DDE7:	FE C4F8         LDX  $C4F8
+DDEA:	FF C4CC         STX  CURFCB          Current FCB 
+DDED:	27 25           BEQ  $DE14
+DDEF:	E6 0D           LDAB 13,X      B=TCB Read Active FCB chain
+DDF1:	C4 0F           ANDB #$0F
+DDF3:	86 06           LDAA #$06
+DDF5:	C1 01           CMPB #$01
+DDF7:	27 0F           BEQ  $DE08
+DDF9:	86 03           LDAA #$03
+DDFB:	C1 02           CMPB #$02
+DDFD:	27 09           BEQ  $DE08
+DDFF:	86 19           LDAA #$19
+DE01:	C1 04           CMPB #$04
+DE03:	27 03           BEQ  $DE08
+DE05:	86 01           LDAA #$01
+DE07:	39              RTS 
+DE08:	A7 00           STAA 0,X       Store A as DFM function code
+DE0A:	BD D786         JSR  DFM       Do DFM Operation
+DE0D:	27 D8           BEQ  $DDE7
+DE0F:	86 03           LDAA #$03      A=$03 FCB Error Status (MASTER FILE DIRECTORY ERROR)
+DE11:	E6 01           LDAB 1,X       Store as FCB Error Status 
+DE13:	39              RTS 
+DE14:	86 08           LDAA #$08
+DE16:	B7 A07B         STAA $A07B
+DE19:	CE 8041         LDX  #$8041
+DE1C:	FF A07C         STX  TRACK           A07C=Track in disc (0..34)
+DE1F:	CE C4F1         LDX  #$C4F1
+DE22:	C6 10           LDAB #$10
+DE24:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+DE27:	FF C4D0         STX  $C4D0
+DE2A:	A6 00           LDAA 0,X
+DE2C:	81 80           CMPA #$80
+DE2E:	26 1C           BNE  $DE4C
+DE30:	BD DD35         JSR  RDSECT          Read Sector
+DE33:	26 25           BNE  $DE5A
+DE35:	CE C7F4         LDX  #$C7F4
+DE38:	FF C4DA         STX  $C4DA
+DE3B:	FE C4D0         LDX  $C4D0
+DE3E:	08              INX 
+DE3F:	C6 07           LDAB #$07
+DE41:	BD DBEE         JSR  $DBEE
+DE44:	BD DD30         JSR  WRSECT          Write Sector
+DE47:	26 14           BNE  $DE5D
+DE49:	FE C4D0         LDX  $C4D0
+DE4C:	6F 00           CLR  0,X
+DE4E:	78 A07B         ASL  $A07B
+DE51:	B6 A07B         LDAA $A07B
+DE54:	81 40           CMPA #$40
+DE56:	26 CA           BNE  $DE22
+DE58:	4F              CLRA
+DE59:	39              RTS 
+DE5A:	86 04           LDAA #$04
+DE5C:	8C 8605         CPX  #$8605
+DE5F:	FE C4D0         LDX  $C4D0
+DE62:	F6 C4FC         LDAB $C4FC
+DE65:	39              RTS 
+
+                                           QSO4W    EQU 1      OPEN FOR WRITE sequential file
+
+DE66:	BD DC95         JSR  $DC95
+DE69:	BD DC3D         JSR  $DC3D
+DE6C:	BD DC23         JSR  $DC23
+DE6F:	BD D9D5         JSR  $D9D5
+DE72:	25 4B           BCS  $DEBF
+DE74:	BD DA09         JSR  $DA09
+DE77:	25 46           BCS  $DEBF
+DE79:	BD DAA8         JSR  $DAA8
+DE7C:	BD DC5A         JSR  $DC5A
+DE7F:	FE C4D2         LDX  $C4D2
+DE82:	FF C7E1         STX  $C7E1
+DE85:	BD DD01         JSR  $DD01
+DE88:	FE C4CC         LDX  CURFCB          Current FCB 
+DE8B:	A6 0C           LDAA 12,X            A=FileTYpe
+DE8D:	84 0F           ANDA #$0F
+DE8F:	81 01           CMPA #$01
+DE91:	27 08           BEQ  $DE9B
+DE93:	A6 0C           LDAA 12,X
+DE95:	84 F0           ANDA #$F0
+DE97:	8A 02           ORAA #$02
+DE99:	A7 0C           STAA 12,X
+DE9B:	86 02           LDAA #$02
+DE9D:	A7 0D           STAA 13,X
+DE9F:	6F 0E           CLR  14,X
+DEA1:	6F 0F           CLR  15,X
+DEA3:	6F 10           CLR  16,X
+DEA5:	6F 11           CLR  17,X
+DEA7:	6F 12           CLR  18,X
+DEA9:	6F 13           CLR  19,X
+DEAB:	6F 1E           CLR  30,X
+DEAD:	6F 29           CLR  41,X
+DEAF:	6F 26           CLR  38,X
+DEB1:	6F 27           CLR  39,X
+DEB3:	86 80           LDAA #$80
+DEB5:	A7 1D           STAA 29,X
+DEB7:	6F 23           CLR  35,X
+DEB9:	BD DC01         JSR  $DC01
+DEBC:	7E DD17         JMP  $DD17
+DEBF:	86 02           LDAA #$02
+DEC1:	7E D7DC         JMP  $D7DC
+
+                                           QSWRIT   EQU 2      WRITE sequential file
+
+DEC4:	BD DC2D         JSR  $DC2D
+DEC7:	C6 02           LDAB #$02
+DEC9:	BD DC4E         JSR  $DC4E
+DECC:	30              TSX 
+DECD:	A6 02           LDAA 2,X
+DECF:	FE C4CC         LDX  CURFCB          Current FCB 
+DED2:	E6 0C           LDAB 12,X            B=FileTYpe
+DED4:	C4 0F           ANDB #$0F
+DED6:	C1 01           CMPB #$01
+DED8:	26 17           BNE  $DEF1
+DEDA:	84 7F           ANDA #$7F
+DEDC:	81 20           CMPA #$20
+DEDE:	26 04           BNE  $DEE4
+DEE0:	6C 23           INC  35,X
+DEE2:	28 2B           BVC  $DF0F
+DEE4:	A6 23           LDAA 35,X
+DEE6:	27 09           BEQ  $DEF1
+DEE8:	81 01           CMPA #$01
+DEEA:	26 02           BNE  $DEEE
+DEEC:	86 E0           LDAA #$E0
+DEEE:	40              NEGA
+DEEF:	8D 08           BSR  $DEF9
+DEF1:	30              TSX 
+DEF2:	A6 02           LDAA 2,X
+DEF4:	FE C4CC         LDX  CURFCB          Current FCB 
+DEF7:	6F 23           CLR  35,X
+DEF9:	E6 1D           LDAB 29,X
+DEFB:	C1 80           CMPB #$80
+DEFD:	26 04           BNE  $DF03
+DEFF:	36              PSHA
+DF00:	8D 0E           BSR  $DF10
+DF02:	32              PULA
+DF03:	FE C4CC         LDX  CURFCB          Current FCB 
+DF06:	E6 1D           LDAB 29,X
+DF08:	6C 1D           INC  29,X
+DF0A:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+DF0D:	A7 26           STAA 38,X
+DF0F:	39              RTS 
+DF10:	BD DC95         JSR  $DC95
+DF13:	BD DAE9         JSR  $DAE9
+DF16:	FE C4CC         LDX  CURFCB          Current FCB 
+DF19:	B6 C4D6         LDAA $C4D6
+DF1C:	F6 C4D7         LDAB $C4D7
+DF1F:	A7 10           STAA 16,X
+DF21:	E7 11           STAB 17,X
+DF23:	6C 13           INC  19,X
+DF25:	26 02           BNE  $DF29
+DF27:	6C 12           INC  18,X
+DF29:	6D 1E           TST  30,X
+DF2B:	26 0A           BNE  $DF37
+DF2D:	A7 0E           STAA 14,X
+DF2F:	E7 0F           STAB 15,X
+DF31:	A7 1E           STAA 30,X
+DF33:	E7 1F           STAB 31,X
+DF35:	20 07           BRA  $DF3E
+DF37:	A7 26           STAA 38,X
+DF39:	E7 27           STAB 39,X
+DF3B:	BD DF4D         JSR  $DF4D
+DF3E:	FE C4CC         LDX  CURFCB          Current FCB 
+DF41:	C6 04           LDAB #$04
+DF43:	E7 1D           STAB 29,X
+DF45:	CB 26           ADDB #$26
+DF47:	BD DC83         JSR  ADDXB         Reg X = Reg X + Reg B
+DF4A:	7E DC7A         JMP  $DC7A
+DF4D:	FE C4CC         LDX  CURFCB          Current FCB 
+DF50:	EE 1E           LDX  30,X
+DF52:	27 1D           BEQ  $DF71
+DF54:	BD DCCC         JSR  $DCCC
+DF57:	1E              ???
+DF58:	00              ???
+DF59:	26 FE           BNE  $DF59
+DF5B:	C4 CC           ANDB #$CC
+DF5D:	A6 1E           LDAA 30,X
+DF5F:	E6 1F           LDAB 31,X
+DF61:	A7 28           STAA 40,X
+DF63:	E7 29           STAB 41,X
+DF65:	A6 26           LDAA 38,X
+DF67:	E6 27           LDAB 39,X
+DF69:	A7 1E           STAA 30,X
+DF6B:	E7 1F           STAB 31,X
+DF6D:	6F 26           CLR  38,X
+DF6F:	6F 27           CLR  39,X
+DF71:	39              RTS 
+

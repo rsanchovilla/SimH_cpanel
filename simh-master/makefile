@@ -1833,10 +1833,7 @@ SWTP6800D = ${SIMHD}/swtp6800/swtp6800
 SWTP6800C = ${SIMHD}/swtp6800/common
 SWTP6800MP-A = ${SWTP6800C}/mp-a.c ${SWTP6800C}/m6800.c ${SWTP6800C}/m6810.c \
 	${SWTP6800C}/bootrom.c ${SWTP6800C}/dc-4.c ${SWTP6800C}/mp-s.c ${SWTP6800D}/mp-a_sys.c \
-	${SWTP6800C}/mp-b2.c ${SWTP6800C}/mp-8m.c
-SWTP6800MP-A2 = ${SWTP6800C}/mp-a2.c ${SWTP6800C}/m6800.c ${SWTP6800C}/m6810.c \
-	${SWTP6800C}/bootrom.c ${SWTP6800C}/dc-4.c ${SWTP6800C}/mp-s.c ${SWTP6800D}/mp-a2_sys.c \
-	${SWTP6800C}/mp-b2.c ${SWTP6800C}/mp-8m.c ${SWTP6800C}/i2716.c
+	${SWTP6800C}/mp-b2.c ${SWTP6800C}/mp-8m.c ${SWTP6800C}/fd400.c 
 SWTP6800_OPT = -I ${SWTP6800D}
 
 INTELSYSD = ${SIMHD}/Intel-Systems
@@ -2154,7 +2151,7 @@ ALL = pdp1 pdp4 pdp7 pdp8 pdp9 pdp15 pdp11 pdp10 \
 	microvax3100m80 vaxstation4000vlc infoserver1000 \
 	nova eclipse hp2100 hp3000 i1401 i1620 s3 altair altairz80 gri \
 	i7094 ibm1130 id16 id32 sds lgp h316 cdc1700 \
-	swtp6800mp-a swtp6800mp-a2 tx-0 ssem b5500 intel-mds \
+	swtp6800mp-a tx-0 ssem b5500 intel-mds \
 	scelbi 3b2 i701 i704 i7010 i7070 i7080 i7090 \
 	sigma uc15 pdp10-ka pdp10-ki pdp10-kl pdp6 i650
 
@@ -2668,15 +2665,6 @@ ${BIN}swtp6800mp-a${EXE} : ${SWTP6800MP-A} ${SIM} ${BUILD_ROMS}
 	${CC} ${SWTP6800MP-A} ${SIM} ${SWTP6800_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${SWTP6800D},swtp6800mp-a))
 	$@ $(call find_test,${SWTP6800D},swtp6800mp-a) ${TEST_ARG}
-endif
-
-swtp6800mp-a2 : ${BIN}swtp6800mp-a2${EXE}
-
-${BIN}swtp6800mp-a2${EXE} : ${SWTP6800MP-A2} ${SIM} ${BUILD_ROMS}
-	${MKDIRBIN}
-	${CC} ${SWTP6800MP-A2} ${SIM} ${SWTP6800_OPT} ${CC_OUTSPEC} ${LDFLAGS}
-ifneq (,$(call find_test,${SWTP6800D},swtp6800mp-a2))
-	$@ $(call find_test,${SWTP6800D},swtp6800mp-a2) ${TEST_ARG}
 endif
 
 intel-mds: ${BIN}intel-mds${EXE}

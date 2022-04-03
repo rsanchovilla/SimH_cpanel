@@ -1,0 +1,306 @@
+0001                         *--------------------------------------------------------------
+0002                         *
+0003                         * FLEX 1.0 (MiniFLEX) disk driver for an Altair 680 connected
+0004                         *    to a Pertec FD3712 through a UIO interface board. This
+0005                         *    code assumes the PIAs on the UIO board and the FD3712
+0006                         *    controller have already been configured for operation by
+0007                         *    the disk boot code.
+0008                         *
+0009                         *    Ver      Date		     Description
+0010                         *    ---   ----------   ---------------------------------------
+0011                         *    1.0   03/19/2022	Mike Douglas, Original
+0012                         *
+0013                         *--------------------------------------------------------------
+0014                         
+0015                         * FD3712 controller commands
+0016                         
+0017 0000                    cSTATUS	equ	$00		;read status
+0018 0003                    cREAD	equ	$03		;read sector
+0019 0005                    cWRITE	equ	$05		;write sector
+0020 0007                    cRDCRC	equ	$07		;validate sector CRC
+0021 0009                    cSEEK	equ	$09		;seek to track
+0022 000b                    cCLRERR	equ	$0B		;clear error flags
+0023 000d                    cRESTOR	equ	$0D		;seek to track 0
+0024 0011                    cSETTRK	equ	$11		;set track to seek
+0025 0021                    cDRVSEC	equ	$21		;set unit and sector
+0026 0031                    cWRTBUF	equ	$31		;write buffer
+0027 0040                    cRDBUF	equ	$40		;read buffer
+0028 0041                    cSHIFT	equ	$41		;shift read buffer
+0029 0081                    cRESET	equ	$81		;reset the controller
+0030                         
+0031                         * FD3712 controller status bits
+0032                         
+0033 0001                    sBUSY	equ	$01		;1=busy
+0034 0008                    sCRCERR	equ	$08		;1=CRC error
+0035 0010                    sWRTPRT	equ	$10		;1=write protected
+0036 0020                    sNOTRDY	equ	$20		;1=drive not ready
+0037 0029                    sERROR	equ	$29		;any error bit except write protect
+0038                         
+0039                         * UIO interface board
+0040                         *   PIA #1 (IC-C) port A is status/data in
+0041                         *   PIA #1 (IC-C) port B is command out
+0042                         *   PIA #2 (IC-B) port A is not used
+0043                         *   PIA #2 (IC-B) port B is data out
+0044                         *
+0045                         *   Command bit 0 (the execute bit) comes from the OR of
+0046                         *   the data-out and data-in handshake lines from the PIAs.
+0047                         *   CB2 from PIA #1 is the data-in handshake and CB2 from
+0048                         *   PIA #2 is the data-out handshake.
+0049                         
+0050 f080                    UIOBASE	equ	$F080	 	;base address of UIO board
+0051                         
+0052 f088                    P1ACSR	equ	UIOBASE+$08	;control/status for FDC data in
+0053 f08a                    P1BCSR	equ	UIOBASE+$0A	;control/status for FDC cmd out
+0054 f08c                    P2ACSR	equ	UIOBASE+$0C	;not connected/used
+0055 f08e                    P2BCSR	equ	UIOBASE+$0E	;control/status for FDC data out
+0056                         
+0057 f08b                    CMDOUT	equ	UIOBASE+$0B	;FDC command out (IC-C port B)
+0058 f089                    DATAIN	equ	UIOBASE+$09	;FDC data/status in (IC-C port A)
+0059 f08f                    DATAOUT	equ	UIOBASE+$0F	;FDC data out (IC-B port B)
+0060                         
+0061 003c                    HSOFF	equ	$3C		;auto handshake off
+0062 002c                    HSON	equ	$2C		;auto handshake on
+0063                         
+0064                         *--------------------------------------------------------------
+0065                         * Disk driver jump table
+0066                         *--------------------------------------------------------------
+0067 7f00                    	org	$7F00
+0068 7f00 7e 7f 11           	jmp	readSec		;read sector
+0069 7f03 7e 7f 6f           	jmp	wrtSec		;write sector
+0070 7f06 7e 7f 8a           	jmp	vfySec		;verify sector
+0071 7f09 7e 7f 91           	jmp	restore		;restore to track 0
+0072 7f0c 7e 7f a5           	jmp	drvSel		;select drive
+0073                         
+0074                         * Local driver data
+0075                         
+0076 7f0f 00                 curTrk	fcb	0		;current track, else $FF if not known
+0077 7f10 00                 curDrv	fcb	0		;drive num in select position (bits 7,6)
+0078                         
+0079                         *--------------------------------------------------------------
+0080                         * readSec - Read Sector
+0081                         *
+0082                         * Entry - (X) = Sector Buffer Address
+0083                         *         (A) = Track Number
+0084                         *         (B) = Sector Number
+0085                         * The sector referenced by the track and sector number
+0086                         * is read into the sector buffer
+0087                         *--------------------------------------------------------------
+0088 7f11 8d 27              readSec	bsr	seek		;seek and give sector num
+0089 7f13 26 44              	bne	seekErr
+0090                         	
+0091 7f15 86 03              	ldaa	#cREAD		;issue read command
+0092 7f17 bd 7f bb           	jsr	doCmd
+0093 7f1a 26 41              	bne	readErr		;error
+0094                         	
+0095 7f1c 86 2c              	ldaa	#HSON		;enable automatic handshake
+0096 7f1e b7 f0 88           	staa	P1ACSR
+0097 7f21 86 40              	ldaa	#cRDBUF		;set controller to read buffer mode
+0098 7f23 b7 f0 8b           	staa	CMDOUT
+0099 7f26 c6 80              	ldab	#128		;B=num bytes to transfer
+0100                         	
+0101 7f28 b6 f0 89           rsLoop	ldaa	DATAIN		;(4) get next byte from fifo
+0102 7f2b a7 00              	staa	0,x		;(6) store in sector buffer
+0103 7f2d 08                 	inx			;(4)
+0104 7f2e 5a                 	decb			;(2)
+0105 7f2f 26 f7              	bne	rsLoop		;(4)
+0106                         
+0107 7f31 86 3c              	ldaa	#HSOFF		;disable automatic handshake
+0108 7f33 b7 f0 88           	staa	P1ACSR
+0109 7f36 7f f0 8b           	clr	CMDOUT		;restore normal status mode
+0110 7f39 39                 	rts			;exit with zero status (success)
+0111                         
+0112                         *--------------------------------------------------------------
+0113                         * seek - Seek to track specified in A and give the 1771 the
+0114                         *    sector number specified in B.
+0115                         *--------------------------------------------------------------
+0116 7f3a 36                 seek	psha			;preserve track number
+0117 7f3b fa 7f 10           	orab	curDrv		;form B=drive and sector
+0118 7f3e 86 21              	ldaa	#cDRVSEC	;select drive and set sector
+0119 7f40 8d 79              	bsr	doCmd
+0120                         
+0121 7f42 33                 	pulb			;B=requested track
+0122 7f43 f1 7f 0f           	cmpb	curTrk		;same track we're on?
+0123 7f46 27 26              	beq	return		;yes, do nothing
+0124                         	
+0125 7f48 f7 7f 0f           	stab	curTrk		;save new current track
+0126 7f4b 27 08              	beq	seek0		;use restore for track 0, not seek
+0127                         	
+0128 7f4d 86 11              	ldaa	#cSETTRK	;set desired track number
+0129 7f4f 8d 6a              	bsr	doCmd
+0130 7f51 86 09              	ldaa	#cSEEK		;seek to track
+0131 7f53 20 66              	bra	doCmd		;execute and return to caller
+0132                         
+0133 7f55 86 0d              seek0	ldaa	#cRESTOR	;issue restore to track 0 command
+0134 7f57 20 62              	bra	doCmd		;execute and return to caller
+0135                         
+0136                         *--------------------------------------------------------------
+0137                         * Return 1771 error code for a 3712 error
+0138                         *--------------------------------------------------------------
+0139 7f59 c6 10              seekErr	ldab	#$10		;return 1771 seek error
+0140 7f5b 20 0c              	bra	errExit
+0141                         	
+0142 7f5d c6 08              readErr	ldab	#$08		;return 1771 CRC error
+0143 7f5f 20 08              	bra	errExit
+0144                         
+0145 7f61 d6 40              wrtErr	ldab	$40		;assume 1771 write protect error
+0146 7f63 85 10              	bita	#sWRTPRT	;is it write protect?
+0147 7f65 26 02              	bne 	errExit		;yes
+0148 7f67 d6 10              	ldab	$10		;else return sector not found
+0149                         	
+0150 7f69 86 0b              errExit	ldaa	#cCLRERR	;clear error in the controller
+0151 7f6b 8d 4e              	bsr	doCmd
+0152 7f6d 17                 	tba			;return error status in A
+0153 7f6e 39                 return	rts
+0154                         
+0155                         *--------------------------------------------------------------
+0156                         * wrtSec - Write Sector
+0157                         *
+0158                         * Entry - (X) = Sector Buffer Address
+0159                         *         (A) = Track Number
+0160                         *         (B) = Sector Number
+0161                         * The content of the Sector Buffer is written to the
+0162                         * sector specified by the track and sector number
+0163                         *--------------------------------------------------------------
+0164 7f6f 8d c9              wrtSec	bsr	seek		;seek and give sector number
+0165 7f71 26 e6              	bne	seekErr
+0166                         
+0167 7f73 86 31              	ldaa	#cWRTBUF	;set controller to write buffer mode
+0168 7f75 b7 f0 8b           	staa	CMDOUT
+0169 7f78 c6 80              	ldab	#128		;B=num bytes to transfer
+0170                         	
+0171 7f7a a6 00              wsLoop	ldaa	0,x		;(5) A=next byte from sector buffer
+0172 7f7c b7 f0 8f           	staa	DATAOUT		;(5) give it to the controller
+0173 7f7f 08                 	inx			;(4)
+0174 7f80 5a                 	decb			;(2)
+0175 7f81 26 f7              	bne	wsLoop		;(4)
+0176                         
+0177 7f83 86 05              	ldaa	#cWRITE		;issue write command
+0178 7f85 8d 34              	bsr	doCmd
+0179 7f87 26 d8              	bne	wrtErr		;error
+0180 7f89 39                 	rts			;else, success
+0181                         
+0182                         *--------------------------------------------------------------
+0183                         * vfySec - Verify Sector
+0184                         *    Read the sector just written to verify the CRC
+0185                         *--------------------------------------------------------------
+0186 7f8a 86 07              vfySec	ldaa	#cRDCRC		;read sector to check CRC
+0187 7f8c 8d 2d              	bsr	doCmd
+0188 7f8e 26 cd              	bne	readErr		;verify failed
+0189 7f90 39                 	rts			;else, exit
+0190                         
+0191                         *--------------------------------------------------------------
+0192                         * restore - Restore to track zero
+0193                         * Entry - (X) = FCB Address
+0194                         * Exit - CC, NE, B=$0B if write protected
+0195                         *	 CS, NE, B=$0F if no drive
+0196                         *	 CC, EQ for success
+0197                         * Restore to track zero for the drive in the FCB
+0198                         *--------------------------------------------------------------
+0199 7f91 8d 12              restore	bsr	drvSel		;select the drive
+0200 7f93 86 0d              	ldaa	#cRESTOR	;issue restore to track 0 command
+0201 7f95 8d 24              	bsr	doCmd
+0202 7f97 26 08              	bne	notRdy		;drive not ready
+0203                         	
+0204 7f99 5f                 	clrb			;return code is in B
+0205 7f9a 85 40              	bita	#$40		;write protect?
+0206 7f9c 27 02              	beq	resExit		;no
+0207 7f9e c6 0b              	ldab	#$0B		;else $0B=write protected
+0208 7fa0 39                 resExit	rts
+0209                         
+0210 7fa1 c6 0f              notRdy	ldab	#$0F		;code for drive not ready
+0211 7fa3 0d                 	sec
+0212 7fa4 39                 	rts
+0213                         	
+0214                         *--------------------------------------------------------------
+0215                         * drvSel - Select Drive
+0216                         * Entry - (X) = FCB Address
+0217                         * The drive specified in the FCB is selected
+0218                         *--------------------------------------------------------------
+0219 7fa5 e6 03              drvSel	ldab	3,x		;A=drive number from FCB
+0220 7fa7 56                 	rorb			;put drive in upper two bits
+0221 7fa8 56                 	rorb
+0222 7fa9 56                 	rorb
+0223 7faa c4 c0              	andb	#$C0		;keep drive bits only
+0224 7fac f7 7f 10           	stab	curDrv		;curDrv=drive num in select position
+0225                         	
+0226 7faf ca 01              	orab	#1		;include a valid sector number
+0227 7fb1 86 21              	ldaa	#cDRVSEC	;select drive/and set sector
+0228 7fb3 8d 06              	bsr	doCmd
+0229                         
+0230 7fb5 86 ff              	ldaa	#$FF		;track number isn't known
+0231 7fb7 b7 7f 0f           	staa	curTrk
+0232 7fba 39                 	rts
+0233                         
+0234                         *--------------------------------------------------------------
+0235                         * doCmd - Write A to the FDC command register and B to the
+0236                         *   FDC data register. Wait for the command to complete and
+0237                         *   return the status register in A. The status is pre-tested
+0238                         *   with all error bits (other than write protect).
+0239                         *
+0240                         * On Entry:
+0241                         *    A = command
+0242                         *    B = data (optional)
+0243                         *
+0244                         * On Exit:
+0245                         *    A = status
+0246                         *    Z = true if no errors
+0247                         *--------------------------------------------------------------
+0248 7fbb b7 f0 8b           doCmd	staa	CMDOUT		;give command byte to controller
+0249 7fbe f7 f0 8f           	stab	DATAOUT		;write data, toggle cmd handshake
+0250                         
+0251 7fc1 b6 f0 89           wtCmd	ldaa	DATAIN		;wait for execution to complete
+0252 7fc4 84 01              	anda	#sBUSY
+0253 7fc6 26 f9              	bne	wtCmd
+0254                         
+0255 7fc8 b6 f0 89           	ldaa	DATAIN		;return status in A
+0256 7fcb 85 29              	bita	#sERROR		;test error bits
+0257 7fcd 39                 	rts
+0258                         
+0259                         *--------------------------------------------------------------
+0260                         * Patches to FLEX to work with the Altair 680
+0261                         *--------------------------------------------------------------
+0262 fc00                    BOOTPR	equ	$FC00		;address of boot PROM
+0263 fc03                    INCH	equ	BOOTPR+3	;input character routine
+0264 fc06                    OUTCH	equ	BOOTPR+6	;output character routine
+0265 f000                    ACIA	equ	$F000		;address of console ACIA
+0266                         
+0267                         * Patches to MiniFLEX jump table
+0268                         
+0269 7109                    	org	$7109
+0270 7109 7e fc 03           	jmp	INCH		;MiniFLEX INCH
+0271 710c 7e fc 06           	jmp	OUTCH		;MiniFLEX OUTCH
+0272                         
+0273 7136                    	org	$7136
+0274 7136 7e fc 06           	jmp	OUTCH		;MiniFLEX OUTCH2
+0275                         
+0276                         * Patch to check for TTYESC while not processing an input request. This
+0277                         *   is done by directly accessing the status register of the ACIA.
+0278                         
+0279 72e3                    	org	$72E3		;input status check
+0280 72e3 f0 00              	fdb	ACIA
+0281                         
+0282 72e9                    	org	$72E9		;input byte
+0283 72e9 f0 01              	fdb	ACIA+1
+0284                         
+0285                         * Patch to force the check for an ACIA to always be true
+0286                         
+0287 760e                    	org	$760E		;ACIA presence test
+0288 760e 20                 	fcb	$20		;force true (BRA instead of BEQ)
+0289                         
+0290                         * Patch to put stack at the end of this driver space
+0291                         
+0292 7145                    	org	$7145
+0293 7145 8e 7f ff           	lds	#$7FFF
+0294                         
+0295 715d                    	org	$715D
+0296 715d 8e 7f ff           	lds	#$7FFF
+0297                         
+0298                         * Patch to exit to 680 monitor instead of SWTBUG
+0299                         
+0300 70f5                    	org	$70F5
+0301 70f5 ff fe              	fdb	$FFFE		;680 monitor entry point
+0302                         
+0303                         	end
+
+
+Number of errors 0

@@ -1,0 +1,660 @@
+0001                         NAM MINIDOS-PLUS   VER 3.0
+0002                         * COPYRIGHT (C) 1978
+0003                         * PERCOM DATA CO. INC.
+0004                         * ALL RIGHTS RESERVED
+0005                         *******************************************
+0006                         * THIS PROGRAM IS AN EXTENSION OF THE PERCOM
+0007                         * MINIDOS OPERATING SYSTEM.  IT PERMITS DISK
+0008                         * FILES TO BE MANIPULATED BY FILES NAMES OF
+0009                         * 6 CHARACTERS OR LESS.  UP TO 31 FILES ARE
+0010                         * SUPPORTED.  THE RESIDENT COMMANDS ARE:
+0011                         *
+0012                         *  S(AVE) <NAME> <BEGIN> <END> [EXEC]
+0013                         *  L(OAD) <NAME>      LOAD FILE INTO MEMORY
+0014                         *  D(ELETE) <NAME>    DELETE FILE FROM DIRECTORY
+0015                         *  F(ILES)                   LISTS FILES ON TERMINAL
+0016                         *  I(NIT)                    INITIALIZES DISK DIRECTORY
+0017                         *  R(ENAME) <THIS> <THAT>
+0018                         *  A(LLOCATE)         RESERVES 10 BLOCKS (SECTORS) FOL-
+0019                         *                            LOWING LAST FILE IN DIRECTORY
+0020                         *  J(UMP) <ADDRESS>   JUMP TO SPECIFIED ADDRESS
+0021                         *  X(IT)                     EXIT TO MONITOR
+0022                         *  M(INIDOS)          ESCAPE TO MINIDOS
+0023                         *
+0024                         * COMMANDS CONSIST OF SINGLE LETTERS.  IF MORE THAN ONE
+0025                         * CHARACTER IS ENTERED, THE DIRECTORY WILL BE SEARCHED 
+0026                         * FOR A FILE WITH THE NAME OF THE GIVEN COMMAND.  IF SUCH
+0027                         * A FILE IS FOUND, IT WILL BE LOADED AND EXECUTED.
+0028                         *
+0029                         * SPACES (BLANKS) ARE DELIMITERS BETWEEN ENTRIES.
+0030                         *
+0031                         * DISK SPACE OCCUPIED BY A DELETED FILE IS MADE AVAIL-
+0032                         * ABLE TO THE FILE PRECEDING IT IN THE DIRECTORY.
+0033                         *
+0034                         * TO `PROTECT` A FILE, MAKE THE FIRST CHARACTER IN THE
+0035                         * FILE NAME `@`.  FOR EXAMPLE:  @NAME
+0036                         * TO `UNPROTECT` THE FILE, RENAME THE FILE WITHOUT THE `@`.
+0037                         *
+0038                         * THE ALLOCATE COMMAND RESERVES 10 SECTORS FOLLOWING THE
+0039                         * LAST FILE FOR USE BY THE LAST FILE.
+0040                         *
+0041                         * DRIVES OTHER THAN DRIVE #1 MAY BE SELECTED BY
+0042                         * PRECEDING THE COMMAND WITH THE DRIVE NUMBER AND A
+0043                         * SLASH (/).  FOR EXAMPLE, TO LOAD A FILE FROM
+0044                         * DRIVE #2, TYPE:   2/L <NAME>
+0045                         *
+0046                         * CONTROL-X IS USED TO CANCEL A COMMAND LINE
+0047                         * CONTROL-H IS USED TO BACKSPACE IN COMMAND LINE
+0048                         * RETURN TERMINATES COMMAND LINE
+0049                         *
+0050                         * THIS VERSION REQUIRES MINIDOS REV 1.4
+0051                         * AND RAM MEMORY AT EITHER $A000 OR $7000 (DEPENDS ON 
+0052                         * VERSION).  ALTHOUGH THIS LISTING WAS ASSEMBLED FOR
+0053                         * ROM AT $C400, THE LISTING IS APPLICABLE FOR VERSIONS
+0054                         * ASSEMBLED AT $A400 AND $7400.
+0055                         **********************************************
+0056                         * ERROR CODES:
+0057                         *
+0058                         *  0  DISK MISSING
+0059                         *  1  FILE PROTECTED
+0060                         *  6  NAME NOT FOUND
+0061                         *  7  DIRECTORY FULL
+0062                         *  8  WHAT? COMMAND NOT UNDERSTOOD
+0063                         *  9  ALLOCATION ERROR
+0064                         *  A  BAD ADDRESS
+0065                         *
+0066                         * ERROR CODES 2 THRU 5 ARE THE SAME AS MINIDOS
+0067                         **********************************************
+0068                               
+0069                         * OPT O,S,NOG
+0070                               
+0071 a07f                    STACK   EQU $A07F          TOP OF STACK
+0072 a080                    RAM     EQU $A080          RAM MEMORY REQUIRED HERE
+0073 c400                    ROM     EQU $C400          ROM OR RAM REQUIRED HERE
+0074                         *
+0075                         * MIKBUG(TM), SWTBUG(TM), RT-68MX LINKAGES
+0076 a048                    XFER    EQU $A048          TRANSFER VECTOR LOCATION
+0077 e07e                    PDATA   EQU $E07E          PRINTS CHARACTER STRING
+0078 e0cc                    OUTS    EQU $E0CC          PRINTS ONE SPACE
+0079 e0c8                    OUT4HS  EQU $E0C8          PRINTS 4 HEX + SPACE
+0080 e0e3                    MONTR   EQU $E0E3          MONITOR RE-ENTRY POINT
+0081 e1ac                    INEEE   EQU $E1AC          CHARACTER INPUT ROUTINE
+0082 e1d1                    OUTEEE  EQU $E1D1          CHARACTER OUTPUT ROUTINE
+0083                         *
+0084                         * MINIDOS LINKAGES
+0085 c3ac                    MINDOS  EQU $C3AC          MINIDOS BYPASS RE-ENTRY POINT
+0086 c003                    CVTDTS  EQU $C003
+0087 c018                    SAVFIL  EQU $C018
+0088 c01b                    LODFIL  EQU $C01B
+0089 c01e                    ERROR   EQU $C01E
+0090 c021                    FWDCAL  EQU $C021
+0091 c024                    LNTH    EQU $C024
+0092 c027                    INITRK  EQU $C027
+0093 c363                    CRLF    EQU $C363
+0094                         *
+0095                         * DISK SECTOR HEADER
+0096 0000                    DRV     EQU $0000
+0097 0001                    TRKSEC  EQU $0001
+0098 0001                    TRK     EQU $0001
+0099 0002                    SCTR    EQU $0002
+0100 0003                    BAKLNK  EQU $0003
+0101 0005                    FWDLNK  EQU $0005
+0102 0008                    TARGET  EQU $0008
+0103 000a                    FILTYP  EQU $000A
+0104                               
+0105 000d                    POSTAM  EQU $000D
+0106 0014                    BEGIN   EQU $0014
+0107 0016                    ALTADD  EQU $0016
+0108 001a                    EXEADD  EQU $001A
+0109 001e                    ENDA    EQU $001E
+0110                               
+0111 0020                    LINLMT  EQU 32             CHARACTERS MAX IN CMD LINE
+0112                         *
+0113 a080                    ORG RAM
+0114 a080                    LINBUF  RMB LINLMT         INPUT LINE BUFFER
+0115 a0a0                    LINPTR  RMB 2              INPUT LINE POINTER
+0116 a0a2                    SEATEM  RMB 2
+0117 a0a4                    BUFTEM  RMB 2
+0118 a0a6                    DIRTEM  RMB 2
+0119 a0a8                    NXTFIL  RMB 2
+0120 a0aa                    ADDTEM  RMB 2
+0121 a0ac                    DRVNUM  RMB 1
+0122 a0ad                    BEGADD  RMB 2
+0123 a0af                    ENDADD  RMB 2
+0124 a0b1                    XFRADD  RMB 2
+0125 a0b3                    DIR     RMB 512            DIRECTORY BUFFER
+0126                         *
+0127 c400                            ORG ROM
+0128 c400 7e c4 03                   JMP COMMND         JUMP TO SATISFY MINIDOS LOOKAHEAD
+0129 c403 bd c0 27           COMMND  JSR INITRK         INITIALIZE TRACK REGISTERS
+0130 c406 8d 02              COMNDX  BSR CMD1
+0131 c408 20 fc                      BRA COMNDX
+0132 c40a 8d 19              CMD1    BSR INLINE
+0133 c40c bd c3 63                   JSR CRLF
+0134 c40f ce a0 80                   LDX #LINBUF
+0135 c412 bd c7 a7                   JSR SKIPSP
+0136 c415 27 0a                      BEQ EOL
+0137 c417 8d 39                      BSR GETDRV         GET DRIVE NUMBER, IDENTIFY COMMAND
+0138 c419 25 07                      BCS CMDERR         BR IF NOT FOUND
+0139 c41b 27 04                      BEQ EOL            BR IF NOT EXECUTABLE
+0140 c41d ad 00                      JSR 0,X            JUMP TO IT
+0141 c41f 25 01                      BCS CMDERR
+0142 c421 39                 EOL     RTS
+0143 c422 7e c0 1e           CMDERR  JMP ERROR
+0144                         * INPUT COMMAND LINE
+0145 c425 bd c3 63           INLINE  JSR CRLF
+0146 c428 86 3e                      LDAA #'>
+0147 c42a bd e1 d1                   JSR OUTEEE
+0148 c42d ce a0 80                   LDX #LINBUF
+0149 c430 5f                         CLRB
+0150 c431 bd e1 ac           INPUT   JSR INEEE
+0151 c434 81 0d                      CMPA #$0D          CHECK FOR CR
+0152 c436 27 16                      BEQ ENDLIN
+0153 c438 81 18                      CMPA #$18          CHECK FOR CANCEL
+0154 c43a 27 e9                      BEQ INLINE
+0155 c43c 81 08                      CMPA #$08          CHECK FOR BKSPC
+0156 c43e 26 06                      BNE INP1
+0157 c440 5a                         DECB
+0158 c441 2b e2                      BMI INLINE
+0159 c443 09                         DEX
+0160 c444 20 eb                      BRA INPUT
+0161 c446 a7 00              INP1    STAA 0,X
+0162 c448 08                         INX
+0163 c449 5c                         INCB
+0164 c44a c1 20                      CMPB #LINLMT       CHECK CHARACTER LIMIT
+0165 c44c 26 e3                      BNE INPUT
+0166 c44e 4f                 ENDLIN  CLRA
+0167 c44f a7 00                      STAA 0,X
+0168 c451 39                         RTS
+0169                                       * SELECT PROPER DRIVE
+0170 c452 81 30              GETDRV  CMPA #'0
+0171 c454 23 0e                      BLS GTD1
+0172 c456 81 33                      CMPA #'3
+0173 c458 22 0a                      BHI GTD1
+0174 c45a e6 01                      LDAB 1,X
+0175 c45c c1 2f                      CMPB #'/
+0176 c45e 26 04                      BNE GTD1
+0177 c460 08                         INX
+0178 c461 08                         INX
+0179 c462 20 02                      BRA GTD2
+0180 c464 86 01              GTD1    LDAA #1
+0181 c466 84 03              GTD2    ANDA #$03
+0182 c468 44                         LSRA
+0183 c469 46                         RORA
+0184 c46a 46                         RORA
+0185 c46b b7 a0 ac                   STAA DRVNUM
+0186 c46e ff a0 a0                   STX LINPTR
+0187                         * IDENTIFY COMMAND
+0188 c471 a6 01                      LDAA 1,X           CHECK FOR END OF LINE
+0189 c473 27 04                      BEQ MCH0           BR IF END OF LINE
+0190 c475 81 20                      CMPA #'            CHECK FOR DELIMITER
+0191 c477 26 10                      BNE NOMCH          BR IF DELIMITER
+0192 c479 a6 00              MCH0    LDAA 0,X
+0193 c47b ce c7 ce                   LDX #CMDTBL
+0194 c47e a1 00              MCH1    CMPA 0,X
+0195 c480 27 32                      BEQ MATCH          BR IF RESIDENT COMMAND FOUND
+0196 c482 08                 MCH2    INX
+0197 c483 08                         INX
+0198 c484 08                         INX
+0199 c485 6d 00                      TST 0,X            END OF COMMAND TABLE?
+0200 c487 26 f5                      BNE MCH1           BR IF NOT
+0201                         * RESIDENT COMMAND NOT FOUND,
+0202                         * CHECK DIRECTORY FOR COMMAND
+0203 c489 fe a0 a0           NOMCH   LDX LINPTR
+0204 c48c 81 30              LODS1   CMPA #'0
+0205 c48e 25 0c                      BCS LODS2
+0206 c490 81 33                      CMPA #'3
+0207 c492 22 08                      BHI LODS2
+0208 c494 bd c6 40                   JSR GETADD
+0209 c497 bd c0 03                   JSR CVTDTS
+0210 c49a 20 08                      BRA LODS3
+0211 c49c 8d 1f              LODS2   BSR SEARCH
+0212 c49e 25 13                      BCS LODS4
+0213 c4a0 ee 00                      LDX 0,X
+0214 c4a2 df 01                      STX TRKSEC
+0215 c4a4 ce ff ff           LODS3   LDX #$FFFF
+0216 c4a7 df 16                      STX ALTADD
+0217 c4a9 bd c0 1b                   JSR LODFIL
+0218 c4ac 25 05                      BCS LODS4
+0219 c4ae de 0d                      LDX POSTAM
+0220 c4b0 8c ff ff                   CPX #$FFFF
+0221 c4b3 39                 LODS4   RTS
+0222                                       
+0223 c4b4 ee 01              MATCH   LDX 1,X
+0224 c4b6 0c                         CLC
+0225 c4b7 39                         RTS
+0226                                      
+0227 c4b8 bd c7 92           LOCATE  JSR NXTOKN
+0228 c4bb 27 6d                      BEQ WHAT
+0229                         * THIS ROUTINE SEARCHES THE DIRECTORY FOR A FILE.
+0230                         * ON ENTRY `LINPTR` POINTS TO NAME TO BE MATCHED.
+0231                         * ON EXIT, `DIRTEM` POINTS TO FILE NAME, X POINTS
+0232                         * TO TRK-SEC NUMBER. CARRY IS SET IF NOT FOUND.
+0233 c4bd bd c6 8f           SEARCH  JSR RDDIR          READ DIRECTORY
+0234 c4c0 25 40                      BCS SEACER+2
+0235 c4c2 ce a0 b3                   LDX #DIR
+0236 c4c5 ff a0 a2           NEXTA   STX SEATEM
+0237 c4c8 ff a0 a6                   STX DIRTEM
+0238 c4cb fe a0 a0                   LDX LINPTR
+0239 c4ce c6 06                      LDAB #6
+0240 c4d0 a6 00              NEXT    LDAA 0,X
+0241 c4d2 27 05                      BEQ NEXTB          BR IF END OF LINE
+0242 c4d4 81 20                      CMPA #'            CK FOR DELIMITER
+0243 c4d6 26 01                      BNE NEXTB          BR IF NOT SPACE
+0244 c4d8 4f                         CLRA
+0245 c4d9 08                 NEXTB   INX
+0246 c4da ff a0 a4                   STX BUFTEM
+0247 c4dd fe a0 a2                   LDX SEATEM
+0248 c4e0 a1 00                      CMPA 0,X
+0249 c4e2 26 13                      BNE NEXTD
+0250 c4e4 6d 00                      TST 0,X
+0251 c4e6 27 1c                      BEQ FOUND
+0252 c4e8 08                         INX
+0253 c4e9 ff a0 a2                   STX SEATEM
+0254 c4ec fe a0 a4                   LDX BUFTEM
+0255 c4ef 5a                         DECB
+0256 c4f0 26 de                      BNE NEXT
+0257 c4f2 fe a0 a2                   LDX SEATEM
+0258 c4f5 0c                         CLC
+0259 c4f6 39                         RTS
+0260 c4f7 cb 0a              NEXTD   ADDB #10
+0261 c4f9 8d 0d                      BSR ADDBTX
+0262 c4fb 8c a2 b3                   CPX #DIR+$200
+0263 c4fe 26 c5                      BNE NEXTA
+0264 c500 86 06              SEACER  LDAA #6            NAME NOT FOUND
+0265 c502 0d                         SEC
+0266 c503 39                         RTS
+0267 c504 8d 02              FOUND   BSR ADDBTX
+0268 c506 0c                         CLC
+0269 c507 39                         RTS
+0270                         * ADD ACCB TO X
+0271 c508 37                 ADDBTX  PSHB
+0272 c509 08                 ABTX    INX
+0273 c50a 5a                         DECB
+0274 c50b 26 fc                      BNE ABTX
+0275 c50d 33                         PULB
+0276 c50e 39                         RTS
+0277                         * THIS ROUTINE LOCATES VACANCY IN DIRECTORY
+0278                         * ON EXIT, X POINTS TO VACANCY
+0279 c50f bd c6 8f           SEANXT  JSR RDDIR          READ DIRECTORY
+0280 c512 25 12                      BCS SNXERR
+0281 c514 ce a0 b3           SEANX0  LDX #DIR
+0282 c517 6d 00              SNEXT   TST 0,X
+0283 c519 27 0d                      BEQ FOUND1         VACANCY FOUND
+0284 c51b c6 10                      LDAB #16
+0285 c51d 8d e9                      BSR ADDBTX
+0286 c51f 8c a2 a3                   CPX #DIR+512-16
+0287 c522 26 f3                      BNE SNEXT
+0288 c524 86 07                      LDAA #7            DIRECTORY FULL
+0289 c526 0d                 SNXERR  SEC
+0290 c527 39                         RTS
+0291 c528 0c                 FOUND1  CLC
+0292 c529 39                         RTS
+0293 c52a 86 08              WHAT    LDAA #8            COMMAND NOT UNDERSTOOD
+0294 c52c 0d                         SEC
+0295 c52d 39                         RTS
+0296 c52e 86 0a              ADDERR  LDAA #$A           BAD ADDRESS
+0297 c530 0d                         SEC
+0298 c531 39                         RTS
+0299 c532 86 01              PROTCT  LDAA #$1           FILE PROTECTED
+0300 c534 0d                         SEC
+0301 c535 39                         RTS
+0302                                      
+0303                         * LOAD FILE ROUTINE
+0304 c536 bd c7 92           LOAD    JSR NXTOKN
+0305 c539 27 ef                      BEQ WHAT
+0306 c53b bd c4 8c                   JSR LODS1
+0307 c53e 23 03                      BLS LOD1           BLS=BCS+BEQ
+0308 c540 ff a0 48                   STX XFER
+0309 c543 39                 LOD1    RTS ERROR          IF CARRY SET
+0310                                      
+0311                         * SAVE ROUTINE 
+0312 c544 ce 00 00           SAVE    LDX #0             INIT NEXT FILE TEMP
+0313 c547 ff a0 a8                   STX NXTFIL
+0314 c54a bd c7 92                   JSR NXTOKN
+0315 c54d 27 db                      BEQ WHAT
+0316 c54f bd c6 1d                   JSR GETPAR         GET PARAMETERS FROM LINE
+0317 c552 25 da                      BCS ADDERR
+0318                         * ENTER HERE WHEN LINKING `SAVE` TO EXISTING PROGRAMS
+0319                         * PARAMETERS MUST BE SET IN `BEGADD`, `ENDADD`, `XFRADD`.
+0320                         * `LINPTR` POINTS TO NAME OF FILE.
+0321 c554 bd c4 bd                   JSR SEARCH         FIND NAME IN DIR
+0322 c557 25 31                      BCS NOTHER         BR IF NOT HERE
+0323 c559 ee 00                      LDX 0,X            PICK UP DTS
+0324 c55b df 05                      STX FWDLNK         SET UP LENGTH CHECK
+0325 c55d fe a0 a6                   LDX DIRTEM
+0326 c560 a6 00                      LDAA 0,X
+0327 c562 81 40                      CMPA #'@           CHECK PROTECTION
+0328 c564 27 cc                      BEQ PROTCT
+0329 c566 8c a2 93                   CPX #DIR+512-32    IS THIS LAST FILE?
+0330 c569 27 3a                      BEQ SAV3
+0331 c56b 6d 10                      TST 16,X           IS NEXT FILE EMPTY
+0332 c56d 27 36                      BEQ SAV3
+0333 c56f ee 16                      LDX 22,X           GET NEXT FILE START
+0334 c571 ff a0 a8                   STX NXTFIL
+0335 c574 bd c6 10                   JSR BEGEND
+0336 c577 bd c0 24                   JSR LNTH           CALCULATE FILE LENGTH
+0337 c57a 5d                 LNTHCK  TSTB               B CONTAINS NUMBER OF BLOCKS
+0338 c57b 27 2a                      BEQ SAV1
+0339 c57d bd c0 21                   JSR FWDCAL
+0340 c580 de 05                      LDX FWDLNK
+0341 c582 bc a0 a8                   CPX NXTFIL         CHECK ALLOCATION LIMITS
+0342 c585 27 75                      BEQ ALLERR
+0343 c587 5a                         DECB
+0344 c588 20 f0                      BRA LNTHCK
+0345                                      
+0346 c58a 81 06              NOTHER  CMPA #6
+0347 c58c 26 70                      BNE SAVERR
+0348 c58e bd c5 14                   JSR SEANX0         LOOK FOR VACANCY
+0349 c591 25 6b                      BCS SAVERR         BR IF DIRECTORY FULL
+0350 c593 ff a0 a6                   STX DIRTEM         SAVE VACANCY
+0351 c596 ff a0 a2                   STX SEATEM
+0352 c599 fe a0 a0                   LDX LINPTR
+0353 c59c a6 00                      LDAA 0,X
+0354 c59e 81 40                      CMPA #'@
+0355 c5a0 25 88                      BCS WHAT
+0356 c5a2 bd c7 3d                   JSR CMOVE1         MOVE NAME INTO DIRECTORY
+0357 c5a5 8d 69              SAV3    BSR BEGEND
+0358 c5a7 fe a0 b1           SAV1    LDX XFRADD
+0359 c5aa df 1a                      STX EXEADD
+0360 c5ac 7f 00 0a                   CLR FILTYP
+0361 c5af fe a0 a6                   LDX DIRTEM
+0362 c5b2 96 14                      LDAA BEGIN
+0363 c5b4 a7 0a                      STAA 10,X
+0364 c5b6 96 15                      LDAA BEGIN+1
+0365 c5b8 a7 0b                      STAA 11,X
+0366 c5ba 96 1e                      LDAA ENDA
+0367 c5bc a7 0c                      STAA 12,X
+0368 c5be 96 1f                      LDAA ENDA+1
+0369 c5c0 a7 0d                      STAA 13,X
+0370 c5c2 96 1a                      LDAA EXEADD
+0371 c5c4 a7 0e                      STAA 14,X
+0372 c5c6 96 1b                      LDAA EXEADD+1
+0373 c5c8 a7 0f                      STAA 15,X
+0374 c5ca ee 06                      LDX 6,X
+0375 c5cc df 01                      STX TRKSEC
+0376 c5ce bd c0 18                   JSR SAVFIL
+0377 c5d1 25 2b                      BCS SAVERR         BRANCH IF SAVE ERROR
+0378 c5d3 fe a0 a6                   LDX DIRTEM         STORE LAST SEC IN DIR
+0379 c5d6 96 01                      LDAA TRK
+0380 c5d8 a7 08                      STAA 8,X
+0381 c5da 96 02                      LDAA SCTR
+0382 c5dc a7 09                      STAA 9,X
+0383 c5de fe a0 a8                   LDX NXTFIL
+0384 c5e1 26 12                      BNE WTDIR
+0385 c5e3 de 01                      LDX TRKSEC
+0386 c5e5 df 05                      STX FWDLNK
+0387 c5e7 bd c0 21                   JSR FWDCAL
+0388 c5ea fe a0 a6                   LDX DIRTEM
+0389 c5ed 96 05                      LDAA FWDLNK
+0390 c5ef a7 16                      STAA 22,X
+0391 c5f1 96 06                      LDAA FWDLNK+1
+0392 c5f3 a7 17                      STAA 23,X
+0393                                      
+0394                         * WRITE DIRECTORY TO DISK
+0395 c5f5 bd c6 94           WTDIR   JSR DIRSET
+0396 c5f8 bd c0 18                   JSR SAVFIL
+0397 c5fb 39                         RTS                ERROR IF CARRY SET
+0398                                      
+0399 c5fc 86 09              ALLERR  LDAA #9 ALLOCATION ERROR
+0400 c5fe 0d                 SAVERR  SEC
+0401 c5ff 39                         RTS
+0402                         * ALLOCATE 10 BLOCKS (SECTORS)
+0403 c600 bd c5 0f           ALOCAT  JSR SEANXT
+0404 c603 25 f9                      BCS ALLERR+2
+0405 c605 a6 06                      LDAA 6,X
+0406 c607 81 22                      CMPA #34
+0407 c609 24 f1                      BCC ALLERR
+0408 c60b 6c 06                      INC 6,X
+0409 c60d 7e c5 f5                   JMP WTDIR
+0410                                      
+0411 c610 fe a0 ad           BEGEND  LDX BEGADD
+0412 c613 df 14                      STX BEGIN
+0413 c615 df 08                      STX TARGET
+0414 c617 fe a0 af                   LDX ENDADD
+0415 c61a df 1e                      STX ENDA
+0416 c61c 39                         RTS
+0417                                      
+0418                         * GET PARAMETERS FROM LINE BUFFER
+0419 c61d 8d 1b              GETPAR  BSR PARM2
+0420 c61f 25 15                      BCS PARERR
+0421 c621 ff a0 ad                   STX BEGADD
+0422 c624 8d 11                      BSR PARM1
+0423 c626 25 0e                      BCS PARERR
+0424 c628 ff a0 af                   STX ENDADD
+0425 c62b 8d 0a                      BSR PARM1
+0426 c62d 25 07                      BCS PARERR
+0427 c62f 26 01                      BNE PAR1
+0428 c631 09                         DEX                MAKE X = $FFFF
+0429 c632 ff a0 b1           PAR1    STX XFRADD
+0430 c635 0c                         CLC
+0431 c636 39                 PARERR  RTS
+0432 c637 fe a0 a4           PARM1   LDX BUFTEM
+0433 c63a bd c7 9e           PARM2   JSR NXT2           MOVE POINTER TO NEXT TOKEN
+0434 c63d ff a0 a4                   STX BUFTEM
+0435                         * GET ADDRESS-CONVERT TO BINARY
+0436                         * ON ENTRY, X POINTS TO FIRST CHARACTER
+0437                         * ON EXIT, X CONTAINS ADDRESS
+0438 c640 4f                 GETADD  CLRA
+0439 c641 b7 a0 aa                   STAA ADDTEM
+0440 c644 b7 a0 ab                   STAA ADDTEM+1
+0441 c647 20 16                      BRA GETAD3
+0442 c649 8d 21              GETAD1  BSR CONVRT
+0443 c64b 25 1b                      BCS GETRTS
+0444 c64d c6 04                      LDAB #4
+0445 c64f 78 a0 ab           GETAD2  ASL ADDTEM+1
+0446 c652 79 a0 aa                   ROL ADDTEM
+0447 c655 5a                         DECB
+0448 c656 26 f7                      BNE GETAD2
+0449 c658 bb a0 ab                   ADDA ADDTEM+1
+0450 c65b b7 a0 ab                   STAA ADDTEM+1
+0451 c65e 08                         INX
+0452 c65f a6 00              GETAD3  LDAA 0,X
+0453 c661 27 04                      BEQ GETDON
+0454 c663 81 20                      CMPA #'            CK FOR DELIMITER
+0455 c665 26 e2                      BNE GETAD1
+0456 c667 0c                 GETDON  CLC
+0457 c668 fe a0 aa           GETRTS  LDX ADDTEM
+0458 c66b 39                         RTS
+0459                         * CONVERT ASCII TO BINARY, CARRY SET IF ERROR
+0460                         * OVERFLOW FLAG IS CLEAR IF DECIMAL NUMBER
+0461 c66c 80 30              CONVRT  SUBA #$30
+0462 c66e 2d 12                      BLT CVTERR
+0463 c670 81 09                      CMPA #9
+0464 c672 0a                         CLV
+0465 c673 23 0b                      BLS CVTQWT
+0466 c675 80 07                      SUBA #7
+0467 c677 81 0a                      CMPA #$A
+0468 c679 25 07                      BCS CVTERR         BR IF LOWER
+0469 c67b 81 0f                      CMPA #$F
+0470 c67d 22 03                      BHI CVTERR
+0471 c67f 0b                         SEV
+0472 c680 0c                 CVTQWT  CLC
+0473 c681 39                         RTS
+0474 c682 0d                 CVTERR  SEC
+0475 c683 39                         RTS
+0476                         * ROUTINE TO GO TO SPECIFIED ADDRESS
+0477 c684 bd c7 92           GOTO    JSR NXTOKN
+0478 c687 27 41                      BEQ WHATER
+0479 c689 8d b5                      BSR GETADD
+0480 c68b 25 f5                      BCS CVTERR
+0481 c68d 6e 00                      JMP 0,X
+0482                         * READ DIRECTORY FROM DISK
+0483 c68f 8d 11              RDDIR   BSR DIRST
+0484 c691 7e c0 1b                   JMP LODFIL
+0485                                      
+0486 c694 ce a0 b3           DIRSET  LDX #DIR
+0487 c697 df 14                      STX BEGIN
+0488 c699 ce a2 b2                   LDX #DIR+$1FF
+0489 c69c df 1e                      STX ENDA
+0490 c69e 86 d0                      LDAA #$D0          MINI-PLUS DIRECTORY
+0491 c6a0 97 0a                      STAA FILTYP
+0492 c6a2 b6 a0 ac           DIRST   LDAA DRVNUM
+0493 c6a5 97 00                      STAA DRV
+0494 c6a7 4f                         CLRA
+0495 c6a8 97 01                      STAA TRK
+0496 c6aa 97 02                      STAA SCTR
+0497 c6ac ce ff ff                   LDX #$FFFF
+0498 c6af df 1a                      STX EXEADD
+0499 c6b1 ce a0 b3                   LDX #DIR
+0500 c6b4 df 16                      STX ALTADD
+0501 c6b6 39                         RTS
+0502                                      
+0503                         * INITIALIZE DISK DIRECTORY
+0504 c6b7 ce a0 b3           INIT    LDX #DIR
+0505 c6ba 6f 00              CLEAR   CLR 0,X
+0506 c6bc 08                         INX
+0507 c6bd 8c a2 b3                   CPX #DIR+$200
+0508 c6c0 26 f8                      BNE CLEAR
+0509 c6c2 86 01                      LDAA #1
+0510 c6c4 b7 a0 b9                   STAA DIR+6
+0511 c6c7 7e c5 f5                   JMP WTDIR
+0512                                      
+0513 c6ca 86 08              WHATER  LDAA #8
+0514 c6cc 0d                 LISTER  SEC
+0515 c6cd 39                         RTS
+0516                                      
+0517                         * LIST DIRECTORY ON TERMINAL
+0518 c6ce 8d bf              DIRECT  BSR RDDIR          READ DIRECTORY
+0519 c6d0 25 fa                      BCS LISTER
+0520 c6d2 ce c7 b0                   LDX #DIRHDR
+0521 c6d5 bd e0 7e                   JSR PDATA
+0522 c6d8 bd c3 63                   JSR CRLF
+0523 c6db ce a0 b3                   LDX #DIR
+0524 c6de 6d 06              LIST1   TST 6,X            CHECK FOR LAST FILE
+0525 c6e0 27 24                      BEQ DONE
+0526 c6e2 c6 06              LIST    LDAB #6
+0527 c6e4 a6 00              LSTA    LDAA 0,X
+0528 c6e6 26 02                      BNE LSTB
+0529 c6e8 86 20                      LDAA #'            INJECT SPACE
+0530 c6ea bd e1 d1           LSTB    JSR OUTEEE
+0531 c6ed 08                         INX
+0532 c6ee 5a                         DECB
+0533 c6ef 26 f3                      BNE LSTA
+0534 c6f1 8d 14                      BSR PRTSEC
+0535 c6f3 bd e0 cc                   JSR OUTS
+0536 c6f6 8d 24                      BSR PRTADD
+0537 c6f8 ff a0 a6                   STX DIRTEM
+0538 c6fb bd c3 63                   JSR CRLF
+0539 c6fe fe a0 a6                   LDX DIRTEM
+0540 c701 8c a2 b3                   CPX #DIR+$200
+0541 c704 26 d8                      BNE LIST1
+0542 c706 39                 DONE    RTS
+0543 c707 8d 00              PRTSEC  BSR PS1            PRINT FIRST AND LAST SECTORS
+0544 c709 ff a0 a2           PS1 STX SEATEM
+0545 c70c bd e0 cc                   JSR OUTS
+0546 c70f ee 00                      LDX 0,X
+0547 c711 df 01                      STX TRKSEC
+0548 c713 bd c3 24                   JSR $C324
+0549 c716 fe a0 a2                   LDX SEATEM
+0550 c719 08                         INX
+0551 c71a 08                         INX
+0552 c71b 39                         RTS
+0553 c71c 8d 02              PRTADD  BSR PA1            PRINT BEGIN AND END ADDRESSES
+0554 c71e 8d 00                      BSR PA1
+0555 c720 bd e0 c8           PA1 JSR OUT4HS
+0556 c723 39                         RTS
+0557                         * ROUTINE TO RENAME A FILE
+0558 c724 bd c4 b8           RENAME  JSR LOCATE
+0559 c727 25 a3                      BCS LISTER
+0560 c729 fe a0 a6                   LDX DIRTEM
+0561 c72c ff a0 a2                   STX SEATEM
+0562 c72f bd c7 92                   JSR NXTOKN
+0563 c732 27 96                      BEQ WHATER
+0564 c734 81 40                      CMPA #'@
+0565 c736 25 92                      BCS WHATER
+0566 c738 8d 03                      BSR CMOVE1
+0567 c73a 7e c5 f5                   JMP WTDIR
+0568                                      
+0569 c73d c6 06              CMOVE1  LDAB #6
+0570 c73f a6 00              CMOVE   LDAA 0,X
+0571 c741 27 08                      BEQ ENDMOV
+0572 c743 81 20                      CMPA #'            CK FOR DELIMITER
+0573 c745 26 03                      BNE CMOVE2
+0574 c747 4f                         CLRA
+0575 c748 20 01                      BRA ENDMOV
+0576 c74a 08                 CMOVE2  INX
+0577 c74b ff a0 a4           ENDMOV  STX BUFTEM
+0578 c74e fe a0 a2                   LDX SEATEM
+0579 c751 a7 00                      STAA 0,X
+0580 c753 08                         INX
+0581 c754 ff a0 a2                   STX SEATEM
+0582 c757 fe a0 a4                   LDX BUFTEM
+0583 c75a 5a                         DECB
+0584 c75b 26 e2                      BNE CMOVE
+0585 c75d 39                         RTS
+0586                         * DELETE FILE FROM DIRECTORY
+0587 c75e bd c4 b8           DELETE  JSR LOCATE
+0588 c761 25 39                      BCS NXT
+0589 c763 fe a0 a6                   LDX DIRTEM
+0590 c766 a6 00                      LDAA 0,X           CHECK IF FILE PROTECTED
+0591 c768 81 40                      CMPA #'@
+0592 c76a 26 03                      BNE DEL1
+0593 c76c 7e c5 32                   JMP PROTCT
+0594 c76f a6 10              DEL1    LDAA 16,X          CHECK IF LAST FILE
+0595 c771 26 08                      BNE DEL3
+0596 c773 a6 06                      LDAA 6,X
+0597 c775 a7 16                      STAA 22,X
+0598 c777 a6 07                      LDAA 7,X
+0599 c779 a7 17                      STAA 23,X
+0600 c77b 8c a2 a3           DEL3    CPX #DIR+512-16
+0601 c77e 27 07                      BEQ DEL2
+0602 c780 a6 10                      LDAA 16,X
+0603 c782 a7 00                      STAA 0,X
+0604 c784 08                         INX
+0605 c785 20 f4                      BRA DEL3
+0606 c787 6f 00              DEL2    CLR 0,X
+0607 c789 08                         INX
+0608 c78a 8c a2 b3                   CPX #DIR+$200
+0609 c78d 26 f8                      BNE DEL2
+0610 c78f 7e c5 f5                   JMP WTDIR
+0611                         * ROUTINE TO GET NEXT TOKEN
+0612 c792 fe a0 a0           NXTOKN  LDX LINPTR
+0613 c795 8d 07                      BSR NXT2
+0614 c797 27 03                      BEQ NXT
+0615 c799 ff a0 a0                   STX LINPTR
+0616 c79c 39                 NXT     RTS
+0617 c79d 08                 NXT1    INX
+0618 c79e a6 00              NXT2    LDAA 0,X
+0619 c7a0 27 0d                      BEQ SKIP2
+0620 c7a2 81 20                      CMPA #'            CK FOR DELIMITER
+0621 c7a4 26 f7                      BNE NXT1
+0622                         * ROUTINE TO SKIP SPACES
+0623 c7a6 08                 SKIP1   INX
+0624 c7a7 a6 00              SKIPSP  LDAA 0,X
+0625 c7a9 27 04                      BEQ SKIP2
+0626 c7ab 81 20                      CMPA #'            CK FOR DELIMITER
+0627 c7ad 27 f7                      BEQ SKIP1
+0628 c7af 39                 SKIP2   RTS
+0629 c7b0 46 49 4c 45 3a 20  DIRHDR  FCC /FILE:  FST LST BEGA ENDA STRT/
+     20 46 53 54 20 4c
+     53 54 20 42 45 47
+     41 20 45 4e 44 41
+     20 53 54 52 54
+0630 c7cd 04                         FCB 4
+0631 c7ce 4c                 CMDTBL  FCC /L/            LOAD FILE
+0632 c7cf c5 36                      FDB LOAD
+0633 c7d1 53                         FCC /S/            SAVE
+0634 c7d2 c5 44                      FDB SAVE
+0635 c7d4 49                         FCC /I/            INITIALIZE DIRECTORY
+0636 c7d5 c6 b7                      FDB INIT
+0637 c7d7 46                         FCC /F/            LIST FILES
+0638 c7d8 c6 ce                      FDB DIRECT
+0639 c7da 44                         FCC /D/            DELETE FILE
+0640 c7db c7 5e                      FDB DELETE
+0641 c7dd 58                         FCC /X/            EXIT TO MONITOR
+0642 c7de e0 e3                      FDB MONTR
+0643 c7e0 41                         FCC /A/            ALLOCATE
+0644 c7e1 c6 00                      FDB ALOCAT
+0645 c7e3 4a                         FCC /J/            GOTO
+0646 c7e4 c6 84                      FDB GOTO
+0647 c7e6 52                         FCC /R/            RENAME
+0648 c7e7 c7 24                      FDB RENAME
+0649 c7e9 4d                         FCC /M/            MINIDOS
+0650 c7ea c3 ac                      FDB MINDOS
+0651 c7ec 00                 ENDTBL  FCB 0
+0652                                        END
+0653                                       
+
+
+
