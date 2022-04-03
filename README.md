@@ -37,9 +37,9 @@ i701, i650 and NORC work is based on my own SimH simulators
 Currently supports visuals emulation for:
 
 * IBM 360/370 (MAR/2022)
-  * IBM 2401, 2415 and 3420 tapes
-  * IBM 2450 and 3525 card reader punch
-  * IBM 1403 and 3203 printer
+  * IBM 2401, 2415 and 3420 Tapes
+  * IBM 2450 and 3525 Card reader punch
+  * IBM 1403 and 3203 Printer
   * IBM 2314 and 3330 DASD
   * IBM 1052 and 3210 Printer-Keyboard Console
   * IBM 360 CPU Model 30, 40, 50 and 65
@@ -231,7 +231,7 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/NO
 
 Once uncompressed, you will find several ready to run .bat files: 
 
-* execute `run CPanel IBM NORC PERT.bat` batch file to run a sample PERT processing
+* execute `run CPanel IBM NORC PERT.bat` batch file to run a sample PERT processing (1958)
 * execute `run CPanel IBM NORC tape demo.bat` to demo tape rewind and forwards read
  
   ![IBM NORC PERT](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/NORC/NORC.png)
@@ -242,7 +242,7 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i6
 
 Once uncompressed, you will find several ready to run .bat files: 
 
-* execute `run CPanel IBM 650 FORTRANSIT graph.bat` batch file to run a sample FORTRANSIT program
+* execute `run CPanel IBM 650 FORTRANSIT graph.bat` batch file to run a sample FORTRANSIT program (1957)
  
   ![IBM 650 FORTRANSIT](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/i650_fortansit.png)
 
