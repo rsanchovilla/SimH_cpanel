@@ -123,6 +123,13 @@ PATCHD  CLR A
         STX   $DD52
         STX   $DDB8
         
+* Patch fortran line printer to use the screen
+* D2B8:	7E D283 ZLP     JMP  ZWARMS   FORTRAN LINE PRINTER OUTPUT VECTOR (Points to DOS68 WARM START)
+*    -> 7E D286 ZOUTCH  JMP  ZOUTEE   
+
+        LDX   #$D286
+        STX   $D2B9
+        
         RTS
         
 PBUF    RMB 2           POINTER TO NEXT BYTE TO GET FROM READ DISK SECTOR BUFFER
