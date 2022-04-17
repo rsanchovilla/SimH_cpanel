@@ -390,6 +390,13 @@ void Symbolic_Trace(char * sTrace)
     } else if(strstr(sTrace, "**troff")) {
         traceon--; if (traceon < -1000) traceon=-1000; // safety
     } else if(strstr(sTrace, "**tron")) {
+        // **tron start trace
+        // **tron0 force start trace at current level (SWI calls will not be traced)
+        // **tron2 start trace at current level, (SWI calls two level deep will be traced)
+        // **tronN start trace at current level, (SWI calls N level deep will be traced)
+        if ((sTrace[6]>='0') && (sTrace[6]<='9'))  {
+            traceon = sTrace[6] - '0';
+        }
         traceon++; if (traceon > 1000) traceon=1000; // safety
     }
     if (trace) {
@@ -402,7 +409,7 @@ void Symbolic_Trace(char * sTrace)
         if (trace == 2) {
             cu=0;
             while(len>0) {
-                if (cu==0) sim_printf("             %04X: ", addr);
+                if (cu==0) sim_printf("     %04X: ", addr);
                 d=CPU_BD_get_mbyte(addr++);
                 c=(d < 32) ? '?':d;
                 buf[cu++]=c; 
@@ -500,6 +507,7 @@ t_stat sim_instr (void)
 
         //symbolic trace: locate source text for current intruction
         src_addr = PC;
+
         if ((MEM_Symbolic_Buffer) && (MEM_Symbolic_Buffer[PC * 80])) {
             src_text = src_trace = &MEM_Symbolic_Buffer[PC * 80];
             while (src_trace=strstr(src_trace, "**")) {
@@ -1927,14 +1935,12 @@ t_stat sim_instr (void)
         //symbolic trace
         if (traceon <= 0) {
             // cpu instructions trace inhibited
-        } else if (src_text) {
-            sim_debug(DEBUG_symb, &m6800_dev, 
-                "%04X %-80s SP:%04X IX:%04X A:%02X B:%02X CC:%02X \n", 
-                src_addr, src_text, SP, IX, A, B, CC);         
         } else {
+            sim_debug(DEBUG_symb, &m6800_dev, "%04X ", src_addr);         
+            if (src_text) sim_debug(DEBUG_symb, &m6800_dev, "%-80s ", src_text);         
             sim_debug(DEBUG_inst, &m6800_dev, 
-                "%04X %-20s SP:%04X IX:%04X A:%02X B:%02X CC:%02X \n", 
-                src_addr, printf_opcode(buf_opcode, src_addr, IR, fetched_byte0, fetched_byte1), SP, IX, A, B, CC);         
+                "%-15s SP:%04X IX:%04X A:%02X B:%02X CC:%02X \n", 
+                printf_opcode(buf_opcode, src_addr, IR, fetched_byte0, fetched_byte1), SP, IX, A, B, CC);         
         }
 
     }
@@ -2141,6 +2147,10 @@ void sim_load_symbolic(FILE *fileref, CONST char *fnam)
         i=strlen(slin);
         for (i=0;i<(int) strlen(slin);i++) {
             if (slin[i] < 32) slin[i]=' ';
+        }
+        if (slin[8]=='/') {
+            i=12;
+            goto rdaddr;
         }
         i=0; 
         // skip leading blanks
@@ -2388,7 +2398,6 @@ t_stat m6800_deposit(t_value val, t_addr exta, UNIT *uptr, int32 sw)
 
 /* end of m6800.c */
 
-// FLEX 2.0 F77 .> da error FDC comando D9 unk
-// backspace de FLEX no funciona 
-// CoRes de FDOS no genera prog en el PTP, comando DOS no funciona (se cuelga)
 // no funciona Space Voyage
+// en asmv/ra6800ml, poner en close clr fcbsta 
+

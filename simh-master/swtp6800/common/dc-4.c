@@ -296,8 +296,13 @@ struct {
 
     int32   multiple_sector;                // multiple read-write flag
     int32   index_countdown;                // index countdown for type I commands
+    int32   busy_countdown;                 // busy flag countdown 
     int32   sector_base;                    // indicates is first sector on track is sector 1 or sector 0
 } dc4 = {0};
+
+// ***************************************************************
+// important note: all disks attached should have the same geometry
+// ***************************************************************
 
 /* Floppy Disk Controller data structures
 
@@ -305,6 +310,7 @@ struct {
        dc4_dsk_unit       Disk Controller unit descriptor
        dc4_dsk_reg        Disk Controller register list
        dc4_dsk_mod        Disk Controller modifiers list
+
 */
 
 UNIT dc4_dsk_unit[] = {
@@ -386,6 +392,7 @@ t_stat dc4_dsk_reset (DEVICE *dptr)
     dc4.sectsize = SECT_SIZE; 
     dc4.multiple_sector=0;
     dc4.index_countdown=0;
+    dc4.busy_countdown=0;
     dc4.sector_base=1; 
     return SCPE_OK;
 }
@@ -425,6 +432,7 @@ int32 dc4_fdcdrv(int32 io, int32 data)
         sim_fseek(dc4_dsk_unit[dc4.cur_dsk].fileref, pos, SEEK_SET); /* seek to offset */
         sim_fread(dc4_dsk_unit[dc4.cur_dsk].filebuf, SECT_SIZE, 1, dc4_dsk_unit[dc4.cur_dsk].fileref); /* read in buffer */
         dc4_dsk_unit[dc4.cur_dsk].u3 |= BUSY | DRQ; /* set DRQ & BUSY */
+        dc4.busy_countdown=5; // start busy countdown
         dc4_dsk_unit[dc4.cur_dsk].pos = 0;      /* clear counter */
         SIR = (uint8 * )(dc4_dsk_unit[dc4.cur_dsk].filebuf); 
         // detect disk type based on image geometry or SIR record
@@ -497,13 +505,14 @@ int32 dc4_fdccmd(int32 io, int32 data)
         switch(data) {
             case 0x8C:                  //read sector command type II
             case 0x9C:                  //read multiple sectors command type II
-                sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Read of disk %d, track %d, sector %d \n", 
+                sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Read disk %d, track %d, sector %d \n", 
                     dc4.cur_dsk, TRK, SECT);
                 if ((SECT - dc4.sector_base >= dc4.spt) || (SECT < dc4.sector_base)) {
                     dc4_dsk_unit[dc4.cur_dsk].u3 |= RECNF; /* set RECORD NOT FOUND */
                     break; 
                 }
                 dc4_dsk_unit[dc4.cur_dsk].u3 |= BUSY; /* set BUSY */
+                dc4.busy_countdown=5; // start busy countdown
                 pos = dc4.trksiz * TRK; /* calculate file offset */
                 pos += dc4.sectsize * (SECT - dc4.sector_base);
                 sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Read pos = %ld ($%08X) \n",
@@ -524,16 +533,17 @@ int32 dc4_fdccmd(int32 io, int32 data)
                 break;
             case 0xAC:                  //write command type II
             case 0xBC:                  //write multiple sectors command type II
-                sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Write of disk %d, track %d, sector %d \n",
+                sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Write disk %d, track %d, sector %d \n",
                     dc4.cur_dsk, TRK, SECT);
                 if (dc4_dsk_unit[dc4.cur_dsk].u3 & WRPROT) {
                     sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Cannot write to write-protected disc %d \n",
                        dc4.cur_dsk);
                 } else {
                     dc4_dsk_unit[dc4.cur_dsk].u3 |= BUSY;/* set BUSY */
+                    dc4.busy_countdown=5; // start busy countdown
                     pos = dc4.trksiz * TRK; /* calculate file offset */
                     pos += dc4.sectsize * (SECT - dc4.sector_base);
-                    sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Write pos = %ld ($%08X) \n",
+                    sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Write pos = %ld ($%06X) \n",
                         pos, (unsigned int) pos);
                     err = sim_fseek(dc4_dsk_unit[dc4.cur_dsk].fileref, pos, SEEK_SET); /* seek to offset */
                     if (err) {
@@ -548,7 +558,7 @@ int32 dc4_fdccmd(int32 io, int32 data)
             case 0x1B:                  //seek command type I
                 TRK = dc4.fdcbyte; /* set track */
                 dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(BUSY | DRQ); /* clear flags */
-                sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Seek of disk %d, track %d \n",
+                sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Seek disk %d, track %d \n",
                     dc4.cur_dsk, TRK);
                 break;
             case 0x0B:                  //restore command type I  
@@ -569,10 +579,17 @@ int32 dc4_fdccmd(int32 io, int32 data)
                 sim_printf("Unknown FDC command %02X\n\r", data);
         }
     } else {                            /* read status from fdc */
+        if (dc4.busy_countdown) {
+            dc4.busy_countdown--; 
+            // if busy countdown expires, set remove busy in status returned to cpu
+            if (dc4.busy_countdown==0) {
+                dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(BUSY); /* clear flags */
+            }
+        } 
         val = dc4_dsk_unit[dc4.cur_dsk].u3;     /* set return value */
         if (dc4.index_countdown) {
             dc4.index_countdown--;
-            // if index countdoen expires, set index flag in status returned to cpu
+            // if index countdown expires, set index flag in status returned to cpu
             if (dc4.index_countdown==0) val |= INDEX; 
         }
         sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Drive %d status=%02X \n",
@@ -591,7 +608,7 @@ int32 dc4_fdctrk(int32 io, int32 data)
         sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdctrk: Drive %d track set to %d \n",
             dc4.cur_dsk, TRK);
     }
-    sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdctrk: Drive %d track read as %d \n",
+    sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdctrk: Drive %d track reg read: current track %d \n",
         dc4.cur_dsk, TRK);
     return TRK;
 }
@@ -622,11 +639,12 @@ int32 dc4_fdcdata(int32 io, int32 data)
     int32 val, err;
 
     if (dc4.cur_dsk >= NUM_DISK) return 0; 
+    dc4.busy_countdown=5; // start busy countdown
     if (io) {                           /* write byte to fdc */
         dc4.fdcbyte = data;                 /* save for seek */
         if (dc4_dsk_unit[dc4.cur_dsk].pos < (t_addr) dc4.sectsize) { /* copy bytes to buffer */
-            sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdata: Writing byte %d of %02X \n",
-                dc4_dsk_unit[dc4.cur_dsk].pos, data);
+            sim_debug (DEBUG_read, &dc4_dsk_dev, "fdcdata: Write byte %02X (dec=%d char='%c') to disk, Current Drive %d TRK %d SECT %d POS %d\n", 
+                  data, data, (data < 32) ? '?':data, dc4.cur_dsk, TRK, SECT, dc4_dsk_unit[dc4.cur_dsk].pos);
             *((uint8 *)(dc4_dsk_unit[dc4.cur_dsk].filebuf) + dc4_dsk_unit[dc4.cur_dsk].pos) = data; /* byte into buffer */
             dc4_dsk_unit[dc4.cur_dsk].pos++;    /* step counter */
             if (dc4_dsk_unit[dc4.cur_dsk].pos == dc4.sectsize) {
@@ -642,7 +660,7 @@ int32 dc4_fdcdata(int32 io, int32 data)
     } else {                            /* read byte from fdc */
         if (dc4_dsk_unit[dc4.cur_dsk].pos < (t_addr) dc4.sectsize) { /* copy bytes from buffer */
             val = *((uint8 *)(dc4_dsk_unit[dc4.cur_dsk].filebuf) + dc4_dsk_unit[dc4.cur_dsk].pos) & 0xFF;
-            sim_debug (DEBUG_read, &dc4_dsk_dev, "fdcdata: Read byte %02X (dec=%d char='%c'), Current Drive %d TRK %d SECT %d POS %d\n", 
+            sim_debug (DEBUG_read, &dc4_dsk_dev, "fdcdata: Read byte %02X (dec=%d char='%c') from disk, Current Drive %d TRK %d SECT %d POS %d\n", 
                   val, val, (val < 32) ? '?':val, dc4.cur_dsk, TRK, SECT, dc4_dsk_unit[dc4.cur_dsk].pos);
             dc4_dsk_unit[dc4.cur_dsk].pos++;        /* step counter */
             if (dc4_dsk_unit[dc4.cur_dsk].pos == dc4.sectsize) { // sector finished

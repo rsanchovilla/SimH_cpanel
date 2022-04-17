@@ -1,0 +1,1123 @@
+                                 NAM LINK  LINKING LOADER
+                          *      
+                          *       C.COPYRIGHT 1977 BY
+                          *       ROBERT D.GRAPPEL LEXINGTON MASS.
+                          *       AND KACK E. HEMENWAY BOSTON MASS.
+                          *       ALL RIGHTS RESERVED
+                          *
+                          *       MODIFIED BY ROBERTO SANCHO TO 
+                          *       SUPPORT CP/68 OPERATING SYSTEM
+                          *       (C) APR 2022        
+                          *
+                          *       DO NOT CHANGE CP/68 STACK 
+                          *       SO DO NOT ISSUE: LDS #$A042
+                        
+B000:                              ORG $B000      
+B000:                     
+B000: 7E B0 44            START   JMP    LOAD
+B003:                                    
+B003: 7E B9 10            TABLES         JMP ETABL    ENT TABLES  
+B006: 7E B6 3D            MONTOR         JMP EMON     ENT MONTOR
+B009: 7E B6 09            GETB           JMP EGETB    ENT GETB
+B00C: 7E B6 0C            OUTB           JMP EOUTB    ENT OUTB  
+B00F: 7E B6 2C            WREOF          JMP EWREOF   ENT WREOF
+B012: 7E B5 C4            INITIO         JMP EINIIO   ENT INITIO
+B015: 7E B6 30            UPDATE         JMP EUPDT    ENT UPDATE
+B018:                     *
+B018:                     *
+B018: 7E B9 0A            INEEE   JMP    EINCH     INPUT A CHAR
+B01B: 7E B9 0D            OUTEEE  JMP    EOUTCH    OUTPUT A CHAR TO TTY
+B01E:                     BASE    RMB    2         BASE ADDRESS
+B020:                     NFLAG   RMB    1         NIBBLE FLAG 0=LFT, FF=RIGTH
+B021:                     BYTE    RMB    1         TEMPORARY LOCATION
+B022:                     LC      RMB    2         LOCATION COUNTER
+B024:                     DESCRA  RMB    2         DESCRIPTOR ADDRESS
+B026:                     DESCRC  RMB    1         DESCRIPTOR COUNT
+B027:                     NXTSYM  RMB    2         NEXT ENTRY IN SYMTAB
+B029:                     SYMTAB  RMB    2         SYMBOL TABLE 
+B02B:                     SYMEND  RMB    2         END OF ADDR
+B02D:                     SYMPTR  RMB    2         SYMTAB (SYMBOL TABLE) POINTER
+B02F:                     STRNG1  RMB    2         PARAM LIST
+B031:                     STRNG2  RMB    2         FOR 
+B033:                     COUNT   RMB    1         COMPARE
+B034:                     XSAV    RMB    2         TEMP 
+B036:                     HIVAL   RMB    2         HIGHEST COMMON COUNT
+B038:                     CBAS    RMB    2         START OF COMMON
+B03A:                     CBASSV  RMB    2         CBAS SAVE TEMP 
+B03C:                     HICBAS  RMB    2         END OF COMMON
+B03E:                     BASESV  RMB    2         FIRST LOCATION
+B040:                     LAST    RMB    2         LAST LOCATION
+B042:                     UPLIM   RMB    2         UPPER MEMORY LIMIT
+B044:                     *                        
+B044:                     *                        
+B044:                     * LOAD IS THE ENTRY POINT TO THE LOADER
+B044:                     *                        
+B044: BD B0 12            LOAD    JSR    INITIO    INIT THE I/O
+B047: FE B0 04                    LDX   TABLES+1  POINT TO START OF SYMTAB
+B04A: 86 A3                       LDAA  #$A3       ADD SPACE FOR 75 SYMBOLS
+B04C: C6 02                       LDAB  #$02       
+B04E: AB 01                       ADDA   1,X        ADD TO START OF SYMTAB
+B050: E9 00                       ADCB   0,X        
+B052: B7 B0 2C                    STAA   SYMEND+1  INIT
+B055: F7 B0 2B                    STAB   SYMEND    
+B058: EE 00                       LDX   0,X        GET START OF SYMTAB
+B05A: FF B0 29                    STX    SYMTAB    
+B05D: FF B0 27                    STX    NXTSYM    
+B060:                     *                        
+B060: 7F B0 20                    CLR    NFLAG     NFLAG := LEFT
+B063: BD B4 5B                    JSR    CRLF      
+B066:                     *                        
+B066: CE B4 7C                    LDX   #MSGL      GET BASE ADDRESS
+B069: BD B4 31                    JSR    PDATA1    
+B06C: BD B3 F7                    JSR    BADDR     GET VALUE IN HEX
+B06F: BD B4 5B                    JSR    CRLF      
+B072: FF B0 1E                    STX    BASE      INIT
+B075: FF B0 3E                    STX    BASESV    INIT
+B078:                     *                        
+B078: CE B4 91                    LDX   #MSGA      GET UPPER MEMORY LIMIT
+B07B: BD B4 31                    JSR    PDATA1    
+B07E: BD B3 F7                    JSR    BADDR     GET VALUE IN HEX
+B081: FF B0 42                    STX    UPLIM     
+B084: BD B4 5B                    JSR    CRLF      
+B087:                     *                        
+B087: CE B4 AC                    LDX   #MSGB      GET START OF COMMON
+B08A: BD B4 31                    JSR    PDATA1    
+B08D: BD B3 F7                    JSR    BADDR     INIT
+B090: BD B4 5B                    JSR    CRLF      
+B093: FF B0 38                    STX    CBAS      INIT
+B096: FF B0 3A                    STX    CBASSV    INIT
+B099: FF B0 3C                    STX    HICBAS    INIT
+B09C: FE B0 1E                    LDX    BASE      GET START OF MEMORY
+B09F:                     *                        
+B09F:                     *                        
+B09F: BD B0 09            LOAD2   JSR    GETB      GET A BYTE
+B0A2: 25 52                       BCS    LOADE     EOF 
+B0A4:                     *                        
+B0A4: 81 00                       CMPA   #$00      NULL?
+B0A6: 27 F7                       BEQ    LOAD2     YES
+B0A8:                     *                        
+B0A8: 81 50                       CMPA   #'P'      PROGRAM MODULE?
+B0AA: 26 03                       BNE    *+5       
+B0AC:                     *                        
+B0AC: 7E B1 78                    JMP    LOADP     YES
+B0AF:                     *                        
+B0AF: 81 4E                       CMPA   #'N'      ENTRY ?
+B0B1: 26 03                       BNE    *+5       NO
+B0B3:                     *                        
+B0B3: 7E B1 C2                    JMP    LOADN     YES
+B0B6:                     *                        
+B0B6: 81 58                       CMPA   #'X'      EXTERNAL ?
+B0B8: 26 03                       BNE    *+5       NO
+B0BA:                     *                        
+B0BA: 7E B2 2F                    JMP    LOADX     YES
+B0BD:                     *                        
+B0BD: 81 4D                       CMPA   #'M'      COMMON?
+B0BF: 26 03                       BNE    *+5       NO
+B0C1:                     *                        
+B0C1: 7E B1 A7                    JMP    LOADM     YES 
+B0C4:                     *                        
+B0C4: 81 52                       CMPA   #'R'      RELOCATABLE?
+B0C6: 26 03                       BNE    *+5       NO
+B0C8:                     *                        
+B0C8: 7E B1 5D                    JMP    LOADR     YES
+B0CB:                     *                        
+B0CB:                     * CONVERT TWO ASCII BYTES TO ONE HEX BYTE
+B0CB:                     *                        
+B0CB: 80 30                       SUBA   #$30      
+B0CD: 81 09                       CMPA   #$09      
+B0CF: 2F 02                       BLE    *+4       
+B0D1: 80 07                       SUBA   #$07      
+B0D3:                     *                        
+B0D3: 7D B0 20                    TST    NFLAG     WHICH NIBBLE ?
+B0D6: 26 0C                       BNE    RNIBL     RIGHT
+B0D8:                     *                        
+B0D8: 48                          ASL A            LEFT
+B0D9: 48                          ASL A            
+B0DA: 48                          ASL A            
+B0DB: 48                          ASL A            
+B0DC: B7 B0 21                    STAA   BYTE      SAVE LEFT NIBBLE
+B0DF: 73 B0 20                    COM    NFLAG     SET FOR RIGHT NIBBLE        
+B0E2: 20 BB                       BRA    LOAD2     
+B0E4:                     *                        
+B0E4: F6 B0 21            RNIBL   LDAB   BYTE      GET LEFT NIBBLE
+B0E7: 1B                          ABA              
+B0E8: A7 00                       STAA   0,X       
+B0EA: FF B0 40                    STX    LAST      LOADED ADDRESS
+B0ED: 08                          INX              
+B0EE: BD B3 DE                    JSR    MEMCHK    CHECK MEMORY LIMIT
+B0F1: 73 B0 20                    COM    NFLAG     SET FOR LEFT NIBBLE
+B0F4: 20 A9                       BRA    LOAD2     
+B0F6:                     *                        
+B0F6:                     * EOF FINISH LOAD        
+B0F6:                     *                        
+B0F6: BD B4 5B            LOADE   JSR    CRLF      
+B0F9: BD B4 5B                    JSR    CRLF      
+B0FC: CE B4 E9                    LDX    #MSGE     "LOAD LIMITS"
+B0FF: BD B4 31                    JSR    PDATA1    
+B102: BD B4 5B                    JSR    CRLF      
+B105: CE B0 3E                    LDX    #BASESV   PRINT STARTING ADDRESS
+B108: BD B4 41                    JSR    OUT4HS    
+B10B: CE B0 40                    LDX    #LAST     
+B10E: BD B4 41                    JSR    OUT4HS    PRINT END ADDRESS
+B111: BD B4 5B                    JSR    CRLF      
+B114: BD B4 5B                    JSR    CRLF      
+B117:                     *                        
+B117: BD B3 3F                    JSR    PRTSYM    PRINT LOAD MAP
+B11A: BD B4 5B                    JSR    CRLF      "COMMON"
+B11D: CE B4 C4                    LDX    #MSGC     
+B120: BD B4 31                    JSR    PDATA1    
+B123: BD B4 5B                    JSR    CRLF      
+B126: CE B0 38                    LDX    #CBAS     PRINT START OF COMMON
+B129: BD B4 41                    JSR    OUT4HS    
+B12C: FE B0 3C                    LDX    HICBAS    
+B12F: BC B0 38                    CPX    CBAS      ANY COMMON ?
+B132: 27 04                       BEQ    LOADE1    NO
+B134:                     *                        
+B134: 09                          DEX              HICBAS:=HICBAS-1
+B135: FF B0 3C                    STX    HICBAS    
+B138:                     *                        
+B138: CE B0 3C            LOADE1  LDX    #HICBAS   PRINT END OF COMMON
+B13B: BD B4 41                    JSR    OUT4HS    
+B13E: BD B4 5B                    JSR    CRLF      
+B141: BD B4 5B                    JSR    CRLF      
+B144:                     *                        
+B144:                     *                        
+B144: CE B5 16                    LDX    #SAVFIL   
+B147: BD B4 31                    JSR    PDATA1    PRINT PROMPT
+B14A: BD B0 18                    JSR    INEEE     
+B14D: 81 59                       CMPA   #'Y'      SAVE LOADED FILE?
+B14F: 26 06                       BNE    *+8       NO
+B151:                     *                        
+B151: BD B4 5B                    JSR    CRLF      
+B154: 7E B5 33                    JMP    PUNCH     
+B157:                     *                        
+B157: BD B4 5B                    JSR    CRLF      
+B15A: 7E B0 15                    JMP    UPDATE    ALL DONE
+B15D:                     *                        
+B15D:                     *                        
+B15D:                     * RELOCATE ADDRESS       
+B15D:                     *                        
+B15D: 09                  LOADR   DEX              POINT TO ADDRESS
+B15E: 09                          DEX              
+B15F: A6 01                       LDAA   1,X       GET ADDRESS
+B161: E6 00                       LDAB   0,X       
+B163: BB B0 1F                    ADDA   BASE+1    ADD IN RELOCATION
+B166: F9 B0 1E                    ADCB   BASE      
+B169: A7 01                       STAA   1,X       STORE
+B16B: E7 00                       STAB   0,X       
+B16D: 08                          INX              POINT TO NEXT ADDRESS
+B16E: BD B3 DE                    JSR    MEMCHK    CHECK MEMORY LIMIT
+B171: 08                          INX              
+B172: BD B3 DE                    JSR    MEMCHK    CHECK MEMORY LIMIT
+B175: 7E B0 9F                    JMP    LOAD2     
+B178:                     *                        
+B178:                     * PROGRAM MODULE         
+B178:                     *                        
+B178: 09                  LOADP   DEX              
+B179: 09                          DEX              BACKUP OVER COMMON LENGTH
+B17A: FF B0 1E                    STX    BASE      SAVE AS NEW BASE
+B17D: A6 01                       LDAA   1,X       
+B17F: E6 00                       LDAB   0,X       
+B181: BB B0 39                    ADDA   CBAS+1    
+B184: F9 B0 38                    ADCB   CBAS      
+B187: B7 B0 3B                    STAA   CBASSV+1  SAVE IN CBASSV
+B18A: F7 B0 3A                    STAB   CBASSV    
+B18D:                     *                        
+B18D:                     * SEE IF NEW COMMON IS LONGER
+B18D:                     * THAN LAST COMMON       
+B18D:                     *                        
+B18D: B6 B0 3D                    LDAA   HICBAS+1  
+B190: F6 B0 3C                    LDAB   HICBAS    
+B193: B0 B0 3B                    SUBA   CBASSV+1  
+B196: F2 B0 3A                    SBCB   CBASSV    
+B199:                     *                        
+B199: 24 06                       BCC    LOADP1    NO
+B19B:                     *                        
+B19B: FE B0 3A                    LDX    CBASSV    YES
+B19E: FF B0 3C                    STX    HICBAS    
+B1A1:                     *                        
+B1A1: FE B0 1E            LOADP1  LDX    BASE      LOAD NEW BASE
+B1A4: 7E B0 9F                    JMP    LOAD2     
+B1A7:                     *                        
+B1A7:                     * COMMON RELOCATION      
+B1A7:                     *                        
+B1A7: 09                  LOADM   DEX              POINT TO ADDRESS
+B1A8: 09                          DEX              
+B1A9: A6 01                       LDAA   1,X       GET ADDRESS
+B1AB: E6 00                       LDAB   0,X       
+B1AD: BB B0 39                    ADDA   CBAS+1    ADD IN BASE OF COMMON
+B1B0: F9 B0 38                    ADCB   CBAS      
+B1B3: A7 01                       STAA   1,X       STORE 
+B1B5: E7 00                       STAB   0,X       
+B1B7: 08                          INX              POINT TO NEXT ADDRESS
+B1B8: BD B3 DE                    JSR    MEMCHK    CHECK MEMORY LIMIT
+B1BB: 08                          INX              
+B1BC: BD B3 DE                    JSR    MEMCHK    CHECK MEMORY LIMIT
+B1BF:                     *                        
+B1BF: 7E B0 9F                    JMP    LOAD2     
+B1C2:                     *                        
+B1C2:                     * HANDLE ENTRY SYMBOL    
+B1C2:                     *                        
+B1C2: C6 06               LOADN   LDAB   #6        6 CHAR/SYMBOL
+B1C4: F7 B0 26                    STAB   DESCRC    
+B1C7: 09                          DEX              
+B1C8: 09                          DEX              
+B1C9: A6 00                       LDAA   0,X       LC:=ENTRY VALUE
+B1CB: B7 B0 22                    STAA   LC        
+B1CE: A6 01                       LDAA   1,X       
+B1D0: B7 B0 23                    STAA   LC+1      
+B1D3: 09                          DEX              BACK UP TO START OF SYMBOL
+B1D4: 09                          DEX              
+B1D5: 09                          DEX              
+B1D6: 09                          DEX              
+B1D7: 09                          DEX              
+B1D8: 09                          DEX              
+B1D9: FF B0 40                    STX    LAST      INIT LAST
+B1DC: FF B0 24                    STX    DESCRA    POINT TO SYMBOL
+B1DF: BD B2 D2                    JSR    LKPSYM    
+B1E2: C1 FF                       CMPB   #$FF      SYMBOL IN TABLE?
+B1E4: 26 0E                       BNE    LOADN4    YES
+B1E6:                     *                        
+B1E6: BD B2 92                    JSR    STOSYM    STORE SYMBOL
+B1E9: FE B0 2D                    LDX    SYMPTR    
+B1EC: 6C 08                       INC    8,X       SET DEFINED BIT
+B1EE:                     *                        
+B1EE: FE B0 40            LOADN3  LDX    LAST      RESTORE POINTER
+B1F1: 7E B0 9F                    JMP    LOAD2     
+B1F4:                     *                        
+B1F4: C5 01               LOADN4  BITB   #$01      ALREADY DEFINED?
+B1F6: 27 09                       BEQ    LOADN6    NO
+B1F8:                     *                        
+B1F8: CA 80                       ORAB   #$80      SET REDEFINED BIT
+B1FA: FE B0 2D                    LDX    SYMPTR    
+B1FD: E7 08                       STAB   8,X       
+B1FF: 20 ED                       BRA    LOADN3    
+B201:                     *                        
+B201: FF B0 24            LOADN6  STX    DESCRA    
+B204: B6 B0 22                    LDAA   LC        ADDR OF SYMBOL
+B207: F6 B0 23                    LDAB   LC+1      
+B20A: FE B0 2D                    LDX    SYMPTR    
+B20D: 6C 08                       INC    8,X       DET DEFINED BIT
+B20F: A7 06                       STAA   6,X       
+B211: E7 07                       STAB   7,X       
+B213:                     *                        
+B213:                     * FOLLOW LINKAGES        
+B213:                     *                        
+B213: FE B0 24                    LDX    DESCRA    
+B216: EE 00               LOADN5  LDX    0,X       
+B218: FF B0 2D                    STX    SYMPTR    
+B21B: FE B0 24                    LDX    DESCRA    
+B21E: A7 00                       STAA   0,X       
+B220: E7 01                       STAB   1,X       
+B222: FE B0 2D                    LDX    SYMPTR    
+B225: 8C FF FF                    CPX    #$FFFF    AT END LINK?
+B228: 27 C4                       BEQ    LOADN3    YES
+B22A:                     *                        
+B22A: FF B0 24                    STX    DESCRA    NO
+B22D: 20 E7                       BRA    LOADN5    
+B22F:                     *                        
+B22F:                     * HANDLE EXTERNAL SYMBOL 
+B22F:                     *                        
+B22F: C6 06               LOADX   LDAB   #6        6 CHARS/SYMBOL
+B231: F7 B0 26                    STAB   DESCRC    
+B234: 09                          DEX              BACK UP TO START OF SYMBOL
+B235: 09                          DEX              
+B236: 09                          DEX              
+B237: 09                          DEX              
+B238: 09                          DEX              
+B239: 09                          DEX              
+B23A: FF B0 24                    STX    DESCRA    POINT TO SYMBOL
+B23D: FF B0 22                    STX    LC        SAVE ADDRESS
+B240: 08                          INX              
+B241: 08                          INX              
+B242: FF B0 40                    STX    LAST      SAVE ADDRESS
+B245: BD B2 D2                    JSR    LKPSYM    
+B248: C1 FF                       CMPB   #$FF      IN TABLE?
+B24A: 26 12                       BNE    LOADX4    YES
+B24C:                     *                        
+B24C: BD B2 92                    JSR    STOSYM    NO,SAVE SYMBOL
+B24F: FE B0 22                    LDX    LC        
+B252: 86 FF               LOADX2  LDAA   #$FF      SET END LINK
+B254: A7 00                       STAA   0,X       
+B256: A7 01                       STAA   1,X       
+B258:                     *                        
+B258: FE B0 40            LOADX3  LDX    LAST      LOAD NEW LAST
+B25B: 7E B0 9F                    JMP    LOAD2     
+B25E:                     *                        
+B25E: FE B0 2D            LOADX4  LDX    SYMPTR    POINT TO SYMBOL ENTRY
+B261: E6 08                       LDAB   8,X       GET INFO BYTE
+B263: C5 01                       BITB   #$01      DEFINED?
+B265: 27 0D                       BEQ    LOADX5    NO
+B267:                     *                        
+B267: A6 06                       LDAA   6,X       GET ENTRY ADDRESS
+B269: E6 07                       LDAB   7,X       
+B26B: FE B0 22                    LDX    LC        
+B26E: A7 00                       STAA   0,X       
+B270: E7 01                       STAB   1,X       SAVE ADDRESS
+B272: 20 E4                       BRA    LOADX3    
+B274:                     *                        
+B274: EE 06               LOADX5  LDX    6,X       GET FIRST LINK
+B276:                     *                        
+B276: FF B0 24            LOADX6  STX    DESCRA    FOLLOW LINKAGE
+B279: EE 00                       LDX    0,X       
+B27B: 8C FF FF                    CPX    #$FFFF    END LINK?
+B27E: 26 F6                       BNE    LOADX6    
+B280:                     *                        
+B280: B6 B0 22                    LDAA   LC        
+B283: F6 B0 23                    LDAB   LC+1      
+B286: FE B0 24                    LDX    DESCRA    
+B289: A7 00                       STAA   0,X       NEW LINK ADDRESS
+B28B: E7 01                       STAB   1,X       
+B28D: FE B0 22                    LDX    LC        
+B290: 20 C0                       BRA    LOADX2    SET NEW END LINK
+B292:                     *                        
+B292:                     * SYMBOL TABLE ROUTINES  
+B292:                     *                        
+B292:                     * STORE SYMBOL IN SYMTAB 
+B292:                     *                        
+B292: FE B0 27            STOSYM  LDX    NXTSYM    
+B295: FF B0 2D                    STX    SYMPTR    SAVE ENTRY ADDR
+B298: BC B0 2B                    CPX    SYMEND    FULL?
+B29B: 26 09                       BNE    STOSY1    NO
+B29D:                     *                        
+B29D: CE B4 66                    LDX    #SYMFUL   ERROR 
+B2A0: BD B4 31                    JSR    PDATA1    
+B2A3: 7E B0 06                    JMP    MONTOR    RETURN TO EXEC
+B2A6:                     *                        
+B2A6:                     * MOVE SYMBOL TO SYMTAB  
+B2A6:                     *                        
+B2A6: FE B0 24            STOSY1  LDX    DESCRA    GET ADDRESS OF SYMBOL
+B2A9: A6 00                       LDAA   0,X       
+B2AB: 08                          INX              
+B2AC: FF B0 24                    STX    DESCRA    
+B2AF: FE B0 27                    LDX    NXTSYM    
+B2B2: A7 00                       STAA   0,X       
+B2B4: 08                          INX              
+B2B5: FF B0 27                    STX    NXTSYM    
+B2B8: 7A B0 26                    DEC    DESCRC    
+B2BB: 26 E9                       BNE    STOSY1    
+B2BD:                     *                        
+B2BD: B6 B0 22                    LDAA   LC        GET LC (LOCATION COUNTER)
+B2C0: A7 00                       STAA   0,X       
+B2C2: B6 B0 23                    LDAA   LC+1      
+B2C5: A7 01                       STAA   1,X       
+B2C7: 86 00                       LDAA   #$00      SET INFO BIT
+B2C9: A7 02                       STAA   2,X       
+B2CB: 08                          INX              
+B2CC: 08                          INX              
+B2CD: 08                          INX              
+B2CE: FF B0 27                    STX    NXTSYM    
+B2D1: 39                          RTS              
+B2D2:                     *                        
+B2D2:                     * LOOK UP SYMBOL IN TABLE
+B2D2:                     *                        
+B2D2: FE B0 29            LKPSYM  LDX    SYMTAB    
+B2D5: BC B0 27                    CPX    NXTSYM    EMPTY TABLE?
+B2D8: 27 2B                       BEQ    LKPSY3    YES
+B2DA:                     *                        
+B2DA: FF B0 2D            LKPSY1  STX    SYMPTR    
+B2DD: FF B0 2F                    STX    STRNG1    
+B2E0: FE B0 24                    LDX    DESCRA    
+B2E3: FF B0 31                    STX    STRNG2    
+B2E6: B6 B0 26                    LDAA   DESCRC    
+B2E9: B7 B0 33                    STAA   COUNT     
+B2EC: CE B0 2F                    LDX    #STRNG1   
+B2EF: BD B3 10                    JSR    COMPAR    
+B2F2: 27 14                       BEQ    LKPSY2    MATCH
+B2F4:                     *                        
+B2F4: FE B0 2D                    LDX    SYMPTR    
+B2F7: 08                          INX              
+B2F8: 08                          INX              
+B2F9: 08                          INX              
+B2FA: 08                          INX              
+B2FB: 08                          INX              
+B2FC: 08                          INX              
+B2FD: 08                          INX              
+B2FE: 08                          INX              
+B2FF: 08                          INX              
+B300: BC B0 27                    CPX    NXTSYM    END OF ENTRIES?
+B303: 26 D5                       BNE    LKPSY1    NO
+B305:                     *                        
+B305:                     * NOT IN SYMTAB          
+B305:                     *                        
+B305: C6 FF               LKPSY3  LDAB   #$FF      
+B307: 39                          RTS              
+B308:                     *                        
+B308:                     * FOUND SYMBOL           
+B308:                     *                        
+B308: FE B0 2D            LKPSY2  LDX    SYMPTR    
+B30B: E6 08                       LDAB   8,X       
+B30D: EE 06                       LDX    6,X       GET VALUE
+B30F: 39                          RTS              
+B310:                     *                        
+B310:                     * COMPARE TWO STRINGS    
+B310:                     *                        
+B310:                     * ON ENTRY [X] = A PARAM LIST OF 5 BYTES:
+B310:                     *    ADDR (STRING 1)     
+B310:                     *    ADDR (STRING 2)     
+B310:                     *    COUNT OF BYTES TO BE COMPARED
+B310:                     *                        
+B310:                     * ON RETURN IF CC Z BIT IS SET THERE IS A MATCH
+B310:                     *                        
+B310: 36                  COMPAR  PSH A            
+B311: 37                          PSH B            
+B312: E6 04                       LDAB   4,X       GET COUNT
+B314: FF B0 34                    STX    XSAV      SAVE PARAM POINTER
+B317: FE B0 34            CMP1    LDX    XSAV      GET PARAM POINTER
+B31A: EE 00                       LDX    0,X       GET ADDR(STRING1)
+B31C: A6 00                       LDAA   0,X       GET CHAR
+B31E: FE B0 34                    LDX    XSAV      
+B321: 6C 01                       INC    1,X       PTR SET TO NEXT 
+B323: 26 02                       BNE    CMP2      CHAR IN
+B325: 6C 00                       INC    0,X       STRING1
+B327: FE B0 34            CMP2    LDX    XSAV      GET PARAM POINTER
+B32A: EE 02                       LDX    2,X       GET ADDR(STRING2)
+B32C: A1 00                       CMPA   0,X       COMPARE 
+B32E: 26 0C                       BNE    CDONE     NOT EQUAL
+B330: FE B0 34                    LDX    XSAV      GET PARAM POINTER
+B333: 6C 03                       INC    3,X       PTR SET TO NEXT
+B335: 26 02                       BNE    CMP3      CHAR IN
+B337: 6C 02                       INC    2,X       STRING2
+B339: 5A                  CMP3    DEC B            DEC COUNTER
+B33A: 26 DB                       BNE    CMP1      TRY AGAIN
+B33C: 33                  CDONE   PUL B            DONE
+B33D: 32                          PUL A            
+B33E: 39                          RTS              
+B33F:                     *                        
+B33F:                     * PRINT LOAD MAP         
+B33F:                     *                        
+B33F: CE B4 F7            PRTSYM  LDX    #MAPMSG   "LOAD MAP"
+B342: BD B4 31                    JSR    PDATA1    
+B345: BD B4 5B                    JSR    CRLF      
+B348: FE B0 29                    LDX    SYMTAB    
+B34B: BC B0 27                    CPX    NXTSYM    ANY SYMBOLS?
+B34E: 27 56                       BEQ    PRTSM3    NO 
+B350:                     *                        
+B350:                     * FIND LOWEST VALUE ENTRY TO PRINT
+B350:                     *                        
+B350: CE FF FF            SORT    LDX    #$FFFF    
+B353: FF B0 36                    STX    HIVAL     
+B356: FE B0 29                    LDX    SYMTAB    
+B359:                     *                        
+B359: FF B0 2D            SORT1   STX    SYMPTR    
+B35C: 86 FF                       LDAA   #$FF      
+B35E: A1 08                       CMPA   8,X       ALREADY PRINTED?
+B360: 27 1C                       BEQ    SORT2     YES
+B362:                     *                        
+B362: 08                          INX              
+B363: 08                          INX              
+B364: 08                          INX              
+B365: 08                          INX              
+B366: 08                          INX              
+B367: 08                          INX              
+B368: FF B0 2F                    STX    STRNG1    POINT TO ENTRY
+B36B: CE B0 36                    LDX    #HIVAL    
+B36E: FF B0 31                    STX    STRNG2    POINT TO HIVAL
+B371: 86 02                       LDAA   #2        
+B373: B7 B0 33                    STAA   COUNT     SET COUNT
+B376: CE B0 2F                    LDX    #STRNG1   POINT TO PARAMETERES
+B379: BD B3 10                    JSR    COMPAR    
+B37C: 25 13                       BCS    SORT3     ENTRY < HIVAL
+B37E:                     *                        
+B37E: FE B0 2D            SORT2   LDX    SYMPTR    
+B381: 08                          INX              
+B382: 08                          INX              
+B383: 08                          INX              
+B384: 08                          INX              
+B385: 08                          INX              
+B386: 08                          INX              
+B387: 08                          INX              
+B388: 08                          INX              
+B389: 08                          INX              
+B38A: BC B0 27                    CPX    NXTSYM    END OF TABLE?
+B38D: 27 0F                       BEQ    SORT4     YES
+B38F:                     *                        
+B38F: 20 C8                       BRA    SORT1     NO
+B391:                     *                        
+B391: FE B0 2D            SORT3   LDX    SYMPTR    HIVAL := ENTRY
+B394: FF B0 24                    STX    DESCRA    SAVE LOWEST ENTRY ADDR
+B397: EE 06                       LDX    6,X       GET VALUE
+B399: FF B0 36                    STX    HIVAL     
+B39C: 20 E0                       BRA    SORT2     
+B39E:                     *                        
+B39E: CE FF FF            SORT4   LDX    #$FFFF    
+B3A1: BC B0 36                    CPX    HIVAL     PRINTED ENTIRE MAP?
+B3A4: 26 01                       BNE    PRTSM0    NO
+B3A6:                     *                        
+B3A6: 39                  PRTSM3  RTS              YES, ALL DONE
+B3A7:                     *                        
+B3A7: FE B0 24            PRTSM0  LDX    DESCRA    GET ENTRY TO BE PRINTED
+B3AA: C6 06               PRTSM1  LDAB   #6        PRINT 6 CHAR SYMBOL
+B3AC: A6 00               PRTSM2  LDAA   0,X       GET CHAR
+B3AE: 08                          INX              
+B3AF: BD B0 1B                    JSR    OUTEEE    
+B3B2: 5A                          DEC B            DONE?
+B3B3: 26 F7                       BNE    PRTSM2    NO
+B3B5:                     *                        
+B3B5: BD B4 45                    JSR    OUTS      PRINT SPACE
+B3B8:                     *                        
+B3B8: BD B4 41                    JSR    OUT4HS    PRINT HEX VALUE
+B3BB: E6 00                       LDAB   0,X       GET INFO BYTE
+B3BD: C5 01                       BITB   #$01      UNRESOLVED?
+B3BF: 26 06                       BNE    PRTSM4    NO
+B3C1:                     *                        
+B3C1: CE B5 00                    LDX    #UNRES    YES
+B3C4: BD B4 31                    JSR    PDATA1    
+B3C7:                     *                        
+B3C7: C5 80               PRTSM4  BITB   #$80      REDEFINED?
+B3C9: 27 06                       BEQ    PRTSM5    NO
+B3CB:                     *                        
+B3CB: CE B5 0C                    LDX    #REDEF    YES
+B3CE: BD B4 31                    JSR    PDATA1    
+B3D1:                     *                        
+B3D1:                     *                        
+B3D1: BD B4 5B            PRTSM5  JSR    CRLF      
+B3D4: FE B0 24                    LDX    DESCRA    FLAG AS PRINTED
+B3D7: 86 FF                       LDAA   #$FF      
+B3D9: A7 08                       STAA   8,X       
+B3DB: 7E B3 50                    JMP    SORT      GET ANOTHER ENTRY
+B3DE:                     *                        
+B3DE:                     * CHECK TO SEE IF MEMORY OVERRUN
+B3DE:                     *                        
+B3DE: BC B0 42            MEMCHK  CPX    UPLIM     OVERRUN?
+B3E1: 27 01                       BEQ    MEMCKE    YES
+B3E3:                     *                        
+B3E3: 39                          RTS              NO
+B3E4:                     *                        
+B3E4: BD B4 5B            MEMCKE  JSR    CRLF      
+B3E7: CE B4 CC                    LDX    #MSGD     ERROR MESSAGE
+B3EA: BD B4 31                    JSR    PDATA1    
+B3ED: BD B4 5B                    JSR    CRLF      
+B3F0: 31                          INS              FIX STACK
+B3F1: 31                          INS              
+B3F2: 7E B0 F6                    JMP    LOADE     PRINT PARTIAL LOAD MAP
+B3F5:                     *                        
+B3F5:                     * I/O ROUTINES           
+B3F5:                     *                        
+B3F5:                     BXSAV   RMB 2            
+B3F7:                     *                        
+B3F7:                     * BUILD 16 BIT ADDRESS   
+B3F7:                     *                        
+B3F7: 8D 0C               BADDR   BSR    INBYTE    
+B3F9: B7 B3 F5                    STAA   BXSAV     
+B3FC: 8D 07                       BSR    INBYTE    
+B3FE: B7 B3 F6                    STAA   BXSAV+1   
+B401: FE B3 F5                    LDX    BXSAV     
+B404: 39                          RTS              
+B405:                     *                        
+B405:                     * INPUT A BYTE           
+B405:                     *                        
+B405: 8D 09               INBYTE  BSR    INHEX     
+B407: 48                          ASL A            
+B408: 48                          ASL A            
+B409: 48                          ASL A            
+B40A: 48                          ASL A            
+B40B: 16                          TAB              
+B40C: 8D 02                       BSR    INHEX     
+B40E: 1B                          ABA              
+B40F: 39                          RTS              
+B410:                     *                        
+B410:                     * INPUT HEX CHARACTER    
+B410:                     *                        
+B410: BD B0 18            INHEX   JSR    INEEE     
+B413: 80 30                       SUBA   #$30      
+B415: 2B 0F                       BMI    NOTHEX    
+B417:                     *                        
+B417: 81 09                       CMPA   #$09      
+B419: 2F 0A                       BLE    INHEXR    
+B41B:                     *                        
+B41B: 81 11                       CMPA   #$11      
+B41D: 2B 07                       BMI    NOTHEX    
+B41F:                     *                        
+B41F: 81 16                       CMPA   #$16      
+B421: 2E 03                       BGT    NOTHEX    
+B423:                     *                        
+B423: 80 07                       SUBA   #$07      
+B425:                     *                        
+B425: 39                  INHEXR  RTS              
+B426:                     *                        
+B426:                     * NOT  A HEX CHARACTER   
+B426:                     *                        
+B426: 86 3F               NOTHEX  LDAA   #'?'      
+B428: BD B0 1B                    JSR    OUTEEE    
+B42B: 20 E3                       BRA    INHEX     
+B42D:                     *                        
+B42D:                     * PRINT DATA STRING      
+B42D:                     *                        
+B42D: BD B0 1B            PDATA2  JSR    OUTEEE    
+B430: 08                          INX              
+B431: A6 00               PDATA1  LDAA   0,X       
+B433: 81 04                       CMPA   #4        
+B435: 26 F6                       BNE    PDATA2    
+B437:                     *                        
+B437: 39                          RTS              
+B438:                     *                        
+B438:                     * OUTPUT TWO HEX CHARACTERS
+B438:                     *                        
+B438: A6 00               OUT2H   LDAA   0,X       
+B43A: 8D 0E               OUT2HA  BSR    OUTHL     
+B43C: A6 00                       LDAA   0,X       
+B43E: 08                          INX              
+B43F: 20 0D                       BRA    OUTHR     
+B441:                     *                        
+B441: 8D F5               OUT4HS  BSR    OUT2H     
+B443: 8D F3               OUT2HS  BSR    OUT2H     
+B445: 86 20               OUTS    LDAA   #$20      
+B447: 7E B0 1B                    JMP    OUTEEE    
+B44A:                     *                        
+B44A: 44                  OUTHL   LSR A            
+B44B: 44                          LSR A            
+B44C: 44                          LSR A            
+B44D: 44                          LSR A            
+B44E:                     *                        
+B44E: 84 0F               OUTHR   ANDA   #$0F      
+B450: 8B 30                       ADDA   #$30      
+B452: 81 39                       CMPA   #$39      
+B454: 23 02                       BLS    OUTCH     
+B456:                     *                        
+B456: 8B 07                       ADDA   #$07      
+B458:                     *                        
+B458: 7E B0 1B            OUTCH   JMP    OUTEEE    
+B45B:                     *                        
+B45B: 86 0D               CRLF    LDAA   #$0D      
+B45D: BD B0 1B                    JSR    OUTEEE    
+B460: 86 0A                       LDAA   #$0A      
+B462: BD B0 1B                    JSR    OUTEEE    
+B465:                     *                        
+B465: 39                          RTS              
+B466:                     *
+B466:                     * MESSAGES
+B466:                     *
+B466: 53 59 4D 42 4F 4C   SYMFUL  FCC    'SYMBOL TABLE OVERFLOW'
+B46C: 20 54 41 42 4C 45 
+B472: 20 4F 56 45 52 46 
+B478: 4C 4F 57          
+B47B: 04                          FCB    4
+B47C: 45 4E 54 45 52 20   MSGL    FCC    'ENTER BASE ADDRESS: '
+B482: 42 41 53 45 20 41 
+B488: 44 44 52 45 53 53 
+B48E: 3A 20             
+B490: 04                          FCB    4    
+B491: 45 4E 54 45 52 20   MSGA    FCC    'ENTER UPPER MEMORY LIMIT: '
+B497: 55 50 50 45 52 20 
+B49D: 4D 45 4D 4F 52 59 
+B4A3: 20 4C 49 4D 49 54 
+B4A9: 3A 20             
+B4AB: 04                          FCB    4    
+B4AC: 45 4E 54 45 52 20   MSGB    FCC    'ENTER START OF COMMON: '
+B4B2: 53 54 41 52 54 20 
+B4B8: 4F 46 20 43 4F 4D 
+B4BE: 4D 4F 4E 3A 20    
+B4C3: 04                          FCB    4    
+B4C4: 43 4F 4D 4D 4F 4E   MSGC    FCC    'COMMON:'
+B4CA: 3A                
+B4CB: 04                          FCB    4
+B4CC: 2A 2A 2A 2A 2A 2A   MSGD    FCC    '****** MEMORY OVERRUN ******'
+B4D2: 20 4D 45 4D 4F 52 
+B4D8: 59 20 4F 56 45 52 
+B4DE: 52 55 4E 20 2A 2A 
+B4E4: 2A 2A 2A 2A       
+B4E8: 04                          FCB    4
+B4E9: 4C 4F 41 44 20 4C   MSGE    FCC    'LOAD LIMITS: '
+B4EF: 49 4D 49 54 53 3A 
+B4F5: 20                
+B4F6: 04                          FCB    4
+B4F7: 4C 4F 41 44 20 4D   MAPMSG  FCC    'LOAD MAP'
+B4FD: 41 50             
+B4FF: 04                          FCB    4
+B500: 55 4E 52 45 53 4F   UNRES   FCC    'UNRESOLVED '
+B506: 4C 56 45 44 20    
+B50B: 04                          FCB    4
+B50C: 52 45 44 45 46 49   REDEF   FCC    'REDEFINED'
+B512: 4E 45 44          
+B515: 04                          FCB    4
+B516: 53 41 56 45 20 4C   SAVFIL  FCC    'SAVE LOADED FILE? Y OR N: '
+B51C: 4F 41 44 45 44 20 
+B522: 46 49 4C 45 3F 20 
+B528: 59 20 4F 52 20 4E 
+B52E: 3A 20             
+B530: 04                          FCB    4
+B531:                     *
+B531:                     * PUNCH: OUTPUT LOAD MODULE IN mikbug FORMAT
+B531:                     * (BASESV - LAST)
+B531:                     *
+B531:                     MCONT   RMB 1
+B532:                     TEMP    RMB 1
+B533:                     *
+B533: =$B533               PUNCH   EQU *
+B533:                     
+B533: B6 B0 41            PUN11   LDAA  LAST+1
+B536: B0 B0 3F                    SUBA  BASESV+1
+B539: F6 B0 40                    LDAB  LAST
+B53C: F2 B0 3E                    SBCB  BASESV
+B53F: 26 04                       BNE PUN22
+B541:                     *
+B541: 81 10                       CMPA  #16
+B543: 25 02                       BCS PUN23
+B545:                     *
+B545: 86 0F               PUN22   LDAA  #15 
+B547:                     *
+B547: 8B 04               PUN23   ADDA  #4
+B549: B7 B5 31                    STAA  MCONT
+B54C: 80 03                       SUBA  #3
+B54E: B7 B5 32                    STAA  TEMP
+B551:                     *
+B551: CE B5 BF                    LDX #MTAPE1
+B554: BD B5 B1                    JSR DDATA1
+B557: 5F                          CLR B
+B558:                     *
+B558:                     * OUTPUT FRAME COUNT
+B558:                     *
+B558: CE B5 31                    LDX #MCONT
+B55B: 8D 33                       BSR PUNT2
+B55D:                     *
+B55D:                     * OUTPUT ADDRESS
+B55D:                     *
+B55D: CE B0 3E                    LDX #BASESV
+B560: BD B5 90                    JSR PUNT2
+B563: BD B5 90                    JSR PUNT2
+B566:                     *
+B566:                     * OUTPUT DATA
+B566:                     *                        
+B566: FE B0 3E                    LDX BASESV
+B569:                     *
+B569: BD B5 90            PUN32   JSR PUNT2
+B56C: 7A B5 32                    DEC TEMP
+B56F: 26 F8                       BNE PUN32                                           
+B571:                     *
+B571: FF B0 3E                    STX BASESV
+B574: 53                          COM B
+B575: 37                          PSH B
+B576: 30                          TSX
+B577: BD B5 90                    JSR PUNT2
+B57A: 33                          PUL B
+B57B: FE B0 3E                    LDX BASESV
+B57E: 09                          DEX
+B57F: BC B0 40                    CPX LAST
+B582: 26 AF                       BNE PUN11
+B584:                     *
+B584: CE B5 B8                    LDX #EOF
+B587: BD B5 B1                    JSR DDATA1
+B58A:                     *
+B58A: BD B0 0F                    JSR WREOF                
+B58D:                     *
+B58D: 7E B0 15                    JMP UPDATE
+B590:                     *
+B590: EB 00               PUNT2   ADDB  0,X
+B592: A6 00               OUT2HD  LDAA  0,X
+B594: 8D 05                       BSR OUTHLL
+B596: A6 00                       LDAA  0,X
+B598: 08                          INX
+B599: 20 04                       BRA OUTHRR
+B59B:                     *       
+B59B: 44                  OUTHLL  LSR A
+B59C: 44                          LSR A 
+B59D: 44                          LSR A 
+B59E: 44                          LSR A 
+B59F:                     *
+B59F: 84 0F               OUTHRR  ANDA  #$0F
+B5A1: 8B 30                       ADDA  #$30
+B5A3: 81 39                       CMPA  #$39        
+B5A5: 23 02                       BLS OTHRR
+B5A7:                     *
+B5A7: 8B 07                       ADDA  #7
+B5A9:                     *
+B5A9: BD B0 0C            OTHRR   JSR OUTB                
+B5AC: 39                          RTS
+B5AD:                     *         
+B5AD: BD B0 0C            DDATA2  JSR OUTB
+B5B0: 08                          INX
+B5B1: A6 00               DDATA1  LDAA  0,X
+B5B3: 81 04                       CMPA  #4
+B5B5: 26 F6                       BNE DDATA2
+B5B7:                     *
+B5B7: 39                          RTS
+B5B8:                     *
+B5B8: 0D 0A               EOF     FDB $0D0A
+B5BA: 53 39                       FCC 'S9'
+B5BC: 0D 0A                       FDB $0D0A
+B5BE: 04                          FCB 4
+B5BF:                     *
+B5BF: 0D 0A               MTAPE1  FDB $0D0A
+B5C1: 53 31                       FCC 'S1'
+B5C3: 04                          FCB 4
+B5C4:                     *
+B5C4:                     
+B5C4:                     * 
+B5C4:                     * 
+B5C4:                     * DRIVER FOR CP/68 OPERATING SYSTEM
+B5C4:                     * WITH MF68 FLOPPY DISK
+B5C4:                     * IN SIMH SWTPC SIMULATOR
+B5C4:                     * 
+B5C4:                     * 
+B5C4:                     * 
+B5C4: =$5                  FCBSTA EQU 5  ERROR STATUS FLAG
+B5C4: =$7                  FCBDBA EQU 7  DATA BUFFER ADDRESS
+B5C4: =$9                  FCBDRV EQU 9  DRIVE NUMBER
+B5C4: =$A                  FCBTRK EQU 10 TRACK NUMBER
+B5C4: =$B                  FCBSCT EQU 11 SECTOR NUMBER
+B5C4: =$C                  FCBTlK EQU 12 TRACK LINK POINTER
+B5C4: =$D                  FCBSLK EQU 13 SECTOR LINK POINTER
+B5C4:                     
+B5C4:                     *
+B5C4:                     * COMMAND-LINE INTERPRETER BASE-PAGE LOCATIONS
+B5C4:                     *
+B5C4: =$20                 DSCRA  EQU $20   ADDRESS OF TOKEN FOR CP68
+B5C4: =$22                 DSCRC  EQU $22   NUMBER OF CHARS IN CURRENT TOKEN FOR CP68  
+B5C4: =$23                 CUCHR  EQU $23   ADDR OF NEXT CHAR TO BE PROCESSED IN CP68 COMMAND LIEN
+B5C4:                     
+B5C4: 7F B6 3F            EINIIO CLR OFOFL    CLEAR OUTPUT FILE OPEN FLAG
+B5C7: 3F                         SWI NXTOK GET NEXT TOKEN TO SKIP .CMD PART OF TRANSIENT COMMAND IN COMMAND LINE
+B5C8: 2F                          FCB $2F
+B5C9: CE B8 40                   LDX #ERRIFN   SET ERROR MSG
+B5CC: FF B7 A6                   STX OPERRM
+B5CF: CE B6 40                   LDX #INFCB   X=INPUT FCB
+B5D2: BD B5 FC                   JSR GETFN    GET FNAME FROM COMMAND LINE, STORE IT IN FCB
+B5D5: BD B7 94                   JSR OPENI    OPEN INPUT FILE
+B5D8: DE 23                      LDX CUCHR
+B5DA: 09                         DEX
+B5DB: 08                  EINI0  INX
+B5DC: A6 00                      LDAA 0,X     GET NEXT CHAR IN COMMAND LINE
+B5DE: 81 0D                      CMPA #$0D    IS EOL?
+B5E0: 27 19                      BEQ EINI1    BR IF COMMAND LINE TERMINATED
+B5E2: 81 20                      CMPA #$20     IS BLANK?
+B5E4: 27 F5                      BEQ EINI0    BR TO SKIP CHAR IF IT IS 
+B5E6: 81 2C                      CMPA #','    IS COMMA?
+B5E8: 27 F1                      BEQ EINI0    BR TO SKIP CHAR IF IT IS 
+B5EA: DF 23                      STX CUCHR    SET BEGGINING OF SECOND FNAME IN CMD LINE
+B5EC: CE B8 5A                   LDX #ERROFN   SET ERROR MSG
+B5EF: FF B7 A6                   STX OPERRM
+B5F2: CE B6 EA                   LDX #OUTFCB  X=OUTPUT FCB
+B5F5: BD B5 FC                   JSR GETFN    GET FNAME FROM COMMAND LINE, STORE IT IN FCB
+B5F8: 7C B6 3F                   INC OFOFL    SIGNAL OUTPUT FILENAME SET
+B5FB: 39                  EINI1  RTS
+B5FC:                     
+B5FC: 3F                  GETFN  SWI FMTFCB PROCESS COMMAND LINE (POINTED BY CUCHR) TO GET FILENAME AND STORE IT IN FCB POINTED BY X-REG
+B5FD: 2C                           FCB $2C
+B5FE: A6 05                      LDAA FCBSTA,X
+B600: 27 06                      BEQ GETFN1    BR IF STATUS OK
+B602: FE B7 A6                   LDX OPERRM    GET ERR MSG
+B605: 7E B7 C4                   JMP DSKERR    PRINT IT AND RETERN TO O/S 
+B608: 39                  GETFN1 RTS 
+B609:                     
+B609: 7E B8 C4            EGETB  JMP FGETB    GETB ROUTINE: READ A BYTE FROM INPUT FILE
+B60C:                     
+B60C: 36                  EOUTB  PSHA         SAVE BYTE TO WRITE TO FILE 
+B60D: B6 B6 3F                   LDAA OFOFL   IS OUTPUT FILE PROVIDED IN CMD LINE?
+B610: 27 14                      BEQ EOUTB5   BR IF NOT (ERROR, MISSING OUTPUT FILE)
+B612: 81 02                      CMPA #2       
+B614: 27 0C                      BEQ EOUTB4   BR IF OUTPUT FILE ALREADY OPEN
+B616: 37                         PSHB
+B617: 3F                         SWI PSHX
+B618: 05                          FCB $05       
+B619: BD B7 A8                   JSR OPENO    OPEN OUTPUT FILE
+B61C: 7C B6 3F                   INC OFOFL    SIGNAL FILE OPEN IN FLAG
+B61F: 3F                         SWI PULX
+B620: 06                          FCB $06
+B621: 33                         PULB        
+B622: 32                  EOUTB4 PULA         RETRIEVE BYTE TO WRITE TO FILE
+B623: 7E B8 E4                   JMP FOUTB    OUTB ROUTINE: WRITE A BYTE TO OUTPUT FILE
+B626: CE B8 75            EOUTB5 LDX #ERRMOF  MSG 'MISSIGN OUTPUT FILENAME' 
+B629: 7E B7 C4                   JMP DSKERR   PRINT ERROR    
+B62C:                                   
+B62C: 39                  EWREOF RTS          WRITE EOF ROUTINE
+B62D:                     
+B62D: 7E B8 FA            EREST  JMP REWIND  RESTR ROUTINE: REOPEN INPUT FILE FOR PASS2
+B630:                     
+B630: BD B8 AD            EUPDT  JSR CLOSEI   UPDATE ROUTINE: OUTPUT/INPUT FILE CLOSE, THEN RETURN TO O/S
+B633: B6 B6 3F                   LDAA OFOFL   CHECK IF OUTPUT FILE OPEN
+B636: 81 02                      CMPA #2 
+B638: 26 03                      BNE EMON     BR IF NOT
+B63A: BD B8 B2                   JSR CLOSEO   CLOSE OUTPUT FILE
+B63D: 3F                  EMON   SWI WARMS      CP68 WARM START
+B63E: 1F                          FCB $1F       RETURN TO OPERATING SYSTEM
+B63F:                     
+B63F:                     OFOFL  RMB 1        OUTPUT FILE OPEN FLAG (1=FILE OPEN)
+B640:                     
+B640: 00 00               INFCB  FCB 0,0      INPUT FILE FCB
+B642: 44 53 4B                   FCC 'DSK' 
+B645: 00                         FCB 0        FCBSTA=5
+B646: 00                         FCB 0        FCBDTT=6  00 FOR FILE READ, FF FOR FILE WRITE
+B647: B6 6A                      FDB INBUF
+B649: 00                         FCB 0        FCBDRV=9
+B64A: 00                         FCB 0        FCBTRK=10
+B64B: 00                         FCB 0        FCBSCT=11
+B64C: 00 00 00 00                FCB 0,0,0,0  FCBFWD=12, FCBBAK=14
+B650:                            RMB 8        FCBNAM=16
+B658: 2E                         FCC '.'  
+B659:                            RMB 3        FCBEXT=25
+B65C: 04                         FCB $04      END OF FILENAME
+B65D: 00                         FCB 0        FCBTYP=29  FILETYPE
+B65E: 00                         FCB 0        FCBACS=30  FILE ACCESS CODE
+B65F: 00 00                      FCB 0,0      FCBFTS=31  FIRST TRACK/SECT
+B661: 00 00                      FCB 0,0      FCBLTS=33  LAST TRACK/SECT
+B663: 00 00                      FCB 0,0      FCBNMS=35  NUMBER OF SECTORS
+B665: 00 00                      FCB 0,0      FCBNFB=37  NEXT FCB IN ACTIVE CHAIN
+B667: 00 00                      FCB 0,0      FCBIND=39  INDEX IN DATA BUFFER
+B669: 00                         FCB 0        FCBSCF=41  SPACE COMPRESSION FLAG (COMPRESSION OFF)
+B66A:                           
+B66A:                     INBUF  RMB 128      INPUT BUFFER        
+B6EA:                     
+B6EA: 00 00               OUTFCB FCB 0,0      OUTPUT FILE
+B6EC: 44 53 4B                   FCC 'DSK' 
+B6EF: 00                         FCB 0
+B6F0: FF                         FCB $FF      OUTPUT FILE
+B6F1: B7 14                      FDB OUTBUF
+B6F3: 00                         FCB 0        FCBDRV=9
+B6F4: 00                         FCB 0        FCBTRK=10
+B6F5: 00                         FCB 0        FCBSCT=11
+B6F6: 00 00 00 00                FCB 0,0,0,0  FCBFWD=12, FCBBAK=14
+B6FA:                            RMB 8        FCBNAM=16
+B702: 2E                         FCC '.'  
+B703:                            RMB 3        FCBEXT=25
+B706: 04                         FCB $04      END OF FILENAME
+B707: 03                         FCB 3        FCBTYP=29  FILETYPE -> OUTPUT TO TEXT FILE (IS A S19 FILE)
+B708: 00                         FCB 0        FCBACS=30  FILE ACCESS CODE
+B709: 00 00                      FCB 0,0      FCBFTS=31  FIRST TRACK/SECT
+B70B: 00 00                      FCB 0,0      FCBLTS=33  LAST TRACK/SECT
+B70D: 00 00                      FCB 0,0      FCBNMS=35  NUMBER OF SECTORS
+B70F: 00 00                      FCB 0,0      FCBNFB=37  NEXT FCB IN ACTIVE CHAIN
+B711: 00 00                      FCB 0,0      FCBIND=39  INDEX IN DATA BUFFER
+B713: 00                         FCB 0        FCBSCF=41  SPACE COMPRESSION FLAG (COMPRESSION OFF)
+B714:                     OUTBUF RMB 128      OUTPUT BUFFER        
+B794:                     
+B794: CE B6 40            OPENI  LDX #INFCB   
+B797: 6F 05                      CLR FCBSTA,X CLEAR STATUS
+B799: 3F                         SWI OPEN
+B79A: 14                          FCB $14
+B79B: 6D 05                      TST FCBSTA,X ERROR?
+B79D: 27 06                      BEQ OPEN2
+B79F: CE B7 CA                   LDX #ERROIN  SET THE ERROR MSG TO PRINT IF OPEN FAILS
+B7A2: 7E B7 C4                   JMP DSKERR
+B7A5: 39                  OPEN2  RTS 
+B7A6:                     OPERRM RMB 2         ;* THE ERROR MSG TP PRINT IF OPEN FAILS
+B7A8:                            
+B7A8: CE B6 EA            OPENO  LDX #OUTFCB
+B7AB: 6F 05                      CLR FCBSTA,X CLEAR STATUS
+B7AD: 3F                         SWI OPEN
+B7AE: 14                          FCB $14
+B7AF: A6 05                      LDAA FCBSTA,X ERROR?
+B7B1: 27 10                      BEQ OPEN4
+B7B3: 81 03                      CMPA #03     OUTPUT FILE ALREADY EXISTS?
+B7B5: 27 06                      BEQ OPEN3   BR IF SO
+B7B7: CE B7 E2                   LDX #ERROOU
+B7BA: 7E B7 C4                   JMP DSKERR
+B7BD: CE B8 90            OPEN3  LDX #ERROFE  
+B7C0: 7E B7 C4                   JMP DSKERR
+B7C3: 39                  OPEN4  RTS 
+B7C4:                            
+B7C4: BD B4 31            DSKERR JSR PDATA1    PRINT ERROR MESSAGE
+B7C7: 7E B6 3D                   JMP EMON      AND RETURN TO OS
+B7CA: 49 4E 50 55 54 20   ERROIN FCC 'INPUT FILE OPEN ERROR'
+B7D0: 46 49 4C 45 20 4F 
+B7D6: 50 45 4E 20 45 52 
+B7DC: 52 4F 52          
+B7DF: 0D 0A 04                   FCB $0D,$0A,$04
+B7E2: 4F 55 54 50 55 54   ERROOU FCC 'OUTPUT FILE OPEN ERROR'
+B7E8: 20 46 49 4C 45 20 
+B7EE: 4F 50 45 4E 20 45 
+B7F4: 52 52 4F 52       
+B7F8: 0D 0A 04                   FCB $0D,$0A,$04
+B7FB: 43 4C 4F 53 45 20   ERRCLS FCC 'CLOSE FILE ERROR'
+B801: 46 49 4C 45 20 45 
+B807: 52 52 4F 52       
+B80B: 0D 0A 04                   FCB $0D,$0A,$04
+B80E: 49 4E 50 55 54 20   ERRGET FCC 'INPUT FILE READ ERROR'
+B814: 46 49 4C 45 20 52 
+B81A: 45 41 44 20 45 52 
+B820: 52 4F 52          
+B823: 0D 0A 04                   FCB $0D,$0A,$04
+B826: 4F 55 54 50 55 54   ERROUT FCC 'OUTPUT FILE WRITE ERROR'
+B82C: 20 46 49 4C 45 20 
+B832: 57 52 49 54 45 20 
+B838: 45 52 52 4F 52    
+B83D: 0D 0A 04                   FCB $0D,$0A,$04
+B840: 49 4E 56 41 4C 49   ERRIFN FCC 'INVALID INPUT FILE NAME'
+B846: 44 20 49 4E 50 55 
+B84C: 54 20 46 49 4C 45 
+B852: 20 4E 41 4D 45    
+B857: 0D 0A 04                   FCB $0D,$0A,$04
+B85A: 49 4E 56 41 4C 49   ERROFN FCC 'INVALID OUTPUT FILE NAME'
+B860: 44 20 4F 55 54 50 
+B866: 55 54 20 46 49 4C 
+B86C: 45 20 4E 41 4D 45 
+B872: 0D 0A 04                   FCB $0D,$0A,$04
+B875: 4D 49 53 53 49 4E   ERRMOF FCC 'MISSING OUTPUT FILE NAME'
+B87B: 47 20 4F 55 54 50 
+B881: 55 54 20 46 49 4C 
+B887: 45 20 4E 41 4D 45 
+B88D: 0D 0A 04                   FCB $0D,$0A,$04
+B890: 4F 55 54 50 55 54   ERROFE FCC 'OUTPUT FILE ALREADY EXISTS'
+B896: 20 46 49 4C 45 20 
+B89C: 41 4C 52 45 41 44 
+B8A2: 59 20 45 58 49 53 
+B8A8: 54 53             
+B8AA: 0D 0A 04                   FCB $0D,$0A,$04      
+B8AD:                     
+B8AD: CE B6 40            CLOSEI LDX #INFCB
+B8B0: 20 03                      BRA CLOSE2
+B8B2: CE B6 EA            CLOSEO LDX #OUTFCB
+B8B5: 6F 05               CLOSE2 CLR FCBSTA,X 
+B8B7: 3F                         SWI CLOSE
+B8B8: 15                          FCB $15
+B8B9: A6 05                      LDAA FCBSTA,X ERROR?
+B8BB: 27 06                      BEQ CLOSE3
+B8BD: CE B7 FB                   LDX #ERRCLS
+B8C0: 7E B7 C4                   JMP DSKERR
+B8C3: 39                  CLOSE3 RTS 
+B8C4:                     
+B8C4: 37                  FGETB  PSHB  GET BYTE FROM INPUT FILE, CARRY SET IF EOF
+B8C5: 3F                         SWI PSHX
+B8C6: 05                          FCB $05
+B8C7: CE B6 40                   LDX #INFCB
+B8CA: 3F                         SWI READ
+B8CB: 18                          FCB $18
+B8CC: E6 05                      LDAB FCBSTA,X  GET STATUS                       
+B8CE: 27 0A                      BEQ FGETB1
+B8D0: C1 08                      CMPB #8   STATUS 8 IS END OF FILE     
+B8D2: 27 0B                      BEQ FGETB2      
+B8D4: CE B8 0E                   LDX #ERRGET OTHERWISE READ ERROR
+B8D7: 7E B7 C4                   JMP DSKERR
+B8DA: 3F                  FGETB1 SWI PULX
+B8DB: 06                          FCB $06
+B8DC: 33                         PULB
+B8DD: 0C                         CLC
+B8DE: 39                         RTS       
+B8DF: 3F                  FGETB2 SWI PULX
+B8E0: 06                          FCB $06
+B8E1: 33                         PULB
+B8E2: 0D                         SEC
+B8E3: 39                         RTS       
+B8E4:                     
+B8E4: 37                  FOUTB  PSHB   WRITE BYTE INTO OUTPUT FILE
+B8E5: 3F                         SWI PSHX
+B8E6: 05                          FCB $05
+B8E7: CE B6 EA                   LDX #OUTFCB
+B8EA: 3F                         SWI WRITE
+B8EB: 19                          FCB $19
+B8EC: 6D 05                      TST FCBSTA,X  GET STATUS                       
+B8EE: 27 06                      BEQ FOUTB1
+B8F0: CE B8 26                   LDX #ERROUT WRITE ERROR
+B8F3: 7E B7 C4                   JMP DSKERR
+B8F6: 3F                  FOUTB1 SWI PULX
+B8F7: 06                          FCB $06
+B8F8: 33                         PULB
+B8F9: 39                         RTS       
+B8FA:                             
+B8FA: CE B6 40            REWIND LDX #INFCB REWIND INPUT FILE
+B8FD: 3F                         SWI REWD         
+B8FE: 16                          FCB $16
+B8FF: 6D 05                      TST FCBSTA,X  GET STATUS                       
+B901: 27 06                      BEQ REW1
+B903: CE B7 CA                   LDX #ERROIN RE-OPEN ERROR
+B906: 7E B7 C4                   JMP DSKERR
+B909: 39                  REW1   RTS        
+B90A:                             
+B90A:                     
+B90A: 7E E1 AC            EINCH  JMP $E1AC   INPUT A CHAR FROM TTY: USE SWTBUF EINCH
+B90D: 7E E1 D1            EOUTCH JMP $E1D1   OUTPUT A CHAR TO TTY: USE SWTBUF OUTEEE
+B910:                     
+B910:                     * START OF LINKER TABLES
+B910: B9 12               ETABL  FDB *+2
+B912:                     
+B912:                             END                

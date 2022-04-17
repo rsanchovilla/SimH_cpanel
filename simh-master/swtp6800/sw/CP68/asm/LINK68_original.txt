@@ -1,0 +1,821 @@
+       NAM LINK  LINKING LOADER
+*      
+*       C.COPYRIGHT 1977 BY
+*       ROBERT D.GRAPPEL LEXINGTON MASS.
+*       AND KACK E. HEMENWAY BOSTON MASS.
+*       ALL RIGHTS RESERVED
+*
+*
+START   LDS    #$A042
+        JMP    LOAD
+               
+TABLES         JMP ETABL    ENT TABLES  
+MONTOR         JMP EMON     ENT MONTOR
+GETB           JMP EGETB    ENT GETB
+OUTB           JMP EOUTB    ENT OUTB
+WREOF          JMP EWREOF   ENT WREOF
+INITIO         JMP EINIIO   ENT INITIO
+UPDATE         JMP EUPDT    ENT UPDATE
+*
+*
+INEEE   JMP    $E1AC     INPUT A CHAR
+OUTEEE  JMP    $E1D1     OUTPUT A CHAR TO TTY
+BASE    RMB    2         BASE ADDRESS
+NFLAG   RMB    1         NIBBLE FLAG 0=LFT, FF=RIGTH
+BYTE    RMB    1         TEMPORARY LOCATION
+LC      RMB    2         LOCATION COUNTER
+DESCRA  RMB    2         DESCRIPTOR ADDRESS
+DESCRC  RMB    1         DESCRIPTOR COUNT
+NXTSYM  RMB    2         NEXT ENTRY IN SYMTAB
+SYMTAB  RMB    2         SYMBOL TABLE 
+SYMEND  RMB    2         END OF ADDR
+SYMPTR  RMB    2         SYMTAB (SYMBOL TABLE) POINTER
+STRNG1  RMB    2         PARAM LIST
+STRNG2  RMB    2         FOR 
+COUNT   RMB    1         COMPARE
+XSAV    RMB    2         TEMP 
+HIVAL   RMB    2         HIGHEST COMMON COUNT
+CBAS    RMB    2         START OF COMMON
+CBASSV  RMB    2         CBAS SAVE TEMP 
+HICBAS  RMB    2         END OF COMMON
+BASESV  RMB    2         FIRST LOCATION
+LAST    RMB    2         LAST LOCATION
+UPLIM   RMB    2         UPPER MEMORY LIMIT
+*                        
+*                        
+* LOAD IS THE ENTRY POINT TO THE LOADER
+*                        
+LOAD    JSR    INITIO    INIT THE I/O
+        LDX   TABLES+1  POINT TO START OF SYMTAB
+        LDAA  #$A3       ADD SPACE FOR 75 SYMBOLS
+        LDAB  #$02       
+        ADDA  1,X        ADD TO START OF SYMTAB
+        ADCB   0,X        
+        STAA   SYMEND+1  INIT
+        STAB   SYMEND    
+        LDX   0,X        GET START OF SYMTAB
+        STX    SYMTAB    
+        STX    NXTSYM    
+*                        
+        CLR    NFLAG     NFLAG := LEFT
+        JSR    CRLF      
+*                        
+        LDX   #MSGL      GET BASE ADDRESS
+        JSR    PDATA1    
+        JSR    BADDR     GET VALUE IN HEX
+        JSR    CRLF      
+        STX    BASE      INIT
+        STX    BASESV    INIT
+*                        
+        LDX   #MSGA      GET UPPER MEMORY LIMIT
+        JSR    PDATA1    
+        JSR    BADDR     GET VALUE IN HEX
+        STX    UPLIM     
+        JSR    CRLF      
+*                        
+        LDX   #MSGB      GET START OF COMMON
+        JSR    PDATA1    
+        JSR    BADDR     INIT
+        JSR    CRLF      
+        STX    CBAS      INIT
+        STX    CBASSV    INIT
+        STX    HICBAS    INIT
+        LDX    BASE      GET START OF MEMORY
+*                        
+*                        
+LOAD2   JSR    GETB      GET A BYTE
+        BCS    LOADE     EOF 
+*                        
+        CMPA   #$00      NULL?
+        BEQ    LOAD2     YES
+*                        
+        CMPA   #'P'      PROGRAM MODULE?
+        BNE    *+5       
+*                        
+        JMP    LOADP     YES
+*                        
+        CMPA   #'N'      ENTRY ?
+        BNE    *+5       NO
+*                        
+        JMP    LOADN     YES
+*                        
+        CMPA   #'X'      EXTERNAL ?
+        BNE    *+5       NO
+*                        
+        JMP    LOADX     YES
+*                        
+        CMPA   #'M'      COMMON?
+        BNE    *+5       NO
+*                        
+        JMP    LOADM     YES 
+*                        
+        CMPA   #'R'      RELOCATABLE?
+        BNE    *+5       NO
+*                        
+        JMP    LOADR     YES
+*                        
+* CONVERT TWO ASCII BYTES TO ONE HEX BYTE
+*                        
+        SUBA   #$30      
+        CMPA   #$09      
+        BLE    *+4       
+        SUBA   #$07      
+*                        
+        TST    NFLAG     WHICH NIBBLE ?
+        BNE    RNIBL     RIGHT
+*                        
+        ASL A            LEFT
+        ASL A            
+        ASL A            
+        ASL A            
+        STAA   BYTE      SAVE LEFT NIBBLE
+        COM    NFLAG     SET FOR RIGHT NIBBLE        
+        BRA    LOAD2     
+*                        
+RNIBL   LDAB   BYTE      GET LEFT NIBBLE
+        ABA              
+        STAA   0,X       
+        STX    LAST      LOADED ADDRESS
+        INX              
+        JSR    MEMCHK    CHECK MEMORY LIMIT
+        COM    NFLAG     SET FOR LEFT NIBBLE
+        BRA    LOAD2     
+*                        
+* EOF FINISH LOAD        
+*                        
+LOADE   JSR    CRLF      
+        JSR    CRLF      
+        LDX    #MSGE     "LOAD LIMITS"
+        JSR    PDATA1    
+        JSR    CRLF      
+        LDX    #BASESV   PRINT STARTING ADDRESS
+        JSR    OUT4HS    
+        LDX    #LAST     
+        JSR    OUT4HS    PRINT END ADDRESS
+        JSR    CRLF      
+        JSR    CRLF      
+*                        
+        JSR    PRTSYM    PRINT LOAD MAP
+        JSR    CRLF      "COMMON"
+        LDX    #MSGC     
+        JSR    PDATA1    
+        JSR    CRLF      
+        LDX    #CBAS     PRINT START OF COMMON
+        JSR    OUT4HS    
+        LDX    HICBAS    
+        CPX    CBAS      ANY COMMON ?
+        BEQ    LOADE1    NO
+*                        
+        DEX              HICBAS:=HICBAS-1
+        STX    HICBAS    
+*                        
+LOADE1  LDX    #HICBAS   PRINT END OF COMMON
+        JSR    OUT4HS    
+        JSR    CRLF      
+        JSR    CRLF      
+*                        
+*                        
+        LDX    #SAVFIL   
+        JSR    PDATA1    PRINT PROMPT
+        JSR    INEEE     
+        CMPA   #'Y'      SAVE LOADED FILE?
+        BNE    *+8       NO
+*                        
+        JSR    CRLF      
+        JMP    PUNCH     
+*                        
+        JSR    CRLF      
+        JMP    MONTOR    ALL DONE
+*                        
+*                        
+* RELOCATE ADDRESS       
+*                        
+LOADR   DEX              POINT TO ADDRESS
+        DEX              
+        LDAA   1,X       GET ADDRESS
+        LDAB   0,X       
+        ADDA   BASE+1    ADD IN RELOCATION
+        ADCB   BASE      
+        STAA   1,X       STORE
+        STAB   0,X       
+        INX              POINT TO NEXT ADDRESS
+        JSR    MEMCHK    CHECK MEMORY LIMIT
+        INX              
+        JSR    MEMCHK    CHECK MEMORY LIMIT
+        JMP    LOAD2     
+*                        
+* PROGRAM MODULE         
+*                        
+LOADP   DEX              
+        DEX              BACKUP OVER COMMON LENGTH
+        STX    BASE      SAVE AS NEW BASE
+        LDAA   1,X       
+        LDAB   0,X       
+        ADDA   CBAS+1    
+        ADCB   CBAS      
+        STAA   CBASSV+1  SAVE IN CBASSV
+        STAB   CBASSV    
+*                        
+* SEE IF NEW COMMON IS LONGER
+* THAN LAST COMMON       
+*                        
+        LDAA   HICBAS+1  
+        LDAB   HICBAS    
+        SUBA   CBASSV+1  
+        SBCB   CBASSV    
+*                        
+        BCC    LOADP1    NO
+*                        
+        LDX    CBASSV    YES
+        STX    HICBAS    
+*                        
+LOADP1  LDX    BASE      LOAD NEW BASE
+        JMP    LOAD2     
+*                        
+* COMMON RELOCATION      
+*                        
+LOADM   DEX              POINT TO ADDRESS
+        DEX              
+        LDAA   1,X       GET ADDRESS
+        LDAB   0,X       
+        ADDA   CBAS+1    ADD IN BASE OF COMMON
+        ADCB   CBAS      
+        STAA   1,X       STORE 
+        STAB   0,X       
+        INX              POINT TO NEXT ADDRESS
+        JSR    MEMCHK    CHECK MEMORY LIMIT
+        INX              
+        JSR    MEMCHK    CHECK MEMORY LIMIT
+*                        
+        JMP    LOAD2     
+*                        
+* HANDLE ENTRY SYMBOL    
+*                        
+LOADN   LDAB   #6        6 CHAR/SYMBOL
+        STAB   DESCRC    
+        DEX              
+        DEX              
+        LDAA   0,X       LC:=ENTRY VALUE
+        STAA   LC        
+        LDAA   1,X       
+        STAA   LC+1      
+        DEX              BACK UP TO START OF SYMBOL
+        DEX              
+        DEX              
+        DEX              
+        DEX              
+        DEX              
+        STX    LAST      INIT LAST
+        STX    DESCRA    POINT TO SYMBOL
+        JSR    LKPSYM    
+        CMPB   #$FF      SYMBOL IN TABLE?
+        BNE    LOADN4    YES
+*                        
+        JSR    STOSYM    STORE SYMBOL
+        LDX    SYMPTR    
+        INC    8,X       SET DEFINED BIT
+*                        
+LOADN3  LDX    LAST      RESTORE POINTER
+        JMP    LOAD2     
+*                        
+LOADN4  BITB   #$01      ALREADY DEFINED?
+        BEQ    LOADN6    NO
+*                        
+        ORAB   #$80      SET REDEFINED BIT
+        LDX    SYMPTR    
+        STAB   8,X       
+        BRA    LOADN3    
+*                        
+LOADN6  STX    DESCRA    
+        LDAA   LC        ADDR OF SYMBOL
+        LDAB   LC+1      
+        LDX    SYMPTR    
+        INC    8,X       DET DEFINED BIT
+        STAA   6,X       
+        STAB   7,X       
+*                        
+* FOLLOW LINKAGES        
+*                        
+        LDX    DESCRA    
+LOADN5  LDX    0,X       
+        STX    SYMPTR    
+        LDX    DESCRA    
+        STAA   0,X       
+        STAB   1,X       
+        LDX    SYMPTR    
+        CPX    #$FFFF    AT END LINK?
+        BEQ    LOADN3    YES
+*                        
+        STX    DESCRA    NO
+        BRA    LOADN5    
+*                        
+* HANDLE EXTERNAL SYMBOL 
+*                        
+LOADX   LDAB   #6        6 CHARS/SYMBOL
+        STAB   DESCRC    
+        DEX              BACK UP TO START OF SYMBOL
+        DEX              
+        DEX              
+        DEX              
+        DEX              
+        DEX              
+        STX    DESCRA    POINT TO SYMBOL
+        STX    LC        SAVE ADDRESS
+        INX              
+        INX              
+        STX    LAST      SAVE ADDRESS
+        JSR    LKPSYM    
+        CMPB   #$FF      IN TABLE?
+        BNE    LOADX4    YES
+*                        
+        JSR    STOSYM    NO,SAVE SYMBOL
+        LDX    LC        
+LOADX2  LDAA   #$FF      SET END LINK
+        STAA   0,X       
+        STAA   1,X       
+*                        
+LOADX3  LDX    LAST      LOAD NEW LAST
+        JMP    LOAD2     
+*                        
+LOADX4  LDX    SYMPTR    POINT TO SYMBOL ENTRY
+        LDAB   8,X       GET INFO BYTE
+        BITB   #$01      DEFINED?
+        BEQ    LOADX5    NO
+*                        
+        LDAA   6,X       GET ENTRY ADDRESS
+        LDAB   7,X       
+        LDX    LC        
+        STAA   0,X       
+        STAB   1,X       SAVE ADDRESS
+        BRA    LOADX3    
+*                        
+LOADX5  LDX    6,X       GET FIRST LINK
+*                        
+LOADX6  STX    DESCRA    FOLLOW LINKAGE
+        LDX    0,X       
+        CPX    #$FFFF    END LINK?
+        BNE    LOADX6    
+*                        
+        LDAA   LC        
+        LDAB   LC+1      
+        LDX    DESCRA    
+        STAA   0,X       NEW LINK ADDRESS
+        STAB   1,X       
+        LDX    LC        
+        BRA    LOADX2    SET NEW END LINK
+*                        
+* SYMBOL TABLE ROUTINES  
+*                        
+* STORE SYMBOL IN SYMTAB 
+*                        
+STOSYM  LDX    NXTSYM    
+        STX    SYMPTR    SAVE ENTRY ADDR
+        CPX    SYMEND    FULL?
+        BNE    STOSY1    NO
+*                        
+        LDX    #SYMFUL   ERROR 
+        JSR    PDATA1    
+        JMP    MONTOR    RETURN TO EXEC
+*                        
+* MOVE SYMBOL TO SYMTAB  
+*                        
+STOSY1  LDX    DESCRA    GET ADDRESS OF SYMBOL
+        LDAA   0,X       
+        INX              
+        STX    DESCRA    
+        LDX    NXTSYM    
+        STAA   0,X       
+        INX              
+        STX    NXTSYM    
+        DEC    DESCRC    
+        BNE    STOSY1    
+*                        
+        LDAA   LC        GET LC (LOCATION COUNTER)
+        STAA   0,X       
+        LDAA   LC+1      
+        STAA   1,X       
+        LDAA   #$00      SET INFO BIT
+        STAA   2,X       
+        INX              
+        INX              
+        INX              
+        STX    NXTSYM    
+        RTS              
+*                        
+* LOOK UP SYMBOL IN TABLE
+*                        
+LKPSYM  LDX    SYMTAB    
+        CPX    NXTSYM    EMPTY TABLE?
+        BEQ    LKPSY3    YES
+*                        
+LKPSY1  STX    SYMPTR    
+        STX    STRNG1    
+        LDX    DESCRA    
+        STX    STRNG2    
+        LDAA   DESCRC    
+        STAA   COUNT     
+        LDX    #STRNG1   
+        JSR    COMPAR    
+        BEQ    LKPSY2    MATCH
+*                        
+        LDX    SYMPTR    
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        CPX    NXTSYM    END OF ENTRIES?
+        BNE    LKPSY1    NO
+*                        
+* NOT IN SYMTAB          
+*                        
+LKPSY3  LDAB   #$FF      
+        RTS              
+*                        
+* FOUND SYMBOL           
+*                        
+LKPSY2  LDX    SYMPTR    
+        LDAB   8,X       
+        LDX    6,X       GET VALUE
+        RTS              
+*                        
+* COMPARE TWO STRINGS    
+*                        
+* ON ENTRY [X] = A PARAM LIST OF 5 BYTES:
+*    ADDR (STRING 1)     
+*    ADDR (STRING 2)     
+*    COUNT OF BYTES TO BE COMPARED
+*                        
+* ON RETURN IF CC Z BIT IS SET THERE IS A MATCH
+*                        
+COMPAR  PSH A            
+        PSH B            
+        LDAB   4,X       GET COUNT
+        STX    XSAV      SAVE PARAM POINTER
+CMP1    LDX    XSAV      GET PARAM POINTER
+        LDX    0,X       GET ADDR(STRING1)
+        LDAA   0,X       GET CHAR
+        LDX    XSAV      
+        INC    1,X       PTR SET TO NEXT 
+        BNE    CMP2      CHAR IN
+        INC    0,X       STRING1
+CMP2    LDX    XSAV      GET PARAM POINTER
+        LDX    2,X       GET ADDR(STRING2)
+        CMPA   0,X       COMPARE 
+        BNE    CDONE     NOT EQUAL
+        LDX    XSAV      GET PARAM POINTER
+        INC    3,X       PTR SET TO NEXT
+        BNE    CMP3      CHAR IN
+        INC    2,X       STRING2
+CMP3    DEC B            DEC COUNTER
+        BNE    CMP1      TRY AGAIN
+CDONE   PUL B            DONE
+        PUL A            
+        RTS              
+*                        
+* PRINT LOAD MAP         
+*                        
+PRTSYM  LDX    #MAPMSG   "LOAD MAP"
+        JSR    PDATA1    
+        JSR    CRLF      
+        LDX    SYMTAB    
+        CPX    NXTSYM    ANY SYMBOLS?
+        BEQ    PRTSM3    NO 
+*                        
+* FIND LOWEST VALUE ENTRY TO PRINT
+*                        
+SORT    LDX    #$FFFF    
+        STX    HIVAL     
+        LDX    SYMTAB    
+*                        
+SORT1   STX    SYMPTR    
+        LDAA   #$FF      
+        CMPA   8,X       ALREADY PRINTED?
+        BEQ    SORT2     YES
+*                        
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        STX    STRNG1    POINT TO ENTRY
+        LDX    #HIVAL    
+        STX    STRNG2    POINT TO HIVAL
+        LDAA   #2        
+        STAA   COUNT     SET COUNT
+        LDX    #STRNG1   POINT TO PARAMETERES
+        JSR    COMPAR    
+        BCS    SORT3     ENTRY < HIVAL
+*                        
+SORT2   LDX    SYMPTR    
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        INX              
+        CPX    NXTSYM    END OF TABLE?
+        BEQ    SORT4     YES
+*                        
+        BRA    SORT1     NO
+*                        
+SORT3   LDX    SYMPTR    HIVAL := ENTRY
+        STX    DESCRA    SAVE LOWEST ENTRY ADDR
+        LDX    6,X       GET VALUE
+        STX    HIVAL     
+        BRA    SORT2     
+*                        
+SORT4   LDX    #$FFFF    
+        CPX    HIVAL     PRINTED ENTIRE MAP?
+        BNE    PRTSM0    NO
+*                        
+PRTSM3  RTS              YES, ALL DONE
+*                        
+PRTSM0  LDX    DESCRA    GET ENTRY TO BE PRINTED
+PRTSM1  LDAB   #6        PRINT 6 CHAR SYMBOL
+PRTSM2  LDAA   0,X       GET CHAR
+        INX              
+        JSR    OUTEEE    
+        DEC B            DONE?
+        BNE    PRTSM2    NO
+*                        
+        JSR    OUTS      PRINT SPACE
+*                        
+        JSR    OUT4HS    PRINT HEX VALUE
+        LDAB   0,X       GET INFO BYTE
+        BITB   #$01      UNRESOLVED?
+        BNE    PRTSM4    NO
+*                        
+        LDX    #UNRES    YES
+        JSR    PDATA1    
+*                        
+PRTSM4  BITB   #$80      REDEFINED?
+        BEQ    PRTSM5    NO
+*                        
+        LDX    #REDEF    YES
+        JSR    PDATA1    
+*                        
+*                        
+PRTSM5  JSR    CRLF      
+        LDX    DESCRA    FLAG AS PRINTED
+        LDAA   #$FF      
+        STAA   8,X       
+        JMP    SORT      GET ANOTHER ENTRY
+*                        
+* CHECK TO SEE IF MEMORY OVERRUN
+*                        
+MEMCHK  CPX    UPLIM     OVERRUN?
+        BEQ    MEMCKE    YES
+*                        
+        RTS              NO
+*                        
+MEMCKE  JSR    CRLF      
+        LDX    #MSGD     ERROR MESSAGE
+        JSR    PDATA1    
+        JSR    CRLF      
+        INS              FIX STACK
+        INS              
+        JMP    LOADE     PRINT PARTIAL LOAD MAP
+*                        
+* I/O ROUTINES           
+*                        
+BXSAV   RMB 2            
+*                        
+* BUILD 16 BIT ADDRESS   
+*                        
+BADDR   BSR    INBYTE    
+        STAA   BXSAV     
+        BSR    INBYTE    
+        STAA   BXSAV+1   
+        LDX    BXSAV     
+        RTS              
+*                        
+* INPUT A BYTE           
+*                        
+INBYTE  BSR    INHEX     
+        ASL A            
+        ASL A            
+        ASL A            
+        ASL A            
+        TAB              
+        BSR    INHEX     
+        ABA              
+        RTS              
+*                        
+* INPUT HEX CHARACTER    
+*                        
+INHEX   JSR    INEEE     
+        SUBA   #$30      
+        BMI    NOTHEX    
+*                        
+        CMPA   #$09      
+        BLE    INHEXR    
+*                        
+        CMPA   #$11      
+        BMI    NOTHEX    
+*                        
+        CMPA   #$16      
+        BGT    NOTHEX    
+*                        
+        SUBA   #$07      
+*                        
+INHEXR  RTS              
+*                        
+* NOT  A HEX CHARACTER   
+*                        
+NOTHEX  LDAA   #'?'      
+        JSR    OUTEEE    
+        BRA    INHEX     
+*                        
+* PRINT DATA STRING      
+*                        
+PDATA2  JSR    OUTEEE    
+        INX              
+PDATA1  LDAA   0,X       
+        CMPA   #4        
+        BNE    PDATA2    
+*                        
+        RTS              
+*                        
+* OUTPUT TWO HEX CHARACTERS
+*                        
+OUT2H   LDAA   0,X       
+OUT2HA  BSR    OUTHL     
+        LDAA   0,X       
+        INX              
+        BRA    OUTHR     
+*                        
+OUT4HS  BSR    OUT2H     
+OUT2HS  BSR    OUT2H     
+OUTS    LDAA   #$20      
+        JMP    OUTEEE    
+*                        
+OUTHL   LSR A            
+        LSR A            
+        LSR A            
+        LSR A            
+*                        
+OUTHR   ANDA   #$0F      
+        ADDA   #$30      
+        CMPA   #$39      
+        BLS    OUTCH     
+*                        
+        ADDA   #$07      
+*                        
+OUTCH   JMP    OUTEEE    
+*                        
+CRLF    LDAA   #$0D      
+        JSR    OUTEEE    
+        LDAA   #$0A      
+        JSR    OUTEEE    
+*                        
+        RTS              
+*
+* MESSAGES
+*
+SYMFUL  FCC    'SYMBOL TABLE OVERFLOW'
+        FCB    4
+MSGL    FCC    'ENTER BASE ADDRESS: '
+        FCB    4    
+MSGA    FCC    'ENTER UPPER MEMORY LIMIT: '
+        FCB    4    
+MSGB    FCC    'ENTER START OF COMMON: '
+        FCB    4    
+MSGC    FCC    'COMMON:'
+        FCB    4
+MSGD    FCC    '****** MEMORY OVERRUN ******'
+        FCB    4
+MSGE    FCC    'LOAD LIMITS:'
+        FCB    4
+MAPMSG  FCC    'LOAD MAP'
+        FCB    4
+UNRES   FCC    'UNRESOLVED '
+        FCB    4
+REDEF   FCC    'REDEFINED'
+        FCB    4
+SAVFIL  FCC    'SAVE LOADED FILE? "Y" OR "N" '
+        FCB    4
+*
+* PUNCH: OUTPUT LOAD MODULE IN mikbug FORMAT
+* (BASESV - LAST)
+*
+MCONT   RMB 1
+TEMP    RMB 1
+*
+PUNCH   EQU *
+
+PUN11   LDAA  LAST+1
+        SUBA  BASESV+1
+        LDAB  LAST
+        SBCB  BASESV
+        BNE PUN22
+*
+        CMPA  #16
+        BCS PUN23
+*
+PUN22   LDAA  #15 
+*
+PUN23   ADDA  #4
+        STAA  MCONT
+        SUBA  #3
+        STAA  TEMP
+*
+        LDX #MTAPE1
+        JSR DDATA1
+        CLR B
+*
+* OUTPUT FRAME COUNT
+*
+        LDX #MCONT
+        BSR PUNT2
+*
+* OUTPUT ADDRESS
+*
+        LDX #BASESV
+        JSR PUNT2
+        JSR PUNT2
+*
+* OUTPUT DATA
+*                        
+        LDX BASESV
+*
+PUN32   JSR PUNT2
+        DEC TEMP
+        BNE PUN32                                           
+*
+        STX BASESV
+        COM B
+        PSH B
+        TSX
+        JSR PUNT2
+        PUL B
+        LDX BASESV
+        DEX
+        CPX LAST
+        BNE PUN11
+*
+        LDX #EOF
+        JSR DDATA1
+*
+        JSR WREOF                
+*
+        JMP UPDATE
+*
+PUNT2   ADDB  0,X
+OUT2HD  LDAA  0,X
+        BSR OUTHLL
+        LDAA  0,X
+        INX
+        BRA OUTHRR
+*       
+OUTHLL  LSR A
+        LSR A 
+        LSR A 
+        LSR A 
+*
+OUTHRR  ANDA  #$0F
+        ADDA  #$30
+        CMPA  #$39        
+        BLS OTHRR
+*
+        ADDA  #7
+*
+OTHRR   JSR OUTB                
+        RTS
+*         
+DDATA2  JSR OUTB
+        INX
+DDATA1  LDAA  0,X
+        CMPA  #4
+        BNE DDATA2
+*
+        RTS
+*
+EOF     FDB $0D0A
+        FCC 'S9'
+        FDB $0D0A
+        FCB 4
+*
+MTAPE1  FDB $0D0A
+        FCC 'S1'
+        FCB 4
+*
+
+EMON    NOP
+EGETB   NOP  
+EOUTB   NOP 
+EWREOF  NOP  
+EINIIO  NOP 
+EUPDT   NOP 
+
+ETABL   EQU *+2 
+
+        END                
