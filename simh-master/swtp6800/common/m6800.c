@@ -128,6 +128,8 @@ char * MEM_Symbolic_Buffer = NULL;      //RSV: symbolic info buffer
 int32 fetched_byte0 = 0;                // keep history of last bytes fetched
 int32 fetched_byte1 = 0;                // keep history of last bytes fetched
 int32 traceon = 1;                      // if <=0 inhibit tracing for thight loops (to keep debug file size under control)
+int32 InstrCount = 0;                   // intructions executed count 
+
 
 /* function prototypes */
 
@@ -518,6 +520,7 @@ t_stat sim_instr (void)
 
         sim_interval--;
         IR = fetch_byte();              /* fetch instruction */
+        InstrCount++;                   // incr num of executed instr
 
         /* The Big Instruction Decode Switch */
         switch (IR) {
