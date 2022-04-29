@@ -1,0 +1,3435 @@
+
+0001                   ******************************************************
+0002                   ******************************************************
+0003                   *
+0004                   *      THIS IS A TOTAL DIAGNOSTIC COMPOSED OF 6 SMALLER
+0005                   *      DIAGNOSTICS FOR THE 6802 MICRO-PROCESSOR
+0006                   *
+0007                   *      AUSTIN,TEXAS - MICROPROCESSOR CAPITAL OF THE WORLD
+0008                   *
+0009                   *      MODIFIED FOR SIMH SWTPC 6800 EMULATOR AND SWTBUG
+0010                   *      BY ROBERTO SANCHO, APR 2022
+0011                   *
+0012                   *      PROGRAM TAKEN FROM MOTOROLA USER GROUP 
+0013                   *      http://test.dankohn.info/~myhome/projects/68HC11/AXIOM_HC11/Source/Users%20Group/UG137
+0014                   *
+0015                   *      THIS DIAGNOSTIC ATTEMPTS TO VERIFY ALL INSTRUCTIONS
+0016                   *      FOR THE 6802 PROCESSOR. THE VARIOUS INSTRUCTION
+0017                   *      GROUPS ARE TESTED SEPARATELY AND IN A SPECIFIED
+0018                   *      ORDER (I.E. A GROUP FOLLOWING A PREVIOUS GROUP
+0019                   *      ASSUMES THE PREVIOUS GROUPS FUNCTION). THE GROUPS
+0020                   *      AND THEIR ORDER IS:
+0021                   *         GROUP 3   BRANCHES
+0022                   *         GROUP 1   LOADS,STORES,ETC
+0023                   *         GROUP 6   NOP,TAP,SEV,ETC
+0024                   *         GROUP 2   NEG,COM,INC,SHIFTS,ETC
+0025                   *         GROUP 4   TAB,TBA,SBA,ETC
+0026                   *         GROUP 5   TSX,INS,PULA,ETC
+0027                   *
+0028                   *      THE DIAGNOSTIC ASSUMES THE FOLLOWING INSTRUCTIONS 
+0029                   *      HAVE BEEN HAND TESTED BEFORE EXECUTION:
+0030                   *         LDAA   IMMEDIATE
+0031                   *         TAP
+0032                   *         JMP    EXTENDED
+0033                   *         EOR    DIRECT
+0034                   *         PSHA
+0035                   *         PULA
+0036                   *
+0037                   *      ONCE THESE INSTRUCTIONS ARE TESTED THE
+0038                   *      DIAGNOSTIC WILL NOT USE ANY INSTRUCTION
+0039                   *      UNTIL IT HAS BEEN THROUGHLY TESTED.
+0040                   *
+0041                   *
+0042                   *      WRITTEN TO RUN UNDER EXBUG 1.2
+0043                   *      TO LOAD FROM MDOS TYPE: LOAD BIGTST;V
+0044                   *
+0045                   *      THE PROGRAM TYPES 'OK' AT THE END OF EACH COMPLETE
+0046                   *      TEST OF THE INSTRUCTION TEST.
+0047                   *      HANGS IF TEST FAILS
+0048                   *
+0049                   *      REQUIRES RAM AT LOCATIONS 0-$200
+0050                   *      REQUIRES ROM OR RAM AT LOCATIONS $1000-$2FFF
+0051                   *
+0052                   ******STARTAT LOCATION $1000
+0053                   *
+0054                   *      WRITTEN BY C.D.HUNTSMAN
+0055                   *
+0056                   *
+0057                   *****************************************************
+0058                   *****************************************************
+0059                   *
+0060  0020                    ORG $20
+0061  0020             *       
+0062  0020             *
+0063  0020             *      DATA IN BASE PAGE FOR DIRECT ADDRESSING
+0064  0020             *
+0065  0020             BOTTOM RMB    $30 STACK AREA
+0066  0050             STACK  RMB    8
+0067  0058 AA 55 AA    DATA   FCB    @252,@125,@252,@0,@0,@377,@100,@124
+0068  005E 40 54     
+0069  0060 80 81 BF           FCB    $80,$81,$BF,$FE
+0070  0064 7D 7E 7F    DATA1  FCB    @175,@176,@177,@001
+0071  0068             TMP    RMB    2
+0072  006A             *
+0073  006A             *      DOUBLE PRECISION CONSTANTS
+0074  006A             *
+0075  006A AA AA       HAAAA  FDB $AAAA
+0076  006C 55 55       H5555  FDB $5555
+0077  006E 55 54       H5554  FDB $5554
+0078  0070 80 01       H8001  FDB $8001
+0079  0072 BF FF       HBFFF  FDB $BFFF
+0080  0074 FF FF       HFFFF  FDB $FFFF
+0081  0076 80 00       H8000  FDB $8000
+0082  0078 FF FE       HFFFE  FDB $FFFE
+0083  007A 00 00       H0000  FDB $0000
+0084  007C 40 00       H4000  FDB $4000
+0085  007E             *
+0086  007E             *      BASE PAGE VARIABLES
+0087  007E             *
+0088  007E             TEMP   RMB 2
+0089  0080             OSP    RMB 2 OLD SP SAVE
+0090  0082             NSP    RMB 2 NEW SP SAVE
+0091  0084             *
+0092  0084             *
+0093  0084             *      EXTENDED VARIABLES
+0094  0084             *
+0095  0100                    ORG $100
+0096  0100             TMP2   RMB 2
+0097  0102                    TTL **** 6802 TOTAL INSTRUCTION TEST - GROUP 3 ****
+0098  0102             *
+0099  0102             *****************************************************
+0100  0102             *
+0101  0102             *      G R P 3
+0102  0102             *
+0103  0102             *****************************************************
+0104  0102             *REV   1.0
+0105  0102             *REV   1.1 GMCM REVISION - SEPT 77
+0106  0102             *
+0107  0102             *      GROUP 3 INSTRUCTIONS INCLUDE ALL BRANCHES 
+0108  0102             *      EXCEPT BSR.
+0109  0102             *
+0110  0102             *PROGRAMTO TEST GP3 INST
+0111  0102             *
+0112  0102             *
+0113  0102             *      THIS TEST ASSUMES THAT THE FOLLOWING INSTRUCTIONS
+0114  0102             *      ARE ALREADY OPERATIONAL:
+0115  0102             *      LDAA IMMEDIATE
+0116  0102             *      TAP
+0117  0102             *      JMP EXTENDED
+0118  0102             *
+0119  1000                    ORG $1000
+0120  1000 20 02       ST     BRA B1
+0121  1002 20 FE              BRA *
+0122  1004 7E 10 C0    B1     JMP B2
+0123  108E                    ORG $108E
+0124  108E 7E 11 0B    C1     JMP C2
+0125  1091             *
+0126  1091             *      TEST ALL PATHS OF BRANCH
+0127  1091             *
+0128  1091             *      I.E., CHECK FORWARD AND REVERSE OFFSETS
+0129  1091             *
+0130  10C0                    ORG $10C0
+0131  10C0 20 08       B2     BRA B3
+0132  10C2 20 FE              BRA *
+0133  10C4 20 40       B4     BRA B5
+0134  10C6 20 FE              BRA *
+0135  10C8 20 FE              BRA *
+0136  10CA 20 F8       B3     BRA B4
+0137  10CC             *
+0138  10CC             *      FINAL PATH
+0139  10CC             *
+0140  1106                    ORG $1106
+0141  1106 0C          B5     CLC
+0142  1107 25 FE              BCS *
+0143  1109 20 83              BRA C1
+0144  110B             *
+0145  110B             *      FROM HERE ON IT IS ASSUMED THAT IF BRA CAN BE
+0146  110B             *      EXECUTED WITH PLUS AND MINUS OFFSETS SO CAN
+0147  110B             *      THE OTHER BRANCHES.
+0148  110B             *
+0149  110B             *
+0150  110B             *      TEST COMBINATIONS OF BRANCH
+0151  110B             *
+0152  110B 86 01       C2     LDAA #$01
+0153  110D 06                 TAP             C=1,Z=0
+0154  110E 25 02              BCS T1
+0155  1110 20 FE              BRA *
+0156  1112 23 02       T1     BLS T2
+0157  1114 20 FE              BRA *
+0158  1116 24 FE       T2     BCC *
+0159  1118 22 FE              BHI *
+0160  111A 86 00              LDAA #$00
+0161  111C 06                 TAP             C=0,Z=0
+0162  111D 24 02              BCC T3
+0163  111F 20 FE              BRA *
+0164  1121 22 02       T3     BHI T4
+0165  1123 20 FE              BRA *
+0166  1125 25 FE       T4     BCS *
+0167  1127 23 FE              BLS *
+0168  1129 86 04              LDAA #$04
+0169  112B 06                 TAP             C=0,Z=1
+0170  112C 23 02              BLS T5
+0171  112E 20 FE              BRA *
+0172  1130 27 02       T5     BEQ T6
+0173  1132 20 FE              BRA *
+0174  1134 26 FE       T6     BNE *
+0175  1136 22 FE              BHI *
+0176  1138 86 05              LDAA #$05
+0177  113A 06                 TAP             C=1,Z=1
+0178  113B 23 02              BLS T7
+0179  113D 20 FE              BRA *
+0180  113F 22 FE       T7     BHI *
+0181  1141 86 08              LDAA #$08
+0182  1143 06                 TAP             N=1,V=0,Z=0
+0183  1144 2B 02              BMI T8
+0184  1146 20 FE              BRA *
+0185  1148 2A FE       T8     BPL *
+0186  114A 2C FE              BGE *
+0187  114C 2D 02              BLT T9
+0188  114E 20 FE              BRA *
+0189  1150 2E FE       T9     BGT *
+0190  1152 2F 02              BLE T10
+0191  1154 20 FE              BRA *
+0192  1156 29 FE       T10    BVS *
+0193  1158 27 FE              BEQ *
+0194  115A 24 02              BCC TA
+0195  115C 20 FE              BRA *
+0196  115E 86 02       TA     LDAA #$02
+0197  1160 06                 TAP              N=0,V=1,Z=0
+0198  1161 29 02              BVS T11
+0199  1163 20 FE              BRA *
+0200  1165 28 FE       T11    BVC *
+0201  1167 2D 02              BLT T12
+0202  1169 20 FE              BRA *
+0203  116B 2C FE       T12    BGE *
+0204  116D 2E FE              BGT *
+0205  116F 2F 02              BLE T13
+0206  1171 20 FE              BRA *
+0207  1173 2A 02       T13    BPL T14
+0208  1175 20 FE              BRA *
+0209  1177 2B FE       T14    BMI *
+0210  1179 86 00              LDAA #$00
+0211  117B 06                 TAP              N=0,V=0,Z=0
+0212  117C 2C 02              BGE T15
+0213  117E 20 FE              BRA *
+0214  1180 2D FE       T15    BLT *
+0215  1182 2F FE              BLE *
+0216  1184 2E 02              BGT T16
+0217  1186 20 FE              BRA *
+0218  1188 86 0A       T16    LDAA #$0A
+0219  118A 06                 TAP              N=1,V=1,Z=0
+0220  118B 2C 02              BGE T17
+0221  118D 20 FE              BRA *
+0222  118F 2D FE       T17    BLT *
+0223  1191 2F FE              BLE *
+0224  1193 2E 02              BGT T18
+0225  1195 20 FE              BRA *
+0226  1197 86 04       T18    LDAA #$04
+0227  1199 06                 TAP              N=0,V=0,Z=1
+0228  119A 2F 02              BLE T19
+0229  119C 20 FE              BRA *
+0230  119E 2E FE       T19    BGT * 
+0231  11A0 20 02              BRA GRP1         GO DO GROUP 1
+0232  11A2                    TTL **** 6802 TOTAL INSTRUCTION TEST - GROUP 1 ****
+0233  11A2             *
+0234  11A2             ******************************************************
+0235  11A2             *
+0236  11A2             *      G R P 1
+0237  11A2             *
+0238  11A2             *****************************************************
+0239  11A2             *
+0240  11A2             *      GMCM   REVISION 1.1 - SEPT 77
+0241  11A2             *
+0242  11A2             *      GROUP I INSTRUCTIONS INCLUDE:
+0243  11A2             *       SUB
+0244  11A2             *       CMP
+0245  11A2             *       SBC
+0246  11A2             *       AND
+0247  11A2             *       BIT
+0248  11A2             *       LDA
+0249  11A2             *       STA
+0250  11A2             *       EOR
+0251  11A2             *       ADC
+0252  11A2             *       ORA
+0253  11A2             *       ADD
+0254  11A2             *       CPX
+0255  11A2             *       BSR
+0256  11A2             *       JSR
+0257  11A2             *       LDS
+0258  11A2             *       LDX
+0259  11A2             *       STS
+0260  11A2             *       STX
+0261  11A2             *
+0262  11A2             *
+0263  11A2 55 AA       DATA2  FCB $55,$AA
+0264  11A4             *
+0265  11A4             *
+0266  11A4             *                         LOAD ACCUMULATOR A (LDA)
+0267  11A4             *
+0268  11A4             *        ASSUMES BRANCHES AND EOR DIRECT WORK!!!!!!!!!!!!!!
+0269  11A4             *
+0270  11A4             ********************************************
+0271  11A4             *
+0272  11A4             *               LOAD ACCUMULATOR a (LDA)
+0273  11A4             *
+0274  11A4 96 58       GRP1   LDAA DATA     DATA=@252,N=1,Z=0,V=0
+0275  11A6 2A FE       A1     BPL  A1
+0276  11A8 27 FE       A2     BEQ  A2
+0277  11AA 29 FE       A3     BVS  A3
+0278  11AC 98 58              EORA DATA
+0279  11AE 26 FE       A4     BNE  A4
+0280  11B0 96 59              LDAA DATA+1   DATA+1=@125,N=0,Z=0,V=0
+0281  11B2 2B FE       A5     BMI  A5
+0282  11B4 98 59              EORA DATA+1
+0283  11B6 26 FE       A6     BNE  A6
+0284  11B8 96 5B              LDAA DATA+3   DATA+3=@0,N=0,Z=1,V=0
+0285  11BA 26 FE       A7     BNE  A7
+0286  11BC             ********************************************
+0287  11BC             *
+0288  11BC             *               LOAD ACCUMULATOR B (LDA)
+0289  11BC             *
+0290  11BC D6 58              LDAB DATA     DATA=@252,N=1,Z=0,V=0
+0291  11BE 2A FE       A10    BPL  A10
+0292  11C0 27 FE       A11    BEQ  A11
+0293  11C2 29 FE       A12    BVS  A12
+0294  11C4 D8 58              EORB DATA
+0295  11C6 26 FE       A13    BNE  A13
+0296  11C8 D6 59              LDAB DATA+1   DATA+1=@125,N=0,Z=0,V=0
+0297  11CA 2B FE       A14    BMI  A14
+0298  11CC D8 59              EORB DATA+1
+0299  11CE 26 FE       A15    BNE  A15
+0300  11D0 D6 5B              LDAB DATA+3   DATA+3=@0,J=0,Z=1,V=0
+0301  11D2 26 FE       A16    BNE  A16
+0302  11D4             ********************************************
+0303  11D4             *
+0304  11D4             *               STORE ACCUMULATOR A (STA)
+0305  11D4             *
+0306  11D4 96 58              LDAA DATA     DATA=@252,N=1,Z=0,V=0
+0307  11D6 97 68              STAA TMP
+0308  11D8 2A FE       A20    BPL  A20
+0309  11DA 27 FE       A21    BEQ  A21
+0310  11DC 29 FE              BVS  *
+0311  11DE 98 68              EORA TMP
+0312  11E0 26 FE       A23    BNE  A23
+0313  11E2 96 59              LDAA DATA+1   DATA+1=@125,N=0,Z=0,V=0
+0314  11E4 97 68              STAA TMP
+0315  11E6 2B FE       A24    BMI  A24
+0316  11E8 98 68              EORA TMP
+0317  11EA 26 FE       A25    BNE  A25
+0318  11EC             ********************************************
+0319  11EC             *
+0320  11EC             *               STORE ACCUMULATOR B (STA)
+0321  11EC             *
+0322  11EC D6 58              LDAB DATA     DATA=@252,N=1,Z=0,V=0
+0323  11EE D7 68              STAB TMP
+0324  11F0 2A FE       A30    BPL  A30
+0325  11F2 27 FE       A31    BEQ  A31
+0326  11F4 29 FE              BVS  *
+0327  11F6 D8 68              EORB TMP
+0328  11F8 26 FE       A33    BNE  A33
+0329  11FA D6 59              LDAB DATA+1     DATA+1=@125,N=0,Z=0,V=0
+0330  11FC D7 68              STAB TMP
+0331  11FE 2B FE              BMI  *
+0332  1200 D8 68              EORB TMP
+0333  1202 26 FE              BNE  *
+0334  1204             *******************************************
+0335  1204             *
+0336  1204             *               LOAD AND STORE STACK POINTER (LDS)
+0337  1204             *
+0338  1204 9F 50              STS  STACK    SAVE STACK POINTER
+0339  1206 9E 58              LDS  DATA     DATA=@252,DATA+1=@125,N=1,Z
+0340  1208 2A FE       A40    BPL  A40
+0341  120A 27 FE       A41    BEQ  A41
+0342  120C 29 FE              BVS  *
+0343  120E 9F 68              STS  TMP
+0344  1210 96 58              LDAA DATA
+0345  1212 98 68              EORA TMP
+0346  1214 26 FE       A43    BNE  A43
+0347  1216 96 59              LDAA DATA+1   DATA+1=@125
+0348  1218 98 69              EORA TMP+1
+0349  121A 26 FE       A44    BNE  A44
+0350  121C 9E 59              LDS  DATA+1   DATA+1=@125,DATA+2=@252,N=0
+0351  121E 2B FE       A45    BMI  A45
+0352  1220 9F 68              STS  TMP
+0353  1222 96 59              LDAA DATA+1
+0354  1224 98 68              EORA TMP
+0355  1226 26 FE       A46    BNE  A46
+0356  1228 96 5A              LDAA DATA+2
+0357  122A 98 69              EORA TMP+1
+0358  122C 26 FE       A47    BNE  A47
+0359  122E 9E 5B              LDS  DATA+3
+0360  1230 26 FE       A48    BNE  A48
+0361  1232 9E 50              LDS  STACK
+0362  1234             **************************************
+0363  1234             *
+0364  1234             *               LOAD AND STORE INDEX REGISTORS (LDX&STX)
+0365  1234             *
+0366  1234 DE 58              LDX  DATA     DATA=@252,DATA+1=@125,N=1,Z
+0367  1236 2A FE       A50    BPL  A50
+0368  1238 27 FE       A51    BEQ  A51
+0369  123A 29 FE       A52    BVS  A52
+0370  123C DF 68              STX  TMP
+0371  123E 96 58              LDAA DATA
+0372  1240 98 68              EORA TMP
+0373  1242 26 FE       A53    BNE  A53
+0374  1244 2B FE              BMI  *        N=1?
+0375  1246 96 59              LDAA DATA+1
+0376  1248 98 69              EORA TMP+1
+0377  124A 26 FE       A54    BNE  A54
+0378  124C DE 59              LDX  DATA+1   DATA+1=@125,DATA+2=@252
+0379  124E 2B FE       A55    BMI  A55
+0380  1250 DF 68              STX  TMP
+0381  1252 96 59              LDAA DATA+1
+0382  1254 98 68              EORA TMP
+0383  1256 26 FE       A56    BNE  A56
+0384  1258 96 58              LDAA DATA
+0385  125A 98 69              EORA TMP+1
+0386  125C 26 FE       A57    BNE  A57
+0387  125E DE 5B              LDX  DATA+3   DATA+3,Z=1
+0388  1260 26 FE       A58    BNE  A58
+0389  1262             *
+0390  1262             ***************************************************:
+0391  1262             *
+0392  1262             *            COMPARE INDEX REGISTER
+0393  1262             *
+0394  1262             *
+0395  1262             *
+0396  1262             *      CASE 1:
+0397  1262             *      X = $AA55
+0398  1262             *      DATA = $AA55
+0399  1262             *      RESULT = $0
+0400  1262             *      Z = 1, N = 0, V = 0, C = 0
+0401  1262             *
+0402  1262 DE 58              LDX DATA
+0403  1264 9C 58              CPX DATA    DO IT
+0404  1266 26 FE              BNE *
+0405  1268 2B FE              BMI *
+0406  126A 29 FE              BVS *
+0407  126C 25 FE              BCS *
+0408  126E 27 02              BEQ CP20
+0409  1270 20 FE              BRA *
+0410  1272 2A 02       CP20   BPL CP22
+0411  1274 20 FE              BRA *
+0412  1276 28 02       CP22   BVC CP23
+0413  1278 20 FE              BRA *
+0414  127A 24 02       CP23   BCC CP1
+0415  127C 20 FE              BRA *
+0416  127E             *
+0417  127E             *      CASE 2:
+0418  127E             *      X = AA55
+0419  127E             *      DATA+1 = 55AA
+0420  127E             *      RESULT = 54AB
+0421  127E             *      N=0, Z=0, V=1, C=0
+0422  127E 9C 59       CP1    CPX DATA+1
+0423  1280 23 FE              BLS *
+0424  1282 28 FE              BVC *
+0425  1284 25 FE              BCS *
+0426  1286 27 FE              BEQ *
+0427  1288 2B FE              BMI *
+0428  128A 26 02              BNE CP2
+0429  128C 20 FE              BRA *
+0430  128E 2C FE       CP2    BGE *
+0431  1290 2E FE              BGT *
+0432  1292 22 02              BHI CP3
+0433  1294 20 FE              BRA *
+0434  1296 2F 02       CP3    BLE CP4
+0435  1298 20 FE              BRA *
+0436  129A 23 FE       CP4    BLS *
+0437  129C 2D 02              BLT CP5
+0438  129E 20 FE              BRA *
+0439  12A0 29 02       CP5    BVS CP6
+0440  12A2 20 FE              BRA *
+0441  12A4 2A 02       CP6    BPL CP7
+0442  12A6 20 FE              BRA *
+0443  12A8             *
+0444  12A8             *      CASE 3:
+0445  12A8             *      X = 55AA
+0446  12A8             *      DATA = AA55
+0447  12A8             *      RESULT = AB55
+0448  12A8             *      Z=0, N=1, V=1, C=1
+0449  12A8             *
+0450  12A8 DE 59       CP7    LDX DATA+1
+0451  12AA 9C 58              CPX DATA
+0452  12AC 2A FE              BPL *
+0453  12AE 28 FE              BVC *
+0454  12B0 27 FE              BEQ *
+0455  12B2 2B 02              BMI CP9
+0456  12B4 20 FE              BRA *
+0457  12B6 29 02       CP9    BVS CP10
+0458  12B8 20 FE              BRA *
+0459  12BA 26 02       CP10   BNE CP11
+0460  12BC 20 FE              BRA *
+0461  12BE             *
+0462  12BE             *      CASE 4:
+0463  12BE             *      X = 55AA
+0464  12BE             *      DATA + 3 = 0000
+0465  12BE             *      RESULT = 55AA
+0466  12BE             *      Z=0, N=0, V=0, C=0
+0467  12BE             *
+0468  12BE DE 59       CP11   LDX DATA+1
+0469  12C0 9C 5B              CPX DATA+3 
+0470  12C2 27 FE              BEQ *
+0471  12C4 2B FE              BMI *
+0472  12C6 29 FE              BVS *
+0473  12C8 25 FE              BCS *
+0474  12CA 26 02              BNE CP12
+0475  12CC 20 FE              BRA *
+0476  12CE 2A 02       CP12   BPL CP13
+0477  12D0 20 FE              BRA *
+0478  12D2 28 02       CP13   BVC CP14
+0479  12D4 20 FE              BRA *
+0480  12D6 24 02       CP14   BCC CP15 
+0481  12D8 20 FE              BRA *
+0482  12DA             *
+0483  12DA             *      CASE 5:
+0484  12DA             *      X = AA00
+0485  12DA             *      DATA = AA55
+0486  12DA             *      RESULT = FFAB
+0487  12DA             *      Z=0, N=1, V=0, C=0
+0488  12DA             *
+0489  12DA DE 5A       CP15   LDX DATA+2   X=AA00
+0490  12DC 9C 58              CPX DATA
+0491  12DE 27 FE              BEQ *
+0492  12E0 2A FE              BPL *
+0493  12E2 29 FE              BVS *
+0494  12E4 26 02              BNE CP16
+0495  12E6 20 FE              BRA *
+0496  12E8 2B 02       CP16   BMI CP17
+0497  12EA 20 FE              BRA *
+0498  12EC 28 02       CP17   BVC CP19
+0499  12EE 20 FE              BRA *
+0500  12F0 01          CP19   NOP
+0501  12F1             **************************************
+0502  12F1             *
+0503  12F1             *               LOGICAL AND ACCUMULATOR A (AND)
+0504  12F1             *
+0505  12F1 96 58              LDAA DATA     DATA+1=@252,DATA+1=@125,N=0
+0506  12F3 94 59              ANDA DATA+1
+0507  12F5 2B FE              BMI  *
+0508  12F7 26 FE              BNE  *
+0509  12F9 29 FE       A62    BVS  A62
+0510  12FB 96 59              LDAA DATA+1
+0511  12FD 94 58              ANDA DATA     N=0,Z=1,V=0
+0512  12FF 2B FE       A63    BMI  A63
+0513  1301 26 FE              BNE  *
+0514  1303 29 FE       A65    BVS  A65
+0515  1305 96 5D              LDAA DATA+5   DATA+5=@377,N=1,Z=0,V=0
+0516  1307 94 5D              ANDA DATA+5
+0517  1309 2A FE       A66    BPL  A66
+0518  130B 27 FE       A67    BEQ  A67
+0519  130D 98 5D              EORA DATA+5   Z=1
+0520  130F 26 FE              BNE  *
+0521  1311 96 5C              LDAA DATA+4   DATA+4=0
+0522  1313 94 5C              ANDA DATA+4
+0523  1315 26 FE              BNE  *
+0524  1317             *********************************************
+0525  1317             *
+0526  1317             *               LOGICAL AND ACCUMULATOR B (AND)
+0527  1317             *
+0528  1317 D6 58              LDAB DATA     DATA=@252,DATA+1=@125
+0529  1319 D4 59              ANDB DATA+1   N=0,Z=1,V=0
+0530  131B 2B FE       A70    BMI  A70
+0531  131D 26 FE              BNE  *
+0532  131F 29 FE       A72    BVS  A72
+0533  1321 D6 59              LDAB DATA+1
+0534  1323 D4 58              ANDB DATA     N=0,Z=1,V=0
+0535  1325 2B FE       A73    BMI  A73
+0536  1327 26 FE              BNE  *
+0537  1329 29 FE       A75    BVS  A75
+0538  132B D6 5D              LDAB DATA+5   DATA+5=@377
+0539  132D D4 5D              ANDB DATA+5   N=1,Z=0,V=0
+0540  132F 2A FE       A76    BPL  A76
+0541  1331 27 FE       A77    BEQ  A77
+0542  1333 D8 5D              EORB DATA+5
+0543  1335 26 FE       A78    BNE  A78
+0544  1337 D6 5C              LDAB DATA+4   DATA+4=0
+0545  1339 D4 5C              ANDB DATA+4   Z=1
+0546  133B 26 FE       A79    BNE  A79
+0547  133D             *********************************************
+0548  133D             *
+0549  133D             *               LOGICAL OR ACCUMULATOR A (ORA)
+0550  133D             *
+0551  133D 96 58              LDAA DATA     DATA=@252
+0552  133F 9A 59              ORAA DATA+1   DATA+1=@125,N=1,Z=0,V=0
+0553  1341 2A FE       A801   BPL  A801
+0554  1343 27 FE       A802   BEQ  A802
+0555  1345 29 FE       A803   BVS  A803
+0556  1347 98 5D              EORA DATA+5   DATA+5=@377
+0557  1349 26 FE       A804   BNE  A804
+0558  134B 96 59              LDAA DATA+1
+0559  134D 9A 58              ORAA DATA
+0560  134F 2A FE       A805   BPL  A805
+0561  1351 27 FE       A806   BEQ  A806
+0562  1353 29 FE       A807   BVS  A807
+0563  1355 98 5D              EORA DATA+5
+0564  1357 26 FE       A808   BNE  A808
+0565  1359 96 5D              LDAA DATA+5
+0566  135B 9A 5D              ORAA DATA+5
+0567  135D 98 5D              EORA DATA+5
+0568  135F 26 FE       A809   BNE  A809
+0569  1361 96 5B              LDAA DATA+3   DATA+3=0
+0570  1363 9A 5B              ORAA DATA+3   N=0,Z=1,V=0
+0571  1365 2B FE       A810   BMI  A810
+0572  1367 26 FE       A811   BNE  A811
+0573  1369 29 FE       A812   BVS  A812
+0574  136B 98 5B              EORA DATA+3
+0575  136D 26 FE              BNE  *
+0576  136F             *********************************************
+0577  136F             *
+0578  136F             *               LOGICAL OR ACCUMULATOR B (ORA)
+0579  136F             *
+0580  136F D6 58              LDAB DATA     DATA=@252,DATA+1=@125
+0581  1371 DA 59              ORAB DATA+1   N=1,Z=0,V=0
+0582  1373 2A FE       A901   BPL  A901
+0583  1375 27 FE       A902   BEQ  A902
+0584  1377 29 FE       A903   BVS  A903
+0585  1379 D8 5D              EORB DATA+5   DATA+5=@377
+0586  137B 26 FE       A904   BNE  A904
+0587  137D D6 59              LDAB DATA+1
+0588  137F DA 58              ORAB DATA
+0589  1381 2A FE       A905   BPL  A905
+0590  1383 27 FE       A906   BEQ  A906
+0591  1385 29 FE       A907   BVS  A907
+0592  1387 D8 5D              EORB DATA+5
+0593  1389 26 FE       A908   BNE  A908
+0594  138B D6 5D              LDAB DATA+5
+0595  138D DA 5D              ORAB DATA+5
+0596  138F D8 5D              EORB DATA+5
+0597  1391 26 FE       A909   BNE  A909
+0598  1393 D6 5B              LDAB DATA+3   DATA+3=0
+0599  1395 DA 5B              ORAB DATA+3   N=0,Z=1,V=0
+0600  1397 2B FE       A910   BMI  A910
+0601  1399 26 FE       A911   BNE  A911
+0602  139B 29 FE              BVS  *
+0603  139D D8 5B              EORB DATA+3
+0604  139F 26 FE       A913   BNE  A913
+0605  13A1             *********************************************
+0606  13A1             *
+0607  13A1             *               ADD ACCUMULATOR A TO MEMORY (ADD)
+0608  13A1             *
+0609  13A1 96 59              LDAA DATA+1   DATA+1=@125
+0610  13A3 9B 59              ADDA DATA+1   N=1,Z=0,V=1,C=0
+0611  13A5 2A FE       A100   BPL  A100
+0612  13A7 27 FE       A101   BEQ  A101
+0613  13A9 28 FE       A102   BVC  A102
+0614  13AB 25 FE       A103   BCS  A103
+0615  13AD 98 58              EORA DATA     DATA=@252
+0616  13AF 26 FE       A104   BNE  A104
+0617  13B1 96 58              LDAA DATA
+0618  13B3 9B 58              ADDA DATA     N=0,Z=0,V=1,C=1
+0619  13B5 2B FE       A105   BMI  A105
+0620  13B7 27 FE       A106   BEQ  A106
+0621  13B9 28 FE              BVC  *
+0622  13BB 24 FE       A108   BCC  A108
+0623  13BD 98 5F              EORA DATA+7   DATA+7=@124
+0624  13BF 26 FE       A109   BNE  A109
+0625  13C1 96 61              LDAA DATA+9   DATA+9=@201(-127)
+0626  13C3 9B 62              ADDA DATA+10   DATA+10=@277(-65),N=0,Z=0
+0627  13C5 2B FE       A110   BMI  A110
+0628  13C7 27 FE       A111   BEQ  A111
+0629  13C9 28 FE       A112   BVC  A112
+0630  13CB 24 FE       A113   BCC  A113
+0631  13CD 98 5E              EORA DATA+6   DATA+6=@100
+0632  13CF 26 FE       A114   BNE  A114
+0633  13D1 96 61              LDAA DATA+9   DATA+9=@201
+0634  13D3 9B 5D              ADDA DATA+5   DATA+5=@377,N=1,Z=0,V=0,C=1
+0635  13D5 2A FE       A115   BPL  A115
+0636  13D7 27 FE       A116   BEQ  A116
+0637  13D9 29 FE       A117   BVS  A117
+0638  13DB 24 FE       A118   BCC  A118
+0639  13DD 98 60              EORA DATA+8   DATA+8=@200
+0640  13DF 26 FE       A119   BNE  A119
+0641  13E1 96 5D              LDAA DATA+5   DATA+5=@377
+0642  13E3 9B 5B              ADDA DATA+3   DATA+3=0,N=1,Z=0,V=0,C=0
+0643  13E5 2A FE       A120   BPL  A120
+0644  13E7 27 FE       A121   BEQ  A121
+0645  13E9 29 FE       A122   BVS  A122
+0646  13EB 25 FE       A123   BCS  A123
+0647  13ED 98 5D              EORA DATA+5   DATA+5=@377
+0648  13EF 26 FE       A124   BNE  A124
+0649  13F1 96 5D              LDAA DATA+5   DATA+5=@377
+0650  13F3 9B 5D              ADDA DATA+5   N=1,Z=0,V=0,C=1
+0651  13F5 2A FE       A125   BPL  A125
+0652  13F7 27 FE       A126   BEQ  A126
+0653  13F9 29 FE       A127   BVS  A127
+0654  13FB 24 FE       A128   BCC  A128
+0655  13FD 98 63              EORA DATA+11   DATA+11=@376
+0656  13FF 26 FE       A129   BNE  A129
+0657  1401 96 5B              LDAA DATA+3   DATA+3=0
+0658  1403 9B 5B              ADDA DATA+3   N=0,Z=1,V=0,C=0
+0659  1405 2B FE       A130   BMI  A130
+0660  1407 26 FE       A131   BNE  A131
+0661  1409 29 FE       A132   BVS  A132
+0662  140B 25 FE       A133   BCS  A133
+0663  140D 98 5B              EORA DATA+3
+0664  140F 26 FE       A134   BNE  A134
+0665  1411             *********************************************
+0666  1411             *
+0667  1411             *               ADD ACCUMULATOR B TO MEMORY
+0668  1411             *
+0669  1411 D6 59              LDAB DATA+1   DATA+1=@125
+0670  1413 DB 59              ADDB DATA+1   N=1,Z=0V=1,C=0
+0671  1415 2A FE       A200   BPL  A200
+0672  1417 27 FE       A201   BEQ  A201
+0673  1419 28 FE       A202   BVC  A202
+0674  141B 25 FE       A203   BCS  A203
+0675  141D D8 58              EORB DATA     DATA=@252
+0676  141F 26 FE       A204   BNE  A204
+0677  1421 D6 58              LDAB DATA     DATA=@252
+0678  1423 DB 58              ADDB DATA     N=0,Z=0,V=1,C=1
+0679  1425 2B FE       A205   BMI  A205
+0680  1427 27 FE       A206   BEQ  A206
+0681  1429 28 FE       A207   BVC  A207
+0682  142B 24 FE       A208   BCC  A208
+0683  142D D8 5F              EORB DATA+7   DATA+7=@124
+0684  142F 26 FE       A209   BNE  A209
+0685  1431 D6 61              LDAB DATA+9   DATA+9=@201(-127)
+0686  1433 DB 62              ADDB DATA+10  DATA+10=@277(-65),N=0,Z=0
+0687  1435 2B FE       A210   BMI  A210
+0688  1437 27 FE       A211   BEQ  A211
+0689  1439 28 FE       A212   BVC  A212
+0690  143B 24 FE       A213   BCC  A213
+0691  143D D8 5E              EORB DATA+6   DATA+6=@100
+0692  143F 26 FE       A214   BNE  A214
+0693  1441 D6 61              LDAB DATA+9   DATA+9"=""@201
+0694  1443 DB 5D              ADDB DATA+5   DATA+5=@377,N=1,Z=0,V=0,C=1
+0695  1445 2A FE       A215   BPL  A215
+0696  1447 27 FE       A216   BEQ  A216
+0697  1449 29 FE       A217   BVS  A217
+0698  144B 24 FE       A218   BCC  A218
+0699  144D D8 60              EORB DATA+8   DATA+8=@200
+0700  144F 26 FE       A219   BNE  A219
+0701  1451 D6 5D              LDAB DATA+5   DATA+5=@377
+0702  1453 DB 5B              ADDB DATA+3   DATA+3=0,N=1,Z=0,V=0,C=0
+0703  1455 2A FE       A220   BPL  A220
+0704  1457 27 FE       A221   BEQ  A221
+0705  1459 29 FE       A222   BVS  A222
+0706  145B 25 FE       A223   BCS  A223
+0707  145D D8 5D              EORB DATA+5   DATA+5=@377
+0708  145F 26 FE       A224   BNE  A224
+0709  1461 D6 5D              LDAB DATA+5   DATA+5=@377
+0710  1463 DB 5D              ADDB DATA+5   N=1,Z=0,V=0,C=1
+0711  1465 2A FE       A225   BPL  A225
+0712  1467 27 FE       A226   BEQ  A226
+0713  1469 29 FE       A227   BVS  A227
+0714  146B 24 FE       A228   BCC  A228
+0715  146D D8 63              EORB DATA+11  DATA+11=@376
+0716  146F 26 FE       A229   BNE  A229
+0717  1471 D6 5B              LDAB DATA+3   DATA+3=@0
+0718  1473 DB 5B              ADDB DATA+3   N=0,Z=1,V=0,C=0
+0719  1475 2B FE       A230   BMI  A230
+0720  1477 26 FE       A231   BNE  A231
+0721  1479 29 FE       A232   BVS  A232
+0722  147B 25 FE       A233   BCS  A233
+0723  147D D8 5B              EORB DATA+3
+0724  147F 26 FE       A234   BNE  A234
+0725  1481             *********************************************
+0726  1481             *
+0727  1481             *               SUBTRACT MEMORY FROM ACCUMULATOR A (SUB)
+0728  1481             *
+0729  1481 96 5D              LDAA DATA+5   DATA+5=@377
+0730  1483 90 5D              SUBA DATA+5   N=0,Z=1,V=0,C=0
+0731  1485 2B FE       A140   BMI  A140
+0732  1487 26 FE       A141   BNE  A141
+0733  1489 29 FE              BVS  *
+0734  148B 25 FE       A143   BCS  A143
+0735  148D 96 62              LDAA DATA+10  DATS"+10""=@277
+0736  148F 90 5B              SUBA DATA+3   DATA+3=0,N=1,Z=0,V=0,C=0
+0737  1491 2A FE       A144   BPL  A144
+0738  1493 27 FE       A145   BEQ  A145
+0739  1495 29 FE       A146   BVS  A146
+0740  1497 25 FE       A147   BCS  A147
+0741  1499 98 62              EORA DATA+10
+0742  149B 26 FE       A148   BNE  A148
+0743  149D             *********************************************
+0744  149D             *
+0745  149D             *               SUBTRACT MEMORY FROM ACCUMULATOR B (SUB)
+0746  149D             *
+0747  149D D6 5D              LDAB DATA+5   DATA+5=@377
+0748  149F D0 5D              SUBB DATA+5   N=0,Z=1,V=0,C=0
+0749  14A1 2B FE       A240   BMI  A240
+0750  14A3 26 FE       A241   BNE  A241
+0751  14A5 29 FE       A242   BVS  A242
+0752  14A7 25 FE       A243   BCS  A243
+0753  14A9 D6 62              LDAB DATA+10  DATA+10=@277
+0754  14AB D0 5B              SUBB DATA+3   DATA+3=0.N=1,Z=0,V=0,C=0
+0755  14AD 2A FE       A244   BPL  A244
+0756  14AF 27 FE       A245   BEQ  A245
+0757  14B1 29 FE       A246   BVS  A246
+0758  14B3 25 FE       A247   BCS  A247
+0759  14B5 D8 62              EORB DATA+10
+0760  14B7 26 FE       A248   BNE   A248
+0761  14B9             *********************************************
+0762  14B9             *
+0763  14B9             *               ADD WITH CARRY,ACCUMULATOR A (ADC)
+0764  14B9             *
+0765  14B9 96 59              LDAA DATA+1   DATA+1=@125
+0766  14BB 9B 5B              ADDA DATA+3   DATA+3=0,RESULT=@125,
+0767  14BD             *                    CARRY SET TO ZERO
+0768  14BD 99 5D              ADCA DATA+5   DATA+5=@377,RESULT=@124,
+0769  14BF             *                    N=0,Z=0,V=0,C=1
+0770  14BF 2B FE              BMI  *        N=1?
+0771  14C1 27 FE              BEQ  *        NO,Z=1?
+0772  14C3 29 FE              BVS  *        NO,V=1?
+0773  14C5 24 FE              BCC  *        NO,C=0?
+0774  14C7 97 68              STAA TMP      NO,SAVE RESULT
+0775  14C9 98 5F              EORA DATA+7   DATA+7=@124.SET UP
+0776  14CB             *                    EXEC TEST
+0777  14CB 26 FE              BNE  *        RESULT=@124?
+0778  14CD 96 68              LDAA TMP      YES RESTORE ACCUM A
+0779  14CF 24 FE              BCC  *        VERIFY C=1
+0780  14D1 99 5B              ADCA DATA+3   DATA+3=0,RESULT=@125
+0781  14D3             *                    Z=0,C=0
+0782  14D3 27 FE              BEQ  *        Z=1?
+0783  14D5 25 FE              BCS  *        NO,C=1?
+0784  14D7 98 59              EORA DATA+1   DATA+1=@125,SET
+0785  14D9             *                    UP EXEC TEST
+0786  14D9 26 FE              BNE  *        RESULT=@125?
+0787  14DB 96 67              LDAA DATA+15  YES,SET UP NEXT TEST,
+0788  14DD             *                    DATA+15=@001,C=0,Z=0
+0789  14DD 99 5D              ADCA DATA+5   DATA+5=@377,C=0,SO RESULT
+0790  14DF             *                   =0,N=0,Z=1
+0791  14DF 2B FE              BMI  *        N=1?
+0792  14E1 26 FE              BNE  *        NO,Z=0?
+0793  14E3 98 5B              EORA DATA+3   NO,SET UP EXEC TEST
+0794  14E5 26 FE              BNE  *        RESULT=0?
+0795  14E7 0C                 CLC           YES,CLEAR CARRY
+0796  14E8 25 FE              BCS  *        VERIFY CARRY CLEARED
+0797  14EA 99 5D              ADCA DATA+5   ADD @377& C=0 TO
+0798  14EC             *                    ZERO,RESULT=@377,N=1,Z=0,V
+0799  14EC 2A FE              BPL  *        N=0?
+0800  14EE 27 FE              BEQ  *        NO,Z=1?
+0801  14F0 29 FE              BVS  *        NO,V=1?
+0802  14F2 98 5D              EORA DATA+5   NO,SET UP EXEC TEST
+0803  14F4 26 FE              BNE  *        RESULT=@377?
+0804  14F6 96 5D              LDAA DATA+5   YES,RESTORE ACCUM A
+0805  14F8 99 60              ADCA DATA+8   DATA+8=@200. ADDIN
+0806  14FA             *                 @200,C=0.RESULT=@177,N=0,V=1,
+0807  14FA 2B FE              BMI  *        N=1?
+0808  14FC 28 FE              BVC  *        NO,V=0?
+0809  14FE 24 FE              BCC  *        NO,C=0?
+0810  1500 99 60              ADCA DATA+8   NO,DATA+8=@200.ADD IN
+0811  1502             *                    @200 & C=1.RESULT
+0812  1502             *                    =0,V=0
+0813  1502 29 FE              BVS  *        V=1?
+0814  1504 98 5B              EORA DATA+3   NO.DATA+3=0,SET UP EXEC TES
+0815  1506             *                    =0,V=0
+0816  1506 26 FE              BNE  *        RESULT=ZERO?
+0817  1508 01                 NOP           YES
+0818  1509             *********************************************
+0819  1509             *
+0820  1509             *               ADD WITH CARRY,ACCUMULATOR B (ADC)
+0821  1509             *
+0822  1509 D6 59              LDAB DATA+1   DATA+1=@125
+0823  150B DB 5B              ADDB DATA+3   DATA+3=0,RESULT=@125,
+0824  150D             *                    CARRY SET TO ZERO
+0825  150D D9 5D              ADCB DATA+5   DATA+5=@377,RESULT=@124,
+0826  150F             *                    N=0,V=0,C=1
+0827  150F 2B FE              BMI  *        N=1?
+0828  1511 29 FE              BVS  *        NO,V=1?
+0829  1513 24 FE              BCC  *        NO,C=0?
+0830  1515 D7 68              STAB TMP      NO, SAVE RESULT
+0831  1517 D8 5F              EORB DATA+7   DATA+7=@124.SET UP
+0832  1519             *                    EXEC TEST
+0833  1519 26 FE              BNE  *        RESULT=@124?
+0834  151B D6 68              LDAB TMP      YES,RESTORE ACCUM B
+0835  151D 24 FE              BCC  *        VERIFY C=0
+0836  151F D9 5B              ADCB DATA+3   DATA+3=0,RESULT=
+0837  1521             *                    Z=0,C=0
+0838  1521 27 FE              BEQ  *        Z=1?
+0839  1523 25 FE              BCS  *        NO,C=1?
+0840  1525 D8 59              EORB DATA+1   NO,DATA+1=@125,
+0841  1527             *                    SET UP EXEC TEST
+0842  1527 26 FE              BNE  *        RESULT=@125?
+0843  1529 D6 67              LDAB DATA+15  YES,SET UP NEXT TEST,
+0844  152B             *                    DATA+15=@001,C=0,Z=0
+0845  152B D9 5D              ADCB DATA+5   DATA+5=@377,RESULT=0,
+0846  152D             *                    N=0,Z=1
+0847  152D 2B FE              BMI  *        N=1?
+0848  152F 26 FE              BNE  *        NO,Z=0?
+0849  1531 D8 5B              EORB DATA+3   NO,SET UP EXEC TEST
+0850  1533 26 FE              BNE  *        RESULT=0?
+0851  1535 0C                 CLC           CLEAR CARRY
+0852  1536 25 FE              BCS  *        VERIFY CARRY CLEARED
+0853  1538 D9 5D              ADCB DATA+5   YES,ADD @377&C=0,RESULT=
+0854  153A             *                    @377,N=1,Z=0,V=0
+0855  153A 2A FE              BPL  *        N=0?
+0856  153C 27 FE              BEQ  *        NO,Z=1?
+0857  153E 29 FE              BVS  *        NO,V=1?
+0858  1540 D8 5D              EORB DATA+5   NO,SET UP EXEC TEST
+0859  1542 26 FE              BNE  *        RESULT=@377?
+0860  1544 D6 5D              LDAB DATA+5   YES,RESTORE ACCUM B
+0861  1546 D9 60              ADCB DATA+8   DATA+8 =@200. ADD IN
+0862  1548             *                    WITH C=0.RESULT=@177,N=0,V
+0863  1548 2B FE              BMI  *        N=1?
+0864  154A 28 FE              BVC  *        NO,V=0?
+0865  154C 24 FE              BCC  *        NO,C=0?
+0866  154E D9 60              ADCB DATA+8   NO,DATA+8=@200. ADD IN
+0867  1550             *                    @200 WITH C=1. RESULT
+0868  1550             *                    =0,V=0
+0869  1550 29 FE              BVS  *        V=1?
+0870  1552 D8 5B              EORB DATA+3   NO,DATA+3=0. SET UP
+0871  1554             *                    EXEC TEST
+0872  1554 26 FE              BNE  *        RESULT=0?
+0873  1556 01                 NOP           YES
+0874  1557             *********************************************
+0875  1557             *
+0876  1557             *               SUBTRACT WITH CARRY,ACCUMULATOR A (SBC)
+0877  1557             *
+0878  1557 96 66              LDAA DATA+14  DATA+14=@177,SET UP TEST,
+0879  1559 0D                 SEC           SET CARRY,
+0880  155A 24 FE              BCC  *        AND VERIFY CARRY SET.N=0,Z=
+0881  155C 92 65              SBCA DATA+13  DATA+13=@176,ACCUM A=0
+0882  155E             *                         N=0,Z=1,V=0,C=0
+0883  155E 2B FE              BMI  *        N=1?
+0884  1560 26 FE              BNE  *        NO,Z=0? ALSO EXEC TEST.
+0885  1562 29 FE              BVS  *        NO,V=1?
+0886  1564 25 FE              BCS  *        NO,C=1?
+0887  1566 92 67              SBCA DATA+15  DATA+15=@001,ACCUM A=A377,
+0888  1568 2A FE              BPL  *        N=0?
+0889  156A 27 FE              BEQ  *        NO,Z=1?
+0890  156C 29 FE              BVS  *        NO,V=1?
+0891  156E 24 FE              BCC  *        NO,C=0?
+0892  1570 98 5D              EORA DATA+5   NO,DATA+5=@377,SET UP
+0893  1572             *                   EXEC TEST
+0894  1572 26 FE              BNE  *        SUBTRACTION RESULT=@377?
+0895  1574 96 5D              LDAA DATA+5   YES,DATA+5=@377,SET
+0896  1576             *                   UP NEXT TEST,N=1.Z=0,V=0,C=
+0897  1576 92 66              SBCA DATA+14  DATA+14=@177;ACCUM A=@177,
+0898  1578             *                   N=0,Z=0,V=1,C=0
+0899  1578 2B FE              BMI  *        N=1?
+0900  157A 27 FE              BEQ  *        NO,Z=1?
+0901  157C 28 FE              BVC  *        NO,V=0?
+0902  157E 25 FE              BCS  *        NO,C=1?
+0903  1580 98 66              EORA DATA+14  NO,DATA+14=@177,SET UP
+0904  1582             *                   EXEC TEST
+0905  1582 26 FE              BNE  *        SUBTRACTION RESULT=@177?
+0906  1584 96 66              LDAA DATA+14  YES,SET UP NEXT TEST,
+0907  1586 0B                 SEV           SET OVERFLOW,
+0908  1587 28 FE              BVC  *        AND VERIFY OVERFLOW SET.V=1
+0909  1589 92 5B              SBCA DATA+3   DATA+3,V=0
+0910  158B 29 FE              BVS  *        V=1?
+0911  158D 98 66              EORA DATA+14  NO,SET UP EXEC TEST
+0912  158F 26 FE              BNE  *        SUBTRACTED RESULT=@177?
+0913  1591 01                 NOP           YES
+0914  1592             *********************************************
+0915  1592             *
+0916  1592             *               SUBTRACT WITH CARRY ACCUM B (SBC)
+0917  1592             *
+0918  1592 D6 66              LDAB DATA+14  DATA+14=@177,SET UP TEST
+0919  1594 0D                 SEC           SET CARRY,
+0920  1595 24 FE              BCC  *        AND VERIFY CARRY SET.N=0,Z=
+0921  1597 D2 65              SBCB DATA+13  DATA+13=@176,ACCUM B=0,
+0922  1599             *                   N=0,Z=1,V=0,C=1
+0923  1599 2B FE              BMI  *        N=1?
+0924  159B 26 FE              BNE  *        NO,Z=0? ALSO EXEC TEST
+0925  159D 29 FE              BVS  *        NO,V=1?
+0926  159F 25 FE              BCS  *        NO,C=1?
+0927  15A1 D2 67              SBCB DATA+15  DATA+15=@001,ACCUM B=@377,
+0928  15A3 2A FE              BPL  *        N=0?
+0929  15A5 27 FE              BEQ  *        NO,Z=1?
+0930  15A7 29 FE              BVS  *        NO,V=1?
+0931  15A9 24 FE              BCC  *        NO,C=0?
+0932  15AB D8 5D              EORB DATA+5   NO,DATA+5=@377,SET UP
+0933  15AD             *                   EXEC TEST
+0934  15AD 26 FE              BNE  *        SUBTRACTION RESULT=@377?
+0935  15AF D6 5D              LDAB DATA+5   YES,DATA+5=@377,SET
+0936  15B1             *                   UP NEXT TEST,N=1.Z=0,V=0,C=
+0937  15B1 D2 66              SBCB DATA+14  DATA+14=@177;ACCUM A=@177,
+0938  15B3             *                   N=0,Z=0,V=1,C=0
+0939  15B3 2B FE              BMI    *      N=1?
+0940  15B5 27 FE              BEQ    *      NO,Z=1?
+0941  15B7 28 FE              BVC    *      NO,V=0?
+0942  15B9 25 FE              BCS    *      NO,C=1?
+0943  15BB D8 66              EORB DATA+14  NO,DATA+14=@177,SET UP
+0944  15BD             *                   EXEC TEST
+0945  15BD 26 FE              BNE  *        SUBTRACTION RESULT=@177?
+0946  15BF D6 66              LDAB DATA+14  YES,SET UP NEXT TEST,
+0947  15C1 0B                 SEV           SET OVERFLOW,
+0948  15C2 28 FE              BVC  *        AND VERIFY OVERFLOW SET.V=1
+0949  15C4 D2 5B              SBCB DATA+3   DATA+3=0,V=0
+0950  15C6 29 FE              BVS  *        V=1?
+0951  15C8 D8 66              EORB DATA+14  NO,SET UP EXEC TEST
+0952  15CA 26 FE              BNE  *        SUBTRACTED RESULT=@177?
+0953  15CC 01                 NOP           YES
+0954  15CD             *********************************************
+0955  15CD             *
+0956  15CD             *               COMPARE ACCUMULATOR A TO MEMORY (CMP)
+0957  15CD             *
+0958  15CD 96 66              LDAA DATA+14  DATA+14=@177,SET UP TEST
+0959  15CF 0C                 CLC           CLEAR CARRY
+0960  15D0 25 FE              BCS  *        VERIFY CARRY CLEARED
+0961  15D2             *                   N=0,Z=0,V=0,C=0
+0962  15D2 91 66              CMPA DATA+14  ACCUM A=@177,N=0,Z=1,V=0,C
+0963  15D4 2B FE              BMI  *        N=1?
+0964  15D6 26 FE              BNE  *        NO,Z=0?
+0965  15D8 25 FE              BCS  *        NO,C=1?
+0966  15DA 98 66              EORA DATA+14  NO,SEY UP EXEC TEST
+0967  15DC 26 FE              BNE  *        WAS ACCUM A STILL=@177?
+0968  15DE             *                   YES.N=0,Z=1,V=0,C"=1,ACCUM
+0969  15DE 91 67              CMPA DATA+15  DATA+15=@001,N=1,Z=0,V=0,C
+0970  15E0 2A FE              BPL  *        N=0?
+0971  15E2 27 FE              BEQ  *        NO,Z=1?
+0972  15E4 29 FE              BVS  *        NO,V=1?
+0973  15E6 24 FE              BCC  *        NO,C=0?
+0974  15E8 98 5B              EORA DATA+3   NO,SET UP EXEC TEST,DATA+3=
+0975  15EA 26 FE              BNE  *        WAS ACCUM A STILL=0?
+0976  15EC 96 63              LDAA DATA+11  YES,SET UP NEXT TEST
+0977  15EE             *                   DATA+11=@376,N=1,Z=0,V=0,C=
+0978  15EE 91 66              CMPA DATA+14  DATA+14=@177,N=0,Z=0,V=1,C
+0979  15F0 2B FE              BMI  *        N=1?
+0980  15F2 28 FE              BVC  *        NO,V=0?
+0981  15F4 98 63              EORA DATA+11  NO,SET UP EXEC TEST
+0982  15F6 26 FE              BNE  *        WAS ACCUM A STILL=@376?
+0983  15F8 0B                 SEV           YES,SET OVERFLOW AND
+0984  15F9 28 FE              BVC  *        VERIFY.NEXT TEST SET UP,V=1
+0985  15FB 91 5D              CMPA DATA+5   DATA+5=@377,V=0
+0986  15FD 29 FE              BVS  *        V=1?
+0987  15FF 98 5B              EORA DATA+3   NO,SET UP EXEC TEST
+0988  1601 26 FE              BNE  *        WAS ACCUM A STILL=0?
+0989  1603 01                 NOP           YES
+0990  1604             *********************************************
+0991  1604             *
+0992  1604             *               COMPARE ACCUMULATOR B TO MEMORY (CMP)
+0993  1604             *
+0994  1604 D6 66              LDAB DATA+14  DATA+14=@177,SET UP TEST
+0995  1606 0C                 CLC           CLEAR CARRY
+0996  1607 25 FE              BCS  *        VERIFY CARRY CLEARED
+0997  1609             *                   N=0,Z=0,V=0,C=0
+0998  1609 D1 66              CMPB DATA+14  ACCUM A=@177,N=0,Z=1,V=0,C
+0999  160B 2B FE              BMI  *        N=1?
+1000  160D 26 FE              BNE  *        NO,Z=0?
+1001  160F 25 FE              BCS  *        NO,C=1?
+1002  1611 D8 66              EORB DATA+14  NO,SEY UP EXEC TEST
+1003  1613 26 FE              BNE  *        WAS ACCUM A STILL=@177?
+1004  1615             *                          YES.N=0,Z=1,V=0,C"=1,ACCUM
+1005  1615 D1 67              CMPB DATA+15  DATA+15=@001,N=1,Z=0,V=0,C
+1006  1617 2A FE              BPL  *        N=0?
+1007  1619 27 FE              BEQ  *        NO,Z=1?
+1008  161B 29 FE              BVS  *        NO,V=1?
+1009  161D 24 FE              BCC  *        NO,C=0?
+1010  161F D8 5B              EORB DATA+3   NO,SET UP EXEC TEST,DATA+3=
+1011  1621 26 FE              BNE  *        WAS ACCUM B STILL=0?
+1012  1623 D6 63              LDAB DATA+11  YES,SET UP EXEC TEST
+1013  1625             *                 DATA+11=@376,N=1,Z=0,V=0,C=0
+1014  1625 D1 66              CMPB DATA+14  DATA+14=@177,N=0,Z=0,V=1,C
+1015  1627 2B FE              BMI  *        N=1?
+1016  1629 28 FE              BVC  *        NO,V=0?
+1017  162B D8 63              EORB DATA+11  NO,SET UP EXEC TEST
+1018  162D 26 FE              BNE  *        WAS ACCUM B STILL=@376?
+1019  162F 0B                 SEV           YES,SET OVERFLOW AND
+1020  1630 28 FE              BVC  *        VERIFY.NEXT TEST SET UP,V=1
+1021  1632 D1 5D              CMPB DATA+5   DATA+5=@377,V=0
+1022  1634 29 FE              BVS  *        V=1?
+1023  1636 D8 5B              EORB DATA+3   NO,SET UP EXEC TEST
+1024  1638 26 FE              BNE  *        WAS ACCUM A STILL=0?
+1025  163A 01                 NOP           YES
+1026  163B             *********************************************
+1027  163B             *
+1028  163B             *               BIT TEST ACCUMULATOR A (BIT)
+1029  163B             *
+1030  163B 96 5D              LDAA DATA+5   DATA+5=@377,SET UP TEST
+1031  163D 0B                 SEV           SET OVERFLOW
+1032  163E 28 FE              BVC  *        VERIFY OVERFLOW SET
+1033  1640 0D                 SEC           SET CARRY
+1034  1641 24 FE              BCC  *        VERIFY CARRY SET
+1035  1643 95 5B              BITA DATA+3   DATA+3=0,N=0,Z=1,C=1
+1036  1645 2B FE              BMI  *        N=1?
+1037  1647 26 FE              BNE  *        NO,Z=0?
+1038  1649 29 FE              BVS  *        NO,V=1?
+1039  164B 24 FE              BCC  *        NO,C=0?
+1040  164D 98 5D              EORA DATA+5   NO,SET UP EXEC TEST
+1041  164F 26 FE              BNE  *        RESULT=@377?
+1042  1651 96 5B              LDAA DATA+3   YES,SET UP NEXT TEST
+1043  1653 95 5D              BITA DATA+5   DATA+3=0 & DATA+5=@377,
+1044  1655             *                   N=0,Z=1,V=0,C=1
+1045  1655 2B FE              BMI  *        N=1?
+1046  1657 26 FE              BNE  *        NO,Z=0?
+1047  1659 29 FE              BVS  *        NO,V=1?
+1048  165B 24 FE              BCC  *        NO,C=0?
+1049  165D 98 5B              EORA DATA+3   NO,SET UP EXEC TEST
+1050  165F 26 FE              BNE  *        RESULT =0?
+1051  1661 96 5D              LDAA DATA+5   YES,DATA+5=@377,
+1052  1663             *                   SET UP NEXT TEST
+1053  1663 0C                 CLC           CLEAR CARRY
+1054  1664 25 FE              BCS  *        VERIFY CARRY CLEARED
+1055  1666 0B                 SEV           SET OVERFLOW
+1056  1667 28 FE              BVC  *        LDA A  DATA+3   DATA+3=0
+1057  1669 98 5D              EORA DATA+5   NO,SET UP EXEC TEST
+1058  166B 26 FE              BNE  *        RESULT=@377?
+1059  166D 96 5B              LDAA DATA+3   DATA+3=0
+1060  166F 95 5B              BITA DATA+3   N=0,Z=1,V=0,C=0
+1061  1671 2B FE              BMI  *        N=1?
+1062  1673 26 FE              BNE  *        NO,Z=0?
+1063  1675 29 FE              BVS  *        NO,V=1?
+1064  1677 25 FE              BCS  *        NO,C=1?
+1065  1679 98 5B              EORA DATA+3   NO,SET UP EXEC TEST
+1066  167B 26 FE              BNE  *        RESULT=0?
+1067  167D 01                 NOP           YES
+1068  167E             *********************************************
+1069  167E             *
+1070  167E             *               BIT TEST ACCUMULATOR B (BIT)
+1071  167E             *
+1072  167E D6 5D              LDAB DATA+5   DATA+5=@377,SET E    *        NO,Z=0?
+1073  1680 0B                 SEV           SET OVERFLOW
+1074  1681 28 FE              BVC  *        VERIFY OVERFLOW SET
+1075  1683 0D                 SEC           SET CARRY
+1076  1684 24 FE              BCC  *        VERIFY CARRY SET
+1077  1686 D5 5B              BITB DATA+3   DATA+3=0,N=0,Z=1,C=1
+1078  1688 2B FE              BMI  *        N=1?
+1079  168A 26 FE              BNE  *        NO,Z=0?
+1080  168C 29 FE              BVS  *        NO,V=1?
+1081  168E 24 FE              BCC  *        NO,C=0?
+1082  1690 D8 5D              EORB DATA+5   NO,SET UP EXEC TEST
+1083  1692 26 FE              BNE  *        RESULT=@377?
+1084  1694 D6 5B              LDAB DATA+3   YES,SET UP NEXT TEST
+1085  1696 D5 5D              BITB DATA+5   DATA+3=0 & DATA+5=@377,
+1086  1698             *                   N=0,Z=1,V=0,C=1
+1087  1698 2B FE              BMI  *        N=1?
+1088  169A 26 FE              BNE  *        NO,Z=0?
+1089  169C 29 FE              BVS  *        NO,V=1?
+1090  169E 24 FE              BCC  *        NO,C=0?
+1091  16A0 D8 5B              EORB DATA+3   NO,SET UP EXEC TEST
+1092  16A2 26 FE              BNE  *        RESULT=0?
+1093  16A4 D6 5D              LDAB DATA+5   YES,DATA+5=@377,
+1094  16A6             *                 SET UP NEXT TEST
+1095  16A6 0C                 CLC           CLEAR CA=1?
+1096  16A7 25 FE              BCS  *        VERIFY CARRY CLEARED
+1097  16A9 0A                 CLV           CLEAR OVERFLOW
+1098  16AA 29 FE              BVS  *        NO,V=1?
+1099  16AC D8 5D              EORB DATA+5   NO,SET UP EXEC TEST
+1100  16AE 26 FE              BNE  *        RESULT=@377?
+1101  16B0 D6 5B              LDAB DATA+3   DATA+3=0
+1102  16B2 D5 5B              BITB DATA+3   DATA+3=0,N=0,Z=1,V=0,C=0
+1103  16B4 2B FE              BMI  *        N=1?
+1104  16B6 26 FE              BNE  *        NO,Z=0?
+1105  16B8 29 FE              BVS  *        NO,V=1?
+1106  16BA 25 FE              BCS  *        N/,C=1?
+1107  16BC D8 5B              EORB DATA+3   NO,SET UP EXEC TEST
+1108  16BE 26 FE              BNE  *        RESULT=0?
+1109  16C0 01                 NOP           YES
+1110  16C1             ******************************************************
+1111  16C1             *
+1112  16C1             *      CHECK ADDRESSING MODES FOR GROUP I INSTRUCTIONS
+1113  16C1             *        ASSUMES DIRECT MODE FOR EACH INSTRUCTION HAS
+1114  16C1             *        BEEN CHECKED ABOVE.
+1115  16C1             *
+1116  16C1             ******************************************************
+1117  16C1             *
+1118  16C1 86 AA              LDAA #$AA     CHECK IMMEDIATE MODE - 1 BYTE
+1119  16C3 91 58              CMPA DATA     
+1120  16C5 26 FE              BNE *         
+1121  16C7 86 55              LDAA #$55     
+1122  16C9 91 58              CMPA DATA     
+1123  16CB 27 FE              BEQ *         
+1124  16CD             *               
+1125  16CD C6 AA              LDAB #$AA     CHECK IMMEDIATE MODE - 1 BYTE
+1126  16CF D1 58              CMPB DATA     
+1127  16D1 26 FE              BNE *         
+1128  16D3 C6 55              LDAB #$55     
+1129  16D5 D1 58              CMPB DATA     
+1130  16D7 27 FE              BEQ *         
+1131  16D9             *               
+1132  16D9 CE AA 55           LDX #$AA55    IMMEDIATE MODE - 2 BYTE
+1133  16DC 9C 58              CPX DATA      
+1134  16DE 26 FE              BNE *         
+1135  16E0 CE 55 AA           LDX #$55AA    
+1136  16E3 9C 58              CPX DATA      
+1137  16E5 27 FE              BEQ *         
+1138  16E7             *               
+1139  16E7 B6 11 A2           LDAA DATA2    EXTENDED MODE - 1 BYTE
+1140  16EA 81 55              CMPA #$55     
+1141  16EC 26 FE              BNE *         
+1142  16EE             *               
+1143  16EE F6 11 A2           LDAB DATA2    EXTENDED MODE - 1 BYTE
+1144  16F1 C1 55              CMPB #$55     
+1145  16F3 26 FE              BNE *         
+1146  16F5             *               
+1147  16F5 CE 33 44           LDX #$3344    EXTENDED MODE - 2 BYTE
+1148  16F8 FF 01 00           STX TMP2      
+1149  16FB B6 01 00           LDAA TMP2     
+1150  16FE F6 01 01           LDAB TMP2+1   
+1151  1701 81 33              CMPA #$33     
+1152  1703 26 FE              BNE *         
+1153  1705 C1 44              CMPB #$44     
+1154  1707 26 FE              BNE *         
+1155  1709             * 
+1156  1709             *      INDEXED MODE - ZERO OFFSET
+1157  1709             * 
+1158  1709 CE 11 A2           LDX #DATA2    INDEXED MODE - 1 BYTE
+1159  170C A6 00              LDAA 0,X
+1160  170E A1 00              CMPA 0,X
+1161  1710 26 FE              BNE *
+1162  1712             * 
+1163  1712 EE 00              LDX 0,X       INDEXED - 2 BYTE
+1164  1714 8C 55 AA           CPX #$55AA
+1165  1717 26 FE              BNE *
+1166  1719             * 
+1167  1719             *      INDEXED MODE - NON ZERO OFFSET
+1168  1719             * 
+1169  1719 CE 11 22           LDX #DATA2-128 ONE BYTE
+1170  171C A6 80              LDAA 128,X
+1171  171E 08                 INX           BUMP SO THE OFFSET IS DIFFERENT
+1172  171F A1 7F              CMPA 127,X
+1173  1721 26 FE              BNE *
+1174  1723 08                 INX
+1175  1724             * 
+1176  1724 CE 11 22           LDX #DATA2-128 ONE BYTE
+1177  1727 E6 80              LDAB 128,X
+1178  1729 08                 INX           BUMP SO THE OFFSET IS DIFFERENT
+1179  172A E1 7F              CMPB 127,X
+1180  172C 26 FE              BNE *
+1181  172E 08                 INX
+1182  172F             * 
+1183  172F EE 7E              LDX 126,X     TWO BYTES
+1184  1731 8C 55 AA           CPX #$55AA
+1185  1734 26 FE              BNE *
+1186  1736             *
+1187  1736             **************************************************
+1188  1736             *
+1189  1736             *    THE BSR AND JSR INSTRUCTIONS ARE NOT GROUP I
+1190  1736             *      TYPE INSTRUCTIONS BUT THEY DO OCCUPY SPACE
+1191  1736             *      IN THE GROUP I SECTION OF THE OPCODE MAP
+1192  1736             *      AND SO ARE INCLUDED HERE.
+1193  1736             *
+1194  1736             **************************************************
+1195  1736             *
+1196  1736             *          BRANCH TO SUBROUTINE
+1197  1736             *
+1198  1736             *
+1199  1736 8E 00 50           LDS #STACK    SETUP STACK
+1200  1739 8D 02              BSR BR1       GO TO SUB
+1201  173B 20 FE       BR2    BRA *         SHOULD NEVER GET HERE
+1202  173D 9F 68       BR1    STS TMP       SEE WHAT SP IS NOW
+1203  173F DE 68              LDX TMP       SHOULD BE DECREMENTED BY 2
+1204  1741 8C 00 4E           CPX #STACK-2
+1205  1744 26 FE              BNE *
+1206  1746 EE 01              LDX 1,X       GET RETURN ADDRESS OFF OF STACK
+1207  1748 8C 17 3B           CPX #BR2      IS IT OKAY?
+1208  174B 26 FE              BNE *
+1209  174D             *
+1210  174D             **************************************************
+1211  174D             *
+1212  174D             *        JUMP TO SUBROUTINE
+1213  174D             *
+1214  174D             *
+1215  174D 8E 00 50           LDS #STACK    RE-INIT STACK
+1216  1750 BD 17 55           JSR JS1       GO TO SUB
+1217  1753 20 FE       JS2    BRA *         SHOULD NEVER GET HERE
+1218  1755 9F 68       JS1    STS TMP       SEE IF SP IS DECREMENTED BY 2
+1219  1757 DE 68              LDX TMP
+1220  1759 8C 00 4E           CPX #STACK-2
+1221  175C 26 FE              BNE *
+1222  175E EE 01              LDX 1,X       CHECK RETURN ADDRESS ON STACK
+1223  1760 8C 17 53           CPX #JS2
+1224  1763 26 FE              BNE *
+1225  1765             *      * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+1226  1765             *
+1227  1765             *           GROUP 1 TEST COMPLETE
+1228  1765             *
+1229  1765             *      * * * * * * * * * * * * * * * * * * * * * * * * * * *
+1230  1765 01                 NOP
+1231  1766 01                 NOP
+1232  1767 01                 NOP
+1233  1768 20 00              BRA GRP6
+1234  176A                    TTL **** 6802 TOTAL INSTRUCTION TEST - GROUP 6 ****
+1235  176A             *
+1236  176A             *********************************************************
+1237  176A             *
+1238  176A             *      G R P 6
+1239  176A             *
+1240  176A             ********************************************************
+1241  176A             *
+1242  176A             *
+1243  176A             *      GROUP VI INSTRUCTIONS INCLUDE:
+1244  176A             *        NOP
+1245  176A             *        TAP
+1246  176A             *        TPA
+1247  176A             *        INX
+1248  176A             *        DEX
+1249  176A             *        CLV
+1250  176A             *        SEV
+1251  176A             *        CLC
+1252  176A             *        SEC
+1253  176A             *        CLI
+1254  176A             *        SEI
+1255  176A             *
+1256  176A             *
+1257  176A             *      ASSUMES FOLLOWING ALREADY HAVE BEEN TESTED:
+1258  176A             *        GROUP I
+1259  176A             *        BRANCHES (GROUP III)
+1260  176A             *
+1261  176A             *           GMCM REVISION 1.0 - SEPT 1977
+1262  176A             *
+1263  176A 86 00       GRP6   LDAA #0
+1264  176C 26 FE              BNE  *
+1265  176E 06                 TAP
+1266  176F 07                 TPA
+1267  1770 88 C0              EORA #$C0
+1268  1772 26 FE              BNE  *        TEST TAP,TPA FOR 00
+1269  1774 86 FF              LDAA #$FF
+1270  1776 06                 TAP
+1271  1777             *
+1272  1777 07                 TPA
+1273  1778 88 FF              EORA #$FF
+1274  177A 26 FE              BNE  *        TEST TAP,TPA FOR FF
+1275  177C 86 AA              LDAA #$AA
+1276  177E 06                 TAP
+1277  177F             *
+1278  177F 07                 TPA
+1279  1780 88 EA              EORA #$EA
+1280  1782 26 FE              BNE  *        TEST TPA,TAP FOR AA
+1281  1784             *
+1282  1784             *     TEST CLV SEV
+1283  1784             *
+1284  1784 86 FF              LDAA #$FF
+1285  1786 06                 TAP
+1286  1787 0A                 CLV
+1287  1788 07                 TPA
+1288  1789 88 FD              EORA #$FD     TEST CLV WITH 1 S
+1289  178B 26 FE              BNE  *
+1290  178D 86 02              LDAA #$02
+1291  178F 06                 TAP
+1292  1790 0A                 CLV
+1293  1791 07                 TPA
+1294  1792 88 C0              EORA #$C0     TEST CLV WITH 0 S
+1295  1794 26 FE              BNE  *
+1296  1796 86 FD              LDAA #$FD
+1297  1798 06                 TAP
+1298  1799 0B                 SEV
+1299  179A 07                 TPA
+1300  179B 88 FF              EORA #$FF     TEST SEV WITH 1 S
+1301  179D 26 FE              BNE  *
+1302  179F 86 00              LDAA #$00
+1303  17A1 06                 TAP
+1304  17A2 0B                 SEV
+1305  17A3 07                 TPA
+1306  17A4 88 C2              EORA #$C2     TEST SEV WITH 0 S
+1307  17A6 26 FE              BNE  *
+1308  17A8             *
+1309  17A8             *     TEST CLC SEC
+1310  17A8             *
+1311  17A8 86 FF              LDAA #$FF
+1312  17AA 06                 TAP
+1313  17AB 0C                 CLC
+1314  17AC 07                 TPA
+1315  17AD 88 FE              EORA #$FE
+1316  17AF 26 FE              BNE  *
+1317  17B1 86 01              LDAA #$01
+1318  17B3 06                 TAP
+1319  17B4 0C                 CLC
+1320  17B5 07                 TPA
+1321  17B6 88 C0              EORA #$C0     TEST CLC WITH 0 S
+1322  17B8 26 FE              BNE  *
+1323  17BA 86 FE              LDAA #$FE
+1324  17BC 06                 TAP
+1325  17BD 0D                 SEC
+1326  17BE 07                 TPA
+1327  17BF 88 FF              EORA #$FF
+1328  17C1 26 FE              BNE  *
+1329  17C3 86 00              LDAA #$00
+1330  17C5 06                 TAP
+1331  17C6 0D                 SEC
+1332  17C7 07                 TPA
+1333  17C8 88 C1              EORA #$C1
+1334  17CA 26 FE              BNE  *        TEST SEC9 WITH 0 S
+1335  17CC             *
+1336  17CC             *     TEST CLI SEI
+1337  17CC             *
+1338  17CC 86 FF              LDAA #$FF
+1339  17CE 06                 TAP
+1340  17CF 0E                 CLI
+1341  17D0 07                 TPA
+1342  17D1 88 EF              EORA #$EF
+1343  17D3 26 FE              BNE  *        TEST CLI WITH 1 S
+1344  17D5 86 10              LDAA #$10
+1345  17D7 06                 TAP
+1346  17D8 0E                 CLI
+1347  17D9 07                 TPA
+1348  17DA 88 C0              EORA #$C0
+1349  17DC 26 FE              BNE  *
+1350  17DE 86 00              LDAA #$00
+1351  17E0 06                 TAP
+1352  17E1 0F                 SEI
+1353  17E2 07                 TPA
+1354  17E3 88 D0              EORA #$D0
+1355  17E5 26 FE              BNE  *
+1356  17E7 86 EF              LDAA #$EF
+1357  17E9 06                 TAP
+1358  17EA 0F                 SEI
+1359  17EB 07                 TPA
+1360  17EC 88 FF              EORA #$FF     TEST SEI WITH 1 S
+1361  17EE 26 FE              BNE  *
+1362  17F0             *
+1363  17F0             *     TEST INX
+1364  17F0             *
+1365  17F0 86 00              LDAA #$00
+1366  17F2 CE FF FF           LDX  #$FFFF
+1367  17F5 06                 TAP
+1368  17F6 08                 INX
+1369  17F7 26 FE              BNE  *
+1370  17F9 2B FE              BMI  *
+1371  17FB 29 FE              BVS  *
+1372  17FD CE 00 EF           LDX  #$00EF
+1373  1800 08                 INX
+1374  1801 27 FE              BEQ  *
+1375  1803 2B FE              BMI  *
+1376  1805 29 FE              BVS  *
+1377  1807 07                 TPA
+1378  1808 88 C0              EORA #$C0
+1379  180A 26 FE              BNE  *
+1380  180C CE 80 80           LDX  #$8080
+1381  180F 08                 INX
+1382  1810 29 FE              BVS  *
+1383  1812             *
+1384  1812             *     TEST FOR DEX
+1385  1812             *
+1386  1812 86 00              LDAA #$00
+1387  1814 CE 00 01           LDX  #$0001
+1388  1817 06                 TAP
+1389  1818 09                 DEX
+1390  1819 26 FE              BNE  *
+1391  181B 2B FE              BMI  *
+1392  181D 29 FE              BVS  *
+1393  181F 09                 DEX
+1394  1820 07                 TPA
+1395  1821 88 C0              EORA #$C0
+1396  1823 26 FE              BNE  *
+1397  1825 CE 80 81           LDX  #$8081
+1398  1828 09                 DEX
+1399  1829 29 FE              BVS  *
+1400  182B             *
+1401  182B             *     TEST NOP
+1402  182B             *
+1403  182B 86 00       Z1     LDAA #$00
+1404  182D F6 18 2C           LDAB Z1+1
+1405  1830 CE 00 00    Z2     LDX  #$0000
+1406  1833 8E 0F FF           LDS  #$0FFF
+1407  1836 06                 TAP
+1408  1837 01                 NOP
+1409  1838 88 00              EORA #$00
+1410  183A 26 FE              BNE  *
+1411  183C 07                 TPA
+1412  183D 88 C4              EORA #$C4
+1413  183F 26 FE              BNE  *
+1414  1841 C8 00              EORB #$00
+1415  1843 26 FE              BNE  *
+1416  1845 BC 18 31           CPX  Z2+1
+1417  1848 26 FE              BNE  *
+1418  184A 30                 TSX
+1419  184B 09                 DEX
+1420  184C 8C 0F FF           CPX  #$0FFF
+1421  184F 26 FE              BNE  *
+1422  1851 86 FF              LDAA #$FF
+1423  1853 06                 TAP
+1424  1854 01                 NOP
+1425  1855 07                 TPA
+1426  1856 88 FF              EORA #$FF
+1427  1858 26 FE              BNE  *
+1428  185A             *
+1429  185A             *           GROUP 6 TEST COMPLETE-RETURN TO START
+1430  185A             *
+1431  185A 01                 NOP
+1432  185B 01                 NOP
+1433  185C 20 00              BRA GRP2
+1434  185E                    TTL **** 6802 TOTAL INSTRUCTION TEST - GROUP 2 ****
+1435  185E             *
+1436  185E             ************************************************************
+1437  185E             *
+1438  185E             *      G R P 2
+1439  185E             *
+1440  185E             *************************************************************
+1441  185E             *
+1442  185E             *
+1443  185E             *
+1444  185E             *      REVISION 1.1 - GMCM - SEPT 1977
+1445  185E             *
+1446  185E             *      GROUP II INSTRUCTIONS INCLUDE:
+1447  185E             *       NEG
+1448  185E             *       COM
+1449  185E             *       LSR
+1450  185E             *       ROR
+1451  185E             *       ASR
+1452  185E             *       ASL
+1453  185E             *       ROL
+1454  185E             *       DEC
+1455  185E             *       INC
+1456  185E             *       TST
+1457  185E             *       JMP
+1458  185E             *       CLR
+1459  185E             *
+1460  185E             *      PROGRAM TO TEST MPU GROUP 2 INSTRUCTIONS
+1461  185E             *
+1462  185E             *      THIS TEST ASSUMES THE FOLLOWING HAVE ALREADY
+1463  185E             *      BEEN TESTED:
+1464  185E             *       GROUP I
+1465  185E             *       BRANCHES (GROUP III)
+1466  185E             *       GROUP VI
+1467  185E             *
+1468  185E             ************************************************
+1469  185E             *
+1470  185E             *               NEGATE ACCUMULATOR A (NEG)
+1471  185E             *
+1472  185E B6 20 FF    GRP2   LDAA OC377
+1473  1861 40                 NEGA          NEGATE @377 TO @001,N=0,Z=0
+1474  1862 2B FE              BMI  *        N=1?
+1475  1864 27 FE              BEQ  *        NO,Z=1?
+1476  1866 29 FE              BVS  *        NO,V=1?
+1477  1868 24 FE              BCC  *        NO,C=0?
+1478  186A B8 20 DF           EORA OC001    NO,SET UP EXECUTION TEST.
+1479  186D 26 FE              BNE  *        WAS NEGATED NUMBER = @001
+1480  186F B6 20 DE           LDAA ZERO     YES
+1481  1872 40                 NEGA          NEGATE ZERO TO ZERO,N=0,Z=1
+1482  1873 2B FE              BMI  *        N=1?
+1483  1875 26 FE              BNE  *        NO,Z=0?
+1484  1877 29 FE              BVS  *        NO,V=1?
+1485  1879 25 FE              BCS  *        NO,C=1?
+1486  187B B8 20 DE           EORA ZERO     NO,SET UP EXECUTION TEST.
+1487  187E 26 FE              BNE  *        WAS NEGATED NUMBER = ZERO?
+1488  1880 B6 20 F1           LDAA OC200    YES
+1489  1883 40                 NEGA          NEGATE @200 TO @200.N=1,Z=0
+1490  1884 2A FE              BPL  *        N=0?
+1491  1886 27 FE              BEQ  *        NO,Z=1?
+1492  1888 28 FE              BVC  *        NO,V=0?
+1493  188A 24 FE              BCC  *        NO,C=0?
+1494  188C B8 20 F1           EORA OC200    NO,SET UP EXEC TEST
+1495  188F 26 FE              BNE  *        WAS NEGATED NUMBER = @200?
+1496  1891 01                 NOP           YES
+1497  1892             *******************************************
+1498  1892             *
+1499  1892             *             NEGATE ACCUMULATOR B (NEG)
+1500  1892             *
+1501  1892 F6 20 FF           LDAB OC377
+1502  1895 50                 NEGB          NEGATE @377 TO @001,N=0,Z=0
+1503  1896 2B FE              BMI  *        N=1?
+1504  1898 27 FE              BEQ  *        NO,Z=1?
+1505  189A 29 FE              BVS  *        NO,V=1?
+1506  189C 24 FE              BCC  *        NO,C=0?
+1507  189E F8 20 DF           EORB OC001    NO,SET UP EXECUTION TEST.
+1508  18A1 26 FE              BNE  *        WAS NEGATED NUMBER = @001?
+1509  18A3 F6 20 DE           LDAB ZERO     YES
+1510  18A6 50                 NEGB          NEGATE ZERO TO ZERO,N=0,Z=|
+1511  18A7 2B FE              BMI  *        N=1?
+1512  18A9 26 FE              BNE  *        NO,Z=0?
+1513  18AB 29 FE              BVS  *        NO,V=1?
+1514  18AD 25 FE              BCS  *        NO,C=1?
+1515  18AF F8 20 DE           EORB ZERO     NO,SET UP EXECUTION TEST.
+1516  18B2 26 FE              BNE  *        WAS NEGATED NUMBER = ZERO?
+1517  18B4 F6 20 F1           LDAB OC200    YES
+1518  18B7 50                 NEGB          NEGATE @200 TO @200.N=1,Z=0
+1519  18B8 2A FE              BPL  *        N=0?
+1520  18BA 27 FE              BEQ  *        NO,Z=1?
+1521  18BC 28 FE              BVC  *        NO,V=0?
+1522  18BE 24 FE              BCC  *        NO,C=0?
+1523  18C0 F8 20 F1           EORB OC200    NO,SET UP EXECUTION TEST
+1524  18C3 26 FE              BNE  *        WAS NEGATED NUMBER = @200?
+1525  18C5 01                 NOP           YES
+1526  18C6             *******************************************
+1527  18C6             *
+1528  18C6             *             NEGATE MEMORY (NEG)
+1529  18C6             *
+1530  18C6 B6 20 FF           LDAA OC377
+1531  18C9 97 68              STAA TMP      SET MEMORY LOCATION TO BE N
+1532  18CB 70 00 68           NEG  TMP      NEGATE @377 TO @100,N=0,Z=0
+1533  18CE 2B FE              BMI  *        N=1?
+1534  18D0 27 FE              BEQ  *        NO,Z=1?
+1535  18D2 29 FE              BVS  *        NO,V=1?
+1536  18D4 24 FE              BCC  *        NO,C=0?
+1537  18D6 96 68              LDAA TMP      NO,GET NEGATED NUMBER
+1538  18D8 B8 20 DF           EORA OC001    SET UP EXECUTION TEST
+1539  18DB 26 FE              BNE  *        IS NDGATED NUMBER = @001?
+1540  18DD 01                 NOP           YES
+1541  18DE             *******************************************
+1542  18DE             *
+1543  18DE             *             COMPLIMENT ACCUMULATOR A (COM)
+1544  18DE             *
+1545  18DE B6 20 FF           LDAA OC377
+1546  18E1 43                 COMA          COMPLIMENT @377 TO ZERO,N=0
+1547  18E2 2B FE              BMI  *        N=1?
+1548  18E4 26 FE              BNE  *        NO,Z=0?
+1549  18E6 29 FE              BVS  *        NO,V=1?
+1550  18E8 24 FE              BCC  *        NO,C=0?
+1551  18EA B8 20 DE           EORA ZERO     NO,SET  UP EXECUTION TEST
+1552  18ED 26 FE              BNE  *        WAS COMPLIMENTED NUMBER =ZE
+1553  18EF 43                 COMA          COMPLIMENT ZERO TO @377,N=1
+1554  18F0 2A FE              BPL  *        N=0?
+1555  18F2 27 FE              BEQ  *        NO,Z=1?
+1556  18F4 29 FE              BVS  *        NO,V=1?
+1557  18F6 24 FE              BCC  *        NO,C=0?
+1558  18F8 B8 20 FF           EORA OC377    NO,SET UP EXECUTION TEST
+1559  18FB 26 FE              BNE  *        WAS COMPLIMENTED NUMBER = @
+1560  18FD 01                 NOP           YES
+1561  18FE             *******************************************
+1562  18FE             *
+1563  18FE             *             COMPLIMENT ACCUMULATOR B (COM)
+1564  18FE             *
+1565  18FE F6 20 FF           LDAB OC377
+1566  1901 53                 COMB          CMPLMNT @377 TO ZERO,
+1567  1902 2B FE              BMI  *        N=1?
+1568  1904 26 FE              BNE  *        NO,Z=0?
+1569  1906 29 FE              BVS  *        NO,V=1?
+1570  1908 24 FE              BCC  *        NO,C=0?
+1571  190A F8 20 DE           EORB ZERO     NO,SET UP EXEC TEST
+1572  190D 26 FE              BNE  *        COMPLMNTD NUMBER=ZERO?
+1573  190F 53                 COMB          YES,CMPLMNT ZERO TO @377
+1574  1910 2A FE              BPL  *        N=0?
+1575  1912 27 FE              BEQ  *        NO,Z=1?
+1576  1914 29 FE              BVS  *        NO,V=1?
+1577  1916 24 FE              BCC  *        NO,C=0?
+1578  1918 F8 20 FF           EORB OC377    NO,SET UP EXEC TEST
+1579  191B 26 FE              BNE  *        COMPLMNTD NUMBER=@377?
+1580  191D 01                 NOP           YES
+1581  191E             *******************************************
+1582  191E             *
+1583  191E             *             COMPLIMENT MEMORY (COM)
+1584  191E             *
+1585  191E B6 20 FF           LDAA OC377
+1586  1921 97 68              STAA TMP      SET UP MEMORY LOCATION
+1587  1923             *                          TO BE COMPLIMENTED
+1588  1923 73 00 68           COM  TMP      CMPLMNT @377 TO ZERO,
+1589  1926             *                         N=0,Z=1,V=0,C=1
+1590  1926 2B FE              BMI  *        N=1?
+1591  1928 26 FE              BNE  *        NO,Z=0?
+1592  192A 29 FE              BVS  *        NO,V=1?
+1593  192C 24 FE              BCC  *        NO,C=0?
+1594  192E 96 68              LDAA TMP      NO,GET CMPLMNTD NUMB
+1595  1930 B8 20 DE           EORA ZERO     SET UP EXEC TEST
+1596  1933 26 FE              BNE  *        COMPLMNTD NUMBER=@377?
+1597  1935 01                 NOP           YES
+1598  1936             *******************************************
+1599  1936             *
+1600  1936             *             LOGICAL SHIFT RIGHT ACCUM A (LSR)
+1601  1936             *
+1602  1936 B6 20 FF           LDAA OC377    SET UP ACCUM A
+1603  1939 44                 LSRA          SHIFT ONCE TO @177,
+1604  193A             *                         N=0,Z=0,V=1,C=1
+1605  193A 2B FE              BMI  *        N=1?
+1606  193C 27 FE              BEQ  *        NO,Z=1?
+1607  193E 28 FE              BVC  *        NO,V=0?
+1608  1940 24 FE              BCC  *        NO,C=0?
+1609  1942 B8 20 F0           EORA OC177    NO,SET UP EXEC TEST
+1610  1945 26 FE              BNE  *        SHFTD NUMB=@177?
+1611  1947 B6 20 F0           LDAA OC177    YES,RESTORE ACCUM A
+1612  194A 44                 LSRA          SHIFT ONCE TO @077
+1613  194B B8 20 E7           EORA OC077    SET UP EXEC TES"T
+1614  194E 26 FE              BNE  *        SHFTD NUMB=@077
+1615  1950 B6 20 E7           LDAA OC077    YES,RESTORE ACCUM A
+1616  1953 44                 LSRA          SHIFT ONCE TO @037
+1617  1954 B8 20 E4           EORA OC037    SET UP EXEC TEST
+1618  1957 26 FE              BNE  *        SHFTD NUMB=@037?
+1619  1959 B6 20 E4           LDAA OC037    YES,RESTORE ACCUM A
+1620  195C 44                 LSRA          SHIFT ONCE TO @017
+1621  195D B8 20 E2           EORA OC017    SET UP EXEC TEST
+1622  1960 26 FE              BNE  *        SHFTD NUMB=@017?
+1623  1962 B6 20 E2           LDAA OC017    YES,RESTORE ACCUM A
+1624  1965 44                 LSRA          SHIFT ONCE TO @007
+1625  1966 B8 20 E1           EORA OC007    SET UP EXEC TEST
+1626  1969 26 FE              BNE  *        SHFTD NUMB=@007?
+1627  196B B6 20 E1           LDAA OC007    YES,RESTORE ACCUM A
+1628  196E 44                 LSRA          SHIFT ONCE TO @003
+1629  196F B8 20 E0           EORA OC003    SET UP EXEC TEST
+1630  1972 26 FE              BNE  *        SHFTD NUMB=@003?
+1631  1974 B6 20 E0           LDAA OC003    YES,RESTORE ACCUM A
+1632  1977 44                 LSRA          SHIFT ONCE TO @001
+1633  1978 B8 20 DF           EORA OC001    SET UP EXEC TEST
+1634  197B 26 FE              BNE  *        SHFTD NUMB=@001?
+1635  197D B6 20 DF           LDAA OC001    YES,RESTORE ACCUM A
+1636  1980 44                 LSRA          SHIFT ONCE TO ZERO
+1637  1981             *                    N=0,Z=1,V=1,C=1
+1638  1981 2B FE              BMI  *        N=1?
+1639  1983 26 FE              BNE  *        NO,Z=0?
+1640  1985 28 FE              BVC  *        NO,V=0?
+1641  1987 24 FE              BCC  *        NO,C=0?
+1642  1989 B8 20 DE           EORA ZERO     NO,SET UP EXEC TEST
+1643  198C 26 FE              BNE  *        SHFTD NUMB=0?
+1644  198E 44                 LSRA          YES,SHIFT ONCE AGAIN TO
+1645  198F             *                     ZERO,N=0,Z=1,V=0,C=0
+1646  198F 2B FE              BMI  *        N=1?
+1647  1991 26 FE              BNE  *        NO,Z=0?
+1648  1993 29 FE              BVS  *        NO,V=1?
+1649  1995 25 FE              BCS  *        NO,C=1?
+1650  1997 01                 NOP           YES
+1651  1998             *******************************************
+1652  1998             *
+1653  1998             *             LOGICAL SHIFT RIGHT ACCUM B (LSR)
+1654  1998             *
+1655  1998 F6 20 FF           LDAB OC377    SET UP ACCUM B
+1656  199B 54                 LSRB          SHIFT ONCE TO @177,
+1657  199C             *                   N=0,Z=0,V=1,C=1
+1658  199C 2B FE              BMI  *        N=1?
+1659  199E 27 FE              BEQ  *        NO,Z=1?
+1660  19A0 28 FE              BVC  *        NO,V=0?
+1661  19A2 24 FE              BCC  *        NO,C=0?
+1662  19A4 F8 20 F0           EORB OC177    NO,SET UP EXEC TEST
+1663  19A7 26 FE              BNE  *        SHFTD NUMB=@177?
+1664  19A9 F6 20 F0           LDAB OC177    YES,RESTORE ACCUM B
+1665  19AC 54                 LSRB          SHIFT ONCE TO @077
+1666  19AD F8 20 E7           EORB OC077    SET UP EXEC TEST
+1667  19B0 26 FE              BNE  *        SHFTD NUMB=@077
+1668  19B2 F6 20 E7           LDAB OC077    YES,RESTORE ACCUM B
+1669  19B5 54                 LSRB          SHIFT ONCE TO @037
+1670  19B6 F8 20 E4           EORB OC037    SET UP EXEC TEST
+1671  19B9 26 FE              BNE  *        SHIFTD NUMB=@037?
+1672  19BB F6 20 E4           LDAB OC037    YES,RESTORE ACCUM B
+1673  19BE 54                 LSRB          SHIFT ONCE TO @017
+1674  19BF F8 20 E2           EORB OC017    SET UP EXEC TEST
+1675  19C2 26 FE              BNE  *        SHFTD NUMB=@017
+1676  19C4 F6 20 E2           LDAB OC017    YES,RESTORE ACCUM B
+1677  19C7 54                 LSRB          SHIFT ONCE TO @007
+1678  19C8 F8 20 E1           EORB OC007    SET UP EXEC TEST
+1679  19CB 26 FE              BNE  *        SHIFTD NUMB=@007?
+1680  19CD F6 20 E1           LDAB OC007    YES, RESTORE ACCUM B
+1681  19D0 54                 LSRB          SHIFT ONCE TO @003
+1682  19D1 F8 20 E0           EORB OC003    SET UP EXEC TEST
+1683  19D4 26 FE              BNE  *        SHFTD NUMB=003?
+1684  19D6 F6 20 E0           LDAB OC003    YES,RESTORE ACCUM B
+1685  19D9 54                 LSRB          SHIFT ONCE TO @001
+1686  19DA F8 20 DF           EORB OC001    SET UP EXEC TEST
+1687  19DD 26 FE              BNE  *        SHFTD NUMB=@001?
+1688  19DF F6 20 DF           LDAB OC001    YES,RESTORE ACCUM B
+1689  19E2 54                 LSRB          SHIFT ONCE TO ZERO,
+1690  19E3             *                   N=0,Z=1,V=1,C=1
+1691  19E3 2B FE              BMI  *        N=1?
+1692  19E5 26 FE              BNE  *        NO,Z=0?
+1693  19E7 28 FE              BVC  *        NO,V=0?
+1694  19E9 24 FE              BCC  *        NO,C=0?
+1695  19EB F8 20 DE           EORB ZERO     NO,SET UP EXEC TEST
+1696  19EE 26 FE              BNE  *        SHFTD NUMB=ZERO?
+1697  19F0 54                 LSRB          YES,SHIFT ONCE ZERO STAYS,
+1698  19F1             *                    N=0,Z=1,V=0,C=0
+1699  19F1 2B FE              BMI  *        N=1?
+1700  19F3 26 FE              BNE  *        NO,Z=0?
+1701  19F5 29 FE              BVS  *        NO,V=1?
+1702  19F7 25 FE              BCS  *        NO,C=1?
+1703  19F9 01                 NOP           NO
+1704  19FA             *******************************************
+1705  19FA             *
+1706  19FA             *             LOGICAL SHIFT RIGHT MEMORY (LSR)
+1707  19FA             *
+1708  19FA B6 20 FF           LDAA OC377
+1709  19FD 97 68              STAA TMP      SET UP MEM LOCATION
+1710  19FF             *                          TO BE SHIFTED
+1711  19FF 74 00 68           LSR  TMP      SHIFT TMP TO @177,
+1712  1A02             *                          N=0,Z=0,V=1,C=1
+1713  1A02 2B FE              BMI  *        N=1?
+1714  1A04 27 FE              BEQ  *        N0,Z=1?
+1715  1A06 28 FE              BVC  *        NO,V=0?
+1716  1A08 24 FE              BCC  *        NO,C=0?
+1717  1A0A 96 68              LDAA TMP      NO,FETCH SHFTD NUMBER
+1718  1A0C B8 20 F0           EORA OC177    SET UP EXEC TEST
+1719  1A0F 26 FE              BNE  *        SHFTD NUMB=@177?
+1720  1A11 B6 20 DF           LDAA OC001    YES
+1721  1A14 97 68              STAA TMP      SET UP MEM LOCATION
+1722  1A16             *                    TO BE SHIFTED
+1723  1A16 74 00 68           LSR  TMP      SHIFT TMP TO ZERO.,
+1724  1A19             *                    N=0,Z=1,V=1,C=1
+1725  1A19 2B FE              BMI  *        N=1?
+1726  1A1B 26 FE              BNE  *        NO,Z=0?
+1727  1A1D 28 FE              BVC  *        NO,V=0?
+1728  1A1F 24 FE              BCC  *        NO,C=0?
+1729  1A21 96 68              LDAA TMP      NO,FETCH SHFTD NUMB
+1730  1A23 B8 20 DE           EORA ZERO     SET UP EXEC TEST
+1731  1A26 26 FE              BNE  *        SHFTD NUMB=ZERO?
+1732  1A28 74 00 68           LSR  TMP      YES,SHFT TMP AGAIN TO ZERO
+1733  1A2B             *                    N=0,Z=1,V=0,C=0
+1734  1A2B 2B FE              BMI  *        N=1?
+1735  1A2D 26 FE              BNE  *        NO,Z=0?
+1736  1A2F 29 FE              BVS  *        NO,V=1?
+1737  1A31 25 FE              BCS  *        NO,C=1?
+1738  1A33 96 68              LDAA TMP      NO,FETCH SHFTD NUMB
+1739  1A35 B8 20 DE           EORA ZERO     SET UP EXEC TEST
+1740  1A38 26 FE              BNE  *        SHFTD NUMB=0?
+1741  1A3A 01                 NOP           YES
+1742  1A3B             *******************************************
+1743  1A3B             *
+1744  1A3B             *             ROTATE ACCUMULATOR A RIGHT (ROR)
+1745  1A3B             *
+1746  1A3B             
+1747  1A3B 0C                 CLC           CLEAR CARRY
+1748  1A3C 25 FE              BCS  *        VERIFY CARRY CLEARED
+1749  1A3E B6 20 EB           LDAA OC126    SET UP TEST
+1750  1A41 46                 RORA          ROTATE @126 TO @053,
+1751  1A42             *                 N=0,Z=0,V=0,C=0 
+1752  1A42 2B FE              BMI  *        N=1?
+1753  1A44 29 FE              BVS  *        NO,V=1?
+1754  1A46 25 FE              BCS  *        NO,C=1?
+1755  1A48 B8 20 E6           EORA OC053    NO,SET UP EXEC TEST
+1756  1A4B 26 FE              BNE  *        ROTATED NUMB=@053?
+1757  1A4D             
+1758  1A4D B6 20 E6           LDAA OC053    SET UP TEST
+1759  1A50 46                 RORA          ROTATE @053 TO @025,
+1760  1A51             *                 N=0,Z=0,V=1,C=1 
+1761  1A51 2B FE              BMI  *        N=1?
+1762  1A53 28 FE              BVC  *        NO,V=0?
+1763  1A55 24 FE              BCC  *        NO,C=0?
+1764  1A57 B8 20 E3           EORA OC025    NO,SET UP EXEC TEST
+1765  1A5A 26 FE              BNE  *        ROTATED NUMB=@025?
+1766  1A5C B6 20 E3           LDAA OC025    YES,RESTORE ACCUM A &
+1767  1A5F 0B                 SEV           SET OVERFLOW
+1768  1A60 28 FE              BVC  *        VERIFY OVERFLOW SET
+1769  1A62 46                 RORA          ROTATE @025+C TO @212,
+1770  1A63             *                   N=1,Z=0,V=0,C=1
+1771  1A63 2A FE              BPL  *        N=0?
+1772  1A65 29 FE              BVS  *        NO,V=1?
+1773  1A67 24 FE              BCC  *        NO,C=0?
+1774  1A69 B8 20 F2           EORA OC212    NO,SET UP EXEC TEST
+1775  1A6C 26 FE              BNE  *        ROTATED NUMF=@212?
+1776  1A6E B6 20 F2           LDAA OC212    YES,RESTORE ACCUM A
+1777  1A71 46                 RORA          ROTATE @212 TO @305,
+1778  1A72             *                    N=1,Z=0,V=1,C=0
+1779  1A72 2A FE              BPL  *        N=0?
+1780  1A74 28 FE              BVC  *        NO,V=0?
+1781  1A76 25 FE              BCS  *        NO,C=1?
+1782  1A78 B8 20 F9           EORA OC305    NO,SET UP EXEC TEST
+1783  1A7B 26 FE              BNE  *        ES,CLEAR CARRY
+1784  1A7D 25 FE              BCS  *        VERIFY CARRY CLEARED
+1785  1A7F B6 20 DF           LDAA OC001    SET UP NEXT TEST
+1786  1A82 46                 RORA          ROTATE @001 TO
+1787  1A83             *                   ZERO,Z=1
+1788  1A83 26 FE              BNE  *        Z=0?
+1789  1A85 B8 20 DE           EORA ZERO     NO,SET UP EXEC TEST
+1790  1A88 26 FE              BNE  *        Z=0?
+1791  1A8A 46                 RORA          YES,ROTATE TO
+1792  1A8B             *            CLEARY CARRY
+1793  1A8B 25 FE              BCS  *        VERIFY CARRY CLEARED
+1794  1A8D F6 20 EB           LDAB OC126    SET UP TEST
+1795  1A90 56                 RORB          ROTATE @126 TO @053,
+1796  1A91             *                 N=0,Z=0,V=0,C=0 
+1797  1A91 2B FE              BMI  *        N=1?
+1798  1A93 29 FE              BVS  *        NO,V=1?
+1799  1A95 25 FE              BCS  *        NO,C=1?
+1800  1A97 F8 20 E6           EORB OC053    NO,SET UP EXEC TEST
+1801  1A9A 26 FE              BNE  *        ROTATED NUMB=@053?
+1802  1A9C             
+1803  1A9C F6 20 E6           LDAB OC053    SET UP TEST
+1804  1A9F 56                 RORB          ROTATE @053 TO @025,
+1805  1AA0             *                 N=0,Z=0,V=1,C=1 
+1806  1AA0 2B FE              BMI  *        N=1?
+1807  1AA2 28 FE              BVC  *        NO,V=0?
+1808  1AA4 24 FE              BCC  *        NO,C=0?
+1809  1AA6 F8 20 E3           EORB OC025    NO,SET UP EXEC TEST
+1810  1AA9 26 FE              BNE  *        ROTATED NUMB=@025?
+1811  1AAB F6 20 E3           LDAB OC025    YES,RESTORE ACCUM A &
+1812  1AAE 0B                 SEV           SET OVERFLOW
+1813  1AAF 28 FE              BVC  *        VERIFY OVERFLOW SET
+1814  1AB1 56                 RORB          ROTATE @025+C TO @212,
+1815  1AB2             *                   N=1,Z=0,V=0,C=1
+1816  1AB2 2A FE              BPL  *        N=0?
+1817  1AB4 29 FE              BVS  *        NO,V=1?
+1818  1AB6 24 FE              BCC  *        NO,C=0?
+1819  1AB8 F8 20 F2           EORB OC212    NO,SET UP EXEC TEST
+1820  1ABB 26 FE              BNE  *        ROTATED NUMF=@212?
+1821  1ABD F6 20 F2           LDAB OC212    YES,RESTORE ACCUM A
+1822  1AC0 56                 RORB          ROTATE @212 TO @305,
+1823  1AC1             *                    N=1,Z=0,V=1,C=0
+1824  1AC1 2A FE              BPL  *        N=0?
+1825  1AC3 28 FE              BVC  *        NO,V=0?
+1826  1AC5 25 FE              BCS  *        NO,C=1?
+1827  1AC7 F8 20 F9           EORB OC305    NO,SET UP EXEC TEST
+1828  1ACA 26 FE              BNE  *        ES,CLEAR CARRY
+1829  1ACC 25 FE              BCS  *        VERIFY CARRY CLEARED
+1830  1ACE F6 20 DF           LDAB OC001    SET UP NEXT TEST
+1831  1AD1 56                 RORB          ROTATE @001 TO
+1832  1AD2             *                   ZERO,Z=1
+1833  1AD2 26 FE              BNE  *        Z=0?
+1834  1AD4 F8 20 DE           EORB ZERO     NO,SET UP EXEC TEST
+1835  1AD7 26 FE              BNE  *        Z=0?
+1836  1AD9 56                 RORB          YES,ROTATE TO
+1837  1ADA             *            CLEARY CARRY
+1838  1ADA 25 FE              BCS  *        VERIFY CARRY CLEARED
+1839  1ADC B6 20 EB           LDAA OC126    SET UP TEST
+1840  1ADF 97 68              STAA TMP      SET UP MEM LOCATION TO BE S
+1841  1AE1 76 00 68           ROR  TMP      ROTATE @126 TO @053
+1842  1AE4             *                   N=0,Z=0,V=0,C=0
+1843  1AE4 2B FE              BMI  *        N=1?
+1844  1AE6 29 FE              BVS  *        NO,V=1?
+1845  1AE8 25 FE              BCS  *        NO,C=1?
+1846  1AEA 96 68              LDAA TMP      NO,FETCH RORATED NUMB
+1847  1AEC B8 20 E6           EORA OC053    SET UP EXEC TEST
+1848  1AEF 26 FE              BNE  *        ROTATED NUMB=@053?
+1849  1AF1 76 00 68           ROR  TMP      ROTATE @053 TO @025,
+1850  1AF4             *                   N=0,Z=0,V=1,C=1
+1851  1AF4 2B FE              BMI  *        N=1?
+1852  1AF6 28 FE              BVC  *        NO,V=0?
+1853  1AF8 24 FE              BCC  *        NO,C=0?
+1854  1AFA 96 68              LDAA TMP      FETCH ROTATED NUMB
+1855  1AFC B8 20 E3           EORA OC025    SET UP EXEC TEST
+1856  1AFF 26 FE              BNE  *        ROTATED NUMB=@025?
+1857  1B01 0B                 SEV           YES,SET OVERFLOW
+1858  1B02 28 FE              BVC  *        VERIFY OVERFLOW SET
+1859  1B04 76 00 68           ROR  TMP      ROTATE @025 TO @212,
+1860  1B07             *                   N=1,Z=0,V=0,C=1
+1861  1B07 2A FE              BPL  *        N=0?
+1862  1B09 29 FE              BVS  *        NO,V=1?
+1863  1B0B 24 FE              BCC  *        NO,C=0?
+1864  1B0D 96 68              LDAA TMP      NO,FETCH ROTATED NUMB
+1865  1B0F B8 20 F2           EORA OC212    SET UP EXEC TEST
+1866  1B12 26 FE              BNE  *        ROTATED NUMB=@212?
+1867  1B14 76 00 68           ROR  TMP      ROTATE @212 TO @305,
+1868  1B17             *                   N=1,Z=0,V=1,C=0
+1869  1B17 2A FE              BPL  *        N=0?
+1870  1B19 28 FE              BVC  *        NO,V=0?
+1871  1B1B 25 FE              BCS  *        NO,C=1?
+1872  1B1D 96 68              LDAA TMP      NO,FETCH ROTATED NUMB
+1873  1B1F B8 20 F9           EORA OC305    SET UP EXEC TEST
+1874  1B22 26 FE              BNE  *        ROTATED NUMB=@305?
+1875  1B24 76 00 68           ROR  TMP      ROTATE @305 TO @142,N=0
+1876  1B27 2B FE              BMI  *        N=1?
+1877  1B29 96 68              LDAA TMP      NO,FETCH ROTATED NUMB
+1878  1B2B B8 20 EE           EORA OC142    SET UP EXEC TEST
+1879  1B2E 26 FE              BNE  *        ROTATED NUMB=@142?
+1880  1B30 0C                 CLC           YES,CLEAR CARRY
+1881  1B31 25 FE              BCS  *        VERIFY CARRY CLEARED
+1882  1B33 B6 20 DF           LDAA OC001    SET UP EXEC TEST
+1883  1B36 97 68              STAA TMP      SET UP MEM LOCATION TO BE R
+1884  1B38 76 00 68           ROR  TMP      ROTATE @001 TO
+1885  1B3B             *                   ZERO,Z=1
+1886  1B3B 26 FE              BNE  *        Z=0?
+1887  1B3D 96 68              LDAA TMP      NO,FETCH ROTATED NUMB
+1888  1B3F B8 20 DE           EORA ZERO     SET UP EXEC TEST
+1889  1B42 26 FE              BNE  *        ROTATED NUMB=ZERO?
+1890  1B44 76 00 68           ROR  TMP      YES,ROTATE ZERO TO
+1891  1B47             *                   @200,Z=0
+1892  1B47 27 FE              BEQ  *        Z=1?
+1893  1B49 96 68              LDAA TMP      NO,FETCH ROTATED NUMB
+1894  1B4B B8 20 F1           EORA OC200    SET UP EXEC TEST
+1895  1B4E 26 FE              BNE  *        ROTATED NUMB=@200?
+1896  1B50 01                 NOP           YES
+1897  1B51             *******************************************
+1898  1B51             *
+1899  1B51             *             ARITHMETICALLY SHIFT RIGHT ACCUMULATOR
+1900  1B51             *
+1901  1B51 B6 20 EA           LDAA OC125    SET UP TEST
+1902  1B54 47                 ASRA          SHIFT @125 TO @052,
+1903  1B55             *                   N=0,V=1,C=1
+1904  1B55 2B FE              BMI  *        N=1?
+1905  1B57 28 FE              BVC  *        NO,V=0?
+1906  1B59 24 FE              BCC  *        NO,C=0?
+1907  1B5B B8 20 E5           EORA OC052    NO,SET UP EXEC TEST
+1908  1B5E 26 FE              BNE  *        SHFTD NUMB=@052?
+1909  1B60 B6 20 E5           LDAA OC052    YES,RESTORE ACCUM A
+1910  1B63 0B                 SEV           & SET (OVERFLOW
+1911  1B64 28 FE              BVC  *        VERIFY OVERFLOW SET
+1912  1B66 47                 ASRA          SHIFT @052 TO @025,
+1913  1B67             *                   N=0,V=0,C=0
+1914  1B67 2B FE              BMI  *        N=1?
+1915  1B69 29 FE              BVS  *        NO,V=1?
+1916  1B6B 25 FE              BCS  *        NO,C=1?
+1917  1B6D B8 20 E3           EORA OC025    NO,SET UP EXEC TEST
+1918  1B70 26 FE              BNE  *        SHFTD NUMB=@025?
+1919  1B72 B6 20 F5           LDAA OC252    YES,SET UP NEXT TEST
+1920  1B75 47                 ASRA          SHIFT @252 TO @325,
+1921  1B76             *                   N=1,V=1,C=0
+1922  1B76 2A FE              BPL  *        N=0?
+1923  1B78 28 FE              BVC  *        NO,V=0?
+1924  1B7A 25 FE              BCS  *        NO,C=1?
+1925  1B7C B8 20 FB           EORA OC325    NO,SET UP EXEC TEST
+1926  1B7F 26 FE              BNE  *        SHFTD NUMB=A325?
+1927  1B81 B6 20 FB           LDAA OC325    YES,RESTORE ACCUM A &
+1928  1B84 0B                 SEV           SET OVERFLOW
+1929  1B85 28 FE              BVC  *        VERIFY OVERFLOW SET
+1930  1B87 47                 ASRA          SHIFT @325 TO @352,
+1931  1B88             *                   N=1,V=0,C=1
+1932  1B88 2A FE              BPL  *        N=0?
+1933  1B8A 29 FE              BVS  *        NO,V=1?
+1934  1B8C 24 FE              BCC  *        NO,C=0?
+1935  1B8E B8 20 FD           EORA OC352    NO,SET UP EXEC TEST
+1936  1B91 26 FE              BNE  *        SHFTD NUMB=@352?
+1937  1B93 B6 20 DF           LDAA OC001    YES,SET UP NEXT TEST
+1938  1B96 47                 ASRA          SHIFT @001 TO ZERO,Z=1
+1939  1B97 26 FE              BNE  *        Z=0?
+1940  1B99 01                 NOP           NO
+1941  1B9A             *******************************************
+1942  1B9A             *
+1943  1B9A             *             ARITHMETICALLY SHIFT RIGHT ACCUM B (ASR)
+1944  1B9A             *
+1945  1B9A F6 20 EA           LDAB OC125    SET UP TEST
+1946  1B9D 57                 ASRB          SHIFT @125 TO @052,
+1947  1B9E             *                   N=0,V=1,C=1
+1948  1B9E 2B FE              BMI  *        N=1?
+1949  1BA0 28 FE              BVC  *        NO,V=0?
+1950  1BA2 24 FE              BCC  *        NO,C=0?
+1951  1BA4 F8 20 E5           EORB OC052    NO,SET UP EXEC TEST
+1952  1BA7 26 FE              BNE  *        SHFTD NUMB=@052?
+1953  1BA9 F6 20 E5           LDAB OC052    YES,RESTORE ACCUM B
+1954  1BAC 0B                 SEV           & OVERFLOW
+1955  1BAD 28 FE              BVC  *        VERIFY OVERFLOW SET
+1956  1BAF 57                 ASRB          SHIFT @052 TO @025
+1957  1BB0             *                          N=0,V=0,C=0
+1958  1BB0 2B FE              BMI  *        N=1?
+1959  1BB2 29 FE              BVS  *        NO,V=1?
+1960  1BB4 25 FE              BCS  *        NO,C=1?
+1961  1BB6 F8 20 E3           EORB OC025    NO,SET UP EXEC TEST
+1962  1BB9 26 FE              BNE  *        SHFTD NUMB=@025?
+1963  1BBB F6 20 F5           LDAB OC252    YES,SET UP NEXT TEST
+1964  1BBE 57                 ASRB          SHIFT @252 TO @325,
+1965  1BBF             *                   N=1,V=1,C=0
+1966  1BBF 2A FE              BPL  *        N=0?
+1967  1BC1 28 FE              BVC  *        NO,V=0?
+1968  1BC3 25 FE              BCS  *        NO,C=1?
+1969  1BC5 F8 20 FB           EORB OC325    NO,SET UP EXEC TEST
+1970  1BC8 26 FE              BNE  *        SHFTD NUMB=@325?
+1971  1BCA F6 20 FB           LDAB OC325    YES,RESTORE ACCUM B
+1972  1BCD 0B                 SEV           &SET OVERFLOW
+1973  1BCE 28 FE              BVC  *        VERIFY OVERFLOW SET
+1974  1BD0 57                 ASRB          SHIFT @325 TO @352,
+1975  1BD1             *                   N=1,V=0,C=1
+1976  1BD1 2A FE              BPL  *        N=0?
+1977  1BD3 29 FE              BVS  *        NO,V=1?
+1978  1BD5 24 FE              BCC  *        NO,C=0?
+1979  1BD7 F8 20 FD           EORB OC352    NO,SET UP EXEC TEST
+1980  1BDA 26 FE              BNE  *        SHFTD NUMB=@352
+1981  1BDC F6 20 DF           LDAB OC001    YES,SET UP NEXT TEST
+1982  1BDF 57                 ASRB          SHIFT @001 TO ZERO,Z=1
+1983  1BE0 26 FE              BNE  *        Z=0?
+1984  1BE2 01                 NOP           NO
+1985  1BE3             *******************************************
+1986  1BE3             *
+1987  1BE3             *             ARITHMETICALLY SHIFT RIGHT MEMORY (ASR)
+1988  1BE3             *
+1989  1BE3 B6 20 EA           LDAA OC125    SET UP TEST
+1990  1BE6 97 68              STAA TMP
+1991  1BE8 77 00 68           ASR  TMP      SHIFT @125 TO @052,
+1992  1BEB             *                   N=0,V=1,C=1
+1993  1BEB 2B FE              BMI  *        N=1?
+1994  1BED 28 FE              BVC  *        NO,V=0?
+1995  1BEF 24 FE              BCC  *        NO,C=0?
+1996  1BF1 96 68              LDAA TMP      NO,FETCH SHFTD NUMB
+1997  1BF3 B8 20 E5           EORA OC052    SET UP EXEC TEST
+1998  1BF6 26 FE              BNE  *        SHFTD NUMB=@052?
+1999  1BF8 0B                 SEV           SHFTD NUMB =@025?
+2000  1BF9 B6 20 F5           LDAA OC252    YES,SET UP NEXT TEST
+2001  1BFC 97 68              STAA TMP
+2002  1BFE 77 00 68           ASR  TMP      SHIFT @252 TO @325,
+2003  1C01             *                   N=1,V=1,C=0
+2004  1C01 2A FE              BPL  *        N=0?
+2005  1C03 28 FE              BVC  *        NO,V=0?
+2006  1C05 25 FE              BCS  *        NO,C=1?
+2007  1C07 96 68              LDAA TMP      NO,FETCH SHFTD NUMB
+2008  1C09 B8 20 FB           EORA OC325    SET UP EXEC TEST
+2009  1C0C 26 FE              BNE  *        SHFTD NUMB=@325?
+2010  1C0E 0B                 SEV           YES,SET OVERFLOW
+2011  1C0F 28 FE              BVC  *        VERIFY OVERFLOW SET
+2012  1C11 77 00 68           ASR  TMP      SHIFT@325 TO @352
+2013  1C14             *                   N=1,V=0,C=1
+2014  1C14 2A FE              BPL  *        N=0?
+2015  1C16 29 FE              BVS  *        NO,V=1          NO
+2016  1C18             *******************************************
+2017  1C18             *
+2018  1C18             *             ARITHMETICALLY SHIFT LEFT ACCUM A (ASL)
+2019  1C18             *
+2020  1C18 B6 20 ED           LDAA OC135
+2021  1C1B 48                 ASLA          SHIFT @135 TO @272,
+2022  1C1C             *                   N=1,Z=0,V=1,C=0
+2023  1C1C 2A FE              BPL  *        N=0?
+2024  1C1E 27 FE              BEQ  *        NO,Z=1?
+2025  1C20 28 FE              BVC  *        64 NO,SET UP EXEC TEST
+2026  1C22 25 FE              BCS  *        NO,C=1?
+2027  1C24                    
+2028  1C24 B8 20 F7           EORA OC272    NO,SET UP EXEC TEST
+2029  1C27 26 FE              BNE  *        SHFTD NUMB=@272?
+2030  1C29 B6 20 F7           LDAA OC272    YES,RESTORE ACCUM A
+2031  1C2C 48                 ASLA          SHIFT @272 TO @164
+2032  1C2D             *                          N=0,V=1,C=1
+2033  1C2D 2B FE              BMI  *        N=1?
+2034  1C2F 28 FE              BVC  *        NO,V=0?
+2035  1C31 24 FE              BCC  *        NO,C=0?
+2036  1C33 B8 20 EF           EORA OC164    NO,SET UP EXEC TEST
+2037  1C36 26 FE              BNE  *        SHFTD NUMB=@164?
+2038  1C38 B6 20 EF           LDAA OC164    YES,RESTORE ACCUM A
+2039  1C3B 48                 ASLA          SHIFT @164 TO @350,
+2040  1C3C             *                   N=1,V=1,C=0
+2041  1C3C 2A FE              BPL  *        N=0?
+2042  1C3E 28 FE              BVC  *        NO,V=0?
+2043  1C40 25 FE              BCS  *        NO,C=1?
+2044  1C42 B8 20 FC           EORA OC350    NO,SET UP EXEC TEST
+2045  1C45 26 FE              BNE  *        SHFTD NUMB=@350?
+2046  1C47 B6 20 FC           LDAA OC350    YES,RESTORE ACCUM A
+2047  1C4A 48                 ASLA
+2048  1C4B             *
+2049  1C4B 2A FE              BPL  *        N=0?
+2050  1C4D 29 FE              BVS  *        NO,V=1?
+2051  1C4F 24 FE              BCC  *        C=0?
+2052  1C51 B8 20 FA           EORA OC320    SET UP EXEC TEST
+2053  1C54 26 FE              BNE  *        SHFTD NUMB=@320?
+2054  1C56 B6 20 FA           LDAA OC320    YES,RESTORE ACCUM A
+2055  1C59 48                 ASLA          SHIFT @320 TO
+2056  1C5A             *                   @240,V=0
+2057  1C5A 29 FE              BVS  *        V=1?
+2058  1C5C 48                 ASLA          NO,SHIFT @240 TO
+2059  1C5D             *                   @100,V=1
+2060  1C5D 28 FE              BVC  *         =0?
+2061  1C5F 48                 ASLA          NO,SHIFT @100
+2062  1C60             *                    TO @200,Z=0
+2063  1C60 27 FE              BEQ  *        Z=1?
+2064  1C62 48                 ASLA          NO,SHIFT @200
+2065  1C63             *                    TO ZERO,Z=1,V=1
+2066  1C63 26 FE              BNE  *        Z=0?
+2067  1C65 28 FE              BVC  *        NO,V=0?
+2068  1C67 B8 20 DE           EORA ZERO     NO,SET UP EXEC TEST
+2069  1C6A             *******************************************
+2070  1C6A             *
+2071  1C6A             *       ARITHMETICALLY SHIFT LEFT ACCUM B (ASL)
+2072  1C6A             *
+2073  1C6A F6 20 ED           LDAB OC135
+2074  1C6D 58                 ASLB          SHIFT @135 TO @272,
+2075  1C6E             *                   N=1,Z=0,V=1,C=0
+2076  1C6E 2A FE              BPL  *        N=0?
+2077  1C70 27 FE              BEQ  *        NO,Z=1?
+2078  1C72 28 FE              BVC  *        64 NO,SET UP EXEC TEST
+2079  1C74 25 FE              BCS  *        NO,C=1?
+2080  1C76                    
+2081  1C76 F8 20 F7           EORB OC272    NO,SET UP EXEC TEST
+2082  1C79 26 FE              BNE  *        SHFTD NUMB=@272?
+2083  1C7B F6 20 F7           LDAB OC272    YES,RESTORE ACCUM B
+2084  1C7E 58                 ASLB          SHIFT @272 TO @164
+2085  1C7F             *                          N=0,V=1,C=1
+2086  1C7F 2B FE              BMI  *        N=1?
+2087  1C81 28 FE              BVC  *        NO,V=0?
+2088  1C83 24 FE              BCC  *        NO,C=0?
+2089  1C85 F8 20 EF           EORB OC164    NO,SET UP EXEC TEST
+2090  1C88 26 FE              BNE  *        SHFTD NUMB=@164?
+2091  1C8A F6 20 EF           LDAB OC164    YES,RESTORE ACCUM B
+2092  1C8D 58                 ASLB          SHIFT @164 TO @350,
+2093  1C8E             *                   N=1,V=1,C=0
+2094  1C8E 2A FE              BPL  *        N=0?
+2095  1C90 28 FE              BVC  *        NO,V=0?
+2096  1C92 25 FE              BCS  *        NO,C=1?
+2097  1C94 F8 20 FC           EORB OC350    NO,SET UP EXEC TEST
+2098  1C97 26 FE              BNE  *        SHFTD NUMB=@350?
+2099  1C99 F6 20 FC           LDAB OC350    YES,RESTORE ACCUM B
+2100  1C9C 58                 ASLB
+2101  1C9D             *
+2102  1C9D 2A FE              BPL  *        N=0?
+2103  1C9F 29 FE              BVS  *        NO,V=1?
+2104  1CA1 24 FE              BCC  *        C=0?
+2105  1CA3 F8 20 FA           EORB OC320    SET UP EXEC TEST
+2106  1CA6 26 FE              BNE  *        SHFTD NUMB=@320?
+2107  1CA8 F6 20 FA           LDAB OC320    YES,RESTORE ACCUM B
+2108  1CAB 58                 ASLB          SHIFT @320 TO
+2109  1CAC             *                   @240,V=0
+2110  1CAC 29 FE              BVS  *        V=1?
+2111  1CAE 58                 ASLB          NO,SHIFT @240 TO
+2112  1CAF             *                   @100,V=1
+2113  1CAF 28 FE              BVC  *         =0?
+2114  1CB1 58                 ASLB          NO,SHIFT @100
+2115  1CB2             *                    TO @200,Z=0
+2116  1CB2 27 FE              BEQ  *        Z=1?
+2117  1CB4 58                 ASLB          NO,SHIFT @200
+2118  1CB5             *                    TO ZERO,Z=1,V=1
+2119  1CB5 26 FE              BNE  *        Z=0?
+2120  1CB7 28 FE              BVC  *        NO,V=0?
+2121  1CB9 F8 20 DE           EORB ZERO     NO,SET UP EXEC TEST
+2122  1CBC             ****************
+2123  1CBC             *
+2124  1CBC             *             ARITHMETICALLY SHIFT LEFT MEMORY (ASL)
+2125  1CBC             *
+2126  1CBC B6 20 ED           LDAA OC135
+2127  1CBF 97 68              STAA TMP      SET UP MEM LOCATION TO BE S
+2128  1CC1 78 00 68           ASL  TMP      SHIFT @135 TO @272,
+2129  1CC4             *                     N=1,Z=0,V=1,C=1
+2130  1CC4 2A FE              BPL  *        N=0?
+2131  1CC6 27 FE              BEQ  *        NO,Z=1?
+2132  1CC8 28 FE              BVC  *        NO,NO,V=0?
+2133  1CCA 25 FE              BCS  *        NO,C=1?
+2134  1CCC 96 68              LDAA TMP      NO,FETCH SHFTD NUMB
+2135  1CCE B8 20 F7           EORA OC272    SET UP EXEC TEST
+2136  1CD1 26 FE              BNE  *        SHFTD NUMB=@272
+2137  1CD3 78 00 68           ASL  TMP      YES,SHIFT @272 TO @164,
+2138  1CD6             *                   N=0,V=1,C=1
+2139  1CD6 2B FE              BMI  *        N=1?
+2140  1CD8 28 FE              BVC  *        NO,V=0?
+2141  1CDA 24 FE              BCC  *        NO,C=0?
+2142  1CDC 96 68              LDAA TMP      NO,FETCH SHFTD NUMB
+2143  1CDE B8 20 EF           EORA OC164    NO,SET UP EXEC TEST
+2144  1CE1 26 FE              BNE  *        SHFTD NUMB=@164?
+2145  1CE3 78 00 68           ASL  TMP      YES,SHIFT @164 TO @350,
+2146  1CE6             *                   N=1,V=1,C=0
+2147  1CE6 2A FE              BPL  *        N=0?
+2148  1CE8 28 FE              BVC  *        NO,V=0?
+2149  1CEA 25 FE              BCS  *        NO,C=1?
+2150  1CEC 96 68              LDAA TMP      NO,FETCH SHFTD NUMB
+2151  1CEE B8 20 FC           EORA OC350    SET UP EXEC TEST
+2152  1CF1 26 FE              BNE  *        SHFTD NUMB=@350?
+2153  1CF3 78 00 68           ASL  TMP      YES,SHIFT @350 TO @320
+2154  1CF6             *                 N=1,Z=0,C=1
+2155  1CF6 2A FE              BPL  *        N=0?
+2156  1CF8 29 FE              BVS  *        NO,V=1?
+2157  1CFA 24 FE              BCC  *        C=0?
+2158  1CFC 96 68              LDAA TMP      NO,FETCH SHFTD NUMB
+2159  1CFE B8 20 FA           EORA OC320    SET UP EXEC TEST
+2160  1D01 26 FE              BNE  *        SHFTD NUMB=@320?
+2161  1D03 78 00 68           ASL  TMP      YES,SHIFT @320 TO
+2162  1D06             *                    @240,V=0
+2163  1D06 29 FE              BVS  *        V=1?
+2164  1D08 78 00 68           ASL  TMP      NO,SHIFT @240
+2165  1D0B             *                    TO @100,V=1
+2166  1D0B 28 FE              BVC  *        V=1?
+2167  1D0D 78 00 68           ASL  TMP      NO,SHIFT @100
+2168  1D10             *                 TO @200,Z=0
+2169  1D10 27 FE              BEQ  *        Z=1?
+2170  1D12 78 00 68           ASL  TMP      NO,SHIFT @200
+2171  1D15             *                    TO ZERO,Z=1,V=1
+2172  1D15 26 FE              BNE  *        Z=0?
+2173  1D17 28 FE              BVC  *        NO,V=0?
+2174  1D19 96 68              LDAA TMP      NO,FETCH SHFTD NUMB
+2175  1D1B B8 20 DE           EORA ZERO     SET UP EXEC TEST
+2176  1D1E 26 FE              BNE  *        SHFTD NUMB=@200?
+2177  1D20 78 00 68           ASL  TMP      YES,SHIFT,CLEARING C BIT,
+2178  1D23             *                    Z=1,V=0,C=0
+2179  1D23 26 FE              BNE  *        Z=0?
+2180  1D25 29 FE              BVS  *        NO,V=1?
+2181  1D27 25 FE              BCS  *        NO,C=1?
+2182  1D29 01                 NOP           NO
+2183  1D2A             *******************************************
+2184  1D2A             *
+2185  1D2A             *             ROTATE LEFT ACCUMULATOR A (ROL)
+2186  1D2A             *
+2187  1D2A B6 20 F5           LDAA OC252    NO,RESTORE ACCUM A       
+2188  1D2D 49                 ROL A         ROTATE @252 TO @124,
+2189  1D2E             *               N=0,V=1,C=1
+2190  1D2E 2B FE              BMI  *        N=1?
+2191  1D30 28 FE              BVC  *        NO,V=0?
+2192  1D32 24 FE              BCC  *        NO,C=0?
+2193  1D34 B8 20 E9           EORA OC124    NO,SET UP EXEC TEST
+2194  1D37 26 FE              BNE  *        ROTATED NUMB=@124?
+2195  1D39 B6 20 E9           LDAA OC124    YES,RESTORE ACCUM A
+2196  1D3C 49                 ROLA          ROTATE @124 TO @251,
+2197  1D3D             *                    N=1,V=1,C=0
+2198  1D3D 2A FE              BPL  *        N=0?
+2199  1D3F 28 FE              BVC  *        NO,V=0?
+2200  1D41 25 FE              BCS  *        NO,C=1?
+2201  1D43 B8 20 F4           EORA OC251    NO,SET UP EXECTEST
+2202  1D46 26 FE              BNE  *        ROTATED NUMB=@251?
+2203  1D48 B6 20 F4           LDAA OC251    YES,RESTORE ACCUM A
+2204  1D4B 49                 ROLA          ROTATE @251 TO @122,
+2205  1D4C             *                    N=0,C=1
+2206  1D4C 2B FE              BMI  *        N=1?
+2207  1D4E 24 FE              BCC  *        NO,C=0?
+2208  1D50 B8 20 E8           EORA OC122    NO,SET UP EXEC TEST
+2209  1D53 26 FE              BNE  *        ROTATED NUMB=@122?
+2210  1D55 B6 20 F1           LDAA OC200    YES,SET UP NEXT TEST
+2211  1D58 0C                 CLC           CLEAR CARRY
+2212  1D59 25 FE              BCS  *        VERIFY CARRY CLEARED
+2213  1D5B 49                 ROLA          ROTATE @200 TO ZERO,
+2214  1D5C             *                    Z=1,V=1
+2215  1D5C 26 FE              BNE  *        Z=0?
+2216  1D5E 28 FE              BVC  *        NO,V=0?
+2217  1D60 49                 ROLA          NO,ROTATE ZERO TO @001,
+2218  1D61             *                    Z=0,V=0
+2219  1D61 27 FE              BEQ  *        Z=1?
+2220  1D63 29 FE              BVS  *        NO,V=1?
+2221  1D65 B6 20 F8           LDAA OC300    NO,SET UP NEXT TEST
+2222  1D68 49                 ROLA          ROTATE @300 TO
+2223  1D69             *                    @200,V=0
+2224  1D69 29 FE              BVS  *        V=1?
+2225  1D6B 01                 NOP           NO
+2226  1D6C             *******************************************
+2227  1D6C             *
+2228  1D6C             *             ROTATE LEFT ACCUMULATOR B (ROL)
+2229  1D6C             *
+2230  1D6C 0C                 CLC           CLEAR CARRY
+2231  1D6D 25 FE              BCS  *        VERIFY CARRY IS CLEARED
+2232  1D6F F6 20 F5           LDAB OC252    SET UP TEST
+2233  1D72 59                 ROLB          ROTATE @252 TO @124,
+2234  1D73             *                    N=0,V=1,C=1
+2235  1D73 2B FE              BMI  *        N=1?
+2236  1D75 28 FE              BVC  *        NO,V=0?
+2237  1D77 24 FE              BCC  *        NO,C=0?
+2238  1D79 F8 20 E9           EORB OC124    NO,SET UP EXEC TEST
+2239  1D7C 26 FE              BNE  *        ROTATED NUMB=@124?
+2240  1D7E F6 20 E9           LDAB OC124    YES,RESTORE ACCUM B
+2241  1D81 59                 ROLB          ROTATE @124 TO 251,
+2242  1D82             *                    N=1,V=1,C=0
+2243  1D82 2A FE              BPL  *        N=0?
+2244  1D84 28 FE              BVC  *        NO,V=0?
+2245  1D86 25 FE              BCS  *        NO,C=1?
+2246  1D88 F8 20 F4           EORB OC251    NO,SET UP EXEC TEST
+2247  1D8B 26 FE              BNE  *        ROTATED NUMB=@251?
+2248  1D8D F6 20 F4           LDAB OC251    YES,RESTORE ACCUM B
+2249  1D90 59                 ROLB          ROTATE @251 TO @122,
+2250  1D91             *                    N=0,C=1
+2251  1D91 2B FE              BMI  *        N=|?
+2252  1D93 24 FE              BCC  *        NO,C=0?
+2253  1D95 F8 20 E8           EORB OC122    NO,SET UP EXEC TEST
+2254  1D98 26 FE              BNE  *        ROTATED NUMB=@122?
+2255  1D9A F6 20 F1           LDAB OC200    YES,SET UP NEXT TEST
+2256  1D9D 0C                 CLC           CLEAR CARRY
+2257  1D9E 25 FE              BCS  *        CLEARED
+2258  1DA0 59                 ROLB          ROTATE @200 TO ZERO,
+2259  1DA1             *                    Z=1,V=1
+2260  1DA1 26 FE              BNE  *        Z=0?
+2261  1DA3 28 FE              BVC  *        NO,V=0?
+2262  1DA5 59                 ROLB          NO,ROTATE ZERO TO @001,
+2263  1DA6             *                          Z=0,V=0
+2264  1DA6 27 FE              BEQ  *        Z=1?
+2265  1DA8 29 FE              BVS  *        NO,V=1?
+2266  1DAA F6 20 F8           LDAB OC300    NO,SET UP NEXT TEST
+2267  1DAD 59                 ROLB          ROTATE @300 TO
+2268  1DAE             *                    @200,V=0
+2269  1DAE 29 FE              BVS  *        V=1?
+2270  1DB0 01                 NOP           NO
+2271  1DB1             *******************************************
+2272  1DB1             *
+2273  1DB1             *             ROTATE LEFT MEMORY (ROL)
+2274  1DB1             *
+2275  1DB1 0C                 CLC           CLEAR CARRY
+2276  1DB2 25 FE              BCS  *        VERIFY CARRY CLEARED
+2277  1DB4 B6 20 F5           LDAA OC252    SET UP TEST
+2278  1DB7 97 68              STAA TMP      SET UP MEM LOCATION TO BE R
+2279  1DB9 79 00 68           ROL  TMP      ROTATE @252 TO @124,
+2280  1DBC             *                 N=0,V=1,C=1
+2281  1DBC 2B FE              BMI  *        N=1?
+2282  1DBE 28 FE              BVC  *        NO,V=0?
+2283  1DC0 24 FE              BCC  *        NO,C=0?
+2284  1DC2 96 68              LDAA TMP      NO,FETCH ROTATED NUMB       
+2285  1DC4 B8 20 E9           EORA OC124    NO,SET UP EXEC TEST
+2286  1DC7 26 FE              BNE  *        ROTATED NUMB=@124?
+2287  1DC9 79 00 68           ROL  TMP      ROTATE @124 TO 251,
+2288  1DCC             *                    N=1,V=1,C=0
+2289  1DCC 2A FE              BPL  *        N=0?
+2290  1DCE 28 FE              BVC  *        NO,V=0?
+2291  1DD0 25 FE              BCS  *        NO,C=1?
+2292  1DD2 96 68              LDAA TMP      NO,FETCH ROTATED NUMB
+2293  1DD4 B8 20 F4           EORA OC251    SET UP EXEC TEST
+2294  1DD7 26 FE              BNE  *        ROTATED NUMB=@251?
+2295  1DD9 79 00 68           ROL  TMP      YES,ROTATE @251 TO @122,
+2296  1DDC             *                 N=0,C=1
+2297  1DDC 2B FE              BMI  *        N=1?
+2298  1DDE 24 FE              BCC  *        NO,C=0?
+2299  1DE0 96 68              LDAA TMP      NO,FETCH ROTATED NUMB
+2300  1DE2 B8 20 E8           EORA OC122    SET UP EXEC TEST
+2301  1DE5 26 FE              BNE  *        ROTATED NUMB=@122?
+2302  1DE7 B6 20 F1           LDAA OC200    YES, SET UP NEXT TEST
+2303  1DEA 97 68              STAA TMP      SET MEM LOCATION TO BE ROTA
+2304  1DEC 0C                 CLC           CLEAR CARRY
+2305  1DED 25 FE              BCS  *        CLEARED
+2306  1DEF 79 00 68           ROL  TMP      ROTATE @200 TO ZERO,
+2307  1DF2             *                    Z=1,V=1
+2308  1DF2 26 FE              BNE  *        Z=0?
+2309  1DF4 28 FE              BVC  *        NO,V=0?
+2310  1DF6 79 00 68           ROL  TMP      NO,ROTATE ZERO TO @001,
+2311  1DF9             *                          Z=0,V=0
+2312  1DF9 27 FE              BEQ  *        Z=1?
+2313  1DFB 29 FE              BVS  *        NO, V=1?
+2314  1DFD B6 20 F8           LDAA OC300    NO,SET UP NEXT TEST
+2315  1E00 97 68              STAA TMP      SET UP MEM LOCATION TO BE R
+2316  1E02 79 00 68           ROL  TMP      ROTATE @300 TO
+2317  1E05             *                 @200,V=0
+2318  1E05 29 FE              BVS  *        V=1?
+2319  1E07 01                 NOP           NO
+2320  1E08             ********************************************
+2321  1E08             *
+2322  1E08             *             DECREMENT ACCUMULATOR A (DEC)
+2323  1E08             *
+2324  1E08 0C                 CLC           CLEAR CARRY
+2325  1E09 25 FE              BCS  *        VERIFY CARRY CLEARED
+2326  1E0B B6 20 DF           LDAA OC001    SET UP TEST
+2327  1E0E 4A                 DECA          DCRMT @001 TO ZERO,
+2328  1E0F             *                    N=0,Z=1,C=0
+2329  1E0F 2B FE              BMI  *        N=1?
+2330  1E11 26 FE              BNE  *        NO,Z=0?
+2331  1E13 25 FE              BCS  *        NO,C=1?
+2332  1E15 B8 20 DE           EORA ZERO     NO,SET UP EXEC TEST
+2333  1E18 26 FE              BNE  *        DCRMTD NUMB=ZERO?
+2334  1E1A 0D                 SEC           YES,SET CARRY
+2335  1E1B 24 FE              BCC  *        VERIFY CARRY SET
+2336  1E1D 4A                 DECA          DCRMT ZERO TO -1(@377),
+2337  1E1E             *                    N=1,Z=0,C=1
+2338  1E1E 2A FE              BPL  *        N=0?
+2339  1E20 27 FE              BEQ  *        NO,Z=1?
+2340  1E22 24 FE              BCC  *        NO,C=0?
+2341  1E24 B8 20 FF           EORA OC377    NO,SET UP EXEC TEST
+2342  1E27 26 FE              BNE  *        DCRMTD NUMB= -1(377)?
+2343  1E29 B6 20 FF           LDAA OC377    YES,RESTORE ACCUM A
+2344  1E2C 4A                 DECA          DCRMT TO -2(@376)
+2345  1E2D             *                    V=0,C=1
+2346  1E2D 29 FE              BVS  *        V=1?
+2347  1E2F 24 FE              BCC  *        NO,C=0?
+2348  1E31 B8 20 FE           EORA OC376    NO,SET UP EXEC TEST
+2349  1E34 26 FE              BNE  *        DCRMTD NUMB = -2(@376)?
+2350  1E36 B6 20 F1           LDAA OC200    YES,SET UP NEXT TEST
+2351  1E39 4A                 DECA          DCRMT @200 TO
+2352  1E3A             *                    @177,V=1
+2353  1E3A 28 FE              BVC  *        V=0?
+2354  1E3C B8 20 F0           EORA OC177    NO,SET UP EXEC TEST
+2355  1E3F 26 FE              BNE  *        DCRMTD NUMB=@177?
+2356  1E41 01                 NOP           YES
+2357  1E42             ********************************************
+2358  1E42             *
+2359  1E42             *             DECREMENT ACCUMULATOR B (DEC)
+2360  1E42             *
+2361  1E42 0C                 CLC           CLEAR CARRY
+2362  1E43 25 FE              BCS  *        VERIFY CARRY CLEARED
+2363  1E45 F6 20 DF           LDAB OC001    SET UPPTEST
+2364  1E48 5A                 DECB          DCRMT @001 TO ZERO,
+2365  1E49             *                    N=0,Z=1,C=0
+2366  1E49 2B FE              BMI  *        N=1?
+2367  1E4B 26 FE              BNE  *        NO,Z=0?
+2368  1E4D 25 FE              BCS  *        NO,C=1?
+2369  1E4F F8 20 DE           EORB ZERO     NO,SET UP EXEC TEST
+2370  1E52 26 FE              BNE  *        DCRMTD NUMB=ZERO?
+2371  1E54 0D                 SEC           YES,SET CARRY
+2372  1E55 24 FE              BCC  *        VERIFY CARRY SET
+2373  1E57 5A                 DECB          DCRMT ZERO TO -1(@377)
+2374  1E58             *                    N=1,Z=0,C=1
+2375  1E58 2A FE              BPL  *        N=0?
+2376  1E5A 27 FE              BEQ  *        NO,Z=1?
+2377  1E5C 24 FE              BCC  *        NO,C=0?
+2378  1E5E F8 20 FF           EORB OC377    NO,SET UP EXEC TEST
+2379  1E61 26 FE              BNE  *        DCRMTD NUMB= -1(@377)?
+2380  1E63 F6 20 FF           LDAB OC377    YES,RESTORE ACCUM B
+2381  1E66 5A                 DECB          DCRMT TO -2(@376),
+2382  1E67             *                    V=0,C=1
+2383  1E67 29 FE              BVS  *        V=1?
+2384  1E69 24 FE              BCC  *        NO,C=0?
+2385  1E6B F8 20 FE           EORB OC376    NO,SET UP EXEC TEST
+2386  1E6E 26 FE              BNE  *        DCRMTD NUMB= -2(@376)?
+2387  1E70 F6 20 F1           LDAB OC200    YES,SET UP NEXT TEST
+2388  1E73 5A                 DECB          DCRMT @200 TO
+2389  1E74             *                    @177,V=1
+2390  1E74 28 FE              BVC  *        V=0?
+2391  1E76 F8 20 F0           EORB OC177    NO,SET UP EXEC TEST
+2392  1E79 26 FE              BNE  *        DCRMTD NUMB=@177?
+2393  1E7B 01                 NOP           YES
+2394  1E7C             ********************************************
+2395  1E7C             *
+2396  1E7C             *             DECREMENT MEMORY (DEC)
+2397  1E7C             *
+2398  1E7C 0C                 CLC           CLEAR CARRY
+2399  1E7D 25 FE              BCS  *        VERIFY CARRY CLEARED
+2400  1E7F B6 20 DF           LDAA OC001    SET UP TEST
+2401  1E82 97 68              STAA TMP      SET UP MEM LOCATION TO BE D
+2402  1E84 7A 00 68           DEC  TMP      DCRMT @001 TO ZERO,
+2403  1E87             *                    N=0,Z=1,C=0
+2404  1E87 2B FE              BMI  *        N=1?
+2405  1E89 26 FE              BNE  *        NO,Z=0?
+2406  1E8B 25 FE              BCS  *        NO,C=1?
+2407  1E8D 96 68              LDAA TMP      NO,FETCH DCRMTD NUMB
+2408  1E8F B8 20 DE           EORA ZERO     SET UP EXEC TEST
+2409  1E92 26 FE              BNE  *        DCRMTD NUMB=ZERO?
+2410  1E94 0D                 SEC           YES,SET CARRY
+2411  1E95 24 FE              BCC  *        VERIFY CARRY SET
+2412  1E97 7A 00 68           DEC  TMP      DCRMT ZERO TO -1(@377),
+2413  1E9A             *                    N=1,Z=0,C=1
+2414  1E9A 2A FE              BPL  *        N=0?
+2415  1E9C 27 FE              BEQ  *        NO,Z=1?
+2416  1E9E 24 FE              BCC  *        NO,C=0?
+2417  1EA0 96 68              LDAA TMP      NO,FETCH DCRMTD NUMB
+2418  1EA2 B8 20 FF           EORA OC377    SET UP EXEC TEST
+2419  1EA5 26 FE              BNE  *        DCRMTD NUMB= -1(@377)?
+2420  1EA7 7A 00 68           DEC  TMP      YES,DCRMT TO -2(@376),
+2421  1EAA             *                    V=0,C=1
+2422  1EAA 29 FE              BVS  *        V=1?
+2423  1EAC 24 FE              BCC  *        NO,C=0?
+2424  1EAE 96 68              LDAA TMP      NO,FETCH DCRMTD NUMB
+2425  1EB0 B8 20 FE           EORA OC376    SET UP EXEC TEST
+2426  1EB3 26 FE              BNE  *        DCRMTD NUMB= -2(@376)?
+2427  1EB5 B6 20 F1           LDAA OC200    YES,SET UP NEXT TEST
+2428  1EB8 97 68              STAA TMP      SET UP MEM LOCATION TO BE D
+2429  1EBA 7A 00 68           DEC  TMP      DCRMT @200 TO
+2430  1EBD             *                    @177,V=1
+2431  1EBD 28 FE              BVC  *        V=0?
+2432  1EBF 96 68              LDAA TMP      NO,FETCH DCRMTD NUMB
+2433  1EC1 B8 20 F0           EORA OC177    SET UP EXEC TEST
+2434  1EC4 26 FE              BNE  *        DCRMTD NUMB=@177?
+2435  1EC6 01                 NOP           YES
+2436  1EC7             ********************************************
+2437  1EC7             *
+2438  1EC7             *             INCREMENT ACCUMULATOR A (INC)
+2439  1EC7             *
+2440  1EC7 0D                 SEC           SET CARRY
+2441  1EC8 24 FE              BCC  *        VERIFY CARRY SET
+2442  1ECA B6 20 FE           LDAA OC376    ACCUM A= -2(@376)
+2443  1ECD 4C                 INCA          ICRMT TO -1(@377),
+2444  1ECE             *                    N=1,Z=0,V=0,C=1
+2445  1ECE 2A FE              BPL  *        N=0?
+2446  1ED0 27 FE              BEQ  *        NO,Z=1?
+2447  1ED2 29 FE              BVS  *        NO,V=1?
+2448  1ED4 24 FE              BCC  *        NO,C=0?
+2449  1ED6 B8 20 FF           EORA OC377    NO,SET UP EXEC TEST
+2450  1ED9 26 FE              BNE  *        INCRMTD NUMB=@377?
+2451  1EDB 0C                 CLC           YES,CLEAR CARRY
+2452  1EDC 25 FE              BCS  *        VERIFY CARRY CLEARED
+2453  1EDE B6 20 FF           LDAA OC377    RESTORE ACCUM A
+2454  1EE1 4C                 INCA          ICRMT TO ZERO,
+2455  1EE2             *                    N=0,Z=1,C=0
+2456  1EE2 2B FE              BMI  *        N=1?
+2457  1EE4 26 FE              BNE  *        NO,Z=0?
+2458  1EE6 25 FE              BCS  *        NO,C=1?
+2459  1EE8 B8 20 DE           EORA ZERO     NO,SET UP EXEC TEST
+2460  1EEB 26 FE              BNE  *        ICRMTD NUMB=ZERO
+2461  1EED B6 20 F0           LDAA OC177    YES,SET UP NEXT TEST
+2462  1EF0 29 FE              BVS  *        VERIFY OVERFLOW= 0
+2463  1EF2 4C                 INCA          ICRMT TO @200,V=1
+2464  1EF3 28 FE              BVC  *        V=0?
+2465  1EF5 B8 20 F1           EORA OC200    NO,SET UP EXEC TEST
+2466  1EF8 26 FE              BNE  *        ICRMTD NUMB=@200
+2467  1EFA 01                 NOP           YES
+2468  1EFB             ********************************************
+2469  1EFB             *
+2470  1EFB             *             INCREMENT ACCUMULATOR B (INC)
+2471  1EFB             *
+2472  1EFB 0D                 SEC           SET CARRY
+2473  1EFC 24 FE              BCC  *        VERIFY CARRY SET
+2474  1EFE F6 20 FE           LDAB OC376    ACCUM B= -2(@376)
+2475  1F01 5C                 INCB          ICRMT TO -1(@377),
+2476  1F02             *                    N=1,Z=0,V=0,C=1
+2477  1F02 2A FE              BPL  *        N=0?
+2478  1F04 27 FE              BEQ  *        NO,Z=1?
+2479  1F06 29 FE              BVS  *        NO,V=1?
+2480  1F08 24 FE              BCC  *        NO,C=0?
+2481  1F0A F8 20 FF           EORB OC377    NO,SET UP EXEC TEST
+2482  1F0D 26 FE              BNE  *        ICRMTD NUMB=@377?
+2483  1F0F 0C                 CLC           YES,CLEAR CARRY
+2484  1F10 25 FE              BCS  *        VERIFY CARRY CLEARED
+2485  1F12 F6 20 FF           LDAB OC377    RESTORE ACCUM B
+2486  1F15 5C                 INCB          ICRMT TO ZERO,
+2487  1F16             *                    N=0,Z=1,C=0
+2488  1F16 2B FE              BMI  *        N=1?
+2489  1F18 26 FE              BNE  *        NO,Z=0?
+2490  1F1A 25 FE              BCS  *        NO,C=1?
+2491  1F1C F8 20 DE           EORB ZERO     NO,SET UP EXEC TEST
+2492  1F1F 26 FE              BNE  *        ICRMTD NUMB=ZERO?
+2493  1F21 F6 20 F0           LDAB OC177    YES,SET UP NEXT TEST
+2494  1F24 29 FE              BVS  *        VERIFY OVERFLOW=0
+2495  1F26 5C                 INCB          ICRMT TO @200,V=1
+2496  1F27 28 FE              BVC  *        V=0?
+2497  1F29 F8 20 F1           EORB OC200    NO,SET UP EXEC TEST
+2498  1F2C 26 FE              BNE  *        ICRMTD NUMB=@200?
+2499  1F2E 01                 NOP           YES
+2500  1F2F             ********************************************
+2501  1F2F             *
+2502  1F2F             *             INCREMENT MEMORY (INC)
+2503  1F2F             *
+2504  1F2F 0D                 SEC           SET CARRY
+2505  1F30 24 FE              BCC  *        VERIFY CARRY SET
+2506  1F32 B6 20 FE           LDAA OC376
+2507  1F35 97 68              STAA TMP      SET UP MEM LOCATION TO BE I
+2508  1F37 7C 00 68           INC  TMP      ICRMT TO -1(@377),
+2509  1F3A             *                    N=1,Z=0,V=0,C=1
+2510  1F3A 2A FE              BPL  *        N=0?
+2511  1F3C 27 FE              BEQ  *        NO,Z=1?
+2512  1F3E 29 FE              BVS  *        NO,V=1?
+2513  1F40 24 FE              BCC  *        NO,C=0?
+2514  1F42 96 68              LDAA TMP      NO,FETCH ICRMTD NUMB
+2515  1F44 B8 20 FF           EORA OC377    SET UP EXEC TEST
+2516  1F47 26 FE              BNE  *        ICRMTD NUMB=@377
+2517  1F49 0C                 CLC           YES,CLEAR CARRY
+2518  1F4A 25 FE              BCS  *        VERIFY CARRY CLEARED
+2519  1F4C 7C 00 68           INC  TMP      ICRMT TO ZERO,
+2520  1F4F             *                    N=0,Z=1,C=0
+2521  1F4F 2B FE              BMI  *        N=1?
+2522  1F51 26 FE              BNE  *        NO,Z=0?
+2523  1F53 25 FE              BCS  *        NO,C=1?
+2524  1F55 96 68              LDAA TMP      NO,FETCH ICRMTD NUMB
+2525  1F57 B8 20 DE           EORA ZERO     SET UP EXEC TEST
+2526  1F5A 26 FE              BNE  *        ICRMTD NUMB= ZERO?
+2527  1F5C B6 20 F0           LDAA OC177    YES,SET UP NEXT TEST
+2528  1F5F 97 68              STAA TMP      SET UP MEM LOCATION TO BE I
+2529  1F61 29 FE              BVS  *        VERIFY OVERFLOW=0
+2530  1F63 7C 00 68           INC  TMP      ICRMT TO @200,V=1
+2531  1F66 28 FE              BVC  *        V=0?
+2532  1F68 96 68              LDAA TMP      NO,FETCH ICRMTD NUMB
+2533  1F6A B8 20 F1           EORA OC200    SET UP EXEC TEST
+2534  1F6D 26 FE              BNE  *        ICRMTD NUMB=@200?
+2535  1F6F 01                 NOP           YES
+2536  1F70             ********************************************
+2537  1F70             *
+2538  1F70             *             TEST ACCUMULATOR A (TST)
+2539  1F70             *
+2540  1F70 B6 20 FF           LDAA OC377    SET UP TEST
+2541  1F73 4D                 TSTA          N=1,Z=0,V=0,C=0
+2542  1F74 2A FE              BPL  *        N=0?
+2543  1F76 27 FE              BEQ  *        NO,Z=1?
+2544  1F78 29 FE              BVS  *        NO,V=1?
+2545  1F7A 25 FE              BCS  *        NO,C=1?
+2546  1F7C B8 20 FF           EORA OC377    NO,SET UP EXEC TEST
+2547  1F7F 26 FE              BNE  *        ACCUM A=@377?
+2548  1F81 B6 20 DE           LDAA ZERO     YES,SET UP NEXT TEST
+2549  1F84 4D                 TSTA          N=0,Z=1,V=0,C=0
+2550  1F85 2B FE              BMI  *        N=1?
+2551  1F87 26 FE              BNE  *        NO,Z=0?
+2552  1F89 29 FE              BVS  *        NO,V=1?
+2553  1F8B 25 FE              BCS  *        NO,C=1?
+2554  1F8D B8 20 DE           EORA ZERO     NO,SET UP EXEC TEST
+2555  1F90 26 FE              BNE  *        ACCUM A=ZERO?
+2556  1F92 01                 NOP           YES
+2557  1F93             ********************************************
+2558  1F93             *
+2559  1F93             *             TEST ACCUMULATOR B (TST)
+2560  1F93             *
+2561  1F93 F6 20 FF           LDAB OC377    SET UP TEST
+2562  1F96 5D                 TSTB          N=1,Z=0,V=0,C=0
+2563  1F97 2A FE              BPL  *        N=0?
+2564  1F99 27 FE              BEQ  *        NO,Z=1?
+2565  1F9B 29 FE              BVS  *        NO,V=1?
+2566  1F9D 25 FE              BCS  *        NO,C=1?
+2567  1F9F F8 20 FF           EORB OC377    NO,SET UP EXEC TEST
+2568  1FA2 26 FE              BNE  *        TSTED NUMB=@377?
+2569  1FA4 F6 20 DE           LDAB ZERO     YES,SET UP NEXT TEST
+2570  1FA7 5D                 TSTB          N=0,Z=1,V=0,C=0
+2571  1FA8 2B FE              BMI  *        N=1?
+2572  1FAA 26 FE              BNE  *        NO,Z=0?
+2573  1FAC 29 FE              BVS  *        NO,V=1?
+2574  1FAE 25 FE              BCS  *        NO,C=1?
+2575  1FB0 F8 20 DE           EORB ZERO     NO,SET UP EXEC TEST
+2576  1FB3 26 FE              BNE  *        TESTED NUMB=0?
+2577  1FB5 01                 NOP           YES
+2578  1FB6             ********************************************
+2579  1FB6             *
+2580  1FB6             *             TEST MEMORY (TST)
+2581  1FB6             *
+2582  1FB6 B6 20 FF           LDAA OC377    SET UP TEST
+2583  1FB9 97 68              STAA TMP      SET UP MEM LOCATION TO BE T
+2584  1FBB 7D 00 68           TST  TMP      N=1,Z=0,V=0,C=0
+2585  1FBE 2A FE              BPL  *        N=0?
+2586  1FC0 27 FE              BEQ  *        NO,Z=1?
+2587  1FC2 29 FE              BVS  *        NO,V=1?
+2588  1FC4 25 FE              BCS  *        NO,C=1?
+2589  1FC6 96 68              LDAA TMP      NO,FETCH TESTED NUMB
+2590  1FC8 B8 20 FF           EORA OC377    SET UP EXEC TEST
+2591  1FCB 26 FE              BNE  *        TESTED NUMB=@377?
+2592  1FCD B6 20 DE           LDAA ZERO     YES,SET UP NEXT TEST
+2593  1FD0 97 68              STAA TMP      SET UP MEM LOCATION TO BE T
+2594  1FD2 7D 00 68           TST  TMP      N=0,Z=1,V=0,C=0
+2595  1FD5 2B FE              BMI  *        N=1?
+2596  1FD7 26 FE              BNE  *        NO,Z=0?
+2597  1FD9 29 FE              BVS  *        NO,V=1?
+2598  1FDB 25 FE              BCS  *        NO,C=1?
+2599  1FDD 96 68              LDAA TMP      NO,FETCH TESTED NUMB
+2600  1FDF 26 FE              BNE  *        TESTED NUMB=0?
+2601  1FE1 01                 NOP           YES
+2602  1FE2             ********************************************
+2603  1FE2             *
+2604  1FE2             *             CLEAR ACCUMULATOR A (CLR)
+2605  1FE2             *
+2606  1FE2 B6 20 FF           LDAA OC377    SET UP TEST
+2607  1FE5             *       N=1,Z=0
+2608  1FE5 2A FE              BPL  *        VERIFY N=1
+2609  1FE7 27 FE              BEQ  *        VERIFY Z=0
+2610  1FE9 4F                 CLRA          CLEAR @377 TO ZERO,
+2611  1FEA             *                    N=0,Z=1,V=0,C=0
+2612  1FEA 2B FE              BMI  *        N=1?
+2613  1FEC 26 FE              BNE  *        NO,Z=0?
+2614  1FEE 29 FE              BVS  *        NO,V=1?
+2615  1FF0 25 FE              BCS  *        NO,C=1?
+2616  1FF2 B8 20 DE           EORA ZERO     NO,ZET UP EXEC TEST
+2617  1FF5 26 FE              BNE  *        ACCUM A=0?
+2618  1FF7 4F                 CLRA          CLEAR ZERO TO ZERO,
+2619  1FF8             *                 N=0,Z=1,V=0,C=0
+2620  1FF8 2B FE              BMI  *        N=1?
+2621  1FFA 26 FE              BNE  *        NO,Z=0?
+2622  1FFC 29 FE              BVS  *        NO,V=1?
+2623  1FFE 25 FE              BCS  *        NO,C=1?
+2624  2000 B8 20 DE           EORA ZERO     NO,SET UP EXEC TEST
+2625  2003 26 FE              BNE  *        ACCUM A=ZERO?
+2626  2005 01                 NOP           YES
+2627  2006             ********************************************
+2628  2006             *
+2629  2006             *             CLEAR ACCUMULATOR B (CLR)
+2630  2006             *
+2631  2006 F6 20 FF           LDAB OC377    SET UP TEST
+2632  2009             *                    N=1,Z=0
+2633  2009 2A FE              BPL  *        VERIFY N=1
+2634  200B 27 FE              BEQ  *        VERIFY Z=0
+2635  200D 5F                 CLRB          CLEAR @377 TO ZERO,
+2636  200E             *                 N=0,Z=1,V=0,C=0
+2637  200E 2B FE              BMI  *        N=1?
+2638  2010 26 FE              BNE  *        NO,Z=0?
+2639  2012 29 FE              BVS  *        NO,V=1?
+2640  2014 25 FE              BCS  *        NO,C=1?
+2641  2016 F8 20 DE           EORB ZERO     NO,SET UP EXEC TEST
+2642  2019 26 FE              BNE  *        ACCUM B=ZERO?
+2643  201B 5F                 CLRB          CLEAR ZERO TO ZERO,
+2644  201C             *                    N=0,Z=1,V=0,C=0
+2645  201C 2B FE              BMI  *        N=1?
+2646  201E 26 FE              BNE  *        NO,Z=0?
+2647  2020 29 FE              BVS  *        NO,V=1?
+2648  2022 25 FE              BCS  *        NO,C=1?
+2649  2024 F8 20 DE           EORB ZERO     NO, SET UP EXEC TEST
+2650  2027 26 FE              BNE  *        ACCUM B=ZERO?
+2651  2029 01                 NOP           YES
+2652  202A             ********************************************
+2653  202A             *
+2654  202A             *             CLEAR MEMORY (CLR)
+2655  202A             *
+2656  202A B6 20 FF           LDAA OC377    SET UP TEST
+2657  202D 97 68              STAA TMP      SET UP MEM LOCATION TO BE C
+2658  202F             *                    N=1,Z=0
+2659  202F 2A FE              BPL  *        VERIFY N=1
+2660  2031 27 FE              BEQ  *        VERIFY Z=0
+2661  2033 7F 00 68           CLR  TMP      CLEAR @377 TO ZERO,
+2662  2036             *                    N=0,Z=1,V=0,C=0
+2663  2036 2B FE              BMI  *        N=1?
+2664  2038 26 FE              BNE  *        NO,Z=0?
+2665  203A 29 FE              BVS  *        NO,V=1?
+2666  203C 25 FE              BCS  *        NO,C=1?
+2667  203E 96 68              LDAA TMP      NO,FETCH CLEARED NUMB
+2668  2040 B8 20 DE           EORA ZERO     SET UP EXEC TEST
+2669  2043 26 FE              BNE  *        CLEARED NUMB=0?
+2670  2045 7F 00 68           CLR  TMP      CLEAR ZERO TO ZERO,
+2671  2048             *                    N=0,Z=1,V=0,C=0
+2672  2048 2B FE              BMI  *        N=1?
+2673  204A 26 FE              BNE  *        NO,Z=0?
+2674  204C 29 FE              BVS  *        NO,V=1?
+2675  204E 25 FE              BCS  *        NO,C=1?
+2676  2050 96 68              LDAA TMP      NO,FETCH CLEARED NUMB
+2677  2052 B8 20 DE           EORA ZERO     SET UP EXEC TEST
+2678  2055 26 FE              BNE  *        CLEARED NUMB=0?
+2679  2057 01                 NOP           YES
+2680  2058             *
+2681  2058             ***************************************************
+2682  2058             *
+2683  2058             *              JUMP
+2684  2058             *
+2685  2058             *
+2686  2058 7E 20 5D           JMP JP1          FORWARD JUMP
+2687  205B 20 FE              BRA *
+2688  205D 4F          JP1    CLRA             FLAG
+2689  205E 4D          JP3    TSTA             TEST FLAG
+2690  205F 26 06              BNE JP2          ONLY GO THRU LOOP ONCE
+2691  2061 4C                 INCA
+2692  2062 7E 20 5E           JMP JP3          REVERSE JUMP
+2693  2065 20 FE              BRA *
+2694  2067 01          JP2    NOP
+2695  2068             *
+2696  2068             *********************************************************
+2697  2068             *
+2698  2068             *      CHECK GROUP II INDEX ADDRESSING MODE.
+2699  2068             *        IT IS ASSUMED AT THIS POINT THAT ALL GROUP II
+2700  2068             *        INSTRUCTIONS HAVE BEEN TESTED USING EXTENDED
+2701  2068             *        AND ACUMULATOR ADDRESSING
+2702  2068             *
+2703  2068             *
+2704  2068 CE 00 68           LDX #TMP         SETUP INDEX REG
+2705  206B 86 FF              LDAA #$FF        PUT -1 IN TMP
+2706  206D 97 68              STAA TMP
+2707  206F 60 00              NEG 0,X          NEG USING INDEXED MODE
+2708  2071 96 68              LDAA TMP         SHOULD BE +1 NOW
+2709  2073 81 01              CMPA #1
+2710  2075 26 FE              BNE *
+2711  2077 63 00              COM 0,X          COM USING INDEX MODE
+2712  2079 96 68              LDAA TMP         SHOULD BE $FE NOW
+2713  207B 81 FE              CMPA #$FE
+2714  207D 26 FE              BNE *
+2715  207F 64 00              LSR 0,X          SHIFT USING INDEX MODE
+2716  2081 96 68              LDAA TMP         SHOULD BE $7F NOW
+2717  2083 81 7F              CMPA #$7F
+2718  2085 26 FE              BNE *
+2719  2087 0D                 SEC              SET TO ROTATE IN 1
+2720  2088 66 00              ROR 0,X          ROR USING INDEX MODE
+2721  208A 96 68              LDAA TMP         SHOULD BE $BF NOW
+2722  208C 81 BF              CMPA #$BF
+2723  208E 26 FE              BNE *
+2724  2090 67 00              ASR 0,X          ASR USING INDEX MODE
+2725  2092 96 68              LDAA TMP         SHOULD BE $DF NOW
+2726  2094 81 DF              CMPA #$DF
+2727  2096 26 FE              BNE *
+2728  2098 68 00              ASL 0,X          ASL USING INDEX MODE
+2729  209A 96 68              LDAA TMP         SHOULD BE $BE NOW
+2730  209C 81 BE              CMPA #$BE
+2731  209E 26 FE              BNE *
+2732  20A0 0D                 SEC              SET TO ROTATE IN 1
+2733  20A1 69 00              ROL 0,X          ROL USING INDEX MODE
+2734  20A3 96 68              LDAA TMP         SHOULD BE $7D NOW
+2735  20A5 81 7D              CMPA #$7D
+2736  20A7 26 FE              BNE *
+2737  20A9 6A 00              DEC 0,X          DEC USING INDEX MODE
+2738  20AB 96 68              LDAA TMP         SHOULD BE $7C NOW
+2739  20AD 81 7C              CMPA #$7C
+2740  20AF 26 FE              BNE *
+2741  20B1 6C 00              INC 0,X          INC USING INDEX MODE
+2742  20B3 96 68              LDAA TMP         SHOULD BE $7D AGAIN
+2743  20B5 81 7D              CMPA #$7D
+2744  20B7 26 FE              BNE *
+2745  20B9 6F 00              CLR 0,X          CLR USING INDEX MODE
+2746  20BB 96 68              LDAA TMP         SHOULD BE ZERO
+2747  20BD 26 FE              BNE *
+2748  20BF 6D 00              TST 0,X          TST USING INDEX MODE
+2749  20C1 26 FE              BNE *
+2750  20C3 CE 20 CA           LDX #JP4         DO INDEXXED JUMP
+2751  20C6 6E 00              JMP 0,X
+2752  20C8 20 FE              BRA *
+2753  20CA 01          JP4    NOP
+2754  20CB CE FF E8           LDX #TMP-128     TRY INDEX WITH NON-ZERO OFFSET
+2755  20CE 6F 80              CLR 128,X
+2756  20D0 08                 INX              BUMP INDEX TO CHANGE OFFSET
+2757  20D1 63 7F              COM 127,X
+2758  20D3 96 68              LDAA TMP
+2759  20D5 81 FF              CMPA #-1
+2760  20D7 26 FE              BNE *
+2761  20D9             *
+2762  20D9             **********************************************
+2763  20D9             *      ALL DONE - 
+2764  20D9             *
+2765  20D9 01                 NOP
+2766  20DA 01                 NOP 
+2767  20DB 01                 NOP
+2768  20DC 20 22              BRA GRP4
+2769  20DE             *
+2770  20DE             *      DATA
+2771  20DE             *
+2772  20DE 00          ZERO   FCB @0
+2773  20DF 01          OC001  FCB @001
+2774  20E0 03          OC003  FCB @003
+2775  20E1 07          OC007  FCB @007
+2776  20E2 0F          OC017  FCB @017
+2777  20E3 15          OC025  FCB @025
+2778  20E4 1F          OC037  FCB @037
+2779  20E5 2A          OC052  FCB @052
+2780  20E6 2B          OC053  FCB @053
+2781  20E7 3F          OC077  FCB @077
+2782  20E8 52          OC122  FCB @122
+2783  20E9 54          OC124  FCB @124
+2784  20EA 55          OC125  FCB @125
+2785  20EB 56          OC126  FCB @126
+2786  20EC 57          OC127  FCB @127
+2787  20ED 5D          OC135  FCB @135
+2788  20EE 62          OC142  FCB @142
+2789  20EF 74          OC164  FCB @164
+2790  20F0 7F          OC177  FCB @177
+2791  20F1 80          OC200  FCB @200
+2792  20F2 8A          OC212  FCB @212
+2793  20F3 95          OC225  FCB @225
+2794  20F4 A9          OC251  FCB @251
+2795  20F5 AA          OC252  FCB @252
+2796  20F6 AC          OC254  FCB @254
+2797  20F7 BA          OC272  FCB @272
+2798  20F8 C0          OC300  FCB @300
+2799  20F9 C5          OC305  FCB @305
+2800  20FA D0          OC320  FCB @320
+2801  20FB D5          OC325  FCB @325
+2802  20FC E8          OC350  FCB @350
+2803  20FD EA          OC352  FCB @352
+2804  20FE FE          OC376  FCB @376
+2805  20FF FF          OC377  FCB @377
+2806  2100                    TTL **** 6802 TOTAL INSTRUCTION TEST - GROUP 4 ****
+2807  2100             *
+2808  2100             *
+2809  2100             *****************************************************
+2810  2100             *
+2811  2100             *      G R P 4
+2812  2100             *
+2813  2100             *****************************************************
+2814  2100             *
+2815  2100             *
+2816  2100             *      REV 1.0
+2817  2100             *      GMCM REVISION 1.1 - SEPT 1977
+2818  2100             *
+2819  2100             *      GROUP IV INSTRUCTIONS INCLUDE:
+2820  2100             *        TAB
+2821  2100             *        TBA
+2822  2100             *        SBA
+2823  2100             *        CBA
+2824  2100             *        DAA
+2825  2100             *        ABA
+2826  2100             *
+2827  2100             *      ASSUMES THE FOLLOWING HAVE ALREADY BEEN CHECKED
+2828  2100             *      AND WORK:
+2829  2100             *        BRANCHES (GROUP III)
+2830  2100             *        GROUP I
+2831  2100             *        GROUP VI
+2832  2100             *        PSHA,PULA
+2833  2100             *
+2834  2100             *
+2835  2100             *      PROGRAM TO TEST GP4 INSTRUCTIONS
+2836  2100             *
+2837  2100             *      TEST TAB
+2838  2100             *
+2839  2100 86 00       GRP4   LDAA #$00
+2840  2102 06                 TAP
+2841  2103 16                 TAB
+2842  2104 07                 TPA
+2843  2105 88 C4              EORA #$C4
+2844  2107 26 FE              BNE  *        DATA 00
+2845  2109 C8 00              EORB #$00
+2846  210B 26 FE              BNE  *
+2847  210D 86 AA              LDAA #$AA
+2848  210F 16                 TAB
+2849  2110 07                 TPA
+2850  2111 88 C8              EORA #$C8     DATA AA
+2851  2113 26 FE              BNE  *
+2852  2115 C8 AA              EORB #$AA
+2853  2117 26 FE              BNE  *
+2854  2119 86 FF              LDAA #$FF
+2855  211B 16                 TAB
+2856  211C 07                 TPA
+2857  211D 88 C8              EORA #$C8
+2858  211F 26 FE              BNE  *        DATA FF
+2859  2121 C8 FF              EORB #$FF
+2860  2123 26 FE              BNE  *
+2861  2125             *
+2862  2125             *     TEST TBA
+2863  2125             *
+2864  2125 C6 00              LDAB #$00
+2865  2127 06                 TAP
+2866  2128 17                 TBA
+2867  2129 25 FE              BCS  *
+2868  212B 29 FE              BVS  *        DATA 00
+2869  212D 1B                 ABA
+2870  212E 2B FE              BMI  *
+2871  2130 88 00              EORA #$00
+2872  2132 26 FE              BNE  *
+2873  2134 07                 TPA
+2874  2135 88 C4              EORA #$C4
+2875  2137 26 FE              BNE  *
+2876  2139 C6 AA              LDAB #$AA
+2877  213B 17                 TBA
+2878  213C 25 FE              BCS  *        DATA AA
+2879  213E 29 FE              BVS  *
+2880  2140 2A FE              BPL  *
+2881  2142 27 FE              BEQ  *
+2882  2144 88 AA              EORA #$AA
+2883  2146 26 FE              BNE  *
+2884  2148 07                 TPA
+2885  2149 88 C4              EORA #$C4
+2886  214B 26 FE              BNE  *
+2887  214D C6 FF              LDAB #$FF
+2888  214F 17                 TBA
+2889  2150 25 FE              BCS  *
+2890  2152 29 FE              BVS  *
+2891  2154 2A FE              BPL  *
+2892  2156 27 FE              BEQ  *
+2893  2158 88 FF              EORA #$FF     DATA FF
+2894  215A 26 FE              BNE  *
+2895  215C 07                 TPA
+2896  215D 88 C4              EORA #$C4
+2897  215F 26 FE              BNE  *
+2898  2161             *
+2899  2161             *     TEST ABA
+2900  2161             *
+2901  2161 8E 00 50           LDS  #STACK
+2902  2164 86 00              LDAA #$00
+2903  2166 C6 05              LDAB #$05
+2904  2168 1B                 ABA
+2905  2169 36                 PSHA
+2906  216A 07                 TPA
+2907  216B 88 C0              EORA #$C0     DATA #1
+2908  216D 26 FE              BNE  *
+2909  216F 32                 PULA
+2910  2170 88 05              EORA #$05
+2911  2172 26 FE              BNE  *
+2912  2174             *
+2913  2174 86 7A              LDAA #$7A
+2914  2176 C6 7A              LDAB #$7A
+2915  2178 1B                 ABA
+2916  2179 36                 PSHA
+2917  217A 07                 TPA
+2918  217B 88 EA              EORA #$EA     DATA #2
+2919  217D 26 FE              BNE  *
+2920  217F 32                 PULA
+2921  2180 88 F4              EORA #$F4
+2922  2182 26 FE              BNE  *
+2923  2184             *
+2924  2184 86 40              LDAA #$40
+2925  2186 C6 C0              LDAB #$C0
+2926  2188 1B                 ABA
+2927  2189 36                 PSHA
+2928  218A 07                 TPA           DATA 3
+2929  218B 88 C5              EORA #$C5
+2930  218D 26 FE              BNE  *
+2931  218F 32                 PULA
+2932  2190 88 00              EORA #$00
+2933  2192 26 FE              BNE  *
+2934  2194             *
+2935  2194 86 00              LDAA #$00
+2936  2196 C6 80              LDAB #$80
+2937  2198 1B                 ABA
+2938  2199 36                 PSHA
+2939  219A 07                 TPA           DATA 4
+2940  219B 88 C8              EORA #$C8
+2941  219D 26 FE              BNE  *
+2942  219F 32                 PULA
+2943  21A0 88 80              EORA #$80
+2944  21A2 26 FE              BNE  *
+2945  21A4             *
+2946  21A4 86 C0              LDAA #$C0
+2947  21A6 C6 40              LDAB #$40
+2948  21A8 1B                 ABA
+2949  21A9 36                 PSHA
+2950  21AA 07                 TPA
+2951  21AB 88 C5              EORA #$C5     DATA 5
+2952  21AD 26 FE              BNE  *
+2953  21AF 32                 PULA
+2954  21B0 88 00              EORA #$00
+2955  21B2 26 FE              BNE  *
+2956  21B4             *
+2957  21B4 86 80              LDAA #$80
+2958  21B6 C6 00              LDAB #$00
+2959  21B8 1B                 ABA
+2960  21B9 36                 PSHA
+2961  21BA 07                 TPA           DATA 6
+2962  21BB 88 C8              EORA #$C8
+2963  21BD 26 FE              BNE  *
+2964  21BF 32                 PULA
+2965  21C0 88 80              EORA #$80
+2966  21C2 26 FE              BNE  *
+2967  21C4             *
+2968  21C4 86 80              LDAA #$80
+2969  21C6 C6 80              LDAB #$80
+2970  21C8 1B                 ABA
+2971  21C9 36                 PSHA
+2972  21CA 07                 TPA           DATA 7
+2973  21CB 88 C7              EORA #$C7
+2974  21CD 26 FE              BNE  *
+2975  21CF 32                 PULA
+2976  21D0 88 00              EORA #$00
+2977  21D2 26 FE              BNE  *
+2978  21D4             *
+2979  21D4 86 C0              LDAA #$C0
+2980  21D6 C6 C0              LDAB #$C0
+2981  21D8 1B                 ABA
+2982  21D9 36                 PSHA
+2983  21DA 07                 TPA
+2984  21DB 88 C9              EORA #$C9
+2985  21DD 26 FE              BNE  *
+2986  21DF 32                 PULA          DATA 8
+2987  21E0 88 80              EORA #$80
+2988  21E2 26 FE              BNE  *
+2989  21E4             *
+2990  21E4             *     TEST SBA
+2991  21E4             *
+2992  21E4 86 0A              LDAA #$0A
+2993  21E6 C6 0A              LDAB #$0A
+2994  21E8 10                 SBA
+2995  21E9 36                 PSHA
+2996  21EA 07                 TPA
+2997  21EB 88 C4              EORA #$C4     DATA 1
+2998  21ED 26 FE              BNE  *
+2999  21EF 32                 PULA
+3000  21F0 88 00              EORA #$00
+3001  21F2 26 FE              BNE  *
+3002  21F4             *
+3003  21F4 86 70              LDAA #$70
+3004  21F6 C6 7F              LDAB #$7F
+3005  21F8 10                 SBA
+3006  21F9 36                 PSHA
+3007  21FA 07                 TPA           DATA 2
+3008  21FB 88 C9              EORA #$C9
+3009  21FD 26 FE              BNE  *
+3010  21FF 32                 PULA
+3011  2200 88 F1              EORA #$F1
+3012  2202 26 FE              BNE  *
+3013  2204             *
+3014  2204 86 48              LDAA #$48
+3015  2206 C6 F7              LDAB #$F7
+3016  2208 10                 SBA
+3017  2209 36                 PSHA
+3018  220A 07                 TPA           DATA 3
+3019  220B 88 C1              EORA #$C1
+3020  220D 26 FE              BNE  *
+3021  220F 32                 PULA
+3022  2210 88 51              EORA #$51
+3023  2212 26 FE              BNE  *
+3024  2214             *
+3025  2214 86 48              LDAA #$48
+3026  2216 C6 B7              LDAB #$B7
+3027  2218 10                 SBA
+3028  2219 36                 PSHA          DATA 4
+3029  221A 07                 TPA
+3030  221B 88 CB              EORA #$CB
+3031  221D 26 FE              BNE  *
+3032  221F 32                 PULA
+3033  2220 88 91              EORA #$91
+3034  2222 26 FE              BNE  *
+3035  2224             *
+3036  2224 86 8A              LDAA #$8A
+3037  2226 C6 7F              LDAB #$7F
+3038  2228 10                 SBA
+3039  2229 36                 PSHA
+3040  222A 07                 TPA
+3041  222B 88 C2              EORA #$C2
+3042  222D 26 FE              BNE  *        DATA 5
+3043  222F 32                 PULA
+3044  2230 88 0B              EORA #$0B
+3045  2232 26 FE              BNE  *
+3046  2234 C8 7F              EORB #$7F
+3047  2236 26 FE              BNE  *
+3048  2238             *
+3049  2238 86 CB              LDAA #$CB
+3050  223A C6 0F              LDAB #$0F
+3051  223C 10                 SBA
+3052  223D 36                 PSHA
+3053  223E 07                 TPA
+3054  223F 88 C8              EORA #$C8
+3055  2241 26 FE              BNE  *        DATA 6
+3056  2243 32                 PULA
+3057  2244 88 BC              EORA #$BC
+3058  2246 26 FE              BNE  *
+3059  2248             *
+3060  2248 86 CB              LDAA #$CB
+3061  224A C6 81              LDAB #$81
+3062  224C 10                 SBA
+3063  224D 36                 PSHA
+3064  224E 07                 TPA           DATA 7
+3065  224F 88 C0              EORA #$C0
+3066  2251 26 FE              BNE  *
+3067  2253 32                 PULA
+3068  2254 88 4A              EORA #$4A
+3069  2256 26 FE              BNE  *
+3070  2258             *
+3071  2258 86 8B              LDAA #$8B
+3072  225A C6 F0              LDAB #$F0
+3073  225C 10                 SBA
+3074  225D 36                 PSHA
+3075  225E 07                 TPA           DATA 8
+3076  225F 88 C9              EORA #$C9
+3077  2261 26 FE              BNE  *
+3078  2263 32                 PULA
+3079  2264 88 9B              EORA #$9B
+3080  2266 26 FE              BNE  *
+3081  2268 C8 F0              EORB #$F0
+3082  226A 26 FE              BNE  *
+3083  226C             *
+3084  226C             *     TEST CBA
+3085  226C             *
+3086  226C 86 0A              LDAA #$0A
+3087  226E C6 0A              LDAB #$0A
+3088  2270 11                 CBA
+3089  2271 36                 PSHA
+3090  2272 07                 TPA           DATA 1
+3091  2273 88 C4              EORA #$C4
+3092  2275 26 FE              BNE  *
+3093  2277 32                 PULA
+3094  2278 88 0A              EORA #$0A
+3095  227A 26 FE              BNE  *
+3096  227C C8 0A              EORB #$0A
+3097  227E 26 FE              BNE  *
+3098  2280             *
+3099  2280 86 48              LDAA #$48
+3100  2282 C6 B7              LDAB #$B7
+3101  2284 11                 CBA
+3102  2285 36                 PSHA
+3103  2286 07                 TPA
+3104  2287 88 CB              EORA #$CB     DATA 4
+3105  2289 26 FE              BNE  *
+3106  228B 32                 PULA
+3107  228C 88 48              EORA #$48
+3108  228E 26 FE              BNE  *
+3109  2290 C8 B7              EORB #$B7
+3110  2292 26 FE              BNE  *
+3111  2294             *
+3112  2294             *     TEST DAA
+3113  2294             *
+3114  2294 86 E1              LDAA #$E1
+3115  2296 06                 TAP
+3116  2297 86 00              LDAA #$00
+3117  2299 19                 DAA           DATA 1
+3118  229A 36                 PSHA
+3119  229B 07                 TPA
+3120  229C 88 E1              EORA #$E1
+3121  229E 26 FE              BNE  *
+3122  22A0 32                 PULA
+3123  22A1 88 66              EORA #$66
+3124  22A3 26 FE              BNE  *
+3125  22A5             *
+3126  22A5 86 C0              LDAA #$C0
+3127  22A7 06                 TAP
+3128  22A8 86 99              LDAA #$99
+3129  22AA 19                 DAA           DATA 2
+3130  22AB 36                 PSHA
+3131  22AC 07                 TPA
+3132  22AD 88 C8              EORA #$C8
+3133  22AF 26 FE              BNE  *
+3134  22B1 32                 PULA
+3135  22B2 88 99              EORA #$99
+3136  22B4 26 FE              BNE  *
+3137  22B6             *
+3138  22B6 86 C0              LDAA #$C0
+3139  22B8 06                 TAP
+3140  22B9 86 AA              LDAA #$AA
+3141  22BB 19                 DAA
+3142  22BC 36                 PSHA          DATA 3
+3143  22BD 07                 TPA
+3144  22BE 88 C1              EORA #$C1
+3145  22C0 26 FE              BNE  *
+3146  22C2 32                 PULA
+3147  22C3 88 10              EORA #$10
+3148  22C5 26 FE              BNE  *
+3149  22C7             *
+3150  22C7 86 C0              LDAA #$C0
+3151  22C9 06                 TAP
+3152  22CA 86 9A              LDAA #$9A
+3153  22CC 19                 DAA           DATA 4
+3154  22CD 36                 PSHA
+3155  22CE 07                 TPA
+3156  22CF 88 C5              EORA #$C5
+3157  22D1 26 FE              BNE  *
+3158  22D3 32                 PULA
+3159  22D4 88 00              EORA #$00
+3160  22D6 26 FE              BNE  *
+3161  22D8             *
+3162  22D8 01                 NOP
+3163  22D9 01                 NOP
+3164  22DA 01                 NOP           GO BACK TO START
+3165  22DB 20 00              BRA GRP5
+3166  22DD                    TTL **** 6802 TOTAL INSTRUCTION TEST - GROUP 5 ****
+3167  22DD             *
+3168  22DD             ***********************************************
+3169  22DD             *
+3170  22DD             *      G R P 5
+3171  22DD             *
+3172  22DD             ************************************************
+3173  22DD             *
+3174  22DD             *
+3175  22DD             *
+3176  22DD             *
+3177  22DD             *      GROUP V INSTRUCTIONS ARE:
+3178  22DD             *       TSX
+3179  22DD             *       INS
+3180  22DD             *       PULA
+3181  22DD             *       PULB
+3182  22DD             *       DES
+3183  22DD             *       TXS
+3184  22DD             *       PSHA
+3185  22DD             *       PSHB
+3186  22DD             *       RTS
+3187  22DD             *       WAI*
+3188  22DD             *
+3189  22DD             *        * WAI WILL BE TESTED IN A SEPARATE INTERUPT DIAGNOSTIC
+3190  22DD             *          SWI AND RTI ARE NOT INCLUDED IN THIS DIAGNOSTIC
+3191  22DD             *
+3192  22DD             *      THE GROUP V TESTS ASSUME ALL OTHER GROUPS ARE ALREADY
+3193  22DD             *      WORKING AND TESTED.
+3194  22DD             *
+3195  22DD             *
+3196  22DD             *
+3197  22DD             **********************************************************
+3198  22DD             *      
+3199  22DD             *          TRANSFER SP TO X-REG (TSX)
+3200  22DD             *
+3201  22DD             *
+3202  22DD 8E 00 7E    GRP5   LDS #TEMP     LOAD STACK REG
+3203  22E0 30                 TSX           TRANSFER SP+1 -> X
+3204  22E1 8C 00 7F           CPX #TEMP+1   OK?
+3205  22E4 26 FE              BNE *
+3206  22E6 8E 1F FF           LDS #$1FFF    TRY A 16 BIT VERSION
+3207  22E9 30                 TSX           SP + 1 --> X
+3208  22EA 8C 20 00           CPX #$2000
+3209  22ED 26 FE              BNE *
+3210  22EF 4F                 CLRA          MAKE SURE TSX DOESN'T CHANGE ANY CC'S
+3211  22F0 06                 TAP
+3212  22F1 30                 TSX
+3213  22F2 07                 TPA
+3214  22F3 81 C0              CMPA #$C0
+3215  22F5 26 FE              BNE *
+3216  22F7             *
+3217  22F7             **********************************************************
+3218  22F7             *
+3219  22F7             *          TRANSFER X-REG TO SP (TXS)
+3220  22F7             *
+3221  22F7             *
+3222  22F7 CE 00 7F           LDX #TEMP+1
+3223  22FA 8E 00 00           LDS #0        CLEAR SP
+3224  22FD 35                 TXS           X-1 -> SP
+3225  22FE 9F 7E              STS TEMP      SAVE NEW SP
+3226  2300 DE 7E              LDX TEMP      GET IT IN X
+3227  2302 8C 00 7E           CPX #TEMP     OK?
+3228  2305 26 FE              BNE *         HANG IF NOT
+3229  2307 4F                 CLRA          MAKE SURE TXS DOESN'T CHANGE ANY CC'S
+3230  2308 06                 TAP
+3231  2309 35                 TXS
+3232  230A 07                 TPA
+3233  230B 81 C0              CMPA #$C0
+3234  230D 26 FE              BNE *
+3235  230F             *
+3236  230F             ***********************************************************
+3237  230F             *
+3238  230F             *          INCREMENT STACK POINTER (INS)
+3239  230F             *
+3240  230F             *
+3241  230F 8E 00 7E           LDS #TEMP
+3242  2312 31                 INS           INC SP
+3243  2313 30                 TSX           SP+1 -> X
+3244  2314 8C 00 80           CPX #TEMP+2   OK?
+3245  2317 26 FE              BNE *         HANG IF NOT
+3246  2319 8E 00 FF           LDS #$FF
+3247  231C 31                 INS           FF+1 -> 100
+3248  231D 30                 TSX           SP+1 -> X
+3249  231E 8C 01 01           CPX #$101     OK?
+3250  2321 26 FE              BNE *         HANG IF NOT
+3251  2323 4F                 CLRA          MAKE SURE INS DOESN'T CHANGE ANY CC'S
+3252  2324 06                 TAP
+3253  2325 31                 INS
+3254  2326 07                 TPA
+3255  2327 81 C0              CMPA #$C0
+3256  2329 26 FE              BNE *
+3257  232B             *
+3258  232B             ***********************************************************
+3259  232B             *
+3260  232B             *          DECREMENT STACK POINTER (DES)
+3261  232B             *
+3262  232B             *
+3263  232B 8E 01 00    DS1    LDS #$100     INIT SP
+3264  232E 34                 DES           SP-1 -> SP
+3265  232F 30                 TSX           SP+1 -> X
+3266  2330 8C 01 00           CPX #$100     OK?
+3267  2333 26 FE              BNE *
+3268  2335 4F                 CLRA          MAKE SURE DES DOESN'T CHANGE ANY CC'S
+3269  2336 06                 TAP
+3270  2337 30                 TSX
+3271  2338 07                 TPA
+3272  2339 81 C0              CMPA #$C0
+3273  233B 26 FE              BNE *
+3274  233D             *
+3275  233D             ************************************************************
+3276  233D             *
+3277  233D             *          PUSH A-REGISTER ON STACK (PSHA)
+3278  233D             *
+3279  233D             *
+3280  233D 8E 00 50    PSA1   LDS #STACK    INIT STACK
+3281  2340 86 55              LDAA #$55
+3282  2342 36                 PSHA          PUSH IT
+3283  2343 30                 TSX           POINT X TO LAST ON STACK
+3284  2344 A1 00              CMPA 0,X      WAS IT PUSHED
+3285  2346 26 FE              BNE *         HANG IF NOT
+3286  2348 86 AA              LDAA #$AA     TRY WITH DIFFERENT PATTERN
+3287  234A 36                 PSHA
+3288  234B 30                 TSX
+3289  234C A1 00              CMPA 0,X
+3290  234E 26 FE              BNE *
+3291  2350 4F                 CLRA          MAKE SURE NO CC'S ARE CHANGED
+3292  2351 06                 TAP
+3293  2352 36                 PSHA          DO A PSHA
+3294  2353 07                 TPA           GET CC'S
+3295  2354 81 C0              CMPA #$C0     OK?
+3296  2356 26 FE              BNE *         HANG IF NOT
+3297  2358 31                 INS
+3298  2359 31                 INS
+3299  235A 31                 INS           CLEAN UP STACK
+3300  235B             *
+3301  235B             **************************************************************
+3302  235B             *
+3303  235B             *          PUSH B-REGISTER ON STACK (PSHB)
+3304  235B             *
+3305  235B             *
+3306  235B 8E 00 50    PSB1   LDS #STACK    INIT STACK
+3307  235E C6 AA              LDAB #$AA     LOAD A CONSTANT
+3308  2360 37                 PSHB          PUSH IT
+3309  2361 30                 TSX           POINT X TO LAST ON STACK
+3310  2362 E1 00              CMPB 0,X      WAS IT PUSHED?
+3311  2364 26 FE              BNE *         HANG IF NOT
+3312  2366 C6 55       I      LDAB #$55     DO ANOTHER PATTERN
+3313  2368 37                 PSHB
+3314  2369 30                 TSX
+3315  236A E1 00              CMPB 0,X
+3316  236C 26 FE              BNE *
+3317  236E 4F                 CLRA          MAKE SURE NO CC'S ARE SET
+3318  236F 06                 TAP
+3319  2370 37                 PSHB          DO A PSHB
+3320  2371 07                 TPA           GET BACK CC'S
+3321  2372 81 C0              CMPA #$C0     OK?
+3322  2374 26 FE              BNE *         HANG IF NOT
+3323  2376 31                 INS
+3324  2377 31                 INS           CLEAN STACK
+3325  2378 31                 INS
+3326  2379             *
+3327  2379             ******************************************************
+3328  2379             *
+3329  2379             *          PULL FROM STACK INTO A (PULA)
+3330  2379             *
+3331  2379             *
+3332  2379 8E 00 50    PLA1   LDS #STACK   INIT SP
+3333  237C 4F                 CLRA         PUSH ZERO
+3334  237D 36                 PSHA
+3335  237E 43                 COMA         SCREW UP A
+3336  237F 32                 PULA         RETRIEVE A
+3337  2380 4D                 TSTA         SHOULD BE ZERO
+3338  2381 26 FE              BNE *
+3339  2383 86 FF              LDAA #$FF    PUSH ALL 1'S
+3340  2385 36                 PSHA
+3341  2386 4F                 CLRA         CHANGE A
+3342  2387 32                 PULA         SHOULD BE ALL 1'S
+3343  2388 81 FF              CMPA #$FF
+3344  238A 26 FE              BNE *
+3345  238C 4F                 CLRA         MAKE SURE NO CC'S ARE CHANGED
+3346  238D 06                 TAP          BY PSHA OR PULA
+3347  238E 36                 PSHA
+3348  238F 32                 PULA
+3349  2390 07                 TPA
+3350  2391 81 C0              CMPA #$C0    SHOULD BE $C0
+3351  2393 26 FE              BNE *
+3352  2395             *
+3353  2395             ******************************************************
+3354  2395             *
+3355  2395             *          PULL FROM STACK INTO B (PULB)
+3356  2395             *
+3357  2395             *
+3358  2395 8E 00 50    PLB1   LDS #STACK   INIT SP
+3359  2398 5F                 CLRB         PUSH ZERO
+3360  2399 37                 PSHB
+3361  239A 53                 COMB         SCREW IT UP
+3362  239B 33                 PULB         RETRIEVE IT
+3363  239C 5D                 TSTB         SHOULD BE ZERO
+3364  239D 26 FE              BNE *
+3365  239F C6 FF              LDAB #$FF    PUSH ALL 1'S
+3366  23A1 37                 PSHB
+3367  23A2 5F                 CLRB         CHANGE B
+3368  23A3 33                 PULB         SHOULD BE ALL 1'S
+3369  23A4 C1 FF              CMPB #$FF
+3370  23A6 26 FE              BNE *
+3371  23A8 4F                 CLRA         MAKE SURE NO CC'S ARE CHANGED 
+3372  23A9 06                 TAP          BY PSHB OR PULB
+3373  23AA 37                 PSHB
+3374  23AB 33                 PULB
+3375  23AC 07                 TPA          SHOULD BE $C0
+3376  23AD 81 C0              CMPA #$C0
+3377  23AF 26 FE              BNE *
+3378  23B1             *
+3379  23B1             ********************************************************
+3380  23B1             *
+3381  23B1             *          RETURN FROM SUBROUTINE (RTS)
+3382  23B1             *
+3383  23B1             *
+3384  23B1 8E 00 50           LDS #STACK   INIT SP
+3385  23B4 BD 23 C0           JSR RT1      GO TO SUB
+3386  23B7 20 FE              BRA *        SHOULD'T GET HERE
+3387  23B9 07                 TPA          CHECK CC'S AFTER RTS
+3388  23BA 81 C0              CMPA #$C0
+3389  23BC 26 FE              BNE *
+3390  23BE 20 10              BRA RT2      OKAY,SKIP AROUND
+3391  23C0 30          RT1    TSX          MODIFY RETURN ADDRESS TO SKIP BRA *
+3392  23C1 A6 00              LDAA 0,X     LOAD RETURN ADDRESS
+3393  23C3 E6 01              LDAB 1,X
+3394  23C5 CB 02              ADDB #2      FIX IT
+3395  23C7 89 00              ADCA #0
+3396  23C9 A7 00              STAA 0,X
+3397  23CB E7 01              STAB 1,X
+3398  23CD 4F                 CLRA         CLEAR CC'S TO MAKE SURE
+3399  23CE 06                 TAP          RTS DOESN'T CHANGE ANY
+3400  23CF 39                 RTS
+3401  23D0             *
+3402  23D0 CE 23 DE    RT2    LDX #RT3     TRY RTS WITHOUT JSR
+3403  23D3 DF 68              STX TMP      PUT DESTINATION (RT3)
+3404  23D5 96 69              LDAA TMP+1   ON STACK
+3405  23D7 36                 PSHA
+3406  23D8 D6 68              LDAB TMP
+3407  23DA 37                 PSHB         RT3 ON STACK
+3408  23DB 39                 RTS
+3409  23DC 20 FE              BRA *        SHOULDN'T GET HERE
+3410  23DE 01          RT3    NOP          OKAY!
+3411  23DF             *
+3412  23DF             *
+3413  23DF             ********************************************************
+3414  23DF             *
+3415  23DF =$E07E       PDATA1 EQU $E07E    SWTBUG PRINT STRING
+3416  23DF =$E0E3       MON    EQU $E0E3    SWTBUG RETURN TO MONITOR
+3417  23DF             *
+3418  23DF             *      CAN PUT BREAKPOINT AFTER HERE
+3419  23DF 01          BRKPT  NOP          EVERYTHINGS OKAY !!!!!!!!!!!!!!!!!!!!!!!!!
+3420  23E0 01                 NOP
+3421  23E1 01                 NOP
+3422  23E2 CE 23 EE           LDX #OKMSG   PRINT 'OK' ON THE TERMINAL
+3423  23E5 BD E0 7E           JSR PDATA1
+3424  23E8 01                 NOP
+3425  23E9 01                 NOP
+3426  23EA 01                 NOP
+3427  23EB 7E E0 E3           JMP MON      RETURN TO SWTBUG MONITOR
+3428  23EE             *
+3429  23EE 20 43 50    OKMSG  FCC ' CPU TEST OK'
+3430  23F4 45 53 54  
+3431  23FA 04                 FCB 4
+3432  23FB             *
+3433  23FB             *
+3434  23FB                    END 
