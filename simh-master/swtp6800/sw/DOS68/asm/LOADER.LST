@@ -1,0 +1,394 @@
+
+                          * 
+                          * Loader for Smoke System Broadcasting DOS-68 Operating System
+                          * I/O Routines for MF68 Floppy Disk
+                          * 
+                          * This program patches SSD DOS-68 to use MF68 instead of 
+                          * own SSB floppy disk
+                          *
+                          * (C) Roberto Sancho, Apr/2022
+                          * Uses BC00-BD00 for loader. Once DOS is started this mem is available for any program
+                          *      BE00-BEFF for MF68 I/O Routines. This mem should not be overwritten/modified
+                          *
+                          
+      =$7F80               SECBUF  EQU $7F80       BUFFER FOR READ DISK SECTOR 
+      =$E0E3               MON     EQU $E0E3       SWTBUG Monitor start 
+                                                  
+BC00:                             ORG $BC00       
+BC00:                                             
+BC00: BD BE 3B            START   JSR   INTDK     
+BC03: 86 FF                       LDAA #$FF       Init PBUF     
+BC05: B7 BC B1                    STAA PBUF       
+BC08: CE E0 E3                    LDX   #$E0E3    Init jump to SWTBUG monitor  
+BC0B: FF BC B3                    STX   TA        as default TA (so if loaded prog has no TA, return to monitor)
+BC0E: 86 08                       LDAA #08        
+BC10: B7 A0 7B                    STAA BFDDRG     Select drive 0 
+BC13: CE 80 51                    LDX   #$8051    Track and sector for DOS68 file (main OS program)
+BC16: FF 7F 80                    STX   SECBUF    Set FWD Link Trk and Sect in sector buffer
+BC19: CE 7F 80                    LDX   #SECBUF   
+BC1C: FF A0 7E                    STX   BFDSBU    Set addr where disc sector is to be read (=the sector buffer)
+BC1F: 8D 3C               RDNEXT  BSR   RDBYTE    read a byte from disk file in B
+BC21: C1 42                       CMPB #$42       is data record? 
+BC23: 27 10                       BEQ   RDDATR    yes -> branch
+BC25: C1 47                       CMPB #$47       is transfer address record?
+BC27: 26 F6                       BNE   RDNEXT    no -> skip this byte and read next from disk 
+BC29: 8D 32                       BSR   RDBYTE    yes -> get transfer addr (TA) hi
+BC2B: F7 BC B3                    STAB TA         
+BC2E: 8D 2D                       BSR   RDBYTE    get transfer addr lo
+BC30: F7 BC B4                    STAB TA+1       save TA address 
+BC33: 20 EA                       BRA   RDNEXT
+BC35:                     
+BC35:                     * READ A DATA RECORD INTO MEM
+BC35:                     
+BC35: 4F                  RDDATR  CLRA
+BC36: 8D 25                       BSR   RDBYTE    B=Data record last byte used (=len-1)
+BC38: 5C                          INCB            B=Data Record len
+BC39: 37                          PSHB            
+BC3A: 8D 21                       BSR   RDBYTE    B=Data load addr hi
+BC3C: F7 BC B5                    STAB PSTORE     
+BC3F: 8D 1C                       BSR   RDBYTE    B=Data load addr lo
+BC41: F7 BC B6                    STAB PSTORE+1   
+BC44: 8D 17               RDDATB  BSR   RDBYTE    get record data byte
+BC46: FE BC B5                    LDX   PSTORE    load address for byte 
+BC49: E7 00                       STAB 0,X        save data byte at load addr
+BC4B: 08                          INX             
+BC4C: FF BC B5                    STX   PSTORE    
+BC4F: 33                          PULB            B=Bytes remaining to load
+BC50: 5A                          DECB            
+BC51: 37                          PSHB            
+BC52: 26 F0                       BNE   RDDATB    continue until all bytes are load
+BC54: 33                          PULB            
+BC55: 8D 06                       BSR   RDBYTE    get chksum byte  
+BC57: 4C                          INCA            
+BC58: 27 C5                       BEQ   RDNEXT    
+BC5A: 7E E0 E3                    JMP   MON       CHKSUM Error -> return to monitor
+BC5D:                     
+BC5D:                     * READ BYTE FROM DISK FILE, FOLLOWING FWD TRK AND SEC LINKS
+BC5D:                     * RETRUN B=BYTE READ, A=CHKSUM 
+BC5D:                     
+BC5D: FE BC B1            RDBYTE  LDX   PBUF      pointer to next byte to get from disk sector buffer
+BC60: 2B 08                       BMI   RDTKSEC   128 bytes already read -> load next sector following FWD LINK
+BC62: E6 00                       LDAB 0,X        read byte from secotr buffer
+BC64: 08                          INX             
+BC65: FF BC B1                    STX   PBUF      
+BC68: 1B                          ABA             A=A+B=checksum
+BC69: 39                          RTS             
+BC6A:                                             
+BC6A: FE 7F 80            RDTKSEC LDX   SECBUF    get FWD Trk and Sect to load
+BC6D: 27 13                       BEQ   JMPTA     If no FWD link, jumo to Transfer Address
+BC6F: FF A0 7C                    STX   BFDTRG    TrSect to load
+BC72: CE 7F 84                    LDX   #SECBUF+4 init sector buffer data address
+BC75: FF BC B1                    STX   PBUF      
+BC78: 36                          PSHA            
+BC79: BD BE 29                    JSR   BFDRDS    read sector into 7f80-7fff (SECBUF)
+BC7C: 32                          PULA            
+BC7D: 27 DE                       BEQ   RDBYTE    
+BC7F: 7E E0 E3                    JMP   MON       return to monitor if read error
+BC82:                                             
+BC82: BD BC 8A            JMPTA   JSR  PATCHD     Patch the loaded system before jumping to it
+BC85: FE BC B3                    LDX  TA         Jump to transfer address to start 
+BC88: 6E 00                       JMP  0,X        loaded program 
+BC8A:                     
+BC8A:                     * PATCH DOS68 TO USE MF68 I/O ROUTINES (AT ADDRESS BEXX) INSTEAD OF 
+BC8A:                     * CALLING SSB FLOPPY ROM (AT ADDRESS 80XX)
+BC8A:                     
+BC8A: 4F                  PATCHD  CLRA
+BC8B:                     
+BC8B:                     * PATCH CALL INIT ROUTINE AT NEW ADDRESS
+BC8B:                     * DDE4  7E 8026         JMP  $8026    SSB INITIALIZE PIA ROUTINE
+BC8B:                     *                   TO  JMP  $BE26    MF68 INIT
+BC8B: 86 BE                       LDAA #$BE
+BC8D: B7 DD E5                    STAA $DDE5
+BC90:                             
+BC90:                     * PATCH CALL ROUTINES AT NEW ADDRESS
+BC90:                     * DD47  BD 8038         JSR  $8038    SSB RESTORE
+BC90:                     * DDA0  BD 8038         JSR  $8038    SSB RESTORE
+BC90:                     * DD30  CE 802C         LDX  #$802C   SSB WRITE SECTOR ROUTINE
+BC90:                     * DD35  CE 8029         LDX  #$8029   SSB READ SECTOR ROUTINE 
+BC90:                     * DD88  8C 8029         CPX  #$8029   SSB READ SECTOR ROUTINE 
+BC90:                     *                    TO JSR  $BEXX    MF68 
+BC90: 86 BE                       LDAA #$BE
+BC92: B7 DD 48                    STAA $DD48
+BC95: B7 DD A1                    STAA $DDA1
+BC98: B7 DD 31                    STAA $DD31
+BC9B: B7 DD 36                    STAA $DD36
+BC9E: B7 DD 89                    STAA $DD89
+BCA1:                     
+BCA1:                     * Patch the whole routine
+BCA1:                     * DD51:	BD 806C         JSR  $806C     SSB Write track register
+BCA1:                     * DDB7:	BD 8072         JSR  $8072     SSB Read track register
+BCA1:                     *                   ->  JMP  $BE38    
+BCA1:                     
+BCA1: CE BE 38                    LDX   #$BE38
+BCA4: FF DD 52                    STX   $DD52
+BCA7: FF DD B8                    STX   $DDB8
+BCAA:                             
+BCAA:                     * Patch fortran line printer to use the screen
+BCAA:                     * D2B8:	7E D283 ZLP     JMP  ZWARMS   FORTRAN LINE PRINTER OUTPUT VECTOR (Points to DOS68 WARM START)
+BCAA:                     *    -> 7E D286 ZOUTCH  JMP  ZOUTEE   
+BCAA:                     
+BCAA: CE D2 86                    LDX   #$D286
+BCAD: FF D2 B9                    STX   $D2B9
+BCB0:                     
+BCB0: 39                          RTS
+BCB1:                             
+BCB1:                     PBUF    RMB 2           POINTER TO NEXT BYTE TO GET FROM READ DISK SECTOR BUFFER
+BCB3:                     TA      RMB 2           TRANSFER ADDRESS (=COLD START ADDR OF OPERATING SYSTEM)
+BCB5:                     PSTORE  RMB 2           POINTER WHERE THE BYTE READ FROM DISK IS TO BE STORED IN MEM
+BCB7:                           
+BCB7:                             
+BCB7:                     *
+BCB7:                     * SSB Smoke Signal Broadcasting BFD-68 disk drive ROM replacement.
+BCB7:                     * Allows to use MF68 TSC Disk Drive
+BCB7:                     *
+BCB7:                     
+BCB7: =$A07B               BFDDRG EQU $A07B  Drive Register  (8-> select drive 0, $10 drive 1, $20 drive 2)
+BCB7: =$A07C               BFDTRG EQU $A07C  Track Register  ($80..$A2)
+BCB7: =$A07D               BFDSRG EQU $A07D  Sector Register ($40..$53)
+BCB7: =$A07E               BFDSBU EQU $A07E  Sector Buffer Pointer
+BCB7:                     
+BCB7:                     *
+BCB7:                     * The following is the original entry for SSB ROM
+BCB7:                     * as listed in 68'Micro Journal, Volumne 1 issue 1, feb 1979, p13-20
+BCB7:                     * 
+BCB7:                     * BFDCLD EQU $8020  SSB Cold Start
+BCB7:                     * BFDWRM EQU $8023  SSB Warm Start
+BCB7:                     * BFDINT EQU $8026  SSB Initialize PIA routine
+BCB7:                     * BFDRDS EQU $8029  SSB Read Sector routine 
+BCB7:                     * BFDWRS EQU $802C  SSB Write Sector routine
+BCB7:                     * BFDRDT EQU $802F  SSB Read Track routine
+BCB7:                     * BFDWRT EQU $8032  SSB Write Track routine
+BCB7:                     * BFDSEK EQU $8035  SSB Seek routine
+BCB7:                     * BFDRST EQU $8038  SSB Restore routine  
+BCB7:                     *
+BCB7:                     *            $8060      Send command
+BCB7:                     *            $8063      Operation complete
+BCB7:                     *            $8066      Clean up & return
+BCB7:                     *            $8069      Write sector register
+BCB7:                     *            $806C      Write track register
+BCB7:                     *            $806F      Write track number
+BCB7:                     *            $8072      Read track register
+BCB7:                     *            $8075      Step in
+BCB7:                     *            $8078      Step out
+BCB7:                     *            $807B      Step
+BCB7:                     *
+BCB7:                     
+BCB7:                     *
+BCB7:                     * THE MEM AREA BE00-BFFF HOLDS THE SSB BFD-68 ROM REPLACEMENT
+BCB7:                     * SSB ROM ENTRY POINTS STARTS AT $8020
+BCB7:                     * REPLACEMENT ENTRY POINTS STARTS AT $BE20
+BCB7:                     
+BE00:                            ORG $BE00
+BE00:                     
+BE00:                     CURDRV RMB 1  PRESENTLY SELECTED DRIVE #
+BE01:                     CTRK0  RMB 4  TRACK STATE TABLE
+BE05:                     RCNT   RMB 1  RETRY COUNT
+BE06:                     
+BE20:                            ORG $BE20
+BE20:                     
+BE20: 7E E0 E3            BFDCLD JMP MON    SSB Cold Start
+BE23: 7E E0 E3            BFDWRM JMP MON    SSB Warm Start
+BE26: 7E BE 3B            BFDINT JMP INTDK  SSB Initialize 
+BE29: 7E BE 4D            BFDRDS JMP RDSEC  SSB Read Sector routine  
+BE2C: 7E BE 5C            BFDWRS JMP WRSEC  SSB Write Sector routine
+BE2F: 7E E0 E3            BFDRDT JMP MON    SSB Read Track routine
+BE32: 7E E0 E3            BFDWRT JMP MON    SSB Write Track routine
+BE35: 7E E0 E3            BFDSEK JMP MON    SSB Seek routine
+BE38: 7E BE 4C            BFDRST JMP DUMMY  SSB Restore routine (Dummy)
+BE3B:                     
+BE3B:                     *
+BE3B:                     * DISK DRIVERS FOR SOUTHWEST TECHNICAL PRODUCTOS
+BE3B:                     *
+BE3B:                     * COMMANDS
+BE3B:                     *
+BE3B: =$B                  FDRSC  EQU $0B    RESTORE
+BE3B: =$1B                 FDSKI  EQU $1B    SEEK
+BE3B: =$8C                 FDRDC  EQU $8C    READ A SECTOR
+BE3B: =$AC                 FDWRC  EQU $AC    WRITE A SECTOR
+BE3B:                     *
+BE3B: =$8014               DRVREG EQU $8014
+BE3B: =$8018               CMDREG EQU $8018
+BE3B: =$8019               TRKREG EQU $8019
+BE3B: =$801A               SECREG EQU $801A
+BE3B: =$801B               DATREG EQU $801B
+BE3B:                     *
+BE3B:                     * FCB DEFINITIONS:
+BE3B:                     *
+BE3B: =$5                  FCBSTA EQU 5  STATUS 
+BE3B: =$7                  FCBDBA EQU 7  DATA BUFFER ADDRESS
+BE3B: =$9                  FCBDRV EQU 9  DRIVE#
+BE3B: =$A                  FCBTRK EQU 10 TRACK# 
+BE3B: =$B                  FCBSCT EQU 11 SECTOR# 
+BE3B:                     *
+BE3B:                     * INIT THE DISK SYSTEM
+BE3B:                     *
+BE3B: 7F BE 00            INTDK  CLR CURDRV    ASSUME DRIVE 0 BOOTED
+BE3E: 86 FF                      LDAA #$FF
+BE40: B7 BE 01                   STAA CTRK0       
+BE43: B7 BE 02                   STAA CTRK0+1
+BE46: B7 BE 03                   STAA CTRK0+2       
+BE49: B7 BE 04                   STAA CTRK0+3
+BE4C: 39                  DUMMY  RTS       
+BE4D:                     
+BE4D:                     *
+BE4D:                     * READ A SECTOR
+BE4D:                     *
+BE4D:                     * drive in $A07B: $08=drive 0, $10=drive 1, $20=drive 2
+BE4D:                     * track in $A07C ($80..$A2)
+BE4D:                     * sector in $A07D ($40..$51)
+BE4D:                     * Sector Buffer in $A07E/F
+BE4D:                     * return A=0 if ok, <>0 if error
+BE4D:                     *
+BE4D: BD BF 09            RDSEC  JSR SELDRV 
+BE50: BD BE 6B            RDSEC1 JSR READ       GETA SECTOR
+BE53: 27 15                      BEQ QUIT10     OK
+BE55: 7A BE 05                   DEC RCNT       RETRY AGAIN?
+BE58: 26 F6                      BNE RDSEC1     YES
+BE5A: 20 0D                      BRA QERR
+BE5C:                     *
+BE5C:                     * WRITE A SECTOR
+BE5C:                     *
+BE5C:                     * drive in $A07B: $08=drive 0, $10=drive 1, $20=drive 2
+BE5C:                     * track in $A07C ($80..$A2)
+BE5C:                     * sector in $A07D ($40..$51)
+BE5C:                     * Sector Buffer in $A07E/F
+BE5C:                     * return A=0 if ok, <>0 if error
+BE5C:                     *
+BE5C: BD BF 09            WRSEC  JSR SELDRV 
+BE5F: BD BE 9E            WTSEC1 JSR WRITE
+BE62: 27 06                      BEQ QUIT10     OK
+BE64: 7A BE 05                   DEC RCNT       TRY AGAIN?
+BE67: 26 F6                      BNE WTSEC1     YES
+BE69: 4D                  QERR   TSTA           A HAS THE STATUS BITS WIITH ERROR 
+BE6A: 39                  QUIT10 RTS
+BE6B:                     *
+BE6B:                     * READ A SECTOR (A=TRK, B=SECTOR, X=CTRKx)
+BE6B:                     *
+BE6B: BD BE CA            READ   JSR SEEK
+BE6E: 86 8C                      LDAA #FDRDC    READ
+BE70: B7 80 18                   STAA CMDREG    
+BE73: BD BE E9                   JSR DEL56U     DELAY
+BE76: FE A0 7E                   LDX BFDSBU     GET BUFFER ADDRESS
+BE79: C6 80                      LDAB #128      128 BYTES/SECTOR     
+BE7B: B6 80 18            READ1  LDAA CMDREG    
+BE7E: 85 02                      BITA #$02      DATA REG FULL?
+BE80: 26 06                      BNE READ2      YES
+BE82: 85 01                      BITA #1        BUSY?
+BE84: 26 F5                      BNE READ1      YES
+BE86: 20 0B                      BRA READ3      ERROR
+BE88: B6 80 1B            READ2  LDAA DATREG    GET A BYTE
+BE8B: A7 00                      STAA 0,X       STORE IN BUFFER
+BE8D: 08                         INX            
+BE8E: 5A                         DECB           
+BE8F: 26 EA                      BNE READ1      DO AGAIN
+BE91: 8D 03                      BSR WBUSY      WAIT TILL DONE
+BE93: 84 1C               READ3  ANDA #$1C      MASK OF STATUS BITS
+BE95: 39                         RTS            
+BE96:                     *                
+BE96: B6 80 18            WBUSY  LDAA CMDREG    
+BE99: 85 01                      BITA #1        BUSY?
+BE9B: 26 F9                      BNE WBUSY      YES
+BE9D: 39                         RTS
+BE9E:                     *
+BE9E:                     * WRITE A SECTOR (A=TRK, B=SECTOR, X=CTRKx)
+BE9E:                     *
+BE9E: BD BE CA            WRITE  JSR SEEK
+BEA1: 86 AC                      LDAA #FDWRC    WRITE COMMAND
+BEA3: B7 80 18                   STAA CMDREG    
+BEA6: BD BE E9                   JSR DEL56U     
+BEA9: FE A0 7E                   LDX BFDSBU     GET BUFFER ADDRESS
+BEAC: C6 80                      LDAB #128      128 BYTES/SECTOR
+BEAE: B6 80 18            WRITE1 LDAA CMDREG    
+BEB1: 85 02                      BITA #2        REG EMPTY?
+BEB3: 26 06                      BNE WRITE2     YES
+BEB5: 85 01                      BITA #1        BUSY?
+BEB7: 26 F5                      BNE WRITE1     YES
+BEB9: 20 AE                      BRA QERR       ERROR
+BEBB: A6 00               WRITE2 LDAA 0,X       GET A BYTE
+BEBD: B7 80 1B                   STAA DATREG    
+BEC0: 08                         INX            
+BEC1: 5A                         DECB           
+BEC2: 26 EA                      BNE WRITE1     DO AGAIN
+BEC4: BD BE 96                   JSR WBUSY      WAIT FOR BUSY
+BEC7: 84 5C               WRITE3 ANDA #$5C      MASK OFF STATUS BITS
+BEC9: 39                         RTS
+BECA:                     *
+BECA:                     * SEEK A=TRACK, B=SECTOR, X=CTRKx
+BECA:                     *
+BECA: B1 80 19            SEEK   CMPA TRKREG    ON TRACK?
+BECD: 27 13                      BEQ SEEK2      YES
+BECF: B7 80 1B                   STAA DATREG    NO, STORE TRACK#
+BED2: BD BE E9                   JSR DEL56U     
+BED5: A7 00                      STAA 0,X       SAVE CURRENT TRACK OF DRIVE
+BED7: 86 1B                      LDAA #FDSKI    SEEK COMMAND
+BED9: B7 80 18                   STAA CMDREG    
+BEDC: BD BE E9                   JSR DEL56U     
+BEDF: BD BE 96                   JSR WBUSY      WAIT FOR BUSY
+BEE2: F7 80 1A            SEEK2  STAB SECREG    SET SECTOR
+BEE5: BD BE E9                   JSR DEL56U
+BEE8: 39                         RTS
+BEE9:                     
+BEE9:                     * DEL56U- DELAY 56us INCLUDING THE CALL TO DELAY56U
+BEE9:                     
+BEE9: BD BE EC            DEL56U JSR DELAY2
+BEEC: BD BE EF            DELAY2 JSR DELAY3
+BEEF: 39                  DELAY3 RTS
+BEF0:                     
+BEF0:                     *
+BEF0:                     * FIND TRACK- RETURN X->TRACK TABLE FOR CURDRV
+BEF0:                     *
+BEF0: CE BE 01            FNDTRK LDX #CTRK0     POINT TO TABLE
+BEF3: B6 BE 00                   LDAA CURDRV
+BEF6: 27 04                      BEQ FNDTK3
+BEF8: 08                  FNDTK2 INX
+BEF9: 4A                         DECA
+BEFA: 26 FC                      BNE FNDTK2
+BEFC: 39                  FNDTK3 RTS
+BEFD:                     
+BEFD:                     *
+BEFD:                     * RESTORE SEEK TRACK0
+BEFD:                     *
+BEFD: 86 0B               RESTOR LDAA #FDRSC    RESTORE COMMAND
+BEFF: B7 80 18                   STAA CMDREG
+BF02: BD BE E9                   JSR DEL56U
+BF05: BD BE 96                   JSR WBUSY
+BF08: 39                         RTS
+BF09:                     
+BF09:                     *
+BF09:                     * SELECT DRIVE, HANDLE SSB STYLE PARAMS
+BF09:                     * SELECT THE DRIVE
+BF09:                     * RETURN A=TRACK, B=SECTOR, X=CTRKx
+BF09:                     *
+BF09: 8D E5               SELDRV BSR FNDTRK     SAVE TRACK FOR CURRENT DRIVE
+BF0B: B6 80 19                   LDAA TRKREG    
+BF0E: A7 00                      STAA 0,X       
+BF10:                                           
+BF10: B6 A0 7B                   LDAA BFDDRG    SSB SELECTED DRIVE 
+BF13: 47                         ASRA	      MOVE TO LSN
+BF14: 47                         ASRA           
+BF15: 47                         ASRA           
+BF16: 47                         ASRA           
+BF17: 84 03                      ANDA #$03      
+BF19: B7 BE 00                   STAA CURDRV    
+BF1C: B7 80 14                   STAA DRVREG    SELECT THE DRIVE
+BF1F:                                           
+BF1F: 8D CF                      BSR FNDTRK     LOAD TRACK FOR NEW DRIVE
+BF21: A6 00                      LDAA 0,X       A=CURRENT DRIVE TRACK
+BF23: B7 80 19                   STAA TRKREG    
+BF26:                                           
+BF26: 81 FF                      CMPA #$FF      INITIALIZED?
+BF28: 26 02                      BNE SELD1      YES
+BF2A: 8D D1                      BSR RESTOR     SEEK TRACK0
+BF2C:                                           
+BF2C: 86 05               SELD1  LDAA #5        SET RETRY COUNT
+BF2E: B7 BE 05                   STAA RCNT      
+BF31: B6 A0 7C                   LDAA BFDTRG    GET SSB TRACK#        
+BF34: 84 7F                      ANDA #$7F      MF68 DISK FORMAT HAS TRACKS RANGING FROM 0..34
+BF36: F6 A0 7D                   LDAB BFDSRG    GET SECTOR 
+BF39: C4 3F                      ANDB #$3F      MF68 DISK FORMAT HAS SECTORS RANGING FROM 0..17
+BF3B: 39                         RTS            
+BF3C:                     *                
+A048:                            ORG $A048      SET START ADDRESS FOR "G"O COMMAND
+A048: BC 00                      FDB START
+A04A:                     
+A04A:                            END
