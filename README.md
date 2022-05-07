@@ -136,7 +136,7 @@ or `run swtp6800 SWTPc 8K Basic 2.3 (1978).bat` batch file to run TSC BASICs
 or `execute `run swtp6800 TSC 4K MicroBasicPlus 2.1 (1977).bat`, 
 or `execute `run swtp6800 TSC 8K Basic (1980).bat` batch file to run SWTPC BASICs
 
-* execute `run swtp6800 MITS Altair 680 Basic 3.2 (1976).bat` batch file to Microsoft Basic 3.2 ported from Altair 680
+* execute `run swtp6800 MITS Altair 680 Basic 3.2 (1976).bat` batch file to Microsoft Basic 3.2 ported from MITS Altair 680
 
 Other 
 
@@ -152,7 +152,7 @@ Once uncompressed, you will find several ready to run .bat files:
 * execute `run swtp6800 gt6144 Space RACE game.bat` batch file to play to Interactive Real Time Graphic game (gasp!)
 * execute `run swtp6800 subLogic 3D package basic (1977).bat` batch file to demo Bruce Artwick 3D microcomputer graphics package
 
-  [SWTPC 6800 Graphics](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.png)
+  ![SWTPC 6800 Graphics](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.png)
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.zip) to download 
 Floppy Disk based Operating Systems test run.
