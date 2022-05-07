@@ -43,6 +43,9 @@ extern DEVICE ptp_dev;
 extern DEVICE mp_8m_dev;
 extern DEVICE dc4_dsk_dev;
 extern DEVICE fd400_dsk_dev;
+extern DEVICE GraphicOne_dev; 
+extern DEVICE gt6144_dev; 
+
 
 /* external routines */
 
@@ -81,6 +84,8 @@ DEVICE *sim_devices[] = {
     &mp_8m_dev,
     &dc4_dsk_dev,
     &fd400_dsk_dev,
+    &GraphicOne_dev,
+    &gt6144_dev,
     NULL
 };
 
