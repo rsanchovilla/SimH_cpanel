@@ -160,7 +160,7 @@ t_stat sio_svc (UNIT *uptr)
         return temp;                    // no char or error?
     sio_unit.buf = temp & 0xFF;         // Save char
     if (sio_unit.buf==127) {
-        // convert BackSpace (ascii 127) so del char (ascii 8) for swtbug
+        // convert BackSpace (ascii 127) to del char (ascii 8) for swtbug
         // also backspace cursor on console
         sio_unit.buf=8; 
         sim_putchar('\b');
@@ -244,8 +244,9 @@ int32 sio0s(int32 io, int32 data)
                 if (feof(ptr_unit.fileref)) { // EOF
                     ptr_unit.u3 &= 0xFE; // clear RXF flag
                     ptr_flag = 0;       // clear reader flag
-                } else                  // not EOF
+                } else {                 // not EOF
                     ptr_unit.u3 |= 0x01; // set ready
+                }
             }
             return (status = ptr_unit.u3); // return ptr status
         } else {
@@ -269,6 +270,12 @@ int32 sio0s(int32 io, int32 data)
 
 int32 sio0d(int32 io, int32 data)
 {
+    extern int32 InstrCount;                   // intructions executed count 
+    static int32 InstrCount0 = 0; 
+    extern int32 PC; 
+    static int32 svdata; 
+
+
     if (io == 0) {                      // data register read
         if (ptr_flag) {                 // RDR enabled?
             if ((ptr_unit.flags & UNIT_ATT) == 0) // attached?
@@ -278,6 +285,11 @@ int32 sio0d(int32 io, int32 data)
 //              printf("Returning old %02X\n", odata); // no, return previous byte
                 return (odata & 0xFF);
             }
+            if ((PC < 0xE000) && (InstrCount - InstrCount0) < 30) {
+                // reading twice elapsing only 30 instr. return again previous byte
+                return svdata;
+            }
+            InstrCount0 = InstrCount; 
             if ((odata = getc(ptr_unit.fileref)) == EOF) { // end of file?
 //              printf("Got EOF\n");
                 ptr_unit.u3 &= 0xFE;    // clear RXF flag
@@ -286,7 +298,7 @@ int32 sio0d(int32 io, int32 data)
 //          printf("Returning new %02X\n", odata);
             ptr_unit.pos++;             // step character count
             ptr_unit.u3 &= 0xFE;        // clear RXF flag
-            return (odata & 0xFF);      // return character
+            return (svdata = (odata & 0xFF));      // return character
         } else {
             sio_unit.u3 &= 0xFE;        // clear RXF flag
             return (odata = sio_unit.buf); // return next char
@@ -300,21 +312,21 @@ int32 sio0d(int32 io, int32 data)
             }
         } else {                        // DC1-DC4 control Reader/Punch
             switch (data) {
-                case 0x11:              // PTR on
+                case 0x11:              // PTR on (^Q)
                     ptr_flag = 1;
                     ptr_unit.u3 |= 0x01;
 //                    printf("Reader on\n");
                     break;
-                case 0x12:              // PTP on
+                case 0x12:              // PTP on (^R)
                     ptp_flag = 1;
                     ptp_unit.u3 |= 0x02;
 //                    printf("Punch on\n");
                     break;
-                case 0x13:              // PTR off
+                case 0x13:              // PTR off (^S)
                     ptr_flag = 0;
 //                    printf("Reader off-%d bytes read\n", ptr_unit.pos);
                     break;
-                case 0x14:              // PTP off
+                case 0x14:              // PTP off (^T)
                     ptp_flag = 0;
 //                    printf("Punch off-%d bytes written\n", ptp_unit.pos);
                     break;

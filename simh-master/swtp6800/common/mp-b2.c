@@ -99,10 +99,6 @@ device addresses, if a device is plugged into a port it's routine
 address is here, 'nulldev' means no device is available
 */
 
-struct idev {
-        int32 (*routine)(int32, int32);
-};
-
 struct idev dev_table[32] = {
         {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev}, /*Port 0 8000-8003 */
         {&sio0s},       {&sio0d},       {&sio1s},       {&sio1d},   /*Port 1 8004-8007 */

@@ -117,9 +117,9 @@ int32 A = 0;                            /* Accumulator A */
 int32 B = 0;                            /* Accumulator B */
 int32 IX = 0;                           /* Index register */
 int32 SP = 0;                           /* Stack pointer */
-int32 CC = CC_ALWAYS_ON | IF;         /* Condition Code Register */
+int32 CC = CC_ALWAYS_ON | IF;           /* Condition Code Register */
 int32 saved_PC = 0;                     /* Program counter */
-int32 PC;                                /* global for the helper routines */
+int32 PC;                               /* global for the helper routines */
 
 int32 mem_fault = 0;                    /* memory fault flag */
 int32 NMI = 0, IRQ = 0;
@@ -322,12 +322,12 @@ void Symbolic_Trace(char * sTrace)
 
     buf[0]=0;
     trace = 0; 
-    if(strstr(sTrace, "**log")) {
+    if(strstr(sTrace, "**log")==sTrace) {
         // **log is like **echo, but does not print on console. Just into debug log
         printf_on_console=0; // 
         sTrace +=5;
         goto doecho;
-    } else if(strstr(sTrace, "**echo")) {
+    } else if(strstr(sTrace, "**echo")==sTrace) {
         // the "**echo xxx[:[A|B|X]]" string in symbolic buffer prints on console xxx (cannot have spaces)
         // if ":" is present, append contents of register A B or X 
         sTrace +=6;
@@ -355,7 +355,7 @@ void Symbolic_Trace(char * sTrace)
             sprintf(&buf[len], "=%04X (dec %d)", d, d);
         }
         trace = 1;
-    } else if(strstr(sTrace, "**m")) {
+    } else if(strstr(sTrace, "**m")==sTrace) {
         // the "**mNNNN[-LL][:xxxx]" string in symbolic buffer prints on console the contents
         // of memory starting at NNNN (hex). prints LL (hex) bytes (defaults to 1). 
         // if ":" is present, prints on console xxx (cannot have leading spaces, nor embebbed spaces, max 40 chars)
@@ -389,9 +389,9 @@ void Symbolic_Trace(char * sTrace)
             buf[len]=0;
         }
         trace=2; 
-    } else if(strstr(sTrace, "**troff")) {
+    } else if(strstr(sTrace, "**troff")==sTrace) {
         traceon--; if (traceon < -1000) traceon=-1000; // safety
-    } else if(strstr(sTrace, "**tron")) {
+    } else if(strstr(sTrace, "**tron")==sTrace) {
         // **tron start trace
         // **tron0 force start trace at current level (SWI calls will not be traced)
         // **tron2 start trace at current level, (SWI calls two level deep will be traced)
@@ -1954,7 +1954,7 @@ t_stat sim_instr (void)
 
     }
     /* Simulation halted - lets dump all the registers! */
-    //RSV dump_regs();
+    // dump_regs();
     saved_PC = PC;
     return reason;
 }
@@ -2119,7 +2119,7 @@ void condevalVs(int32 op1, int32 op2, int32 re)
 /* test and set H for addition */
 void condevalHa(int32 op1, int32 op2, int32 re)
 {
-    // the boolean formulae of overflow, according to Motorola_M6800_Programming_Reference_Manual_M68PRM(D)_Nov76.pdf
+    // the boolean formulae of half carry, according to Motorola_M6800_Programming_Reference_Manual_M68PRM(D)_Nov76.pdf
     // is the following: H = A3 . B3 + B3 . not(R3) + not(R3) . A3
     int A3 = (op1 & 0x08) >> 3;
     int B3 = (op2 & 0x08) >> 3;

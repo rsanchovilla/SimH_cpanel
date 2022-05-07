@@ -270,6 +270,8 @@
 /* function prototypes */
 
 t_stat dc4_dsk_reset (DEVICE *dptr);
+t_stat dc4_dsk_set_fmt(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat dc4_dsk_show_fmt(FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
 /* SS-50 I/O address space functions */
 
@@ -298,6 +300,7 @@ struct {
     int32   index_countdown;                // index countdown for type I commands
     int32   busy_countdown;                 // busy flag countdown 
     int32   sector_base;                    // indicates is first sector on track is sector 1 or sector 0
+    int32   fmt;                            // indicates the physicsl format to be used. 0=autodetect based on disk image file
 } dc4 = {0};
 
 // ***************************************************************
@@ -328,6 +331,7 @@ REG dc4_dsk_reg[] = {
 MTAB dc4_dsk_mod[] = {
         { UNIT_ENABLE, UNIT_ENABLE, "RW", "RW", NULL },
         { UNIT_ENABLE, 0, "RO", "RO", NULL },
+        {MTAB_XTD | MTAB_VDV, 0, "FMT", "FMT", &dc4_dsk_set_fmt, &dc4_dsk_show_fmt, NULL, "Set card format"},
         { 0 }
 };
 
@@ -389,12 +393,61 @@ t_stat dc4_dsk_reset (DEVICE *dptr)
     dc4.heds = 0;
     dc4.cpd = 0;
     dc4.dsksiz = 0;
+    dc4.fmt=0;
     dc4.sectsize = SECT_SIZE; 
     dc4.multiple_sector=0;
     dc4.index_countdown=0;
     dc4.busy_countdown=0;
     dc4.sector_base=1; 
     return SCPE_OK;
+}
+
+struct {
+    int         fmt;
+    const char  *name;
+    const char  *desc;
+} disk_formats[] = {
+    {0, "AUTO", "Autodetect disk format"},
+    {1, "35x10x256-0", "256 bytes sector, 35 tracks, 10 sectors per track (first sector is number 0)"},
+    {1, "FDOS", "SWTPC FDOS 1.0"},
+    {2, "35x18x128-1", "128 bytes sector, 35 tracks, 18 sectors per track (first sector is number 1)"},
+    {2, "FLEX1", "TSC FLEX 1.0"},
+    {2, "CP68", "HEMENWAY CP/68"},
+    {3, "SIRx256-1", "256 bytes sector, tracks and sectors defined in SIR record (first sector is number 1)"},
+    {3, "FLEX2", "TSC FLEX 2.0"},
+    {4, "NNx18x128-1", "128 bytes sector, tracks defined by disk image file size, 18 sectors per track (first sector is number 1)"},
+    {5, "35x18x128-0", "128 bytes sector, 35 tracks, 18 sectors per track (first sector is number 0)"},
+    {5, "DOS68", "SSB DOS 68 5.1"},
+    {0, 0},
+};
+
+t_stat dc4_dsk_show_fmt(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+    int f;
+
+    for (f = 0; disk_formats[f].name != 0; f++) {
+        if (dc4.fmt == disk_formats[f].fmt) {
+            fprintf (st, "%s format [%s]", disk_formats[f].name, disk_formats[f].desc);
+            return SCPE_OK;
+        }
+    }
+    fprintf (st, "invalid format (fmt=%d)", dc4.fmt);
+    return SCPE_OK;
+}
+
+t_stat dc4_dsk_set_fmt(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+    int f;
+
+    if (uptr == NULL) return SCPE_IERR;
+    if (cptr == NULL) return SCPE_ARG;
+    for (f = 0; disk_formats[f].name != 0; f++) {
+        if (strcmp (cptr, disk_formats[f].name) == 0) {
+            dc4.fmt = disk_formats[f].fmt;
+            return SCPE_OK;
+            }
+        }
+    return SCPE_ARG;
 }
 
 /*  I/O instruction handlers, called from the MP-B2 module when a
@@ -426,43 +479,63 @@ int32 dc4_fdcdrv(int32 io, int32 data)
             sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: Drive NOT write protected \n");
         }
         if (dc4_dsk_unit[dc4.cur_dsk].fileref==0) return 0; // no file attached
-        pos = 0x200;                    /* Read in SIR */
-        sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: Read pos = %ld ($%04X) \n",
-            pos, (unsigned int) pos);
-        sim_fseek(dc4_dsk_unit[dc4.cur_dsk].fileref, pos, SEEK_SET); /* seek to offset */
-        sim_fread(dc4_dsk_unit[dc4.cur_dsk].filebuf, SECT_SIZE, 1, dc4_dsk_unit[dc4.cur_dsk].fileref); /* read in buffer */
         dc4_dsk_unit[dc4.cur_dsk].u3 |= BUSY | DRQ; /* set DRQ & BUSY */
         dc4.busy_countdown=5; // start busy countdown
         dc4_dsk_unit[dc4.cur_dsk].pos = 0;      /* clear counter */
+        // read SIR record at 0x200
+        pos = 0x200;                    /* Read in SIR */
+        sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: Read pos = %ld ($%04X) \n",
+             pos, (unsigned int) pos);
+        sim_fseek(dc4_dsk_unit[dc4.cur_dsk].fileref, pos, SEEK_SET); /* seek to offset */
+        sim_fread(dc4_dsk_unit[dc4.cur_dsk].filebuf, SECT_SIZE, 1, dc4_dsk_unit[dc4.cur_dsk].fileref); /* read in buffer */
         SIR = (uint8 * )(dc4_dsk_unit[dc4.cur_dsk].filebuf); 
-        // detect disk type based on image geometry or SIR record
         disk_image_size=sim_fsize(dc4_dsk_unit[dc4.cur_dsk].fileref);
-        if (disk_image_size==35*10*256) { // 89600 bytes -> FDOS image
-            sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: FDOS Disk \n");
-            // FDOS disc has no SIR record. 
-            dc4.spt = 10; // 10 sectors
-            dc4.cpd = 35; // 35 tracks
-            dc4.sectsize = 256; 
-            dc4.sector_base=0; // first sector in track is number ZERO
-        } else if (disk_image_size==35*18*128) { // 80640 bytes -> FLEX 1.0 image
-            sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: FLEX 1.0 Disk \n");
-            dc4.spt = 18; // 18 sectors
-            dc4.cpd = 35; // 35 tracks
-            dc4.sectsize = 128; 
-            dc4.sector_base=1; // first sector in track is number ONE
-        } else if ((SIR[0]==0) && (SIR[1]==0)) {
-            sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: FLEX 2.0 Disk \n");
-            // FLEX disc has SIR record. on disk image offset $200
-            dc4.spt = SIR[MAXSEC]; // Highest numbero of tracks. As in FLEX sectors are numbered as 1,2,..Hi this is also the number of sectors per track
-            dc4.cpd = SIR[MAXCYL]+1; // highest track number . Of FLEX, first track is track zero
-            dc4.sectsize = 256; 
-            dc4.sector_base=1; // first sector in track is number ONE
-        } else {
-            sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: Unknown type disk \n");
-            dc4.spt = 18; 
-            dc4.sectsize = 128; 
-            dc4.cpd = disk_image_size / (dc4.spt * dc4.sectsize); 
-            dc4.sector_base=1; // first sector in track is number ONE
+        // determine disk image geometry
+        if (dc4.fmt==0) {
+            // autodetect format, based on image size or SIR record
+            if (disk_image_size==35*10*256) { // 89600 bytes -> FDOS image
+                dc4.fmt=1; //FDOS image
+            } else if (disk_image_size==35*18*128) { // 80640 bytes -> FLEX 1.0 image
+                dc4.fmt=2; //FLEX 1.0 image
+                // note: DOS68 format (fmt=5) cannot be difierentiated from FLEX 1.0
+                // the only difference is the number of first sector 
+            } else if ((SIR[0]==0) && (SIR[1]==0)) {
+                dc4.fmt=3; //FLEX 2.0 image
+            } else {
+                dc4.fmt=4; //Unknow OS image
+            }
+        }
+        if (dc4.fmt==1) { 
+           sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: FDOS Disk \n");
+           dc4.spt = 10; // 10 sectors
+           dc4.cpd = 35; // 35 tracks
+           dc4.sectsize = 256; 
+           dc4.sector_base=0; // first sector in track is number ZERO
+        } else if (dc4.fmt==2) {
+           sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: FLEX 1.0 Disk \n");
+           dc4.spt = 18; // 18 sectors
+           dc4.cpd = 35; // 35 tracks
+           dc4.sectsize = 128; 
+           dc4.sector_base=1; // first sector in track is number ONE
+        } else if (dc4.fmt==3) {
+           sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: FLEX 2.0 Disk \n");
+           // FLEX disc has SIR record. on disk image offset $200
+           dc4.spt = SIR[MAXSEC]; // Highest numbero of tracks. As in FLEX sectors are numbered as 1,2,..Hi this is also the number of sectors per track
+           dc4.cpd = SIR[MAXCYL]+1; // highest track number . Of FLEX, first track is track zero
+           dc4.sectsize = 256; 
+           dc4.sector_base=1; // first sector in track is number ONE
+        } else if (dc4.fmt==4) {
+           sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: Unknown type disk \n");
+           dc4.spt = 18; 
+           dc4.sectsize = 128; 
+           dc4.cpd = disk_image_size / (dc4.spt * dc4.sectsize); 
+           dc4.sector_base=1; // first sector in track is number ONE
+        } else if (dc4.fmt==5) {
+           sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: DOS-68 Disk \n");
+           dc4.spt = 18; // 18 sectors
+           dc4.cpd = 35; // 35 tracks
+           dc4.sectsize = 128; 
+           dc4.sector_base=0; // first sector in track is number ZERO
         }
         dc4.heds = 0;
         dc4.trksiz = dc4.spt * dc4.sectsize;
