@@ -1,7 +1,7 @@
 # SimH_cpanel
 
 
-**NEW!: IBM 360 Simulator**
+**NEW!: SWTPC 6800 Simulator**
 
 The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
@@ -35,6 +35,12 @@ i701, i650 and NORC work is based on my own SimH simulators
 </table>
 
 Currently supports visuals emulation for:
+
+* SWTPC 6800 (APR/2022)
+  * SWTPC MF68 Floppy Disk
+  * Percom LFD-400 Floppy 
+  * SWTPC GT-6144 Graphics Terminal + PPG-J Analog Joystick
+  * subLogic Graphics One Terminal
 
 * IBM 360/370 (MAR/2022)
   * IBM 2401, 2415 and 3420 Tapes
@@ -98,6 +104,76 @@ Hot keys are available when GUI window has the focus:
 
 Press power button to quit the simulator.
 (On i7000 control panels, only ^E, ^Y and ^T available)
+
+## SWTPC 6800
+
+Southwest Technical Products Corp 6800 computer, based on Motorola 6800 cpu. There is no control panel simulation. 
+Instead, SWTPC GT-6144 Graphics Terminal + PPG-J Analog Joystick is simulated: 64x96 B/W resolution on TV. 
+Also simulated is subLogic designed Graphics One Terminal: 200x200 B/W resolution, just enough to run basic
+version of Bruce Artwick 3D microcomputer graphics package
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_PaperTape.zip) to download 
+PaperTape based programs test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+Machine code programming
+
+* execute `run swtp6800 Assembler (1977).bat` batch file to demo TSC Assembler 
+* execute `run swtp6800 CoRes Assembler (1977).bat` batch file to demo SWTPC CoResident Assembler 
+* execute `run swtp6800 Debug Package (1978).bat` batch file to demo TSC Debug Package
+
+Basic programming
+
+* execute `run swtp6800 Assembler (1977).bat` batch file to demo TSC Assembler 
+
+* execute `run swtp6800 SWTPc 4K Basic 2.0 (1976).bat`, 
+or `run swtp6800 SWTPc 8K Basic 2.0 (1977).bat`,
+or `run swtp6800 SWTPc 8K Basic 2.2 (1978).bat`, 
+or `run swtp6800 SWTPc 8K Basic 2.3 (1978).bat` batch file to run TSC BASICs
+
+* execute `run swtp6800 TSC 4K MicroBasic 1.3 (1976).bat`, 
+or `execute `run swtp6800 TSC 4K MicroBasicPlus 2.1 (1977).bat`, 
+or `execute `run swtp6800 TSC 8K Basic (1980).bat` batch file to run SWTPC BASICs
+
+* execute `run swtp6800 MITS Altair 680 Basic 3.2 (1976).bat` batch file to Microsoft Basic 3.2 ported from Altair 6800
+
+Other 
+
+* execute `run swtp6800 Space Voyage game (1976).bat` batch file to run Space Voyage text game
+* execute `run run swtp6800 Editor (1977).bat` batch file to demo TSC Text Editor
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.zip) to download 
+Graphics programs test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run swtp6800 gt6144 st1 demo (1976 graphics).bat` batch file to show Star Trek USS Enterprise on simulated TV set
+* execute `run swtp6800 gt6144 Space RACE game.bat` batch file to play to Interactive Real Time Graphic game (gasp!)
+* execute `run swtp6800 subLogic 3D package basic (1977).bat` batch file to demo Bruce Artwick 3D microcomputer graphics package
+
+  !SWTPC 6800 Graphics](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.png)
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.zip) to download 
+Floppy Disk based Operating Systems test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run swtp6800 MiniDOS MPX (1977).bat` and `run swtp6800 MiniDOS MPX demo.bat` batch file to run 
+Percom MPX Operating System for LPD-400 floppy disk
+* execute `run swtp6800 FDOS (1977).bat` and `run swtp6800 FDOS demo.bat` batch file to run 
+SWTPC FDOS 1.0 Operating System for MF68 floppy disk
+* execute `run swtp6800 FLEX 1.0 (1978).bat` batch file to run 
+TSC FLEX 1.0 Operating System for MF68 floppy disk
+* execute `run swtp6800 CP68 (1978).bat` and `run swtp6800 CP68 build.bat` batch file to run 
+HEMENWAY CP/68 Operating System ported to MF68 floppy disk
+* execute `run swtp6800 FLEX 2.0 (1979).bat` and `run swtp6800 FLEX 2.0 demo.bat` batch file to run 
+TSC FLEX 2.0 Operating System for MF68 floppy disk
+* execute `run swtp6800 DOS68 5.1C (1980).bat` and `run swtp6800 DOS68 5.1C demo.bat` batch file to run 
+SSB (System Signals Broacasting) DOS 5.1C Operating System ported to MF68 floppy disk
+
+  ![SWTPC 6800 OS](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FloppyDisk.png)
+
 
 ## IBM 370
 
