@@ -155,7 +155,7 @@ Once uncompressed, you will find several ready to run .bat files:
 
   ![SWTPC 6800 Graphics](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.png)
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.zip) to download 
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FloppyDisk.zip) to download 
 Floppy Disk based Operating Systems test run.
 
 Once uncompressed, you will find several ready to run .bat files: 
