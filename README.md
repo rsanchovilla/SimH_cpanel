@@ -126,8 +126,6 @@ Machine code programming
 
 Basic programming
 
-* execute `run swtp6800 Assembler (1977).bat` batch file to demo TSC Assembler 
-
 * execute `run swtp6800 SWTPc 4K Basic 2.0 (1976).bat`, 
 or `run swtp6800 SWTPc 8K Basic 2.0 (1977).bat`,
 or `run swtp6800 SWTPc 8K Basic 2.2 (1978).bat`, 
@@ -160,17 +158,17 @@ Floppy Disk based Operating Systems test run.
 
 Once uncompressed, you will find several ready to run .bat files: 
 
-* execute `run swtp6800 MiniDOS MPX (1977).bat` and `run swtp6800 MiniDOS MPX demo.bat` batch file to run 
+* execute `run swtp6800 MiniDOS MPX (1977).bat` or `run swtp6800 MiniDOS MPX demo.bat` batch file to run 
 Percom MPX Operating System for LPD-400 floppy disk
-* execute `run swtp6800 FDOS (1977).bat` and `run swtp6800 FDOS demo.bat` batch file to run 
+* execute `run swtp6800 FDOS (1977).bat` or `run swtp6800 FDOS demo.bat` batch file to run 
 SWTPC FDOS 1.0 Operating System for MF68 floppy disk
 * execute `run swtp6800 FLEX 1.0 (1978).bat` batch file to run 
 TSC FLEX 1.0 Operating System for MF68 floppy disk
-* execute `run swtp6800 CP68 (1978).bat` and `run swtp6800 CP68 build.bat` batch file to run 
+* execute `run swtp6800 CP68 (1978).bat` or `run swtp6800 CP68 build.bat` batch file to run 
 HEMENWAY CP/68 Operating System ported to MF68 floppy disk
-* execute `run swtp6800 FLEX 2.0 (1979).bat` and `run swtp6800 FLEX 2.0 demo.bat` batch file to run 
+* execute `run swtp6800 FLEX 2.0 (1979).bat` or `run swtp6800 FLEX 2.0 demo.bat` batch file to run 
 TSC FLEX 2.0 Operating System for MF68 floppy disk
-* execute `run swtp6800 DOS68 5.1C (1980).bat` and `run swtp6800 DOS68 5.1C demo.bat` batch file to run 
+* execute `run swtp6800 DOS68 5.1C (1980).bat` or `run swtp6800 DOS68 5.1C demo.bat` batch file to run 
 SSB (System Signals Broacasting) DOS 5.1C Operating System ported to MF68 floppy disk
 
   ![SWTPC 6800 OS](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FloppyDisk.png)
