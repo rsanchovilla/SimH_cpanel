@@ -1,0 +1,2768 @@
+Macro Assembler 1.42 Beta [Bld 222]
+(i386-unknown-win32)
+(C) 1992,2022 Alfred Arnold
+Motorola MPC821 Additions (C) 2012 Marcin Cieslak
+68RS08-Generator (C) 2006 Andreas Bolsch
+Mitsubishi M16C-Generator also (C) 1999 RMS
+XILINX KCPSM(Picoblaze)-Generator (C) 2003 Andreas Wassatsch
+TMS320C2x-Generator (C) 1994/96 Thomas Sailer
+TMS320C5x-Generator (C) 1995/96 Thomas Sailer
+Panafacom MN1610/1613-Generator (C) 2019 Haruo Asano
+MIL-STD 1750 Generator also (C) 2019 Oliver Kellogg
+GI CP-1600-Generator (C) 2021 Haruo Asano
+
+
+Assembling ..\FlightSim_m6800.asm
+PASS 1
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 1 - 5/19/2022 9:55:4
+
+
+       1/       0 :                     ;*	NAM FLITM6800
+       2/       0 :                     
+       3/       0 :                     ;*THE FOLLOWING PROGRAM WAS WRITTEN BY WAYNE PARSONS IN
+       4/       0 :                     ;*CONJUNCTION WITH THE INDISTRIAL ENGENEERING DEPARTMENT
+       5/       0 :                     ;*AND DR. DAUER AS A PARTIAL REQUIREMENT FOR COMPLETITION
+       6/       0 :                     ;*OF A MS DEGREE AT THE UNIVERSITY OF CENTRAL FLORIDA IN THE
+       7/       0 :                     ;*FALL SEMESTER OF 1981.
+       8/       0 :                     ;*
+       9/       0 :                     ;* MODIFIED BY ROBERTO SANCHO JUN 2022 
+      10/       0 :                     ;* TO RUN ON SIMH SWTPC 6800 SIMULATOR
+      11/       0 :                     ;*
+      12/       0 :                     ;*   CHANGES: - REMOVE INTERFACE WITH EXTERNAL ATC-610J 
+      13/       0 :                     ;*              ANALOG FLIGH SIMULATOR
+      14/       0 :                     ;*            - ADD ROUTINES TO PERFORM FLIGH SIMULATION
+      15/       0 :                     ;*              USING SWTPC 6800 CPU
+      16/       0 :                     ;*            - USES MP-T TIMER SS50 BOARD TO PROVIDE
+      17/       0 :                     ;*              TIMING FOR SIMULATION. 
+      18/       0 :                     ;*            - USES PPG-J ANALOG TO SIMULATR PLANE CONTROL YOKE
+      19/       0 :                     ;*
+      20/       0 :                     ;*   THIS PROGRAM ONLY USES SW AND HW AVAILABLE IN 1979
+      21/       0 :                     ;*
+      22/       0 :                     ;**********************************************************
+      23/       0 :                     ;* 
+      24/       0 :                     ;* MEMORY MAP: 0000-004F SUBLOGIC 3DG68 DIRECT STORAGE
+      25/       0 :                     ;*             0050-     USED BY FLIGHTSIM M6800
+      26/       0 :                     ;*             0100-0112 SUBLOGIC 3DG68 3D TO 2D ROUTINE CONTROL ARRAY
+      27/       0 :                     ;*             0113-0FFF SUBLOGIC 3DG68 PACKAGE (ENTRY POINT 0900)
+      28/       0 :                     ;* 
+      29/       0 :                     ;*             1100-1296 SUBLOGIC SCENERY
+      30/       0 :                     ;*             1300-1362 PARTSON'S FIELD SCENERY
+      31/       0 :                     ;*             1800-18FF 2D OUTPUT BUFFER ARRAY
+      32/       0 :                     ;*
+      33/       0 :                     ;*             6000-     FLIGHT SIMULATOR M6800 PROGRAM
+      34/       0 :                     ;*
+      35/       0 :                     ;**********************************************************	
+      36/       0 :                     
+      37/       0 :                     			; PATCHES FOR 3DG68 
+      38/     DBE :                     	ORG $0DBE
+      39/     DBE : 7E 0D BE            	JMP SVTRIG	; PATCH 3DG68 TO SAVE COS&SIN CALCULATIONS FOR PV, BV, HV
+      40/     A8C :                     	ORG $0A8C
+      41/     A8C : 7E 0A 8C            	JMP SAFSWP1	; PATCH 3DG68 TO MAKE SWAP ROUTINE INTERRUPT SAFE
+      42/     AAE :                     	ORG $0AAE
+      43/     AAE : 7E 0A AE            	JMP SAFSWP2	
+      44/     AB1 :                     
+      45/    6000 :                     	ORG $6000
+      46/    6000 :                     	
+      47/    6000 : 8E 60 00            START	LDS #STACK	;SET NEW STACK ADDRESS
+      48/    6003 : 7E 60 03                    JMP MACRO	
+      49/    6006 :                     
+      50/    6006 :                     			; PATCHES FOR 3DG68 ROUTINES
+      51/    6006 :                     			
+      52/    6006 :                     			; PATCH 3DG68 TO SAVE COS&SIN CALCULATIONS FOR PV, BV, HV
+      53/    6006 :                     			; TO BE USED AGAIN ON PLANE MOTION CALCULATIONS			
+      54/    6006 : BD 60 06            SVTRIG	JSR  COS	; ADDR $20..$2B CONTAINS COS AND SIN VALUES 
+      55/    6009 : D7 2A               	STAB $2A
+      56/    600B : 97 2B               	STAA $2B
+      57/    600D : DE 20               	LDX $0020
+      58/    600F : FF 60 0F            	STX SINP	;SIN(PV)
+      59/    6012 : DE 22               	LDX $0022
+      60/    6014 : FF 60 14            	STX SINB	;SIN(BV)
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 2 - 5/19/2022 9:55:4
+
+
+      61/    6017 : DE 24               	LDX $0024
+      62/    6019 : FF 60 19            	STX SINH	;SIN(HV)
+      63/    601C : DE 26               	LDX $0026
+      64/    601E : FF 60 1E            	STX COSP	;COS(PV)
+      65/    6021 : DE 28               	LDX $0028
+      66/    6023 : FF 60 23            	STX COSB	;COS(BV)
+      67/    6026 : DE 2A               	LDX $002A
+      68/    6028 : FF 60 28            	STX COSH	;COS(HV)
+      69/    602B : 7E 0D C5            	JMP $0DC5
+      70/    602E :                     	
+      71/    602E :                     			; ROUTINE AT 0A8C..0AB0 USES M6800 16 BITS REGISTERS
+      72/    602E :                     			; IX AND SP TO SWAP A SERIES OF 16 BIT VALUES
+      73/    602E :                     			; THIS TRICK IS CLEVER AND NICE AND FASTER THAN ANY OTHER METHOD
+      74/    602E :                     			; SP IS SAVED AT ENTRY AND EXIT OF ROUTINES, SO WORKS OK
+      75/    602E :                     			; BUT IF AN INTERRUPR OCCURS WHILE IN MIDDLE OF ROUTINE, 
+      76/    602E :                     			; AS SP IS BEING FILLED WITH DATA, MEMORY AT ANY LOCATION CAN BE
+      77/    602E :                     			; OVERWRITTEN WITH IRQ STATUS SAVE. TO FIX THIS, IRQ IS DISABLED
+      78/    602E :                     			; ON ENTRY, ENABLED AGAIN ON EXIT
+      79/    602E :                     
+      80/    602E : 0F                  SAFSWP1	SEI		; DISABLE IRQ ON SWAP ROUTINE ENTRY
+      81/    602F : 9F 38               	STS  $38
+      82/    6031 : DE 2A               	LDX  $2A
+      83/    6033 : 7E 0A 90            	JMP  $0A90
+      84/    6036 : 9E 38               SAFSWP2	LDS  $38	; ENABLE IRQ ON SWAP ROUTINE EXIT
+      85/    6038 : 0E                  	CLI
+      86/    6039 : 39                  	RTS
+      87/    603A :                     
+      88/    603A :                     
+      89/    603A :                     ; 3DG68 MEMORY LOCATIONS
+      90/    603A :                     
+      91/    603A : =$100                XV	EQU $0100	;VIEWER POSITION WEST (0000-7FFF), EAST (FFFF-8000)
+      92/    603A : =$102                YV	EQU $0102	;VIEWER POSITION ALTITUDE
+      93/    603A : =$104                ZV	EQU $0104	;VIEWER POSITION SOUTH (0000-7FFF), NORTH (FFFF-8000)
+      94/    603A : =$106                PV 	EQU $0106	;VIEWER PITCH ANGLE
+      95/    603A : =$108                BV 	EQU $0108	;VIEWER BANK ANGLE
+      96/    603A : =$10A                HV 	EQU $010A	;VIEWER HEADING ANGLE
+      97/    603A : =$10E                SCRN	EQU $010E	;SCREEN WIDTH FOR OUTPUT
+      98/    603A : =$10F                IBP 	EQU $010F	;INPUT BUFFER POINTER
+      99/    603A : =$111                OBP 	EQU $0111	;OUTPUT BUFFER POINTER
+     100/    603A :                     
+     101/    603A : =$0                  MA	EQU $00		;FIRST ARG FOR MULTS FUNCTION
+     102/    603A : =$2                  MB	EQU $02		;SECOND ARG FOR MULTS FUNCTION
+     103/    603A :                     
+     104/    603A : =$21C                MULTS	EQU $021C	;(B,A)=(MA)*(MB)
+     105/    603A : =$900                CONV3D	EQU $0900	;CONVERSION OF 3D INPUT BUFFER TO 2D OUTPUT BUFFER
+     106/    603A : =$BA2                SIN	EQU $0BA2	;(B,A)=SIN(B). B=0..$FF FOR 0..259 DEG. 
+     107/    603A : =$BA4                COS	EQU $0BA4	;(B,A)=COS(B). (B,A)=SIGNED 16 BITS (-1 -> $FFFF, +1 -> $7FFF)
+     108/    603A :                     
+     109/    603A :                     ;* SWTBUG ROM LOCATIONS
+     110/    603A :                     
+     111/    603A : =$E0C8               OUT4HS	EQU $E0C8 	;OUTPUT 4 HEX CHAR + SPACE (WORD POINTED BY X-REG)
+     112/    603A : =$E0CA               OUT2HS	EQU $E0CA 	;OUTPUT 2 HEX CHAR + SPACE (BYTE POINTED BY X-REG)
+     113/    603A : =$E1AC               INEEE	EQU $E1AC	;SWTBUG INPUT CHAR
+     114/    603A : =$E1D1               OUTEEE	EQU $E1D1	;SWTBUG OUTPUT CHAR
+     115/    603A : =$E113               MON	EQU $E113	;SWTBUG RETURN TO MONITOR
+     116/    603A :                     
+     117/    603A :                     ;* FLIGHT SIM VARIABLES
+     118/    603A :                     
+     119/    603A :                     STACKSP RMB 200		;STACK SPACE
+     120/    6102 :                     STACK	RMB 1
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 3 - 5/19/2022 9:55:4
+
+
+     121/    6103 :                     
+     122/    6103 :                     TICK	RMB 2		;IRQ TICK COUNT. GET INCREMENTED BY IRQ EACH 10MSEC
+     123/    6105 :                     TICK0	RMB 2		;LAST TICK COUNT VALUE
+     124/    6107 :                     TICK1	RMB 2		;CURRENT TICK COUNT VALUE
+     125/    6109 :                     NFRAME	RMB 2		;NUMBER OF FRAME
+     126/    610B :                     ELAPSED	RMB 1		;NUMBER OF TICKS ELAPSED
+     127/    610C :                     
+     128/    610C :                     IDXREG	RMB 2		;INDEX ON OUTPUT 2D BUFFER
+     129/    610E :                     
+     130/    610E :                     JHSGN	RMB 2		;STORE JOY HORIZ POS -$20 .. $1F AS 16 BITS SIGNED
+     131/    6110 :                     JVSGN	RMB 2		;STORE JOY VERT POS -$30 .. $2F AS 16 BITS SIGNED
+     132/    6112 :                     JHPOS	RMB 1		;JOY HORIZONTAL POSITION 00..3F
+     133/    6113 :                     JVPOS	RMB 1		;JOY VERTICAL POSITION 00..5F
+     134/    6114 :                     ASAVE	RMB 1		;SAVE REGISTER
+     135/    6115 :                     BSAVE	RMB 1		;SAVE REGISTER
+     136/    6116 :                     ISAVE	RMB 2		;SAVE REGISTER
+     137/    6118 :                     
+     138/    6118 :                     COSP	RMB 2		;COS(PITCH VIEWER)
+     139/    611A :                     COSB	RMB 2		;COS(BANK VIEWER)
+     140/    611C :                     COSH	RMB 2		;COS(HEADING VIEWER)
+     141/    611E :                     SINP	RMB 2		;SIN(PITCH VIEWER)
+     142/    6120 :                     SINB	RMB 2		;SIN(BANK VIEWER)
+     143/    6122 :                     SINH	RMB 2		;SIN(HEADING VIEWER)
+     144/    6124 :                     
+     145/    6124 :                     SPEED   RMB 2		;PLANE SPEED
+     146/    6126 :                     PITCH	RMB 2 		;PLANE PITCH ANGLE (16 BITS). >0 LOOK DOWN
+     147/    6128 :                     BANK	RMB 2		;PLANE BANK ANGLE (16 BITS). >0 BANK TO LEFT
+     148/    612A :                     HEADING RMB 2		;PLANE HEADING ANGLE (16 BITS). =0 NORTH, >0 TO RIGHT
+     149/    612C :                     VEL	RMB 2		;TEMP VAR VEL = SPEED * TIME ELPASED
+     150/    612E :                     DZ	RMB 2		;Z AXIS INCREMENT
+     151/    6130 :                     DY	RMB 2		;Z AXIS INCREMENT
+     152/    6132 :                     DX	RMB 2		;Z AXIS INCREMENT
+     153/    6134 :                     
+     154/    6134 : BD 61 34            MACRO   JSR CLRMEM	;CLEAR MEMORY LOCATIONS
+     155/    6137 : BD 61 37            	JSR PIAINT	;INITIALIZE PIA AND CLEAR SCREEN
+     156/    613A : BD 61 3A            	JSR PROMPT	;PRINT USER PROMPT MESSAGES
+     157/    613D : BD 61 3D            	JSR INITLOD	;LOAD INITIAL AIRCRAFT POSITIONAL PARAMETERS
+     158/    6140 : 20 FE               	BRA TIMONE	;GO TRANSFORM INITIAL VIEW 1ST TIME THRU
+     159/    6142 : BD 61 42            GOAGN	JSR UPDATE	;GET UPDATED AIRCRAFT POSITION
+     160/    6145 : BD 61 45            TIMONE	JSR GO3D2D	;GO TRANSFORM 3D TO 2D COORDINATES 
+     161/    6148 : BD 61 48            	JSR CLSCRN	;CLEAR SCREEN FOR NEW DRAW
+     162/    614B : BD 61 4B            	JSR DBDRAW	;DRAW TRANSFORMED DATA BASE
+     163/    614E : BD 61 4E            	JSR UPDTPOS	;UPDATE AIRCRAFT POSITION
+     164/    6151 : BD 61 51            	JSR GETJOY	;GET ANALOG PPG-J JOY POSITION
+     165/    6154 : BD 61 54            	JSR CHKLAND	;CHECK IF LANDED OR CRASHED
+     166/    6157 :                     	; JSR PRTVIEW	;PRINT ON TERMINAL AIRCRAFT STATE (FOR DEBUG) 
+     167/    6157 :                     	
+     168/    6157 :                     
+     169/    6157 : 7E 61 42                    jmp goagn
+     170/    615A :                     	
+     171/    615A :                     	
+     172/    615A : 7E E1 13            	JMP  MON	;SWTBUG RETURN TO MONITOR
+     173/    615D :                     	
+     174/    615D : 20 E3               	BRA GOAGN
+     175/    615F :                     
+     176/    615F :                     ;* UPDATE PLANE STATE
+     177/    615F : 01                  UPDATE	NOP		
+     178/    6160 :                     	;CALC ELAPSED = NUMBER OF TICKS ELAPSED FROM LAST UPDATE 
+     179/    6160 : FE 61 03            TCK0	LDX TICK	;GET TICK COUNT
+     180/    6163 : BC 61 05            	CPX TICK0	
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 4 - 5/19/2022 9:55:4
+
+
+     181/    6166 : FF 61 07            	STX TICK1	;STORE CURRENT TICK COUNT
+     182/    6169 : B6 61 08            	LDAA TICK1+1
+     183/    616C : F6 61 07            	LDAB TICK1
+     184/    616F : B0 61 06            	SUBA TICK0+1
+     185/    6172 : F2 61 05            	SBCB TICK0
+     186/    6175 : C1 00               	CMPB #0
+     187/    6177 : 27 FE               	BEQ TCK1
+     188/    6179 : 86 FF               	LDA #255	;MAX ELAPSED TIME IS 255
+     189/    617B : 81 05               TCK1	CMPA #5		;AT LEAST THIS NUMBER OF TICKS SHOULD BE ELAPSED
+     190/    617D : 25 E1               	BCS TCK0	;BR IF A-REG < 5
+     191/    617F : 81 64               	CMPA #100	
+     192/    6181 : 25 FE               	BCS TCK2	;BR IF A-REG < 100
+     193/    6183 : 86 64               	LDAA #100
+     194/    6185 : B7 61 0B            TCK2	STAA ELAPSED	;NUMBER OF TICKS ELAPSED FROM LAST UPDATE 
+     195/    6188 : FE 61 07            	LDX TICK1	;.*echo elapsed:a
+     196/    618B : FF 61 05            	STX TICK0	
+     197/    618E : FE 61 09            	LDX NFRAME	;INCR NUMBER 
+     198/    6191 : 08                  	INX 		
+     199/    6192 : FF 61 09            	STX NFRAME	;.*echo nframe:x
+     200/    6195 :                     	;SET PLANE PITCH, BANK AND TURN RATE BASED ON JOYSTICK POSITION 			
+     201/    6195 :                     	;* UPDATE PLANE BANK BASED ON JOY HORIZ POS 
+     202/    6195 : C6 00               	LDAB #0		
+     203/    6197 : 86 20               	LDAA #32	
+     204/    6199 : B0 61 12            	SUBA JHPOS	;GET JOY HORIZ POS LEFT=0, RIGHT=63
+     205/    619C : B7 61 0F            	STAA JHSGN+1	;STORE SIGNED JOY HORIZ POS (LOW PART)
+     206/    619F : 24 FE                       BCC JH1
+     207/    61A1 : C6 FF                       LDAB #$FF
+     208/    61A3 : F7 61 0E            JH1     STAB JHSGN	;STORE SIGNED JOY HORIZ POS (HI PART)
+     209/    61A6 : 48                  	ASLA
+     210/    61A7 : 59                  	ROLB		;JOY H = JOY H * 32
+     211/    61A8 : 48                  	ASLA
+     212/    61A9 : 59                  	ROLB
+     213/    61AA : 48                  	ASLA
+     214/    61AB : 59                  	ROLB
+     215/    61AC : 48                  	ASLA
+     216/    61AD : 59                  	ROLB
+     217/    61AE : 48                  	ASLA
+     218/    61AF : 59                  	ROLB
+     219/    61B0 : BB 61 29                    ADDA BANK+1	;BANK = BANK + (JOY H - 32)
+     220/    61B3 : B7 61 29                    STAA BANK+1
+     221/    61B6 : F9 61 28                    ADCB BANK
+     222/    61B9 : F7 61 28                    STAB BANK
+     223/    61BC :                             ;* LIMIT BANK TO +/- 60GR (2A HEX)
+     224/    61BC : C1 2A                       CMPB #$2A
+     225/    61BE : 2D FE                       BLT JH2
+     226/    61C0 : CE 2A 00                    LDX #$2A00
+     227/    61C3 : FF 61 28                    STX BANK
+     228/    61C6 : 20 FE                       BRA JH3
+     229/    61C8 : C1 D6               JH2	CMPB #$D6	;D6 = -2A   
+     230/    61CA : 2A FE               	BPL JH3     
+     231/    61CC : CE D6 00                    LDX #$D600
+     232/    61CF : FF 61 28                    STX BANK
+     233/    61D2 : F6 61 28            JH3	LDAB BANK        
+     234/    61D5 : F7 01 09                    STAB BV+1	;SET VIEWER BANK ANGLE
+     235/    61D8 :                             ;* UPDATE PLANE PITCH BASED ON JOY VERT POS 
+     236/    61D8 : C6 00               	LDAB #0
+     237/    61DA : 86 30               	LDAA #48
+     238/    61DC : B0 61 13            	SUBA JVPOS	;GET JOY VERT POS UP=0, DOWN=95
+     239/    61DF : B7 61 11            	STAA JVSGN+1	;STORE SIGNED JOY VERT POS (LOW PART)
+     240/    61E2 : 24 FE                       BCC JV1
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 5 - 5/19/2022 9:55:4
+
+
+     241/    61E4 : C6 FF                       LDAB #$FF
+     242/    61E6 : F7 61 10            JV1     STAB JVSGN	;STORE SIGNED JOY VERT POS (HI PART)
+     243/    61E9 : 48                  	ASLA
+     244/    61EA : 59                  	ROLB		;JOY V = JOY V * 32
+     245/    61EB : 48                  	ASLA
+     246/    61EC : 59                  	ROLB
+     247/    61ED : 48                  	ASLA
+     248/    61EE : 59                  	ROLB
+     249/    61EF : 48                  	ASLA
+     250/    61F0 : 59                  	ROLB
+     251/    61F1 : 48                  	ASLA
+     252/    61F2 : 59                  	ROLB
+     253/    61F3 : BB 61 27            	ADDA PITCH+1	;BANK = BANK + (JOY V - 48)
+     254/    61F6 : B7 61 27                    STAA PITCH+1
+     255/    61F9 : F9 61 26                    ADCB PITCH
+     256/    61FC : F7 61 26                    STAB PITCH        
+     257/    61FF :                             ;* LIMIT PITCH FROM -45GR (NOSE UP $E0 HEX) TO +80GR ($38 HEX)
+     258/    61FF : C1 38                       CMPB #$38
+     259/    6201 : 2D FE                       BLT JV2
+     260/    6203 : CE 38 00                    LDX #$3800
+     261/    6206 : FF 61 26                    STX PITCH
+     262/    6209 : 20 FE                       BRA JV3
+     263/    620B : C1 E0               JV2	CMPB #$E0	;E6 = -20   
+     264/    620D : 2A FE               	BPL JV3     
+     265/    620F : CE E0 00                    LDX #$E000
+     266/    6212 : FF 61 26                    STX PITCH
+     267/    6215 : F6 61 26            JV3	LDAB PITCH        
+     268/    6218 : F7 01 07                    STAB PV+1	;SET VIEWER PITCH ANGLE        
+     269/    621B :                             ;* CALC TURN RATE BASED ON BANK
+     270/    621B : B6 61 29                    LDAA BANK+1
+     271/    621E : 97 01                       STAA MA+1
+     272/    6220 : C6 00                       LDAB #0
+     273/    6222 : B6 61 28                    LDAA BANK
+     274/    6225 : 2A FE                       BPL JT1
+     275/    6227 : 5A                          DECB
+     276/    6228 : 78 00 01            JT1	ASL MA+1
+     277/    622B : 49                  	ROLA
+     278/    622C : 59                  	ROLB
+     279/    622D : 78 00 01            	ASL MA+1
+     280/    6230 : 49                  	ROLA
+     281/    6231 : 59                  	ROLB
+     282/    6232 : 78 00 01            	ASL MA+1
+     283/    6235 : 49                  	ROLA
+     284/    6236 : 59                  	ROLB
+     285/    6237 : D7 00                       STAB MA        
+     286/    6239 : 97 01                       STAA MA+1
+     287/    623B : B6 61 2B                    LDAA HEADING+1
+     288/    623E : F6 61 2A                    LDAB HEADING
+     289/    6241 : 90 01                       SUBA MA+1
+     290/    6243 : D2 00                       SBCB MA
+     291/    6245 : B7 61 2B                    STAA HEADING+1	;HEADING = HEADING - BANK*8
+     292/    6248 : F7 61 2A                    STAB HEADING
+     293/    624B : F7 01 0B                    STAB HV+1	;SET VIEWER HEADING ANGLE
+     294/    624E : 39                  	RTS		
+     295/    624F :                     ;* UPDATE PLANE COORDINATES X,Y,Z
+     296/    624F : 01                  UPDTPOS	NOP             
+     297/    6250 :                     	;* CALCULATE VEL = PLANE SPEED * ELAPSED TIME
+     298/    6250 : F6 61 0B            	LDAB ELAPSED  
+     299/    6253 : 86 00               	LDAA #0
+     300/    6255 : D7 00               	STAB MA         
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 6 - 5/19/2022 9:55:4
+
+
+     301/    6257 : 97 01               	STAA MA+1	
+     302/    6259 : FE 61 24            	LDX SPEED
+     303/    625C : DF 02               	STX MB		;.*echo speed:x
+     304/    625E : BD 02 1C            	JSR MULTS
+     305/    6261 : F7 61 2C            	STAB VEL 
+     306/    6264 : B7 61 2D            	STAA VEL+1	
+     307/    6267 :                     	;* DZ = VEL * COS(PITCH) * COS(HEADING)
+     308/    6267 : FE 61 18            	LDX COSP
+     309/    626A : DF 00               	STX MA		;.*echo cosp:x	
+     310/    626C : FE 61 1C            	LDX COSH
+     311/    626F : DF 02               	STX MB		;.*echo cosh:x		
+     312/    6271 : BD 02 1C            	JSR MULTS
+     313/    6274 : D7 00               	STAB MA
+     314/    6276 : 97 01               	STAA MA+1	
+     315/    6278 : FE 61 2C            	LDX VEL
+     316/    627B : DF 02               	STX MB		;.*echo vel:x
+     317/    627D : BD 02 1C            	JSR MULTS
+     318/    6280 : F7 61 2E            	STAB DZ
+     319/    6283 : B7 61 2F            	STAA DZ+1
+     320/    6286 : B6 01 05            	LDAA ZV+1	;* UPDATE ZV VIEWER POSITION OF PLANE
+     321/    6289 : F6 01 04            	LDAB ZV
+     322/    628C : B0 61 2F            	SUBA DZ+1
+     323/    628F : F2 61 2E            	SBCB DZ
+     324/    6292 : B7 01 05            	STAA ZV+1
+     325/    6295 : F7 01 04            	STAB ZV
+     326/    6298 :                     	;* DX = VEL * COS(PITCH) * SIN(HEADING)
+     327/    6298 : FE 61 18            	LDX COSP
+     328/    629B : DF 00               	STX MA		;.*echo cosp:x			
+     329/    629D : FE 61 22            	LDX SINH
+     330/    62A0 : DF 02               	STX MB		;.*echo sinh:x	
+     331/    62A2 : BD 02 1C            	JSR MULTS
+     332/    62A5 : D7 00               	STAB MA
+     333/    62A7 : 97 01               	STAA MA+1
+     334/    62A9 : FE 61 2C            	LDX VEL
+     335/    62AC : DF 02               	STX MB		;.*echo vel:x
+     336/    62AE : BD 02 1C            	JSR MULTS
+     337/    62B1 : F7 61 32            	STAB DX
+     338/    62B4 : B7 61 33            	STAA DX+1
+     339/    62B7 : B6 01 01            	LDAA XV+1	;* UPDATE XV VIEWER POSITION OF PLANE
+     340/    62BA : F6 01 00            	LDAB XV
+     341/    62BD : B0 61 33            	SUBA DX+1
+     342/    62C0 : F2 61 32            	SBCB DX
+     343/    62C3 : B7 01 01            	STAA XV+1
+     344/    62C6 : F7 01 00            	STAB XV
+     345/    62C9 :                     	;* DY = VEL * SIN(PITCH) 
+     346/    62C9 : FE 61 1E            	LDX SINP
+     347/    62CC : DF 00               	STX MA		
+     348/    62CE : FE 61 2C            	LDX VEL
+     349/    62D1 : DF 02               	STX MB
+     350/    62D3 : BD 02 1C            	JSR MULTS
+     351/    62D6 : F7 61 30            	STAB DY
+     352/    62D9 : B7 61 31            	STAA DY+1
+     353/    62DC : B6 01 03            	LDAA YV+1	;* UPDATE YV VIEWER POSITION OF PLANE
+     354/    62DF : F6 01 02            	LDAB YV		
+     355/    62E2 : BB 61 31            	ADDA DY+1
+     356/    62E5 : F9 61 30            	ADCB DY
+     357/    62E8 : B7 01 03            	STAA YV+1
+     358/    62EB : F7 01 02            	STAB YV
+     359/    62EE : 39                  	RTS 		
+     360/    62EF :                     
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 7 - 5/19/2022 9:55:4
+
+
+     361/    62EF :                     ;* CHECK IF LANDED OR CRASHED
+     362/    62EF : B6 01 02            CHKLAND	LDAA YV
+     363/    62F2 : 2A FE               	BPL ALT0	;BR IF ALTITUDE IS ZERO
+     364/    62F4 : 39                  	RTS		;RETURN BECAUSE PLANE IS FLYING
+     365/    62F5 : B6 01 09            ALT0	LDAA BV+1	;CHECK IF PLANE BANK IF +/- 18GR
+     366/    62F8 : 81 18                       CMPA #$18
+     367/    62FA : 2D FE                       BLT ALT1
+     368/    62FC : 7E 62 FC            	JMP CRASH       ;CRASH: BANK TOO HIGH 
+     369/    62FF : 81 E8               ALT1	CMPA #$E8
+     370/    6301 : 2A FE               	BPL ALT2
+     371/    6303 : 7E 63 03            	JMP CRASH       ;CRASH: BANK TOO HIGH
+     372/    6306 : B6 01 07            ALT2	LDAA PV+1	;CHECK IF PLANE PITCH IF -18GR (NOSE UP) TO +18GR (NOSE DOWN)
+     373/    6309 : 81 18                       CMPA #$18
+     374/    630B : 2D FE                       BLT ALT3
+     375/    630D : 7E 63 0D            	JMP CRASH       ;CRASH: NOSE TOO LOW, NOSE HIT THE GROUND
+     376/    6310 : 81 E8               ALT3	CMPA #$E8
+     377/    6312 : 2A FE               	BPL ALT4
+     378/    6314 : 7E 63 14            	JMP CRASH       ;CRASH: NOSE TOO HIGH, TAIL HIT THE GROUND
+     379/    6317 : 7E 63 17            ALT4	JMP LANDED
+     380/    631A :                     
+     381/    631A :                     ;* END OF FLIGHT MESSAGES 
+     382/    631A : CE 63 1A            LANDED	LDX #MLANDED
+     383/    631D : 20 FE               	BRA MEOF
+     384/    631F : CE 63 1F            CRASH	LDX #MCRASH
+     385/    6322 : BD 63 22            MEOF	JSR DSPCHR	
+     386/    6325 : CE 63 25               	LDX #MNEWFL
+     387/    6328 : BD 63 28            	JSR DSPCHR
+     388/    632B : BD 63 2B                    JSR INCHR
+     389/    632E : 81 31               	CMPA #'1'
+     390/    6330 : 26 FE               	BNE ENDFLI
+     391/    6332 : CE 63 32            	LDX #MCRLF	;REMOVE WELCOME MESSAGE
+     392/    6335 : FF 63 36            	STX PROMPT+1
+     393/    6338 : 7E 61 34            	JMP MACRO
+     394/    633B : 7E E1 13            ENDFLI	JMP MON	
+     395/    633E :                     
+     396/    633E : 0D 0A 0D 0A         MCRASH	FCB 13,10,13,10
+     397/    6342 : 43 52 41 53 48 21   	FCC 'CRASH!'
+     398/    6348 : 0D 0A 04            	FCB 13,10,4
+     399/    634B :                     
+     400/    634B : 0D 0A 0D 0A         MLANDED	FCB 13,10,13,10
+     401/    634F : 4C 41 4E 44 45 44   	FCC 'LANDED!'
+             6355 : 21                
+     402/    6356 : 0D 0A 04            	FCB 13,10,4
+     403/    6359 :                     
+     404/    6359 : 0D 0A 0D 0A         MNEWFL	FCB 13,10,13,10
+     405/    635D : 50 52 45 53 53 20   	FCC 'PRESS 1 TO FLIGTH AGAIN, ANY OTHER KEY TO QUIT ?'
+             6363 : 31 20 54 4F 20 46 
+             6369 : 4C 49 47 54 48 20 
+             636F : 41 47 41 49 4E 2C 
+             6375 : 20 41 4E 59 20 4F 
+             637B : 54 48 45 52 20 4B 
+             6381 : 45 59 20 54 4F 20 
+             6387 : 51 55 49 54 20 3F 
+     406/    638D : 04                  	FCB 4
+     407/    638E :                     	
+     408/    638E :                     ;*PRINT ON TERMINAL VIEWER X,Y,Z 3D POS AND P,B,H ANGLES (0..255)
+     409/    638E : CE 01 00            PRTVIEW	LDX #XV
+     410/    6391 : 86 58               	LDAA #'X'
+     411/    6393 : BD 63 93            	JSR PRT4H
+     412/    6396 : 86 59               	LDAA #'Y'
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 8 - 5/19/2022 9:55:4
+
+
+     413/    6398 : BD 63 98            	JSR PRT4H
+     414/    639B : 86 5A               	LDAA #'Z'
+     415/    639D : BD 63 9D            	JSR PRT4H
+     416/    63A0 : 86 50               	LDAA #'P'
+     417/    63A2 : BD 63 A2            	JSR PRT2H
+     418/    63A5 : 86 42               	LDAA #'B'
+     419/    63A7 : BD 63 A7            	JSR PRT2H
+     420/    63AA : 86 48               	LDAA #'H'
+     421/    63AC : BD 63 AC            	JSR PRT2H
+     422/    63AF : 86 4A               	LDAA #'J'
+     423/    63B1 : CE 61 12            	LDX #JHPOS
+     424/    63B4 : BD 63 B4            	JSR PRT4H
+     425/    63B7 : 86 0D               PRTCRLF	LDA #13
+     426/    63B9 : BD E1 D1            	JSR OUTEEE
+     427/    63BC : 86 0A               	LDA #10
+     428/    63BE : 7E E1 D1            	JMP OUTEEE
+     429/    63C1 : BD E1 D1            PRT4H	JSR OUTEEE
+     430/    63C4 : 86 20               	LDA #32
+     431/    63C6 : BD E1 D1            	JSR OUTEEE
+     432/    63C9 : BD E0 C8            	JSR OUT4HS
+     433/    63CC : 86 20               	LDA #32
+     434/    63CE : 7E E1 D1            	JMP OUTEEE
+     435/    63D1 : BD E1 D1            PRT2H	JSR OUTEEE
+     436/    63D4 : 86 20               	LDA #32
+     437/    63D6 : BD E1 D1            	JSR OUTEEE
+     438/    63D9 : 08                  	INX
+     439/    63DA : BD E0 CA            	JSR OUT2HS
+     440/    63DD : 86 20               	LDA #32
+     441/    63DF : 7E E1 D1            	JMP OUTEEE
+     442/    63E2 :                     
+     443/    63E2 :                     ;*SUBROUTINE "CLRMEM" CLEAR MEMORY STORAGE LOCATIONS
+     444/    63E2 : 5F                  CLRMEM	CLRB
+     445/    63E3 : C6 00               	LDAB #$00	;TOTAL NUMBER OF LOCATIONS TO CLEAR (00=CLEAR FROM 00 TO FF)
+     446/    63E5 : CE 18 00            	LDX #$1800	;CLEAR OUTPUT BUFFER (AT 1800)
+     447/    63E8 : 8D FE               	BSR CLEAR2
+     448/    63EA : 39                  	RTS
+     449/    63EB : 4F                  CLEAR2	CLRA
+     450/    63EC : A7 00               CLRMOR	STAA $00,X
+     451/    63EE : 08                  	INX
+     452/    63EF : 5A                  	DECB
+     453/    63F0 : 26 FA               	BNE CLRMOR
+     454/    63F2 : 39                  	RTS
+     455/    63F3 : 86 01               PIAINT	LDAA #1		;GRAPHICS DISPLAY OPTION = PIA INITIALIZATION
+     456/    63F5 : BD 63 F5            	JSR SCREEN
+     457/    63F8 : 86 03               CLSCRN	LDAA #3
+     458/    63FA : BD 63 FA            	JSR SCREEN
+     459/    63FD : 39                  	RTS
+     460/    63FE : 86 06               GETJOY	LDAA #6		;GET ANALOG PPG-J JOY POSITION
+     461/    6400 : 7E 64 00            	JMP SCREEN	
+     462/    6403 :                     
+     463/    6403 :                     ;*SUBROUTINE "PROMPT" WILL LOAD THE INDEX REGISTER WITH THE		
+     464/    6403 :                     ;*ADDRESS OF THE NEXT USER PROMPT TO BE DISPLAYED AND THEN 
+     465/    6403 :                     ;*WILL PRINT THE MESSAGE ON THE USER'S TERMINAL. IT WILL
+     466/    6403 :                     ;*THEN WAIT UNTIL THE USER HAS READ AND UNDERSTOOD THE
+     467/    6403 :                     ;*PROMPT BEFORE PRINTING THE NEXT MESSAGE.
+     468/    6403 : CE 64 03            PROMPT	LDX #WELCOM
+     469/    6406 : BD 64 06            	JSR DSPCHR
+     470/    6409 : CE 64 09            	LDX #MSGA
+     471/    640C : BD 64 0C            	JSR DSPCHR
+     472/    640F : BD 64 0F            	JSR INCHR
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 9 - 5/19/2022 9:55:4
+
+
+     473/    6412 : CE 13 00            	LDX #$1300	;RESPONSE TO MSGB PROMPT = 1 (PARSONS AIRFIELD)
+     474/    6415 : 81 31               	CMPA #$31
+     475/    6417 : 27 FE               	BEQ LOADIR
+     476/    6419 : CE 11 00            	LDX #$1100	;RESPONSE TO MSGB PROMPT = 2 (SUBLOGIC AIRFIELD)
+     477/    641C : FF 01 0F            LOADIR	STX IBP
+     478/    641F : CE 64 1F            	LDX #MCRLF
+     479/    6422 : A6 00               DSPCHR	LDAA $0,X	;PRINT A STRING POINTED BY X-REG, TERMINATED BY $04 CHAR
+     480/    6424 : 81 04               	CMPA #04	
+     481/    6426 : 26 FE               	BNE PRTCHR
+     482/    6428 : 39                  	RTS
+     483/    6429 : BD E1 D1            PRTCHR	JSR OUTEEE	;PUT CHARACTER OUT TO TERMINAL
+     484/    642C : 08                  	INX
+     485/    642D : 20 F3               	BRA DSPCHR	
+     486/    642F :                     	
+     487/    642F : 4F                  INCHR	CLRA		;PREPARE ACCM FOR RESPONSE
+     488/    6430 : 7E E1 AC            	JMP INEEE	;ANY RESPONSE ?
+     489/    6433 :                     	
+     490/    6433 :                     ;*SUBROUTINE "INITLOD" LOADS THE SIX POSITIONAL PARAMETERS
+     491/    6433 :                     ;*OF THE SIMULATOR'S INITIAL POSITION WHICH WAS PREVIOUSLY
+     492/    6433 :                     ;*PROMPTED TO THE USER.
+     493/    6433 : CE D5 00            INITLOD	LDX #$D500	;-11,190 FEET FROM DISPLAY ORIGIN
+     494/    6436 : FF 01 00            	STX XV		;POS = WEST (0000-7FFF) NEG = EAST (FFFF-8000)
+     495/    6439 : CE FC 18            	LDX #$FC18	;ALT = 1000 FT => 3D VALUE FOR VIEWRT
+     496/    643C : FF 01 02            	STX YV		;      SO REQUIRE NEGATIVE 3D VALUE (FFFF-8000)
+     497/    643F : CE F0 00            	LDX #$F000	;-4096 FEET FROM DISPLAY ORIGIN
+     498/    6442 : FF 01 04            	STX ZV		;POS=SOUTH (0000-7FFF) NEG=NORTH (FFFF-8000)
+     499/    6445 : CE 00 00            	LDX #$0000	;PITCH = BANK = HEADING = 0.0 DEGREES
+     500/    6448 : FF 01 06            	STX PV
+     501/    644B : FF 01 08            	STX BV
+     502/    644E : FF 01 0A            	STX HV
+     503/    6451 : CE 18 00            	LDX #$1800	;OUTPUT 2D BUFFER
+     504/    6454 : FF 01 11            	STX OBP
+     505/    6457 : 86 40               	LDAA #$40
+     506/    6459 : B7 01 0E            	STAA SCRN	;SCREEN WIDTH=64 PIXELS X 64 PIXELS
+     507/    645C : CE 00 00            	LDX #0
+     508/    645F : FF 61 26            	STX PITCH	;PLANE PITCH ANGLE (16 BITS). >0 LOOK DOWN
+     509/    6462 : FF 61 28            	STX BANK	;PLANE BANK ANGLE (16 BITS). >0 BANK TO LEFT
+     510/    6465 : FF 61 2A            	STX HEADING 	;PLANE HEADING ANGLE (16 BITS). =0 NORTH, >0 TO RIGHT	
+     511/    6468 : FF 61 1E            	STX SINP	;SIN(PITCH VIEWER)
+     512/    646B : FF 61 20            	STX SINB	;SIN(BANK VIEWER)
+     513/    646E : FF 61 22            	STX SINH	;SIN(HEADING VIEWER)
+     514/    6471 : CE 7F FF            	LDX #$7FFF	
+     515/    6474 : FF 61 18            	STX COSP	;COS(PITCH VIEWER)
+     516/    6477 : FF 61 1A            	STX COSB	;COS(BANK VIEWER)
+     517/    647A : FF 61 1C            	STX COSH	;COS(HEADING VIEWER)
+     518/    647D : CE 00 FA            	LDX #250
+     519/    6480 : FF 61 24            	STX SPEED	;PLANE SPEED 
+     520/    6483 : CE 64 83            	LDX #TMRIRQ	;LOAD TIMER IRQ SERVICING ROUTINE ADDRESS
+     521/    6486 : FF A0 00            	STX $A000	;STORE IT ON IRQ VECTOR
+     522/    6489 : CE 00 00            	LDX #0
+     523/    648C : FF 61 03            	STX TICK	;INIT TICK COUNT
+     524/    648F : FF 61 05            	STX TICK0
+     525/    6492 : FF 61 09            	STX NFRAME	;INIT FRAME NUMBER	
+     526/    6495 : CE 80 10            	LDX #$8010	;INIT MP-T TIMER 
+     527/    6498 : 86 FF                	LDAA #$FF	;TO GENERATE AN IRQ EACH 10 MSEC 
+     528/    649A : A7 02                	STAA 2,X
+     529/    649C : 86 3D                	LDAA #$3D
+     530/    649E : A7 03                	STAA 3,X
+     531/    64A0 : 86 80                	LDAA #$80
+     532/    64A2 : A7 02                	STAA 2,X
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 10 - 5/19/2022 9:55:4
+
+
+     533/    64A4 : 86 04               	LDAA #$04	;04=10 MILLISEC INTERVAL
+     534/    64A6 : A7 02                	STAA 2,X
+     535/    64A8 : 01                   	NOP
+     536/    64A9 : 0E                   	CLI		;ENABLE INTERRUPTS
+     537/    64AA : 39                  	RTS
+     538/    64AB :                     ;* TIMER IRQ ROUTINE TO INCREMENT TICK EACH 10 MSEC
+     539/    64AB :                     ;* USED TO PROVIDE REAL TIME CALCULATIONS ON PLANE MOTION SIMULATION
+     540/    64AB :                     ;* TICK SHOULD BE READ WITH LDX (NOT LDAA/B) TO PREVENT BEING
+     541/    64AB :                     ;* UPDATED IN MIDDLE OF READ.
+     542/    64AB :                     ;* TICK VAR WILL WRAP AFTER 65536*10 MSEC = 655,36 SEC = 10.9 MINUTES
+     543/    64AB : CE 80 10            TMRIRQ	LDX #$8010	;CLEAR IRQ REQUEST FROM MP-T TIMER CARD
+     544/    64AE : A6 02                	LDAA 2,X
+     545/    64B0 : FE 61 03             	LDX TICK	;INCREMENT TICK COUNT
+     546/    64B3 : 08                   	INX
+     547/    64B4 : FF 61 03             	STX TICK
+     548/    64B7 : 3B                   	RTI
+     549/    64B8 :                     
+     550/    64B8 :                     ;*SUBROUTINE "GO3D2D" CALLS THE PROGRAM WRITTEN BY SUBLOGIC'S
+     551/    64B8 :                     ;*BRUCE ARTWICK WHICH WILL PERFORM THE NECESSARYMATHEMATICAL
+     552/    64B8 :                     ;*ALGORITHMS TO SUCCESSFULLY TRANSFORM THE DATA BASE GIVE
+     553/    64B8 :                     ;*THE POSITIONAL PARAMETERS STORED IN XV,YU,ZV,PV,BV AND HV,
+     554/    64B8 :                     ;*UPON COMPLETITION THE OUTPUT ARRAY IS STORES IN MEMORY IN
+     555/    64B8 :                     ;*THE OUTPUT BUFFER.
+     556/    64B8 : BD 09 00            GO3D2D	JSR CONV3D	
+     557/    64BB : 39                  	RTS		
+     558/    64BC :                     ;*SUBROUTINE "DBDRAW" WILL LOAD THE NEXT (X1,Y1) AND (X2,Y2)
+     559/    64BC :                     ;*FROM THE OUTPUT BUFFER IF THE CONTROL BYTE IS HEX 55,
+     560/    64BC :                     ;*OTHERWISE IT WILL RETURN TO THE MACRO
+     561/    64BC : FE 01 11            DBDRAW	LDX OBP		
+     562/    64BF : A6 00               FEED	LDAA 0,X	
+     563/    64C1 : 81 55               	CMPA #$55
+     564/    64C3 : 27 FE               	BEQ NXTLIN
+     565/    64C5 : 39                  	RTS		
+     566/    64C6 : 08                  NXTLIN	INX
+     567/    64C7 : A6 00               	LDAA 0,X
+     568/    64C9 : B7 64 C9            	STAA X1		;.*echo x1:a
+     569/    64CC : 08                  	INX	
+     570/    64CD : A6 00               	LDAA 0,X
+     571/    64CF : B7 64 CF            	STAA Y1		;.*echo y1:a
+     572/    64D2 : 08                  	INX	
+     573/    64D3 : A6 00               	LDAA 0,X
+     574/    64D5 : B7 64 D5            	STAA X2		;.*echo x2:a
+     575/    64D8 : 08                  	INX	
+     576/    64D9 : A6 00               	LDAA 0,X
+     577/    64DB : B7 64 DB            	STAA Y2		;.*echo y2:a
+     578/    64DE : 08                  	INX	
+     579/    64DF : FF 61 0C            	STX IDXREG
+     580/    64E2 : 86 05               	LDAA #5		;GRAPHIC'S DISPLAY OPTION = DRAW (SHOW2)
+     581/    64E4 : BD 64 E4            	JSR SCREEN	;.*echo drawline
+     582/    64E7 : FE 61 0C            	LDX IDXREG
+     583/    64EA : 20 D3               	BRA FEED
+     584/    64EC :                     
+     585/    64EC : 0D 0A 0D 0A         WELCOM	FCB 13,10,13,10
+     586/    64F0 : 20 20 20 20 20 57           FCC '     WELCOME TO THE M6800 FLIGHT SIMULATOR PROGRAM'
+             64F6 : 45 4C 43 4F 4D 45 
+             64FC : 20 54 4F 20 54 48 
+             6502 : 45 20 4D 36 38 30 
+             6508 : 30 20 46 4C 49 47 
+             650E : 48 54 20 53 49 4D 
+             6514 : 55 4C 41 54 4F 52 
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 11 - 5/19/2022 9:55:4
+
+
+             651A : 20 50 52 4F 47 52 
+             6520 : 41 4D             
+     587/    6522 : 0D 0A 0D 0A                 FCB 13,10,13,10
+     588/    6526 : 54 48 49 53 20 50   	FCC 'THIS PROGRAM IS DESIGNED TO ALLOW THE USER TO SET UP THE AIRCRAFT`S INITIAL'
+             652C : 52 4F 47 52 41 4D 
+             6532 : 20 49 53 20 44 45 
+             6538 : 53 49 47 4E 45 44 
+             653E : 20 54 4F 20 41 4C 
+             6544 : 4C 4F 57 20 54 48 
+             654A : 45 20 55 53 45 52 
+             6550 : 20 54 4F 20 53 45 
+             6556 : 54 20 55 50 20 54 
+             655C : 48 45 20 41 49 52 
+             6562 : 43 52 41 46 54 60 
+             6568 : 53 20 49 4E 49 54 
+             656E : 49 41 4C          
+     589/    6571 : 0D 0A               	FCB 13,10
+     590/    6573 : 50 4F 53 49 54 49   	FCC 'POSITION COORDINAES FROM USER PROMPTS, ENGAGE THE FLIGHT SIMULATOR AND'
+             6579 : 4F 4E 20 43 4F 4F 
+             657F : 52 44 49 4E 41 45 
+             6585 : 53 20 46 52 4F 4D 
+             658B : 20 55 53 45 52 20 
+             6591 : 50 52 4F 4D 50 54 
+             6597 : 53 2C 20 45 4E 47 
+             659D : 41 47 45 20 54 48 
+             65A3 : 45 20 46 4C 49 47 
+             65A9 : 48 54 20 53 49 4D 
+             65AF : 55 4C 41 54 4F 52 
+             65B5 : 20 41 4E 44       
+     591/    65B9 : 0D 0A               	FCB 13,10
+     592/    65BB : 50 52 45 53 45 4E   	FCC 'PRESENT AN UPDATED GRAPHICS DISPLAY AS STUDENT PILOT ATTEMPTS TO MANUEVER'
+             65C1 : 54 20 41 4E 20 55 
+             65C7 : 50 44 41 54 45 44 
+             65CD : 20 47 52 41 50 48 
+             65D3 : 49 43 53 20 44 49 
+             65D9 : 53 50 4C 41 59 20 
+             65DF : 41 53 20 53 54 55 
+             65E5 : 44 45 4E 54 20 50 
+             65EB : 49 4C 4F 54 20 41 
+             65F1 : 54 54 45 4D 50 54 
+             65F7 : 53 20 54 4F 20 4D 
+             65FD : 41 4E 55 45 56 45 
+             6603 : 52                
+     593/    6604 : 0D 0A               	FCB 13,10	 
+     594/    6606 : 54 48 45 20 50 4C   	FCC 'THE PLANE FOR LANDING ON AN AIRSTRIP. TO USE THE PROGRAM YOU FIRST MUST'
+             660C : 41 4E 45 20 46 4F 
+             6612 : 52 20 4C 41 4E 44 
+             6618 : 49 4E 47 20 4F 4E 
+             661E : 20 41 4E 20 41 49 
+             6624 : 52 53 54 52 49 50 
+             662A : 2E 20 54 4F 20 55 
+             6630 : 53 45 20 54 48 45 
+             6636 : 20 50 52 4F 47 52 
+             663C : 41 4D 20 59 4F 55 
+             6642 : 20 46 49 52 53 54 
+             6648 : 20 4D 55 53 54    
+     595/    664D : 0D 0A               	FCB 13,10	 
+     596/    664F : 43 48 4F 4F 53 45   	FCC 'CHOOSE AN AIRPORT DATABASE.'
+             6655 : 20 41 4E 20 41 49 
+             665B : 52 50 4F 52 54 20 
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 12 - 5/19/2022 9:55:4
+
+
+             6661 : 44 41 54 41 42 41 
+             6667 : 53 45 2E          
+     597/    666A : 0D 0A 0D 0A         MCRLF   FCB 13,10,13,10
+     598/    666E : 04                  	FCB $04
+     599/    666F :                     	
+     600/    666F : 20 20 20 43 48 4F   MSGA	FCC '   CHOOSE THE AIRPORT DATABASE AS FOLLOWS: '
+             6675 : 4F 53 45 20 54 48 
+             667B : 45 20 41 49 52 50 
+             6681 : 4F 52 54 20 44 41 
+             6687 : 54 41 42 41 53 45 
+             668D : 20 41 53 20 46 4F 
+             6693 : 4C 4C 4F 57 53 3A 
+             6699 : 20                
+     601/    669A : 0D 0A 0D 0A                 FCB 13,10,13,10
+     602/    669E : 20 31 20 3D 20 50   	FCC ' 1 = PARSON`S FIELD AT TETERBORO, NEW JERSEY.'	
+             66A4 : 41 52 53 4F 4E 60 
+             66AA : 53 20 46 49 45 4C 
+             66B0 : 44 20 41 54 20 54 
+             66B6 : 45 54 45 52 42 4F 
+             66BC : 52 4F 2C 20 4E 45 
+             66C2 : 57 20 4A 45 52 53 
+             66C8 : 45 59 2E          
+     603/    66CB : 0D 0A                       FCB 13,10
+     604/    66CD : 20 32 20 3D 20 41   	FCC ' 2 = ARTWICK`S FIELD AT TETERBORO, NEW JERSEY.'	
+             66D3 : 52 54 57 49 43 4B 
+             66D9 : 60 53 20 46 49 45 
+             66DF : 4C 44 20 41 54 20 
+             66E5 : 54 45 54 45 52 42 
+             66EB : 4F 52 4F 2C 20 4E 
+             66F1 : 45 57 20 4A 45 52 
+             66F7 : 53 45 59 2E       
+     605/    66FB : 0D 0A 0D 0A                 FCB 13,10,13,10
+     606/    66FF : 3F                          FCC '?'
+     607/    6700 : 04                  	FCB $04
+     608/    6701 :                     	
+     609/    6701 : 81 01               SCREEN	CMPA #01       
+     610/    6703 : 27 FE               	BEQ  FIRST     
+     611/    6705 : 81 02               	CMPA #02       
+     612/    6707 : 27 FE               	BEQ  JINIT     
+     613/    6709 : 81 03               	CMPA #03       
+     614/    670B : 27 FE               	BEQ  ERASE     
+     615/    670D : 81 04               	CMPA #04
+     616/    670F : 27 FE               	BEQ  PIXEL
+     617/    6711 : 81 05               	CMPA #05
+     618/    6713 : 27 FE               	BEQ  SHOW2
+     619/    6715 : 81 06               	CMPA #06
+     620/    6717 : 27 FE               	BEQ  JSTART
+     621/    6719 : 39                  	RTS
+     622/    671A :                     ;* PIA INITIALIZATION SECTION
+     623/    671A : 4F                  FIRST	CLRA
+     624/    671B : B7 80 0C            	STAA $800C     
+     625/    671E : 86 FF               	LDAA #$FF
+     626/    6720 : B7 80 0C            	STAA $800C
+     627/    6723 : 86 3F               	LDAA #$3F
+     628/    6725 : B7 80 0D            	STAA $800D
+     629/    6728 : 39                  	RTS
+     630/    6729 :                     ;* ERASE SCREEN SECTION
+     631/    6729 : 86 3F               ERASE	LDAA #63
+     632/    672B : B7 67 2B            	STAA HPOS
+     633/    672E : B6 67 2E            HSET	LDAA HPOS
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 13 - 5/19/2022 9:55:4
+
+
+     634/    6731 : 8D FE               	BSR  SENDA
+     635/    6733 : 86 80               VBAR	LDAA #128
+     636/    6735 : 8D FE               CLR	BSR  SENDA
+     637/    6737 : 4C                  	INCA
+     638/    6738 : 81 E0               MOD	CMPA #224
+     639/    673A : 26 F9               	BNE  CLR
+     640/    673C : 7A 67 3C            	DEC  HPOS
+     641/    673F : 2C ED               	BGE  HSET
+     642/    6741 : 86 C0               	LDAA #192
+     643/    6743 : B7 67 39            	STAA MOD+1
+     644/    6746 : 39                  	RTS
+     645/    6747 :                     ;*SCREEN DRIVE SUBROUTINES
+     646/    6747 : 16                  SENDA	TAB
+     647/    6748 : F7 80 0C            SENDB	STAB $800C
+     648/    674B : C6 37               	LDAB #$37
+     649/    674D : F7 80 0D            	STAB $800D
+     650/    6750 : E6 00               	LDAB 0,X
+     651/    6752 : C6 3F               	LDAB #$3F
+     652/    6754 : F7 80 0D            	STAB $800D
+     653/    6757 : 39                  	RTS
+     654/    6758 :                     ;* PIXEL OUTPUT
+     655/    6758 : F6 67 58            PIXEL	LDAB X1
+     656/    675B : CB 60               	ADDB #96
+     657/    675D : 8D E9               	BSR SENDB
+     658/    675F : C6 A0               	LDAB #160
+     659/    6761 : F0 67 61            	SUBB Y1
+     660/    6764 : 8D E2               	BSR SENDB
+     661/    6766 : 39                  	RTS
+     662/    6767 : 20 FE               SHOW2	BRA SHOW
+     663/    6769 :                     ;* INITIALIZE PIA INTERFACE TO JOYSTICK
+     664/    6769 : 86 3D               JINIT	LDAA #$3D
+     665/    676B : CE 80 0C            	LDX #$800C
+     666/    676E : C6 00               	LDAB #$00
+     667/    6770 : E7 02               	STAB 2,X
+     668/    6772 : A7 03               	STAA 3,X
+     669/    6774 :                     ;* SAVE MACHINE REGISTERS ON INPUT
+     670/    6774 : B7 61 14            JSTART	STAA ASAVE
+     671/    6777 : F7 61 15            	STAB BSAVE
+     672/    677A : FF 61 16            	STX ISAVE
+     673/    677D :                     ;* GET HORIZONTAL STICK POSITION
+     674/    677D : CE 80 0C            	LDX #$800C
+     675/    6780 : A6 03               LOOP1	LDA 3,X
+     676/    6782 : 84 80               	ANDA #$80
+     677/    6784 : 27 FA               	BEQ LOOP1
+     678/    6786 : A6 02               	LDAA 2,X
+     679/    6788 : 16                  	TAB
+     680/    6789 : 84 80               	ANDA #$80
+     681/    678B : 26 F3               	BNE LOOP1
+     682/    678D : C4 3F               	ANDB #$3F
+     683/    678F : F7 61 12            	STAB JHPOS 
+     684/    6792 : A6 03               LOOP2	LDAA 3,X
+     685/    6794 : 84 80               	ANDA #$80 
+     686/    6796 : 27 FA               	BEQ LOOP2
+     687/    6798 : A6 02               	LDAA 2,X
+     688/    679A : 16                  	TAB
+     689/    679B : 84 80               	ANDA #$80
+     690/    679D : 26 FE               	BNE GOBACK
+     691/    679F : 20 DF               	BRA LOOP1
+     692/    67A1 : C4 7F               GOBACK	ANDB #$7F
+     693/    67A3 : F7 61 13                    STAB JVPOS
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 14 - 5/19/2022 9:55:4
+
+
+     694/    67A6 : B6 61 14            	LDAA ASAVE
+     695/    67A9 : F6 61 15            	LDAB BSAVE
+     696/    67AC : FE 61 16            	LDX ISAVE
+     697/    67AF : 39                  	RTS
+     698/    67B0 :                     ;* ROUTINE TO DRAW LINE FROM (X1,Y1) TO (X2,Y2)
+     699/    67B0 : 4F                  SHOW	CLRA
+     700/    67B1 : C6 01               	LDAB #1
+     701/    67B3 : F7 67 B3            	STAB M
+     702/    67B6 : F7 67 B6            	STAB N
+     703/    67B9 : F6 67 B9            	LDAB X2 
+     704/    67BC : F0 67 BC            	SUBB X1
+     705/    67BF : F7 67 BF            	STAB D
+     706/    67C2 : 2C FE               	BGE BP1
+     707/    67C4 : 70 67 C4            	NEG M
+     708/    67C7 : 70 67 C7            	NEG D
+     709/    67CA : 26 FE               BP1	BNE BP2
+     710/    67CC : 86 FF               	LDAA #$FF
+     711/    67CE : F6 67 CE            BP2	LDAB Y2
+     712/    67D1 : F0 67 D1            	SUBB Y1
+     713/    67D4 : F7 67 D4            	STAB E
+     714/    67D7 : 2C FE               	BGE B8963
+     715/    67D9 : 70 67 D9            	NEG N
+     716/    67DC : 70 67 DC            	NEG E
+     717/    67DF : BD 67 58            B8963	JSR PIXEL
+     718/    67E2 : F6 67 E2            	LDAB X1
+     719/    67E5 : F1 67 E5            	CMPB X2
+     720/    67E8 : 27 FE               	BEQ B8990
+     721/    67EA : 4D                  B8969	TSTA
+     722/    67EB : 2D FE               	BLT B8981
+     723/    67ED : F6 67 ED            	LDAB X1
+     724/    67F0 : FB 67 F0            	ADDB M
+     725/    67F3 : F7 67 F3            	STAB X1
+     726/    67F6 : B0 67 F6            	SUBA E
+     727/    67F9 : 20 E4               	BRA B8963
+     728/    67FB : F6 67 FB            B8981	LDAB Y1
+     729/    67FE : FB 67 FE            	ADDB N
+     730/    6801 : F7 68 01            	STAB Y1
+     731/    6804 : BB 68 04            	ADDA D
+     732/    6807 : 20 D6               	BRA B8963
+     733/    6809 : F6 68 09            B8990	LDAB Y1
+     734/    680C : F1 68 0C            	CMPB Y2
+     735/    680F : 26 D9               	BNE B8969
+     736/    6811 : 39                  	RTS
+     737/    6812 :                     
+     738/    6812 : =$50                 X1	EQU $0050
+     739/    6812 : =$52                 X2	EQU $0052
+     740/    6812 : =$51                 Y1	EQU $0051
+     741/    6812 : =$53                 Y2	EQU $0053
+     742/    6812 : =$54                 M	EQU $0054
+     743/    6812 : =$55                 N	EQU $0055
+     744/    6812 : =$56                 D	EQU $0056
+     745/    6812 : =$57                 E	EQU $0057
+     746/    6812 : =$58                 HPOS	EQU $0058
+     747/    6812 :                     
+     748/    A048 :                     	ORG $A048	;SET START ADDRESS FOR "G" COMMAND
+     749/    A048 : 60 00               	FDB START
+     750/    A04A :                     
+     751/    A04A :                     	END
+FlightSim_m6800.asm(751)
+PASS 2
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 1 - 5/19/2022 9:55:4
+
+
+       1/       0 :                     ;*	NAM FLITM6800
+       2/       0 :                     
+       3/       0 :                     ;*THE FOLLOWING PROGRAM WAS WRITTEN BY WAYNE PARSONS IN
+       4/       0 :                     ;*CONJUNCTION WITH THE INDISTRIAL ENGENEERING DEPARTMENT
+       5/       0 :                     ;*AND DR. DAUER AS A PARTIAL REQUIREMENT FOR COMPLETITION
+       6/       0 :                     ;*OF A MS DEGREE AT THE UNIVERSITY OF CENTRAL FLORIDA IN THE
+       7/       0 :                     ;*FALL SEMESTER OF 1981.
+       8/       0 :                     ;*
+       9/       0 :                     ;* MODIFIED BY ROBERTO SANCHO JUN 2022 
+      10/       0 :                     ;* TO RUN ON SIMH SWTPC 6800 SIMULATOR
+      11/       0 :                     ;*
+      12/       0 :                     ;*   CHANGES: - REMOVE INTERFACE WITH EXTERNAL ATC-610J 
+      13/       0 :                     ;*              ANALOG FLIGH SIMULATOR
+      14/       0 :                     ;*            - ADD ROUTINES TO PERFORM FLIGH SIMULATION
+      15/       0 :                     ;*              USING SWTPC 6800 CPU
+      16/       0 :                     ;*            - USES MP-T TIMER SS50 BOARD TO PROVIDE
+      17/       0 :                     ;*              TIMING FOR SIMULATION. 
+      18/       0 :                     ;*            - USES PPG-J ANALOG TO SIMULATR PLANE CONTROL YOKE
+      19/       0 :                     ;*
+      20/       0 :                     ;*   THIS PROGRAM ONLY USES SW AND HW AVAILABLE IN 1979
+      21/       0 :                     ;*
+      22/       0 :                     ;**********************************************************
+      23/       0 :                     ;* 
+      24/       0 :                     ;* MEMORY MAP: 0000-004F SUBLOGIC 3DG68 DIRECT STORAGE
+      25/       0 :                     ;*             0050-     USED BY FLIGHTSIM M6800
+      26/       0 :                     ;*             0100-0112 SUBLOGIC 3DG68 3D TO 2D ROUTINE CONTROL ARRAY
+      27/       0 :                     ;*             0113-0FFF SUBLOGIC 3DG68 PACKAGE (ENTRY POINT 0900)
+      28/       0 :                     ;* 
+      29/       0 :                     ;*             1100-1296 SUBLOGIC SCENERY
+      30/       0 :                     ;*             1300-1362 PARTSON'S FIELD SCENERY
+      31/       0 :                     ;*             1800-18FF 2D OUTPUT BUFFER ARRAY
+      32/       0 :                     ;*
+      33/       0 :                     ;*             6000-     FLIGHT SIMULATOR M6800 PROGRAM
+      34/       0 :                     ;*
+      35/       0 :                     ;**********************************************************	
+      36/       0 :                     
+      37/       0 :                     			; PATCHES FOR 3DG68 
+      38/     DBE :                     	ORG $0DBE
+      39/     DBE : 7E 60 06            	JMP SVTRIG	; PATCH 3DG68 TO SAVE COS&SIN CALCULATIONS FOR PV, BV, HV
+      40/     A8C :                     	ORG $0A8C
+      41/     A8C : 7E 60 2E            	JMP SAFSWP1	; PATCH 3DG68 TO MAKE SWAP ROUTINE INTERRUPT SAFE
+      42/     AAE :                     	ORG $0AAE
+      43/     AAE : 7E 60 36            	JMP SAFSWP2	
+      44/     AB1 :                     
+      45/    6000 :                     	ORG $6000
+      46/    6000 :                     	
+      47/    6000 : 8E 61 02            START	LDS #STACK	;SET NEW STACK ADDRESS
+      48/    6003 : 7E 61 34                    JMP MACRO	
+      49/    6006 :                     
+      50/    6006 :                     			; PATCHES FOR 3DG68 ROUTINES
+      51/    6006 :                     			
+      52/    6006 :                     			; PATCH 3DG68 TO SAVE COS&SIN CALCULATIONS FOR PV, BV, HV
+      53/    6006 :                     			; TO BE USED AGAIN ON PLANE MOTION CALCULATIONS			
+      54/    6006 : BD 0B A4            SVTRIG	JSR  COS	; ADDR $20..$2B CONTAINS COS AND SIN VALUES 
+      55/    6009 : D7 2A               	STAB $2A
+      56/    600B : 97 2B               	STAA $2B
+      57/    600D : DE 20               	LDX $0020
+      58/    600F : FF 61 1E            	STX SINP	;SIN(PV)
+      59/    6012 : DE 22               	LDX $0022
+      60/    6014 : FF 61 20            	STX SINB	;SIN(BV)
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 2 - 5/19/2022 9:55:4
+
+
+      61/    6017 : DE 24               	LDX $0024
+      62/    6019 : FF 61 22            	STX SINH	;SIN(HV)
+      63/    601C : DE 26               	LDX $0026
+      64/    601E : FF 61 18            	STX COSP	;COS(PV)
+      65/    6021 : DE 28               	LDX $0028
+      66/    6023 : FF 61 1A            	STX COSB	;COS(BV)
+      67/    6026 : DE 2A               	LDX $002A
+      68/    6028 : FF 61 1C            	STX COSH	;COS(HV)
+      69/    602B : 7E 0D C5            	JMP $0DC5
+      70/    602E :                     	
+      71/    602E :                     			; ROUTINE AT 0A8C..0AB0 USES M6800 16 BITS REGISTERS
+      72/    602E :                     			; IX AND SP TO SWAP A SERIES OF 16 BIT VALUES
+      73/    602E :                     			; THIS TRICK IS CLEVER AND NICE AND FASTER THAN ANY OTHER METHOD
+      74/    602E :                     			; SP IS SAVED AT ENTRY AND EXIT OF ROUTINES, SO WORKS OK
+      75/    602E :                     			; BUT IF AN INTERRUPR OCCURS WHILE IN MIDDLE OF ROUTINE, 
+      76/    602E :                     			; AS SP IS BEING FILLED WITH DATA, MEMORY AT ANY LOCATION CAN BE
+      77/    602E :                     			; OVERWRITTEN WITH IRQ STATUS SAVE. TO FIX THIS, IRQ IS DISABLED
+      78/    602E :                     			; ON ENTRY, ENABLED AGAIN ON EXIT
+      79/    602E :                     
+      80/    602E : 0F                  SAFSWP1	SEI		; DISABLE IRQ ON SWAP ROUTINE ENTRY
+      81/    602F : 9F 38               	STS  $38
+      82/    6031 : DE 2A               	LDX  $2A
+      83/    6033 : 7E 0A 90            	JMP  $0A90
+      84/    6036 : 9E 38               SAFSWP2	LDS  $38	; ENABLE IRQ ON SWAP ROUTINE EXIT
+      85/    6038 : 0E                  	CLI
+      86/    6039 : 39                  	RTS
+      87/    603A :                     
+      88/    603A :                     
+      89/    603A :                     ; 3DG68 MEMORY LOCATIONS
+      90/    603A :                     
+      91/    603A : =$100                XV	EQU $0100	;VIEWER POSITION WEST (0000-7FFF), EAST (FFFF-8000)
+      92/    603A : =$102                YV	EQU $0102	;VIEWER POSITION ALTITUDE
+      93/    603A : =$104                ZV	EQU $0104	;VIEWER POSITION SOUTH (0000-7FFF), NORTH (FFFF-8000)
+      94/    603A : =$106                PV 	EQU $0106	;VIEWER PITCH ANGLE
+      95/    603A : =$108                BV 	EQU $0108	;VIEWER BANK ANGLE
+      96/    603A : =$10A                HV 	EQU $010A	;VIEWER HEADING ANGLE
+      97/    603A : =$10E                SCRN	EQU $010E	;SCREEN WIDTH FOR OUTPUT
+      98/    603A : =$10F                IBP 	EQU $010F	;INPUT BUFFER POINTER
+      99/    603A : =$111                OBP 	EQU $0111	;OUTPUT BUFFER POINTER
+     100/    603A :                     
+     101/    603A : =$0                  MA	EQU $00		;FIRST ARG FOR MULTS FUNCTION
+     102/    603A : =$2                  MB	EQU $02		;SECOND ARG FOR MULTS FUNCTION
+     103/    603A :                     
+     104/    603A : =$21C                MULTS	EQU $021C	;(B,A)=(MA)*(MB)
+     105/    603A : =$900                CONV3D	EQU $0900	;CONVERSION OF 3D INPUT BUFFER TO 2D OUTPUT BUFFER
+     106/    603A : =$BA2                SIN	EQU $0BA2	;(B,A)=SIN(B). B=0..$FF FOR 0..259 DEG. 
+     107/    603A : =$BA4                COS	EQU $0BA4	;(B,A)=COS(B). (B,A)=SIGNED 16 BITS (-1 -> $FFFF, +1 -> $7FFF)
+     108/    603A :                     
+     109/    603A :                     ;* SWTBUG ROM LOCATIONS
+     110/    603A :                     
+     111/    603A : =$E0C8               OUT4HS	EQU $E0C8 	;OUTPUT 4 HEX CHAR + SPACE (WORD POINTED BY X-REG)
+     112/    603A : =$E0CA               OUT2HS	EQU $E0CA 	;OUTPUT 2 HEX CHAR + SPACE (BYTE POINTED BY X-REG)
+     113/    603A : =$E1AC               INEEE	EQU $E1AC	;SWTBUG INPUT CHAR
+     114/    603A : =$E1D1               OUTEEE	EQU $E1D1	;SWTBUG OUTPUT CHAR
+     115/    603A : =$E113               MON	EQU $E113	;SWTBUG RETURN TO MONITOR
+     116/    603A :                     
+     117/    603A :                     ;* FLIGHT SIM VARIABLES
+     118/    603A :                     
+     119/    603A :                     STACKSP RMB 200		;STACK SPACE
+     120/    6102 :                     STACK	RMB 1
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 3 - 5/19/2022 9:55:4
+
+
+     121/    6103 :                     
+     122/    6103 :                     TICK	RMB 2		;IRQ TICK COUNT. GET INCREMENTED BY IRQ EACH 10MSEC
+     123/    6105 :                     TICK0	RMB 2		;LAST TICK COUNT VALUE
+     124/    6107 :                     TICK1	RMB 2		;CURRENT TICK COUNT VALUE
+     125/    6109 :                     NFRAME	RMB 2		;NUMBER OF FRAME
+     126/    610B :                     ELAPSED	RMB 1		;NUMBER OF TICKS ELAPSED
+     127/    610C :                     
+     128/    610C :                     IDXREG	RMB 2		;INDEX ON OUTPUT 2D BUFFER
+     129/    610E :                     
+     130/    610E :                     JHSGN	RMB 2		;STORE JOY HORIZ POS -$20 .. $1F AS 16 BITS SIGNED
+     131/    6110 :                     JVSGN	RMB 2		;STORE JOY VERT POS -$30 .. $2F AS 16 BITS SIGNED
+     132/    6112 :                     JHPOS	RMB 1		;JOY HORIZONTAL POSITION 00..3F
+     133/    6113 :                     JVPOS	RMB 1		;JOY VERTICAL POSITION 00..5F
+     134/    6114 :                     ASAVE	RMB 1		;SAVE REGISTER
+     135/    6115 :                     BSAVE	RMB 1		;SAVE REGISTER
+     136/    6116 :                     ISAVE	RMB 2		;SAVE REGISTER
+     137/    6118 :                     
+     138/    6118 :                     COSP	RMB 2		;COS(PITCH VIEWER)
+     139/    611A :                     COSB	RMB 2		;COS(BANK VIEWER)
+     140/    611C :                     COSH	RMB 2		;COS(HEADING VIEWER)
+     141/    611E :                     SINP	RMB 2		;SIN(PITCH VIEWER)
+     142/    6120 :                     SINB	RMB 2		;SIN(BANK VIEWER)
+     143/    6122 :                     SINH	RMB 2		;SIN(HEADING VIEWER)
+     144/    6124 :                     
+     145/    6124 :                     SPEED   RMB 2		;PLANE SPEED
+     146/    6126 :                     PITCH	RMB 2 		;PLANE PITCH ANGLE (16 BITS). >0 LOOK DOWN
+     147/    6128 :                     BANK	RMB 2		;PLANE BANK ANGLE (16 BITS). >0 BANK TO LEFT
+     148/    612A :                     HEADING RMB 2		;PLANE HEADING ANGLE (16 BITS). =0 NORTH, >0 TO RIGHT
+     149/    612C :                     VEL	RMB 2		;TEMP VAR VEL = SPEED * TIME ELPASED
+     150/    612E :                     DZ	RMB 2		;Z AXIS INCREMENT
+     151/    6130 :                     DY	RMB 2		;Z AXIS INCREMENT
+     152/    6132 :                     DX	RMB 2		;Z AXIS INCREMENT
+     153/    6134 :                     
+     154/    6134 : BD 63 E2            MACRO   JSR CLRMEM	;CLEAR MEMORY LOCATIONS
+     155/    6137 : BD 63 F3            	JSR PIAINT	;INITIALIZE PIA AND CLEAR SCREEN
+     156/    613A : BD 64 03            	JSR PROMPT	;PRINT USER PROMPT MESSAGES
+     157/    613D : BD 64 33            	JSR INITLOD	;LOAD INITIAL AIRCRAFT POSITIONAL PARAMETERS
+     158/    6140 : 20 03               	BRA TIMONE	;GO TRANSFORM INITIAL VIEW 1ST TIME THRU
+     159/    6142 : BD 61 5F            GOAGN	JSR UPDATE	;GET UPDATED AIRCRAFT POSITION
+     160/    6145 : BD 64 B8            TIMONE	JSR GO3D2D	;GO TRANSFORM 3D TO 2D COORDINATES 
+     161/    6148 : BD 63 F8            	JSR CLSCRN	;CLEAR SCREEN FOR NEW DRAW
+     162/    614B : BD 64 BC            	JSR DBDRAW	;DRAW TRANSFORMED DATA BASE
+     163/    614E : BD 62 4F            	JSR UPDTPOS	;UPDATE AIRCRAFT POSITION
+     164/    6151 : BD 63 FE            	JSR GETJOY	;GET ANALOG PPG-J JOY POSITION
+     165/    6154 : BD 62 EF            	JSR CHKLAND	;CHECK IF LANDED OR CRASHED
+     166/    6157 :                     	; JSR PRTVIEW	;PRINT ON TERMINAL AIRCRAFT STATE (FOR DEBUG) 
+     167/    6157 :                     	
+     168/    6157 :                     
+     169/    6157 : 7E 61 42                    jmp goagn
+     170/    615A :                     	
+     171/    615A :                     	
+     172/    615A : 7E E1 13            	JMP  MON	;SWTBUG RETURN TO MONITOR
+     173/    615D :                     	
+     174/    615D : 20 E3               	BRA GOAGN
+     175/    615F :                     
+     176/    615F :                     ;* UPDATE PLANE STATE
+     177/    615F : 01                  UPDATE	NOP		
+     178/    6160 :                     	;CALC ELAPSED = NUMBER OF TICKS ELAPSED FROM LAST UPDATE 
+     179/    6160 : FE 61 03            TCK0	LDX TICK	;GET TICK COUNT
+     180/    6163 : BC 61 05            	CPX TICK0	
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 4 - 5/19/2022 9:55:4
+
+
+     181/    6166 : FF 61 07            	STX TICK1	;STORE CURRENT TICK COUNT
+     182/    6169 : B6 61 08            	LDAA TICK1+1
+     183/    616C : F6 61 07            	LDAB TICK1
+     184/    616F : B0 61 06            	SUBA TICK0+1
+     185/    6172 : F2 61 05            	SBCB TICK0
+     186/    6175 : C1 00               	CMPB #0
+     187/    6177 : 27 02               	BEQ TCK1
+     188/    6179 : 86 FF               	LDA #255	;MAX ELAPSED TIME IS 255
+     189/    617B : 81 05               TCK1	CMPA #5		;AT LEAST THIS NUMBER OF TICKS SHOULD BE ELAPSED
+     190/    617D : 25 E1               	BCS TCK0	;BR IF A-REG < 5
+     191/    617F : 81 64               	CMPA #100	
+     192/    6181 : 25 02               	BCS TCK2	;BR IF A-REG < 100
+     193/    6183 : 86 64               	LDAA #100
+     194/    6185 : B7 61 0B            TCK2	STAA ELAPSED	;NUMBER OF TICKS ELAPSED FROM LAST UPDATE 
+     195/    6188 : FE 61 07            	LDX TICK1	;.*echo elapsed:a
+     196/    618B : FF 61 05            	STX TICK0	
+     197/    618E : FE 61 09            	LDX NFRAME	;INCR NUMBER 
+     198/    6191 : 08                  	INX 		
+     199/    6192 : FF 61 09            	STX NFRAME	;.*echo nframe:x
+     200/    6195 :                     	;SET PLANE PITCH, BANK AND TURN RATE BASED ON JOYSTICK POSITION 			
+     201/    6195 :                     	;* UPDATE PLANE BANK BASED ON JOY HORIZ POS 
+     202/    6195 : C6 00               	LDAB #0		
+     203/    6197 : 86 20               	LDAA #32	
+     204/    6199 : B0 61 12            	SUBA JHPOS	;GET JOY HORIZ POS LEFT=0, RIGHT=63
+     205/    619C : B7 61 0F            	STAA JHSGN+1	;STORE SIGNED JOY HORIZ POS (LOW PART)
+     206/    619F : 24 02                       BCC JH1
+     207/    61A1 : C6 FF                       LDAB #$FF
+     208/    61A3 : F7 61 0E            JH1     STAB JHSGN	;STORE SIGNED JOY HORIZ POS (HI PART)
+     209/    61A6 : 48                  	ASLA
+     210/    61A7 : 59                  	ROLB		;JOY H = JOY H * 32
+     211/    61A8 : 48                  	ASLA
+     212/    61A9 : 59                  	ROLB
+     213/    61AA : 48                  	ASLA
+     214/    61AB : 59                  	ROLB
+     215/    61AC : 48                  	ASLA
+     216/    61AD : 59                  	ROLB
+     217/    61AE : 48                  	ASLA
+     218/    61AF : 59                  	ROLB
+     219/    61B0 : BB 61 29                    ADDA BANK+1	;BANK = BANK + (JOY H - 32)
+     220/    61B3 : B7 61 29                    STAA BANK+1
+     221/    61B6 : F9 61 28                    ADCB BANK
+     222/    61B9 : F7 61 28                    STAB BANK
+     223/    61BC :                             ;* LIMIT BANK TO +/- 60GR (2A HEX)
+     224/    61BC : C1 2A                       CMPB #$2A
+     225/    61BE : 2D 08                       BLT JH2
+     226/    61C0 : CE 2A 00                    LDX #$2A00
+     227/    61C3 : FF 61 28                    STX BANK
+     228/    61C6 : 20 0A                       BRA JH3
+     229/    61C8 : C1 D6               JH2	CMPB #$D6	;D6 = -2A   
+     230/    61CA : 2A 06               	BPL JH3     
+     231/    61CC : CE D6 00                    LDX #$D600
+     232/    61CF : FF 61 28                    STX BANK
+     233/    61D2 : F6 61 28            JH3	LDAB BANK        
+     234/    61D5 : F7 01 09                    STAB BV+1	;SET VIEWER BANK ANGLE
+     235/    61D8 :                             ;* UPDATE PLANE PITCH BASED ON JOY VERT POS 
+     236/    61D8 : C6 00               	LDAB #0
+     237/    61DA : 86 30               	LDAA #48
+     238/    61DC : B0 61 13            	SUBA JVPOS	;GET JOY VERT POS UP=0, DOWN=95
+     239/    61DF : B7 61 11            	STAA JVSGN+1	;STORE SIGNED JOY VERT POS (LOW PART)
+     240/    61E2 : 24 02                       BCC JV1
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 5 - 5/19/2022 9:55:4
+
+
+     241/    61E4 : C6 FF                       LDAB #$FF
+     242/    61E6 : F7 61 10            JV1     STAB JVSGN	;STORE SIGNED JOY VERT POS (HI PART)
+     243/    61E9 : 48                  	ASLA
+     244/    61EA : 59                  	ROLB		;JOY V = JOY V * 32
+     245/    61EB : 48                  	ASLA
+     246/    61EC : 59                  	ROLB
+     247/    61ED : 48                  	ASLA
+     248/    61EE : 59                  	ROLB
+     249/    61EF : 48                  	ASLA
+     250/    61F0 : 59                  	ROLB
+     251/    61F1 : 48                  	ASLA
+     252/    61F2 : 59                  	ROLB
+     253/    61F3 : BB 61 27            	ADDA PITCH+1	;BANK = BANK + (JOY V - 48)
+     254/    61F6 : B7 61 27                    STAA PITCH+1
+     255/    61F9 : F9 61 26                    ADCB PITCH
+     256/    61FC : F7 61 26                    STAB PITCH        
+     257/    61FF :                             ;* LIMIT PITCH FROM -45GR (NOSE UP $E0 HEX) TO +80GR ($38 HEX)
+     258/    61FF : C1 38                       CMPB #$38
+     259/    6201 : 2D 08                       BLT JV2
+     260/    6203 : CE 38 00                    LDX #$3800
+     261/    6206 : FF 61 26                    STX PITCH
+     262/    6209 : 20 0A                       BRA JV3
+     263/    620B : C1 E0               JV2	CMPB #$E0	;E6 = -20   
+     264/    620D : 2A 06               	BPL JV3     
+     265/    620F : CE E0 00                    LDX #$E000
+     266/    6212 : FF 61 26                    STX PITCH
+     267/    6215 : F6 61 26            JV3	LDAB PITCH        
+     268/    6218 : F7 01 07                    STAB PV+1	;SET VIEWER PITCH ANGLE        
+     269/    621B :                             ;* CALC TURN RATE BASED ON BANK
+     270/    621B : B6 61 29                    LDAA BANK+1
+     271/    621E : 97 01                       STAA MA+1
+     272/    6220 : C6 00                       LDAB #0
+     273/    6222 : B6 61 28                    LDAA BANK
+     274/    6225 : 2A 01                       BPL JT1
+     275/    6227 : 5A                          DECB
+     276/    6228 : 78 00 01            JT1	ASL MA+1
+     277/    622B : 49                  	ROLA
+     278/    622C : 59                  	ROLB
+     279/    622D : 78 00 01            	ASL MA+1
+     280/    6230 : 49                  	ROLA
+     281/    6231 : 59                  	ROLB
+     282/    6232 : 78 00 01            	ASL MA+1
+     283/    6235 : 49                  	ROLA
+     284/    6236 : 59                  	ROLB
+     285/    6237 : D7 00                       STAB MA        
+     286/    6239 : 97 01                       STAA MA+1
+     287/    623B : B6 61 2B                    LDAA HEADING+1
+     288/    623E : F6 61 2A                    LDAB HEADING
+     289/    6241 : 90 01                       SUBA MA+1
+     290/    6243 : D2 00                       SBCB MA
+     291/    6245 : B7 61 2B                    STAA HEADING+1	;HEADING = HEADING - BANK*8
+     292/    6248 : F7 61 2A                    STAB HEADING
+     293/    624B : F7 01 0B                    STAB HV+1	;SET VIEWER HEADING ANGLE
+     294/    624E : 39                  	RTS		
+     295/    624F :                     ;* UPDATE PLANE COORDINATES X,Y,Z
+     296/    624F : 01                  UPDTPOS	NOP             
+     297/    6250 :                     	;* CALCULATE VEL = PLANE SPEED * ELAPSED TIME
+     298/    6250 : F6 61 0B            	LDAB ELAPSED  
+     299/    6253 : 86 00               	LDAA #0
+     300/    6255 : D7 00               	STAB MA         
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 6 - 5/19/2022 9:55:4
+
+
+     301/    6257 : 97 01               	STAA MA+1	
+     302/    6259 : FE 61 24            	LDX SPEED
+     303/    625C : DF 02               	STX MB		;.*echo speed:x
+     304/    625E : BD 02 1C            	JSR MULTS
+     305/    6261 : F7 61 2C            	STAB VEL 
+     306/    6264 : B7 61 2D            	STAA VEL+1	
+     307/    6267 :                     	;* DZ = VEL * COS(PITCH) * COS(HEADING)
+     308/    6267 : FE 61 18            	LDX COSP
+     309/    626A : DF 00               	STX MA		;.*echo cosp:x	
+     310/    626C : FE 61 1C            	LDX COSH
+     311/    626F : DF 02               	STX MB		;.*echo cosh:x		
+     312/    6271 : BD 02 1C            	JSR MULTS
+     313/    6274 : D7 00               	STAB MA
+     314/    6276 : 97 01               	STAA MA+1	
+     315/    6278 : FE 61 2C            	LDX VEL
+     316/    627B : DF 02               	STX MB		;.*echo vel:x
+     317/    627D : BD 02 1C            	JSR MULTS
+     318/    6280 : F7 61 2E            	STAB DZ
+     319/    6283 : B7 61 2F            	STAA DZ+1
+     320/    6286 : B6 01 05            	LDAA ZV+1	;* UPDATE ZV VIEWER POSITION OF PLANE
+     321/    6289 : F6 01 04            	LDAB ZV
+     322/    628C : B0 61 2F            	SUBA DZ+1
+     323/    628F : F2 61 2E            	SBCB DZ
+     324/    6292 : B7 01 05            	STAA ZV+1
+     325/    6295 : F7 01 04            	STAB ZV
+     326/    6298 :                     	;* DX = VEL * COS(PITCH) * SIN(HEADING)
+     327/    6298 : FE 61 18            	LDX COSP
+     328/    629B : DF 00               	STX MA		;.*echo cosp:x			
+     329/    629D : FE 61 22            	LDX SINH
+     330/    62A0 : DF 02               	STX MB		;.*echo sinh:x	
+     331/    62A2 : BD 02 1C            	JSR MULTS
+     332/    62A5 : D7 00               	STAB MA
+     333/    62A7 : 97 01               	STAA MA+1
+     334/    62A9 : FE 61 2C            	LDX VEL
+     335/    62AC : DF 02               	STX MB		;.*echo vel:x
+     336/    62AE : BD 02 1C            	JSR MULTS
+     337/    62B1 : F7 61 32            	STAB DX
+     338/    62B4 : B7 61 33            	STAA DX+1
+     339/    62B7 : B6 01 01            	LDAA XV+1	;* UPDATE XV VIEWER POSITION OF PLANE
+     340/    62BA : F6 01 00            	LDAB XV
+     341/    62BD : B0 61 33            	SUBA DX+1
+     342/    62C0 : F2 61 32            	SBCB DX
+     343/    62C3 : B7 01 01            	STAA XV+1
+     344/    62C6 : F7 01 00            	STAB XV
+     345/    62C9 :                     	;* DY = VEL * SIN(PITCH) 
+     346/    62C9 : FE 61 1E            	LDX SINP
+     347/    62CC : DF 00               	STX MA		
+     348/    62CE : FE 61 2C            	LDX VEL
+     349/    62D1 : DF 02               	STX MB
+     350/    62D3 : BD 02 1C            	JSR MULTS
+     351/    62D6 : F7 61 30            	STAB DY
+     352/    62D9 : B7 61 31            	STAA DY+1
+     353/    62DC : B6 01 03            	LDAA YV+1	;* UPDATE YV VIEWER POSITION OF PLANE
+     354/    62DF : F6 01 02            	LDAB YV		
+     355/    62E2 : BB 61 31            	ADDA DY+1
+     356/    62E5 : F9 61 30            	ADCB DY
+     357/    62E8 : B7 01 03            	STAA YV+1
+     358/    62EB : F7 01 02            	STAB YV
+     359/    62EE : 39                  	RTS 		
+     360/    62EF :                     
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 7 - 5/19/2022 9:55:4
+
+
+     361/    62EF :                     ;* CHECK IF LANDED OR CRASHED
+     362/    62EF : B6 01 02            CHKLAND	LDAA YV
+     363/    62F2 : 2A 01               	BPL ALT0	;BR IF ALTITUDE IS ZERO
+     364/    62F4 : 39                  	RTS		;RETURN BECAUSE PLANE IS FLYING
+     365/    62F5 : B6 01 09            ALT0	LDAA BV+1	;CHECK IF PLANE BANK IF +/- 18GR
+     366/    62F8 : 81 18                       CMPA #$18
+     367/    62FA : 2D 03                       BLT ALT1
+     368/    62FC : 7E 63 1F            	JMP CRASH       ;CRASH: BANK TOO HIGH 
+     369/    62FF : 81 E8               ALT1	CMPA #$E8
+     370/    6301 : 2A 03               	BPL ALT2
+     371/    6303 : 7E 63 1F            	JMP CRASH       ;CRASH: BANK TOO HIGH
+     372/    6306 : B6 01 07            ALT2	LDAA PV+1	;CHECK IF PLANE PITCH IF -18GR (NOSE UP) TO +18GR (NOSE DOWN)
+     373/    6309 : 81 18                       CMPA #$18
+     374/    630B : 2D 03                       BLT ALT3
+     375/    630D : 7E 63 1F            	JMP CRASH       ;CRASH: NOSE TOO LOW, NOSE HIT THE GROUND
+     376/    6310 : 81 E8               ALT3	CMPA #$E8
+     377/    6312 : 2A 03               	BPL ALT4
+     378/    6314 : 7E 63 1F            	JMP CRASH       ;CRASH: NOSE TOO HIGH, TAIL HIT THE GROUND
+     379/    6317 : 7E 63 1A            ALT4	JMP LANDED
+     380/    631A :                     
+     381/    631A :                     ;* END OF FLIGHT MESSAGES 
+     382/    631A : CE 63 4B            LANDED	LDX #MLANDED
+     383/    631D : 20 03               	BRA MEOF
+     384/    631F : CE 63 3E            CRASH	LDX #MCRASH
+     385/    6322 : BD 64 22            MEOF	JSR DSPCHR	
+     386/    6325 : CE 63 59               	LDX #MNEWFL
+     387/    6328 : BD 64 22            	JSR DSPCHR
+     388/    632B : BD 64 2F                    JSR INCHR
+     389/    632E : 81 31               	CMPA #'1'
+     390/    6330 : 26 09               	BNE ENDFLI
+     391/    6332 : CE 66 6A            	LDX #MCRLF	;REMOVE WELCOME MESSAGE
+     392/    6335 : FF 64 04            	STX PROMPT+1
+     393/    6338 : 7E 61 34            	JMP MACRO
+     394/    633B : 7E E1 13            ENDFLI	JMP MON	
+     395/    633E :                     
+     396/    633E : 0D 0A 0D 0A         MCRASH	FCB 13,10,13,10
+     397/    6342 : 43 52 41 53 48 21   	FCC 'CRASH!'
+     398/    6348 : 0D 0A 04            	FCB 13,10,4
+     399/    634B :                     
+     400/    634B : 0D 0A 0D 0A         MLANDED	FCB 13,10,13,10
+     401/    634F : 4C 41 4E 44 45 44   	FCC 'LANDED!'
+             6355 : 21                
+     402/    6356 : 0D 0A 04            	FCB 13,10,4
+     403/    6359 :                     
+     404/    6359 : 0D 0A 0D 0A         MNEWFL	FCB 13,10,13,10
+     405/    635D : 50 52 45 53 53 20   	FCC 'PRESS 1 TO FLIGTH AGAIN, ANY OTHER KEY TO QUIT ?'
+             6363 : 31 20 54 4F 20 46 
+             6369 : 4C 49 47 54 48 20 
+             636F : 41 47 41 49 4E 2C 
+             6375 : 20 41 4E 59 20 4F 
+             637B : 54 48 45 52 20 4B 
+             6381 : 45 59 20 54 4F 20 
+             6387 : 51 55 49 54 20 3F 
+     406/    638D : 04                  	FCB 4
+     407/    638E :                     	
+     408/    638E :                     ;*PRINT ON TERMINAL VIEWER X,Y,Z 3D POS AND P,B,H ANGLES (0..255)
+     409/    638E : CE 01 00            PRTVIEW	LDX #XV
+     410/    6391 : 86 58               	LDAA #'X'
+     411/    6393 : BD 63 C1            	JSR PRT4H
+     412/    6396 : 86 59               	LDAA #'Y'
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 8 - 5/19/2022 9:55:4
+
+
+     413/    6398 : BD 63 C1            	JSR PRT4H
+     414/    639B : 86 5A               	LDAA #'Z'
+     415/    639D : BD 63 C1            	JSR PRT4H
+     416/    63A0 : 86 50               	LDAA #'P'
+     417/    63A2 : BD 63 D1            	JSR PRT2H
+     418/    63A5 : 86 42               	LDAA #'B'
+     419/    63A7 : BD 63 D1            	JSR PRT2H
+     420/    63AA : 86 48               	LDAA #'H'
+     421/    63AC : BD 63 D1            	JSR PRT2H
+     422/    63AF : 86 4A               	LDAA #'J'
+     423/    63B1 : CE 61 12            	LDX #JHPOS
+     424/    63B4 : BD 63 C1            	JSR PRT4H
+     425/    63B7 : 86 0D               PRTCRLF	LDA #13
+     426/    63B9 : BD E1 D1            	JSR OUTEEE
+     427/    63BC : 86 0A               	LDA #10
+     428/    63BE : 7E E1 D1            	JMP OUTEEE
+     429/    63C1 : BD E1 D1            PRT4H	JSR OUTEEE
+     430/    63C4 : 86 20               	LDA #32
+     431/    63C6 : BD E1 D1            	JSR OUTEEE
+     432/    63C9 : BD E0 C8            	JSR OUT4HS
+     433/    63CC : 86 20               	LDA #32
+     434/    63CE : 7E E1 D1            	JMP OUTEEE
+     435/    63D1 : BD E1 D1            PRT2H	JSR OUTEEE
+     436/    63D4 : 86 20               	LDA #32
+     437/    63D6 : BD E1 D1            	JSR OUTEEE
+     438/    63D9 : 08                  	INX
+     439/    63DA : BD E0 CA            	JSR OUT2HS
+     440/    63DD : 86 20               	LDA #32
+     441/    63DF : 7E E1 D1            	JMP OUTEEE
+     442/    63E2 :                     
+     443/    63E2 :                     ;*SUBROUTINE "CLRMEM" CLEAR MEMORY STORAGE LOCATIONS
+     444/    63E2 : 5F                  CLRMEM	CLRB
+     445/    63E3 : C6 00               	LDAB #$00	;TOTAL NUMBER OF LOCATIONS TO CLEAR (00=CLEAR FROM 00 TO FF)
+     446/    63E5 : CE 18 00            	LDX #$1800	;CLEAR OUTPUT BUFFER (AT 1800)
+     447/    63E8 : 8D 01               	BSR CLEAR2
+     448/    63EA : 39                  	RTS
+     449/    63EB : 4F                  CLEAR2	CLRA
+     450/    63EC : A7 00               CLRMOR	STAA $00,X
+     451/    63EE : 08                  	INX
+     452/    63EF : 5A                  	DECB
+     453/    63F0 : 26 FA               	BNE CLRMOR
+     454/    63F2 : 39                  	RTS
+     455/    63F3 : 86 01               PIAINT	LDAA #1		;GRAPHICS DISPLAY OPTION = PIA INITIALIZATION
+     456/    63F5 : BD 67 01            	JSR SCREEN
+     457/    63F8 : 86 03               CLSCRN	LDAA #3
+     458/    63FA : BD 67 01            	JSR SCREEN
+     459/    63FD : 39                  	RTS
+     460/    63FE : 86 06               GETJOY	LDAA #6		;GET ANALOG PPG-J JOY POSITION
+     461/    6400 : 7E 67 01            	JMP SCREEN	
+     462/    6403 :                     
+     463/    6403 :                     ;*SUBROUTINE "PROMPT" WILL LOAD THE INDEX REGISTER WITH THE		
+     464/    6403 :                     ;*ADDRESS OF THE NEXT USER PROMPT TO BE DISPLAYED AND THEN 
+     465/    6403 :                     ;*WILL PRINT THE MESSAGE ON THE USER'S TERMINAL. IT WILL
+     466/    6403 :                     ;*THEN WAIT UNTIL THE USER HAS READ AND UNDERSTOOD THE
+     467/    6403 :                     ;*PROMPT BEFORE PRINTING THE NEXT MESSAGE.
+     468/    6403 : CE 64 EC            PROMPT	LDX #WELCOM
+     469/    6406 : BD 64 22            	JSR DSPCHR
+     470/    6409 : CE 66 6F            	LDX #MSGA
+     471/    640C : BD 64 22            	JSR DSPCHR
+     472/    640F : BD 64 2F            	JSR INCHR
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 9 - 5/19/2022 9:55:4
+
+
+     473/    6412 : CE 13 00            	LDX #$1300	;RESPONSE TO MSGB PROMPT = 1 (PARSONS AIRFIELD)
+     474/    6415 : 81 31               	CMPA #$31
+     475/    6417 : 27 03               	BEQ LOADIR
+     476/    6419 : CE 11 00            	LDX #$1100	;RESPONSE TO MSGB PROMPT = 2 (SUBLOGIC AIRFIELD)
+     477/    641C : FF 01 0F            LOADIR	STX IBP
+     478/    641F : CE 66 6A            	LDX #MCRLF
+     479/    6422 : A6 00               DSPCHR	LDAA $0,X	;PRINT A STRING POINTED BY X-REG, TERMINATED BY $04 CHAR
+     480/    6424 : 81 04               	CMPA #04	
+     481/    6426 : 26 01               	BNE PRTCHR
+     482/    6428 : 39                  	RTS
+     483/    6429 : BD E1 D1            PRTCHR	JSR OUTEEE	;PUT CHARACTER OUT TO TERMINAL
+     484/    642C : 08                  	INX
+     485/    642D : 20 F3               	BRA DSPCHR	
+     486/    642F :                     	
+     487/    642F : 4F                  INCHR	CLRA		;PREPARE ACCM FOR RESPONSE
+     488/    6430 : 7E E1 AC            	JMP INEEE	;ANY RESPONSE ?
+     489/    6433 :                     	
+     490/    6433 :                     ;*SUBROUTINE "INITLOD" LOADS THE SIX POSITIONAL PARAMETERS
+     491/    6433 :                     ;*OF THE SIMULATOR'S INITIAL POSITION WHICH WAS PREVIOUSLY
+     492/    6433 :                     ;*PROMPTED TO THE USER.
+     493/    6433 : CE D5 00            INITLOD	LDX #$D500	;-11,190 FEET FROM DISPLAY ORIGIN
+     494/    6436 : FF 01 00            	STX XV		;POS = WEST (0000-7FFF) NEG = EAST (FFFF-8000)
+     495/    6439 : CE FC 18            	LDX #$FC18	;ALT = 1000 FT => 3D VALUE FOR VIEWRT
+     496/    643C : FF 01 02            	STX YV		;      SO REQUIRE NEGATIVE 3D VALUE (FFFF-8000)
+     497/    643F : CE F0 00            	LDX #$F000	;-4096 FEET FROM DISPLAY ORIGIN
+     498/    6442 : FF 01 04            	STX ZV		;POS=SOUTH (0000-7FFF) NEG=NORTH (FFFF-8000)
+     499/    6445 : CE 00 00            	LDX #$0000	;PITCH = BANK = HEADING = 0.0 DEGREES
+     500/    6448 : FF 01 06            	STX PV
+     501/    644B : FF 01 08            	STX BV
+     502/    644E : FF 01 0A            	STX HV
+     503/    6451 : CE 18 00            	LDX #$1800	;OUTPUT 2D BUFFER
+     504/    6454 : FF 01 11            	STX OBP
+     505/    6457 : 86 40               	LDAA #$40
+     506/    6459 : B7 01 0E            	STAA SCRN	;SCREEN WIDTH=64 PIXELS X 64 PIXELS
+     507/    645C : CE 00 00            	LDX #0
+     508/    645F : FF 61 26            	STX PITCH	;PLANE PITCH ANGLE (16 BITS). >0 LOOK DOWN
+     509/    6462 : FF 61 28            	STX BANK	;PLANE BANK ANGLE (16 BITS). >0 BANK TO LEFT
+     510/    6465 : FF 61 2A            	STX HEADING 	;PLANE HEADING ANGLE (16 BITS). =0 NORTH, >0 TO RIGHT	
+     511/    6468 : FF 61 1E            	STX SINP	;SIN(PITCH VIEWER)
+     512/    646B : FF 61 20            	STX SINB	;SIN(BANK VIEWER)
+     513/    646E : FF 61 22            	STX SINH	;SIN(HEADING VIEWER)
+     514/    6471 : CE 7F FF            	LDX #$7FFF	
+     515/    6474 : FF 61 18            	STX COSP	;COS(PITCH VIEWER)
+     516/    6477 : FF 61 1A            	STX COSB	;COS(BANK VIEWER)
+     517/    647A : FF 61 1C            	STX COSH	;COS(HEADING VIEWER)
+     518/    647D : CE 00 FA            	LDX #250
+     519/    6480 : FF 61 24            	STX SPEED	;PLANE SPEED 
+     520/    6483 : CE 64 AB            	LDX #TMRIRQ	;LOAD TIMER IRQ SERVICING ROUTINE ADDRESS
+     521/    6486 : FF A0 00            	STX $A000	;STORE IT ON IRQ VECTOR
+     522/    6489 : CE 00 00            	LDX #0
+     523/    648C : FF 61 03            	STX TICK	;INIT TICK COUNT
+     524/    648F : FF 61 05            	STX TICK0
+     525/    6492 : FF 61 09            	STX NFRAME	;INIT FRAME NUMBER	
+     526/    6495 : CE 80 10            	LDX #$8010	;INIT MP-T TIMER 
+     527/    6498 : 86 FF                	LDAA #$FF	;TO GENERATE AN IRQ EACH 10 MSEC 
+     528/    649A : A7 02                	STAA 2,X
+     529/    649C : 86 3D                	LDAA #$3D
+     530/    649E : A7 03                	STAA 3,X
+     531/    64A0 : 86 80                	LDAA #$80
+     532/    64A2 : A7 02                	STAA 2,X
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 10 - 5/19/2022 9:55:4
+
+
+     533/    64A4 : 86 04               	LDAA #$04	;04=10 MILLISEC INTERVAL
+     534/    64A6 : A7 02                	STAA 2,X
+     535/    64A8 : 01                   	NOP
+     536/    64A9 : 0E                   	CLI		;ENABLE INTERRUPTS
+     537/    64AA : 39                  	RTS
+     538/    64AB :                     ;* TIMER IRQ ROUTINE TO INCREMENT TICK EACH 10 MSEC
+     539/    64AB :                     ;* USED TO PROVIDE REAL TIME CALCULATIONS ON PLANE MOTION SIMULATION
+     540/    64AB :                     ;* TICK SHOULD BE READ WITH LDX (NOT LDAA/B) TO PREVENT BEING
+     541/    64AB :                     ;* UPDATED IN MIDDLE OF READ.
+     542/    64AB :                     ;* TICK VAR WILL WRAP AFTER 65536*10 MSEC = 655,36 SEC = 10.9 MINUTES
+     543/    64AB : CE 80 10            TMRIRQ	LDX #$8010	;CLEAR IRQ REQUEST FROM MP-T TIMER CARD
+     544/    64AE : A6 02                	LDAA 2,X
+     545/    64B0 : FE 61 03             	LDX TICK	;INCREMENT TICK COUNT
+     546/    64B3 : 08                   	INX
+     547/    64B4 : FF 61 03             	STX TICK
+     548/    64B7 : 3B                   	RTI
+     549/    64B8 :                     
+     550/    64B8 :                     ;*SUBROUTINE "GO3D2D" CALLS THE PROGRAM WRITTEN BY SUBLOGIC'S
+     551/    64B8 :                     ;*BRUCE ARTWICK WHICH WILL PERFORM THE NECESSARYMATHEMATICAL
+     552/    64B8 :                     ;*ALGORITHMS TO SUCCESSFULLY TRANSFORM THE DATA BASE GIVE
+     553/    64B8 :                     ;*THE POSITIONAL PARAMETERS STORED IN XV,YU,ZV,PV,BV AND HV,
+     554/    64B8 :                     ;*UPON COMPLETITION THE OUTPUT ARRAY IS STORES IN MEMORY IN
+     555/    64B8 :                     ;*THE OUTPUT BUFFER.
+     556/    64B8 : BD 09 00            GO3D2D	JSR CONV3D	
+     557/    64BB : 39                  	RTS		
+     558/    64BC :                     ;*SUBROUTINE "DBDRAW" WILL LOAD THE NEXT (X1,Y1) AND (X2,Y2)
+     559/    64BC :                     ;*FROM THE OUTPUT BUFFER IF THE CONTROL BYTE IS HEX 55,
+     560/    64BC :                     ;*OTHERWISE IT WILL RETURN TO THE MACRO
+     561/    64BC : FE 01 11            DBDRAW	LDX OBP		
+     562/    64BF : A6 00               FEED	LDAA 0,X	
+     563/    64C1 : 81 55               	CMPA #$55
+     564/    64C3 : 27 01               	BEQ NXTLIN
+     565/    64C5 : 39                  	RTS		
+     566/    64C6 : 08                  NXTLIN	INX
+     567/    64C7 : A6 00               	LDAA 0,X
+     568/    64C9 : 97 50               	STAA X1		;.*echo x1:a
+     569/    64CB : 08                  	INX	
+     570/    64CC : A6 00               	LDAA 0,X
+     571/    64CE : 97 51               	STAA Y1		;.*echo y1:a
+     572/    64D0 : 08                  	INX	
+     573/    64D1 : A6 00               	LDAA 0,X
+     574/    64D3 : 97 52               	STAA X2		;.*echo x2:a
+     575/    64D5 : 08                  	INX	
+     576/    64D6 : A6 00               	LDAA 0,X
+     577/    64D8 : 97 53               	STAA Y2		;.*echo y2:a
+     578/    64DA : 08                  	INX	
+     579/    64DB : FF 61 0C            	STX IDXREG
+     580/    64DE : 86 05               	LDAA #5		;GRAPHIC'S DISPLAY OPTION = DRAW (SHOW2)
+     581/    64E0 : BD 67 01            	JSR SCREEN	;.*echo drawline
+     582/    64E3 : FE 61 0C            	LDX IDXREG
+     583/    64E6 : 20 D7               	BRA FEED
+     584/    64E8 :                     
+     585/    64E8 : 0D 0A 0D 0A         WELCOM	FCB 13,10,13,10
+     586/    64EC : 20 20 20 20 20 57           FCC '     WELCOME TO THE M6800 FLIGHT SIMULATOR PROGRAM'
+             64F2 : 45 4C 43 4F 4D 45 
+             64F8 : 20 54 4F 20 54 48 
+             64FE : 45 20 4D 36 38 30 
+             6504 : 30 20 46 4C 49 47 
+             650A : 48 54 20 53 49 4D 
+             6510 : 55 4C 41 54 4F 52 
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 11 - 5/19/2022 9:55:4
+
+
+             6516 : 20 50 52 4F 47 52 
+             651C : 41 4D             
+     587/    651E : 0D 0A 0D 0A                 FCB 13,10,13,10
+     588/    6522 : 54 48 49 53 20 50   	FCC 'THIS PROGRAM IS DESIGNED TO ALLOW THE USER TO SET UP THE AIRCRAFT`S INITIAL'
+             6528 : 52 4F 47 52 41 4D 
+             652E : 20 49 53 20 44 45 
+             6534 : 53 49 47 4E 45 44 
+             653A : 20 54 4F 20 41 4C 
+             6540 : 4C 4F 57 20 54 48 
+             6546 : 45 20 55 53 45 52 
+             654C : 20 54 4F 20 53 45 
+             6552 : 54 20 55 50 20 54 
+             6558 : 48 45 20 41 49 52 
+             655E : 43 52 41 46 54 60 
+             6564 : 53 20 49 4E 49 54 
+             656A : 49 41 4C          
+     589/    656D : 0D 0A               	FCB 13,10
+     590/    656F : 50 4F 53 49 54 49   	FCC 'POSITION COORDINAES FROM USER PROMPTS, ENGAGE THE FLIGHT SIMULATOR AND'
+             6575 : 4F 4E 20 43 4F 4F 
+             657B : 52 44 49 4E 41 45 
+             6581 : 53 20 46 52 4F 4D 
+             6587 : 20 55 53 45 52 20 
+             658D : 50 52 4F 4D 50 54 
+             6593 : 53 2C 20 45 4E 47 
+             6599 : 41 47 45 20 54 48 
+             659F : 45 20 46 4C 49 47 
+             65A5 : 48 54 20 53 49 4D 
+             65AB : 55 4C 41 54 4F 52 
+             65B1 : 20 41 4E 44       
+     591/    65B5 : 0D 0A               	FCB 13,10
+     592/    65B7 : 50 52 45 53 45 4E   	FCC 'PRESENT AN UPDATED GRAPHICS DISPLAY AS STUDENT PILOT ATTEMPTS TO MANUEVER'
+             65BD : 54 20 41 4E 20 55 
+             65C3 : 50 44 41 54 45 44 
+             65C9 : 20 47 52 41 50 48 
+             65CF : 49 43 53 20 44 49 
+             65D5 : 53 50 4C 41 59 20 
+             65DB : 41 53 20 53 54 55 
+             65E1 : 44 45 4E 54 20 50 
+             65E7 : 49 4C 4F 54 20 41 
+             65ED : 54 54 45 4D 50 54 
+             65F3 : 53 20 54 4F 20 4D 
+             65F9 : 41 4E 55 45 56 45 
+             65FF : 52                
+     593/    6600 : 0D 0A               	FCB 13,10	 
+     594/    6602 : 54 48 45 20 50 4C   	FCC 'THE PLANE FOR LANDING ON AN AIRSTRIP. TO USE THE PROGRAM YOU FIRST MUST'
+             6608 : 41 4E 45 20 46 4F 
+             660E : 52 20 4C 41 4E 44 
+             6614 : 49 4E 47 20 4F 4E 
+             661A : 20 41 4E 20 41 49 
+             6620 : 52 53 54 52 49 50 
+             6626 : 2E 20 54 4F 20 55 
+             662C : 53 45 20 54 48 45 
+             6632 : 20 50 52 4F 47 52 
+             6638 : 41 4D 20 59 4F 55 
+             663E : 20 46 49 52 53 54 
+             6644 : 20 4D 55 53 54    
+     595/    6649 : 0D 0A               	FCB 13,10	 
+     596/    664B : 43 48 4F 4F 53 45   	FCC 'CHOOSE AN AIRPORT DATABASE.'
+             6651 : 20 41 4E 20 41 49 
+             6657 : 52 50 4F 52 54 20 
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 12 - 5/19/2022 9:55:4
+
+
+             665D : 44 41 54 41 42 41 
+             6663 : 53 45 2E          
+     597/    6666 : 0D 0A 0D 0A         MCRLF   FCB 13,10,13,10
+     598/    666A : 04                  	FCB $04
+     599/    666B :                     	
+     600/    666B : 20 20 20 43 48 4F   MSGA	FCC '   CHOOSE THE AIRPORT DATABASE AS FOLLOWS: '
+             6671 : 4F 53 45 20 54 48 
+             6677 : 45 20 41 49 52 50 
+             667D : 4F 52 54 20 44 41 
+             6683 : 54 41 42 41 53 45 
+             6689 : 20 41 53 20 46 4F 
+             668F : 4C 4C 4F 57 53 3A 
+             6695 : 20                
+     601/    6696 : 0D 0A 0D 0A                 FCB 13,10,13,10
+     602/    669A : 20 31 20 3D 20 50   	FCC ' 1 = PARSON`S FIELD AT TETERBORO, NEW JERSEY.'	
+             66A0 : 41 52 53 4F 4E 60 
+             66A6 : 53 20 46 49 45 4C 
+             66AC : 44 20 41 54 20 54 
+             66B2 : 45 54 45 52 42 4F 
+             66B8 : 52 4F 2C 20 4E 45 
+             66BE : 57 20 4A 45 52 53 
+             66C4 : 45 59 2E          
+     603/    66C7 : 0D 0A                       FCB 13,10
+     604/    66C9 : 20 32 20 3D 20 41   	FCC ' 2 = ARTWICK`S FIELD AT TETERBORO, NEW JERSEY.'	
+             66CF : 52 54 57 49 43 4B 
+             66D5 : 60 53 20 46 49 45 
+             66DB : 4C 44 20 41 54 20 
+             66E1 : 54 45 54 45 52 42 
+             66E7 : 4F 52 4F 2C 20 4E 
+             66ED : 45 57 20 4A 45 52 
+             66F3 : 53 45 59 2E       
+     605/    66F7 : 0D 0A 0D 0A                 FCB 13,10,13,10
+     606/    66FB : 3F                          FCC '?'
+     607/    66FC : 04                  	FCB $04
+     608/    66FD :                     	
+     609/    66FD : 81 01               SCREEN	CMPA #01       
+     610/    66FF : 27 19               	BEQ  FIRST     
+     611/    6701 : 81 02               	CMPA #02       
+     612/    6703 : 27 64               	BEQ  JINIT     
+     613/    6705 : 81 03               	CMPA #03       
+     614/    6707 : 27 20               	BEQ  ERASE     
+     615/    6709 : 81 04               	CMPA #04
+     616/    670B : 27 4B               	BEQ  PIXEL
+     617/    670D : 81 05               	CMPA #05
+     618/    670F : 27 56               	BEQ  SHOW2
+     619/    6711 : 81 06               	CMPA #06
+     620/    6713 : 27 5F               	BEQ  JSTART
+     621/    6715 : 39                  	RTS
+     622/    6716 :                     ;* PIA INITIALIZATION SECTION
+     623/    6716 : 4F                  FIRST	CLRA
+     624/    6717 : B7 80 0C            	STAA $800C     
+     625/    671A : 86 FF               	LDAA #$FF
+     626/    671C : B7 80 0C            	STAA $800C
+     627/    671F : 86 3F               	LDAA #$3F
+     628/    6721 : B7 80 0D            	STAA $800D
+     629/    6724 : 39                  	RTS
+     630/    6725 :                     ;* ERASE SCREEN SECTION
+     631/    6725 : 86 3F               ERASE	LDAA #63
+     632/    6727 : 97 58               	STAA HPOS
+     633/    6729 : 96 58               HSET	LDAA HPOS
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 13 - 5/19/2022 9:55:4
+
+
+     634/    672B : 8D 1A               	BSR  SENDA
+     635/    672D : 86 80               VBAR	LDAA #128
+     636/    672F : 8D 16               CLR	BSR  SENDA
+     637/    6731 : 4C                  	INCA
+     638/    6732 : 81 E0               MOD	CMPA #224
+     639/    6734 : 26 F9               	BNE  CLR
+     640/    6736 : 7A 00 58            	DEC  HPOS
+     641/    6739 : 2C EE               	BGE  HSET
+     642/    673B : 86 C0               	LDAA #192
+     643/    673D : B7 67 33            	STAA MOD+1
+     644/    6740 : 39                  	RTS
+     645/    6741 :                     ;*SCREEN DRIVE SUBROUTINES
+     646/    6741 : 16                  SENDA	TAB
+     647/    6742 : F7 80 0C            SENDB	STAB $800C
+     648/    6745 : C6 37               	LDAB #$37
+     649/    6747 : F7 80 0D            	STAB $800D
+     650/    674A : E6 00               	LDAB 0,X
+     651/    674C : C6 3F               	LDAB #$3F
+     652/    674E : F7 80 0D            	STAB $800D
+     653/    6751 : 39                  	RTS
+     654/    6752 :                     ;* PIXEL OUTPUT
+     655/    6752 : D6 50               PIXEL	LDAB X1
+     656/    6754 : CB 60               	ADDB #96
+     657/    6756 : 8D EA               	BSR SENDB
+     658/    6758 : C6 A0               	LDAB #160
+     659/    675A : D0 51               	SUBB Y1
+     660/    675C : 8D E4               	BSR SENDB
+     661/    675E : 39                  	RTS
+     662/    675F : 20 4F               SHOW2	BRA SHOW
+     663/    6761 :                     ;* INITIALIZE PIA INTERFACE TO JOYSTICK
+     664/    6761 : 86 3D               JINIT	LDAA #$3D
+     665/    6763 : CE 80 0C            	LDX #$800C
+     666/    6766 : C6 00               	LDAB #$00
+     667/    6768 : E7 02               	STAB 2,X
+     668/    676A : A7 03               	STAA 3,X
+     669/    676C :                     ;* SAVE MACHINE REGISTERS ON INPUT
+     670/    676C : B7 61 14            JSTART	STAA ASAVE
+     671/    676F : F7 61 15            	STAB BSAVE
+     672/    6772 : FF 61 16            	STX ISAVE
+     673/    6775 :                     ;* GET HORIZONTAL STICK POSITION
+     674/    6775 : CE 80 0C            	LDX #$800C
+     675/    6778 : A6 03               LOOP1	LDA 3,X
+     676/    677A : 84 80               	ANDA #$80
+     677/    677C : 27 FA               	BEQ LOOP1
+     678/    677E : A6 02               	LDAA 2,X
+     679/    6780 : 16                  	TAB
+     680/    6781 : 84 80               	ANDA #$80
+     681/    6783 : 26 F3               	BNE LOOP1
+     682/    6785 : C4 3F               	ANDB #$3F
+     683/    6787 : F7 61 12            	STAB JHPOS 
+     684/    678A : A6 03               LOOP2	LDAA 3,X
+     685/    678C : 84 80               	ANDA #$80 
+     686/    678E : 27 FA               	BEQ LOOP2
+     687/    6790 : A6 02               	LDAA 2,X
+     688/    6792 : 16                  	TAB
+     689/    6793 : 84 80               	ANDA #$80
+     690/    6795 : 26 0A               	BNE GOBACK
+     691/    6797 : 20 DF               	BRA LOOP1
+     692/    6799 : C4 7F               GOBACK	ANDB #$7F
+     693/    679B : F7 61 13                    STAB JVPOS
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 14 - 5/19/2022 9:55:4
+
+
+     694/    679E : B6 61 14            	LDAA ASAVE
+     695/    67A1 : F6 61 15            	LDAB BSAVE
+     696/    67A4 : FE 61 16            	LDX ISAVE
+     697/    67A7 : 39                  	RTS
+     698/    67A8 :                     ;* ROUTINE TO DRAW LINE FROM (X1,Y1) TO (X2,Y2)
+     699/    67A8 : 4F                  SHOW	CLRA
+     700/    67A9 : C6 01               	LDAB #1
+     701/    67AB : D7 54               	STAB M
+     702/    67AD : D7 55               	STAB N
+     703/    67AF : D6 52               	LDAB X2 
+     704/    67B1 : D0 50               	SUBB X1
+     705/    67B3 : D7 56               	STAB D
+     706/    67B5 : 2C 13               	BGE BP1
+     707/    67B7 : 70 00 54            	NEG M
+     708/    67BA : 70 00 56            	NEG D
+     709/    67BD : 26 0F               BP1	BNE BP2
+     710/    67BF : 86 FF               	LDAA #$FF
+     711/    67C1 : D6 53               BP2	LDAB Y2
+     712/    67C3 : D0 51               	SUBB Y1
+     713/    67C5 : D7 57               	STAB E
+     714/    67C7 : 2C 16               	BGE B8963
+     715/    67C9 : 70 00 55            	NEG N
+     716/    67CC : 70 00 57            	NEG E
+     717/    67CF : BD 67 52            B8963	JSR PIXEL
+     718/    67D2 : D6 50               	LDAB X1
+     719/    67D4 : D1 52               	CMPB X2
+     720/    67D6 : 27 31               	BEQ B8990
+     721/    67D8 : 4D                  B8969	TSTA
+     722/    67D9 : 2D 20               	BLT B8981
+     723/    67DB : D6 50               	LDAB X1
+     724/    67DD : DB 54               	ADDB M
+     725/    67DF : D7 50               	STAB X1
+     726/    67E1 : 90 57               	SUBA E
+     727/    67E3 : 20 EA               	BRA B8963
+     728/    67E5 : D6 51               B8981	LDAB Y1
+     729/    67E7 : DB 55               	ADDB N
+     730/    67E9 : D7 51               	STAB Y1
+     731/    67EB : 9B 56               	ADDA D
+     732/    67ED : 20 E0               	BRA B8963
+     733/    67EF : D6 51               B8990	LDAB Y1
+     734/    67F1 : D1 53               	CMPB Y2
+     735/    67F3 : 26 E3               	BNE B8969
+     736/    67F5 : 39                  	RTS
+     737/    67F6 :                     
+     738/    67F6 : =$50                 X1	EQU $0050
+     739/    67F6 : =$52                 X2	EQU $0052
+     740/    67F6 : =$51                 Y1	EQU $0051
+     741/    67F6 : =$53                 Y2	EQU $0053
+     742/    67F6 : =$54                 M	EQU $0054
+     743/    67F6 : =$55                 N	EQU $0055
+     744/    67F6 : =$56                 D	EQU $0056
+     745/    67F6 : =$57                 E	EQU $0057
+     746/    67F6 : =$58                 HPOS	EQU $0058
+     747/    67F6 :                     
+     748/    A048 :                     	ORG $A048	;SET START ADDRESS FOR "G" COMMAND
+     749/    A048 : 60 00               	FDB START
+     750/    A04A :                     
+     751/    A04A :                     	END
+FlightSim_m6800.asm(751)
+PASS 3
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 1 - 5/19/2022 9:55:4
+
+
+       1/       0 :                     ;*	NAM FLITM6800
+       2/       0 :                     
+       3/       0 :                     ;*THE FOLLOWING PROGRAM WAS WRITTEN BY WAYNE PARSONS IN
+       4/       0 :                     ;*CONJUNCTION WITH THE INDISTRIAL ENGENEERING DEPARTMENT
+       5/       0 :                     ;*AND DR. DAUER AS A PARTIAL REQUIREMENT FOR COMPLETITION
+       6/       0 :                     ;*OF A MS DEGREE AT THE UNIVERSITY OF CENTRAL FLORIDA IN THE
+       7/       0 :                     ;*FALL SEMESTER OF 1981.
+       8/       0 :                     ;*
+       9/       0 :                     ;* MODIFIED BY ROBERTO SANCHO JUN 2022 
+      10/       0 :                     ;* TO RUN ON SIMH SWTPC 6800 SIMULATOR
+      11/       0 :                     ;*
+      12/       0 :                     ;*   CHANGES: - REMOVE INTERFACE WITH EXTERNAL ATC-610J 
+      13/       0 :                     ;*              ANALOG FLIGH SIMULATOR
+      14/       0 :                     ;*            - ADD ROUTINES TO PERFORM FLIGH SIMULATION
+      15/       0 :                     ;*              USING SWTPC 6800 CPU
+      16/       0 :                     ;*            - USES MP-T TIMER SS50 BOARD TO PROVIDE
+      17/       0 :                     ;*              TIMING FOR SIMULATION. 
+      18/       0 :                     ;*            - USES PPG-J ANALOG TO SIMULATR PLANE CONTROL YOKE
+      19/       0 :                     ;*
+      20/       0 :                     ;*   THIS PROGRAM ONLY USES SW AND HW AVAILABLE IN 1979
+      21/       0 :                     ;*
+      22/       0 :                     ;**********************************************************
+      23/       0 :                     ;* 
+      24/       0 :                     ;* MEMORY MAP: 0000-004F SUBLOGIC 3DG68 DIRECT STORAGE
+      25/       0 :                     ;*             0050-     USED BY FLIGHTSIM M6800
+      26/       0 :                     ;*             0100-0112 SUBLOGIC 3DG68 3D TO 2D ROUTINE CONTROL ARRAY
+      27/       0 :                     ;*             0113-0FFF SUBLOGIC 3DG68 PACKAGE (ENTRY POINT 0900)
+      28/       0 :                     ;* 
+      29/       0 :                     ;*             1100-1296 SUBLOGIC SCENERY
+      30/       0 :                     ;*             1300-1362 PARTSON'S FIELD SCENERY
+      31/       0 :                     ;*             1800-18FF 2D OUTPUT BUFFER ARRAY
+      32/       0 :                     ;*
+      33/       0 :                     ;*             6000-     FLIGHT SIMULATOR M6800 PROGRAM
+      34/       0 :                     ;*
+      35/       0 :                     ;**********************************************************	
+      36/       0 :                     
+      37/       0 :                     			; PATCHES FOR 3DG68 
+      38/     DBE :                     	ORG $0DBE
+      39/     DBE : 7E 60 06            	JMP SVTRIG	; PATCH 3DG68 TO SAVE COS&SIN CALCULATIONS FOR PV, BV, HV
+      40/     A8C :                     	ORG $0A8C
+      41/     A8C : 7E 60 2E            	JMP SAFSWP1	; PATCH 3DG68 TO MAKE SWAP ROUTINE INTERRUPT SAFE
+      42/     AAE :                     	ORG $0AAE
+      43/     AAE : 7E 60 36            	JMP SAFSWP2	
+      44/     AB1 :                     
+      45/    6000 :                     	ORG $6000
+      46/    6000 :                     	
+      47/    6000 : 8E 61 02            START	LDS #STACK	;SET NEW STACK ADDRESS
+      48/    6003 : 7E 61 34                    JMP MACRO	
+      49/    6006 :                     
+      50/    6006 :                     			; PATCHES FOR 3DG68 ROUTINES
+      51/    6006 :                     			
+      52/    6006 :                     			; PATCH 3DG68 TO SAVE COS&SIN CALCULATIONS FOR PV, BV, HV
+      53/    6006 :                     			; TO BE USED AGAIN ON PLANE MOTION CALCULATIONS			
+      54/    6006 : BD 0B A4            SVTRIG	JSR  COS	; ADDR $20..$2B CONTAINS COS AND SIN VALUES 
+      55/    6009 : D7 2A               	STAB $2A
+      56/    600B : 97 2B               	STAA $2B
+      57/    600D : DE 20               	LDX $0020
+      58/    600F : FF 61 1E            	STX SINP	;SIN(PV)
+      59/    6012 : DE 22               	LDX $0022
+      60/    6014 : FF 61 20            	STX SINB	;SIN(BV)
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 2 - 5/19/2022 9:55:4
+
+
+      61/    6017 : DE 24               	LDX $0024
+      62/    6019 : FF 61 22            	STX SINH	;SIN(HV)
+      63/    601C : DE 26               	LDX $0026
+      64/    601E : FF 61 18            	STX COSP	;COS(PV)
+      65/    6021 : DE 28               	LDX $0028
+      66/    6023 : FF 61 1A            	STX COSB	;COS(BV)
+      67/    6026 : DE 2A               	LDX $002A
+      68/    6028 : FF 61 1C            	STX COSH	;COS(HV)
+      69/    602B : 7E 0D C5            	JMP $0DC5
+      70/    602E :                     	
+      71/    602E :                     			; ROUTINE AT 0A8C..0AB0 USES M6800 16 BITS REGISTERS
+      72/    602E :                     			; IX AND SP TO SWAP A SERIES OF 16 BIT VALUES
+      73/    602E :                     			; THIS TRICK IS CLEVER AND NICE AND FASTER THAN ANY OTHER METHOD
+      74/    602E :                     			; SP IS SAVED AT ENTRY AND EXIT OF ROUTINES, SO WORKS OK
+      75/    602E :                     			; BUT IF AN INTERRUPR OCCURS WHILE IN MIDDLE OF ROUTINE, 
+      76/    602E :                     			; AS SP IS BEING FILLED WITH DATA, MEMORY AT ANY LOCATION CAN BE
+      77/    602E :                     			; OVERWRITTEN WITH IRQ STATUS SAVE. TO FIX THIS, IRQ IS DISABLED
+      78/    602E :                     			; ON ENTRY, ENABLED AGAIN ON EXIT
+      79/    602E :                     
+      80/    602E : 0F                  SAFSWP1	SEI		; DISABLE IRQ ON SWAP ROUTINE ENTRY
+      81/    602F : 9F 38               	STS  $38
+      82/    6031 : DE 2A               	LDX  $2A
+      83/    6033 : 7E 0A 90            	JMP  $0A90
+      84/    6036 : 9E 38               SAFSWP2	LDS  $38	; ENABLE IRQ ON SWAP ROUTINE EXIT
+      85/    6038 : 0E                  	CLI
+      86/    6039 : 39                  	RTS
+      87/    603A :                     
+      88/    603A :                     
+      89/    603A :                     ; 3DG68 MEMORY LOCATIONS
+      90/    603A :                     
+      91/    603A : =$100                XV	EQU $0100	;VIEWER POSITION WEST (0000-7FFF), EAST (FFFF-8000)
+      92/    603A : =$102                YV	EQU $0102	;VIEWER POSITION ALTITUDE
+      93/    603A : =$104                ZV	EQU $0104	;VIEWER POSITION SOUTH (0000-7FFF), NORTH (FFFF-8000)
+      94/    603A : =$106                PV 	EQU $0106	;VIEWER PITCH ANGLE
+      95/    603A : =$108                BV 	EQU $0108	;VIEWER BANK ANGLE
+      96/    603A : =$10A                HV 	EQU $010A	;VIEWER HEADING ANGLE
+      97/    603A : =$10E                SCRN	EQU $010E	;SCREEN WIDTH FOR OUTPUT
+      98/    603A : =$10F                IBP 	EQU $010F	;INPUT BUFFER POINTER
+      99/    603A : =$111                OBP 	EQU $0111	;OUTPUT BUFFER POINTER
+     100/    603A :                     
+     101/    603A : =$0                  MA	EQU $00		;FIRST ARG FOR MULTS FUNCTION
+     102/    603A : =$2                  MB	EQU $02		;SECOND ARG FOR MULTS FUNCTION
+     103/    603A :                     
+     104/    603A : =$21C                MULTS	EQU $021C	;(B,A)=(MA)*(MB)
+     105/    603A : =$900                CONV3D	EQU $0900	;CONVERSION OF 3D INPUT BUFFER TO 2D OUTPUT BUFFER
+     106/    603A : =$BA2                SIN	EQU $0BA2	;(B,A)=SIN(B). B=0..$FF FOR 0..259 DEG. 
+     107/    603A : =$BA4                COS	EQU $0BA4	;(B,A)=COS(B). (B,A)=SIGNED 16 BITS (-1 -> $FFFF, +1 -> $7FFF)
+     108/    603A :                     
+     109/    603A :                     ;* SWTBUG ROM LOCATIONS
+     110/    603A :                     
+     111/    603A : =$E0C8               OUT4HS	EQU $E0C8 	;OUTPUT 4 HEX CHAR + SPACE (WORD POINTED BY X-REG)
+     112/    603A : =$E0CA               OUT2HS	EQU $E0CA 	;OUTPUT 2 HEX CHAR + SPACE (BYTE POINTED BY X-REG)
+     113/    603A : =$E1AC               INEEE	EQU $E1AC	;SWTBUG INPUT CHAR
+     114/    603A : =$E1D1               OUTEEE	EQU $E1D1	;SWTBUG OUTPUT CHAR
+     115/    603A : =$E113               MON	EQU $E113	;SWTBUG RETURN TO MONITOR
+     116/    603A :                     
+     117/    603A :                     ;* FLIGHT SIM VARIABLES
+     118/    603A :                     
+     119/    603A :                     STACKSP RMB 200		;STACK SPACE
+     120/    6102 :                     STACK	RMB 1
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 3 - 5/19/2022 9:55:4
+
+
+     121/    6103 :                     
+     122/    6103 :                     TICK	RMB 2		;IRQ TICK COUNT. GET INCREMENTED BY IRQ EACH 10MSEC
+     123/    6105 :                     TICK0	RMB 2		;LAST TICK COUNT VALUE
+     124/    6107 :                     TICK1	RMB 2		;CURRENT TICK COUNT VALUE
+     125/    6109 :                     NFRAME	RMB 2		;NUMBER OF FRAME
+     126/    610B :                     ELAPSED	RMB 1		;NUMBER OF TICKS ELAPSED
+     127/    610C :                     
+     128/    610C :                     IDXREG	RMB 2		;INDEX ON OUTPUT 2D BUFFER
+     129/    610E :                     
+     130/    610E :                     JHSGN	RMB 2		;STORE JOY HORIZ POS -$20 .. $1F AS 16 BITS SIGNED
+     131/    6110 :                     JVSGN	RMB 2		;STORE JOY VERT POS -$30 .. $2F AS 16 BITS SIGNED
+     132/    6112 :                     JHPOS	RMB 1		;JOY HORIZONTAL POSITION 00..3F
+     133/    6113 :                     JVPOS	RMB 1		;JOY VERTICAL POSITION 00..5F
+     134/    6114 :                     ASAVE	RMB 1		;SAVE REGISTER
+     135/    6115 :                     BSAVE	RMB 1		;SAVE REGISTER
+     136/    6116 :                     ISAVE	RMB 2		;SAVE REGISTER
+     137/    6118 :                     
+     138/    6118 :                     COSP	RMB 2		;COS(PITCH VIEWER)
+     139/    611A :                     COSB	RMB 2		;COS(BANK VIEWER)
+     140/    611C :                     COSH	RMB 2		;COS(HEADING VIEWER)
+     141/    611E :                     SINP	RMB 2		;SIN(PITCH VIEWER)
+     142/    6120 :                     SINB	RMB 2		;SIN(BANK VIEWER)
+     143/    6122 :                     SINH	RMB 2		;SIN(HEADING VIEWER)
+     144/    6124 :                     
+     145/    6124 :                     SPEED   RMB 2		;PLANE SPEED
+     146/    6126 :                     PITCH	RMB 2 		;PLANE PITCH ANGLE (16 BITS). >0 LOOK DOWN
+     147/    6128 :                     BANK	RMB 2		;PLANE BANK ANGLE (16 BITS). >0 BANK TO LEFT
+     148/    612A :                     HEADING RMB 2		;PLANE HEADING ANGLE (16 BITS). =0 NORTH, >0 TO RIGHT
+     149/    612C :                     VEL	RMB 2		;TEMP VAR VEL = SPEED * TIME ELPASED
+     150/    612E :                     DZ	RMB 2		;Z AXIS INCREMENT
+     151/    6130 :                     DY	RMB 2		;Z AXIS INCREMENT
+     152/    6132 :                     DX	RMB 2		;Z AXIS INCREMENT
+     153/    6134 :                     
+     154/    6134 : BD 63 E2            MACRO   JSR CLRMEM	;CLEAR MEMORY LOCATIONS
+     155/    6137 : BD 63 F3            	JSR PIAINT	;INITIALIZE PIA AND CLEAR SCREEN
+     156/    613A : BD 64 03            	JSR PROMPT	;PRINT USER PROMPT MESSAGES
+     157/    613D : BD 64 33            	JSR INITLOD	;LOAD INITIAL AIRCRAFT POSITIONAL PARAMETERS
+     158/    6140 : 20 03               	BRA TIMONE	;GO TRANSFORM INITIAL VIEW 1ST TIME THRU
+     159/    6142 : BD 61 5F            GOAGN	JSR UPDATE	;GET UPDATED AIRCRAFT POSITION
+     160/    6145 : BD 64 B8            TIMONE	JSR GO3D2D	;GO TRANSFORM 3D TO 2D COORDINATES 
+     161/    6148 : BD 63 F8            	JSR CLSCRN	;CLEAR SCREEN FOR NEW DRAW
+     162/    614B : BD 64 BC            	JSR DBDRAW	;DRAW TRANSFORMED DATA BASE
+     163/    614E : BD 62 4F            	JSR UPDTPOS	;UPDATE AIRCRAFT POSITION
+     164/    6151 : BD 63 FE            	JSR GETJOY	;GET ANALOG PPG-J JOY POSITION
+     165/    6154 : BD 62 EF            	JSR CHKLAND	;CHECK IF LANDED OR CRASHED
+     166/    6157 :                     	; JSR PRTVIEW	;PRINT ON TERMINAL AIRCRAFT STATE (FOR DEBUG) 
+     167/    6157 :                     	
+     168/    6157 :                     
+     169/    6157 : 7E 61 42                    jmp goagn
+     170/    615A :                     	
+     171/    615A :                     	
+     172/    615A : 7E E1 13            	JMP  MON	;SWTBUG RETURN TO MONITOR
+     173/    615D :                     	
+     174/    615D : 20 E3               	BRA GOAGN
+     175/    615F :                     
+     176/    615F :                     ;* UPDATE PLANE STATE
+     177/    615F : 01                  UPDATE	NOP		
+     178/    6160 :                     	;CALC ELAPSED = NUMBER OF TICKS ELAPSED FROM LAST UPDATE 
+     179/    6160 : FE 61 03            TCK0	LDX TICK	;GET TICK COUNT
+     180/    6163 : BC 61 05            	CPX TICK0	
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 4 - 5/19/2022 9:55:4
+
+
+     181/    6166 : FF 61 07            	STX TICK1	;STORE CURRENT TICK COUNT
+     182/    6169 : B6 61 08            	LDAA TICK1+1
+     183/    616C : F6 61 07            	LDAB TICK1
+     184/    616F : B0 61 06            	SUBA TICK0+1
+     185/    6172 : F2 61 05            	SBCB TICK0
+     186/    6175 : C1 00               	CMPB #0
+     187/    6177 : 27 02               	BEQ TCK1
+     188/    6179 : 86 FF               	LDA #255	;MAX ELAPSED TIME IS 255
+     189/    617B : 81 05               TCK1	CMPA #5		;AT LEAST THIS NUMBER OF TICKS SHOULD BE ELAPSED
+     190/    617D : 25 E1               	BCS TCK0	;BR IF A-REG < 5
+     191/    617F : 81 64               	CMPA #100	
+     192/    6181 : 25 02               	BCS TCK2	;BR IF A-REG < 100
+     193/    6183 : 86 64               	LDAA #100
+     194/    6185 : B7 61 0B            TCK2	STAA ELAPSED	;NUMBER OF TICKS ELAPSED FROM LAST UPDATE 
+     195/    6188 : FE 61 07            	LDX TICK1	;.*echo elapsed:a
+     196/    618B : FF 61 05            	STX TICK0	
+     197/    618E : FE 61 09            	LDX NFRAME	;INCR NUMBER 
+     198/    6191 : 08                  	INX 		
+     199/    6192 : FF 61 09            	STX NFRAME	;.*echo nframe:x
+     200/    6195 :                     	;SET PLANE PITCH, BANK AND TURN RATE BASED ON JOYSTICK POSITION 			
+     201/    6195 :                     	;* UPDATE PLANE BANK BASED ON JOY HORIZ POS 
+     202/    6195 : C6 00               	LDAB #0		
+     203/    6197 : 86 20               	LDAA #32	
+     204/    6199 : B0 61 12            	SUBA JHPOS	;GET JOY HORIZ POS LEFT=0, RIGHT=63
+     205/    619C : B7 61 0F            	STAA JHSGN+1	;STORE SIGNED JOY HORIZ POS (LOW PART)
+     206/    619F : 24 02                       BCC JH1
+     207/    61A1 : C6 FF                       LDAB #$FF
+     208/    61A3 : F7 61 0E            JH1     STAB JHSGN	;STORE SIGNED JOY HORIZ POS (HI PART)
+     209/    61A6 : 48                  	ASLA
+     210/    61A7 : 59                  	ROLB		;JOY H = JOY H * 32
+     211/    61A8 : 48                  	ASLA
+     212/    61A9 : 59                  	ROLB
+     213/    61AA : 48                  	ASLA
+     214/    61AB : 59                  	ROLB
+     215/    61AC : 48                  	ASLA
+     216/    61AD : 59                  	ROLB
+     217/    61AE : 48                  	ASLA
+     218/    61AF : 59                  	ROLB
+     219/    61B0 : BB 61 29                    ADDA BANK+1	;BANK = BANK + (JOY H - 32)
+     220/    61B3 : B7 61 29                    STAA BANK+1
+     221/    61B6 : F9 61 28                    ADCB BANK
+     222/    61B9 : F7 61 28                    STAB BANK
+     223/    61BC :                             ;* LIMIT BANK TO +/- 60GR (2A HEX)
+     224/    61BC : C1 2A                       CMPB #$2A
+     225/    61BE : 2D 08                       BLT JH2
+     226/    61C0 : CE 2A 00                    LDX #$2A00
+     227/    61C3 : FF 61 28                    STX BANK
+     228/    61C6 : 20 0A                       BRA JH3
+     229/    61C8 : C1 D6               JH2	CMPB #$D6	;D6 = -2A   
+     230/    61CA : 2A 06               	BPL JH3     
+     231/    61CC : CE D6 00                    LDX #$D600
+     232/    61CF : FF 61 28                    STX BANK
+     233/    61D2 : F6 61 28            JH3	LDAB BANK        
+     234/    61D5 : F7 01 09                    STAB BV+1	;SET VIEWER BANK ANGLE
+     235/    61D8 :                             ;* UPDATE PLANE PITCH BASED ON JOY VERT POS 
+     236/    61D8 : C6 00               	LDAB #0
+     237/    61DA : 86 30               	LDAA #48
+     238/    61DC : B0 61 13            	SUBA JVPOS	;GET JOY VERT POS UP=0, DOWN=95
+     239/    61DF : B7 61 11            	STAA JVSGN+1	;STORE SIGNED JOY VERT POS (LOW PART)
+     240/    61E2 : 24 02                       BCC JV1
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 5 - 5/19/2022 9:55:4
+
+
+     241/    61E4 : C6 FF                       LDAB #$FF
+     242/    61E6 : F7 61 10            JV1     STAB JVSGN	;STORE SIGNED JOY VERT POS (HI PART)
+     243/    61E9 : 48                  	ASLA
+     244/    61EA : 59                  	ROLB		;JOY V = JOY V * 32
+     245/    61EB : 48                  	ASLA
+     246/    61EC : 59                  	ROLB
+     247/    61ED : 48                  	ASLA
+     248/    61EE : 59                  	ROLB
+     249/    61EF : 48                  	ASLA
+     250/    61F0 : 59                  	ROLB
+     251/    61F1 : 48                  	ASLA
+     252/    61F2 : 59                  	ROLB
+     253/    61F3 : BB 61 27            	ADDA PITCH+1	;BANK = BANK + (JOY V - 48)
+     254/    61F6 : B7 61 27                    STAA PITCH+1
+     255/    61F9 : F9 61 26                    ADCB PITCH
+     256/    61FC : F7 61 26                    STAB PITCH        
+     257/    61FF :                             ;* LIMIT PITCH FROM -45GR (NOSE UP $E0 HEX) TO +80GR ($38 HEX)
+     258/    61FF : C1 38                       CMPB #$38
+     259/    6201 : 2D 08                       BLT JV2
+     260/    6203 : CE 38 00                    LDX #$3800
+     261/    6206 : FF 61 26                    STX PITCH
+     262/    6209 : 20 0A                       BRA JV3
+     263/    620B : C1 E0               JV2	CMPB #$E0	;E6 = -20   
+     264/    620D : 2A 06               	BPL JV3     
+     265/    620F : CE E0 00                    LDX #$E000
+     266/    6212 : FF 61 26                    STX PITCH
+     267/    6215 : F6 61 26            JV3	LDAB PITCH        
+     268/    6218 : F7 01 07                    STAB PV+1	;SET VIEWER PITCH ANGLE        
+     269/    621B :                             ;* CALC TURN RATE BASED ON BANK
+     270/    621B : B6 61 29                    LDAA BANK+1
+     271/    621E : 97 01                       STAA MA+1
+     272/    6220 : C6 00                       LDAB #0
+     273/    6222 : B6 61 28                    LDAA BANK
+     274/    6225 : 2A 01                       BPL JT1
+     275/    6227 : 5A                          DECB
+     276/    6228 : 78 00 01            JT1	ASL MA+1
+     277/    622B : 49                  	ROLA
+     278/    622C : 59                  	ROLB
+     279/    622D : 78 00 01            	ASL MA+1
+     280/    6230 : 49                  	ROLA
+     281/    6231 : 59                  	ROLB
+     282/    6232 : 78 00 01            	ASL MA+1
+     283/    6235 : 49                  	ROLA
+     284/    6236 : 59                  	ROLB
+     285/    6237 : D7 00                       STAB MA        
+     286/    6239 : 97 01                       STAA MA+1
+     287/    623B : B6 61 2B                    LDAA HEADING+1
+     288/    623E : F6 61 2A                    LDAB HEADING
+     289/    6241 : 90 01                       SUBA MA+1
+     290/    6243 : D2 00                       SBCB MA
+     291/    6245 : B7 61 2B                    STAA HEADING+1	;HEADING = HEADING - BANK*8
+     292/    6248 : F7 61 2A                    STAB HEADING
+     293/    624B : F7 01 0B                    STAB HV+1	;SET VIEWER HEADING ANGLE
+     294/    624E : 39                  	RTS		
+     295/    624F :                     ;* UPDATE PLANE COORDINATES X,Y,Z
+     296/    624F : 01                  UPDTPOS	NOP             
+     297/    6250 :                     	;* CALCULATE VEL = PLANE SPEED * ELAPSED TIME
+     298/    6250 : F6 61 0B            	LDAB ELAPSED  
+     299/    6253 : 86 00               	LDAA #0
+     300/    6255 : D7 00               	STAB MA         
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 6 - 5/19/2022 9:55:4
+
+
+     301/    6257 : 97 01               	STAA MA+1	
+     302/    6259 : FE 61 24            	LDX SPEED
+     303/    625C : DF 02               	STX MB		;.*echo speed:x
+     304/    625E : BD 02 1C            	JSR MULTS
+     305/    6261 : F7 61 2C            	STAB VEL 
+     306/    6264 : B7 61 2D            	STAA VEL+1	
+     307/    6267 :                     	;* DZ = VEL * COS(PITCH) * COS(HEADING)
+     308/    6267 : FE 61 18            	LDX COSP
+     309/    626A : DF 00               	STX MA		;.*echo cosp:x	
+     310/    626C : FE 61 1C            	LDX COSH
+     311/    626F : DF 02               	STX MB		;.*echo cosh:x		
+     312/    6271 : BD 02 1C            	JSR MULTS
+     313/    6274 : D7 00               	STAB MA
+     314/    6276 : 97 01               	STAA MA+1	
+     315/    6278 : FE 61 2C            	LDX VEL
+     316/    627B : DF 02               	STX MB		;.*echo vel:x
+     317/    627D : BD 02 1C            	JSR MULTS
+     318/    6280 : F7 61 2E            	STAB DZ
+     319/    6283 : B7 61 2F            	STAA DZ+1
+     320/    6286 : B6 01 05            	LDAA ZV+1	;* UPDATE ZV VIEWER POSITION OF PLANE
+     321/    6289 : F6 01 04            	LDAB ZV
+     322/    628C : B0 61 2F            	SUBA DZ+1
+     323/    628F : F2 61 2E            	SBCB DZ
+     324/    6292 : B7 01 05            	STAA ZV+1
+     325/    6295 : F7 01 04            	STAB ZV
+     326/    6298 :                     	;* DX = VEL * COS(PITCH) * SIN(HEADING)
+     327/    6298 : FE 61 18            	LDX COSP
+     328/    629B : DF 00               	STX MA		;.*echo cosp:x			
+     329/    629D : FE 61 22            	LDX SINH
+     330/    62A0 : DF 02               	STX MB		;.*echo sinh:x	
+     331/    62A2 : BD 02 1C            	JSR MULTS
+     332/    62A5 : D7 00               	STAB MA
+     333/    62A7 : 97 01               	STAA MA+1
+     334/    62A9 : FE 61 2C            	LDX VEL
+     335/    62AC : DF 02               	STX MB		;.*echo vel:x
+     336/    62AE : BD 02 1C            	JSR MULTS
+     337/    62B1 : F7 61 32            	STAB DX
+     338/    62B4 : B7 61 33            	STAA DX+1
+     339/    62B7 : B6 01 01            	LDAA XV+1	;* UPDATE XV VIEWER POSITION OF PLANE
+     340/    62BA : F6 01 00            	LDAB XV
+     341/    62BD : B0 61 33            	SUBA DX+1
+     342/    62C0 : F2 61 32            	SBCB DX
+     343/    62C3 : B7 01 01            	STAA XV+1
+     344/    62C6 : F7 01 00            	STAB XV
+     345/    62C9 :                     	;* DY = VEL * SIN(PITCH) 
+     346/    62C9 : FE 61 1E            	LDX SINP
+     347/    62CC : DF 00               	STX MA		
+     348/    62CE : FE 61 2C            	LDX VEL
+     349/    62D1 : DF 02               	STX MB
+     350/    62D3 : BD 02 1C            	JSR MULTS
+     351/    62D6 : F7 61 30            	STAB DY
+     352/    62D9 : B7 61 31            	STAA DY+1
+     353/    62DC : B6 01 03            	LDAA YV+1	;* UPDATE YV VIEWER POSITION OF PLANE
+     354/    62DF : F6 01 02            	LDAB YV		
+     355/    62E2 : BB 61 31            	ADDA DY+1
+     356/    62E5 : F9 61 30            	ADCB DY
+     357/    62E8 : B7 01 03            	STAA YV+1
+     358/    62EB : F7 01 02            	STAB YV
+     359/    62EE : 39                  	RTS 		
+     360/    62EF :                     
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 7 - 5/19/2022 9:55:4
+
+
+     361/    62EF :                     ;* CHECK IF LANDED OR CRASHED
+     362/    62EF : B6 01 02            CHKLAND	LDAA YV
+     363/    62F2 : 2A 01               	BPL ALT0	;BR IF ALTITUDE IS ZERO
+     364/    62F4 : 39                  	RTS		;RETURN BECAUSE PLANE IS FLYING
+     365/    62F5 : B6 01 09            ALT0	LDAA BV+1	;CHECK IF PLANE BANK IF +/- 18GR
+     366/    62F8 : 81 18                       CMPA #$18
+     367/    62FA : 2D 03                       BLT ALT1
+     368/    62FC : 7E 63 1F            	JMP CRASH       ;CRASH: BANK TOO HIGH 
+     369/    62FF : 81 E8               ALT1	CMPA #$E8
+     370/    6301 : 2A 03               	BPL ALT2
+     371/    6303 : 7E 63 1F            	JMP CRASH       ;CRASH: BANK TOO HIGH
+     372/    6306 : B6 01 07            ALT2	LDAA PV+1	;CHECK IF PLANE PITCH IF -18GR (NOSE UP) TO +18GR (NOSE DOWN)
+     373/    6309 : 81 18                       CMPA #$18
+     374/    630B : 2D 03                       BLT ALT3
+     375/    630D : 7E 63 1F            	JMP CRASH       ;CRASH: NOSE TOO LOW, NOSE HIT THE GROUND
+     376/    6310 : 81 E8               ALT3	CMPA #$E8
+     377/    6312 : 2A 03               	BPL ALT4
+     378/    6314 : 7E 63 1F            	JMP CRASH       ;CRASH: NOSE TOO HIGH, TAIL HIT THE GROUND
+     379/    6317 : 7E 63 1A            ALT4	JMP LANDED
+     380/    631A :                     
+     381/    631A :                     ;* END OF FLIGHT MESSAGES 
+     382/    631A : CE 63 4B            LANDED	LDX #MLANDED
+     383/    631D : 20 03               	BRA MEOF
+     384/    631F : CE 63 3E            CRASH	LDX #MCRASH
+     385/    6322 : BD 64 22            MEOF	JSR DSPCHR	
+     386/    6325 : CE 63 59               	LDX #MNEWFL
+     387/    6328 : BD 64 22            	JSR DSPCHR
+     388/    632B : BD 64 2F                    JSR INCHR
+     389/    632E : 81 31               	CMPA #'1'
+     390/    6330 : 26 09               	BNE ENDFLI
+     391/    6332 : CE 66 66            	LDX #MCRLF	;REMOVE WELCOME MESSAGE
+     392/    6335 : FF 64 04            	STX PROMPT+1
+     393/    6338 : 7E 61 34            	JMP MACRO
+     394/    633B : 7E E1 13            ENDFLI	JMP MON	
+     395/    633E :                     
+     396/    633E : 0D 0A 0D 0A         MCRASH	FCB 13,10,13,10
+     397/    6342 : 43 52 41 53 48 21   	FCC 'CRASH!'
+     398/    6348 : 0D 0A 04            	FCB 13,10,4
+     399/    634B :                     
+     400/    634B : 0D 0A 0D 0A         MLANDED	FCB 13,10,13,10
+     401/    634F : 4C 41 4E 44 45 44   	FCC 'LANDED!'
+             6355 : 21                
+     402/    6356 : 0D 0A 04            	FCB 13,10,4
+     403/    6359 :                     
+     404/    6359 : 0D 0A 0D 0A         MNEWFL	FCB 13,10,13,10
+     405/    635D : 50 52 45 53 53 20   	FCC 'PRESS 1 TO FLIGTH AGAIN, ANY OTHER KEY TO QUIT ?'
+             6363 : 31 20 54 4F 20 46 
+             6369 : 4C 49 47 54 48 20 
+             636F : 41 47 41 49 4E 2C 
+             6375 : 20 41 4E 59 20 4F 
+             637B : 54 48 45 52 20 4B 
+             6381 : 45 59 20 54 4F 20 
+             6387 : 51 55 49 54 20 3F 
+     406/    638D : 04                  	FCB 4
+     407/    638E :                     	
+     408/    638E :                     ;*PRINT ON TERMINAL VIEWER X,Y,Z 3D POS AND P,B,H ANGLES (0..255)
+     409/    638E : CE 01 00            PRTVIEW	LDX #XV
+     410/    6391 : 86 58               	LDAA #'X'
+     411/    6393 : BD 63 C1            	JSR PRT4H
+     412/    6396 : 86 59               	LDAA #'Y'
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 8 - 5/19/2022 9:55:4
+
+
+     413/    6398 : BD 63 C1            	JSR PRT4H
+     414/    639B : 86 5A               	LDAA #'Z'
+     415/    639D : BD 63 C1            	JSR PRT4H
+     416/    63A0 : 86 50               	LDAA #'P'
+     417/    63A2 : BD 63 D1            	JSR PRT2H
+     418/    63A5 : 86 42               	LDAA #'B'
+     419/    63A7 : BD 63 D1            	JSR PRT2H
+     420/    63AA : 86 48               	LDAA #'H'
+     421/    63AC : BD 63 D1            	JSR PRT2H
+     422/    63AF : 86 4A               	LDAA #'J'
+     423/    63B1 : CE 61 12            	LDX #JHPOS
+     424/    63B4 : BD 63 C1            	JSR PRT4H
+     425/    63B7 : 86 0D               PRTCRLF	LDA #13
+     426/    63B9 : BD E1 D1            	JSR OUTEEE
+     427/    63BC : 86 0A               	LDA #10
+     428/    63BE : 7E E1 D1            	JMP OUTEEE
+     429/    63C1 : BD E1 D1            PRT4H	JSR OUTEEE
+     430/    63C4 : 86 20               	LDA #32
+     431/    63C6 : BD E1 D1            	JSR OUTEEE
+     432/    63C9 : BD E0 C8            	JSR OUT4HS
+     433/    63CC : 86 20               	LDA #32
+     434/    63CE : 7E E1 D1            	JMP OUTEEE
+     435/    63D1 : BD E1 D1            PRT2H	JSR OUTEEE
+     436/    63D4 : 86 20               	LDA #32
+     437/    63D6 : BD E1 D1            	JSR OUTEEE
+     438/    63D9 : 08                  	INX
+     439/    63DA : BD E0 CA            	JSR OUT2HS
+     440/    63DD : 86 20               	LDA #32
+     441/    63DF : 7E E1 D1            	JMP OUTEEE
+     442/    63E2 :                     
+     443/    63E2 :                     ;*SUBROUTINE "CLRMEM" CLEAR MEMORY STORAGE LOCATIONS
+     444/    63E2 : 5F                  CLRMEM	CLRB
+     445/    63E3 : C6 00               	LDAB #$00	;TOTAL NUMBER OF LOCATIONS TO CLEAR (00=CLEAR FROM 00 TO FF)
+     446/    63E5 : CE 18 00            	LDX #$1800	;CLEAR OUTPUT BUFFER (AT 1800)
+     447/    63E8 : 8D 01               	BSR CLEAR2
+     448/    63EA : 39                  	RTS
+     449/    63EB : 4F                  CLEAR2	CLRA
+     450/    63EC : A7 00               CLRMOR	STAA $00,X
+     451/    63EE : 08                  	INX
+     452/    63EF : 5A                  	DECB
+     453/    63F0 : 26 FA               	BNE CLRMOR
+     454/    63F2 : 39                  	RTS
+     455/    63F3 : 86 01               PIAINT	LDAA #1		;GRAPHICS DISPLAY OPTION = PIA INITIALIZATION
+     456/    63F5 : BD 66 FD            	JSR SCREEN
+     457/    63F8 : 86 03               CLSCRN	LDAA #3
+     458/    63FA : BD 66 FD            	JSR SCREEN
+     459/    63FD : 39                  	RTS
+     460/    63FE : 86 06               GETJOY	LDAA #6		;GET ANALOG PPG-J JOY POSITION
+     461/    6400 : 7E 66 FD            	JMP SCREEN	
+     462/    6403 :                     
+     463/    6403 :                     ;*SUBROUTINE "PROMPT" WILL LOAD THE INDEX REGISTER WITH THE		
+     464/    6403 :                     ;*ADDRESS OF THE NEXT USER PROMPT TO BE DISPLAYED AND THEN 
+     465/    6403 :                     ;*WILL PRINT THE MESSAGE ON THE USER'S TERMINAL. IT WILL
+     466/    6403 :                     ;*THEN WAIT UNTIL THE USER HAS READ AND UNDERSTOOD THE
+     467/    6403 :                     ;*PROMPT BEFORE PRINTING THE NEXT MESSAGE.
+     468/    6403 : CE 64 E8            PROMPT	LDX #WELCOM
+     469/    6406 : BD 64 22            	JSR DSPCHR
+     470/    6409 : CE 66 6B            	LDX #MSGA
+     471/    640C : BD 64 22            	JSR DSPCHR
+     472/    640F : BD 64 2F            	JSR INCHR
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 9 - 5/19/2022 9:55:4
+
+
+     473/    6412 : CE 13 00            	LDX #$1300	;RESPONSE TO MSGB PROMPT = 1 (PARSONS AIRFIELD)
+     474/    6415 : 81 31               	CMPA #$31
+     475/    6417 : 27 03               	BEQ LOADIR
+     476/    6419 : CE 11 00            	LDX #$1100	;RESPONSE TO MSGB PROMPT = 2 (SUBLOGIC AIRFIELD)
+     477/    641C : FF 01 0F            LOADIR	STX IBP
+     478/    641F : CE 66 66            	LDX #MCRLF
+     479/    6422 : A6 00               DSPCHR	LDAA $0,X	;PRINT A STRING POINTED BY X-REG, TERMINATED BY $04 CHAR
+     480/    6424 : 81 04               	CMPA #04	
+     481/    6426 : 26 01               	BNE PRTCHR
+     482/    6428 : 39                  	RTS
+     483/    6429 : BD E1 D1            PRTCHR	JSR OUTEEE	;PUT CHARACTER OUT TO TERMINAL
+     484/    642C : 08                  	INX
+     485/    642D : 20 F3               	BRA DSPCHR	
+     486/    642F :                     	
+     487/    642F : 4F                  INCHR	CLRA		;PREPARE ACCM FOR RESPONSE
+     488/    6430 : 7E E1 AC            	JMP INEEE	;ANY RESPONSE ?
+     489/    6433 :                     	
+     490/    6433 :                     ;*SUBROUTINE "INITLOD" LOADS THE SIX POSITIONAL PARAMETERS
+     491/    6433 :                     ;*OF THE SIMULATOR'S INITIAL POSITION WHICH WAS PREVIOUSLY
+     492/    6433 :                     ;*PROMPTED TO THE USER.
+     493/    6433 : CE D5 00            INITLOD	LDX #$D500	;-11,190 FEET FROM DISPLAY ORIGIN
+     494/    6436 : FF 01 00            	STX XV		;POS = WEST (0000-7FFF) NEG = EAST (FFFF-8000)
+     495/    6439 : CE FC 18            	LDX #$FC18	;ALT = 1000 FT => 3D VALUE FOR VIEWRT
+     496/    643C : FF 01 02            	STX YV		;      SO REQUIRE NEGATIVE 3D VALUE (FFFF-8000)
+     497/    643F : CE F0 00            	LDX #$F000	;-4096 FEET FROM DISPLAY ORIGIN
+     498/    6442 : FF 01 04            	STX ZV		;POS=SOUTH (0000-7FFF) NEG=NORTH (FFFF-8000)
+     499/    6445 : CE 00 00            	LDX #$0000	;PITCH = BANK = HEADING = 0.0 DEGREES
+     500/    6448 : FF 01 06            	STX PV
+     501/    644B : FF 01 08            	STX BV
+     502/    644E : FF 01 0A            	STX HV
+     503/    6451 : CE 18 00            	LDX #$1800	;OUTPUT 2D BUFFER
+     504/    6454 : FF 01 11            	STX OBP
+     505/    6457 : 86 40               	LDAA #$40
+     506/    6459 : B7 01 0E            	STAA SCRN	;SCREEN WIDTH=64 PIXELS X 64 PIXELS
+     507/    645C : CE 00 00            	LDX #0
+     508/    645F : FF 61 26            	STX PITCH	;PLANE PITCH ANGLE (16 BITS). >0 LOOK DOWN
+     509/    6462 : FF 61 28            	STX BANK	;PLANE BANK ANGLE (16 BITS). >0 BANK TO LEFT
+     510/    6465 : FF 61 2A            	STX HEADING 	;PLANE HEADING ANGLE (16 BITS). =0 NORTH, >0 TO RIGHT	
+     511/    6468 : FF 61 1E            	STX SINP	;SIN(PITCH VIEWER)
+     512/    646B : FF 61 20            	STX SINB	;SIN(BANK VIEWER)
+     513/    646E : FF 61 22            	STX SINH	;SIN(HEADING VIEWER)
+     514/    6471 : CE 7F FF            	LDX #$7FFF	
+     515/    6474 : FF 61 18            	STX COSP	;COS(PITCH VIEWER)
+     516/    6477 : FF 61 1A            	STX COSB	;COS(BANK VIEWER)
+     517/    647A : FF 61 1C            	STX COSH	;COS(HEADING VIEWER)
+     518/    647D : CE 00 FA            	LDX #250
+     519/    6480 : FF 61 24            	STX SPEED	;PLANE SPEED 
+     520/    6483 : CE 64 AB            	LDX #TMRIRQ	;LOAD TIMER IRQ SERVICING ROUTINE ADDRESS
+     521/    6486 : FF A0 00            	STX $A000	;STORE IT ON IRQ VECTOR
+     522/    6489 : CE 00 00            	LDX #0
+     523/    648C : FF 61 03            	STX TICK	;INIT TICK COUNT
+     524/    648F : FF 61 05            	STX TICK0
+     525/    6492 : FF 61 09            	STX NFRAME	;INIT FRAME NUMBER	
+     526/    6495 : CE 80 10            	LDX #$8010	;INIT MP-T TIMER 
+     527/    6498 : 86 FF                	LDAA #$FF	;TO GENERATE AN IRQ EACH 10 MSEC 
+     528/    649A : A7 02                	STAA 2,X
+     529/    649C : 86 3D                	LDAA #$3D
+     530/    649E : A7 03                	STAA 3,X
+     531/    64A0 : 86 80                	LDAA #$80
+     532/    64A2 : A7 02                	STAA 2,X
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 10 - 5/19/2022 9:55:4
+
+
+     533/    64A4 : 86 04               	LDAA #$04	;04=10 MILLISEC INTERVAL
+     534/    64A6 : A7 02                	STAA 2,X
+     535/    64A8 : 01                   	NOP
+     536/    64A9 : 0E                   	CLI		;ENABLE INTERRUPTS
+     537/    64AA : 39                  	RTS
+     538/    64AB :                     ;* TIMER IRQ ROUTINE TO INCREMENT TICK EACH 10 MSEC
+     539/    64AB :                     ;* USED TO PROVIDE REAL TIME CALCULATIONS ON PLANE MOTION SIMULATION
+     540/    64AB :                     ;* TICK SHOULD BE READ WITH LDX (NOT LDAA/B) TO PREVENT BEING
+     541/    64AB :                     ;* UPDATED IN MIDDLE OF READ.
+     542/    64AB :                     ;* TICK VAR WILL WRAP AFTER 65536*10 MSEC = 655,36 SEC = 10.9 MINUTES
+     543/    64AB : CE 80 10            TMRIRQ	LDX #$8010	;CLEAR IRQ REQUEST FROM MP-T TIMER CARD
+     544/    64AE : A6 02                	LDAA 2,X
+     545/    64B0 : FE 61 03             	LDX TICK	;INCREMENT TICK COUNT
+     546/    64B3 : 08                   	INX
+     547/    64B4 : FF 61 03             	STX TICK
+     548/    64B7 : 3B                   	RTI
+     549/    64B8 :                     
+     550/    64B8 :                     ;*SUBROUTINE "GO3D2D" CALLS THE PROGRAM WRITTEN BY SUBLOGIC'S
+     551/    64B8 :                     ;*BRUCE ARTWICK WHICH WILL PERFORM THE NECESSARYMATHEMATICAL
+     552/    64B8 :                     ;*ALGORITHMS TO SUCCESSFULLY TRANSFORM THE DATA BASE GIVE
+     553/    64B8 :                     ;*THE POSITIONAL PARAMETERS STORED IN XV,YU,ZV,PV,BV AND HV,
+     554/    64B8 :                     ;*UPON COMPLETITION THE OUTPUT ARRAY IS STORES IN MEMORY IN
+     555/    64B8 :                     ;*THE OUTPUT BUFFER.
+     556/    64B8 : BD 09 00            GO3D2D	JSR CONV3D	
+     557/    64BB : 39                  	RTS		
+     558/    64BC :                     ;*SUBROUTINE "DBDRAW" WILL LOAD THE NEXT (X1,Y1) AND (X2,Y2)
+     559/    64BC :                     ;*FROM THE OUTPUT BUFFER IF THE CONTROL BYTE IS HEX 55,
+     560/    64BC :                     ;*OTHERWISE IT WILL RETURN TO THE MACRO
+     561/    64BC : FE 01 11            DBDRAW	LDX OBP		
+     562/    64BF : A6 00               FEED	LDAA 0,X	
+     563/    64C1 : 81 55               	CMPA #$55
+     564/    64C3 : 27 01               	BEQ NXTLIN
+     565/    64C5 : 39                  	RTS		
+     566/    64C6 : 08                  NXTLIN	INX
+     567/    64C7 : A6 00               	LDAA 0,X
+     568/    64C9 : 97 50               	STAA X1		;.*echo x1:a
+     569/    64CB : 08                  	INX	
+     570/    64CC : A6 00               	LDAA 0,X
+     571/    64CE : 97 51               	STAA Y1		;.*echo y1:a
+     572/    64D0 : 08                  	INX	
+     573/    64D1 : A6 00               	LDAA 0,X
+     574/    64D3 : 97 52               	STAA X2		;.*echo x2:a
+     575/    64D5 : 08                  	INX	
+     576/    64D6 : A6 00               	LDAA 0,X
+     577/    64D8 : 97 53               	STAA Y2		;.*echo y2:a
+     578/    64DA : 08                  	INX	
+     579/    64DB : FF 61 0C            	STX IDXREG
+     580/    64DE : 86 05               	LDAA #5		;GRAPHIC'S DISPLAY OPTION = DRAW (SHOW2)
+     581/    64E0 : BD 66 FD            	JSR SCREEN	;.*echo drawline
+     582/    64E3 : FE 61 0C            	LDX IDXREG
+     583/    64E6 : 20 D7               	BRA FEED
+     584/    64E8 :                     
+     585/    64E8 : 0D 0A 0D 0A         WELCOM	FCB 13,10,13,10
+     586/    64EC : 20 20 20 20 20 57           FCC '     WELCOME TO THE M6800 FLIGHT SIMULATOR PROGRAM'
+             64F2 : 45 4C 43 4F 4D 45 
+             64F8 : 20 54 4F 20 54 48 
+             64FE : 45 20 4D 36 38 30 
+             6504 : 30 20 46 4C 49 47 
+             650A : 48 54 20 53 49 4D 
+             6510 : 55 4C 41 54 4F 52 
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 11 - 5/19/2022 9:55:4
+
+
+             6516 : 20 50 52 4F 47 52 
+             651C : 41 4D             
+     587/    651E : 0D 0A 0D 0A                 FCB 13,10,13,10
+     588/    6522 : 54 48 49 53 20 50   	FCC 'THIS PROGRAM IS DESIGNED TO ALLOW THE USER TO SET UP THE AIRCRAFT`S INITIAL'
+             6528 : 52 4F 47 52 41 4D 
+             652E : 20 49 53 20 44 45 
+             6534 : 53 49 47 4E 45 44 
+             653A : 20 54 4F 20 41 4C 
+             6540 : 4C 4F 57 20 54 48 
+             6546 : 45 20 55 53 45 52 
+             654C : 20 54 4F 20 53 45 
+             6552 : 54 20 55 50 20 54 
+             6558 : 48 45 20 41 49 52 
+             655E : 43 52 41 46 54 60 
+             6564 : 53 20 49 4E 49 54 
+             656A : 49 41 4C          
+     589/    656D : 0D 0A               	FCB 13,10
+     590/    656F : 50 4F 53 49 54 49   	FCC 'POSITION COORDINAES FROM USER PROMPTS, ENGAGE THE FLIGHT SIMULATOR AND'
+             6575 : 4F 4E 20 43 4F 4F 
+             657B : 52 44 49 4E 41 45 
+             6581 : 53 20 46 52 4F 4D 
+             6587 : 20 55 53 45 52 20 
+             658D : 50 52 4F 4D 50 54 
+             6593 : 53 2C 20 45 4E 47 
+             6599 : 41 47 45 20 54 48 
+             659F : 45 20 46 4C 49 47 
+             65A5 : 48 54 20 53 49 4D 
+             65AB : 55 4C 41 54 4F 52 
+             65B1 : 20 41 4E 44       
+     591/    65B5 : 0D 0A               	FCB 13,10
+     592/    65B7 : 50 52 45 53 45 4E   	FCC 'PRESENT AN UPDATED GRAPHICS DISPLAY AS STUDENT PILOT ATTEMPTS TO MANUEVER'
+             65BD : 54 20 41 4E 20 55 
+             65C3 : 50 44 41 54 45 44 
+             65C9 : 20 47 52 41 50 48 
+             65CF : 49 43 53 20 44 49 
+             65D5 : 53 50 4C 41 59 20 
+             65DB : 41 53 20 53 54 55 
+             65E1 : 44 45 4E 54 20 50 
+             65E7 : 49 4C 4F 54 20 41 
+             65ED : 54 54 45 4D 50 54 
+             65F3 : 53 20 54 4F 20 4D 
+             65F9 : 41 4E 55 45 56 45 
+             65FF : 52                
+     593/    6600 : 0D 0A               	FCB 13,10	 
+     594/    6602 : 54 48 45 20 50 4C   	FCC 'THE PLANE FOR LANDING ON AN AIRSTRIP. TO USE THE PROGRAM YOU FIRST MUST'
+             6608 : 41 4E 45 20 46 4F 
+             660E : 52 20 4C 41 4E 44 
+             6614 : 49 4E 47 20 4F 4E 
+             661A : 20 41 4E 20 41 49 
+             6620 : 52 53 54 52 49 50 
+             6626 : 2E 20 54 4F 20 55 
+             662C : 53 45 20 54 48 45 
+             6632 : 20 50 52 4F 47 52 
+             6638 : 41 4D 20 59 4F 55 
+             663E : 20 46 49 52 53 54 
+             6644 : 20 4D 55 53 54    
+     595/    6649 : 0D 0A               	FCB 13,10	 
+     596/    664B : 43 48 4F 4F 53 45   	FCC 'CHOOSE AN AIRPORT DATABASE.'
+             6651 : 20 41 4E 20 41 49 
+             6657 : 52 50 4F 52 54 20 
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 12 - 5/19/2022 9:55:4
+
+
+             665D : 44 41 54 41 42 41 
+             6663 : 53 45 2E          
+     597/    6666 : 0D 0A 0D 0A         MCRLF   FCB 13,10,13,10
+     598/    666A : 04                  	FCB $04
+     599/    666B :                     	
+     600/    666B : 20 20 20 43 48 4F   MSGA	FCC '   CHOOSE THE AIRPORT DATABASE AS FOLLOWS: '
+             6671 : 4F 53 45 20 54 48 
+             6677 : 45 20 41 49 52 50 
+             667D : 4F 52 54 20 44 41 
+             6683 : 54 41 42 41 53 45 
+             6689 : 20 41 53 20 46 4F 
+             668F : 4C 4C 4F 57 53 3A 
+             6695 : 20                
+     601/    6696 : 0D 0A 0D 0A                 FCB 13,10,13,10
+     602/    669A : 20 31 20 3D 20 50   	FCC ' 1 = PARSON`S FIELD AT TETERBORO, NEW JERSEY.'	
+             66A0 : 41 52 53 4F 4E 60 
+             66A6 : 53 20 46 49 45 4C 
+             66AC : 44 20 41 54 20 54 
+             66B2 : 45 54 45 52 42 4F 
+             66B8 : 52 4F 2C 20 4E 45 
+             66BE : 57 20 4A 45 52 53 
+             66C4 : 45 59 2E          
+     603/    66C7 : 0D 0A                       FCB 13,10
+     604/    66C9 : 20 32 20 3D 20 41   	FCC ' 2 = ARTWICK`S FIELD AT TETERBORO, NEW JERSEY.'	
+             66CF : 52 54 57 49 43 4B 
+             66D5 : 60 53 20 46 49 45 
+             66DB : 4C 44 20 41 54 20 
+             66E1 : 54 45 54 45 52 42 
+             66E7 : 4F 52 4F 2C 20 4E 
+             66ED : 45 57 20 4A 45 52 
+             66F3 : 53 45 59 2E       
+     605/    66F7 : 0D 0A 0D 0A                 FCB 13,10,13,10
+     606/    66FB : 3F                          FCC '?'
+     607/    66FC : 04                  	FCB $04
+     608/    66FD :                     	
+     609/    66FD : 81 01               SCREEN	CMPA #01       
+     610/    66FF : 27 15               	BEQ  FIRST     
+     611/    6701 : 81 02               	CMPA #02       
+     612/    6703 : 27 5C               	BEQ  JINIT     
+     613/    6705 : 81 03               	CMPA #03       
+     614/    6707 : 27 1C               	BEQ  ERASE     
+     615/    6709 : 81 04               	CMPA #04
+     616/    670B : 27 45               	BEQ  PIXEL
+     617/    670D : 81 05               	CMPA #05
+     618/    670F : 27 4E               	BEQ  SHOW2
+     619/    6711 : 81 06               	CMPA #06
+     620/    6713 : 27 57               	BEQ  JSTART
+     621/    6715 : 39                  	RTS
+     622/    6716 :                     ;* PIA INITIALIZATION SECTION
+     623/    6716 : 4F                  FIRST	CLRA
+     624/    6717 : B7 80 0C            	STAA $800C     
+     625/    671A : 86 FF               	LDAA #$FF
+     626/    671C : B7 80 0C            	STAA $800C
+     627/    671F : 86 3F               	LDAA #$3F
+     628/    6721 : B7 80 0D            	STAA $800D
+     629/    6724 : 39                  	RTS
+     630/    6725 :                     ;* ERASE SCREEN SECTION
+     631/    6725 : 86 3F               ERASE	LDAA #63
+     632/    6727 : 97 58               	STAA HPOS
+     633/    6729 : 96 58               HSET	LDAA HPOS
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 13 - 5/19/2022 9:55:4
+
+
+     634/    672B : 8D 14               	BSR  SENDA
+     635/    672D : 86 80               VBAR	LDAA #128
+     636/    672F : 8D 10               CLR	BSR  SENDA
+     637/    6731 : 4C                  	INCA
+     638/    6732 : 81 E0               MOD	CMPA #224
+     639/    6734 : 26 F9               	BNE  CLR
+     640/    6736 : 7A 00 58            	DEC  HPOS
+     641/    6739 : 2C EE               	BGE  HSET
+     642/    673B : 86 C0               	LDAA #192
+     643/    673D : B7 67 33            	STAA MOD+1
+     644/    6740 : 39                  	RTS
+     645/    6741 :                     ;*SCREEN DRIVE SUBROUTINES
+     646/    6741 : 16                  SENDA	TAB
+     647/    6742 : F7 80 0C            SENDB	STAB $800C
+     648/    6745 : C6 37               	LDAB #$37
+     649/    6747 : F7 80 0D            	STAB $800D
+     650/    674A : E6 00               	LDAB 0,X
+     651/    674C : C6 3F               	LDAB #$3F
+     652/    674E : F7 80 0D            	STAB $800D
+     653/    6751 : 39                  	RTS
+     654/    6752 :                     ;* PIXEL OUTPUT
+     655/    6752 : D6 50               PIXEL	LDAB X1
+     656/    6754 : CB 60               	ADDB #96
+     657/    6756 : 8D EA               	BSR SENDB
+     658/    6758 : C6 A0               	LDAB #160
+     659/    675A : D0 51               	SUBB Y1
+     660/    675C : 8D E4               	BSR SENDB
+     661/    675E : 39                  	RTS
+     662/    675F : 20 47               SHOW2	BRA SHOW
+     663/    6761 :                     ;* INITIALIZE PIA INTERFACE TO JOYSTICK
+     664/    6761 : 86 3D               JINIT	LDAA #$3D
+     665/    6763 : CE 80 0C            	LDX #$800C
+     666/    6766 : C6 00               	LDAB #$00
+     667/    6768 : E7 02               	STAB 2,X
+     668/    676A : A7 03               	STAA 3,X
+     669/    676C :                     ;* SAVE MACHINE REGISTERS ON INPUT
+     670/    676C : B7 61 14            JSTART	STAA ASAVE
+     671/    676F : F7 61 15            	STAB BSAVE
+     672/    6772 : FF 61 16            	STX ISAVE
+     673/    6775 :                     ;* GET HORIZONTAL STICK POSITION
+     674/    6775 : CE 80 0C            	LDX #$800C
+     675/    6778 : A6 03               LOOP1	LDA 3,X
+     676/    677A : 84 80               	ANDA #$80
+     677/    677C : 27 FA               	BEQ LOOP1
+     678/    677E : A6 02               	LDAA 2,X
+     679/    6780 : 16                  	TAB
+     680/    6781 : 84 80               	ANDA #$80
+     681/    6783 : 26 F3               	BNE LOOP1
+     682/    6785 : C4 3F               	ANDB #$3F
+     683/    6787 : F7 61 12            	STAB JHPOS 
+     684/    678A : A6 03               LOOP2	LDAA 3,X
+     685/    678C : 84 80               	ANDA #$80 
+     686/    678E : 27 FA               	BEQ LOOP2
+     687/    6790 : A6 02               	LDAA 2,X
+     688/    6792 : 16                  	TAB
+     689/    6793 : 84 80               	ANDA #$80
+     690/    6795 : 26 02               	BNE GOBACK
+     691/    6797 : 20 DF               	BRA LOOP1
+     692/    6799 : C4 7F               GOBACK	ANDB #$7F
+     693/    679B : F7 61 13                    STAB JVPOS
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 14 - 5/19/2022 9:55:4
+
+
+     694/    679E : B6 61 14            	LDAA ASAVE
+     695/    67A1 : F6 61 15            	LDAB BSAVE
+     696/    67A4 : FE 61 16            	LDX ISAVE
+     697/    67A7 : 39                  	RTS
+     698/    67A8 :                     ;* ROUTINE TO DRAW LINE FROM (X1,Y1) TO (X2,Y2)
+     699/    67A8 : 4F                  SHOW	CLRA
+     700/    67A9 : C6 01               	LDAB #1
+     701/    67AB : D7 54               	STAB M
+     702/    67AD : D7 55               	STAB N
+     703/    67AF : D6 52               	LDAB X2 
+     704/    67B1 : D0 50               	SUBB X1
+     705/    67B3 : D7 56               	STAB D
+     706/    67B5 : 2C 06               	BGE BP1
+     707/    67B7 : 70 00 54            	NEG M
+     708/    67BA : 70 00 56            	NEG D
+     709/    67BD : 26 02               BP1	BNE BP2
+     710/    67BF : 86 FF               	LDAA #$FF
+     711/    67C1 : D6 53               BP2	LDAB Y2
+     712/    67C3 : D0 51               	SUBB Y1
+     713/    67C5 : D7 57               	STAB E
+     714/    67C7 : 2C 06               	BGE B8963
+     715/    67C9 : 70 00 55            	NEG N
+     716/    67CC : 70 00 57            	NEG E
+     717/    67CF : BD 67 52            B8963	JSR PIXEL
+     718/    67D2 : D6 50               	LDAB X1
+     719/    67D4 : D1 52               	CMPB X2
+     720/    67D6 : 27 17               	BEQ B8990
+     721/    67D8 : 4D                  B8969	TSTA
+     722/    67D9 : 2D 0A               	BLT B8981
+     723/    67DB : D6 50               	LDAB X1
+     724/    67DD : DB 54               	ADDB M
+     725/    67DF : D7 50               	STAB X1
+     726/    67E1 : 90 57               	SUBA E
+     727/    67E3 : 20 EA               	BRA B8963
+     728/    67E5 : D6 51               B8981	LDAB Y1
+     729/    67E7 : DB 55               	ADDB N
+     730/    67E9 : D7 51               	STAB Y1
+     731/    67EB : 9B 56               	ADDA D
+     732/    67ED : 20 E0               	BRA B8963
+     733/    67EF : D6 51               B8990	LDAB Y1
+     734/    67F1 : D1 53               	CMPB Y2
+     735/    67F3 : 26 E3               	BNE B8969
+     736/    67F5 : 39                  	RTS
+     737/    67F6 :                     
+     738/    67F6 : =$50                 X1	EQU $0050
+     739/    67F6 : =$52                 X2	EQU $0052
+     740/    67F6 : =$51                 Y1	EQU $0051
+     741/    67F6 : =$53                 Y2	EQU $0053
+     742/    67F6 : =$54                 M	EQU $0054
+     743/    67F6 : =$55                 N	EQU $0055
+     744/    67F6 : =$56                 D	EQU $0056
+     745/    67F6 : =$57                 E	EQU $0057
+     746/    67F6 : =$58                 HPOS	EQU $0058
+     747/    67F6 :                     
+     748/    A048 :                     	ORG $A048	;SET START ADDRESS FOR "G" COMMAND
+     749/    A048 : 60 00               	FDB START
+     750/    A04A :                     
+     751/    A04A :                     	END
+FlightSim_m6800.asm(751)
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 15 - 5/19/2022 9:55:4
+
+
+  Symbol Table (* = unused):
+  --------------------------
+
+ ALT0 :                        62F5 C |  ALT1 :                        62FF C |
+ ALT2 :                        6306 C |  ALT3 :                        6310 C |
+ ALT4 :                        6317 C |
+*ARCHITECTURE :                                        "i386-unknown-win32" - |
+ ASAVE :                       6114 C |  B8963 :                       67CF C |
+ B8969 :                       67D8 C |  B8981 :                       67E5 C |
+ B8990 :                       67EF C |  BANK :                        6128 C |
+ BP1 :                         67BD C |  BP2 :                         67C1 C |
+ BSAVE :                       6115 C |  BV :                           108 - |
+*CASESENSITIVE :                  0 - |  CHKLAND :                     62EF C |
+ CLEAR2 :                      63EB C |  CLR :                         672F C |
+ CLRMEM :                      63E2 C |  CLRMOR :                      63EC C |
+ CLSCRN :                      63F8 C | *COMPMODE :                       0 - |
+*CONSTPI :        3.141592653589793 - |  CONV3D :                       900 - |
+ COS :                          BA4 - |  COSB :                        611A C |
+ COSH :                        611C C |  COSP :                        6118 C |
+ CRASH :                       631F C |  D :                             56 - |
+*DATE :                 "5/19/2022" - |  DBDRAW :                      64BC C |
+ DSPCHR :                      6422 C |  DX :                          6132 C |
+ DY :                          6130 C |  DZ :                          612E C |
+ E :                             57 - |  ELAPSED :                     610B C |
+ ENDFLI :                      633B C |  ERASE :                       6725 C |
+*FALSE :                          0 - |  FEED :                        64BF C |
+ FIRST :                       6716 C |  GETJOY :                      63FE C |
+ GO3D2D :                      64B8 C |  GOAGN :                       6142 C |
+ GOBACK :                      6799 C | *HAS64 :                          0 - |
+ HEADING :                     612A C |  HPOS :                          58 - |
+ HSET :                        6729 C |  HV :                           10A - |
+ IBP :                          10F - |  IDXREG :                      610C C |
+ INCHR :                       642F C |  INEEE :                       E1AC - |
+ INITLOD :                     6433 C |  ISAVE :                       6116 C |
+ JH1 :                         61A3 C |  JH2 :                         61C8 C |
+ JH3 :                         61D2 C |  JHPOS :                       6112 C |
+ JHSGN :                       610E C |  JINIT :                       6761 C |
+ JSTART :                      676C C |  JT1 :                         6228 C |
+ JV1 :                         61E6 C |  JV2 :                         620B C |
+ JV3 :                         6215 C |  JVPOS :                       6113 C |
+ JVSGN :                       6110 C |  LANDED :                      631A C |
+*LISTON :                         1 - |  LOADIR :                      641C C |
+ LOOP1 :                       6778 C |  LOOP2 :                       678A C |
+ M :                             54 - |  MA :                             0 - |
+*MACEXP :                         7 - |  MACRO :                       6134 C |
+ MB :                             2 - |  MCRASH :                      633E C |
+ MCRLF :                       6666 C |  MEOF :                        6322 C |
+ MLANDED :                     634B C |  MNEWFL :                      6359 C |
+ MOD :                         6732 C | *MOMCPU :                      6800 - |
+*MOMCPUNAME :                "6800" - |  MON :                         E113 - |
+ MSGA :                        666B C |  MULTS :                        21C - |
+ N :                             55 - | *NESTMAX :                      100 - |
+ NFRAME :                      6109 C |  NXTLIN :                      64C6 C |
+ OBP :                          111 - |  OUT2HS :                      E0CA - |
+ OUT4HS :                      E0C8 - |  OUTEEE :                      E1D1 - |
+*PADDING :                        0 - |  PIAINT :                      63F3 C |
+ PITCH :                       6126 C |  PIXEL :                       6752 C |
+ PROMPT :                      6403 C |  PRT2H :                       63D1 C |
+ PRT4H :                       63C1 C |  PRTCHR :                      6429 C |
+*PRTCRLF :                     63B7 C | *PRTVIEW :                     638E C |
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 16 - 5/19/2022 9:55:4
+
+
+ PV :                           106 - | *RELAXED :                        0 - |
+ SAFSWP1 :                     602E C |  SAFSWP2 :                     6036 C |
+ SCREEN :                      66FD C |  SCRN :                         10E - |
+ SENDA :                       6741 C |  SENDB :                       6742 C |
+ SHOW :                        67A8 C |  SHOW2 :                       675F C |
+*SIN :                          BA2 - |  SINB :                        6120 C |
+ SINH :                        6122 C |  SINP :                        611E C |
+ SPEED :                       6124 C |  STACK :                       6102 C |
+*STACKSP :                     603A C |  START :                       6000 C |
+ SVTRIG :                      6006 C |  TCK0 :                        6160 C |
+ TCK1 :                        617B C |  TCK2 :                        6185 C |
+ TICK :                        6103 C |  TICK0 :                       6105 C |
+ TICK1 :                       6107 C | *TIME :                    "9:55:4" - |
+ TIMONE :                      6145 C |  TMRIRQ :                      64AB C |
+*TRUE :                           1 - |  UPDATE :                      615F C |
+ UPDTPOS :                     624F C | *VBAR :                        672D C |
+ VEL :                         612C C | *VERSION :                     142F - |
+ WELCOM :                      64E8 C |  X1 :                            50 - |
+ X2 :                            52 - |  XV :                           100 - |
+ Y1 :                            51 - |  Y2 :                            53 - |
+ YV :                           102 - |  ZV :                           104 - |
+
+    154 symbols
+     22 unused symbols
+
+ AS V1.42 Beta [Bld 222] - Source File FlightSim_m6800.asm - Page 17 - 5/19/2022 9:55:4
+
+
+  Code Pages:
+  ----------
+
+STANDARD (0 changed characters)
+
+1 code page
+
+0.02 seconds assembly time
+
+    751 lines source file
+      3 passes
+      0 errors
+      0 warnings
