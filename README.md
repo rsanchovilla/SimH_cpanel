@@ -37,10 +37,11 @@ i701, i650 and NORC simulators are my own SimH simulators
 
 Currently supports visuals emulation for:
 
-* SWTPC 6800 (APR/2022)
+* SWTPC 6800 (MAY/2022)
   * SWTPC MF68 Floppy Disk
   * Percom LFD-400 Floppy 
   * SWTPC GT-6144 Graphics Terminal + PPG-J Analog Joystick
+  * MP-T Timer Card
   * subLogic Graphics One Terminal
 
 * IBM 360/370 (MAR/2022)
@@ -132,15 +133,16 @@ or `run swtp6800 SWTPc 8K Basic 2.2 (1978).bat`,
 or `run swtp6800 SWTPc 8K Basic 2.3 (1978).bat` batch file to run TSC BASICs
 
 * execute `run swtp6800 TSC 4K MicroBasic 1.3 (1976).bat`, 
-or `execute `run swtp6800 TSC 4K MicroBasicPlus 2.1 (1977).bat`, 
-or `execute `run swtp6800 TSC 8K Basic (1980).bat` batch file to run SWTPC BASICs
+or execute `run swtp6800 TSC 4K MicroBasicPlus 2.1 (1977).bat`, 
+or execute `run swtp6800 TSC 8K Basic (1980).bat` batch file to run SWTPC BASICs
 
 * execute `run swtp6800 MITS Altair 680 Basic 3.2 (1976).bat` batch file to Microsoft Basic 3.2 ported from MITS Altair 680
 
 Other 
 
 * execute `run swtp6800 Space Voyage game (1976).bat` batch file to run Space Voyage text game
-* execute `run run swtp6800 Editor (1977).bat` batch file to demo TSC Text Editor
+* execute `run swtp6800 Editor (1977).bat` batch file to demo TSC Text Editor
+* execute `run swtp6800 Usurpator Chess (1980).bat` batch file to run USURPATOR I Chess program for 6800 (from book by H.G.MULLER)
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.zip) to download 
 Graphics programs test run.
@@ -149,9 +151,22 @@ Once uncompressed, you will find several ready to run .bat files:
 
 * execute `run swtp6800 gt6144 st1 demo (1976 graphics).bat` batch file to show Star Trek USS Enterprise on simulated TV set
 * execute `run swtp6800 gt6144 Space RACE game.bat` batch file to play to Interactive Real Time Graphic game (gasp!)
-* execute `run swtp6800 subLogic 3D package basic (1977).bat` batch file to demo Bruce Artwick 3D microcomputer graphics package
+* execute `run swtp6800 subLogic 3D package basic (1977).bat` batch file to demo Bruce Artwick 3D 
+microcomputer graphics package recovered from [archive.org](https://archive.org/details/Sublogic_3_Dimensional_Microcomputer_Graphics_-1/mode/2up) 
+and [here](http://www.sublogiccorp.com/contents/displayArticle.aspx?0_3)
 
   ![SWTPC 6800 Graphics](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.png)
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FlighSim.zip) to download 
+Fligh Simulator test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run swtp6800 gt6144 Flight Simulator (1981).bat` batch file to run the simulator. This program is based on Original 
+subLogic 3DG68.V3.1 Graphics Routine Package (by Bruce Artwick 1979) recovered 
+from [here](https://stars.library.ucf.edu/cgi/viewcontent.cgi?article=1649&context=rtd)
+
+  ![SWTPC 6800 Fligh Sim](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FlighSim.gif)
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FloppyDisk.zip) to download 
 Floppy Disk based Operating Systems test run.
