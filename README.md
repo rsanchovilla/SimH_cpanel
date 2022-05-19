@@ -160,7 +160,7 @@ and [here](http://www.sublogiccorp.com/contents/displayArticle.aspx?0_3)
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FlightSim.zip) to download 
 Flight Simulator test run.
 
-Once uncompressed, you will find a ready to run .bat files: 
+Once uncompressed, you will find a ready to run .bat file: 
 
 * execute `run swtp6800 gt6144 Flight Simulator (1981).bat` batch file to run the simulator. This program is based on Original 
 subLogic 3DG68.V3.1 Graphics Routine Package (by Bruce Artwick 1979) recovered 
