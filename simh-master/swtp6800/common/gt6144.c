@@ -23,6 +23,13 @@
         be used in advertising or otherwise to promote the sale, use or other dealings
         in this Software without prior written authorization from Roberto Sancho .
 
+        Address     Mode    Function
+        -------     ----    --------
+
+        0x800C      pia1    gt6144 data port      
+        0x800D      pia2
+        0x800E      pia1    ppg-j analog joystick
+        0x800F      pia2
 
 */
 
@@ -88,7 +95,7 @@ MTAB gt6144_mod[] = {
 };
 
 
-UNIT gt6144_unit = { UDATA (&gt6144_svc, UNIT_DISABLE + UNIT_DIS, 0)
+UNIT gt6144_unit = { UDATA (&gt6144_svc, UNIT_SEQ, 0)
     };
 
 DEVICE gt6144_dev = {
@@ -211,9 +218,9 @@ void gt6144_SetPixel(int xx, int yy, int col)
     if ((yy < 0) || (yy >= V_RESOL)) return; 
     xx = xx * X_MULT + H_OFFSET; 
     yy = yy * Y_MULT + V_OFFSET; 
+    if (gt6144.inverted) col=1-col; 
     for (y=0; y<Y_MULT; y++) {
         for (x=0;x<X_MULT;x++) { 
-            if (gt6144.inverted) col=1-col; 
             gt6144.surface[xx + x + (yy + y) * gt6144.wx]=gt6144.color[col];
         }
     }
@@ -291,7 +298,7 @@ void ppj_joy_poll(void)
             gt6144.joy_y = 96 / 2; 
         }
         if (gt6144.joy_x < 0) gt6144.joy_x=0; else
-        if (gt6144.joy_x >= 64) gt6144.joy_x=64-1; else
+        if (gt6144.joy_x >= 64) gt6144.joy_x=64-1; 
         if (gt6144.joy_y < 0) gt6144.joy_y=0; else
         if (gt6144.joy_y >= 96) gt6144.joy_y=96-1; 
     }
@@ -369,10 +376,11 @@ int32 ppj_pia1(int32 io, int32 data)
         // second read return joy_y with bit7=0, and so on
         if (gt6144.joy_seq == 0) {
            data = (gt6144.joy_x & 0x7f); 
-           data += 0x80; // bit7=1 to signal joy_x value is returned
+           data += 0x00; // bit7=0 to signal joy_x value is returned
            gt6144.joy_seq = 1; 
         } else {
            data = (gt6144.joy_y & 0x7f); 
+           data += 0x80; // bit7=1 to signal joy_y value is returned
            gt6144.joy_seq = 0; 
         }
         return data; 
