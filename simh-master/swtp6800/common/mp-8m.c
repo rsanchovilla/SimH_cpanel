@@ -178,7 +178,7 @@ void mp_8m_put_mbyte(int32 addr, int32 val)
     int32 org, len;
     int32 i;
     UNIT *uptr;
-
+    
     sim_debug (DEBUG_write, &mp_8m_dev, "mp_8m_put_mbyte: addr=%04X, val=%02X",
         addr, val);
     for (i = 0; i < MP_8M_NUM; i++) { /* find addressed unit */

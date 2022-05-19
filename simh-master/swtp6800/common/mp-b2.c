@@ -86,13 +86,16 @@ extern int32 dc4_fdcsec(int32 io, int32 data);
 extern int32 dc4_fdcdata(int32 io, int32 data);
 
 /* LFD-400 FDC I/O routines */
-
 extern int32 fd400_fdcstatus(int32 io, int32 data);
 extern int32 fd400_cstatus(int32 io, int32 data);
 extern int32 fd400_data(int32 io, int32 data);
 extern int32 fd400_cursect(int32 io, int32 data);
 extern int32 fd400_startrw(int32 io, int32 data);
 extern UNIT  fd400_dsk_unit[]; 
+
+/* MP-T Timer I/O routines */
+extern int32 timer0pia(int32 io, int32 data);
+extern int32 timer1pia(int32 io, int32 data);
 
 /* This is the I/O configuration table.  There are 32 possible
 device addresses, if a device is plugged into a port it's routine
@@ -106,17 +109,21 @@ struct idev dev_table[32] = {
    sio0x routine.  SWTBUG tests for the MP-C with most port reads! */
         {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev},     /*Port 2 8008-800B*/
         {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev},     /*Port 3 800C-800F*/
-        {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev},     /*Port 4 8010-8013*/
+        // addr 800C and 800D are used by gt6144 graphic card
+        //      800E and 800F             ppg-j analog joystick
+        {&nulldev},     {&nulldev},     {&timer0pia},   {&timer1pia},   /*Port 4 8010-8013*/
+        // addr 8012 and 8013 are used by mp-t timer card
         {&dc4_fdcdrv},  {&nulldev},     {&nulldev},     {&nulldev},     /*Port 5 8014-8017*/
         {&dc4_fdccmd},  {&dc4_fdctrk},  {&dc4_fdcsec},  {&dc4_fdcdata}, /*Port 6 8018-801B*/
+        // addr 8018 and 8019 are also used by Graph1 terminal
         {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev}      /*Port 7 801C-801F*/
 };
 
 struct idev dev_table2[8] = {
 /* LFD-400 routines */
-        {&fd400_cstatus} /* Port CC00 */, {&fd400_data}      /* Port CC01 */,
-        {&fd400_cursect} /* Port CC02 */, {&fd400_fdcstatus} /* Port CC03 */, 
-        {&fd400_startrw} /* Port CC04 */, {&nulldev},     
+        {&fd400_cstatus} /* addr CC00 */, {&fd400_data}      /* addr CC01 */,
+        {&fd400_cursect} /* addr CC02 */, {&fd400_fdcstatus} /* addr CC03 */, 
+        {&fd400_startrw} /* addr CC04 */, {&nulldev},     
         {&nulldev},                       {&nulldev}
 };
 
