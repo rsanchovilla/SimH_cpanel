@@ -281,6 +281,7 @@ DEBTAB m6800_debug[] = {
     { "WRITE", DEBUG_write, "Write Command"},
     { "SYMB", DEBUG_symb, "Symbolic info"},
     { "INST", DEBUG_inst, "Instructions"},
+    { "IRQ", DEBUG_irq, "IRQ"},
     { NULL }
 };
 
@@ -493,11 +494,15 @@ t_stat sim_instr (void)
         }                               /* end NMI */
         if (IRQ > 0) {                  //* IRQ? */
             if (GET_FLAG(IF) == 0) {
+                sim_debug(DEBUG_irq, &m6800_dev, 
+                    "IRQ when PC:%04X, SP:%04X IX:%04X A:%02X B:%02X CC:%02X \n", 
+                    PC, SP, IX, A, B, CC);         
                 push_word(PC);
                 push_word(IX);
                 push_byte(A);
                 push_byte(B);
                 push_byte(CC);
+                SET_FLAG(IF);
                 PC = get_vec_val(0xFFF8);
             }
         }                               /* end IRQ */
@@ -508,8 +513,7 @@ t_stat sim_instr (void)
         }
 
         //symbolic trace: locate source text for current intruction
-        src_addr = PC;
-
+        src_addr = PC;    
         if ((MEM_Symbolic_Buffer) && (MEM_Symbolic_Buffer[PC * 80])) {
             src_text = src_trace = &MEM_Symbolic_Buffer[PC * 80];
             while (src_trace=strstr(src_trace, "**")) {
@@ -687,11 +691,17 @@ t_stat sim_instr (void)
                 PC = pop_word();
                 break;
             case 0x3B:                  /* RTI */
+                sim_debug(DEBUG_irq, &m6800_dev, 
+                    "RTI when PC:%04X, SP:%04X IX:%04X A:%02X B:%02X CC:%02X \n", 
+                    PC, SP, IX, A, B, CC);         
                 CC = pop_byte();
                 B = pop_byte();
                 A = pop_byte();
                 IX = pop_word();
                 PC = pop_word();
+                sim_debug(DEBUG_irq, &m6800_dev, 
+                    "RTI done PC:%04X, SP:%04X IX:%04X A:%02X B:%02X CC:%02X \n", 
+                    PC, SP, IX, A, B, CC);         
                 break;
             case 0x3E:                  /* WAI */
                 push_word(PC);
@@ -2273,7 +2283,7 @@ void sim_load_S19(FILE *fileref, CONST char *fnam)
             } else if (i==nlen-1) { // S19 one-byte checksum decoded
                 chksum = (~chksum) & 0xFF; 
                 if (b!=chksum) {
-                    sim_printf("S19 file: line %d: incorrect checksum \n", nlin);
+                    sim_printf("S19 file: line %d: incorrect checksum (found %02X, calculated %02X)\n", nlin, b, chksum);
                     break; 
                 }
             }
@@ -2423,7 +2433,4 @@ t_stat m6800_deposit(t_value val, t_addr exta, UNIT *uptr, int32 sw)
 }
 
 /* end of m6800.c */
-
-// no funciona Space Voyage
-// en asmv/ra6800ml, poner en close clr fcbsta 
 
