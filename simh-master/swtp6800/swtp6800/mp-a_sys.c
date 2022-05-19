@@ -45,6 +45,7 @@ extern DEVICE dc4_dsk_dev;
 extern DEVICE fd400_dsk_dev;
 extern DEVICE GraphicOne_dev; 
 extern DEVICE gt6144_dev; 
+extern DEVICE timer_dev; 
 
 
 /* external routines */
@@ -86,6 +87,7 @@ DEVICE *sim_devices[] = {
     &fd400_dsk_dev,
     &GraphicOne_dev,
     &gt6144_dev,
+    &timer_dev,
     NULL
 };
 

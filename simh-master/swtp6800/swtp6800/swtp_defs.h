@@ -45,6 +45,7 @@ Copyright (c) 2005-2012, William Beech
 #define DEBUG_write     0x0004
 #define DEBUG_symb      0x0008     
 #define DEBUG_inst      0x0010
+#define DEBUG_irq       0x0020
 #define DEBUG_all       0xFFFF
 
 /* Simulator stop codes */
@@ -55,3 +56,6 @@ Copyright (c) 2005-2012, William Beech
 #define STOP_OPCODE 4       // invalid opcode
 #define STOP_MEMORY 5       // invalid memory address
 
+struct idev {
+        int32 (*routine)(int32, int32);
+};
