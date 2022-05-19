@@ -157,16 +157,16 @@ and [here](http://www.sublogiccorp.com/contents/displayArticle.aspx?0_3)
 
   ![SWTPC 6800 Graphics](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.png)
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FlighSim.zip) to download 
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FlightSim.zip) to download 
 Flight Simulator test run.
 
-Once uncompressed, you will find several ready to run .bat files: 
+Once uncompressed, you will find a ready to run .bat files: 
 
 * execute `run swtp6800 gt6144 Flight Simulator (1981).bat` batch file to run the simulator. This program is based on Original 
 subLogic 3DG68.V3.1 Graphics Routine Package (by Bruce Artwick 1979) recovered 
 from [here](https://stars.library.ucf.edu/cgi/viewcontent.cgi?article=1649&context=rtd)
 
-  ![SWTPC 6800 Flight Sim](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FlighSim.gif)
+  ![SWTPC 6800 Flight Sim](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FlightSim.gif)
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FloppyDisk.zip) to download 
 Floppy Disk based Operating Systems test run.
