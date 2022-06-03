@@ -1693,9 +1693,8 @@ I7094_OPT = -DUSE_INT64 -I ${I7094D}
 I650D = ${SIMHD}/I650
 I650 = ${I650D}/i650_cpu.c ${I650D}/i650_cdr.c ${I650D}/i650_cdp.c \
        ${I650D}/i650_dsk.c ${I650D}/i650_mt.c ${I650D}/i650_sys.c ${I650D}/i650_cpanel.c \
-       ${SIMHD}/sim_video.c \
        ${SIMHD}/cpanel.c \
-       ${SIMHD}/cpanel_vid.c \
+       ${SIMHD}/cpanel_vid.c 
 I650_OPT = -I ${I650D} -DUSE_INT64 -DUSE_SIM_CARD -DUSE_SIM_VIDEO -DHAVE_LIBSDL -DCPANEL
 
 NORCD = ${SIMHD}/NORC
@@ -1705,9 +1704,8 @@ NORC = ${NORCD}/NORC_cpu.c \
     ${NORCD}/NORC_mt.c \
     ${NORCD}/NORC_sys.c \
     ${NORCD}/NORC_cpanel.c \
-    ${SIMHD}/sim_video.c \
     ${SIMHD}/cpanel.c \
-    ${SIMHD}/cpanel_vid.c \
+    ${SIMHD}/cpanel_vid.c 
 NORC_OPT = -I ${NORCD} -DUSE_INT64 -DUSE_SIM_CARD -DUSE_SIM_VIDEO -DHAVE_LIBSDL -DCPANEL
 
 I701D = ${SIMHD}/I701             
@@ -1718,9 +1716,8 @@ I701 = ${I701D}/i701_cpu.c \
     ${I701D}/i701_lp.c \
     ${I701D}/i701_sys.c \
     ${I701D}/i701_cpanel.c \
-    ${SIMHD}/sim_video.c \
     ${SIMHD}/cpanel.c \
-    ${SIMHD}/cpanel_vid.c \
+    ${SIMHD}/cpanel_vid.c 
 I701_OPT = -I ${I701D} -DUSE_INT64 -DUSE_SIM_CARD -DUSE_SIM_VIDEO -DHAVE_LIBSDL -DCPANEL
 
 IBM360D = ${SIMHD}/IBM360
@@ -1737,17 +1734,16 @@ IBM360 = ${IBM360D}/ibm360_cpu.c \
     ${IBM360D}/ibm360_sys.c \
     ${IBM360D}/ibm360_vma.c \
     ${IBM360D}/ibm360_cpanel.c \
-    ${SIMHD}/sim_video.c \
     ${SIMHD}/cpanel.c \
-    ${SIMHD}/cpanel_vid.c \
+    ${SIMHD}/cpanel_vid.c 
 IBM360_OPT = -I ${IBM360D} -DUSE_INT64 -DUSE_SIM_CARD -DUSE_SIM_VIDEO -DHAVE_LIBSDL -DCPANEL
 
 SWTP6800D = ${SIMHD}/swtp6800/swtp6800
 SWTP6800C = ${SIMHD}/swtp6800/common
 SWTP6800MP-A = ${SWTP6800C}/mp-a.c ${SWTP6800C}/m6800.c ${SWTP6800C}/m6810.c \
-	${SWTP6800C}/bootrom.c 
-	${SWTP6800C}/dc-4.c ${SWTP6800C}/fd400.c 
-	${SWTP6800C}/mp-t.c ${SWTP6800C}/gt6144.c ${SWTP6800C}/graph1.c 
+	${SWTP6800C}/bootrom.c \
+	${SWTP6800C}/dc-4.c ${SWTP6800C}/fd400.c \
+	${SWTP6800C}/mp-t.c ${SWTP6800C}/gt6144.c ${SWTP6800C}/graph1.c \
 	${SWTP6800C}/mp-s.c ${SWTP6800D}/mp-a_sys.c \
 	${SWTP6800C}/mp-b2.c ${SWTP6800C}/mp-8m.c 
 SWTP6800_OPT = -I ${SWTP6800D} -DUSE_SIM_VIDEO -DHAVE_LIBSDL 
