@@ -1742,6 +1742,16 @@ IBM360 = ${IBM360D}/ibm360_cpu.c \
     ${SIMHD}/cpanel_vid.c \
 IBM360_OPT = -I ${IBM360D} -DUSE_INT64 -DUSE_SIM_CARD -DUSE_SIM_VIDEO -DHAVE_LIBSDL -DCPANEL
 
+SWTP6800D = ${SIMHD}/swtp6800/swtp6800
+SWTP6800C = ${SIMHD}/swtp6800/common
+SWTP6800MP-A = ${SWTP6800C}/mp-a.c ${SWTP6800C}/m6800.c ${SWTP6800C}/m6810.c \
+	${SWTP6800C}/bootrom.c 
+	${SWTP6800C}/dc-4.c ${SWTP6800C}/fd400.c 
+	${SWTP6800C}/mp-t.c ${SWTP6800C}/gt6144.c ${SWTP6800C}/graph1.c 
+	${SWTP6800C}/mp-s.c ${SWTP6800D}/mp-a_sys.c \
+	${SWTP6800C}/mp-b2.c ${SWTP6800C}/mp-8m.c 
+SWTP6800_OPT = -I ${SWTP6800D} -DUSE_SIM_VIDEO -DHAVE_LIBSDL 
+
 #
 # Simulators with CPANEL ======================= End
 #
@@ -1832,16 +1842,6 @@ SDS = ${SDSD}/sds_cpu.c ${SDSD}/sds_drm.c ${SDSD}/sds_dsk.c ${SDSD}/sds_io.c \
 	${SDSD}/sds_stddev.c ${SDSD}/sds_sys.c ${SDSD}/sds_cp.c ${SDSD}/sds_cr.c
 SDS_OPT = -I ${SDSD} -DUSE_SIM_CARD
 
-
-SWTP6800D = ${SIMHD}/swtp6800/swtp6800
-SWTP6800C = ${SIMHD}/swtp6800/common
-SWTP6800MP-A = ${SWTP6800C}/mp-a.c ${SWTP6800C}/m6800.c ${SWTP6800C}/m6810.c \
-	${SWTP6800C}/bootrom.c 
-	${SWTP6800C}/dc-4.c ${SWTP6800C}/fd400.c 
-	${SWTP6800C}/mp-t.c ${SWTP6800C}/gt6144.c ${SWTP6800C}/graph1.c 
-	${SWTP6800C}/mp-s.c ${SWTP6800D}/mp-a_sys.c \
-	${SWTP6800C}/mp-b2.c ${SWTP6800C}/mp-8m.c 
-SWTP6800_OPT = -I ${SWTP6800D}
 
 INTELSYSD = ${SIMHD}/Intel-Systems
 INTELSYSC = ${SIMHD}/Intel-Systems/common
