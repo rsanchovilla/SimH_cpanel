@@ -150,7 +150,7 @@ Graphics programs test run.
 Once uncompressed, you will find several ready to run .bat files: 
 
 * execute `run swtp6800 gt6144 st1 demo (1976 graphics).bat` batch file to show Star Trek USS Enterprise on simulated TV set
-* execute `run swtp6800 gt6144 Space RACE game.bat` batch file to play to Interactive Real Time Graphic game (gasp!)
+* execute `run swtp6800 gt6144 Space RACE game.bat` batch file to play Interactive Real Time Graphic game (gasp!)
 * execute `run swtp6800 subLogic 3D package basic (1977).bat` batch file to demo Bruce Artwick 3D 
 microcomputer graphics package recovered from [archive.org](https://archive.org/details/Sublogic_3_Dimensional_Microcomputer_Graphics_-1/mode/2up) 
 and [here](http://www.sublogiccorp.com/contents/displayArticle.aspx?0_3)
@@ -188,6 +188,14 @@ SSB (System Signals Broacasting) DOS 5.1C Operating System ported to MF68 floppy
 
   ![SWTPC 6800 OS](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FloppyDisk.png)
 
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_SDOS.zip) to download 
+SDOS Operating Systems test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run swtp6800 SDOS 1.1G (1985).bat` to run Software Dynamics SDOS 1.1G Operating System for MF-68 floppy disk
+* execute `run swtp6800 SDOS 1.1G build.bat` to run build SDOS 1.1G Operating System floppy disk images from SDOS binary files in /build folder
+* execute `run swtp6800 SDOS 1.1G compile.bat` to run compile SDOS 1.1G Operating System binary files in /comp folder from sources in /build/src
 
 ## IBM 370
 
