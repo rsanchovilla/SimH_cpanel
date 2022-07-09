@@ -26,6 +26,7 @@
     MODIFICATIONS:
 
         24 Apr 15 -- Modified to use simh_debug
+        Jun/2022 -- Modified to support additional devices
 
     NOTES:
 
@@ -46,6 +47,8 @@
 #define UNIT_RAM_A000     (1 << UNIT_V_RAM_A000)
 #define UNIT_V_RAM_C000   (UNIT_V_UF+5) /* MP-8M board 5 enable */
 #define UNIT_RAM_C000     (1 << UNIT_V_RAM_C000)
+
+t_stat set_64k (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
 
 /* function prototypes */
 
@@ -97,6 +100,10 @@ extern UNIT  fd400_dsk_unit[];
 extern int32 timer0pia(int32 io, int32 data);
 extern int32 timer1pia(int32 io, int32 data);
 
+/* HLE-HD I/O routines */
+extern int32 hd0cmd(int32 io, int32 data);
+extern int32 hd1data(int32 io, int32 data);
+
 /* This is the I/O configuration table.  There are 32 possible
 device addresses, if a device is plugged into a port it's routine
 address is here, 'nulldev' means no device is available
@@ -111,8 +118,9 @@ struct idev dev_table[32] = {
         {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev},     /*Port 3 800C-800F*/
         // addr 800C and 800D are used by gt6144 graphic card
         //      800E and 800F             ppg-j analog joystick
-        {&nulldev},     {&nulldev},     {&timer0pia},   {&timer1pia},   /*Port 4 8010-8013*/
+        {&hd0cmd},     {&hd1data},     {&timer0pia},   {&timer1pia},   /*Port 4 8010-8013*/
         // addr 8012 and 8013 are used by mp-t timer card
+        // addr 8010 and 8011 are used by HLE-Hard Disk 
         {&dc4_fdcdrv},  {&nulldev},     {&nulldev},     {&nulldev},     /*Port 5 8014-8017*/
         {&dc4_fdccmd},  {&dc4_fdctrk},  {&dc4_fdcsec},  {&dc4_fdcdata}, /*Port 6 8018-801B*/
         // addr 8018 and 8019 are also used by Graph1 terminal
@@ -165,6 +173,8 @@ MTAB MB_mod[] = {
     { UNIT_RAM_A000, 0, "BD4 Off", "NOBD4", NULL },
     { UNIT_RAM_C000, UNIT_RAM_C000, "BD5 On", "BD5", NULL },
     { UNIT_RAM_C000, 0, "BD5 Off", "NOBD5", NULL },
+    { MTAB_XTD | MTAB_VDV, 0,       NULL,     "NO64K", &set_64k, NULL, NULL},
+    { MTAB_XTD | MTAB_VDV, 1,       NULL,     "64K"  , &set_64k, NULL, NULL},
     { 0 }
 };
 
@@ -201,11 +211,39 @@ DEVICE MB_dev = {
     NULL                                //lname
 };
 
+// Hack for 64k RAM:
+//	System has ram in 0000..FFFF
+//      except FF00..FF1F that is the I/O 
+//      no bootrom, no eprom
+
+int Hack64kRAM=0; 
+int RAM64k[65536]; 
+t_stat set_64k (UNIT *uptr, int32 value, CONST char *cptr, void *desc)
+{
+    if (value == 1) {
+        // activate 64k RAM
+        Hack64kRAM=1;
+        memset(RAM64k, 0, sizeof(RAM64k)); 
+    } else {
+        Hack64kRAM=0;
+    }
+    return SCPE_OK; 
+}
+
 /*  get a byte from memory */
 
 int32 MB_get_mbyte(int32 addr)
 {
     int32 val;
+
+    if (Hack64kRAM) {
+        if ((addr >= 0xFF00) && (addr <= 0xFF20)) {
+            val = (dev_table[addr - 0xFF00].routine(0, 0)) & 0xFF;
+        } else {
+            val = RAM64k[addr]; 
+        }
+        return; 
+    }
 
     switch(addr & 0xE000) {
         case 0x0000:                    //0000-1FFFh
@@ -240,7 +278,7 @@ int32 MB_get_mbyte(int32 addr)
             sim_debug (DEBUG_read, &MB_dev, "MB_get_mbyte: I/O addr=%04X val=%02X\n",
                 addr, val);
             break;
-        case 0xA000:                    //A000-AFFFh
+        case 0xA000:                    //A000-BFFFh
             if (MB_unit.flags & UNIT_RAM_A000)
                 val = mp_8m_get_mbyte(addr) & 0xFF;
             else
@@ -278,6 +316,15 @@ int32 MB_get_mword(int32 addr)
 
 void MB_put_mbyte(int32 addr, int32 val)
 {
+    if (Hack64kRAM) {
+        if ((addr >= 0xFF00) && (addr <= 0xFF20)) {
+            dev_table[addr - 0xFF00].routine(1, val); // I/0 address FF00 - FF1F
+        } else {
+            RAM64k[addr] = val; 
+        }
+        return; 
+    }
+
     switch(addr & 0xE000) {
         case 0x0000:                    //0000-1FFFh
             if (MB_unit.flags & UNIT_RAM_0000)

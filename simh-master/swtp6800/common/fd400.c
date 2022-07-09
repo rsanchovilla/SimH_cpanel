@@ -148,7 +148,7 @@
 #define NUM_DISK        4               
 #define SECT_SIZE       (8+4+256)  /* sector size=header (10 bytes) + data (256 bytes) + CRC (2 bytes)  */
 #define NUM_SECT        10              /* sectors/track */
-#define TRAK_SIZE       (SECT_SIZE * NUM_SECT) /* trk size (bytes) */
+#define TRACK_SIZE      (SECT_SIZE * NUM_SECT) /* trk size (bytes) */
 #define HEADS           1               /* handle as SS with twice the sectors */
 #define NUM_CYL         40              /* maximum tracks */
 #define DSK_SIZE        (NUM_SECT * HEADS * NUM_CYL * SECT_SIZE) /* dsk size (bytes) */

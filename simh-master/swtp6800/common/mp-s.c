@@ -26,6 +26,7 @@
     MODIFICATIONS:
 
         24 Apr 15 -- Modified to use simh_debug
+        Roberto Sancho: Jun 2022  -- general refactoring & clean up. Added PTR bin mode for SDOS PORT: simulation
 
     NOTES:
 
@@ -61,27 +62,26 @@
 #include    <ctype.h>
 #include    "swtp_defs.h"
 
-#define UNIT_V_TTY  (UNIT_V_UF)         // TTY or ANSI mode
-#define UNIT_TTY   (1 << UNIT_V_TTY)
-
 /* local global variables */
 
-int32 ptr_stopioe = 0;                  // stop on error
-int32 ptp_stopioe = 0;                  // stop on error
 int32 odata;
 int32 status;
 
 int32 ptp_flag = 0;
 int32 ptr_flag = 0;
+int32 ptr_send_bin = 0;
+int32 ptr_send_bin_byte; 
+int32 ptp_send_bin = 0;
+int32 ptp_send_bin_byte; 
 
 /* function prototypes */
 
 t_stat sio_svc (UNIT *uptr);
-t_stat ptr_svc (UNIT *uptr);
-t_stat ptp_svc (UNIT *uptr);
 t_stat sio_reset (DEVICE *dptr);
 t_stat ptr_reset (DEVICE *dptr);
 t_stat ptp_reset (DEVICE *dptr);
+t_stat sio_attach(UNIT * uptr, CONST char *file);
+
 int32 sio0s(int32 io, int32 data);
 int32 sio0d(int32 io, int32 data);
 int32 sio1s(int32 io, int32 data);
@@ -98,22 +98,16 @@ UNIT sio_unit = { UDATA (&sio_svc, 0, 0), KBD_POLL_WAIT
 };
 
 REG sio_reg[] = {
-    { ORDATA (DATA, sio_unit.buf, 8) },
-    { ORDATA (STAT, sio_unit.u3, 8) },
+    { ORDATA (DATA, odata, 8) },
+    { ORDATA (STAT, status, 8) },
     { NULL }
 };
 
-MTAB sio_mod[] = {
-    { UNIT_TTY, UNIT_TTY, "TTY", "TTY", NULL },
-    { UNIT_TTY, 0, "ANSI", "ANSI", NULL },
-    { 0 }
-};
-
 DEVICE sio_dev = {
-    "MP-S", &sio_unit, sio_reg, sio_mod,
+    "MP-S", &sio_unit, sio_reg, NULL,
     1, 10, 31, 1, 8, 8,
     NULL, NULL, &sio_reset,
-    NULL, NULL, NULL
+    NULL, &sio_attach, NULL
 };
 
 /* paper tape reader data structures
@@ -123,11 +117,11 @@ DEVICE sio_dev = {
    ptr_reg        PTR register list
    ptr_mod        PTR modifiers list */
 
-UNIT ptr_unit = { UDATA (&ptr_svc, UNIT_SEQ + UNIT_ATTABLE, 0), KBD_POLL_WAIT
+UNIT ptr_unit = { UDATA (NULL, UNIT_SEQ + UNIT_ATTABLE, 0), KBD_POLL_WAIT
 };
 
 DEVICE ptr_dev = {
-    "PTR", &ptr_unit, NULL, NULL,
+    "PTR", &ptr_unit, NULL, NULL, 
     1, 10, 31, 1, 8, 8,
     NULL, NULL, &ptr_reset,
     NULL, NULL, NULL
@@ -140,7 +134,8 @@ DEVICE ptr_dev = {
    ptp_reg        PTP register list
    ptp_mod        PTP modifiers list */
 
-UNIT ptp_unit = { UDATA (&ptp_svc, UNIT_SEQ + UNIT_ATTABLE, 0), KBD_POLL_WAIT
+
+UNIT ptp_unit = { UDATA (NULL, UNIT_SEQ + UNIT_ATTABLE, 0), KBD_POLL_WAIT
 };
 DEVICE ptp_dev = {
     "PTP", &ptp_unit, NULL, NULL,
@@ -156,6 +151,7 @@ t_stat sio_svc (UNIT *uptr)
     int32 temp;
 
     sim_activate (&sio_unit, sio_unit.wait); // continue poll
+    if (sio_unit.buf) return SCPE_OK; // last polled char not yet processed, so do not poll a new one (previous would be lost)
     if ((temp = sim_poll_kbd ()) < SCPE_KFLAG)
         return temp;                    // no char or error?
     sio_unit.buf = temp & 0xFF;         // Save char
@@ -163,36 +159,9 @@ t_stat sio_svc (UNIT *uptr)
         // convert BackSpace (ascii 127) to del char (ascii 8) for swtbug
         // also backspace cursor on console
         sio_unit.buf=8; 
-        sim_putchar('\b');
-        sim_putchar(' ');
-        sim_putchar('\b');
     }
-    sio_unit.u3 |= 0x01;                // Set RXF flag
     /* Do any special character handling here */
     sio_unit.pos++;                     // step character count
-    return SCPE_OK;
-}
-
-/* paper tape reader input service routine */
-
-t_stat ptr_svc (UNIT *uptr)
-{
-    int32 temp;
-
-    sim_activate (&ptr_unit, ptr_unit.wait); // continue poll
-    if ((temp = sim_poll_kbd ()) < SCPE_KFLAG)
-        return temp;                    // no char or error?
-    ptr_unit.buf = temp & 0xFF;         // Save char
-    ptr_unit.u3 |= 0x01;                // Set RXF flag
-    /* Do any special character handling here */
-    ptr_unit.pos++;                     // step character count
-    return SCPE_OK;
-}
-
-/* paper tape punch output service routine */
-
-t_stat ptp_svc (UNIT *uptr)
-{
     return SCPE_OK;
 }
 
@@ -200,8 +169,9 @@ t_stat ptp_svc (UNIT *uptr)
 
 t_stat sio_reset (DEVICE *dptr)
 {
-    sio_unit.buf = 0;                   // Data buffer
-    sio_unit.u3 = 0x02;                 // Status buffer
+    sio_unit.buf = 0;
+    odata  = 0;                    // Data buffer
+    status = 0x02;                 // Status buffer
     sio_unit.wait = 10000;
     sim_activate (&sio_unit, sio_unit.wait); // activate unit
     return SCPE_OK;
@@ -211,10 +181,7 @@ t_stat sio_reset (DEVICE *dptr)
 
 t_stat ptr_reset (DEVICE *dptr)
 {
-    ptr_unit.buf = 0;
-    ptr_unit.u3 = 0x02;
-//    sim_activate (&ptr_unit, ptr_unit.wait); // activate unit
-    sim_cancel (&ptr_unit);             // deactivate unit
+    ptr_flag = 0;
     return SCPE_OK;
 }
 
@@ -222,104 +189,186 @@ t_stat ptr_reset (DEVICE *dptr)
 
 t_stat ptp_reset (DEVICE *dptr)
 {
-    ptp_unit.buf = 0;
-    ptp_unit.u3 = 0x02;
-//    sim_activate (&ptp_unit, ptp_unit.wait); // activate unit
-    sim_cancel (&ptp_unit);             // deactivate unit
+    ptp_flag = 0;
     return SCPE_OK;
 }
 
 /*  I/O instruction handlers, called from the MP-B2 module when a
    read or write occur to addresses 0x8004-0x8007. */
 
-int32 sio0s(int32 io, int32 data)
+// return <0 if no char received (on ptr or on keyb polling)
+//        0..255 char read
+int GetPtrConsoleChar(void)
 {
-    if (io == 0) {                      // control register read
-        if (ptr_flag) {                 // reader enabled?
-            if ((ptr_unit.flags & UNIT_ATT) == 0) { // attached?
-                ptr_unit.u3 &= 0xFE;    // no, clear RXF flag 
-                ptr_flag = 0;           // clear reader flag
-                printf("Reader not attached to file\n");
-            } else {                    // attached
-                if (feof(ptr_unit.fileref)) { // EOF
-                    ptr_unit.u3 &= 0xFE; // clear RXF flag
-                    ptr_flag = 0;       // clear reader flag
-                } else {                 // not EOF
-                    ptr_unit.u3 |= 0x01; // set ready
-                }
-            }
-            return (status = ptr_unit.u3); // return ptr status
-        } else {
-            return (status = sio_unit.u3); // return console status
-        }
-    } else {                            // control register write
-        if (data == 0x03) {             // reset port!
-            sio_unit.u3 = 0x02;         // reset console
-            sio_unit.buf = 0;
-            sio_unit.pos = 0;
-            ptr_unit.u3 = 0x02;         // reset reader
-            ptr_unit.buf = 0;
-            ptr_unit.pos = 0;
-            ptp_unit.u3 = 0x02;         // reset punch
-            ptp_unit.buf = 0;
-            ptp_unit.pos = 0;
-        }
-    return (status = 0);                // invalid io
+    extern int32 InstrCount;                   // intructions executed count 
+    static int32 InstrCount0=0;
+    int32  m; 
+    int byte; 
+
+    m = (InstrCount - InstrCount0) ; // number of instr exectued elapsed from last time this routine was called
+    if ((m>0) && (m<150)) return -1; // too few instr exec -> no time to receive anything new -> return no data received
+    InstrCount0=InstrCount;
+
+    if (ptr_flag==0) {                 
+        // PRT disabled, new reading from console
+        byte=sio_unit.buf;
+        sio_unit.buf=0; // mark polled char as processed, so next polled char can be read
+        if (byte==0) return -1; // char zero is no char read
+        return byte; // return next char
     }
+    // RDR is enabled
+    if ((ptr_unit.flags & UNIT_ATT) == 0) { // attached?
+        ptr_flag = 0;           // clear reader flag
+        return -1;               // no, no data
+    }
+    if (ptr_send_bin == 0) {
+        // normal ascii PTR read
+        if (feof(ptr_unit.fileref)) {
+            byte = EOF; 
+        } else {
+            byte = getc(ptr_unit.fileref);
+        }
+        if (byte == EOF) { // end of file?
+            ptr_flag = 0;           // clear reader flag
+            byte = 0;               // and return byte zero
+        }
+        ptr_unit.pos++;             // step character count
+        return byte; 
+    }
+    // binary mode used by SDOS PORT: driver
+    // read attached file to ptr as two hexdigits per byte, until eof (signaed as ^Z)
+    if (ptr_send_bin<10) { 
+        // start sending 10 0x55 chars to sync
+        byte = 0x55; ptr_send_bin++; 
+        ptr_send_bin_byte=0; 
+    } else if (ptr_send_bin_byte == EOF) {
+        byte = 26; // send ^Z to signal eof
+    } else if (ptr_send_bin==10) {         
+        ptr_send_bin_byte = getc(ptr_unit.fileref); 
+        if (ptr_send_bin_byte == EOF) {
+            byte=26; 
+        } else {
+            byte = (ptr_send_bin_byte >> 4); // get high nybble
+            ptr_send_bin++;
+        }
+    } else {
+        byte = (ptr_send_bin_byte & 0x0F); // get low nybble
+        ptr_send_bin=10;
+    }
+    if (byte < 16) { // convert to hex digit 0..F
+        byte = byte + ((byte < 10) ? '0':'A'-10);
+    }
+    return byte; 
 }
 
+
+// at 0x8004
+int32 sio0s(int32 io, int32 data)
+{
+    int byte; 
+
+    if (io == 0) {                      
+        // status register read
+        if (status & 0x01) {
+            // RXF flag set, not yet cleared -> prev byte has not yet read from data reg -> do not read a new one
+            return status; 
+        }
+        // RXF flag cleared -> data reg can be overwritten
+        byte = GetPtrConsoleChar(); 
+        if (byte < 0) {             
+            status &= 0xFE;  // no data received
+        } else {
+            status |= 0x01;  // Set RXF flag
+            odata=byte; 
+        }
+        return (status); // return acia status
+    }                       
+    // control register write
+    if (data == 0x03) {             // reset port!
+        status = 0x02;              // transmite data reg empty
+        sio_unit.buf = 0;
+        sio_unit.pos = 0;
+        odata = 0;
+    }
+    return 0; 
+}
+
+// at 0x8005
 int32 sio0d(int32 io, int32 data)
 {
     extern int32 InstrCount;                   // intructions executed count 
-    static int32 InstrCount0 = 0; 
     extern int32 PC; 
-    static int32 svdata; 
 
 
-    if (io == 0) {                      // data register read
-        if (ptr_flag) {                 // RDR enabled?
-            if ((ptr_unit.flags & UNIT_ATT) == 0) // attached?
-                return 0;               // no, done
-//          printf("ptr_unit.u3=%02X\n", ptr_unit.u3);
-            if ((ptr_unit.u3 & 0x01) == 0) { // yes, more data?
-//              printf("Returning old %02X\n", odata); // no, return previous byte
-                return (odata & 0xFF);
-            }
-            if ((PC < 0xE000) && (InstrCount - InstrCount0) < 30) {
-                // reading twice elapsing only 30 instr. return again previous byte
-                return svdata;
-            }
-            InstrCount0 = InstrCount; 
-            if ((odata = getc(ptr_unit.fileref)) == EOF) { // end of file?
-//              printf("Got EOF\n");
-                ptr_unit.u3 &= 0xFE;    // clear RXF flag
-                return (odata = 0);     // no data
-            }
-//          printf("Returning new %02X\n", odata);
-            ptr_unit.pos++;             // step character count
-            ptr_unit.u3 &= 0xFE;        // clear RXF flag
-            return (svdata = (odata & 0xFF));      // return character
+    if (io == 0) {                      
+        // data register read
+        status &= 0xFE;  // clear RXF bit
+        return odata; 
+    } else {                            
+        // data register write
+
+        if ((ptr_flag) && (data == 0x81)) {
+            // send char 129 dec with ptr active -> hack to receive bin file from ptr
+            // this is non-realistic, but very handly to implement SDOS PORT: device over PTP and PTR
+            ptr_send_bin = 1; 
         } else {
-            sio_unit.u3 &= 0xFE;        // clear RXF flag
-            return (odata = sio_unit.buf); // return next char
+            ptr_send_bin = 0; 
         }
-    } else {                            // data register write
-        if (isprint(data) || data == '\r' || data == '\n') { // printable?
+        if (ptp_flag) {
+            if (data == 0x82) {
+                // send char 130 dec with ptp active -> hack to send ascii file to ptp without echo on console
+                // this is non-realistic, but very handly to implement SDOS PORT: device over PTP and PTR
+                ptp_send_bin = -1; 
+            } else if (data == 0x83) {
+                // send char 131 dec with ptp active -> hack to send bin file to ptp
+                // this is non-realistic, but very handly to implement SDOS PORT: device over PTP and PTR
+                ptp_send_bin = 1; // clear for reception of binary byte
+                ptp_send_bin_byte=0; 
+            } else if (ptp_send_bin<0) {
+                if ((isprint(data) || data == '\r' || data == '\n' || data == 9) &&
+                    (ptp_unit.flags & UNIT_ATT)) { 
+                    putc(data, ptp_unit.fileref); // add printable char 
+                    data =0x80; // data should not be printed again
+                }
+                if (data >= 32) data =0x80; // data should not be printed
+            } else if (ptp_send_bin) {
+                int n; 
+                n=data  - (data <= '9' ? '0':'A'-10); // data has a hex digit 0..F?
+                if ((n<0) || (n>15)) {
+                    ptp_send_bin_byte=0;  // no, init byte to send for ptp to attached file
+                    ptp_send_bin = 1; 
+                } else {
+                    ptp_send_bin_byte= (ptp_send_bin_byte << 4) + n;  // yes, add hex digit 
+                    ptp_send_bin++; 
+                    if (ptp_send_bin > 2) {
+                        data = ptp_send_bin_byte; // full byte composed
+                        ptp_send_bin_byte=0;  // clear to receive next byte
+                        ptp_send_bin = 1;  
+                        if (ptp_unit.flags & UNIT_ATT) { // PTP enabled & attached?
+                           putc(data, ptp_unit.fileref); // add byte
+                        }
+                        data = 0x80;  
+                    }
+                }
+                if (data >= 32) data =0x80; // data should not be printed
+            }
+        }
+        if (isprint(data) || data == '\r' || data == '\n' || data == 8) { // printable?
             sim_putchar(data);          // print character on console
             if (ptp_flag && ptp_unit.flags & UNIT_ATT) { // PTP enabled & attached?
                 putc(data, ptp_unit.fileref);
                 ptp_unit.pos++;         // step character counter
             }
-        } else {                        // DC1-DC4 control Reader/Punch
+        } else {                        // control Reader/Punch
             switch (data) {
                 case 0x11:              // PTR on (^Q)
                     ptr_flag = 1;
-                    ptr_unit.u3 |= 0x01;
+                    ptr_send_bin=0; 
 //                    printf("Reader on\n");
                     break;
                 case 0x12:              // PTP on (^R)
                     ptp_flag = 1;
-                    ptp_unit.u3 |= 0x02;
+                    ptp_send_bin=0; 
 //                    printf("Punch on\n");
                     break;
                 case 0x13:              // PTR off (^S)
@@ -329,12 +378,16 @@ int32 sio0d(int32 io, int32 data)
                 case 0x14:              // PTP off (^T)
                     ptp_flag = 0;
 //                    printf("Punch off-%d bytes written\n", ptp_unit.pos);
+                    if (ptp_send_bin != 0) {
+                        detach_unit(&ptp_unit); 
+                    }
                     break;
                 default:                // ignore all other characters
                     break;
             }
         }
     }
+
     return (odata = 0);
 }
 
@@ -354,4 +407,13 @@ int32 sio1d(int32 io, int32 data)
     return odata;
 }
 
+t_stat sio_attach(UNIT * uptr, CONST char *file)
+{
+    t_stat              r;
+
+    if ((r = attach_unit(uptr, file)) != SCPE_OK) return r;
+    return r;
+}
+
 /* end of mp-s.c */
+

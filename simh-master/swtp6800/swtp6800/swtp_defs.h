@@ -36,6 +36,7 @@ Copyright (c) 2005-2012, William Beech
 #define MAXMEMSIZE      65536               // max memory size
 #define MEMSIZE         (m6800_unit.capac)  // actual memory size
 #define ADDRMASK        (MAXMEMSIZE - 1)    // address mask
+#define BYTEMASK        0xff
 #define MEM_ADDR_OK(x)  (((uint32) (x)) < MEMSIZE)
 
 /* debug definitions */

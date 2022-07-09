@@ -329,12 +329,12 @@ void Symbolic_Trace(char * sTrace)
         sTrace +=5;
         goto doecho;
     } else if(strstr(sTrace, "**echo")==sTrace) {
-        // the "**echo xxx[:[A|B|X]]" string in symbolic buffer prints on console xxx (cannot have spaces)
+        // the "**echo xxx[:[A|B|X|D]]" string in symbolic buffer prints on console xxx (cannot have spaces)
         // if ":" is present, append contents of register A B or X 
         sTrace +=6;
        doecho:
         addr=len=0;
-        while (c=*sTrace++) {
+        while ((c=*sTrace++) != 0) {
             if (c==32) {
                 if (len==0) continue; // skip leading spaces
                 break; // space after xxx ends string to echo
@@ -344,15 +344,16 @@ void Symbolic_Trace(char * sTrace)
             if ((cu == 'A') && (addr > 0)) addr=1; // signal to append A
             if ((cu == 'B') && (addr > 0)) addr=2; // signal to append B
             if ((cu == 'X') && (addr > 0)) addr=3; // signal to append X
+            if ((cu == 'D') && (addr > 0)) addr=4; // signal to append D (=A,B)
             if (len>40) break; 
             buf[len++] = c; 
         }
         buf[len]=0;
-        d = (addr==1) ? A : (addr==2) ? B : (addr==3) ? IX : 0; 
-        c = (addr==1) ? 'A' : (addr==2) ? 'B' : (addr==3) ? 'X' : ' '; 
+        d = (addr==1) ? A : (addr==2) ? B : (addr==3) ? IX : (addr==4) ? A*256+B : 0; 
+        c = (addr==1) ? 'A' : (addr==2) ? 'B' : (addr==3) ? 'X' : (addr==4) ? 'D' : ' '; 
         if ((addr == 1) || (addr==2))  {
             sprintf(&buf[len], "=%02X (dec %d) '%c'", d, d, (d<32) ? '?':d);
-        } else if (addr==3) {
+        } else if ((addr==3) || (addr==4)) {
             sprintf(&buf[len], "=%04X (dec %d)", d, d);
         }
         trace = 1;
@@ -360,17 +361,20 @@ void Symbolic_Trace(char * sTrace)
         // the "**mNNNN[-LL][:xxxx]" string in symbolic buffer prints on console the contents
         // of memory starting at NNNN (hex). prints LL (hex) bytes (defaults to 1). 
         // if ":" is present, prints on console xxx (cannot have leading spaces, nor embebbed spaces, max 40 chars)
+        // "**mX[-LL][:xxxx]" same, but prints contents of address given by IX register contents
         sTrace +=3;
         addr=len=0;
-        while (c=*sTrace++) {
+        while ((c=*sTrace++) != 0) {
             cu=sim_toupper(c);
-            if ((c>='0') && (c<='9')) {
+            if (c=='X') {
+                addr = -1; 
+            } else if ((c>='0') && (c<='9')) {
                 addr = addr * 16 + c - '0';
             } else if ((cu>='A') && (cu<='F')) {
                 addr = addr * 16 + cu - 'A'+10;
             } else break; 
         }
-        if (c=='-') while (c=*sTrace++) {
+        if (c=='-') while ((c=*sTrace++) != 0) {
             cu=sim_toupper(c);
             if ((c>='0') && (c<='9')) {
                 len = len * 16 + c - '0';
@@ -379,11 +383,12 @@ void Symbolic_Trace(char * sTrace)
             } else break; 
         }
         if (len==0) len=1;
+        if (addr == -1) addr = IX; 
         sprintf(buf, "Mem dump");
         if (c==':') {
             int len=0;
-            while (c=*sTrace++) {
-                if (c==32) break; // space after xxx ends string to echo
+            while ((c=*sTrace++) != 0) {
+                if (c==' ') break; // space after xxx ends string to echo
                 if (len>40) break; 
                 buf[len++] = c; 
             }
@@ -516,7 +521,7 @@ t_stat sim_instr (void)
         src_addr = PC;    
         if ((MEM_Symbolic_Buffer) && (MEM_Symbolic_Buffer[PC * 80])) {
             src_text = src_trace = &MEM_Symbolic_Buffer[PC * 80];
-            while (src_trace=strstr(src_trace, "**")) {
+            while ((src_trace=strstr(src_trace, "**")) != 0) {
                 Symbolic_Trace(src_trace); 
                 src_trace++;
             }
@@ -567,7 +572,7 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A - B;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVs(op1, B, A);
@@ -575,7 +580,7 @@ t_stat sim_instr (void)
             case 0x11:                  /* CBA */
                 lo = A - B;
                 COND_SET_FLAG_C(lo);
-                lo &= 0xFF ;
+                lo &= BYTEMASK ;
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 condevalVs(A, B, lo);
@@ -604,7 +609,7 @@ t_stat sim_instr (void)
                     A = (A & 0x0F) | (EA << 4) | 0x100;
                 }
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);   
                 break;
@@ -612,7 +617,7 @@ t_stat sim_instr (void)
                 op1 = A;
                 A += B;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 condevalHa(op1, B, A);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
@@ -728,14 +733,14 @@ t_stat sim_instr (void)
                 break;
             case 0x40:                  /* NEG A */
                 op1 = A;
-                A = (0 - A) & 0xFF;
+                A = (0 - A) & BYTEMASK;
                 COND_SET_FLAG_V(op1 == 0x80); 
                 COND_SET_FLAG(A,CF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 break;
             case 0x43:                  /* COM A */
-                A = ~A & 0xFF;
+                A = ~A & BYTEMASK;
                 CLR_FLAG(VF);
                 SET_FLAG(CF);
                 COND_SET_FLAG_N(A);
@@ -743,7 +748,7 @@ t_stat sim_instr (void)
                 break;
             case 0x44:                  /* LSR A */
                 COND_SET_FLAG(A & 0x01,CF);
-                A = (A >> 1) & 0xFF;
+                A = (A >> 1) & BYTEMASK;
                 CLR_FLAG(NF);
                 COND_SET_FLAG_Z(A);
                 COND_SET_FLAG_V(get_flag(NF) ^ get_flag(CF));
@@ -751,7 +756,7 @@ t_stat sim_instr (void)
             case 0x46:                  /* ROR A */
                 hi = get_flag(CF);
                 COND_SET_FLAG(A & 0x01,CF);
-                A = (A >> 1) & 0xFF;
+                A = (A >> 1) & BYTEMASK;
                 if (hi)
                     A |= 0x80;
                 COND_SET_FLAG_N(A);
@@ -761,7 +766,7 @@ t_stat sim_instr (void)
             case 0x47:                  /* ASR A */
                 COND_SET_FLAG(A & 0x01,CF);
                 lo = A & 0x80;
-                A = (A >> 1) & 0xFF;
+                A = (A >> 1) & BYTEMASK;
                 A |= lo;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
@@ -769,7 +774,7 @@ t_stat sim_instr (void)
                 break;
             case 0x48:                  /* ASL A */
                 COND_SET_FLAG(A & 0x80,CF);
-                A = (A << 1) & 0xFF;
+                A = (A << 1) & BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 COND_SET_FLAG_V(get_flag(NF) ^ get_flag(CF));
@@ -777,7 +782,7 @@ t_stat sim_instr (void)
             case 0x49:                  /* ROL A */
                 hi = get_flag(CF);
                 COND_SET_FLAG(A & 0x80,CF);
-                A = (A << 1) & 0xFF;
+                A = (A << 1) & BYTEMASK;
                 if (hi)
                     A |= 0x01;
                 COND_SET_FLAG_N(A);
@@ -786,18 +791,18 @@ t_stat sim_instr (void)
                 break;
             case 0x4A:                  /* DEC A */
                 COND_SET_FLAG_V(A == 0x80);
-                A = (A - 1) & 0xFF;
+                A = (A - 1) & BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 break;
             case 0x4C:                  /* INC A */
                 COND_SET_FLAG_V(A == 0x7F);
-                A = (A + 1) & 0xFF;
+                A = (A + 1) & BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 break;
             case 0x4D:                  /* TST A */
-                lo = (A - 0) & 0xFF;
+                lo = (A - 0) & BYTEMASK;
                 CLR_FLAG(VF);
                 CLR_FLAG(CF);
                 COND_SET_FLAG_N(lo);
@@ -812,7 +817,7 @@ t_stat sim_instr (void)
                 break;
             case 0x50:                  /* NEG B */
                 op1 = B;
-                B = (0 - B) & 0xFF;
+                B = (0 - B) & BYTEMASK;
                 COND_SET_FLAG_V(op1 == 0x80); 
                 COND_SET_FLAG(B,CF);
                 COND_SET_FLAG_N(B);
@@ -820,7 +825,7 @@ t_stat sim_instr (void)
                 break;
             case 0x53:                  /* COM B */
                 B = ~B;
-                B &= 0xFF;
+                B &= BYTEMASK;
                 CLR_FLAG(VF);
                 SET_FLAG(CF);
                 COND_SET_FLAG_N(B);
@@ -828,7 +833,7 @@ t_stat sim_instr (void)
                 break;
             case 0x54:                  /* LSR B */
                 COND_SET_FLAG(B & 0x01,CF);
-                B = (B >> 1) & 0xFF;
+                B = (B >> 1) & BYTEMASK;
                 CLR_FLAG(NF);
                 COND_SET_FLAG_Z(B);
                 COND_SET_FLAG_V(get_flag(NF) ^ get_flag(CF));
@@ -836,7 +841,7 @@ t_stat sim_instr (void)
             case 0x56:                  /* ROR B */
                 hi = get_flag(CF);
                 COND_SET_FLAG(B & 0x01,CF);
-                B = (B >> 1) & 0xFF;
+                B = (B >> 1) & BYTEMASK;
                 if (hi)
                     B |= 0x80;
                 COND_SET_FLAG_N(B);
@@ -846,7 +851,7 @@ t_stat sim_instr (void)
             case 0x57:                  /* ASR B */
                 COND_SET_FLAG(B & 0x01,CF);
                 lo = B & 0x80;
-                B = (B >> 1) & 0xFF;
+                B = (B >> 1) & BYTEMASK;
                 B |= lo;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
@@ -854,7 +859,7 @@ t_stat sim_instr (void)
                 break;
             case 0x58:                  /* ASL B */
                 COND_SET_FLAG(B & 0x80,CF);
-                B = (B << 1) & 0xFF;
+                B = (B << 1) & BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 COND_SET_FLAG_V(get_flag(NF) ^ get_flag(CF));
@@ -862,7 +867,7 @@ t_stat sim_instr (void)
             case 0x59:                  /* ROL B */
                 hi = get_flag(CF);
                 COND_SET_FLAG(B & 0x80,CF);
-                B = (B << 1) & 0xFF;
+                B = (B << 1) & BYTEMASK;
                 if (hi)
                     B |= 0x01;
                 COND_SET_FLAG_N(B);
@@ -871,18 +876,18 @@ t_stat sim_instr (void)
                 break;
             case 0x5A:                  /* DEC B */
                 COND_SET_FLAG_V(B == 0x80);
-                B = (B - 1) & 0xFF;
+                B = (B - 1) & BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 break;
             case 0x5C:                  /* INC B */
                 COND_SET_FLAG_V(B == 0x7F);
-                B = (B + 1) & 0xFF;
+                B = (B + 1) & BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 break;
             case 0x5D:                  /* TST B */
-                lo = (B - 0) & 0xFF;
+                lo = (B - 0) & BYTEMASK;
                 CLR_FLAG(VF);
                 CLR_FLAG(CF);
                 COND_SET_FLAG_N(lo);
@@ -898,7 +903,7 @@ t_stat sim_instr (void)
             case 0x60:                  /* NEG ind */
                 EA = (fetch_byte() + IX) & ADDRMASK;
                 op1 = CPU_BD_get_mbyte(EA);
-                lo = (0 - op1) & 0xFF;
+                lo = (0 - op1) & BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_V(op1 == 0x80); 
                 COND_SET_FLAG(lo,CF);
@@ -908,7 +913,7 @@ t_stat sim_instr (void)
             case 0x63:                  /* COM ind */
                 EA = (fetch_byte() + IX) & ADDRMASK;
                 lo = ~CPU_BD_get_mbyte(EA);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 CLR_FLAG(VF);
                 SET_FLAG(CF);
@@ -952,7 +957,7 @@ t_stat sim_instr (void)
                 EA = (fetch_byte() + IX) & ADDRMASK;
                 lo = CPU_BD_get_mbyte(EA);
                 COND_SET_FLAG(lo & 0x80,CF);
-                lo = (lo << 1) & 0xFF;
+                lo = (lo << 1) & BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
@@ -963,7 +968,7 @@ t_stat sim_instr (void)
                 lo = CPU_BD_get_mbyte(EA);
                 hi = get_flag(CF);
                 COND_SET_FLAG(lo & 0x80,CF);
-                lo = (lo << 1) &0xFF;
+                lo = (lo << 1) & BYTEMASK;
                 if (hi) lo |= 0x01;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_N(lo);
@@ -974,7 +979,7 @@ t_stat sim_instr (void)
                 EA = (fetch_byte() + IX) & ADDRMASK;
                 lo = CPU_BD_get_mbyte(EA);
                 COND_SET_FLAG_V(lo == 0x80);
-                lo = (lo - 1) & 0xFF;
+                lo = (lo - 1) & BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
@@ -983,7 +988,7 @@ t_stat sim_instr (void)
                 EA= (fetch_byte() + IX) & ADDRMASK;
                 lo = CPU_BD_get_mbyte(EA);
                 COND_SET_FLAG_V(lo == 0x7F);
-                lo = (lo + 1) & 0xFF;
+                lo = (lo + 1) & BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
@@ -999,7 +1004,8 @@ t_stat sim_instr (void)
                 PC = (fetch_byte() + IX) & ADDRMASK;
                 break;
             case 0x6F:                  /* CLR ind */
-                CPU_BD_put_mbyte((fetch_byte() + IX) & ADDRMASK, 0);
+                EA = (fetch_byte() + IX) & ADDRMASK;
+                CPU_BD_put_mbyte(EA, 0);
                 CLR_FLAG(NF);
                 CLR_FLAG(VF);
                 CLR_FLAG(CF);
@@ -1008,7 +1014,7 @@ t_stat sim_instr (void)
             case 0x70:                  /* NEG ext */
                 EA = fetch_word();
                 op1 = CPU_BD_get_mbyte(EA);
-                lo = (0 - op1) & 0xFF;
+                lo = (0 - op1) & BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_V(op1 == 0x80); 
                 COND_SET_FLAG(lo,CF);
@@ -1018,7 +1024,7 @@ t_stat sim_instr (void)
             case 0x73:                  /* COM ext */
                 EA = fetch_word();
                 lo = ~CPU_BD_get_mbyte(EA);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 CLR_FLAG(VF);
                 SET_FLAG(CF);
@@ -1064,7 +1070,7 @@ t_stat sim_instr (void)
                 EA = fetch_word();
                 lo = CPU_BD_get_mbyte(EA);
                 COND_SET_FLAG(lo & 0x80,CF);
-                lo = (lo << 1) & 0xFF;
+                lo = (lo << 1) & BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
@@ -1075,7 +1081,7 @@ t_stat sim_instr (void)
                 lo = CPU_BD_get_mbyte(EA);
                 hi = get_flag(CF);
                 COND_SET_FLAG(lo & 0x80,CF);
-                lo = (lo << 1) & 0xFF;
+                lo = (lo << 1) & BYTEMASK;
                 if (hi) lo |= 0x01;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_N(lo);
@@ -1086,7 +1092,7 @@ t_stat sim_instr (void)
                 EA = fetch_word();
                 lo = CPU_BD_get_mbyte(EA);
                 COND_SET_FLAG_V(lo == 0x80);
-                lo = (lo - 1) & 0xFF;
+                lo = (lo - 1) & BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
@@ -1095,7 +1101,7 @@ t_stat sim_instr (void)
                 EA = fetch_word();
                 lo = CPU_BD_get_mbyte(EA);
                 COND_SET_FLAG_V(lo == 0x7F);
-                lo = (lo + 1) & 0xFF;
+                lo = (lo + 1) & BYTEMASK;
                 CPU_BD_put_mbyte(EA, lo);
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
@@ -1106,7 +1112,7 @@ t_stat sim_instr (void)
                 CLR_FLAG(VF);
                 CLR_FLAG(CF);
                 COND_SET_FLAG_N(lo);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 COND_SET_FLAG_Z(lo);
                 break;
             case 0x7E:                  /* JMP ext */
@@ -1121,81 +1127,81 @@ t_stat sim_instr (void)
                 SET_FLAG(ZF);
                 break;
             case 0x80:                  /* SUB A imm */
-                lo = fetch_byte() & 0xFF;
+                lo = fetch_byte();
                 op1 = A;
                 A = A - lo;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVs(op1, lo, A);
                 break;
             case 0x81:                  /* CMP A imm */
-                op1 = fetch_byte() & 0xFF;
+                op1 = fetch_byte();
                 lo = A - op1;
                 COND_SET_FLAG_C(lo);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 condevalVs(A, op1, lo);
                 break;
             case 0x82:                  /* SBC A imm */
-                lo = (fetch_byte() & 0xFF);
+                lo = fetch_byte();
                 op1 = A;
                 A = A - lo - get_flag(CF);
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVs(op1, lo, A);
                 break;
             case 0x84:                  /* AND A imm */
-                A = (A & fetch_byte() & 0xFF) & 0xFF;
+                A = (A & fetch_byte()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 break;
             case 0x85:                  /* BIT A imm */
-                lo = (A & fetch_byte() & 0xFF) & 0xFF;
+                lo = (A & fetch_byte()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 break;
             case 0x86:                  /* LDA A imm */
-                A = fetch_byte() & 0xFF;
+                A = fetch_byte();
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 break;
             case 0x88:                  /* EOR A imm */
-                A = (A ^ fetch_byte() & 0xFF) & 0xFF;
+                A = (A ^ fetch_byte()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 break;
             case 0x89:                  /* ADC A imm */
-                lo = (fetch_byte() & 0xFF);
+                lo = fetch_byte();
                 op1 = A;
                 A = A + lo + get_flag(CF);
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 condevalHa(op1, lo, A);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVa(op1, lo, A);
                 break;
             case 0x8A:                  /* ORA A imm */
-                A = (A | fetch_byte() & 0xFF) & 0xFF;
+                A = (A | fetch_byte()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 break;
             case 0x8B:                  /* ADD A imm */
-                lo = fetch_byte() & 0xFF;
+                lo = fetch_byte();
                 op1 = A;
                 A = A + lo;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 condevalHa(op1, lo, A);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
@@ -1228,7 +1234,7 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A - lo;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVs(op1, lo, A);
@@ -1237,7 +1243,7 @@ t_stat sim_instr (void)
                 op1 = get_dir_val();
                 lo = A - op1;
                 COND_SET_FLAG_C(lo);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 condevalVs(A, op1, lo);
@@ -1247,19 +1253,19 @@ t_stat sim_instr (void)
                 op1 = A; 
                 A = A - lo - get_flag(CF);
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVs(op1, lo, A);
                 break;
             case 0x94:                  /* AND A dir */
-                A = (A & get_dir_val()) & 0xFF;
+                A = (A & get_dir_val()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 break;
             case 0x95:                  /* BIT A dir */
-                lo = (A & get_dir_val()) & 0xFF;
+                lo = (A & get_dir_val()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
@@ -1277,7 +1283,7 @@ t_stat sim_instr (void)
                 COND_SET_FLAG_Z(A);
                 break;
             case 0x98:                  /* EOR A dir */
-                A = (A ^ get_dir_val()) & 0xFF;
+                A = (A ^ get_dir_val()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
@@ -1287,14 +1293,14 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A + lo + get_flag(CF);
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 condevalHa(op1, lo, A);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVa(op1, lo, A);
                 break;
             case 0x9A:                  /* ORA A dir */
-                A = (A | get_dir_val()) & 0xFF;
+                A = (A | get_dir_val()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
@@ -1304,27 +1310,27 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A + lo;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 condevalHa(op1, lo, A);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVa(op1, lo, A);
                 break;
             case 0x9C:                  /* CPX dir */
-                lo = CPU_BD_get_mword(fetch_byte() & 0xFF); 
+                lo = CPU_BD_get_mword(fetch_byte() & BYTEMASK); 
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
                 COND_SET_FLAG_N(op1 >> 8);
                 condevalVs(IX >> 8, lo >> 8, op1 >> 8);
                 break;
             case 0x9E:                  /* LDS dir */
-                SP = CPU_BD_get_mword(fetch_byte() & 0xFF);
+                SP = CPU_BD_get_mword(fetch_byte() & BYTEMASK);
                 COND_SET_FLAG_N(SP >> 8);
                 COND_SET_FLAG_Z(SP);
                 CLR_FLAG(VF);
                 break;
             case 0x9F:                  /* STS dir */
-                CPU_BD_put_mword(fetch_byte() & 0xFF, SP);
+                CPU_BD_put_mword(fetch_byte() & BYTEMASK, SP);
                 COND_SET_FLAG_N(SP >> 8);
                 COND_SET_FLAG_Z(SP);
                 CLR_FLAG(VF);
@@ -1334,7 +1340,7 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A - lo;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVs(op1, lo, A);
@@ -1343,7 +1349,7 @@ t_stat sim_instr (void)
                 op1 = get_indir_val();
                 lo = A - op1;
                 COND_SET_FLAG_C(lo);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 condevalVs(A, op1, lo);
@@ -1353,19 +1359,19 @@ t_stat sim_instr (void)
                 op1 = A; 
                 A = A - lo - get_flag(CF);
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVs(op1, lo, A);
                 break;
             case 0xA4:                  /* AND A ind */
-                A = (A & get_indir_val()) & 0xFF;
+                A = (A & get_indir_val()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 break;
             case 0xA5:                  /* BIT A ind */
-                lo = (A & get_indir_val()) & 0xFF;
+                lo = (A & get_indir_val()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
@@ -1383,7 +1389,7 @@ t_stat sim_instr (void)
                 COND_SET_FLAG_Z(A);
                 break;
             case 0xA8:                  /* EOR A ind */
-                A = (A ^ get_indir_val()) & 0xFF;
+                A = (A ^ get_indir_val()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
@@ -1393,14 +1399,14 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A + lo + get_flag(CF);
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 condevalHa(op1, lo, A);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVa(op1, lo, A);
                 break;
             case 0xAA:                  /* ORA A ind */
-                A = (A | get_indir_val()) & 0xFF;
+                A = (A | get_indir_val()) & BYTEMASK;
                 CLR_FLAG(VF);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
@@ -1410,14 +1416,14 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A + lo;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 condevalHa(op1, lo, A);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVa(op1, lo, A);
                 break;
             case 0xAC:                  /* CPX ind */
-                lo = (fetch_byte() + IX) & ADDRMASK;
+                lo = CPU_BD_get_mword((fetch_byte() + IX) & ADDRMASK);
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
                 COND_SET_FLAG_N(op1 >> 8);
@@ -1445,7 +1451,7 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A - lo;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVs(op1, lo, A);
@@ -1454,7 +1460,7 @@ t_stat sim_instr (void)
                 op1 = get_ext_val();
                 lo = A - op1;
                 COND_SET_FLAG_C(lo);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 condevalVs(A, op1, lo);
@@ -1464,7 +1470,7 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A - lo - get_flag(CF);
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
                 condevalVs(op1, lo, A);
@@ -1505,7 +1511,7 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A + lo + get_flag(CF);
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 condevalHa(op1, lo, A);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
@@ -1522,7 +1528,7 @@ t_stat sim_instr (void)
                 op1 = A;
                 A = A + lo;
                 COND_SET_FLAG_C(A);
-                A &= 0xFF;
+                A &= BYTEMASK;
                 condevalHa(op1, lo, A);
                 COND_SET_FLAG_N(A);
                 COND_SET_FLAG_Z(A);
@@ -1560,7 +1566,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B - lo;
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 condevalVs(op1, lo, B);
@@ -1569,7 +1575,7 @@ t_stat sim_instr (void)
                 op1 = fetch_byte() & 0xFF;
                 lo = B - op1;
                 COND_SET_FLAG_C(lo);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 condevalVs(B, op1, lo);
@@ -1579,7 +1585,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B - lo - get_flag(CF);
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 condevalVs(op1, lo, B);
@@ -1613,7 +1619,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B + lo + get_flag(CF);
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 condevalHa(op1, lo, B);
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
@@ -1630,7 +1636,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B + lo;
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 condevalHa(op1, lo, B);
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
@@ -1647,7 +1653,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B - lo;
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 condevalVs(op1, lo, B);
@@ -1656,7 +1662,7 @@ t_stat sim_instr (void)
                 op1 = get_dir_val();
                 lo = B - op1;
                 COND_SET_FLAG_C(lo);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 condevalVs(B, op1, lo);
@@ -1666,7 +1672,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B - lo - get_flag(CF);
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 condevalVs(op1, lo, B);
@@ -1706,7 +1712,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B + lo + get_flag(CF);
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 condevalHa(op1, lo, B);
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
@@ -1723,7 +1729,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B + lo;
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 condevalHa(op1, lo, B);
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
@@ -1746,7 +1752,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B - lo;
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 condevalVs(op1, lo, B);
@@ -1755,7 +1761,7 @@ t_stat sim_instr (void)
                 op1 = get_indir_val();
                 lo = B - op1;
                 COND_SET_FLAG_C(lo);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 condevalVs(B, op1, lo);
@@ -1765,7 +1771,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B - lo - get_flag(CF);
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 condevalVs(op1, lo, B);
@@ -1805,7 +1811,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B + lo + get_flag(CF);
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 condevalHa(op1, lo, B);
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
@@ -1822,7 +1828,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B + lo;
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 condevalHa(op1, lo, B);
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
@@ -1845,7 +1851,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B - lo;
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 condevalVs(op1, lo, B);
@@ -1854,7 +1860,7 @@ t_stat sim_instr (void)
                 op1 = get_ext_val();
                 lo = B - op1;
                 COND_SET_FLAG_C(lo);
-                lo &= 0xFF;
+                lo &= BYTEMASK;
                 COND_SET_FLAG_N(lo);
                 COND_SET_FLAG_Z(lo);
                 condevalVs(B, op1, lo);
@@ -1864,7 +1870,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B - lo - get_flag(CF);
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
                 condevalVs(op1, lo, B);
@@ -1905,7 +1911,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B + lo + get_flag(CF);
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 condevalHa(op1, lo, B);
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
@@ -1922,7 +1928,7 @@ t_stat sim_instr (void)
                 op1 = B;
                 B = B + lo;
                 COND_SET_FLAG_C(B);
-                B &= 0xFF;
+                B &= BYTEMASK;
                 condevalHa(op1, lo, B);
                 COND_SET_FLAG_N(B);
                 COND_SET_FLAG_Z(B);
@@ -1964,7 +1970,6 @@ t_stat sim_instr (void)
 
     }
     /* Simulation halted - lets dump all the registers! */
-    // dump_regs();
     saved_PC = PC;
     return reason;
 }
@@ -2152,12 +2157,14 @@ t_stat m6800_reset (DEVICE *dptr)
     NMI = 0, IRQ = 0;
     sim_brk_types = sim_brk_dflt = SWMASK ('E');
     saved_PC = CPU_BD_get_mword(0xFFFE);
-//    if (saved_PC == 0xFFFF)
-//        printf("No EPROM image found - M6800 reset incomplete!\n");
-//    else
-//        printf("EPROM vector=%04X\n", saved_PC);
-    if (MEM_Symbolic_Buffer) free (MEM_Symbolic_Buffer);    //RSV clear symbolic info
-    
+    if ((saved_PC == 0xFFFF) && ((sim_switches & SWMASK ('P')) == 0)) {
+        printf("No EPROM image found\n");
+        return STOP_MEMORY;           /* stop simulation - no ROM*/
+    }
+    if (MEM_Symbolic_Buffer) {
+        free (MEM_Symbolic_Buffer);    //RSV clear symbolic info
+        MEM_Symbolic_Buffer=NULL; 
+    }
     return SCPE_OK;
 }
 
@@ -2184,9 +2191,13 @@ void sim_load_symbolic(FILE *fileref, CONST char *fnam)
         for (i=0;i<(int) strlen(slin);i++) {
             if (slin[i] < 32) slin[i]=' ';
         }
-        if (slin[8]=='/') {
-            i=12;
+        if (slin[8]=='/') { // listing file for Macro Assembler AS V1.42
+            i=12;           // Alfred Arnold, Stefan Hilse, Stephan Kanthak, Oliver Sellke, Vittorio De Tomasi
             goto rdaddr;
+        }
+        if (slin[19]==':') { // listing file for SDOS Assembler
+            i=0;           
+            goto rdaddr2;
         }
         i=0; 
         // skip leading blanks
@@ -2204,9 +2215,10 @@ void sim_load_symbolic(FILE *fileref, CONST char *fnam)
         // skip separation blanks
       rdaddr:
         while (slin[i] == 32) i++;
+      rdaddr2:
         // read hex address AAAA
         addr=0;
-        while (c=toupper(slin[i])) {
+        while ((c=toupper(slin[i])) != 0) {
             if ((c>='0') && (c<='9')) {
                 addr = addr * 16 + c - '0';
             } else if ((c>='A') && (c<='F')) {
