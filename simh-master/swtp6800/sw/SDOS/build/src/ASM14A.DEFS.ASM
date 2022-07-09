@@ -1,0 +1,650 @@
+	PAGE
+	IFUND	CODE
+CODE	EQU	$100		CHOOSE THIS PLACE
+	FIN
+
+*
+*	ASSEMBLY CONTROL...
+*
+BIGMSG	EQU	1	BIG MESSAGES, THIS VERSION?
+	IFUND	DEBUG
+DEBUG	EQU	0	DON'T GIMME A BIG PATCH SPACE.
+	FIN
+XREF	EQU	0	(NOT COMPLETELY CODED) DON'T INCLUDE XREF CODE.
+CONDASM	EQU	1	CONDITIONAL ASSEMBLY?
+REPEAT	EQU	1	RPT, PLEEZE
+TITLES	EQU	1	TITLES ?
+STRINGS	EQU	0	NO STRINGS...
+SHIFT	EQU	1	INCLUDE SHIFT CODE?
+NICE	EQU	1	LOTSA NICE FEATURES (THAT TAKE MORE SPACE...)
+ERRLINES	EQU	1	 SAVE ERROR LINE #S IF SET
+DUMPOK	EQU	1	DUMP SYM TABLE
+DUMPV	EQU	1	DUMP BY VALUE TOO?
+
+*
+	IFUND	SYMMAX
+SYMMAX	EQU	33	MAXIMUM SYMBOL LENGTH.
+	FIN
+*
+	IF	DEBUG	PRE-RELEASES ONLY WHILE DEBUGGING.
+	IFUND	PRERELEASE	DEFAULT IS "A"
+PRERELEASE EQU	'A
+	FIN
+	FIN
+*
+VERS	SET	(BIGMSG*4)+(DEBUG*8)+(XREF*$10)
+VERS	SET	(VERS)+(CONDASM*$20)+(REPEAT*$40)+(TITLES*$80)
+VERS	SET	VERS+(NICE*$100)+(SHIFT*$200)+(ERRLINES*$400)
+VERS	SET	VERS+(DUMPOK*$1000)+(DUMPV*$2000)+((CODE#$100)##14)
+RELEASE	EQU	$14	RELEASE NUMBER 1.4
+
+	IFUND	PZBASE
+PZBASE	EQU	$20		RESERVE FIRST 32 BYTES OF PAGE ZERO
+	FIN
+*
+	IFUND	PZMAX	WORRY ABOUT TOP OF PAGE ZERO...
+PZMAX	EQU	$F0	@/ FIRST BYTE AFTER PAGE ZERO.
+	FIN	PZMAX
+*
+	IFUND	IBUFS	SIZE OF INPUT BUFFER...
+IBUFS	EQU	255	MAKE IT BIG.
+	FIN	IBUFS
+*
+	IFUND	NUMHASHBKTS
+NUMHASHBKTS EQU	7	LOG-BASE-2 OF NUMBER OF BUCKETS DESIRED.
+	FIN
+
+	IF	NUMHASHBKTS>7!NUMHASHBKTS<2	IDIOT CHECK # OF BUCKETS...
+HASH:M	EQU	$1F	SET UP HASH:M PROPERLY.
+	FIN		(ALSO FORCES DOUBLE DEF)
+
+HASH:M	EQU	(1##NUMHASHBKTS)-1
+*
+**** Set up binary buffer ****
+	ifund	BBSIZE
+BBSIZE	equ	$40	64 bytes for binary buffer.
+	fin	BBSIZE
+
+**** Set up include file stuff ****
+	ifund	MAXINCLVL	Maximum depth of include files....
+MAXINCLVL equ	20	Pick a random number.
+	fin	MAXINCLVL
+
+MAXINCLNUM equ	254	No reason for this to be any smaller,
+MINDEP	EQU	15	Minimum page depth
+*			and 254 is the maximum.
+	PAGE	- - -  O P C O D E   T Y P E   D E F I N I T I O N S  - - -
+	IFUND	MC6809
+*
+*  THE FOLLOWING ARE THE CURRENTLY RECOGNIZED 6800 OPCODE TYPES:
+*
+*	NOTE THAT T:BASE MUST ALWAYS BE EQU'D TO THE FIRST VALUE SHOWN!
+*
+T:DRNI	EQU	-3&$FF	DYADIC W/ REGISTER & MEMORY, NO IMMEDIATE.
+T:PSH    EQU      -2&$FF            PUSH/PULL
+T:DYDR	EQU	-1&$FF	DYDADIC W/ REGISTER & MEMORY.
+T:MOND   EQU      0	MONADIC REG/MEM
+T:NIL    EQU      1	NILADIC (NO AF)
+T:DYDX   EQU      2	DYADIC WITH S OR X REG & MEMORY
+T:BRA    EQU      3	BRANCH
+T:JMP    EQU      4	JUMPS
+T:DXNI	EQU	5	DYADICS IN X/S W/ NO IMMEDIATE.
+
+T:BASE	EQU	T:DRNI	*****ALWAYS EQU ME TO THE FIRST IN THE ABOVE LIST****
+
+*
+* NOTE THAT TYPE CODES THAT ARE .LE. ZERO MEAN THAT A REGISTER CAN BE
+* ASSOCIATED; IF TYPE .LT. ZERO, THERE MUST BE A REGISTER;
+* IF TYPE .EQ. ZERO, THERE MAY BE A REGISTER;
+* IF TYPE .GT. ZERO, THERE MAY NOT BE A REGISTER.
+*
+	FIN
+	PAGE	- - - C H A R A C T E R   T Y P E S - - -
+*
+*  THE FOLLOWING SYMBOLS DEFINE THE TYPES RETURNED BY GTCHT
+*
+C:ALPH   EQU      1
+C:NUM    EQU      2
+C:CR     EQU      3
+C:QQ     EQU      4
+C:Q      EQU      5
+C:LP     EQU      6
+C:RP     EQU      7
+C:TERM   EQU      8
+C:BL     EQU      9
+C:UNK    EQU      10
+*
+	PAGE	- - - O B J E C T   D E F I N I T I O N S - - -
+*
+*  OBJECTS:
+O:SYM    EQU      1                 SYMBOL
+O:NUM    EQU      2
+O:STR    EQU      3                 STRING
+O:LP     EQU      4                 LEFT PAREN
+O:RP     EQU      5                 RIGHT PAREN
+O:TERM   EQU      6                 TERMINATOR
+O:OP     EQU      7                 OPERATOR
+O:UNKN   EQU      8                 UNKNOWN.
+	PAGE	- - - O P E R A T O R   D E F S - - -
+   
+*45*
+*
+*   O P E R A T O R S
+*
+*        Do not change positions of ops under P:UN or
+*        OP:PLS, OP:MNS, OP:MOD & OP:AND.  The positions
+*        of these are critical to the handling of monadic
+*        operators.
+*
+*
+***** ALL VALUES MUST BE LESS THAN $7F ****
+*
+
+P:UN     EQU      $70               (GOD SHOULD FORGIVE THIS SYMBOL)
+OP:PLS   EQU      P:UN+1            MONADIC +
+OP:MNS   EQU      P:UN+2	MONADIC -
+OP:COM   EQU      P:UN+3            \ (INVERT TEST RESULT)
+OP:NOT   EQU      P:UN+4            &
+*
+P:SH     EQU      $60               SHIFT GROUP
+OP:SHF   EQU      P:SH+1            ##
+*
+P:MUL    EQU      $50               MULTIPLY/DIVIDE GROUP
+OP:MUL   EQU      P:MUL+1           *
+OP:DIV   EQU      P:MUL+2           /
+OP:MOD   EQU      P:MUL+3           \
+OP:CQU   EQU      P:MUL+4           //
+*
+P:ADD    EQU      $40
+OP:ADD   EQU      P:ADD+1           +
+OP:SUB   EQU      P:ADD+2           -
+*
+P:REL    EQU      $30               RELATIONAL OPERATORS:
+OP:GT    EQU      P:REL+1           >
+OP:LT    EQU      P:REL+2	<
+OP:GE    EQU      P:REL+3           >=  =>
+OP:LE    EQU      P:REL+4           <=  =<
+OP:EQ    EQU      P:REL+5           =
+OP:NE    EQU      P:REL+6           #   
+OP:HI    EQU      P:REL+7           >>
+OP:LO    EQU      P:REL+8           <<
+OP:HS    EQU      P:REL+9           >/
+OP:LS    EQU      P:REL+10          \<
+*
+P:LOG    EQU      $20               LOGICAL OPERATORS
+OP:IOR   EQU      P:LOG+1           !
+OP:EOR   EQU      P:LOG+2           !!
+OP:AND   EQU      P:LOG+4           &   (DON'T CHANGE ME!)
+*
+P:BOX    EQU      $10               LEFT ANCHOR:
+OP:BOX   EQU      P:BOX+1
+*
+P:EOX    EQU      $00               RIGHT ANCHOR
+OP:EOX   EQU      P:EOX+1           <RIGHT-ANCHOR>
+	PAGE	- - -  E R R O R   F L A G S  - - -
+   
+*
+*   E R R O R   F L A G S
+*
+F$ERRGROUP SET	0	ERROR GROUP ZERO.
+*
+F:ILLF   EQU      F$ERRGROUP+$01	ILLEGAL LABEL FIELD
+F:SYNTX  EQU      F$ERRGROUP+$02	SYNTAX ERROR
+F:ILLAF  EQU      F$ERRGROUP+$04	ILLEGAL ARGUMENT FIELD
+F:UNDF   EQU      F$ERRGROUP+$08	UNDEFINED SYMBOL
+F:DDEF   EQU      F$ERRGROUP+$10	DOUBLE-DEF
+F:UDDF   EQU      F$ERRGROUP+$20	USE OF DOUBLE-DEF
+F:NST    EQU      F$ERRGROUP+$40	NESTING ERROR
+F:END    EQU      F$ERRGROUP+$80	END SUPPLIED BY MAL.
+*
+F$ERRGROUP SET	$01##8	SECOND ERROR GROUP.
+*
+F:OVF    EQU      F$ERRGROUP+$01	OVERFLOW
+F:BRA    EQU      F$ERRGROUP+$02	OUT OF RANGE BRANCH/BSR
+F:ILV    EQU      F$ERRGROUP+$04	ILLEGAL VALUE
+F:BADD   EQU      F$ERRGROUP+$08	ILLEGAL DIGIT
+F:SYMOV  EQU      F$ERRGROUP+$10	SYMBOL TABLE OVERFLOW.
+F:ILST   EQU      F$ERRGROUP+$20	ILLEGAL STRING.
+F:PHASE	EQU	F$ERRGROUP+$40	PHASE ERROR.
+F:ILLCF	EQU	F$ERRGROUP+$80	ILLEGAL COMMAND FIELD.
+*
+F$ERRGROUP SET	$02##8	THIRD ERROR GROUP
+*
+F:ILTRUNC EQU	F$ERRGROUP+$01	INPUT LINE WAS TRUNCATED.
+F:FILNOTF EQU	F$ERRGROUP+$02	FILE NOT FOUND.
+F:FRCREF	EQU	F$ERRGROUP+$04	Forced reference impossible
+F:SAERR	EQU	F$ERRGROUP+$08	START ADDRESS ERROR ON END STATEMENT
+*
+F$ERRMAX EQU	(F$ERRGROUP##-8)+1	LAST ERROR GROUP.
+	PAGE	- - -  S Y M B O L   T Y P E S  - - -
+   
+*
+*
+*   S Y M B O L   T Y P E S
+*
+*
+*                   ---------------------
+*                   | 0 1 2 3 | 4 5 6 7 |
+*                   ---------------------
+*                     | | | |   | | | |
+T:FREF   EQU    $01   | | | |   | | | > SYMBOL IS FORWARD REF.
+T:SET    EQU    $02   | | | |   | | > SYMBOL WAS SET (NOT EQU'D)
+T:UNDF   EQU    $04   | | | |   | > SYMBOL IS UNDEFINED
+T:USED   EQU    $08   | | | |   > SYMBOL HAS BEEN USED
+*                     | | | |
+T:DDEF   EQU    $10   | | | > SYMBOL IS DOUBLE-DEFFED
+T:SPEC	EQU    $20   | | >Special symbol, never flag as forward ref
+*                     --> RESERVED
+*
+*  NOTE:
+*	UNDEF -	1  -- REFD BUT NOT DEFD IN PASS1 OR P2 YET.
+*		0 -- ALREADY REFD AND DEFD IN P1 OR P2.
+*
+*	FREF -	1 -- (ONLY POSS IN PASS 2) NOT YET REFED IN P2.
+*		0 -- DEFED IN P2 (IF P2). ONLY POSS STATE IN P1.
+*
+*	SET -	1 -- AT LEAST 1 SET DONE SO FAR BUT NO EQUS.
+*		0 -- NO LEGAL SETS DONE SO FAR.  IF UNDEF=0 IMPLIES VAR WAS
+*		      EQUD IN PASS1.  IF FREF=0 ALSO, WAS EQUD IN P2.
+*
+	PAGE	- - -  D I R E C T I V E   T Y P E S  - - -
+   
+*
+*
+*   D I R E C T I V E   T Y P E S
+*
+*
+D:AF     EQU      $02               FIND AF
+D:LF     EQU      $04               EQUATE LF TO PC
+D:CC     EQU      $08               THIS IS A CONTROL CARD
+D:DO     EQU      $10               THIS IS A DO/IF/CASE CARD
+D:CA	EQU	$20	THIS IS A CONDITIONAL-ASSEMBLY CARD.
+D:SS	EQU	$40	SKIP SYNTAX CHECK
+D:SI	EQU	$80	Skip if executing INCLUDE file.
+*
+*
+DT:      EQU      0
+DT:AF    EQU      D:AF*256
+DT:LF    EQU      D:LF*256
+DT:CC    EQU      D:CC*256
+DT:DO    EQU      D:DO*256
+DT:CA	EQU	D:CA*256
+DT:SS	EQU	D:SS*256
+DT:SI	equ	D:SI*256
+*
+	PAGE	- - -  E X P R E S S I O N  T Y P E S  - - -
+	SPACE	3
+   
+*
+*
+*    E X P R E S S I O N   T Y P E S
+*
+*
+XT:FREF  EQU      T:FREF            $01; ON IF EXPRESSION INVOLVES FREF
+XT:UNEV  EQU      $02                    ON IF EXPRESSION IS UNEVALUABLE
+XT:UNDF  EQU      T:UNDF            $04; ON IF EXP USES UNDEFINED SYM.
+	page	- - - S D O S   L o a d   F i l e   D e f n s - - -
+*
+*  SDOS Load File Definitions:
+*
+*	(1)	Binary record types.
+*
+RTYPE$SKIP	equ 0	Skip record.
+RTYPE$START	equ TYPE1RECORD	Start record.
+RTYPE$LOAD	equ 2	Load record.
+RTYPE$LOADGO	equ 3	Load record & start program.
+
+
+*
+*	(2)	Internal record descriptor data structure.
+*
+	org	0	These are all offsets:
+R$BASE	rmb	2	W/ Base target address of load record.
+R$LEN	rmb	2	W/ length of record to be stored.
+
+R$SHORT:  equ	*	K/ length of short form.
+
+R$FILEBASE rmb	4	Q/ File pointer.
+R$VALID	rmb	1	B/ If false, much of this stuff is not valid.
+
+R$LONG:	equ	*	K/ Length of long form.
+	PAGE	- - -  L I S T I N G   F L A G S  - - -
+   
+*
+*
+*    L I S T I N G   F L A G S
+*
+*        (1):  TEMPORARY FLAGS
+*
+LF:ERR   EQU      $01               LINE HAS ERROR ON IT
+LF:PTD   EQU      $02               LINE HAS BEEN PRINTED
+LF:CC    EQU      $04               LINE IS A CONTROL CARD
+LF:SKP   EQU      $08               LINE WAS SKIPPED
+LF:DO    EQU      $10               LINE CAME FROM ITERATION
+LF:MAC   EQU      $20               LINE CAME FROM MACRO
+LF:CA	EQU	$40	LINE IS A COND. ASM. LINE.
+*
+*
+*        (2):  PERMANENT FLAGS
+*
+LL:LIST  EQU      $01               LISTING IS ON
+LL:GEN   EQU      $02               LIST EXTRA LINES OF GENERATED CODE
+LL:PCC   EQU      $04               PRINT CONTROL CARDS
+LL:DO    EQU      $08               PRINT EXTRA ITERATION LINES
+LL:SKP   EQU      $10               PRINT SKIPPED LINES
+LL:MAC   EQU      $20               PRINT MACRO EXPANSIONS
+LL:PCA	EQU	$40	PRINT CONDITIONAL-ASSMBLY LINES.
+LL:THRO  EQU      $80               EJECT A PAGE BEFORE PRINTING
+
+
+**** LISTING FLAG DEFAULTS ****
+
+LLDFLT	EQU	LL:SKP!LL:PCA
+	PAGE	- - -  O P T I O N   F L A G S  - - -
+   
+*
+*
+*   U S E R - S P E C I F I E D   O P T I O N S
+*
+*
+OPT:MCM  EQU      $01               USE MOTOROLA/MCM-SIGMA PRECEDENCE
+OPT:LO   EQU      $02               GENERATE A LISTING
+OPT:BO   EQU      $04               GENERATE A BINARY
+OPT:LST	EQU	$08	IF ON, WANTS TO SEE CODE LISTING
+OPT:LN   EQU      $10               SOURCE HAS LINE #'S IN MOTOROLA'S
+*                                   KLUDGEY FORM.
+OPT:LF   EQU      $20               DELETE LINE-FEED CHARACTERS
+OPT:DMP	EQU	$40	DUMP SYMBOL TABLE
+OPT:EL	EQU	$80	ERROR LINES OPTION
+
+
+**** SECOND OPTION BYTE FLAGS ****
+
+OPT1:DO	EQU	$01	IF OFF, DON'T DUMP ERRORS TO CONSOLE.
+OPT1:6801 EQU	$02	IF ON, ASSEMBLE FOR 6801.
+
+
+**** DEFAULT OPTION VALUES ****
+
+	IFUND	OPTDFLT
+OPTDFLT	EQU	OPT:DMP!OPT:EL!OPT:LST
+	FIN
+
+	IFUND	OPT1DFLT
+OPT1DFLT	EQU	OPT1:DO
+	FIN
+	page	- - -  I N C L B :   D a t a   S t r u c t u r e  - - -
+*
+*  INCLB:  Data structure
+*
+*	The INCLB: data structure is used to keep track of nested INCLUDE
+*	files, and to cross-reference errors to the appropriate file.
+*
+
+	ORG	0
+INCLB:NEXT	rmb 2	W/ Address of next INCLB: on master chain.
+INCLB:ERRCHN	rmb 2	W/ Address of first ERB: for this file.
+INCLB:PREVB	rmb 2	W/ Address of INCLB: for file that INCLUDEd
+			;  this file.  Used for dynamic nesting.
+INCLB:FPGE	rmb 2	W/ When suspended, saved FPGE from pg. zero.
+INCLB:LINEN	rmb 2	W/ When suspended, saved LINEN from pg. zero.
+INCLB:FPOS	rmb 4	Q/ When suspended, saved file position for
+			;  repositioning when resuming.
+INCLB:NUM	rmb 1	B/ Serial number of this INCLB:
+INCLB:LEN	rmb 1	B/ Length of INCLB:TEXT part.
+
+INCLB:SIZE:	equ *	K/ Minimum size of INCLB:
+
+INCLB:TEXT	rmb 0	BV/ ASCII text of filename.
+
+
+	page	- - -  E R B :   ( E r r o r   B l o c k )  - - -
+*
+*  ERB:  (Error Block)  Data Structure Definition.
+*
+
+	ORG	0
+ERB:NEXT	rmb 2	W/ Address of next error block in chain.
+ERB:FPGE	rmb 2	W/ Form # of error.
+ERB:LINEN	rmb 2	W/ Line # of error.
+
+ERB:SIZE:	equ *	K/ length of an error block.
+	PAGE	- - -  M I S C   S Y M B O L S  - - -
+   
+*46*
+*
+*   MISCELLANEOUS SYMBOLS:
+*
+BLANK    EQU      $20               ASCII BLANK
+ASCII:COMMA EQU	$2C	ASCII COMMA
+CTRLL    EQU      $C                ^L
+TAB      EQU      $9                ASCII TAB
+DDEPTH   EQU      66
+DWIDTH   EQU      132               DEFAULT DEPTHS AND WIDTHS.
+TABMAX	EQU	8	SET MAX # OF TABS THAT TABS COM CAN DEFINE
+	PAGE	- - - C H A N N E L   D E F I N I T I O N S - - -
+*
+*   The following symbols tell the assembler which channels to use
+*   for each function.
+*
+
+CONS	EQU	0	CONSOLE
+SI	EQU	1	SOURCE INPUT
+LO	EQU	2	LISTING OUTPUT
+BO	EQU	3	BINARY OUTPUT
+	PAGE	- - -  P A G E   Z E R O   W O R K S P A C E  - - -
+*
+*  P A G E  Z E R O   
+*
+*	WORKING STORAGE.
+TEMPX	EQU	0	LOCATION 0 IS A TEMP
+TEMPA	EQU	0
+TEMPB	EQU	1
+*
+	ORG	PZBASE
+INPTR	RMB	2	PTR:  USED FOR PROCESSING INPUT LINES.
+LFPTR	RMB	2	PTR:  LF
+CFPTR	RMB	2	PTR:  ADDRESS OF COMMAND FIELD.
+AFPTR	RMB	2	PTR:  ADDRESS OF ARGUMENT FIELD.
+EXPTR    RMB      2	PTR:  NEXT CHARACTER TO BE USED BY GNOBJ.
+FLAMOUT  RMB      2	PTR:  STACK POINTER FOR EXP EVAL
+*
+*
+*     ARITHMETIC REGISTERS.
+*
+MLA      RMB      2
+MLB      RMB      2
+MLC      RMB      2
+MLD      RMB      2
+*
+TPTR     RMB      2                 TEMP POINTER
+TPTR1    RMB      2                 TEMP POINTER
+SYMPT    RMB      2                 POINTER TO SYMBOL
+DIRPT    RMB      2                 DIRECTIVE POINTER
+IOXSAVE	RMB	2	X REG SAVE FOR IO ROUTINES
+INFLINK	RMB	2	PTR TO FIRST CONS LINE BLOCK.
+LTPTR    RMB      2                 TEMP FOR LISTING FUNCTIONS
+LTPTR2   RMB      2                            (DITTO)
+
+
+ IF DUMPOK
+
+*
+*   CELLS FOR SYMBOL TABLE DUMP STUFF.
+
+RTNPTR	RMB	2	PTR:  SORT ROUTINE.
+SCHAIN	RMB	2	PTR:  HEAD OF SORTED SYMBOL LIST.
+BUCKET 	RMB	2	PTR:  CURRENT BUCKET.
+LAST	RMB	2	PTR:  LAST SYMBOL.
+THIS	RMB	2	PTR:  THIS SYMBOL.
+NEW	RMB	2	PTR:  NEW SYMBOL.
+SORTAIL	RMB	2	PTR:  TAIL OF SORT CHAIN.
+
+ FIN
+*
+OPPTR	RMB	2	PTR:  OPCODE ENTRY
+*
+
+*
+*
+*  SINGLE BYTE QUANTITIES . . .
+*
+PASS     RMB      1                 IF # 0, THIS IS PASS 2
+LLTP	RMB	1	CTR:  # OF LINES LEFT ON THIS PAGE.
+	IFUND	MC6809
+REG      RMB      1	FLAG:  $FF ==> NO REGISTER SEEN,
+			;      $00 ==> REGISTER A SPECIFIED,
+			;      $01 ==> REGISTER B SPECIFIED.
+	ELSE
+PCRFLAG	RMB	1	PCR INDEX FLAG
+INDXFG	RMB	1	INDEXED FLAG
+OPSIZE	RMB	1	OPCODE SIZE
+P2OP	RMB	1	PREFIX OP CODE IF ANY
+COP	RMB	1	OP CODE TEMP CELL FOR 680C OPS
+POSTBYTE	RMB	1	POST BYTE VALUE
+BRACKET	RMB	1	BRACKET (INDIRECT) FLAG
+PCNEXT	RMB	1	PC NEXT (*') CORRECTION
+PCNEXTREF RMB	1	*' USED FLAG
+ABRKT	RMB	1	ANGLE BRACKET FLAG
+	FIN
+OP       RMB      1	VALUE:  OPCODE RECOGNIZED.
+GRP      RMB      1	VALUE:  GROUP TYPE OF OPCODE.
+XTYPE    RMB      1	VALUE:  TYPE OF MOST RECENTLY EVALUATED EXP.
+RJA      RMB      1                 REJECTED OBJECT (A)
+RJB      RMB      1                 REJECTED OBJECT (B)
+RJOBJ    RMB      1                 REJECTED OBJECT FLAG
+CUROP	RMB	1	LOC TO SAVE CURRENT OP IN EXECUTOR
+RJCH	RMB	1	CELL:  HOLDS REJECTED CH FOR GETCS.
+	PAGE
+*
+* 	SYMBOL TEMPLATE DEFINITION.
+*
+*
+SYM:BLK  EQU      *-2
+S:NEXT   EQU      0
+S:VAL    EQU      *-SYM:BLK
+VAL      RMB      2
+S:TYPE   EQU      *-SYM:BLK
+S:TYP    EQU      S:TYPE
+TYPE     RMB      1
+S:LEN    EQU      *-SYM:BLK
+SYM      RMB      1
+S:TEXT   EQU      *-SYM:BLK
+         RMB      SYMMAX
+SENT:L   EQU      S:TEXT-S:NEXT
+         PAGE     - - - C E L L S   T O    B E   I N I T I A L I Z E D - - -
+   
+*
+*
+*  THE FOLLOWING CELLS MUST BE INITIALIZED BEFORE EACH PASS.
+*
+*
+PVARZ    EQU      *
+DOCOPY	RMB	1	FLAG - IF ON COPY LO TO CONSOLE (FOR ERRS)
+INLLINK	RMB	2	PTR TO LAST LINK IN INPUT CHAIN
+INCNT	RMB	1	FLAG TO INDICATE IF IN SI=CONS MODE
+	IF	ERRLINES=1
+ERRCHAIN	RMB	2	HEAD OF ERROR LINE CHAIN
+	FIN
+ERR:F    RMB      F$ERRMAX	ERROR FLAGS
+ERRC     RMB      1                 # OF ERRORS
+SKPFLG   RMB      1                 SKIP FLAG
+FPGE     RMB      2                 BCD:  # OF PAGES IN FILE
+LINEN    RMB      2                 BCD:  CURRENT LINE #
+PAGEN    RMB      2                 BCD:  CURRENT PAGE #
+EOFF     RMB      1                 FLAG:  END OF FILE SEEN.
+PC       RMB      2                 PROGRAM COUNTER
+LINEPC	RMB	2	PROGRAM COUNTER FOR HEADER PRINTOUT
+SKPLVL   RMB      1
+DOLVL    RMB      1                 DO LEVEL
+INCLVL	rmb	1	B/ Current include nesting level.
+INCLNUM	rmb	1	B/ Current include file serial number.
+DPRSET	RMB	1
+
+PVARE    EQU      *
+EVAFBIAS	RMB	1	ARG FIELD BIAS BY +1 FLAG
+*
+*
+*  THE FOLLOWING CELLS MUST BE SET TO AN INITIAL VALUE BY PINIT
+*
+LIST:P   RMB      1                 LISTING FLAGS (PERM)
+RPTF     RMB      2                 REPEAT FLAG
+*
+*  CELLS INITIALIZED AT START OF PASS 1
+*
+INCLHEAD	RMB	2	W/Pointer to head of INCLB: chain.
+INCLTAIL	rmb	2	W/Pointer to tail of INCLB: chain.
+;				0 --> empty.
+.CURINCLB rmb	2	W/Pointer to currently open INCLB:.
+COLNO    RMB      1                 CURRENT COLUMN #
+IOERRLOC	RMB	2	LOC TO RET IF I/O ERROR OCCURS
+STPTR    RMB      2                 POINTER TO SYMBOL TABLE
+*
+*  THE FOLLOWING CELLS GET NON-ZERO INITIAL VALUES
+*
+PZ1I     EQU      *
+INBUF    RMB      2                 POINTER TO INPUT BUFFER
+INBUFE   RMB      2                 END @ OF INPUT BUFFER
+WIDTH    RMB      1                 PAGE WIDTH IN COLUMNS
+DEPTH    RMB      1                 PAGE DEPTH
+TABTBL   RMB      2                 @ OF TAB TABLE.
+LBBEG    RMB      2                 @ OF LISTING BUFFER
+EOLBF    RMB      2                 @ OF END OF LISTING BUFFER
+OPTF     RMB      1                 OPTION BYTE
+OPT1F	RMB	1	SECONDARY OPTION BYTE.
+STLOW    RMB      2
+*
+PZ1E     EQU      *
+*
+*  CELLS INITIALIZED AT START OF PASS 2
+*
+BBPTR    RMB      2
+BBCNT    RMB      1
+*
+*  CELLS INITIALIZED BY LISTING FUCTIONS AT START OF EACH LINE
+*
+LIST:T   RMB      1                 LISTING FLAGS (TEMP)
+LBFPT    RMB      2                 PTR:  NEXT CH IN LISTING BUF
+PCPUT    RMB      1                 FLAG:  PC FIELD USED
+
+
+	IF	*>>PZMAX	IDIOT CHECK FOR P/ZERO TOO BIG...
+PZBASE	EQU	0	GENERATE AN ERROR.
+	FIN
+
+PZEND	EQU	*	REMEMBER TOP BYTE OF P/ZERO.
+PZSIZE	EQU	PZEND-PZBASE	AND TOTAL SIZE OF P/ZERO.
+	PAGE	- - - I / O   P A C K A G E   I N T E R F A C E - - -
+	ORG	CODE
+START	JMP	ASM	GO START ASM
+*
+* PUT IN JUMP TABLE FOR SD I/O ROUTINES
+*
+	JMP	IOERROR	HANDLE I/O ERROR
+IOPKGBASE EQU	$FC	LOC CONTAINS FIRST UNUSABLE LOC
+	RMB	2	USED TO BE IOPKGBASE.
+OPEN$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+CLOSE$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+CREATE$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+GETPOS$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+GETWD$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+ISCONSOLE$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+RASCII$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+RBIN$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+WASCII$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+WRITEREC$ RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+POSITION$ RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+EXIT$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+EOF$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+GTSIZE$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+RESET$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+DATE$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+TIME$	RMB	3	SAVE SPACE FOR JUMP TO PROPER ROUTINE
+STACK$	RMB	2	LOC CONTAINS STACK ADDR TO USE
+STACKM	RMB	2	MAX STACK LOC
+ERROR$	RMB	3	XFER VEC TO ERROR MESSAGE PRINTER.
+CRAPOUT$	RMB	3	ERROR EXIT TO DEFAULTPROGRAM
+	RMB	CODE+$600-*	SPACE FOR I/O PACKAGE
+*
+         FCC      "COPYRIGHT (C) 1979  TERRILL M. MOORE"
+

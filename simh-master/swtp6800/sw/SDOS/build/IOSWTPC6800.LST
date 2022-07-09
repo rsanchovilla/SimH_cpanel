@@ -1,0 +1,2514 @@
+
+
+
+
+ASM/6800 1.4A0: 0000                    
+08/16/82 00:00:00; Page 1; Form 0       
+IOSWTPC6800.ASM
+  0000            1: RAM64K   EQU  0 
+
+
+
+
+ASM/6800 1.4A0: 0000                    
+08/16/82 00:00:00; Page 2; Form 1       
+IOSWTPC6800.ASM
+                  1: 
+                  2: ;*              I/O Package Configuraton for SimH SWTPC 6800 Simulator
+                  3: ;*              should work on real hw too
+                  4: 
+                  5: ;*              (C) Roberto Sancho, Jun 2022
+                  6: ;*              based on SSB I/O Package
+                  7: 
+                  8: ;*              features implemented: 
+                  9: ;                            mapalg: Only supports 0001
+                 10: ;                            I/O Implemented using active wait (no interruption based)
+                 11: ;                            no clock interrupt
+                 12: ;                            no vt terminal driver. Just a minimal subset
+                 13: ;                                              BackSpace, Tab (converted to 8 spaces) 
+                 14: ;                                              ^C to discard current input 
+                 15: ;                                              ^C^C to kill current program
+                 16: ;                                              <CR> is the only activation key allowed (cannot be changed)
+                 17: ;                                              ^Z to signal end of file
+                 18: ;                                              ^D to call monitor, J A080 to return to SDOS
+                 19: ;                                              basic debug keys ^B, ^T, ^G, ^V
+                 20: ;                            only supported disk geometry: 5'25 floppy 2 sides x 35tr x 18 sec x 128 bytes
+                 21: ;                            supports for HLE 5MB Hard Disk
+                 22: ;                            PORT: device to read from PTR/punch to PTP
+                 23: ;                           
+                 24: 
+  0004           25: NDRIVES         equ     4
+  0013           26: NIOCHANNELS     equ     16+3    ; number of files that can be opened at same time
+                 27: 
+                 28:                                 ; SWTBUG ROM entry points
+                 29: 
+                 30:                 ; conditional assembly for SWTPC with 64K ram and
+                 31:                 ; I/O address at FF00..FF1F instead of 8000..801F  
+                 32: 
+  0000           33:              if ram64k=1
+ *S*             34: 
+ *S*             35:                                 ; Memory Map
+ *S*             36:                                 ; 0000..B3FF User RAM (46080 BYTES = 45 kB)
+ *S*             37: DRIVERBASE      set     $B400   ; B400..BFFF SDOS I/O Driver for SWTPC 6800 
+ *S*             38: IOBUF           EQU     $C080   ; C080..CDFF BUFFERS FOR I/O DRIVER
+ *S*             39: IOBUFEND        EQU     $CE00
+ *S*             40: SDOS            EQU     $CE00   ; CE00..EFFF SDOS Operating System (64K compile version)
+ *S*             41:                                 ; FF00..FF1F IO MAPED MEMORY
+ *S*             42: IRQVECTOR       equ     $FFF8   ; IRQ VECTOR IN HIGH MEM IS RAM
+ *S*             43: 
+                 44:               else
+                 45:                                 ; Memory Map
+                 46:                                 ; 0000..6FFF User RAM
+  7000           47: DRIVERBASE      EQU     $7000   ; 7000..7FFF SDOS I/O Driver for SWTPC 6800
+                 48:                                 ; 8000..9FFF IO MAPED MEMORY
+                 49:                                 ; A000..A07F 6810 RAM (128 BYTES), used by SWTBUG ROM
+  A080           50: IOBUF           EQU     $A080   ; A080..ADFF BUFFERS FOR I/O DRIVER
+  AE00           51: IOBUFEND        EQU     $AE00   ;
+  AE00           52: SDOS            EQU     $AE00   ; AE00..DFFF SDOS Operating System (56K compile version)
+                 53:                                 ; E000..E7FF SWTBUG ROM
+                 54:                                 ; E800..FFFF EPROM
+                 55: 
+
+
+
+
+ASM/6800 1.4A0: 0000                    
+08/16/82 00:00:00; Page 3; Form 1       
+IOSWTPC6800.ASM
+  E1D1           56: OUTEEE          EQU     $E1D1   ; OUTPUT A CHAR USING SWTPC 6800 SWTBUG ROM
+  E1AC           57: INEEE           equ     $E1AC   ; INPUT A CHAR (BLOCKING) USING SWTPC 6800 SWTBUG ROM
+  E0D0           58: SWTMON          EQU     $E0D0   ; SWTBUG COLD START ENTRY POINT
+  E337           59: RDON            equ     $E334+3 ; reader on (skip echo setting in rom)
+  E347           60: RDOFF           equ     $E347   ; reader off
+  E34D           61: PNCHON          equ     $E34d   ; punch on 
+  E353           62: PNCHOFF         equ     $E353   ; punch off
+  A00C           63: PORECH          equ     $A00C   ; swtbug echo flag (=0 -> echo, $FF -> no echo)
+  A000           64: IRQVECTOR       equ     $A000   ; ON SWTBUG, A000=IRQ VECTOR IN RAM
+                 65: 
+                 66:              fin
+                 67: 
+                 68: 
+                 69: ;*              Fill in the SDOS-TO-IOPACKAGE COMMUNICATION REGION
+                 70: 
+  AE00           71:                 ORG     SDOS
+                 72: 
+AE00 11          73:                 FCB     $11                  ; SDOS:VERSIONNUMBER SDOS VERSION NUMBER (=$AE00)
+AE01 0000        74:                 FDB     0                    ; SDOS:LASTERROR    LAST ERROR ENCOUNTERED
+AE03 7003        75:                 FDB     CNFGTABLE            ; SDOS:CONFIGURATION TELL SDOS WHERE ALL THE GOODIES ARE
+AE05 0000        76:                 FDB     0                    ; SDOS:SERIALNUMBER SERIAL NUMBER
+AE07 0000        77:                 FDB     0                    ; SDOS:IOBLOCKPTR   IOBLOCKPTR
+AE09 0000        78:                 FDB     0                    ; SDOS:IOCBPOINTER  IOCB POINTER (FOR FILE-TYPE DEVICE DRIVERS)
+AE0B 000000      79:                 FCB     0,0,0                ; SET CLOCK TO "MIDNITE"
+AE0E 10          80:                 FCB     16                   ; DAY, LET COMMAND INTERPRETER KNOW
+AE0F 08          81:                 FCB     8                    ; MONTH, THAT THE TIME HASN'T BEEN SET
+AE10 82          82:                 FCB     $82                  ; YEAR 
+                 83: 
+                 84: 
+                 85: ;* patches SDOSINIT AND SDOS O/S
+                 86: 
+  0000           87: OFS             EQU     SDOS-$AE00      ; Offset for pathing (0=for 56k compile)
+                 88: 
+  0000           89:              if ram64k=1                
+ *S*             90:                 ; No need to apply any patch to loaded SDOS11G64K file. It is generated by 
+ *S*             91:                 ; assembling SDOS11G.ASM and has already been edited to disable all the checksum/serial number
+ *S*             92:                 ; validations
+                 93:              else
+                 94:                 ; patch the loaded original unmodified SDOS11G56K file, it is the build
+                 95:                 ; for 56K RAM machine that comes from CHM and is generated by 
+                 96:                 ; assembling SDOS11GPART1.ASM and SDOS11GPART2.ASM and    
+                 97: 
+  2027           98:                 ORG $2027
+2027 01          99:                 NOP             ; SKIP CHECKSUM VERIFICATION. WILL NOT WORK BECAUSE
+2028 01         100:                 NOP             ; SDOS IS BEING PATCHED AND ... WE TRUST THE HW!
+  23E9          101:                 ORG $23E9
+23E9 01         102:                 NOP             ; REMOVE STACK MESSED UP IF START CODE CHECKSUM
+23EA 01         103:                 NOP             ; IS NOT ZERO BECAUSE IT HAS BEEN PATCHED, AS WE ARE DOING NOW!
+  2031          104:                 ORG $2031
+2031 01         105:                 NOP             ; PATCH ROM SERIAL NUMBER CHECHING TO DO NOTHING
+2032 01         106:                 NOP
+  217A          107:                 ORG $217A
+217A 39         108:                 RTS             ; INMEDIATE RETURN ON CALL TO WRITERANDOM (DO NOT CHECK)
+  B00F          109:                 ORG $B00F+OFS
+B00F 34         110:                 DES             ; PATCH SAFEGUARD ROUTINE TO ITS FINAL FORM
+
+
+
+
+ASM/6800 1.4A0: B010                    
+08/16/82 00:00:00; Page 4; Form 1       
+IOSWTPC6800.ASM
+B010 31         111:                 INS             ; AS IF IT WAS SET-UP BY SERIALNUMBER.SYS 
+B011 39         112:                 RTS             ; THIS ALLOWS TO BYPASS SERIALNUMBER.SYS EXECUTION
+B012 3B         113:                 RTI
+B013 3B         114:                 RTI
+B014 3B         115:                 RTI
+B015 3B         116:                 RTI
+  B408          117:                 ORG $B408+OFS
+B408 8601       118:                 LDAA #$01       ; SET CHECKSUM ON COPYRIGHT STRING AS ALLWAYS OK
+  DD82          119:                 ORG $DD82+OFS
+DD82 01         120:                 NOP             ; PATCH TASK USER STACK POINTER 
+DD83 01         121:                 NOP             ; SO IT NOT GET MESSED UP IF CHECKSUM DOES NOT MATCH
+DD84 01         122:                 NOP
+DD85 01         123:                 NOP
+DD86 01         124:                 NOP
+DD87 01         125:                 NOP
+  B844          126:                 ORG $B844+OFS   ; PATCH SerialNumberLocation to Point to SerialNumber 
+B844 FFF0       127:                 FDB $FFF0
+  B837          128:                 ORG $B837+OFS   ; PATCH EXITCKSUML ROUTINE TO IGNORE CHECKSUM
+B837 4F         129:                 CLRA
+  C6F1          130:                 ORG $C6F1+OFS   ; PATCH ERRBOOTCKSUMFAIL, SO BOOT CHECKSUM IS IGNORED
+C6F1 01         131:                 NOP
+C6F2 01         132:                 NOP
+  2138          133:                 ORG $2138       ; PATCH TO ALLOW LOAD A NON-ENCRYPTED SERIALNUMBER.SYS (OR WAHTERES IS THE FIRS
+2138 01         134:                 NOP
+2139 01         135:                 NOP
+  2736          136:                 ORG $2736       ; PATH  FCC "SERIALNUMBER.SYS" FILENAME
+2736 44454641   137:                 FCC "DEFAULTPROGRAM  "
+                138:                                 ; INSTEAD OF RUNNING SERIALNUMBER.SYS ON STARTUP
+                139:                                 ; JUST RUN DEFAULTPROGRAM (HOPEFULLY BEING A COPY 
+                140:                                 ; OF SDOS USER COMMAND PROCESSOR)
+                141:               fin
+                142:               
+  2000          143:                 ORG $2000       ; PATCH MAIN ENTRY POINT TO SET-UP PROPERLY 
+2000 7E3000     144:                 JMP SWTPCINIT   ; DRIVER MEM
+                145:                 
+  0007          146: SDOS.IOBLOCKPTR EQU $07         ; POINTER TO I/O REQUEST (PASSED TO DRIVERS)
+  0015          147: SDOS.RTI        equ $15         ; JMP TO "RETURN FROM INTERRUPT; NO EVENT"
+  002D          148: SDOS.ERROR      equ $2D         ; ERROR SUBROUTINE; INLINE 2 BYTE ERROR CODE 
+  0030          149: SDOS.ERRORSAVE  equ $30         ; ERROR CODE SAVE ROUTINE; SAVES (X) AS ERROR CODE 
+  0033          150: SDOS.ERRORED    equ $33         ; "ERROR CAN'T BE HANDLED BY ME" ENTRY 
+  002A          151: SDOS.WAITEVENT  equ $2A         ; JMP TO WAIT FOR EVENT SELECTED BY (X)
+  0036          152: SDOS.CHECKRDLEN EQU $36
+  000B          153: SDOS.CLOCK      EQU $0B
+                154: 
+  0000          155: SCBLK.OPCODE    equ $00         ; PRIMARY SYSCALL FUNCTION (OPEN, READ, ETC.)    
+  0001          156: SCBLK.WLEN      equ $01         ; WAIT FLAG BIT (0=WAIT) AND SYSCALL BLOCK LENGTH (0..127)      
+  0002          157: SCBLK.PARAMS    equ $02         ; PARAMETER BYTES TO OPCODE (SECONDARY OPCODE, CHANNEL #)    
+  0004          158: SCBLK.WRBUF     equ $04         ; POINTER TO WRITE DATA BUFFER     
+  0006          159: SCBLK.WRLEN     equ $06         ; NUMBER OF BYTES IN WRITE DATA BUFFER
+  0008          160: SCBLK.RPLEN     equ $08         ; LENGTH OF REPLY (RESULT OF SYSCALL)    
+  000A          161: SCBLK.RDBUF     equ $0A         ; POINTER TO READ DATA BUFFER (WHERE RESULT GOES)     
+  000C          162: SCBLK.RDLEN     equ $0C         ; CEILING ON SIZE OF REPLY (READ DATA BUFFER)
+  000E          163: SCBLK.DATA      EQU $0E         ; OTHER PARAMETERS FOR SYSCALL; UP TO 127-12 BYTES
+                164:  
+  0082          165: SPECIALFN.CLEAR equ $0082            
+
+
+
+
+ASM/6800 1.4A0: 2000                    
+08/16/82 00:00:00; Page 5; Form 1       
+IOSWTPC6800.ASM
+  0083          166: SPECIALFN.EEOL  equ $0083            
+  0081          167: SPECIALFN.POSN  equ $0081
+                168: 
+  002B          169: DSKINFO.SECTORDB        EQU $2B
+  003C          170: DSKINFO.OPSCOUNT        equ $3c
+                171: 
+                172: 
+  001A          173: FCB.SIZE        equ $001A
+  0022          174: IOCB.SIZE       EQU $0022
+  0002          175: NMAGICFCBS      EQU     2       ; FOR ERRMSGFCB, SYSFCB
+                176: 
+                177: 
+                178: ;*
+                179: ;*      device errors 
+                180: ;*
+  03E9          181: ERR.EOFHIT                      EQU 1001
+  040A          182: ERR.ILLDEVICEOP                 equ 1034
+  0411          183: err.programkilled               EQU 1041
+  0412          184: ERR.DEVICETIMEDOUT              equ 1042
+  0415          185: ERR.DISKREAD                    equ 1045
+  0416          186: ERR.DISKWRITE                   equ 1046
+  0417          187: ERR.DISKSEEK                    equ 1047
+  0418          188: ERR.DSKWRTPROT                  equ 1048                  
+  0424          189: ERR.DEVICENOTREADY              equ 1060
+  076E          190: ERR.WRONGDISKTYPE               equ 1902
+  0773          191: ERR.ACTIVATIONNOTINBUFFER       EQU 1907
+  0775          192: err.activationreceived          equ 1909
+                193: 
+                194: ;*
+                195: ;*      DEVICE CONTROL BLOCK DISPLACEMENTS
+                196: ;*
+  0000          197: DCB.DONEFLAG    EQU     0       ; 0 --> DEVICE IS BUSY; <>0 --> DEVICE IS DONE
+  0001          198: DCB.LASTERROR   equ     1       ; IF DCB IS DONE, CONTAINS ERROR STATUS (0 = NONE )
+  0003          199: DCB.NAME        EQU     3       ; POINTER TO DEVICE NAME STRING TERMINATED BY ZERO BYTE
+  0005          200: DCB.NEXTDCB     EQU     5       ; POINTER TO NEXT DCB IN LIST OR ZERO
+  0007          201: DCB.DRIVER      EQU     7       ; POINTER TO DRIVER ENTRY POINT LIST
+  0043          202: dcb.fdunit      equ     $43                     
+                203: 
+  0013          204: dcb.oilquiescent        equ     $13
+  0028          205: dcb.profile             equ     $28
+  004D          206: dcb.ringinbase          equ     $4d
+  0059          207: dcb.ringoutbase         equ     $59
+  005D          208: dcb.ringoutthreshold    equ     $5d
+  0067          209: dcb.linebuf             equ     $67
+  007A          210: dcb.linebuflen          equ     $7a
+  007D          211: DCB.TLBUFFER            equ     $7D
+  00A1          212: dcb.outputtoblk         equ     $a1
+  00A9          213: dcb.inputtoblk          equ     $a9
+  00B1          214: dcb.tcb                 equ     $b1
+  00B3          215: dcb.taskstack           equ     $b3
+  00B5          216: DCB.RESET               EQU     $B5
+  00CA          217: dcb.clearin             equ     $ca
+  00FD          218: dcb.vtsize              equ     $fd
+                219: 
+  0006          220: DCBPOINTER              EQU     $06     ; POINTER TO DEVICE CONTROL BLOCK
+
+
+
+
+ASM/6800 1.4A0: 2000                    
+08/16/82 00:00:00; Page 6; Form 1       
+IOSWTPC6800.ASM
+                221: 
+                222: 
+  0000          223: DVTYP.TYPE              EQU     $00
+  000B          224: DVTYP.CLOCK             EQU     $0B
+  0002          225: DVTYP.STAPE             equ     $02
+                226: 
+  0000          227: RDSI.DISKINFO           EQU     $00
+  0002          228: RDSI.LSN                EQU     $02  
+  0005          229: RDSI.SECTORBASE         EQU     $05           
+  0007          230: RDSI.FLINK              EQU     $07                 
+  0009          231: RDSI.BLINK              EQU     $09                 
+  000B          232: RDSI.MODIFIED           EQU     $0B             
+  000C          233: RDSI.STATE              EQU     $0C                 
+  000D          234: RDSI.RETRYCOUNT         EQU     $0D            
+  000E          235: RDSI.SECTOR             EQU     $0E
+  0010          236: RDSI.TRACK              EQU     $10                
+  0012          237: RDSI.CYLINDER           EQU     $12             
+  0014          238: RDSI.SIZE               EQU     $14 
+                239: 
+  0000          240: RDSISTATE.IDLE          EQU     $00
+  0001          241: RDSISTATE.READING       EQU     $01         
+  0003          242: RDSISTATE.VERIFYING     EQU     $03        
+  0002          243: RDSISTATE.WRITING       EQU     $02         
+                244: 
+  0011          245: CC.DISMOUNTDISK         EQU     $11     ; DEVICE CONTROL OPS: DISMOUNT THE DISK
+  001D          246: cc.activationck         EQU     $1D
+  0010          247: CC.ECHO                 EQU     $10
+  0011          248: CC.NOECHO               EQU     $11
+  0014          249: cc.SETACTBLOCK          EQU     $14
+                250: 
+                251: 
+  0004          252: SC.GETTYPE              EQU     $04
+  002C          253: SC.GETLINEFLAGS         EQU     $2C
+  0001          254: SC.GETCOL               equ     $01
+  0002          255: sc.geteof               equ     $02
+                256: 
+  0000          257: SYSCALL.OPEN            EQU     $00
+  0001          258: SYSCALL.CREATE          EQU     $01            
+  0002          259: SYSCALL.CLOSE           EQU     $02
+  0003          260: SYSCALL.RENAME          EQU     $03
+  0004          261: SYSCALL.DELETE          EQU     $04            
+  0006          262: SYSCALL.CHAIN           EQU     $06             
+  000A          263: SYSCALL.READA           EQU     $0A             
+  000B          264: SYSCALL.READB           EQU     $0B             
+  000C          265: SYSCALL.WRITEA          EQU     $0C
+  000D          266: SYSCALL.WRITEB          EQU     $0D             
+  000E          267: SYSCALL.CONTROL         EQU     $0E           
+  000F          268: SYSCALL.STATUS          EQU     $0F            
+  0011          269: SYSCALL.EXIT            EQU     $11              
+  0012          270: SYSCALL.ERROREXIT       EQU     $12         
+  0013          271: SYSCALL.SETERROR        EQU     $13
+  0014          272: SYSCALL.GETERROR        EQU     $14
+  0015          273: SYSCALL.DISPERROR       EQU     $15
+  0018          274: SYSCALL.DEBUG           EQU     $18             
+                275: 
+
+
+
+
+ASM/6800 1.4A0: 2000                    
+08/16/82 00:00:00; Page 7; Form 1       
+IOSWTPC6800.ASM
+  0008          276: GOBIT                   EQU     $08     ; GO FROM BREAKPOINT/SINGLE STEP
+  0010          277: SSTEPBIT                EQU     $10     ; SINGLE STEP REQUEST
+  0020          278: BREAKBIT                EQU     $20     ; REQUEST LINE NUMBER BREAKPOINT
+  0040          279: TRACEBIT                EQU     $40     ; REQUEST LINE NUMBER TRACE
+  0080          280: ABORTBIT                EQU     $80     ; REQUEST PROGRAM ABORT
+                281: 
+                282: ;*
+                283: ;* ONE TIME START-UP INITIALIZATION 
+                284: ;* FOR SWTPC 6800. NEEDED BECAUSE 
+                285: ;* WE MUST INIT FCB/IOCBS TO ZERO
+                286: ;* WE MUST SET UP IOCBPOINTERS PROPERLY
+                287: 
+  3000          288:                         ORG     $3000
+                289: 
+3000 CEA084     290: SWTPCINIT       LDX     #FCBS           ; FCB/IOCBS TO ZERO
+3003 6F00       291: SINIT1          CLR     0,X
+3005 08         292:                 INX
+3006 8CA5FC     293:                 CPX     #IOCBPOINTERS   
+3009 26F8       294:                 BNE     SINIT1  
+300B 86A3       295:                 LDAA    #(IOCBS/256)    ; SET UP IOCBPOINTERS PROPERLY
+300D C676       296:                 LDAB    #(IOCBS&$FF)    ; EACH IOCBPOINTER POINTS TO
+300F A700       297: SINIT2          STAA    0,X             ; THE CORRESPONDING IOCB
+3011 E701       298:                 STAB    1,X
+3013 CB22       299:                 ADDB    #(IOCB.SIZE&$FF)
+3015 8900       300:                 ADCA    #(IOCB.SIZE/256)
+3017 08         301:                 INX
+3018 08         302:                 INX
+3019 8CA622     303:                 CPX     #INTERRUPTSTACK
+301C 26F1       304:                 BNE     SINIT2
+301E 7FA083     305:                 CLR     BASICDEBUGFLAGS
+                306:                 ; INIT DONE, RETURN TO SDOSINIT 
+3021 FEAE03     307:                 LDX     $AE03+OFS       ; $AE03=CODE+SDOS:CONFIGURATION GET THE STACK POINTER
+3024 7E2003     308:                 JMP     $2003
+                309: 
+                310: ;*              BUFFERS FOR I/O DRIVER
+                311: ;*              MUST BE INITIALIZED!
+                312: 
+  A080          313:                 ORG     IOBUF           ; A080..AE00 
+                314: 
+  0000          315:              if ram64k=1
+ *S*            316:                 ; ^D not available on RAM64K. SWTBUG ROM not present
+                317:              else
+A080 7E73D5     318: swtgo           jmp     swtret          ; return address from SWTBUG MONITOR
+                319:                                         ; ^D -> enter to monitor, JA080 | JE480 return to sdos
+                320:              fin
+A083 00         321: BASICDEBUGFLAGS fcb     0               ; set basic debug flags  A083 | E483
+                322: 
+                323: 
+A084 02F2       324: FCBS            RMB     FCB.SIZE*(NIOCHANNELS+2*NDRIVES+NMAGICFCBS) ; MUST PRECEDE IOCBS
+A376 0286       325: IOCBS           RMB     IOCB.SIZE*NIOCHANNELS
+A5FC 0026       326: IOCBPOINTERS    RMB     NIOCHANNELS*2
+A622 0040       327: INTERRUPTSTACK  RMB     $40     ; STACK SPACE FOR INTERRUPT ROUTINES
+A662 00         328: INTSTACKTOP     FCB     0
+A663 00         329: DSKBUFFERPOOL   fcb     0
+  079B          330: DSKPOOLSIZE     equ     IOBUFEND-DSKBUFFERPOOL-2
+
+
+
+
+ASM/6800 1.4A0: A663                    
+08/16/82 00:00:00; Page 8; Form 1       
+IOSWTPC6800.ASM
+                331: 
+  7000          332:                 ORG     DRIVERBASE      
+                333: 
+                334:                                 ; THIS IS CODE+SDOS:CONFIGURATION ADDRESS    ; 
+                335: 
+7000 7E7000     336: SYSCALLIO       JMP     SYSCALLIO       ; SDOS SETS JMP ADDR TO ITS ENTRY POINT
+                337: 
+7003 770D       338: CNFGTABLE       FDB     DISKDCBS        ; CNFG:DISKDCBS         DEFAULT DISK MUST BE FIRST
+7005 7093       339:                 FDB     DCB.TTY         ; CNFG:DEVICEDCBS        CONSOLE MUST BE FIRST
+7007 A5FC       340:                 FDB     IOCBPOINTERS    ; CNFG:IOCBPOINTERS     POINTER LIST TO IOCB'S
+7009 13         341:                 FCB     NIOCHANNELS     ; CNFG:NIOCHANNELS      NUMBER OF I/O CHANNELS
+700A A663       342:                 FDB     DSKBUFFERPOOL   ; CNFG:DSKBUFFERPOOL    POINTER TO THE DISK BUFFER POOL
+700C 079B       343:                 FDB     DSKPOOLSIZE     ; CNFG:DSKPOOLSIZE      SIZE OF THE BUFFER POOL
+700E 7C01       344:                 FDB     ATTNCHECK       ; CNFG:ATTNCHECK        ADDRESS OF ATTENTION CHECK ROUTINE
+7010 7C01       345:                 FDB     DEBUGSYSCALL    ; CNFG:DEBUGGER RMB     ADDRESS OF DEBUGGER (0 IF NONE)
+7012 7000       346:                 FDB     DRIVERBASE      ; CNFG:DRIVERBASE       LOWEST ADDRESS USED BY DRIVERS = END OF USER RA
+7014 7027       347:                 FDB     INTSETUP        ; CNFG:INTSETUP         POINTER TO INTERRUPT SYSTEM SETUP ROUTINE
+7016 7E703A     348:                 JMP     INTDISABLE      ; CNFG:INTDISABLE       SUBROUTINE (OR "JMP") TO DISABLE ALL INTERRUPTS
+7019 7E703C     349:                 JMP     INTENABLE       ; CNFG:INTENABLE        SUBROUTINE (OR "JMP") TO ENABLE ALL INTERRUPTS
+701C 7E703F     350:                 JMP     INTRTI          ; CNFG:INTRTI           CODE TO ENABLE PRIORITY INTERRUPT AND DO RTI (U
+701F A662       351:                 FDB     INTSTACKTOP     ; CNFG:INTERRUPTSTACK   POINTER TO LAST BYTE OF INTERRUPT STACK SPACE
+7021 7040       352:                 FDB     IOINTPOLL       ; CNFG:IOINTPOLL        POINTER TO I/O INTERRUPT SERVICE DEVICE POLL RO
+7023 705C       353:                 FDB     TASKQUEUE       ; CNFG:TASKQUEUE        POINTER TO FIRST TASK IN TASK QUEUE
+7025 7050       354:                 FDB     TIMEOUTQUEUE    ; CNFG:TIMEOUTLIST      POINTER TO CHAINED LIST OF TIMEOUT BLOCKS
+                355: 
+                356: 
+7027 CE703E     357: INTSETUP        LDX #IRQINT
+702A FFA000     358:                 STX IRQVECTOR           ; ON SWTBUG, A000=IRQ VECTOR IN RAM
+702D BD7932     359:                 JSR INTDK               ; INIT THE DISK SYSTEM
+7030 CE70CA     360:                 ldx     #InputBuf       ; init Input buf head and and pointerd
+7033 FF71C4     361:                 stx     InputBufP0      ; to set as no chars has been typed yet (empty buf)
+7036 FF71C6     362:                 stx     InputBufP1
+7039 39         363:                 RTS
+703A 0F         364: INTDISABLE      SEI
+703B 39         365:                 RTS
+703C 0E         366: INTENABLE       CLI
+703D 39         367:                 RTS
+703E 01         368: IRQINT          NOP
+703F 3B         369: INTRTI          RTI     
+                370: 
+7040 4F         371: IOINTPOLL       CLRA
+                372:                 ; LDA $8xxx                     ; No MP-T TIMER INTERRUPT
+7041 46         373:                 RORA
+7042 2400       374:                 BCC     NOTIMERINT
+                375:                 ; LDX   #CLOCKDCB
+                376:                 ; JMP   CLOCKSTATE
+7044 FE704E     377: NOTIMERINT      LDX     BADINTERRUPTCOUNT       ; CAN'T FIGURE OUT WHO IT IS...
+7047 08         378:                 INX                             ; BUMP CRAZY INTERRRUPT COUNTER
+7048 FF704E     379:                 STX     BADINTERRUPTCOUNT   
+704B 7EAE15     380:                 JMP     SDOS+SDOS.RTI           ; AND HOPE IT WENT AWAY !   
+                381: 
+704E 0000       382: BADINTERRUPTCOUNT       FDB     0               ; # OF INTERRUPTS FROM UNKNOWN DEVICES
+                383: 
+7050 0000       384: TIMEOUTQUEUE    FDB     0                       ; TIMEOUT:LINK   POINTER TO NEXT TIMEOUTBLOCK
+7052 0000       385:                 FDB     0                       ; TIMEOUT:FUSE.  16 BIT TIMEOUT COUNT (1/60 SEC UNITS); 0--> NO
+
+
+
+
+ASM/6800 1.4A0: 7054                    
+08/16/82 00:00:00; Page 9; Form 1       
+IOSWTPC6800.ASM
+7054 7058       386:                 FDB     FUSEBURNEDUP            ; TIMEOUT:ROUTINE POINTER TO TIMEOUT INTERRUPT ROUTINE FOR DEVI
+7056 7093       387:                 FDB     DCB.TTY                 ; TIMEOUT:DCB    POINTER TO DCB BEING TIMED OUT
+                388: 
+7058 01         389: FUSEBURNEDUP    NOP
+                390:                 ; BSR     ABORTQUANTUM
+7059 7EAE15     391:                 JMP     SDOS+SDOS.RTI
+                392: 
+  0000          393: IGN             EQU     0                       ; IGNORE VALUE
+                394: 
+705C 0000       395: TASKQUEUE       FDB     0                       ; TCB:LNK        POINTER TO NEXT TCB IN QUEUE
+705E 7078       396:                 FDB     TASKSTACKINIT           ; TCB:STACK      STACK POINTER FOR TASK
+7060 0000       397:                 FDB     0                       ; TCB:COND       TASK'S WAKE UP ROUTINE
+7062 0000       398:                 FDB     0                       ; TCB:PARAM      PARAMETER TO TCB:COND ROUTINE
+7064 00000000   399:                 FCB     0,0,0,0,0,0,0,0         ; TCB:SCRATCHPAD SPACE FOR TASK'S SCRATCHPAD (LOCATIONS 0-7)
+706C 7093       400:                 FDB     DCB.TTY                 
+706E 000A       401:                 RMB     10
+7078 00000000   402: TASKSTACKINIT   FCB     0,0,IGN,IGN,IGN,IGN     ; ZERO CC SO INTERRUPTS ARE ENABLED
+707E 7082       403:                 FDB     TASKSETUP               ; INITIAL PC OF FIRST TASK
+7080 00         404: TASKSTACKTOP    FCB     0               
+7081 00         405: TASKWAKEUPFLAG  FCB     0                       ; TASK IS SLEEPING
+7082 CE7081     406: TASKSETUP       LDX     #TASKWAKEUPFLAG
+7085 BDAE2A     407:                 JSR     SDOS+SDOS.WAITEVENT     ; WAIT FOR EVENT (X) TO GO NON-ZERO
+7088 20F8       408:                 BRA     TASKSETUP
+                409: 
+                410: 
+                411: ; DEVICE CONTROL BLOCK FOR TTY CONSOLE
+                412: 
+708A 434F4E53   413: dcbname.tty     fcc     'CONSOLE:'
+7092 00         414:                 fcb     0
+                415: 
+7093 01         416: DCB.TTY         FCB     1                       ; DCB:DONEFLAG  ; 0 --> DEVICE IS BUSY; <>0 --> DEVICE IS DONE
+7094 0000       417:                 FDB     0                       ; DCB:LASTERROR ; IF DCB IS DONE, CONTAINS ERROR STATUS (0 = NO
+7096 708A       418:                 FDB     dcbname.tty             ; DCB:NAME      ; POINTER TO DEVICE NAME STRING TERMINATED BY Z
+7098 752C       419:                 FDB     DCB.PORT                ; DCB:NEXTDCB   ; POINTER TO NEXT DCB IN LIST OR ZERO
+709A 709C       420:                 FDB     CONSOLEDRIVER           ; DCB:DRIVER    ; POINTER TO DRIVER ENTRY POINT LIST
+                421: 
+                422: ; DEVICE DRIVER BLOCK FOR TTY CONSOLE
+                423: 
+709C 720C       424: CONSOLEDRIVER   FDB     OPEN.TTY        ; DRIVER:OPEN   OPEN FILE
+709E 7230       425:                 FDB     CLOSE.TTY       ; DRIVER:CLOSE  CLOSE FILE
+70A0 730A       426:                 FDB     READA.TTY       ; DRIVER:READA  READ ASCII
+70A2 7483       427:                 FDB     WRITEA.TTY      ; DRIVER:WRITEA WRITE ASCII
+70A4 72E8       428:                 FDB     READB.TTY       ; DRIVER:READB  READ BINARY
+70A6 748D       429:                 FDB     WRITEB.TTY      ; DRIVER:WRITEB WRITE BINARY
+70A8 720C       430:                 FDB     OPEN.TTY        ; DRIVER:CREATE CREATE FILE
+70AA 70B8       431:                 FDB     ILLDEVICEOP     ; DRIVER:RENAME RENAME FILE
+70AC 70B8       432:                 FDB     ILLDEVICEOP     ; DRIVER:DELETE DELETE FILE
+70AE 7264       433:                 FDB     CONTROL.TTY     ; DRIVER:CONTROL        DO CONTROL OPERATION
+70B0 7233       434:                 FDB     STATUS.TTY      ; DRIVER:STATUS READ DEVICE (DRIVER) STATUS
+70B2 7279       435:                 FDB     RESET.TTY       ; DRIVER:RESET  RESET DRIVER (ON BOOT)
+70B4 70B8       436:                 FDB     ILLDEVICEOP     ; DRIVER:STARTIO        power-fail restart--dream on!
+                437: 
+70B6 0C         438: OKRTS           CLC
+70B7 39         439:                 RTS
+                440: 
+
+
+
+
+ASM/6800 1.4A0: 70B8                    
+08/16/82 00:00:00; Page 10; Form 1      
+IOSWTPC6800.ASM
+70B8 BDAE2D     441: ILLDEVICEOP     JSR     SDOS+SDOS.ERROR
+70BB 040A       442:                 FDB     ERR.ILLDEVICEOP
+70BD BDAE30     443: ERRETX          JSR     SDOS+SDOS.ERRORSAVE
+70C0 7EAE33     444:                 JMP     SDOS+SDOS.ERRORED
+                445: 
+                446: 
+70C3 0001       447: LMODE           RMB     1               ; =0 -> reada in non-line mode, >0 -> reada line mode 
+70C4 0002       448: LEN             RMB     2               ; DATA BUFFER LENGTH
+70C6 0002       449: PDATA           RMB     2               ; ADDR OF DATA 
+70C8 0002       450: RPLEN           RMB     2               ; REPLY DATA BUFFER LENGTH
+                451: 
+  00FA          452: InputBufLen     EQU     250             ; length of input buffer (max 255)
+70CA 00FA       453: InputBuf        RMB     InputBufLen     ; input buffer ADDR
+71C4 0002       454: InputBufP0      RMB     2               ; addr of next char into InputBuffer TO BE PROCESSED (HEAD OF BUFFER)
+71C6 0002       455: InputBufP1      RMB     2               ; addr of next free char into InputBuffer (END OF BUFFER)
+                456: 
+71C8 0001       457: EOFFLAG         RMB     1               ; =1 -> EOF = input line processed
+71C9 0001       458: ECHOFLAG        rmb     1               ; =0 -> NO ECHO 
+71CA 0001       459: ncol            rmb     1               ; number of chars printed in the current line
+71CB 0001       460: basicflags      rmb     1               ; flags for basic control chars for debugging
+71CC 0001       461: CTRLCNUM        RMB     1               ; NUMBER OF CONTROL-C TYPED IN SEQUENCE
+71CD 0001       462: expandtabflag   rmb     1
+71CE 0001       463: crflag          rmb     1               ;1=if prev char recv in port: was a <CR>
+                464: 
+71CF 0010       465: ACTIVATIONCHARSVECTOR   RMB 16          ; Activation Chars vector
+71DF 0001       466: ActivationCharSensed    rmb 1           ; Activation Char typed by user
+                467: 
+  0000          468:              if ram64k=1
+ *S*            469:                 ; on 64K RAM machine, SWTBUG rom not present. Here goes the console I/O routines
+ *S*            470: ACIAPORT        EQU     $FF04   ; ACIA PORT IN SWTBUG 64K RAM
+ *S*            471: PORECH          FCB     0       ; ECHO (=0 -> echo, $FF -> no echo)
+ *S*            472: 
+ *S*            473:                 ; *OUTPUT ONE CHARACTER
+ *S*            474: OUTEEE          PSHB            ; SAVE ACC B
+ *S*            475:                 STX     $00     ; STORE INDEX REGISTER
+ *S*            476:                 LDX     #ACIAPORT
+ *S*            477:                 LDAB    1,X
+ *S*            478:                 CMPB    3,X
+ *S*            479: ACIOUT          LDAB    #$11
+ *S*            480:                 STAB    0,X
+ *S*            481: ACIOU1          LDAB    0,X
+ *S*            482:                 ASRB
+ *S*            483:                 ASRB
+ *S*            484:                 BCC     ACIOU1  ; ACIA NOT READY
+ *S*            485:                 STAA    1,X     ; OUTPUT CHARACTER **log OUTCH:A
+ *S*            486: RES             PULB            ; RESTORE ACC B
+ *S*            487:                 LDX     $00
+ *S*            488:                 RTS
+ *S*            489: 
+ *S*            490:                 ; *INPUT ONE CHAR INTO ACC B
+ *S*            491: INEEE           PSHB            ; SAVE ACC B
+ *S*            492:                 STX     $00     ; STORE INDEX REGISTER
+ *S*            493:                 LDX     #ACIAPORT
+ *S*            494:                 LDAB    1,X
+ *S*            495:                 CMPB    3,X
+
+
+
+
+ASM/6800 1.4A0: 71DF                    
+08/16/82 00:00:00; Page 11; Form 1      
+IOSWTPC6800.ASM
+ *S*            496:                 LDAA    #$15    ; RECONFIG FOR 8 BIT, 1 SB
+ *S*            497:                 STAA    0,X     ;             **troff
+ *S*            498: ACIAIN          LDAA    0,X
+ *S*            499:                 ASRA
+ *S*            500:                 BCC     ACIAIN  ; NOT READY
+ *S*            501:                 LDAA    1,X     ; LOAD CHAR   **tron
+ *S*            502:                 LDAB    PORECH
+ *S*            503:                 BEQ     ACIOUT  ; ECHO
+ *S*            504:                 BRA     RES     ; DON'T ECHO
+ *S*            505: 
+ *S*            506: RDON            LDAA    #$11    ; RON CHAR.
+ *S*            507:                 BRA     OUTEEE
+ *S*            508: RDOFF           LDAA    #$13    ; TURN READER OFF
+ *S*            509:                 BRA     OUTEEE
+ *S*            510: PNCHON          LDAA    #$12    ; punch on 
+ *S*            511:                 BRA     OUTEEE
+ *S*            512: PNCHOFF         LDAA    #$14    ; punch off
+ *S*            513:                 BRA     OUTEEE
+ *S*            514:                 
+                515:              else
+                516:                 ; use SWTBUG rom for INEEE and OUTEEE, and so ... 
+                517:              fin
+                518: 
+                519:                 ; print a char 
+                520: 
+71E0 810D       521: prtch           cmpa    #13             ; <CR> RESET COLUMN COUNT
+71E2 270E       522:                 beq     prt1
+71E4 8108       523:                 cmpa    #8              ; backSpace
+71E6 2712       524:                 beq     prt4            
+71E8 853C       525:                 bita    #60             ; DO NOT INCR NCOL ON CONTROL CHARS
+71EA 2703       526:                 BEQ     PRT3
+71EC 7C71CA     527: prt2            inc     ncol            ; INCR NCOL ON REGULAR $20-$7F
+71EF 7EE1D1     528: prt3            jmp     outeee
+71F2 7F71CA     529: prt1            clr     ncol
+71F5 7A71CA     530:                 dec     ncol
+71F8 20F5       531:                 bra     prt3
+71FA BDE1D1     532: prt4            jsr     outeee
+71FD 8620       533:                 ldaa    #32
+71FF BDE1D1     534:                 jsr     outeee
+7202 8608       535:                 ldaa    #8
+7204 7EE1D1     536:                 jmp     outeee
+                537: 
+                538:                 ; read keyboard key pressed 
+                539: 
+7207 01         540: inch            nop                             ; **troff
+7208 BDE1AC     541:                 jsr     ineee                   ; read the keyboard (blocking)
+720B 39         542:                 rts                             ; **tron
+                543: 
+720C 7F71C8     544: OPEN.TTY        CLR     EOFFLAG         ; RESET EOF FLAG
+720F 8601       545:                 LDAA    #1
+7211 B771C9     546:                 STAA    ECHOFLAG        ; set ECHO ON (to be done by this iopackage)
+7214 86FF       547:                 ldaa    #255
+7216 B7A00C     548:                 staa    PORECH          ; DISABLE ECHO into swtbug 
+7219 7F71CA     549:                 clr     ncol            ; init numbers of chars printed in line
+721C CE71CF     550:                 LDX     #ACTIVATIONCHARSVECTOR
+
+
+
+
+ASM/6800 1.4A0: 721F                    
+08/16/82 00:00:00; Page 12; Form 1      
+IOSWTPC6800.ASM
+721F 8610       551:                 LDAA    #16
+7221 6F00       552: OPEN.TTY1       CLR     0,X             ; reset the 16 bytes of Activation Char vector
+7223 08         553:                 INX
+7224 4A         554:                 DECA
+7225 26FA       555:                 BNE     OPEN.TTY1       
+7227 7F71CC     556:                 CLR     CTRLCNUM        ; INIT ^c COUNT
+722A 7F71CB     557:                 clr     basicflags
+722D 7E70B6     558:                 JMP     OKRTS           ; TTY IS ALWAYS OPEN
+                559: 
+7230 7E70B6     560: CLOSE.TTY       JMP     OKRTS           ; AND TTY CANNOT BE CLOSED
+                561: 
+                562: 
+7233 FEAE07     563: STATUS.TTY      ldx     SDOS+SDOS.IOBLOCKPTR
+7236 8600       564:                 ldaa    #0  ; vt:sclen
+7238 E603       565:                 ldab    scblk.params+1,x        ; get sc status opcode
+723A C12C       566:                 cmpb    #SC.GETLINEFLAGS
+723C 260B       567:                 bne     st0
+723E B671CB     568:                 ldaa    basicflags              ; get the basic flags
+                569: 
+7241 BAA083     570:                 oraa    BASICDEBUGFLAGS         ; or basic debug flags 
+                571: ;               oraa #TRACEBIT                  ; turn on basic trace 
+                572: 
+7244 7F71CB     573:                 clr     basicflags              ; ans clear them
+7247 2014       574:                 bra     statusret1
+7249 C101       575: st0             cmpb    #SC.GETCOL
+724B 2605       576:                 bne     st1
+724D B671CA     577:                 ldaa    ncol                    ; get the bumber of columns used in current line
+7250 200B       578:                 bra     statusret1
+7252 C102       579: st1             cmpb    #sc.geteof
+7254 2605       580:                 bne     st2             
+7256 B671C8     581:                 ldaa    eofflag
+7259 2002       582:                 bra     statusret1
+725B 8600       583: st2             ldaa    #0                      ; any other request returns 0
+725D EE0A       584: statusret1      LDX     scblk.rdbuf,x           ; return 1 byte status
+725F A700       585:                 staa    0,X                     ; STORE IN RDBUF
+7261 7E70B6     586:                 JMP     OKRTS 
+                587: 
+7264 FEAE07     588: CONTROL.TTY     ldx     sdos+sdos.ioblockptr
+7267 E603       589:                 ldab    scblk.params+1,x
+7269 C11D       590:                 cmpb    #cc.activationck
+726B 271D       591:                 beq     dactivationck
+726D C110       592:                 cmpb    #cc.ECHO
+726F 270B       593:                 beq     dECHO
+7271 C111       594:                 cmpb    #cc.NOECHO
+7273 270F       595:                 beq     dnoecho
+7275 C114       596:                 cmpb    #cc.SETACTBLOCK
+7277 2721       597:                 beq     dsetactivation
+7279 7E70B6     598: RESET.TTY       JMP     OKRTS           ; TTY DOES NOT NEED RESET
+                599: 
+727C 8601       600: DECHO           LDAA    #1
+727E B771C9     601:                 STAA    ECHOFLAG
+7281 7E70B6     602:                 JMP     OKRTS
+7284 7F71C9     603: DNOECHO         CLR     ECHOFLAG
+7287 7E70B6     604:                 JMP     OKRTS           
+                605:                 
+
+
+
+
+ASM/6800 1.4A0: 728A                    
+08/16/82 00:00:00; Page 13; Form 1      
+IOSWTPC6800.ASM
+728A FE71C4     606: dactivationck   ldx     InputBufp0              ; Is input Buf empty?
+728D BC71C6     607:                 cpx     InputBufP1
+7290 2705       608:                 beq     dactivation1            ; br if so (reada will block)
+7292 BDAE2D     609:                 jsr     sdos+sdos.error         ; something in input buffer
+7295 0775       610:                 fdb     err.activationreceived  ; signal it (reada will not block)
+7297 7E70B6     611: dactivation1    JMP     OKRTS                   
+                612: 
+                613: 
+729A BD7472     614: dsetactivation  jsr     GETWRITEPARAMS          ; set the activation chars vector
+729D CE71CF     615:                 ldx     #ACTIVATIONCHARSVECTOR  
+72A0 FF7929     616:                 stx     ddata
+72A3 C610       617:                 ldab    #16
+72A5 FE70C6     618: dsetact1        ldx     pdata
+72A8 A600       619:                 ldaa    0,x
+72AA 08         620:                 inx
+72AB FF70C6     621:                 stx     pdata
+72AE FE7929     622:                 ldx     ddata
+72B1 A700       623:                 staa    0,x     
+72B3 08         624:                 inx
+72B4 FF7929     625:                 stx     ddata
+72B7 5A         626:                 decb
+72B8 26EB       627:                 bne     dsetact1
+72BA 7E70B6     628:                 jmp     okrts
+                629: 
+                630:                 ; read params from READA/B SYSCALL
+                631:                 ; set LMODE, PDATA, LEN, clears RPLEN
+                632: 
+72BD FEAE07     633: getreadparams   ldx     sdos+sdos.ioblockptr
+72C0 A603       634:                 ldaa    scblk.params+1,x        ; if LMODE=0 -> reada in non-line mode, >0 -> reada line mode 
+72C2 B770C3     635:                 staa    LMODE
+72C5 EE0C       636:                 LDX     scblk.rdlen,x           ; LEN=reada/B SYSCALL buffer length
+72C7 FF70C4     637:                 stX     LEN
+72CA FEAE07     638:                 LDX     SDOS+SDOS.IOBLOCKPTR    ; INIT RPLEN TO ZERO (ACTUAL CHARS READ INTO SYSCALL BUFFER)
+72CD 6F08       639:                 CLR     scblk.RPLEN,x
+72CF 6F09       640:                 CLR     scblk.RPLEN+1,x
+72D1 FEAE07     641:                 LDX     SDOS+SDOS.IOBLOCKPTR    ; PDATA=addr of INPUT buffer 
+72D4 EE0A       642:                 LDX     scblk.rdbuf,x
+72D6 FF70C6     643:                 STX     PDATA
+72D9 39         644:                 rts
+                645:                 
+                646:                 ; save x-reg as rplen (numb of chars read) as syscall return 
+72DA DF00       647: setrplen        stx     $00
+72DC 9600       648:                 ldaa    $00
+72DE D601       649:                 ldab    $01
+72E0 FEAE07     650:                 LDX     SDOS+SDOS.IOBLOCKPTR    
+72E3 A708       651:                 staa    scblk.RPLEN,x
+72E5 E709       652:                 stab    scblk.RPLEN+1,x
+72E7 39         653:                 rts
+                654: 
+72E8 BD72BD     655: readb.TTY       jsr     getreadparams           ; get syscall params
+72EB FE70C4     656:                 ldx     len                     ; readb will read
+72EE BD72DA     657:                 jsr     setrplen                ; exactly len chars from keyboard
+72F1 FE70C4     658: readb1          ldx     len                     ; input buf full? (remaining len=0)
+72F4 2712       659:                 beq     readb2                  ; br if buf full
+72F6 09         660:                 dex                             ; no, decr remaining len
+
+
+
+
+ASM/6800 1.4A0: 72F7                    
+08/16/82 00:00:00; Page 14; Form 1      
+IOSWTPC6800.ASM
+72F7 FF70C4     661:                 stx     len
+72FA BD7207     662:                 jsr     inch                    ; read char from keyboard
+72FD FE70C6     663:                 ldx     pdata                   ; input buf addr
+7300 A700       664:                 staa    0,x                     ; store into input buf
+7302 08         665:                 inx
+7303 FF70C6     666:                 stx     pdata
+7306 20E9       667:                 bra     readb1
+7308 0C         668: readb2          clc
+7309 39         669:                 rts             
+                670: 
+730A BD72BD     671: reada.TTY       jsr     getreadparams           ; get syscall params
+730D B670C3     672:                 LDAA    LMODE                   ; CHECK IF NON-LINE MODE READ BUT BUF LEN > 0
+7310 2608       673:                 BNE     reada1                  ; BR BECAUSE IN LINE MODE
+7312 FE70C4     674:                 LDX     LEN
+7315 2703       675:                 BEQ     reada1
+7317 7E70B8     676:                 jmp     ILLDEVICEOP             ; ERROR BECAUSE NON-LINE MODE READ BUT BUF LEN > 0
+731A FE70C4     677: reada1          LDX     LEN                     ; IS BUFFER IS ZERO BYTES
+731D 2605       678:                 BNE     READA2                  ; THE JUST RETURN FROM READ 
+731F BDAE2D     679:                 jsr     sdos+sdos.error         ; signaling "Activation not in buffer" error
+7322 0773       680:                 fdb     ERR.ACTIVATIONNOTINBUFFER                 
+7324 FE71C4     681: READA2          ldx     InputBufp0              ; LEN IS >0 -> CHECK Is input Buf empty?
+7327 BC71C6     682:                 cpx     InputBufP1
+732A 2603       683:                 bne     reada3                  ; br if not
+732C BD738A     684:                 jsr     readInputBuf            ; input buffer empty -> read it from keyboard
+732F CE0000     685: reada3          LDX     #0
+7332 FF70C8     686:                 STX     RPLEN                   ; INIT RPLEN
+7335 FE71C4     687: READA4          LDX     iNPUTBUFP0              ; CHECK IF INPUT BUF IS EMPTY
+7338 BC71C6     688:                 CPX     iNPUTBUFP1              
+733B 2743       689:                 BEq     READA6                  ; BR IF EMPTY 
+733D FE71C4     690:                 LDX     iNPUTBUFP0              ; GET CHAR FROM INPUT BUFFER
+7340 A600       691:                 LDAA    0,X                                     
+7342 08         692:                 INX
+7343 FF71C4     693:                 STX     INPUTBUFP0
+7346 811A       694:                 cmpa    #26                     ; char is ^Z ? 
+7348 2736       695:                 beq     reada6                  ; br if so to signal eof
+734A FE70C6     696:                 LDX     PDATA                   ; STORE CHAR IN SYSCALL BUFFER
+734D A700       697:                 STAA    0,X
+734F 08         698:                 INX     
+7350 FF70C6     699:                 STX     PDATA
+7353 810D       700:                 cmpa    #13                     ; <cr> resets ncol to 0
+7355 2605       701:                 bne     rd1ncol
+7357 7F71CA     702:                 clr     ncol
+735A 2003       703:                 bra     rd2ncol
+735C 7C71CA     704: rd1ncol         inc     ncol                    ; incr ncol chars processed    
+735F FE70C8     705: rd2ncol         LDX     RPLEN                   ; INCR RPLEN NUM OF BYTES STORED
+7362 08         706:                 INX                             ; IN SYSCALL BUFFER
+7363 FF70C8     707:                 STX     RPLEN
+7366 36         708:                 psha
+7367 BD72DA     709:                 JSR     setrplen                
+736A 32         710:                 pula
+736B B171DF     711:                 CMPA    ActivationCharSensed    ; CHAR IS activation char sensed ?
+736E 2603       712:                 BNE     READA5                  ; BR IF NOT
+7370 7E70B6     713:                 JMP     OKRTS                   ; YES! ACTIVATION CHAR IN READ BUFFER -> EXIT FROM SYSCALL, NO 
+7373 FE70C8     714: READA5          LDX     RPLEN                   ; CHECK IF SYSCALL BUFFER
+7376 BC70C4     715:                 CPX     LEN                     ; IS FULL
+
+
+
+
+ASM/6800 1.4A0: 7379                    
+08/16/82 00:00:00; Page 15; Form 1      
+IOSWTPC6800.ASM
+7379 26BA       716:                 BNE     READA4                  ; BR IF NOT ...
+737B BDAE2D     717:                 jsr     sdos+sdos.error         ; BUFFER IS FULL -> RETURN FROM SYSCALL 
+737E 0773       718:                 fdb     ERR.ACTIVATIONNOTINBUFFER ; signaling "Activation not in buffer" error
+7380 8601       719: READA6          LDAA    #1                      ; SIGNAL EOF FLAG
+7382 B771C8     720:                 STAA    EOFFLAG
+7385 BDAE2D     721:                 jsr     sdos+sdos.error         ; NO MORE CHARS IN INPUT BUFFER
+7388 03E9       722:                 fdb     err.eofhit              ; return from read signaling eof CONDITION
+                723:                 
+                724:                 
+738A 7F71CC     725: ReadInputBuf    CLR     CTRLCNUM
+738D 7F71DF     726:                 CLR     ActivationCharSensed    ; no activation char sensed
+7390 7F71CD     727:                 clr     expandtabflag           ; tabs should be echoed as ^I if echo is enabled
+7393 CE70CA     728: RINBUF          ldx     #InputBuf               ; init Input buf head and and pointer
+7396 FF71C4     729:                 stx     InputBufP0              ; to set as no chars has been typed yet (empty buf)
+7399 FF71C6     730:                 stx     InputBufP1
+739C BD7207     731: RINCH           jsr     inch                    ; READ KEY FROM KEYBOARD
+739F B77550     732:                 staa    ch                      ; save
+73A2 8103       733:                 CMPa    #3                      ; is ^C (BREAK)
+73A4 2612       734:                 BNE     RI1
+73A6 BD74BC     735: RCTRLC          jsr     write.chcr.echo         ; if echo set, write ^C on screen, then <cr><LF>
+73A9 7C71CC     736:                 INC     CTRLCNUM                ; INC COUNTER OF ^c'S ISSUED
+73AC B671CC     737:                 LDAA    CTRLCNUM
+73AF 8102       738:                 CMPA    #2      
+73B1 26E0       739:                 BNE     rINBUF                  ; BR IF IS THE FIRST ONE: DISCARD CURRENT LINE
+73B3 BDAE2D     740:                 jsr     sdos+sdos.error         ; TWO ^C IN SEQUENCE
+73B6 0411       741:                 FDB     err.programkilled       ; KILL THE CURRENT PROGRAM
+73B8 7F71CC     742: RI1             CLR     CTRLCNUM                ; KEY READ IS NOT ^c -> RESET COUNT
+73BB 8108       743:                 CMPA    #8                      ; IS ^H (BACKSPACE)
+73BD 2704       744:                 BEQ     RBACKSPACE
+73BF 817F       745:                 CMPA    #127                    ; OR IS ROUBOUT/DEL
+73C1 2605       746:                 BNE     RI2                     ;    BR IF NOT
+73C3 BD7450     747: RBACKSPACE      JSR     BACKSPACE               ; DEL LAST TYPED CHAR FROM INPUTBUF AND (IF ECHO ENABLED) FROM 
+73C6 20D4       748:                 BRA     RINCH                   ; IF SO, IGNORE THE BACKSPACE KEY AND BR TO KEEP READING KEYBOA
+73C8 8104       749: RI2             CMPA    #4                      ; IS ^D ? (GO TO DEBUG MONITOR)   
+73CA 2614       750:                 BNE     RI3
+73CC BD74BC     751: RCTRLD          jsr     write.chcr.echo         ; if echo set, write ^D on screen, then <cr><LF>
+  0000          752:              if ram64k=1
+ *S*            753:                 JMP     RINCH                   ; RAM64K does not uses SWTBUG ROM, so ^D does nothing
+                754:              else
+73CF BF73D6     755:                 STS     SWTRET+1                ; SAVE STACK POINTER
+73D2 7EE0D0     756:                 JMP     SWTMON                  ; JUMP TO SWTBUG monitor. return from monitor with JA080 comman
+73D5 8EA07F     757: SWTRET          LDS     #$A07F                  ; SWTBUG MONITOR GO COMMAND RETURNS HERE. RESTORE STACK POINTER
+73D8 86FF       758:                 ldaa    #255
+73DA B7A00C     759:                 staa    PORECH                  ; DISABLE ECHO FOR ACIA
+73DD 7E739C     760:                 JMP     RINCH                   ; JMP TO KEEP READING KEYBOARD AS NOTHING HAPPEND
+                761:              fin
+73E0 C620       762: RI3             ldab    #BREAKBIT               ; 
+73E2 8102       763:                 CMPA    #2                      ; IS ^B? (REQUEST LINE NUMBER BREAKPOINT in a basic program)
+73E4 2712       764:                 BEQ     Rbas                    ;    br if SO ...
+73E6 C610       765:                 ldab    #SSTEPBIT       
+73E8 8116       766:                 cmpa    #$16                    ; IS ^V? (REQUEST SINGLE STEP in a basic program)
+73EA 270C       767:                 BEQ     Rbas                    ;    br if SO ...
+73EC C640       768:                 ldab    #TRACEBIT               
+73EE 8114       769:                 cmpa    #$14                    ; IS ^T? (REQUEST LINE NUMBER TRACE in a basic program)
+73F0 2706       770:                 BEQ     Rbas                    ;    br if SO ...
+
+
+
+
+ASM/6800 1.4A0: 73F2                    
+08/16/82 00:00:00; Page 16; Form 1      
+IOSWTPC6800.ASM
+73F2 C608       771:                 ldab    #GOBIT          
+73F4 8107       772:                 cmpa    #7                      ; IS ^G? (GO FROM BREAKPOINT/SINGLE STEP in a basic program)
+73F6 2608       773:                 Bne     RI4                     ;    br if SO ...
+73F8 FA71CB     774: RBAS            orab    basicflags              ; add current basic flags
+73FB CA01       775:                 orab    #1                      ; SET BASIC KEYB POLL ACTIVE ON SC:GETLINEFLAGS
+73FD F771CB     776:                 stab    basicflags              ; store back
+  7400          777: RI4                                             
+7400 FE71C6     778:                 LDX     INPUTBUFP1              ; CHECK IF INPUTBUF IS FULL
+7403 8C71C3     779:                 CPX     #INPUTBUF+INPUTBUFLEN-1
+7406 2605       780:                 BNE     RSTORECH                ; BR IF BUF HAS ROOM LEFT TO STORE THE TYPED CHAR
+7408 36         781:                 PSHA                            ; IF INPUTBUF FULL, THEN ...
+7409 BD7450     782:                 JSR     BACKSPACE               ; ... DEL LAST TYPED CHAR FROM INPUTBUF AND (IF ECHO ENABLED) F
+740C 32         783:                 PULA                            ; TO REPLACE IT WITH NEW TYPED CHAR
+740D FE71C6     784: RSTORECH        LDX     INPUTBUFP1              
+7410 A700       785:                 STAA    0,X                     ; STORE CHAR IN INPUTBUF
+7412 08         786:                 inx
+7413 FF71C6     787:                 stx     inputbufp1
+7416 36         788:                 psha
+7417 BD74C1     789:                 JSR     WRITEA.CH.echo          ; ECHO IT TO SCREEN 
+741A 32         790:                 pula
+741B 810D       791:                 CMPa    #13                     ; IS <CR> ? 
+741D 272A       792:                 BEQ     ActivChar               ;   BR IF SO ...
+741F 811A       793:                 CMPa    #26                     ; IS ^Z ? 
+7421 2605       794:                 bne     ri5                     ;   BR IF NOT ...
+7423 BD74BF     795:                 jsr     write.cr.echo           ; write a <cr> after ^Z
+7426 2027       796:                 Bra     Rendofinput             ; then end reading the line
+7428 36         797: ri5             psha                            ; now check if the char in a-reg is an activation char
+7429 8407       798:                 anda    #7
+742B C601       799:                 ldab    #1                      ; set to 1 the bit number
+742D 4D         800: ri6             tsta                            ; corresponding to (char & 7)
+742E 2704       801:                 beq     ri7
+7430 58         802:                 aslb            
+7431 4A         803:                 deca
+7432 20F9       804:                 bra     ri6
+7434 32         805: ri7             pula
+7435 47         806:                 asra                            ; a=byte index on ACTIVATIONCHARSVECTOR
+7436 47         807:                 asra                            ; b=bit mask 
+7437 47         808:                 asra
+7438 B7743F     809:                 staa    ActivByte+1     
+743B CE71CF     810:                 ldx     #ACTIVATIONCHARSVECTOR  ; check ACTIVATIONCHARSVECTOR to 
+743E A600       811: ActivByte       ldaa    0,X                     ; determine if char is an activation char
+7440 D700       812:                 stab    $00
+7442 9400       813:                 anda    $00
+7444 2603       814:                 bne     ActivChar               ; BR if char is an activation char
+7446 7E739C     815:                 JMP     RINCH
+7449 B67550     816: ActivChar       ldaa    ch
+744C B771DF     817:                 staa    ActivationCharSensed    ; save the activation char sensed
+744F 39         818: Rendofinput     RTS                             ; > READ LINE FROM KEYBOARD TERMINATED
+                819:                 
+                820:                 
+                821: 
+7450 FE71C6     822: BACKSPACE       LDX     InputBufP1              ; DEL LAST TYPED CHAR FROM INPUTBUF AND (IF ECHO ENABLED) FROM 
+7453 8C70CA     823:                 CPX     #iNPUTbUF               
+7456 2719       824:                 BEQ     BACKSPC2
+7458 09         825:                 DEX
+
+
+
+
+ASM/6800 1.4A0: 7459                    
+08/16/82 00:00:00; Page 17; Form 1      
+IOSWTPC6800.ASM
+7459 FF71C6     826:                 STX     iNPUTBUFP1              ; BACKSPACE TO ERASE LAST CHAR TYPED FROM INPUTBUF
+745C 7D71C9     827:                 TST     ECHOflag
+745F 2710       828:                 BEQ     BACKSPC2                ; IF NO ECHO, BR TO KEEP READING KEYBOARD
+7461 A600       829:                 LDAA    0,X                     ; GET CHAR THAT HAS BEEN ERASED
+7463 8120       830:                 CMPA    #32                     ; IS A CONTROL CHAR?
+7465 2405       831:                 BCC     BACKSPC1                ; BR IF A >= 32 
+7467 8608       832:                 LDAA    #8                      ; IS A CONTROL CHAR -> ISSUE TWO BACKSPACES
+7469 BD71E0     833:                 JSR     PRTCH                   ; TO DELETE ^x FROM SCREEN
+746C 8608       834: BACKSPC1        LDAA    #8
+746E BD71E0     835:                 JSR     PRTCH
+7471 39         836: BACKSPC2        RTS
+                837: 
+7472 FEAE07     838: GETWRITEPARAMS  LDX     SDOS+SDOS.IOBLOCKPTR    ; get number of chars to write form syscall
+7475 EE06       839:                 LDX     scblk.wrlen,x           
+7477 FF70C4     840:                 STX     LEN                     
+747A FEAE07     841:                 LDX     SDOS+SDOS.IOBLOCKPTR    ; get addr of chars to write
+747D EE04       842:                 LDX     scblk.wrbuf,x
+747F FF70C6     843:                 STX     PDATA
+7482 39         844:                 RTS
+                845: 
+                846: 
+7483 8601       847: WRITEA.TTY      LDAa    #1
+7485 B774A5     848:                 STaA    write.MODE+1
+7488 B771CD     849:                 staa    expandtabflag           ; signal tabs should be expanded to spaces
+748B 2006       850:                 BRA     WRITE.0
+748D 7F74A5     851: WRITEB.TTY      CLR     write.MODE+1
+7490 7F71CA     852:                 clr     ncol
+7493 BD7472     853: WRITE.0         JSR     GETWRITEPARAMS 
+7496 FE70C4     854:                 LDX     LEN                     
+7499 271E       855:                 BEQ     WRITE.9                 ; exit because writing zero chars
+749B FE70C6     856: WRITE.1         LDX     PDATA                   ; get next char to write.
+749E A600       857:                 LDAA    0,X
+74A0 08         858:                 INX                             ; .*echo wrtch:a
+74A1 FF70C6     859:                 STX     PDATA
+74A4 C600       860: write.MODE      ldab    #0                      ; if not ascii mode (that means, we are executing a writeb)
+74A6 2705       861:                 BEQ     WRITE.2                 ; br to print char without any further processing  
+74A8 BD74C7     862:                 JSR     WRITEA.CH               ; convert char <CR> -> <CR><LF>, ctrol char -> ^X
+74AB 2003       863:                 bra     write.3
+74AD BD750A     864: WRITE.2         JSR     prtch2                  ; send char to console via swtbug
+74B0 FE70C4     865: write.3         LDX     LEN
+74B3 09         866:                 DEX
+74B4 FF70C4     867:                 STX     LEN
+74B7 26E2       868:                 BNE     WRITE.1
+74B9 7E70B6     869: WRITE.9         JMP     OKRTS
+                870: 
+                871: 
+74BC BD74C1     872: write.chcr.echo jsr     WRITEA.CH.echo  
+74BF 860D       873: write.cr.echo   ldaa    #13
+74C1 7D71C9     874: WRITEA.CH.echo  tst     echoflag                ; write char only if echo set and expand tabs. 
+74C4 2609       875:                 bne     writea.ch1              ; this is called from ReadInputBuf
+74C6 39         876:                 rts
+74C7 810C       877: WRITEA.CH       cmpa    #12                     ; ^L -> do not print
+74C9 273E       878:                 beq     WRITEA.CH4
+74CB 8107       879:                 cmpa    #7                      ; ^G -> do not print
+74CD 273A       880:                 beq     WRITEA.CH4
+
+
+
+
+ASM/6800 1.4A0: 74CF                    
+08/16/82 00:00:00; Page 18; Form 1      
+IOSWTPC6800.ASM
+74CF 847F       881: writea.ch1      andA    #$7f            
+74D1 810D       882:                 CMPA    #13
+74D3 2607       883:                 BNE     WRITEA.CH2              ; SEND A <LF> AFTER EACH <CR>
+74D5 BD750A     884:                 JSR     prtch2
+74D8 860A       885:                 LDAA    #10
+74DA 202A       886:                 bra     WRITEA.CH3      
+74DC 8109       887: WRITEA.CH2      cmpa    #9                      ; check for <TAB> (char 9 dec)
+74DE 2619       888:                 bne     WRITEA.CH2b
+74E0 7D71CD     889:                 tst     expandtabflag           ; tabs should be expanded to spaces?
+74E3 2718       890:                 beq     WRITEA.CH2c             ; br if not to print tab as ^I
+74E5 F671CA     891:                 ldab    ncol                    ; tab converted to 1-8 spaces depending on ncol
+74E8 C407       892:                 andb    #7
+74EA 8608       893:                 ldaa    #8
+74EC 10         894:                 sba
+74ED 16         895:                 tab                             ; b=spaces that replaces tab=8-ncol
+74EE 37         896: WRITEA.CH2a     pshb
+74EF 8620       897:                 ldaa    #32
+74F1 BD750A     898:                 jsr     prtch2
+74F4 33         899:                 pulb
+74F5 5A         900:                 decb
+74F6 26F6       901:                 bne     WRITEA.CH2a
+74F8 39         902:                 rts
+74F9 8120       903: WRITEA.CH2b     cmpa    #32                     ; if ch < 32, print it as control char "^ch"
+74FB 2409       904:                 bcC     WRITEA.CH3              ; BR IF A-REG >= 32
+74FD 36         905: WRITEA.CH2c     psha
+74FE 865E       906:                 ldaa    #'^
+7500 BD750A     907:                 JSR     prtch2
+7503 32         908:                 pula
+7504 8B40       909:                 adda    #'@
+7506 BD750A     910: WRITEA.CH3      jsr     prtch2
+7509 39         911: WRITEA.CH4      RTS
+                912:                 
+750A 810D       913: prtch2          cmpa    #13                     ; handle ncol computing
+750C 270E       914:                 beq     wr3ncol                 ; for writea.tty
+750E 8108       915:                 cmpa    #8
+7510 270F       916:                 beq     wr4ncol
+7512 810A       917:                 cmpa    #10
+7514 2703       918:                 beq     wr2ncol                 ; <LF> does not change ncol (char is ignored)
+7516 7C71CA     919: wr1ncol         inc     ncol
+7519 7E71E0     920: wr2ncol         jmp     prtch
+751C 7F71CA     921: wr3ncol         clr     ncol                    ; <CR> resets ncol
+751F 20F5       922:                 bra     wr1ncol
+7521 7A71CA     923: wr4ncol         dec     ncol                    ; <BackSpace> ^H decr ncol
+7524 20F3       924:                 bra     wr2ncol                         
+                925:                 
+                926:                 
+                927: ; DEVICE CONTROL BLOCK FOR SIMH IO VIRTUAL PORT
+                928: 
+7526 504F5254   929: dcbname.port    fcc     'PORT:'
+752B 00         930:                 fcb     0
+                931: 
+752C 01         932: DCB.PORT        FCB     1                       ; DCB:DONEFLAG  ; 0 --> DEVICE IS BUSY; <>0 --> DEVICE IS DONE
+752D 0000       933:                 FDB     0                       ; DCB:LASTERROR ; IF DCB IS DONE, CONTAINS ERROR STATUS (0 = NO
+752F 7526       934:                 FDB     dcbname.port            ; DCB:NAME      ; POINTER TO DEVICE NAME STRING TERMINATED BY Z
+7531 7B56       935:                 FDB     CLOCKDCB                ; DCB:NEXTDCB   ; POINTER TO NEXT DCB IN LIST OR ZERO
+
+
+
+
+ASM/6800 1.4A0: 7533                    
+08/16/82 00:00:00; Page 19; Form 1      
+IOSWTPC6800.ASM
+7533 7535       936:                 FDB     PORTDRIVER              ; DCB:DRIVER    ; POINTER TO DRIVER ENTRY POINT LIST
+                937: 
+                938: ; DEVICE DRIVER FOR IO PORT (for simh PTR and PTP)
+                939: 
+7535 7571       940: PORTDRIVER      FDB     OPEN.PORT       ; DRIVER:OPEN   OPEN FILE
+7537 7579       941:                 FDB     CLOSE.PORT      ; DRIVER:CLOSE  CLOSE FILE
+7539 75DE       942:                 FDB     READA.PORT      ; DRIVER:READA  READ ASCII
+753B 768A       943:                 FDB     WRITEA.PORT     ; DRIVER:WRITEA WRITE ASCII
+753D 75E5       944:                 FDB     READB.PORT      ; DRIVER:READB  READ BINARY
+753F 7694       945:                 FDB     WRITEB.PORT     ; DRIVER:WRITEB WRITE BINARY
+7541 7571       946:                 FDB     OPEN.PORT       ; DRIVER:CREATE CREATE FILE
+7543 70B8       947:                 FDB     ILLDEVICEOP     ; DRIVER:RENAME RENAME FILE
+7545 70B8       948:                 FDB     ILLDEVICEOP     ; DRIVER:DELETE DELETE FILE
+7547 7551       949:                 FDB     control.port    ; DRIVER:CONTROL        DO CONTROL OPERATION
+7549 755B       950:                 FDB     status.port     ; DRIVER:STATUS READ DEVICE (DRIVER) STATUS
+754B 70B6       951:                 FDB     OKRTS           ; DRIVER:RESET  RESET DRIVER (ON BOOT)
+754D 70B8       952:                 FDB     ILLDEVICEOP     ; DRIVER:STARTIO        power-fail restart--dream on!
+                953: 
+754F FF         954: PORTMODE        FCB     $FF             ; =1 -> READING FROM PTR, =2 -> READING FROM PTP
+7550 0001       955: ch              rmb     1               ; char read/write
+                956: 
+7551 FEAE07     957: control.port    ldx     sdos+sdos.ioblockptr
+7554 E603       958:                 ldab    scblk.params+1,x
+7556 C11D       959:                 cmpb    #cc.activationck
+7558 7E70B6     960:                 jmp     okrts
+                961: 
+755B FEAE07     962: status.port     ldx     SDOS+SDOS.IOBLOCKPTR
+755E E603       963:                 ldab    scblk.params+1,x        ; get sc status opcode
+7560 C104       964:                 cmpb    #sc.gettype
+7562 2604       965:                 bne     stpo1
+7564 8602       966:                 ldaa    #DVTYP.STAPE
+7566 2002       967:                 bra     stpo2
+7568 8600       968: stpo1           ldaa    #0                      ; any other request returns 0
+756A EE0A       969: stpo2           LDX     scblk.rdbuf,x           ; return 1 byte status
+756C A700       970:                 staa    0,X                     ; STORE IN RDBUF
+756E 7E70B6     971:                 JMP     OKRTS 
+                972: 
+                973: 
+7571 8600       974: OPEN.PORT       LDAA    #0
+7573 B7754F     975:                 STAA    PORTMODE        ; =0 -> ready for read/write
+7576 7E70B6     976:                 JMP     OKRTS
+                977: 
+7579 B6754F     978: CLOSE.PORT      ldaa    portmode
+757C 2603       979:                 bne     cl1
+757E 7E70B6     980:                 jmp     okrts           ; just close after open
+7581 8101       981: cl1             cmpa    #1              
+7583 260B       982:                 bne     cl2
+                983:                                         ; close ptr
+7585 BDE347     984:                 jsr     RDOFF           ; PTR off (^S)
+7588 86FF       985:                 ldaa    #$ff            ; set mode as closed
+758A B7754F     986:                 staa    portmode
+758D 7E70B6     987:                 JMP     OKRTS
+  7590          988: cl2                                     
+7590 8102       989:                 cmpa    #2
+7592 260E       990:                 bne     cl3
+
+
+
+
+ASM/6800 1.4A0: 7592                    
+08/16/82 00:00:00; Page 20; Form 1      
+IOSWTPC6800.ASM
+                991:                                         ; close ptp
+7594 BDE353     992:                 jsr     PNCHOFF         ; PTR off (^T)
+7597 86FF       993:                 ldaa    #$ff            ; set mode as closed
+7599 B7754F     994:                 staa    portmode
+759C 7E70B6     995:                 JMP     OKRTS
+                996: 
+759F 7E70B6     997:                 JMP     OKRTS
+75A2 7E70B8     998: cl3             JMP     ILLDEVICEOP     
+                999: 
+75A5 CE0032    1000: delay1k         ldx     #50             ; **troff
+75A8 09        1001: delay1kb        dex
+75A9 26FD      1002:                 bne     delay1kb
+75AB 39        1003:                 rts                     ; **tron
+               1004: 
+75AC BD75A5    1005: innyble         jsr     delay1k         ; RECEIVE A BYTE FROM PTR AS TWO ASCII NYBLLES TO FORM A BYTE
+75AF BD7207    1006:                 jsr     inch            ; EXAMPLE: RECIVE CHARS "3A" -> RECV BYTE = $3A
+75B2 8130      1007:                 cmpa    #'0             ; .*echo inch:a
+75B4 2406      1008:                 BCC     innyb1          ; BR IF A >= '0'
+75B6 811A      1009:                 cmpa    #26
+75B8 26F2      1010:                 bne     innyble         ; invalid char -> read next 
+75BA 0D        1011:                 sec                     ; RECEIVED ^Z
+75BB 39        1012:                 rts                     ; return carry set -> eof
+75BC 8030      1013: innyb1          suba    #'0
+75BE 810A      1014:                 cmpa    #10
+75C0 2402      1015:                 bcc     innyb4          ; br if a >= 10
+75C2 0C        1016:                 clc
+75C3 39        1017:                 rts                     ; return nyble 0..9
+75C4 8007      1018: innyb4          suba    #7
+75C6 8110      1019:                 cmpa    #16
+75C8 24E2      1020:                 bcc     innyble         ; br if a >= 16 -> invalid nyble -> read next
+75CA 0C        1021:                 clc
+75CB 39        1022:                 rts
+               1023: 
+75CC BD75A5    1024: INBYTE          jsr     delay1k         ; RECEIVE AN ASCII CHAR FROM PTR 
+75CF BD7207    1025:                 jsr     inch            
+75D2 8100      1026:                 CMPA    #0              ; RECV $00 CHAR -> END OF FILE
+75D4 2706      1027:                 BEQ     INBYTEEOF
+75D6 811A      1028:                 CMPA    #26             ; RECV ^Z -> END OF FILE
+75D8 2702      1029:                 BEQ     INBYTEEOF
+75DA 0C        1030:                 CLC
+75DB 39        1031:                 RTS
+75DC 0D        1032: INBYTEEOF       SEC                     ; SET CARRY TO SIGNAL END OF FILE TO CALLER
+75DD 39        1033:                 RTS
+               1034: 
+               1035: 
+75DE 8601      1036: READA.PORT      LDAa    #1
+75E0 B77627    1037:                 STaA    APORT.MODE+1
+75E3 2003      1038:                 BRA     READ.PORT
+75E5 7F7627    1039: READB.PORT      CLR     APORT.MODE+1
+75E8 BD72BD    1040: READ.PORT       jsr     getreadparams   ; get syscall params
+75EB CE0000    1041:                 ldx     #0
+75EE BD72DA    1042:                 jsr     setrplen        ; set reply len size
+75F1 B6754F    1043:                 LDAA    PORTMODE
+75F4 2617      1044:                 BNE     RP1
+75F6 8601      1045:                 LDAA    #1              ; start reading from ptr
+
+
+
+
+ASM/6800 1.4A0: 75F8                    
+08/16/82 00:00:00; Page 21; Form 1      
+IOSWTPC6800.ASM
+75F8 B7754F    1046:                 STAA    PORTMODE        ; 
+75FB 7F71CE    1047:                 clr     crflag
+75FE BDE337    1048:                 jsr     RDON            ; ACTIVATE PTR on (^Q)
+7601 B67627    1049:                 LDAA    APORT.MODE+1    ; GET PORT READA/READB MODE
+7604 260E      1050:                 BNE     rp1start        ; BR IF READA
+7606 8681      1051:                 LDAA    #129            ; ACTIVATE PTR bin mode (129)
+7608 BD71E0    1052:                 JSR     PRTCH   
+760B 2007      1053:                 bra     rp1start
+760D 8101      1054: rp1             cmpa    #1
+760F 2703      1055:                 beq     rp1start        ; br read port input
+7611 7E70B8    1056:                 jmp     ILLDEVICEOP     
+7614 CE0000    1057: rp1start        ldx     #0
+7617 FF70C8    1058:                 stx     rplen
+761A FE70C4    1059: rpin            ldx     len
+761D 2603      1060:                 bne     rp1a
+761F 7E70B6    1061:                 jmp     okrts           ; input buffer full -> terminate read
+7622 09        1062: rp1a            dex
+7623 FF70C4    1063:                 stx     len
+7626 8600      1064: APORT.MODE      LDAA    #0
+7628 272F      1065:                 BEQ     READBPORT
+762A BD75CC    1066: READAPORT       JSR     INBYTE  
+762D 2556      1067:                 bcs     rp1eof          ; br if eof
+               1068:                 ; now handle the end of line: DOS <CR><LF>, Unix <LF>, Mac/SDOS <CR>
+762F 810D      1069:                 cmpa    #13
+7631 2607      1070:                 bne     cr1             ; if <CR> -> set crflag
+7633 C601      1071:                 ldab    #1
+7635 F771CE    1072:                 stab    crflag
+7638 2012      1073:                 bra     cr0
+763A 810A      1074: cr1             cmpa    #10             ; if <LF> after a <CR> -> ignore <LF>
+763C 2609      1075:                 bne     cr2             ; if <LF> NOT after a <CR> -> convert to <CR>
+763E 7D71CE    1076:                 tst     crflag
+7641 26E7      1077:                 bne     READAPORT       
+7643 860D      1078:                 ldaa    #13
+7645 2005      1079:                 bra     cr0
+7647 7F71CE    1080: cr2             clr     crflag          ; not <cr>/<l> -> clear cr flag 
+764A 2024      1081:                 bra     SAVEREADPORTCH  ; and br to store char
+764C 7D70C3    1082: cr0             tst     lmode
+764F 271F      1083:                 beq     SAVEREADPORTCH  ; if not line mode br to store char
+7651 7F70C4    1084:                 clr     len             ; recv <cR> in line more -> set len to zero so reada is terminated
+7654 7F70C5    1085:                 clr     len+1
+7657 2017      1086:                 BRA     SAVEREADPORTCH
+7659 BD75AC    1087: READBPORT       jsr     innyble
+765C 2527      1088:                 bcs     rp1eof          ; br if eof
+765E 48        1089:                 asla
+765F 48        1090:                 asla
+7660 48        1091:                 asla
+7661 48        1092:                 asla
+7662 B77550    1093:                 staa    ch              ; save hi nyble
+7665 BD75AC    1094:                 jsr     innyble
+7668 251B      1095:                 bcs     rp1eof          ; br if eof
+766A BB7550    1096:                 adda    ch
+766D B77550    1097:                 staa    ch              ; binary char composed
+7670 FE70C6    1098: SAVEREADPORTCH  ldx     pdata           ; input buf addr
+7673 A700      1099:                 staa    0,x             ; store into input buf
+7675 08        1100:                 inx                     ; .*echo inbyte:a
+
+
+
+
+ASM/6800 1.4A0: 7676                    
+08/16/82 00:00:00; Page 22; Form 1      
+IOSWTPC6800.ASM
+7676 FF70C6    1101:                 stx     pdata
+7679 FE70C8    1102:                 ldx     rplen
+767C 08        1103:                 inx
+767D FF70C8    1104:                 stx     rplen
+7680 BD72DA    1105:                 jsr     setrplen        ; set reply len size = num of bytes read
+7683 2095      1106:                 bra     rpin
+               1107: 
+7685 BDAE2D    1108: rp1eof          jsr     sdos+sdos.error ; .*echo eof
+7688 03E9      1109:                 fdb     err.eofhit      ; return from read signaling eof CONDITION
+               1110: 
+768A 8601      1111: WRITEA.PORT     LDAa    #1
+768C B77627    1112:                 STaA    APORT.MODE+1
+768F B771CD    1113:                 staa    expandtabflag   ; signal tabs should be expanded to spaces
+7692 2003      1114:                 BRA     WRITE.PORT
+7694 7F7627    1115: WRITEB.PORT     CLR     APORT.MODE+1
+7697 BD7472    1116: WRITE.PORT      JSR     GETWRITEPARAMS 
+769A B6754F    1117:                 LDAA    PORTMODE
+769D 2625      1118:                 BNE     WP1
+769F 8602      1119:                 LDAA    #2              ; start WRITING AT ptP
+76A1 B7754F    1120:                 STAA    PORTMODE        ; 
+76A4 BDE34D    1121:                 jsr     PNCHON          ; ACTIVATE PTP on (^R)
+76A7 8682      1122:                 ldaa    #130            ; ACTIVATE PTP ascii (130)
+76A9 F67627    1123:                 LDAb    APORT.MODE+1    ; GET PORT WRITEA/WRITEB MODE
+76AC 2611      1124:                 BNE     Wp0             ; BR IF writeA
+76AE 8683      1125:                 LDAA    #131            ; ACTIVATE PTP bin mode (131)
+76B0 BD71E0    1126:                 JSR     PRTCH   
+76B3 8620      1127:                 LDAA    #32
+76B5 BD71E0    1128:                 JSR     PRTCH           ; SEND A SPACEs TO SYNC
+76B8 8620      1129:                 LDAA    #32
+76BA BD71E0    1130:                 JSR     PRTCH           
+76BD 8620      1131:                 LDAA    #32
+76BF BD71E0    1132: wp0             JSR     PRTCH           
+76C2 2007      1133:                 bra     Wp1start
+76C4 8102      1134: Wp1             cmpa    #2
+76C6 2703      1135:                 beq     Wp1start        ; br read port input
+76C8 7E70B8    1136:                 jmp     ILLDEVICEOP     
+  76CB         1137: Wp1start        
+76CB FE70C4    1138: WpOUT           ldx     len
+76CE 2603      1139:                 bne     Wp1a
+76D0 7E70B6    1140:                 jmp     okrts           ; input buffer full -> terminate read
+76D3 09        1141: Wp1a            dex
+76D4 FF70C4    1142:                 stx     len
+76D7 FE70C6    1143:                 LDX     PDATA           ; get next char to write.
+76DA A600      1144:                 LDAA    0,X
+76DC 08        1145:                 INX                     ; .*echo wrtch:a
+76DD FF70C6    1146:                 STX     PDATA
+76E0 F67627    1147:                 LDAB    APORT.MODE+1
+76E3 2705      1148:                 BEQ     WRITEBPORT
+76E5 BD74C7    1149: WRITEAPORT      JSR     WRITEA.CH       ; convert char <CR> -> <CR><LF>, cTRol char -> ^X
+76E8 20E1      1150:                 BRA     WPOUT
+76EA B77550    1151: WRITEBPORT      STAA    CH
+76ED 44        1152:                 LSRA
+76EE 44        1153:                 LSRA
+76EF 44        1154:                 LSRA
+76F0 44        1155:                 LSRA
+
+
+
+
+ASM/6800 1.4A0: 76F1                    
+08/16/82 00:00:00; Page 23; Form 1      
+IOSWTPC6800.ASM
+76F1 BD76FE    1156:                 JSR     OUTNYBLE
+76F4 B67550    1157:                 LDAA    CH
+76F7 840F      1158:                 ANDa    #$0F
+76F9 BD76FE    1159:                 JSR     OUTNYBLE
+76FC 20CD      1160:                 BRA     WPOUT
+               1161: 
+76FE 8B30      1162: OUTNYBLE        ADDA    #'0
+7700 813A      1163:                 CMPA    #'9+1
+7702 2502      1164:                 BCS     OUTNYBLE1       ; BR IF A<'9'+1
+7704 8B07      1165:                 ADDA    #7              ; 7='A'-'0'-10
+7706 7E71E0    1166: OUTNYBLE1       jMP     PRTCH
+               1167: 
+               1168: 
+               1169: 
+               1170: 
+               1171: 
+               1172: 
+               1173: 
+               1174: 
+               1175: ; DEVICE CONTROL BLOCK FOR MF-68 FLOPPY DISK
+               1176: 
+  0003         1177: LSN.SIZE        EQU     3       ; # BYTES OCCUPIED BY AN LSN
+  0002         1178: LCN.SIZE        EQU     2       ; # BYTES OCCUPIED BY AN LCN
+               1179: 
+7709 44303A    1180: dcbname.D0      fcc     'D0:'
+770C 00        1181:                 fcb     0
+  770D         1182: DISKDCBS        
+770D 01        1183: DCB.D0          FCB     1                       ; DCB:DONEFLAG  ; 0 --> DEVICE IS BUSY; <>0 --> DEVICE IS DONE
+770E 0000      1184:                 FDB     0                       ; DCB:LASTERROR ; IF DCB IS DONE, CONTAINS ERROR STATUS (0 = NO
+7710 7709      1185:                 FDB     dcbname.D0              ; DCB:NAME      ; POINTER TO DEVICE NAME STRING TERMINATED BY Z
+7712 7755      1186:                 FDB     dcb.d1                  ; DCB:NEXTDCB   ; POINTER TO NEXT DCB IN LIST OR ZERO
+7714 7829      1187:                 FDB     DSKDRIVER               ; DCB:DRIVER    ; POINTER TO DRIVER ENTRY POINT LIST
+               1188: 
+               1189:                                                                 ; DISK GEOMETRY
+7716 0080      1190:                 FDB     128                     ; DSKINFO:NBPS  ; NUMBER OF BYTES PER SECTOR
+7718 0012      1191:                 FDB     18                      ; DSKINFO:NSPT  ; NUMBER OF SECTORS PER TRACK
+771A 0002      1192:                 FDB     2                       ; DSKINFO:NTPC  ; NUMBER OF TRACKS PER CYLINDER
+771C 0023      1193:                 FDB     35                      ; DSKINFO:NCYL  ; NUMBER OF CYLINDERS PER DRIVE
+               1194: 
+               1195:                                                                 ; THE FOLLOWING ARE FILLED FROM THE BOOT SECTOR
+771E 0001      1196:                 RMB     1                       ; DSKINFO:NSPC   NUMBER OF SECTORS PER CLUSTER
+771F 0002      1197:                 RMB     LCN.SIZE                ; DSKINFO:MINALLOC ALLOCATION MINIMUM FOR NEW FILES
+7721 0002      1198:                 RMB     LCN.SIZE                ; DSKINFO:MIDALLOC ALLOCATION MIN FOR FILE EXTENSION
+7723 0002      1199:                 RMB     2                       ; DSKINFO:MAPALGORITHM CODE TO SELECT LOGICAL TO PHYSICAL SECTO
+               1200: 
+               1201:                                                                 ; CONTAINS DISK ID FOR MOUNTED DISKS
+7725 0001      1202:                 RMB     1                       ; DSKINFO:LOG2NBPS LOG BASE 2 OF DSKINFO:NBPS
+7726 0002      1203:                 RMB     2                       ; DSKINFO:NBPSM1 = NBPS-1 FOR USE AS MASK (QUICK "MOD NBPS")
+7728 0003      1204:                 RMB     LSN.SIZE                ; DSKINFO:NLSN   NUMBER OF LSNS FOR THIS DISK = NSPT*NTPC*NCYL
+772B 0002      1205:                 RMB     LCN.SIZE                ; DSKINFO:NLCN   NUMBER OF LCNS FOR THIS DISK = NLSN/NSPC
+772D 0002      1206:                 RMB     2                       ; DSKINFO:NBPC   NUMBER OF BYTES PER CLUSTER
+772F 0002      1207:                 RMB     LCN.SIZE                ; DSKINFO:RANDMAP "RANDOM" LCN TO DISTRIBUTE NEW FILES
+7731 0003      1208:                 RMB     LSN.SIZE                ; DSKINFO:MAPLSN LSN OF 1ST SECTOR IN DISK...
+               1209: 
+               1210:                                                                 ; ALLOCATION MAP CLUSTER
+
+
+
+
+ASM/6800 1.4A0: 7734                    
+08/16/82 00:00:00; Page 24; Form 1      
+IOSWTPC6800.ASM
+7734 0002      1211:                 RMB     2                       ; DSKINFO:DIRFCB POINTER TO FCB FOR $DIRECTORY FILE
+7736 0002      1212:                 RMB     2                       ; DSKINFO:MAPFCB POINTER TO FCB FOR $DISKMAP FILE
+7738 0002      1213:                 RMB     2                       ; DSKINFO:SECTORDB POINTER TO RDSI CONTAINING LSN, ADDRESS PARA
+773A 0003      1214:                 RMB     LSN.SIZE                ; DSKINFO:BADLSN LSN OF LAST SECTOR THAT COULDN'T READ/WRITE/SE
+773D 0000      1215:                 FDB     0                       ; DSKINFO:SEEKERRCNT # SEEK ERRORS SINCE MOUNT
+773F 0000      1216:                 FDB     0                       ; DSKINFO:SEEKERRSTS 16 BITS OF LAST "SEEK" STATUS IN ERROR
+7741 0000      1217:                 FDB     0                       ; DSKINFO:WRITEERRCNT # WRITE ERRORS SINCE MOUNT
+7743 0000      1218:                 FDB     0                       ; DSKINFO:WRITEERRSTS 16 BITS OF LAST "WRITE" STATUS IN ERROR
+7745 0000      1219:                 FDB     0                       ; DSKINFO:READERRCNT # READ ERRORS SINCE MOUNT
+7747 0000      1220:                 FDB     0                       ; DSKINFO:READERRSTS 16 BITS OF LAST "READ" STATUS IN ERROR
+7749 000000    1221:                 FCB     0,0,0                   ; DSKINFO:OPSCOUNT 24 BITS OF # DRIVER OPERATIONS SINCEMOUNT
+774C 0003      1222:                 RMB     LSN.SIZE                ; DSKINFO:ERRLSN LSN CAUSING ANY SOFT OR HARD ERROR
+774F 0001      1223:                 RMB     1                       ; DSKINFO:WRITEPROTSTATE 0 --> WRITEABLE
+7750 00        1224:                 FCB     0                       ; FDUNIT         Drive number 
+               1225: 
+7751 44313A    1226: dcbname.D1      fcc     'D1:'
+7754 00        1227:                 fcb     0
+7755 01        1228: DCB.D1          FCB     1                       ; DCB:DONEFLAG  ; 0 --> DEVICE IS BUSY; <>0 --> DEVICE IS DONE
+7756 0000      1229:                 FDB     0                       ; DCB:LASTERROR ; IF DCB IS DONE, CONTAINS ERROR STATUS (0 = NO
+7758 7751      1230:                 FDB     dcbname.D1              ; DCB:NAME      ; POINTER TO DEVICE NAME STRING TERMINATED BY Z
+775A 779D      1231:                 FDB     dcb.d2                  ; DCB:NEXTDCB   ; POINTER TO NEXT DCB IN LIST OR ZERO
+775C 7829      1232:                 FDB     DSKDRIVER               ; DCB:DRIVER    ; POINTER TO DRIVER ENTRY POINT LIST
+               1233: 
+               1234:                                                                 ; DISK GEOMETRY
+775E 0080      1235:                 FDB     128                     ; DSKINFO:NBPS  ; NUMBER OF BYTES PER SECTOR
+7760 0012      1236:                 FDB     18                      ; DSKINFO:NSPT  ; NUMBER OF SECTORS PER TRACK
+7762 0002      1237:                 FDB     2                       ; DSKINFO:NTPC  ; NUMBER OF TRACKS PER CYLINDER
+7764 0023      1238:                 FDB     35                      ; DSKINFO:NCYL  ; NUMBER OF CYLINDERS PER DRIVE
+               1239: 
+               1240:                                                                 ; THE FOLLOWING ARE FILLED FROM THE BOOT SECTOR
+7766 0001      1241:                 RMB     1                       ; DSKINFO:NSPC   NUMBER OF SECTORS PER CLUSTER
+7767 0002      1242:                 RMB     LCN.SIZE                ; DSKINFO:MINALLOC ALLOCATION MINIMUM FOR NEW FILES
+7769 0002      1243:                 RMB     LCN.SIZE                ; DSKINFO:MIDALLOC ALLOCATION MIN FOR FILE EXTENSION
+776B 0002      1244:                 RMB     2                       ; DSKINFO:MAPALGORITHM CODE TO SELECT LOGICAL TO PHYSICAL SECTO
+               1245: 
+               1246:                                                                 ; CONTAINS DISK ID FOR MOUNTED DISKS
+776D 0001      1247:                 RMB     1                       ; DSKINFO:LOG2NBPS LOG BASE 2 OF DSKINFO:NBPS
+776E 0002      1248:                 RMB     2                       ; DSKINFO:NBPSM1 = NBPS-1 FOR USE AS MASK (QUICK "MOD NBPS")
+7770 0003      1249:                 RMB     LSN.SIZE                ; DSKINFO:NLSN   NUMBER OF LSNS FOR THIS DISK = NSPT*NTPC*NCYL
+7773 0002      1250:                 RMB     LCN.SIZE                ; DSKINFO:NLCN   NUMBER OF LCNS FOR THIS DISK = NLSN/NSPC
+7775 0002      1251:                 RMB     2                       ; DSKINFO:NBPC   NUMBER OF BYTES PER CLUSTER
+7777 0002      1252:                 RMB     LCN.SIZE                ; DSKINFO:RANDMAP "RANDOM" LCN TO DISTRIBUTE NEW FILES
+7779 0003      1253:                 RMB     LSN.SIZE                ; DSKINFO:MAPLSN LSN OF 1ST SECTOR IN DISK...
+               1254: 
+               1255:                                                                 ; ALLOCATION MAP CLUSTER
+777C 0002      1256:                 RMB     2                       ; DSKINFO:DIRFCB POINTER TO FCB FOR $DIRECTORY FILE
+777E 0002      1257:                 RMB     2                       ; DSKINFO:MAPFCB POINTER TO FCB FOR $DISKMAP FILE
+7780 0002      1258:                 RMB     2                       ; DSKINFO:SECTORDB POINTER TO RDSI CONTAINING LSN, ADDRESS PARA
+7782 0003      1259:                 RMB     LSN.SIZE                ; DSKINFO:BADLSN LSN OF LAST SECTOR THAT COULDN'T READ/WRITE/SE
+7785 0000      1260:                 FDB     0                       ; DSKINFO:SEEKERRCNT # SEEK ERRORS SINCE MOUNT
+7787 0000      1261:                 FDB     0                       ; DSKINFO:SEEKERRSTS 16 BITS OF LAST "SEEK" STATUS IN ERROR
+7789 0000      1262:                 FDB     0                       ; DSKINFO:WRITEERRCNT # WRITE ERRORS SINCE MOUNT
+778B 0000      1263:                 FDB     0                       ; DSKINFO:WRITEERRSTS 16 BITS OF LAST "WRITE" STATUS IN ERROR
+778D 0000      1264:                 FDB     0                       ; DSKINFO:READERRCNT # READ ERRORS SINCE MOUNT
+778F 0000      1265:                 FDB     0                       ; DSKINFO:READERRSTS 16 BITS OF LAST "READ" STATUS IN ERROR
+
+
+
+
+ASM/6800 1.4A0: 7791                    
+08/16/82 00:00:00; Page 25; Form 1      
+IOSWTPC6800.ASM
+7791 000000    1266:                 FCB     0,0,0                   ; DSKINFO:OPSCOUNT 24 BITS OF # DRIVER OPERATIONS SINCEMOUNT
+7794 0003      1267:                 RMB     LSN.SIZE                ; DSKINFO:ERRLSN LSN CAUSING ANY SOFT OR HARD ERROR
+7797 0001      1268:                 RMB     1                       ; DSKINFO:WRITEPROTSTATE 0 --> WRITEABLE
+7798 01        1269:                 FCB     1                       ; FDUNIT         Drive number 
+               1270: 
+7799 44323A    1271: dcbname.D2      fcc     'D2:'
+779C 00        1272:                 fcb     0
+779D 01        1273: DCB.D2          FCB     1                       ; DCB:DONEFLAG  ; 0 --> DEVICE IS BUSY; <>0 --> DEVICE IS DONE
+779E 0000      1274:                 FDB     0                       ; DCB:LASTERROR ; IF DCB IS DONE, CONTAINS ERROR STATUS (0 = NO
+77A0 7799      1275:                 FDB     dcbname.D2              ; DCB:NAME      ; POINTER TO DEVICE NAME STRING TERMINATED BY Z
+77A2 77E5      1276:                 FDB     dcb.d3                  ; DCB:NEXTDCB   ; POINTER TO NEXT DCB IN LIST OR ZERO
+77A4 7829      1277:                 FDB     DSKDRIVER               ; DCB:DRIVER    ; POINTER TO DRIVER ENTRY POINT LIST
+               1278: 
+               1279:                                                                 ; DISK GEOMETRY
+77A6 0080      1280:                 FDB     128                     ; DSKINFO:NBPS  ; NUMBER OF BYTES PER SECTOR
+77A8 0012      1281:                 FDB     18                      ; DSKINFO:NSPT  ; NUMBER OF SECTORS PER TRACK
+77AA 0002      1282:                 FDB     2                       ; DSKINFO:NTPC  ; NUMBER OF TRACKS PER CYLINDER
+77AC 0023      1283:                 FDB     35                      ; DSKINFO:NCYL  ; NUMBER OF CYLINDERS PER DRIVE
+               1284: 
+               1285:                                                                 ; THE FOLLOWING ARE FILLED FROM THE BOOT SECTOR
+77AE 0001      1286:                 RMB     1                       ; DSKINFO:NSPC   NUMBER OF SECTORS PER CLUSTER
+77AF 0002      1287:                 RMB     LCN.SIZE                ; DSKINFO:MINALLOC ALLOCATION MINIMUM FOR NEW FILES
+77B1 0002      1288:                 RMB     LCN.SIZE                ; DSKINFO:MIDALLOC ALLOCATION MIN FOR FILE EXTENSION
+77B3 0002      1289:                 RMB     2                       ; DSKINFO:MAPALGORITHM CODE TO SELECT LOGICAL TO PHYSICAL SECTO
+               1290: 
+               1291:                                                                 ; CONTAINS DISK ID FOR MOUNTED DISKS
+77B5 0001      1292:                 RMB     1                       ; DSKINFO:LOG2NBPS LOG BASE 2 OF DSKINFO:NBPS
+77B6 0002      1293:                 RMB     2                       ; DSKINFO:NBPSM1 = NBPS-1 FOR USE AS MASK (QUICK "MOD NBPS")
+77B8 0003      1294:                 RMB     LSN.SIZE                ; DSKINFO:NLSN   NUMBER OF LSNS FOR THIS DISK = NSPT*NTPC*NCYL
+77BB 0002      1295:                 RMB     LCN.SIZE                ; DSKINFO:NLCN   NUMBER OF LCNS FOR THIS DISK = NLSN/NSPC
+77BD 0002      1296:                 RMB     2                       ; DSKINFO:NBPC   NUMBER OF BYTES PER CLUSTER
+77BF 0002      1297:                 RMB     LCN.SIZE                ; DSKINFO:RANDMAP "RANDOM" LCN TO DISTRIBUTE NEW FILES
+77C1 0003      1298:                 RMB     LSN.SIZE                ; DSKINFO:MAPLSN LSN OF 1ST SECTOR IN DISK...
+               1299: 
+               1300:                                                                 ; ALLOCATION MAP CLUSTER
+77C4 0002      1301:                 RMB     2                       ; DSKINFO:DIRFCB POINTER TO FCB FOR $DIRECTORY FILE
+77C6 0002      1302:                 RMB     2                       ; DSKINFO:MAPFCB POINTER TO FCB FOR $DISKMAP FILE
+77C8 0002      1303:                 RMB     2                       ; DSKINFO:SECTORDB POINTER TO RDSI CONTAINING LSN, ADDRESS PARA
+77CA 0003      1304:                 RMB     LSN.SIZE                ; DSKINFO:BADLSN LSN OF LAST SECTOR THAT COULDN'T READ/WRITE/SE
+77CD 0000      1305:                 FDB     0                       ; DSKINFO:SEEKERRCNT # SEEK ERRORS SINCE MOUNT
+77CF 0000      1306:                 FDB     0                       ; DSKINFO:SEEKERRSTS 16 BITS OF LAST "SEEK" STATUS IN ERROR
+77D1 0000      1307:                 FDB     0                       ; DSKINFO:WRITEERRCNT # WRITE ERRORS SINCE MOUNT
+77D3 0000      1308:                 FDB     0                       ; DSKINFO:WRITEERRSTS 16 BITS OF LAST "WRITE" STATUS IN ERROR
+77D5 0000      1309:                 FDB     0                       ; DSKINFO:READERRCNT # READ ERRORS SINCE MOUNT
+77D7 0000      1310:                 FDB     0                       ; DSKINFO:READERRSTS 16 BITS OF LAST "READ" STATUS IN ERROR
+77D9 000000    1311:                 FCB     0,0,0                   ; DSKINFO:OPSCOUNT 24 BITS OF # DRIVER OPERATIONS SINCEMOUNT
+77DC 0003      1312:                 RMB     LSN.SIZE                ; DSKINFO:ERRLSN LSN CAUSING ANY SOFT OR HARD ERROR
+77DF 0001      1313:                 RMB     1                       ; DSKINFO:WRITEPROTSTATE 0 --> WRITEABLE
+77E0 02        1314:                 FCB     2                       ; FDUNIT         Drive number 
+               1315: 
+               1316: 
+77E1 44333A    1317: dcbname.D3      fcc     'D3:'
+77E4 00        1318:                 fcb     0
+77E5 01        1319: DCB.D3          FCB     1                       ; DCB:DONEFLAG  ; 0 --> DEVICE IS BUSY; <>0 --> DEVICE IS DONE
+77E6 0000      1320:                 FDB     0                       ; DCB:LASTERROR ; IF DCB IS DONE, CONTAINS ERROR STATUS (0 = NO
+
+
+
+
+ASM/6800 1.4A0: 77E8                    
+08/16/82 00:00:00; Page 26; Form 1      
+IOSWTPC6800.ASM
+77E8 77E1      1321:                 FDB     dcbname.D3              ; DCB:NAME      ; POINTER TO DEVICE NAME STRING TERMINATED BY Z
+77EA 7A3D      1322:                 FDB     DCB.HD                  ; DCB:NEXTDCB   ; POINTER TO NEXT DCB IN LIST OR ZERO
+77EC 7829      1323:                 FDB     DSKDRIVER               ; DCB:DRIVER    ; POINTER TO DRIVER ENTRY POINT LIST
+               1324: 
+               1325:                                                                 ; DISK GEOMETRY
+77EE 0080      1326:                 FDB     128                     ; DSKINFO:NBPS  ; NUMBER OF BYTES PER SECTOR
+77F0 0012      1327:                 FDB     18                      ; DSKINFO:NSPT  ; NUMBER OF SECTORS PER TRACK
+77F2 0002      1328:                 FDB     2                       ; DSKINFO:NTPC  ; NUMBER OF TRACKS PER CYLINDER
+77F4 0023      1329:                 FDB     35                      ; DSKINFO:NCYL  ; NUMBER OF CYLINDERS PER DRIVE
+               1330: 
+               1331:                                                                 ; THE FOLLOWING ARE FILLED FROM THE BOOT SECTOR
+77F6 0001      1332:                 RMB     1                       ; DSKINFO:NSPC   NUMBER OF SECTORS PER CLUSTER
+77F7 0002      1333:                 RMB     LCN.SIZE                ; DSKINFO:MINALLOC ALLOCATION MINIMUM FOR NEW FILES
+77F9 0002      1334:                 RMB     LCN.SIZE                ; DSKINFO:MIDALLOC ALLOCATION MIN FOR FILE EXTENSION
+77FB 0002      1335:                 RMB     2                       ; DSKINFO:MAPALGORITHM CODE TO SELECT LOGICAL TO PHYSICAL SECTO
+               1336: 
+               1337:                                                                 ; CONTAINS DISK ID FOR MOUNTED DISKS
+77FD 0001      1338:                 RMB     1                       ; DSKINFO:LOG2NBPS LOG BASE 2 OF DSKINFO:NBPS
+77FE 0002      1339:                 RMB     2                       ; DSKINFO:NBPSM1 = NBPS-1 FOR USE AS MASK (QUICK "MOD NBPS")
+7800 0003      1340:                 RMB     LSN.SIZE                ; DSKINFO:NLSN   NUMBER OF LSNS FOR THIS DISK = NSPT*NTPC*NCYL
+7803 0002      1341:                 RMB     LCN.SIZE                ; DSKINFO:NLCN   NUMBER OF LCNS FOR THIS DISK = NLSN/NSPC
+7805 0002      1342:                 RMB     2                       ; DSKINFO:NBPC   NUMBER OF BYTES PER CLUSTER
+7807 0002      1343:                 RMB     LCN.SIZE                ; DSKINFO:RANDMAP "RANDOM" LCN TO DISTRIBUTE NEW FILES
+7809 0003      1344:                 RMB     LSN.SIZE                ; DSKINFO:MAPLSN LSN OF 1ST SECTOR IN DISK...
+               1345: 
+               1346:                                                                 ; ALLOCATION MAP CLUSTER
+780C 0002      1347:                 RMB     2                       ; DSKINFO:DIRFCB POINTER TO FCB FOR $DIRECTORY FILE
+780E 0002      1348:                 RMB     2                       ; DSKINFO:MAPFCB POINTER TO FCB FOR $DISKMAP FILE
+7810 0002      1349:                 RMB     2                       ; DSKINFO:SECTORDB POINTER TO RDSI CONTAINING LSN, ADDRESS PARA
+7812 0003      1350:                 RMB     LSN.SIZE                ; DSKINFO:BADLSN LSN OF LAST SECTOR THAT COULDN'T READ/WRITE/SE
+7815 0000      1351:                 FDB     0                       ; DSKINFO:SEEKERRCNT # SEEK ERRORS SINCE MOUNT
+7817 0000      1352:                 FDB     0                       ; DSKINFO:SEEKERRSTS 16 BITS OF LAST "SEEK" STATUS IN ERROR
+7819 0000      1353:                 FDB     0                       ; DSKINFO:WRITEERRCNT # WRITE ERRORS SINCE MOUNT
+781B 0000      1354:                 FDB     0                       ; DSKINFO:WRITEERRSTS 16 BITS OF LAST "WRITE" STATUS IN ERROR
+781D 0000      1355:                 FDB     0                       ; DSKINFO:READERRCNT # READ ERRORS SINCE MOUNT
+781F 0000      1356:                 FDB     0                       ; DSKINFO:READERRSTS 16 BITS OF LAST "READ" STATUS IN ERROR
+7821 000000    1357:                 FCB     0,0,0                   ; DSKINFO:OPSCOUNT 24 BITS OF # DRIVER OPERATIONS SINCEMOUNT
+7824 0003      1358:                 RMB     LSN.SIZE                ; DSKINFO:ERRLSN LSN CAUSING ANY SOFT OR HARD ERROR
+7827 0001      1359:                 RMB     1                       ; DSKINFO:WRITEPROTSTATE 0 --> WRITEABLE
+7828 03        1360:                 FCB     3                       ; FDUNIT         Drive number 
+               1361: 
+               1362:                 
+               1363: ; DEVICE DRIVER BLOCK FOR FLOPPY DISK
+               1364: 
+7829 7921      1365: DSKDRIVER       FDB     DSKRESTORE              ; DRIVER:DISKRESET RESET THIS DISK DRIVER
+782B 78DF      1366:                 FDB     DSKREAD                 ; DRIVER:DISKREAD INITIATE A DISK SECTOR READ
+782D 78EC      1367:                 FDB     DSKWRITE                ; DRIVER:DISKWRITE INITIATE A DISK SECTOR WRITE
+782F 7921      1368:                 FDB     DSKWAITDONE             ; DRIVER:DISKWAIT WAIT FOR DISK I/O COMPLETE
+7831 70B8      1369:                 FDB     ILLDEVICEOP             ; DRIVER:DISKSTATUS STATUS handled completely by SDOS1.1
+7833 783B      1370:                 FDB     DSKCONTROL              ; DRIVER:DISKCONTROL PERFORM DISK-SPECIFIC CONTROL OPERATION
+7835 70B8      1371:                 FDB     ILLDEVICEOP             ; DRIVER:DISKWRITEPROTQ DETERMINE IF DISK IS WRITE PROTECTED
+7837 70B8      1372:                 FDB     ILLDEVICEOP             ; DRIVER:DISKVERIFY INITIATE A DISK SECTOR VERIFY
+7839 70B8      1373:                 FDB     ILLDEVICEOP             ; DRIVER:DISKLSNTOPSN CONVERT LSN TO PHYSICAL CYLINDER, TRACK A
+               1374: 
+               1375: ; FLOPPY DISK LOW LEVEL I/O
+
+
+
+
+ASM/6800 1.4A0: 7839                    
+08/16/82 00:00:00; Page 27; Form 1      
+IOSWTPC6800.ASM
+               1376: 
+783B 8111      1377: DSKCONTROL      CMPA    #CC.DISMOUNTDISK        ; SINCE SDOS PASSES THIS THRU
+783D 2703      1378:                 BEQ     DSKDISMOUNT             ; B/ ITS A DISMOUNT!
+783F 7E70B8    1379:                 JMP     ILLDEVICEOP             ; NOT A LEGAL CONTROL CALL
+7842 5F        1380: DSKDISMOUNT     CLRB                            ; CLEAR THE CARRY
+7843 39        1381:                 RTS
+               1382:                 
+               1383: ;
+               1384: ;       Take RDSI:LSN and split it up into RDSI:CYLINDER,
+               1385: ;       RDSI:TRACK, and RDSI:SECTOR, 
+               1386: ;       mapalg NOT IMPLEMENTED 
+               1387: ;
+7844 FE7923    1388: FDTEARLSN       LDX     RDSIPOINTER
+7847 6F0E      1389:                 CLR     RDSI.SECTOR,X           ; CLEAR MSB OF SECTOR, TRACK AND CYL
+7849 6F10      1390:                 CLR     RDSI.TRACK,X
+784B 6F11      1391:                 CLR     RDSI.TRACK+1,X
+784D 6F12      1392:                 CLR     RDSI.CYLINDER,X
+               1393: 
+               1394: ;        ASSERT RDSI:LSN ALREADY CHECKED FOR LEGAL BY SDOS
+               1395: ; 
+               1396: ;        The formulae for computing the DCB parameters as a function
+               1397: ;        of number of sides, single density (SD) or double density (DD)
+               1398: ;        first track, SD or DD on other than first track, and number of
+               1399: ;        tracks on the drive are:
+               1400: ; 
+               1401: ;                SS/SD   NBPS = 128 bytes per sector
+               1402: ;                        NSPT = 18  sectors per track
+               1403: ;                        NTPC = 1 (See note 1) tracks per cylinder
+               1404: ;                        NCYL = #sides * #tracks (See note 2)
+               1405: ; 
+               1406: ;                note 1: This is a lie to SDOS in the case of a double
+               1407: ;                        sided disk, but it makes the NLSN (NSPT*NTPC*NCYL)
+               1408: ;                        work out to be correct.
+               1409: ;                note 2: #tracks is the number of tracks on the disk, including
+               1410: ;                        double tracks on a double track disk.
+               1411: ; 
+               1412: ;      +-------------------------------------------+
+               1413: ;      |        5" DRIVE       |   SINGLE SIDED    |
+               1414: ;      | # TRACKS ON DRIVE --> | 35   40   70   80 |
+               1415: ;      |         NSPT NBPS NTPC|NCYL NCYL NCYL NCYL|
+               1416: ;      |-----------------------+-------------------+
+               1417: ;      |   SS/SD  18   128    1| 35   40   70   80 |
+               1418: ;      |   DS/SD              2|                   |
+               1419: ;      +-------------------------------------------+
+               1420: ; 
+               1421: ;       To compute the sector, track and cylinder, use this formula:
+               1422: ;                LSN/18 --> REM --> SECTOR#
+               1423: ;                       --> /2  --> REM -> TRACK (HEAD)
+               1424: ;                               --> CYLINDER
+               1425: ;       where REM is the remainder from the previous step. 
+               1426: 
+784F A603      1427:                 LDAA    RDSI.LSN+1,X            ; SO DISCARD HIGHER LSN BYTE
+7851 E604      1428:                 LDAB    RDSI.LSN+2,X            
+7853 01        1429:                 NOP                             ; .*echo Read_LSN:D
+7854 BD7860    1430:                 JSR     DIV18                   ; GO DO THE FAST DIVIDE BY NSPT
+
+
+
+
+ASM/6800 1.4A0: 7857                    
+08/16/82 00:00:00; Page 28; Form 1      
+IOSWTPC6800.ASM
+7857 4C        1431:                 INCA                            ; SECTORS ON PHYSICAL DISK ARE NUMBERED 1..18
+7858 A70F      1432:                 STAA    RDSI.SECTOR+1,X         ; A CONTAINS SECTOR = (LSN MOD 18)+1
+785A 54        1433:                 LSRB                            ; B CONTAINS CYL = INT(LSN/18) / 2, bit0 -> carry
+785B E713      1434:                 STAB    RDSI.CYLINDER+1,X       
+785D 6911      1435:                 ROL     RDSI.TRACK+1,X          ; TRACK (HEAD) = INT(LSN/18) MOD 2, head<-carry 0/1
+785F 39        1436:                 RTS
+               1437: ;
+               1438: ;       Fancy divide algorithm takes (A,B) and divides by NSPT (18).
+               1439: ;       If we have 35 track, double side,
+               1440: ;       18 sectors/track this is 35*2*18 LSNs =0..1259, with a max
+               1441: ;       quotient of 69.
+               1442: ;
+               1443: ;       Divide (A,B) by 18 (NSPT), quotient in B, remainder in A
+               1444: ;
+7860 58        1445: DIV18           ASLB
+7861 49        1446:                 ROLA
+7862 8BEE      1447:                 ADDA    #-18                    ; ADD -NSPT TO GENERATE QUOTIENT BIT
+7864 2502      1448:                 BCS     DIV18.1                 ; B/ Q BIT IS ONE
+7866 80EE      1449:                 SUBA    #-18                    ; RESTORE BY ADDING DIVISOR; LEAVE CARRY=0
+7868 59        1450: DIV18.1         ROLB                            ; SHIFT QUOTIENT BIT INTO QUOTIENT
+7869 49        1451:                 ROLA
+786A 8BEE      1452:                 ADDA    #-18
+786C 2502      1453:                 BCS     DIV18.2
+786E 80EE      1454:                 SUBA    #-18
+7870 59        1455: DIV18.2         ROLB                            ; SHIFT QUOTIENT BIT INTO QUOTIENT
+7871 49        1456:                 ROLA
+7872 8BEE      1457:                 ADDA    #-18
+7874 2502      1458:                 BCS     DIV18.3
+7876 80EE      1459:                 SUBA    #-18
+7878 59        1460: DIV18.3         ROLB                            ; SHIFT QUOTIENT BIT INTO QUOTIENT
+7879 49        1461:                 ROLA
+787A 8BEE      1462:                 ADDA    #-18
+787C 2502      1463:                 BCS     DIV18.4
+787E 80EE      1464:                 SUBA    #-18
+7880 59        1465: DIV18.4         ROLB                            ; SHIFT QUOTIENT BIT INTO QUOTIENT
+7881 49        1466:                 ROLA
+7882 8BEE      1467:                 ADDA    #-18
+7884 2502      1468:                 BCS     DIV18.5
+7886 80EE      1469:                 SUBA    #-18
+7888 59        1470: DIV18.5         ROLB                            ; SHIFT QUOTIENT BIT INTO QUOTIENT
+7889 49        1471:                 ROLA
+788A 8BEE      1472:                 ADDA    #-18
+788C 2502      1473:                 BCS     DIV18.6
+788E 80EE      1474:                 SUBA    #-18
+7890 59        1475: DIV18.6         ROLB                            ; SHIFT QUOTIENT BIT INTO QUOTIENT
+7891 49        1476:                 ROLA
+7892 8BEE      1477:                 ADDA    #-18
+7894 2502      1478:                 BCS     DIV18.7
+7896 80EE      1479:                 SUBA    #-18
+7898 59        1480: DIV18.7         ROLB                            ; SHIFT QUOTIENT BIT INTO QUOTIENT
+7899 49        1481:                 ROLA
+789A 8BEE      1482:                 ADDA    #-18
+789C 2502      1483:                 BCS     DIV18.8
+789E 80EE      1484:                 SUBA    #-18
+78A0 59        1485: DIV18.8         ROLB
+
+
+
+
+ASM/6800 1.4A0: 78A1                    
+08/16/82 00:00:00; Page 29; Form 1      
+IOSWTPC6800.ASM
+78A1 39        1486:                 RTS
+               1487: 
+78A2 6C3E      1488: DSKOPSCOUNT     INC     DSKINFO.OPSCOUNT+2,X    ; COUNT # OPERATIONS ISSUED TO disk
+78A4 2606      1489:                 BNE     DSKOPSCOUNT1
+78A6 6C3D      1490:                 INC     DSKINFO.OPSCOUNT+1,X
+78A8 2602      1491:                 BNE     DSKOPSCOUNT1
+78AA 6C3C      1492:                 INC     DSKINFO.OPSCOUNT,X
+78AC 39        1493: DSKOPSCOUNT1    rts
+               1494: 
+               1495: ; PREPARE A SINGLE SECTOR TRANSFER
+               1496: 
+78AD DE06      1497: DSKPREP         LDX     DCBPOINTER              ; GET DCB POINTER
+78AF BD78A2    1498:                 jsr     DSKOPSCOUNT             ; incr count of I/O operations done
+78B2 A643      1499:                 LDAA    dcb.fdunit,X            ; get this dcb drive number
+78B4 B77925    1500:                 STAA    DRV
+78B7 6F01      1501:                 CLR     DCB.LASTERROR,X         ; CLEAR ANY ERROR
+78B9 6F02      1502:                 CLR     DCB.LASTERROR+1,X
+78BB EE2B      1503:                 LDX     DSKINFO.SECTORDB,X      ; GET RDSI POINTER
+78BD FF7923    1504:                 STX     RDSIPOINTER             ; SAVE IT
+78C0 BD7844    1505:                 JSR     FDTEARLSN               ; CONVERT RDSI:LSR -> RDSI:TRACK/CYLINDER/SECTOR
+78C3 A605      1506:                 LDAA    RDSI.SECTORBASE,X       ; POINTER TO ACTUAL SECTOR CONTENTS
+78C5 E606      1507:                 LDAB    RDSI.SECTORBASE+1,X
+78C7 B77929    1508:                 STAA    DDATA
+78CA F7792A    1509:                 STAB    DDATA+1
+78CD A613      1510:                 LDAA    RDSI.CYLINDER+1,X       
+78CF B77926    1511:                 STAA    TRK
+78D2 A60F      1512:                 LDAA    RDSI.SECTOR+1,X 
+78D4 B77927    1513:                 STAA    SECT
+78D7 A611      1514:                 LDAA    RDSI.TRACK+1,X  
+78D9 B77928    1515:                 STAA    SIDE
+78DC 6F0C      1516:                 CLR     RDSI.STATE,X            ; RESET SECTOR STATE TO "IDLE"
+78DE 39        1517:                 RTS
+               1518:                 
+               1519: ; READ/WRITE -- DO SINGLE SECTOR TRANSFER
+               1520: 
+78DF BD78AD    1521: DSKREAD         JSR     DSKPREP
+78E2 BD7944    1522:                 JSR     RDSEC                   ; DO I/O OPERATION WITH ACTIVE WAIT: NO INTERRUPTS :-(
+78E5 2612      1523:                 BNE     DSKERR
+78E7 FE7929    1524:                 LDX     DDATA                   
+78EA 0C        1525:                 CLC                             ; .*mX-80:RdSec
+78EB 39        1526:                 RTS
+               1527: 
+78EC BD78AD    1528: DSKWRITE        JSR     DSKPREP
+78EF BD7953    1529:                 JSR     WRSEC                   ; DO I/O OPERATION WITH ACTIVE WAIT: NO INTERRUPTS :-(
+78F2 2605      1530:                 BNE     DSKERR
+78F4 FE7929    1531:                 LDX     DDATA                   
+78F7 0C        1532:                 CLC                             ; .*mX-80:WrSec
+78F8 39        1533:                 RTS
+               1534:                 
+78F9 CE0417    1535: DSKERR          LDX     #ERR.DISKSEEK
+78FC 8510      1536:                 BITA    #$10
+78FE 2611      1537:                 bne     dskerr1                 ; seek error reported by controler status reg
+7900 CE0416    1538:                 LDX     #ERR.DISKWRITE
+7903 8520      1539:                 BITA    #$20                    
+7905 260A      1540:                 bne     dskerr1                 ; WRITE FAULT reported by controler status reg
+
+
+
+
+ASM/6800 1.4A0: 7907                    
+08/16/82 00:00:00; Page 30; Form 1      
+IOSWTPC6800.ASM
+7907 CE0418    1541:                 LDX     #ERR.DSKWRTPROT
+790A 8540      1542:                 BITA    #$40                    
+790C 2603      1543:                 bne     dskerr1                 ; WRITE PROTECT reported by controler status reg
+790E CE0415    1544:                 LDX     #ERR.DISKREAD           ; ELSE ASUME LOST DATA OR CRC ERROR HAS BEEN reported by contro
+7911 DF00      1545: DSKERR1         STX     $00                     ; TXAB X=SDOS ERROR CODE (16 BITS) -> (A,B)
+7913 9600      1546:                 LDAA    $00
+7915 D601      1547:                 LDAB    $01             
+7917 DE06      1548:                 LDX     DCBPOINTER              ; GET DCB POINTER
+7919 A701      1549:                 STAA    DCB.LASTERROR,X         ; SAVE THE ERROR
+791B E702      1550:                 STAB    DCB.LASTERROR+1,X
+791D DE00      1551:                 LDX     $00                     ; GET BACK ERROR IN X-REG
+791F 0D        1552:                 SEC
+7920 39        1553:                 RTS     
+               1554:         
+  7921         1555: DSKRESTORE
+  7921         1556: DSKWAITDONE
+7921 5F        1557:                 CLRB                           ; CLEAR THE CARRY
+7922 39        1558:                 RTS
+               1559: 
+               1560: 
+7923 0002      1561: RDSIPOINTER     RMB     2
+               1562: 
+               1563: 
+               1564: ; DISK DRIVERS FOR SOUTHWEST TECHNICAL PRODUCTS MF-68
+               1565: 
+               1566: ; INPUT PARAMS
+               1567: 
+7925 0001      1568: DRV    RMB 1         ; DRIVE TO OPERATE ON
+7926 0001      1569: TRK    RMB 1         ; TRACK TO READ/WRITE
+7927 0001      1570: SECT   RMB 1         ; SECTOR TO READ/WRITE
+7928 0001      1571: SIDE   RMB 1         ; SIDE TO READ/WRITE
+7929 0002      1572: DDATA  RMB 2         ; POINTER TO DATA BUFFER (MUST HAVE 128 BYTES)
+               1573: 
+               1574: ; COMMANDS FOR WD1771 CONTROLLER CHIP
+               1575: ;
+  000B         1576: FDRSC  EQU $0B       ; RESTORE
+  001B         1577: FDSKI  EQU $1B       ; SEEK
+  008C         1578: FDRDC  EQU $8C       ; READ A SECTOR
+  00AC         1579: FDWRC  EQU $AC       ; WRITE A SECTOR
+               1580: 
+               1581: ; ADDR OF WD1771 CONTROLLER CHIP REGISTERS 
+               1582: 
+  0000         1583:         if RAM64K=1
+ *S*           1584: 
+ *S*           1585: DRVREG set $ff14
+ *S*           1586: CMDREG set $ff18
+ *S*           1587: TRKREG set $ff19
+ *S*           1588: SECREG set $ff1A
+ *S*           1589: DATREG set $ff1B
+ *S*           1590: 
+               1591:         else
+               1592:         
+  8014         1593: DRVREG EQU $8014
+  8018         1594: CMDREG EQU $8018
+  8019         1595: TRKREG EQU $8019
+
+
+
+
+ASM/6800 1.4A0: 7929                    
+08/16/82 00:00:00; Page 31; Form 1      
+IOSWTPC6800.ASM
+  801A         1596: SECREG EQU $801A
+  801B         1597: DATREG EQU $801B
+               1598: 
+               1599:         fin
+               1600: 
+               1601: ; DRIVER VARS
+               1602: 
+792B FF        1603: CURDRV FCB $FF       ; PRESENTLY SELECTED DRIVE #
+792C 0004      1604: CTRK0  RMB 4         ; TRACK STATE TABLE
+7930 0001      1605: RCNT   RMB 1         ; RETRY COUNT
+7931 0001      1606: SIDEBT RMB 1         ; SIDE SELECTION BIT
+               1607: 
+               1608: ; INIT THE DISK SYSTEM
+               1609: 
+7932 7F792B    1610: INTDK  CLR CURDRV    ; ASSUME DRIVE 0 BOOTED
+7935 86FF      1611:        LDAA #$FF
+7937 B7792C    1612:        STAA CTRK0       
+793A B7792D    1613:        STAA CTRK0+1
+793D B7792E    1614:        STAA CTRK0+2       
+7940 B7792F    1615:        STAA CTRK0+3
+7943 39        1616: DUMMY  RTS       
+               1617: 
+               1618: ; READ A SECTOR
+               1619: ;
+7944 BD7A10    1620: RDSEC  JSR SELDRV 
+7947 BD7962    1621: RDSEC1 JSR READ       ; GETA SECTOR
+794A 2715      1622:        BEQ QUIT10     ; OK
+794C 7A7930    1623:        DEC RCNT       ; RETRY AGAIN?
+794F 26F6      1624:        BNE RDSEC1     ; YES
+7951 200D      1625:        BRA QERR
+               1626: 
+               1627: ; WRITE A SECTOR
+               1628: ;
+7953 BD7A10    1629: WRSEC  JSR SELDRV 
+7956 BD7998    1630: WTSEC1 JSR WRITE
+7959 2706      1631:        BEQ QUIT10     ; OK
+795B 7A7930    1632:        DEC RCNT       ; TRY AGAIN?
+795E 26F6      1633:        BNE WTSEC1     ; YES
+7960 4D        1634: QERR   TSTA           ; A HAS THE STATUS BITS WITH ERROR 
+7961 39        1635: QUIT10 RTS
+               1636: 
+               1637: ; READ A SECTOR (A=TRK, B=SECTOR, X=CTRKx)
+               1638: ;
+7962 BD79C7    1639: READ   JSR SEEK
+7965 868C      1640:        LDAA #FDRDC    ; READ
+7967 BB7931    1641:        ADDA SIDEBT
+796A B78018    1642:        STAA CMDREG     
+796D BD79F0    1643:        JSR DEL56U     ; DELAY
+7970 FE7929    1644:        LDX DDATA      ; GET BUFFER ADDRESS
+7973 C680      1645:        LDAB #128      ; 128 BYTES/SECTOR     
+7975 B68018    1646: READ1  LDAA CMDREG     
+7978 8502      1647:        BITA #$02      ; DATA REG FULL?
+797A 2606      1648:        BNE READ2      ; YES
+797C 8501      1649:        BITA #1        ; BUSY?
+797E 26F5      1650:        BNE READ1      ; YES
+
+
+
+
+ASM/6800 1.4A0: 7980                    
+08/16/82 00:00:00; Page 32; Form 1      
+IOSWTPC6800.ASM
+7980 200B      1651:        BRA READ3      ; ERROR
+7982 B6801B    1652: READ2  LDAA DATREG    ; GET A BYTE
+7985 A700      1653:        STAA 0,X       ; STORE IN BUFFER
+7987 08        1654:        INX             
+7988 5A        1655:        DECB            
+7989 26EA      1656:        BNE READ1      ; DO AGAIN
+798B 8D03      1657:        BSR WBUSY      ; WAIT TILL DONE
+798D 841C      1658: READ3  ANDA #$1C      ; MASK OF STATUS BITS
+798F 39        1659:        RTS             
+               1660:                        
+7990 B68018    1661: WBUSY  LDAA CMDREG     
+7993 8501      1662:        BITA #1        ; BUSY?
+7995 26F9      1663:        BNE WBUSY      ; YES
+7997 39        1664:        RTS
+               1665: 
+               1666: ; WRITE A SECTOR (A=TRK, B=SECTOR, X=CTRKx)
+               1667: 
+7998 BD79C7    1668: WRITE  JSR SEEK
+799B 86AC      1669:        LDAA #FDWRC    ; WRITE COMMAND
+799D BB7931    1670:        ADDA SIDEBT
+79A0 B78018    1671:        STAA CMDREG     
+79A3 BD79F0    1672:        JSR DEL56U      
+79A6 FE7929    1673:        LDX DDATA      ; GET BUFFER ADDRESS
+79A9 C680      1674:        LDAB #128      ; 128 BYTES/SECTOR
+79AB B68018    1675: WRITE1 LDAA CMDREG     
+79AE 8502      1676:        BITA #2        ; REG EMPTY?
+79B0 2606      1677:        BNE WRITE2     ; YES
+79B2 8501      1678:        BITA #1        ; BUSY?
+79B4 26F5      1679:        BNE WRITE1     ; YES
+79B6 20A8      1680:        BRA QERR       ; ERROR
+79B8 A600      1681: WRITE2 LDAA 0,X       ; GET A BYTE
+79BA B7801B    1682:        STAA DATREG     
+79BD 08        1683:        INX             
+79BE 5A        1684:        DECB            
+79BF 26EA      1685:        BNE WRITE1     ; DO AGAIN
+79C1 BD7990    1686:        JSR WBUSY      ; WAIT FOR BUSY
+79C4 847C      1687: WRITE3 ANDA #$7C      ; MASK OFF STATUS BITS
+79C6 39        1688:        RTS
+               1689: 
+               1690: ; SEEK A=TRACK, B=SECTOR, X=CTRKx
+               1691: 
+79C7 B18019    1692: SEEK   CMPA TRKREG    ; ON TRACK?
+79CA 2713      1693:        BEQ SEEK2      ; YES
+79CC B7801B    1694:        STAA DATREG    ; NO, STORE TRACK#
+79CF BD79F0    1695:        JSR DEL56U      
+79D2 A700      1696:        STAA 0,X       ; SAVE CURRENT TRACK OF DRIVE
+79D4 861B      1697:        LDAA #FDSKI    ; SEEK COMMAND
+79D6 B78018    1698:        STAA CMDREG     
+79D9 BD79F0    1699:        JSR DEL56U      
+79DC BD7990    1700:        JSR WBUSY      ; WAIT FOR BUSY
+79DF F7801A    1701: SEEK2  STAB SECREG    ; SET SECTOR
+79E2 BD79F0    1702:        JSR DEL56U
+79E5 B67928    1703:        LDAA SIDE
+79E8 2702      1704:        BEQ SEEK3
+79EA 8608      1705:        LDAA #$08      ; SELECT SIDE 1
+
+
+
+
+ASM/6800 1.4A0: 79EC                    
+08/16/82 00:00:00; Page 33; Form 1      
+IOSWTPC6800.ASM
+79EC B77931    1706: SEEK3  STAA SIDEBT       
+79EF 39        1707:        RTS
+               1708: 
+               1709: ; DEL56U- DELAY 56us INCLUDING THE CALL TO DELAY56U
+               1710: 
+79F0 BD79F3    1711: DEL56U JSR DELAY2
+79F3 BD79F6    1712: DELAY2 JSR DELAY3
+79F6 39        1713: DELAY3 RTS
+               1714: 
+               1715: ; FIND TRACK- RETURN X->TRACK TABLE FOR CURDRV
+               1716: 
+79F7 CE792C    1717: FNDTRK LDX #CTRK0     ; POINT TO TABLE
+79FA B6792B    1718:        LDAA CURDRV
+79FD 2704      1719:        BEQ FNDTK3
+79FF 08        1720: FNDTK2 INX
+7A00 4A        1721:        DECA
+7A01 26FC      1722:        BNE FNDTK2
+7A03 39        1723: FNDTK3 RTS
+               1724: 
+               1725: ; RESTORE SEEK TRACK0
+               1726: 
+7A04 860B      1727: RESTOR LDAA #FDRSC    ; RESTORE COMMAND
+7A06 B78018    1728:        STAA CMDREG
+7A09 BD79F0    1729:        JSR DEL56U
+7A0C BD7990    1730:        JSR WBUSY
+7A0F 39        1731:        RTS
+               1732: 
+               1733: ; SELECT THE DRIVE
+               1734: ; RETURN A=TRACK, B=SECTOR, X=CTRKx
+               1735: 
+7A10 8DE5      1736: SELDRV BSR FNDTRK     ; SAVE TRACK FOR CURRENT DRIVE
+7A12 B68019    1737:        LDAA TRKREG     
+7A15 A700      1738:        STAA 0,X        
+7A17 B67925    1739:        LDAA DRV       ; GET DRIVE 
+7A1A B7792B    1740:        STAA CURDRV     
+7A1D B78014    1741:        STAA DRVREG    ; SELECT THE DRIVE
+7A20 8DD5      1742:        BSR FNDTRK     ; LOAD TRACK FOR NEW DRIVE
+7A22 A600      1743:        LDAA 0,X       ; A=CURRENT DRIVE TRACK
+7A24 B78019    1744:        STAA TRKREG     
+7A27 81FF      1745:        CMPA #$FF      ; INITIALIZED?
+7A29 2602      1746:        BNE SELD1      ; YES
+7A2B 8DD7      1747:        BSR RESTOR     ; SEEK TRACK0
+7A2D 8605      1748: SELD1  LDAA #5        ; SET RETRY COUNT
+7A2F B77930    1749:        STAA RCNT       
+7A32 B67926    1750:        LDAA TRK       ; GET TRACK#        
+7A35 F67927    1751:        LDAB SECT      ; GET SECTOR#
+7A38 39        1752:        RTS            
+               1753: 
+               1754: 
+               1755: ; High level EMULATOR (HLE) for swtpc 6800 harddisk with
+               1756: ; XIBEX S1410 Winchester Disk Controller and
+               1757: ; TANDOM TM-602S 5MB DRIVE
+               1758: 
+               1759: 
+7A39 48443A    1760: dcbname.hd      fcc     'HD:'
+
+
+
+
+ASM/6800 1.4A0: 7A3C                    
+08/16/82 00:00:00; Page 34; Form 1      
+IOSWTPC6800.ASM
+7A3C 00        1761:                 fcb     0
+7A3D 01        1762: DCB.HD          FCB     1                       ; DCB:DONEFLAG  ; 0 --> DEVICE IS BUSY; <>0 --> DEVICE IS DONE
+7A3E 0000      1763:                 FDB     0                       ; DCB:LASTERROR ; IF DCB IS DONE, CONTAINS ERROR STATUS (0 = NO
+7A40 7A39      1764:                 FDB     dcbname.HD              ; DCB:NAME      ; POINTER TO DEVICE NAME STRING TERMINATED BY Z
+7A42 0000      1765:                 FDB     0                       ; DCB:NEXTDCB   ; POINTER TO NEXT DCB IN LIST OR ZERO
+7A44 7A81      1766:                 FDB     HDDRIVER                ; DCB:DRIVER    ; POINTER TO DRIVER ENTRY POINT LIST
+               1767: 
+               1768:                                                                 ; DISK GEOMETRY
+7A46 0080      1769:                 FDB     128                     ; DSKINFO:NBPS  ; NUMBER OF BYTES PER SECTOR
+7A48 0040      1770:                 FDB     64                      ; DSKINFO:NSPT  ; NUMBER OF SECTORS PER TRACK
+7A4A 0004      1771:                 FDB     4                       ; DSKINFO:NTPC  ; NUMBER OF TRACKS PER CYLINDER (=surfaces)
+7A4C 0099      1772:                 FDB     153                     ; DSKINFO:NCYL  ; NUMBER OF CYLINDERS PER DRIVE
+               1773: 
+               1774:                                                                 ; THE FOLLOWING ARE FILLED FROM THE BOOT SECTOR
+7A4E 0001      1775:                 RMB     1                       ; DSKINFO:NSPC   NUMBER OF SECTORS PER CLUSTER
+7A4F 0002      1776:                 RMB     LCN.SIZE                ; DSKINFO:MINALLOC ALLOCATION MINIMUM FOR NEW FILES
+7A51 0002      1777:                 RMB     LCN.SIZE                ; DSKINFO:MIDALLOC ALLOCATION MIN FOR FILE EXTENSION
+7A53 0002      1778:                 RMB     2                       ; DSKINFO:MAPALGORITHM CODE TO SELECT LOGICAL TO PHYSICAL SECTO
+               1779: 
+               1780:                                                                 ; CONTAINS DISK ID FOR MOUNTED DISKS
+7A55 0001      1781:                 RMB     1                       ; DSKINFO:LOG2NBPS LOG BASE 2 OF DSKINFO:NBPS
+7A56 0002      1782:                 RMB     2                       ; DSKINFO:NBPSM1 = NBPS-1 FOR USE AS MASK (QUICK "MOD NBPS")
+7A58 0003      1783:                 RMB     LSN.SIZE                ; DSKINFO:NLSN   NUMBER OF LSNS FOR THIS DISK = NSPT*NTPC*NCYL
+7A5B 0002      1784:                 RMB     LCN.SIZE                ; DSKINFO:NLCN   NUMBER OF LCNS FOR THIS DISK = NLSN/NSPC
+7A5D 0002      1785:                 RMB     2                       ; DSKINFO:NBPC   NUMBER OF BYTES PER CLUSTER
+7A5F 0002      1786:                 RMB     LCN.SIZE                ; DSKINFO:RANDMAP "RANDOM" LCN TO DISTRIBUTE NEW FILES
+7A61 0003      1787:                 RMB     LSN.SIZE                ; DSKINFO:MAPLSN LSN OF 1ST SECTOR IN DISK...
+               1788: 
+               1789:                                                                 ; ALLOCATION MAP CLUSTER
+7A64 0002      1790:                 RMB     2                       ; DSKINFO:DIRFCB POINTER TO FCB FOR $DIRECTORY FILE
+7A66 0002      1791:                 RMB     2                       ; DSKINFO:MAPFCB POINTER TO FCB FOR $DISKMAP FILE
+7A68 0002      1792:                 RMB     2                       ; DSKINFO:SECTORDB POINTER TO RDSI CONTAINING LSN, ADDRESS PARA
+7A6A 0003      1793:                 RMB     LSN.SIZE                ; DSKINFO:BADLSN LSN OF LAST SECTOR THAT COULDN'T READ/WRITE/SE
+7A6D 0000      1794:                 FDB     0                       ; DSKINFO:SEEKERRCNT # SEEK ERRORS SINCE MOUNT
+7A6F 0000      1795:                 FDB     0                       ; DSKINFO:SEEKERRSTS 16 BITS OF LAST "SEEK" STATUS IN ERROR
+7A71 0000      1796:                 FDB     0                       ; DSKINFO:WRITEERRCNT # WRITE ERRORS SINCE MOUNT
+7A73 0000      1797:                 FDB     0                       ; DSKINFO:WRITEERRSTS 16 BITS OF LAST "WRITE" STATUS IN ERROR
+7A75 0000      1798:                 FDB     0                       ; DSKINFO:READERRCNT # READ ERRORS SINCE MOUNT
+7A77 0000      1799:                 FDB     0                       ; DSKINFO:READERRSTS 16 BITS OF LAST "READ" STATUS IN ERROR
+7A79 000000    1800:                 FCB     0,0,0                   ; DSKINFO:OPSCOUNT 24 BITS OF # DRIVER OPERATIONS SINCEMOUNT
+7A7C 0003      1801:                 RMB     LSN.SIZE                ; DSKINFO:ERRLSN LSN CAUSING ANY SOFT OR HARD ERROR
+7A7F 0001      1802:                 RMB     1                       ; DSKINFO:WRITEPROTSTATE 0 --> WRITEABLE
+7A80 00        1803:                 FCB     0                       ; FDUNIT         Drive number 
+               1804: 
+               1805: 
+               1806: ; DEVICE DRIVER BLOCK FOR HARD DISK
+               1807: 
+7A81 7921      1808: HDDRIVER        FDB     DSKRESTORE              ; DRIVER:DISKRESET RESET THIS DISK DRIVER
+7A83 7B21      1809:                 FDB     HDREAD                  ; DRIVER:DISKREAD INITIATE A DISK SECTOR READ
+7A85 7B3B      1810:                 FDB     HDWRITE                 ; DRIVER:DISKWRITE INITIATE A DISK SECTOR WRITE
+7A87 7921      1811:                 FDB     DSKWAITDONE             ; DRIVER:DISKWAIT WAIT FOR DISK I/O COMPLETE
+7A89 70B8      1812:                 FDB     ILLDEVICEOP             ; DRIVER:DISKSTATUS STATUS handled completely by SDOS1.1
+7A8B 783B      1813:                 FDB     DSKCONTROL              ; DRIVER:DISKCONTROL PERFORM DISK-SPECIFIC CONTROL OPERATION
+7A8D 70B8      1814:                 FDB     ILLDEVICEOP             ; DRIVER:DISKWRITEPROTQ DETERMINE IF DISK IS WRITE PROTECTED
+7A8F 70B8      1815:                 FDB     ILLDEVICEOP             ; DRIVER:DISKVERIFY INITIATE A DISK SECTOR VERIFY
+
+
+
+
+ASM/6800 1.4A0: 7A91                    
+08/16/82 00:00:00; Page 35; Form 1      
+IOSWTPC6800.ASM
+7A91 70B8      1816:                 FDB     ILLDEVICEOP             ; DRIVER:DISKLSNTOPSN CONVERT LSN TO PHYSICAL CYLINDER, TRACK A
+               1817: 
+  0001         1818: HDCMD.HEARTBEAT EQU     $01
+  0002         1819: HDCMD.SELDRV    EQU     $02
+  0003         1820: HDCMD.SETSECT   EQU     $03
+  0004         1821: HDCMD.SETSURF   EQU     $04
+  0005         1822: HDCMD.SETTRACK  EQU     $05
+  0006         1823: HDCMD.SETADDRH  EQU     $06
+  0007         1824: HDCMD.SETADDRL  EQU     $07
+  0008         1825: HDCMD.READ      EQU     $08
+  0009         1826: HDCMD.WRITE     EQU     $09
+               1827: 
+               1828: 
+  0000         1829:                 if ram64k=1
+ *S*           1830: 
+ *S*           1831: HDCMD           EQU     $FF10   ; PORTS FOR HARD DISK HIGH LEVEL EMULATOR INTERFACE
+ *S*           1832: HDDATA          EQU     $FF11           
+ *S*           1833: 
+               1834:                 else
+               1835: 
+  8010         1836: HDCMD           EQU     $8010   ; PORTS FOR HARD DISK HIGH LEVEL EMULATOR INTERFACE
+  8011         1837: HDDATA          EQU     $8011           
+               1838: 
+               1839:                 fin
+               1840: 
+               1841: 
+7A93 8655      1842: HDPREP          LDAA    #$55                    ; TEST IF HD HLE CONTROLER IS RESPONDING
+7A95 B78011    1843:                 STAA    HDDATA
+7A98 8601      1844:                 LDAA    #HDCMD.HEARTBEAT        
+7A9A B78010    1845:                 STAA    HDCMD
+7A9D B68011    1846:                 LDAA    HDDATA
+7AA0 8167      1847:                 CMPa    #$67                    ; SHOULD GET THIS REPLY 
+7AA2 2705      1848:                 BEQ     HDHLEOK
+7AA4 CE0424    1849:                 LDX     #ERR.DEVICENOTREADY     ; WE ARE RUNNING WITH HD DISABLED OR IN ANOTHER SIMULATOR 
+7AA7 0D        1850:                 SEC                             ; WITHOUT HLE HARD DRIVE EMULATOR, OR EVEN IN REAL HW!
+7AA8 39        1851:                 RTS                             ; IN ANY CASE, THERE IS NO HARD DISK -> SIGNALS DEVICE NOT READ
+7AA9 DE06      1852: HDHLEOK         LDX     DCBPOINTER              ; GET DCB POINTER
+7AAB BD78A2    1853:                 jsr     DSKOPSCOUNT             ; incr count of I/O operations done
+7AAE A643      1854:                 LDAA    dcb.fdunit,X            ; get this dcb drive number
+7AB0 C602      1855:                 LDAB    #HDCMD.SELDRV           ; HD COMMAND: SELECT DRIVE
+7AB2 F78010    1856:                 STAB    HDCMD
+7AB5 B78011    1857:                 STAA    HDDATA
+7AB8 6F01      1858:                 CLR     DCB.LASTERROR,X         ; CLEAR ANY ERROR
+7ABA 6F02      1859:                 CLR     DCB.LASTERROR+1,X
+7ABC EE2B      1860:                 LDX     DSKINFO.SECTORDB,X      ; GET RDSI POINTER
+7ABE FF7923    1861:                 STX     RDSIPOINTER             ; SAVE IT
+               1862:                                                 ; CONVERT RDSI:LSR -> RDSI:CYLINDER/SECTOR
+7AC1 FE7923    1863:                 LDX     RDSIPOINTER
+7AC4 6F0E      1864:                 CLR     RDSI.SECTOR,X           ; CLEAR MSB OF SECTOR, TRACK 
+7AC6 6F10      1865:                 CLR     RDSI.TRACK,X
+7AC8 6F12      1866:                 CLR     RDSI.CYLINDER,X 
+               1867: 
+7ACA A603      1868:                 LDAA    RDSI.LSN+1,X            ; DISCARD HIGHER LSN BYTE
+7ACC E604      1869:                 LDAB    RDSI.LSN+2,X            
+7ACE 37        1870:                 PSHB
+
+
+
+
+ASM/6800 1.4A0: 7ACF                    
+08/16/82 00:00:00; Page 36; Form 1      
+IOSWTPC6800.ASM
+7ACF C43F      1871:                 ANDB    #63                     ; SECTOR = LSN AND 63
+7AD1 E70F      1872:                 STAB    RDSI.SECTOR+1,X         ; B CONTAINS SECTOR = 0..63
+7AD3 F78011    1873:                 STAB    HDDATA
+7AD6 C603      1874:                 LDAB    #HDCMD.SETSECT          ; HD COMMAND: SET SECTOR
+7AD8 F78010    1875:                 STAB    HDCMD
+7ADB 33        1876:                 PULB
+7ADC 44        1877:                 LSRA                            ; LSN = LSN DIV 64
+7ADD 56        1878:                 RORB
+7ADE 44        1879:                 LSRA                            
+7ADF 56        1880:                 RORB
+7AE0 44        1881:                 LSRA                            
+7AE1 56        1882:                 RORB
+7AE2 44        1883:                 LSRA                            
+7AE3 56        1884:                 RORB
+7AE4 44        1885:                 LSRA                            
+7AE5 56        1886:                 RORB
+7AE6 44        1887:                 LSRA                            
+7AE7 56        1888:                 RORB
+7AE8 37        1889:                 PSHB
+7AE9 C403      1890:                 ANDB    #3                      ; SURFACE = LSN AND 3
+7AEB E711      1891:                 STAB    RDSI.TRACK+1,X          ; B CONTAINS SURFACE = 0..3
+7AED F78011    1892:                 STAB    HDDATA
+7AF0 C604      1893:                 LDAB    #HDCMD.SETSURF          ; HD COMMAND: SET SURFACE
+7AF2 F78010    1894:                 STAB    HDCMD
+7AF5 33        1895:                 PULB                            ; LSN = LSN DIV 4
+7AF6 44        1896:                 LSRA                            
+7AF7 56        1897:                 RORB
+7AF8 44        1898:                 LSRA                            
+7AF9 56        1899:                 RORB
+7AFA E713      1900:                 STAB    RDSI.CYLINDER+1,X       ; B CONTAINS TRACK 0..152
+7AFC F78011    1901:                 STAB    HDDATA
+7AFF C605      1902:                 LDAB    #HDCMD.SETTRACK         ; HD COMMAND: SET TRACK
+7B01 F78010    1903:                 STAB    HDCMD
+               1904: 
+7B04 A605      1905:                 LDAA    RDSI.SECTORBASE,X       ; POINTER TO ACTUAL SECTOR CONTENTS
+7B06 B77929    1906:                 STAA    DDATA
+7B09 B78011    1907:                 STAA    HDDATA
+7B0C 8606      1908:                 LDAA    #HDCMD.SETADDRH         ; HD COMMAND: SET ADDR (MSB)
+7B0E B78010    1909:                 STAA    HDCMD
+7B11 E606      1910:                 LDAB    RDSI.SECTORBASE+1,X     ; POINTER TO ACTUAL SECTOR CONTENTS
+7B13 F7792A    1911:                 STAB    DDATA+1
+7B16 F78011    1912:                 STAB    HDDATA
+7B19 C607      1913:                 LDAB    #HDCMD.SETADDRL         ; HD COMMAND: SET ADDR (LSB)
+7B1B F78010    1914:                 STAB    HDCMD
+               1915: 
+7B1E 6F0C      1916:                 CLR     RDSI.STATE,X            ; RESET SECTOR STATE TO "IDLE"
+7B20 39        1917:                 RTS
+               1918: 
+7B21 BD7A93    1919: HDREAD          JSR     HDPREP
+7B24 250D      1920:                 BCS     HDERR
+7B26 8608      1921:                 LDAA    #HDCMD.READ             ; HD COMMAND: READ SECTOR
+7B28 B78010    1922:                 STAA    HDCMD
+7B2B B68011    1923:                 LDAA    HDDATA                  ; retried status of hd operation
+7B2E 2706      1924:                 BEQ     HDRDOK
+7B30 CE0415    1925:                 LDX     #ERR.DISKREAD
+
+
+
+
+ASM/6800 1.4A0: 7B33                    
+08/16/82 00:00:00; Page 37; Form 1      
+IOSWTPC6800.ASM
+7B33 7E7911    1926: HDERR           JMP     DSKERR1
+7B36 FE7929    1927: HDRDOK          LDX     DDATA                   
+7B39 0C        1928:                 CLC                             ; .*mX-80:HdSec
+7B3A 39        1929:                 RTS
+               1930:                 
+7B3B BD7A93    1931: HDWRITE         JSR     HDPREP
+7B3E 25F3      1932:                 BCS     HDERR
+7B40 8609      1933:                 LDAA    #HDCMD.WRITE            ; HD COMMAND: WRITE SECTOR
+7B42 B78010    1934:                 STAA    HDCMD
+7B45 B68011    1935:                 LDAA    HDDATA
+7B48 27EC      1936:                 BEQ     HDRDOK
+7B4A CE0416    1937:                 LDX     #ERR.DISKWRITE
+7B4D 20E4      1938:                 BRA     HDERR
+               1939:                 
+               1940: 
+               1941: 
+               1942: ; DEVICE CONTROL BLOCK FOR CLOCK 
+               1943: 
+7B4F 434C4F43  1944: CLOCKSTR        FCC     'CLOCK:'
+7B55 00        1945:                 fcb     0
+               1946: 
+7B56 01        1947: CLOCKDCB        FCB     1                       ; DCB:DONEFLAG  ; 0 --> DEVICE IS BUSY; <>0 --> DEVICE IS DONE.
+7B57 0000      1948:                 FDB     0                       ; DCB:LASTERROR ; IF DCB IS DONE, CONTAINS ERROR STATUS (0 = NO
+7B59 7B4F      1949:                 FDB     CLOCKSTR                ; DCB:NAME      ; POINTER TO DEVICE NAME STRING TERMINATED BY Z
+7B5B 0000      1950:                 FDB     0                       ; DCB:NEXTDCB   ; POINTER TO NEXT DCB IN LIST OR ZERO
+7B5D 7B5F      1951:                 FDB     CLOCKDRIVER             ; DCB:DRIVER    ; POINTER TO DRIVER ENTRY POINT LIST
+               1952: 
+               1953: ; DEVICE DRIVER BLOCK FOR CLOCK CONSOLE
+               1954: 
+7B5F 7B79      1955: CLOCKDRIVER     FDB     CLOCKOPEN       ; DRIVER:OPEN   OPEN FILE
+7B61 7B79      1956:                 FDB     CLOCKCLOSE      ; DRIVER:CLOSE  CLOSE FILE
+7B63 7BB9      1957:                 FDB     CLOCKREADA      ; DRIVER:READA  READ ASCII
+7B65 70B8      1958:                 FDB     ILLDEVICEOP     ; DRIVER:WRITEA WRITE ASCII WRITEA IS A NO-NO
+7B67 7B97      1959:                 FDB     CLOCKREADB      ; DRIVER:READB  READ BINARY
+7B69 7B94      1960:                 FDB     CLOCKWRITEB     ; DRIVER:WRITEB WRITE BINARY
+7B6B 70B8      1961:                 FDB     ILLDEVICEOP     ; DRIVER:CREATE CREATE FILE YOU UPDATE THE CLOCK, NOT REBUILD IT (CREAT
+7B6D 70B8      1962:                 FDB     ILLDEVICEOP     ; DRIVER:RENAME RENAME FILE RENAME IT TO WHAT? CLOCK-RADIO: ???
+7B6F 70B8      1963:                 FDB     ILLDEVICEOP     ; DRIVER:DELETE DELETE FILE YOU CAN'T GET RID OF THE CLOCK, NEITHER
+7B71 70B8      1964:                 FDB     ILLDEVICEOP     ; DRIVER:CONTROL NO CONTROL FUNCTIONS
+7B73 7B7F      1965:                 FDB     CLOCKSTATUS     ; DRIVER:STATUS READ DEVICE (DRIVER) STATUS SAY "I'M A CLOCK, TICK-TOCK
+7B75 7B94      1966:                 FDB     CLOCKRESET      ; DRIVER:RESET  RESET DRIVER (ON BOOT)
+7B77 7B79      1967:                 FDB     CLOCKPFRESTART  ; DRIVER:STARTIO        WHO UNPLUGGED ME???
+               1968: 
+  0000         1969: TEMPX           EQU     0
+               1970: 
+  7B79         1971: CLOCKOPEN       EQU     *               ; HOW ABOUT LOOKING AT YOUR $9 TI CHEAPIE, MAC!
+  7B79         1972: CLOCKCLOSE      EQU     *               ; WHAT AM I SUPPOSED TO DO, PUT THE CLOCK AWAY??
+  7B79         1973: CLOCKPFRESTART  EQU     *               ; AM I SUPPOSED TO KEEP TIME WITH NO POWER???
+7B79 7E70B6    1974:                 JMP     OKRTS           ; TOUGH!
+               1975: 
+7B7C 7E70B8    1976: CLOCKSPRUNG     JMP     ILLDEVICEOP
+7B7F 8104      1977: CLOCKSTATUS     CMPA    #SC.GETTYPE     ; The only status syscall accepted is SC:GETTYP, which returns DVTYF.CL
+7B81 26F9      1978:                 BNE     CLOCKSPRUNG     ; 
+7B83 FEAE07    1979:                 LDX     SDOS+SDOS.IOBLOCKPTR
+7B86 BDAE36    1980:                 JSR     SDOS+SDOS.CHECKRDLEN    ; HAS HE GOT A BYTE SPACE
+
+
+
+
+ASM/6800 1.4A0: 7B89                    
+08/16/82 00:00:00; Page 38; Form 1      
+IOSWTPC6800.ASM
+7B89 0001      1981:                 FDB     1
+7B8B EE0A      1982:                 LDX     SCBLK.RDBUF,X   ; GET THE BUFFER POINTER (where syscall return values are to be set)
+7B8D 860B      1983:                 LDAA    #DVTYP.CLOCK    ; I'M ALIVE AND TICKING (HOPEFULLY!)
+7B8F A700      1984:                 STAA    0,X     
+7B91 7E70B6    1985:                 JMP     OKRTS
+  7B94         1986: CLOCKWRITEB     EQU     *
+  7B94         1987: CLOCKRESET      EQU     *
+7B94 7E70B6    1988:                 JMP     OKRTS
+               1989: 
+7B97 BDAE36    1990: CLOCKREADB      JSR     SDOS+SDOS.CHECKRDLEN
+7B9A 0006      1991:                 FDB     6               ; HE BETTER HAVE 6 BYTES AT LEAST
+7B9C CEAE00    1992:                 LDX     #SDOS           ; READ CURRENT CLOCK SETTING
+7B9F C606      1993:                 LDAB    #6              ; TO STACK
+7BA1 A60B      1994: CLOCKRB1        LDAA    SDOS.CLOCK,X
+7BA3 08        1995:                 INX
+7BA4 36        1996:                 PSHA
+7BA5 5A        1997:                 DECB
+7BA6 26F9      1998:                 BNE     CLOCKRB1
+7BA8 FEAE07    1999:                 LDX     SDOS+SDOS.IOBLOCKPTR
+7BAB EE0A      2000:                 LDX     SCBLK.RDBUF,X
+7BAD C606      2001:                 LDAB    #6              ; PUT CLOCK IN READ BUFFER
+7BAF 32        2002: CLOCKRB2        PULA
+7BB0 A705      2003:                 STAA    5,X
+7BB2 09        2004:                 DEX
+7BB3 5A        2005:                 DECB
+7BB4 26F9      2006:                 BNE     CLOCKRB2
+7BB6 7E70B6    2007:                 JMP     OKRTS
+               2008: 
+7BB9 BDAE36    2009: CLOCKREADA      JSR     SDOS+SDOS.CHECKRDLEN
+7BBC 0011      2010:                 FDB     17              ; ENOUGH FOR HH:MM:SS MM/DD/YY
+7BBE FEAE07    2011:                 LDX     SDOS+SDOS.IOBLOCKPTR
+7BC1 A60C      2012:                 LDAA    SCBLK.RDLEN,X   ; SEE IF ENOUGH SPACE FOR CR
+7BC3 2606      2013:                 BNE     CLOCKREADA0
+7BC5 E60D      2014:                 LDAB    SCBLK.RDLEN+1,X 
+7BC7 C112      2015:                 CMPB    #18
+7BC9 2502      2016:                 BLO     CLOCKREADA1     ; B/ NO
+7BCB 6C09      2017: CLOCKREADA0     INC     SCBLK.RPLEN+1,X ; YES, INCLUDE THE CR IN THE COUNT
+7BCD EE0A      2018: CLOCKREADA1     LDX     SCBLK.RDBUF,X
+7BCF 2504      2019:                 BLO     CLOCKREADA2     ; B/ CR NOT INCLUDED
+7BD1 860D      2020:                 LDAA    #13             ; <CR>
+7BD3 A711      2021:                 STAA    17,X
+7BD5 8611      2022: CLOCKREADA2     LDAA    #17
+7BD7 DF00      2023:                 STX     TEMPX
+7BD9 CE7BF0    2024:                 LDX     #TIMESTR
+7BDC E600      2025: CLOCKREADA3     LDAB    0,X
+7BDE 08        2026:                 INX
+7BDF DF02      2027:                 STX     TEMPX+2
+7BE1 DE00      2028:                 LDX     TEMPX
+7BE3 E700      2029:                 STAB    0,X
+7BE5 08        2030:                 INX
+7BE6 DF00      2031:                 STX     TEMPX
+7BE8 DE02      2032:                 LDX     TEMPX+2
+7BEA 4A        2033:                 DECA
+7BEB 26EF      2034:                 BNE     CLOCKREADA3
+7BED 7E70B6    2035:                 JMP     OKRTS
+
+
+
+
+ASM/6800 1.4A0: 7BED                    
+08/16/82 00:00:00; Page 39; Form 1      
+IOSWTPC6800.ASM
+               2036: 
+7BF0 30303A30  2037: TIMESTR         FCC     '00:00:00 08/16/82'
+               2038:   
+  7C01         2039: ATTNCHECK       
+  7C01         2040: DEBUGSYSCALL    
+7C01 7E70B6    2041:                 jmp     okrts
+               2042: 
+               2043: 
+  0000         2044:                 if *>>IOBUF
+ *S*           2045:                 ? IO package too big! overlaps IOBUF
+               2046:                 fin
+               2047:                 
+               2048:                 end
+
+
+
+
+ASM/6800 1.4A0: 7C01                    
+08/16/82 00:00:00; Page 40; Form 1      Symbols Sorted by Name
+IOSWTPC6800.ASM
+Symbols Sorted by Name:
+
+*ABORTBIT/0080   ACTIVATIONCHARSENSED/71DF       ACTIVATIONCHARSVECTOR/71CF      ACTIVBYTE/743E  ACTIVCHAR/7449  APORT.MODE/7626
+ ATTNCHECK/7C01  BACKSPACE/7450  BACKSPC1/746C   BACKSPC2/7471   BADINTERRUPTCOUNT/704E          BASICDEBUGFLAGS/A083
+ BASICFLAGS/71CB                 BREAKBIT/0020   CC.ACTIVATIONCK/001D            CC.DISMOUNTDISK/0011            CC.ECHO/0010
+ CC.NOECHO/0011  CC.SETACTBLOCK/0014             CH/7550         CL1/7581        CL2/7590        CL3/75A2        CLOCKCLOSE/7B79
+ CLOCKDCB/7B56   CLOCKDRIVER/7B5F                CLOCKOPEN/7B79  CLOCKPFRESTART/7B79             CLOCKRB1/7BA1   CLOCKRB2/7BAF
+ CLOCKREADA/7BB9                 CLOCKREADA0/7BCB                CLOCKREADA1/7BCD                CLOCKREADA2/7BD5
+ CLOCKREADA3/7BDC                CLOCKREADB/7B97                 CLOCKRESET/7B94                 CLOCKSPRUNG/7B7C
+ CLOCKSTATUS/7B7F                CLOCKSTR/7B4F   CLOCKWRITEB/7B94                CLOSE.PORT/7579                 CLOSE.TTY/7230
+ CMDREG/8018     CNFGTABLE/7003  CONSOLEDRIVER/709C              CONTROL.PORT/7551               CONTROL.TTY/7264
+ CR0/764C        CR1/763A        CR2/7647        CRFLAG/71CE     CTRK0/792C      CTRLCNUM/71CC   CURDRV/792B     DACTIVATION1/7297
+ DACTIVATIONCK/728A              DATREG/801B    *DCB.CLEARIN/00CA               *DCB.D0/770D     DCB.D1/7755     DCB.D2/779D
+ DCB.D3/77E5    *DCB.DONEFLAG/0000              *DCB.DRIVER/0007                 DCB.FDUNIT/0043                 DCB.HD/7A3D
+*DCB.INPUTTOBLK/00A9             DCB.LASTERROR/0001             *DCB.LINEBUF/0067               *DCB.LINEBUFLEN/007A
+*DCB.NAME/0003  *DCB.NEXTDCB/0005               *DCB.OILQUIESCENT/0013          *DCB.OUTPUTTOBLK/00A1            DCB.PORT/752C
+*DCB.PROFILE/0028               *DCB.RESET/00B5 *DCB.RINGINBASE/004D            *DCB.RINGOUTBASE/0059
+*DCB.RINGOUTTHRESHOLD/005D      *DCB.TASKSTACK/00B3             *DCB.TCB/00B1   *DCB.TLBUFFER/007D               DCB.TTY/7093
+*DCB.VTSIZE/00FD                 DCBNAME.D0/7709                 DCBNAME.D1/7751                 DCBNAME.D2/7799
+ DCBNAME.D3/77E1                 DCBNAME.HD/7A39                 DCBNAME.PORT/7526               DCBNAME.TTY/708A
+ DCBPOINTER/0006                 DDATA/7929      DEBUGSYSCALL/7C01               DECHO/727C      DEL56U/79F0     DELAY1K/75A5
+ DELAY1KB/75A8   DELAY2/79F3     DELAY3/79F6     DISKDCBS/770D   DIV18/7860      DIV18.1/7868    DIV18.2/7870    DIV18.3/7878
+ DIV18.4/7880    DIV18.5/7888    DIV18.6/7890    DIV18.7/7898    DIV18.8/78A0    DNOECHO/7284    DRIVERBASE/7000
+ DRV/7925        DRVREG/8014     DSETACT1/72A5   DSETACTIVATION/729A             DSKBUFFERPOOL/A663              DSKCONTROL/783B
+ DSKDISMOUNT/7842                DSKDRIVER/7829  DSKERR/78F9     DSKERR1/7911    DSKINFO.OPSCOUNT/003C
+ DSKINFO.SECTORDB/002B           DSKOPSCOUNT/78A2                DSKOPSCOUNT1/78AC               DSKPOOLSIZE/079B
+ DSKPREP/78AD    DSKREAD/78DF    DSKRESTORE/7921                 DSKWAITDONE/7921                DSKWRITE/78EC  *DUMMY/7943
+ DVTYP.CLOCK/000B                DVTYP.STAPE/0002               *DVTYP.TYPE/0000                 ECHOFLAG/71C9   EOFFLAG/71C8
+ ERR.ACTIVATIONNOTINBUFFER/0773  ERR.ACTIVATIONRECEIVED/0775     ERR.DEVICENOTREADY/0424        *ERR.DEVICETIMEDOUT/0412
+ ERR.DISKREAD/0415               ERR.DISKSEEK/0417               ERR.DISKWRITE/0416              ERR.DSKWRTPROT/0418
+ ERR.EOFHIT/03E9                 ERR.ILLDEVICEOP/040A            ERR.PROGRAMKILLED/0411         *ERR.WRONGDISKTYPE/076E
+*ERRETX/70BD     EXPANDTABFLAG/71CD              FCB.SIZE/001A   FCBS/A084       FDRDC/008C      FDRSC/000B      FDSKI/001B
+ FDTEARLSN/7844  FDWRC/00AC      FNDTK2/79FF     FNDTK3/7A03     FNDTRK/79F7     FUSEBURNEDUP/7058               GETREADPARAMS/72BD
+ GETWRITEPARAMS/7472             GOBIT/0008      HDCMD/8010      HDCMD.HEARTBEAT/0001            HDCMD.READ/0008
+ HDCMD.SELDRV/0002               HDCMD.SETADDRH/0006             HDCMD.SETADDRL/0007             HDCMD.SETSECT/0003
+ HDCMD.SETSURF/0004              HDCMD.SETTRACK/0005             HDCMD.WRITE/0009                HDDATA/8011     HDDRIVER/7A81
+ HDERR/7B33      HDHLEOK/7AA9    HDPREP/7A93     HDRDOK/7B36     HDREAD/7B21     HDWRITE/7B3B    IGN/0000        ILLDEVICEOP/70B8
+ INBYTE/75CC     INBYTEEOF/75DC  INCH/7207       INEEE/E1AC      INNYB1/75BC     INNYB4/75C4     INNYBLE/75AC    INPUTBUF/70CA
+ INPUTBUFLEN/00FA                INPUTBUFP0/71C4                 INPUTBUFP1/71C6                 INTDISABLE/703A
+ INTDK/7932      INTENABLE/703C  INTERRUPTSTACK/A622             INTRTI/703F     INTSETUP/7027   INTSTACKTOP/A662
+ IOBUF/A080      IOBUFEND/AE00   IOCB.SIZE/0022  IOCBPOINTERS/A5FC               IOCBS/A376      IOINTPOLL/7040  IRQINT/703E
+ IRQVECTOR/A000  LCN.SIZE/0002   LEN/70C4        LMODE/70C3      LSN.SIZE/0003  *M6800/0001     *M6801/0000     *M6809/0000
+ NCOL/71CA       NDRIVES/0004    NIOCHANNELS/0013                NMAGICFCBS/0002                 NOTIMERINT/7044
+ OFS/0000        OKRTS/70B6      OPEN.PORT/7571  OPEN.TTY/720C   OPEN.TTY1/7221  OUTEEE/E1D1     OUTNYBLE/76FE   OUTNYBLE1/7706
+ PDATA/70C6      PNCHOFF/E353    PNCHON/E34D     PORECH/A00C     PORTDRIVER/7535                 PORTMODE/754F   PRT1/71F2
+*PRT2/71EC       PRT3/71EF       PRT4/71FA       PRTCH/71E0      PRTCH2/750A     QERR/7960       QUIT10/7961     RAM64K/0000
+ RBACKSPACE/73C3                 RBAS/73F8       RCNT/7930      *RCTRLC/73A6    *RCTRLD/73CC     RD1NCOL/735C    RD2NCOL/735F
+ RDOFF/E347      RDON/E337       RDSEC/7944      RDSEC1/7947    *RDSI.BLINK/0009                 RDSI.CYLINDER/0012
+*RDSI.DISKINFO/0000             *RDSI.FLINK/0007                 RDSI.LSN/0002  *RDSI.MODIFIED/000B
+*RDSI.RETRYCOUNT/000D            RDSI.SECTOR/000E                RDSI.SECTORBASE/0005           *RDSI.SIZE/0014  RDSI.STATE/000C
+ RDSI.TRACK/0010                 RDSIPOINTER/7923               *RDSISTATE.IDLE/0000            *RDSISTATE.READING/0001
+*RDSISTATE.VERIFYING/0003       *RDSISTATE.WRITING/0002          READ/7962       READ.PORT/75E8  READ1/7975      READ2/7982
+ READ3/798D      READA.PORT/75DE                 READA.TTY/730A  READA1/731A     READA2/7324     READA3/732F     READA4/7335
+ READA5/7373     READA6/7380     READAPORT/762A  READB.PORT/75E5                 READB.TTY/72E8  READB1/72F1     READB2/7308
+ READBPORT/7659  READINPUTBUF/738A               RENDOFINPUT/744F                RESET.TTY/7279  RESTOR/7A04     RI1/73B8
+
+
+
+
+ASM/6800 1.4A0: 7C01                    
+08/16/82 00:00:00; Page 41; Form 1      Symbols Sorted by Name
+IOSWTPC6800.ASM
+ RI2/73C8        RI3/73E0        RI4/7400        RI5/7428        RI6/742D        RI7/7434        RINBUF/7393     RINCH/739C
+ RP1/760D        RP1A/7622       RP1EOF/7685     RP1START/7614   RPIN/761A       RPLEN/70C8      RSTORECH/740D   SAVEREADPORTCH/7670
+ SC.GETCOL/0001  SC.GETEOF/0002  SC.GETLINEFLAGS/002C            SC.GETTYPE/0004                *SCBLK.DATA/000E
+*SCBLK.OPCODE/0000               SCBLK.PARAMS/0002               SCBLK.RDBUF/000A                SCBLK.RDLEN/000C
+ SCBLK.RPLEN/0008               *SCBLK.WLEN/0001                 SCBLK.WRBUF/0004                SCBLK.WRLEN/0006
+ SDOS/AE00       SDOS.CHECKRDLEN/0036            SDOS.CLOCK/000B                 SDOS.ERROR/002D                 SDOS.ERRORED/0033
+ SDOS.ERRORSAVE/0030             SDOS.IOBLOCKPTR/0007            SDOS.RTI/0015   SDOS.WAITEVENT/002A             SECREG/801A
+ SECT/7927       SEEK/79C7       SEEK2/79DF      SEEK3/79EC      SELD1/7A2D      SELDRV/7A10     SETRPLEN/72DA   SIDE/7928
+ SIDEBT/7931     SINIT1/3003     SINIT2/300F    *SPECIALFN.CLEAR/0082           *SPECIALFN.EEOL/0083            *SPECIALFN.POSN/0081
+ SSTEPBIT/0010   ST0/7249        ST1/7252        ST2/725B        STATUS.PORT/755B                STATUS.TTY/7233
+ STATUSRET1/725D                 STPO1/7568      STPO2/756A     *SWTGO/A080      SWTMON/E0D0     SWTPCINIT/3000  SWTRET/73D5
+*SYSCALL.CHAIN/0006             *SYSCALL.CLOSE/0002             *SYSCALL.CONTROL/000E           *SYSCALL.CREATE/0001
+*SYSCALL.DEBUG/0018             *SYSCALL.DELETE/0004            *SYSCALL.DISPERROR/0015         *SYSCALL.ERROREXIT/0012
+*SYSCALL.EXIT/0011              *SYSCALL.GETERROR/0014          *SYSCALL.OPEN/0000              *SYSCALL.READA/000A
+*SYSCALL.READB/000B             *SYSCALL.RENAME/0003            *SYSCALL.SETERROR/0013          *SYSCALL.STATUS/000F
+*SYSCALL.WRITEA/000C            *SYSCALL.WRITEB/000D             SYSCALLIO/7000  TASKQUEUE/705C  TASKSETUP/7082  TASKSTACKINIT/7078
+*TASKSTACKTOP/7080               TASKWAKEUPFLAG/7081             TEMPX/0000      TIMEOUTQUEUE/7050               TIMESTR/7BF0
+ TRACEBIT/0040   TRK/7926        TRKREG/8019     WBUSY/7990      WP0/76BF        WP1/76C4        WP1A/76D3       WP1START/76CB
+ WPOUT/76CB      WR1NCOL/7516    WR2NCOL/7519    WR3NCOL/751C    WR4NCOL/7521    WRITE/7998      WRITE.0/7493    WRITE.1/749B
+ WRITE.2/74AD    WRITE.3/74B0    WRITE.9/74B9    WRITE.CHCR.ECHO/74BC            WRITE.CR.ECHO/74BF              WRITE.MODE/74A4
+ WRITE.PORT/7697                 WRITE1/79AB     WRITE2/79B8    *WRITE3/79C4     WRITEA.CH/74C7  WRITEA.CH.ECHO/74C1
+ WRITEA.CH1/74CF                 WRITEA.CH2/74DC                 WRITEA.CH2A/74EE                WRITEA.CH2B/74F9
+ WRITEA.CH2C/74FD                WRITEA.CH3/7506                 WRITEA.CH4/7509                 WRITEA.PORT/768A
+ WRITEA.TTY/7483                *WRITEAPORT/76E5                 WRITEB.PORT/7694                WRITEB.TTY/748D
+ WRITEBPORT/76EA                 WRSEC/7953      WTSEC1/7956
+
+
+
+
+ASM/6800 1.4A0: 7C01                    
+08/16/82 00:00:00; Page 42; Form 1      Symbols Sorted by Value
+IOSWTPC6800.ASM
+Symbols Sorted by Value:
+
+*DCB.DONEFLAG/0000              *DVTYP.TYPE/0000                 IGN/0000       *M6801/0000     *M6809/0000      OFS/0000
+ RAM64K/0000    *RDSI.DISKINFO/0000             *RDSISTATE.IDLE/0000            *SCBLK.OPCODE/0000              *SYSCALL.OPEN/0000
+ TEMPX/0000      DCB.LASTERROR/0001              HDCMD.HEARTBEAT/0001           *M6800/0001     *RDSISTATE.READING/0001
+ SC.GETCOL/0001 *SCBLK.WLEN/0001                *SYSCALL.CREATE/0001             DVTYP.STAPE/0002                HDCMD.SELDRV/0002
+ LCN.SIZE/0002   NMAGICFCBS/0002                 RDSI.LSN/0002  *RDSISTATE.WRITING/0002          SC.GETEOF/0002  SCBLK.PARAMS/0002
+*SYSCALL.CLOSE/0002             *DCB.NAME/0003   HDCMD.SETSECT/0003              LSN.SIZE/0003  *RDSISTATE.VERIFYING/0003
+*SYSCALL.RENAME/0003             HDCMD.SETSURF/0004              NDRIVES/0004    SC.GETTYPE/0004                 SCBLK.WRBUF/0004
+*SYSCALL.DELETE/0004            *DCB.NEXTDCB/0005                HDCMD.SETTRACK/0005             RDSI.SECTORBASE/0005
+ DCBPOINTER/0006                 HDCMD.SETADDRH/0006             SCBLK.WRLEN/0006               *SYSCALL.CHAIN/0006
+*DCB.DRIVER/0007                 HDCMD.SETADDRL/0007            *RDSI.FLINK/0007                 SDOS.IOBLOCKPTR/0007
+ GOBIT/0008      HDCMD.READ/0008                 SCBLK.RPLEN/0008                HDCMD.WRITE/0009               *RDSI.BLINK/0009
+ SCBLK.RDBUF/000A               *SYSCALL.READA/000A              DVTYP.CLOCK/000B                FDRSC/000B     *RDSI.MODIFIED/000B
+ SDOS.CLOCK/000B                *SYSCALL.READB/000B              RDSI.STATE/000C                 SCBLK.RDLEN/000C
+*SYSCALL.WRITEA/000C            *RDSI.RETRYCOUNT/000D           *SYSCALL.WRITEB/000D             RDSI.SECTOR/000E
+*SCBLK.DATA/000E                *SYSCALL.CONTROL/000E           *SYSCALL.STATUS/000F             CC.ECHO/0010    RDSI.TRACK/0010
+ SSTEPBIT/0010   CC.DISMOUNTDISK/0011            CC.NOECHO/0011 *SYSCALL.EXIT/0011               RDSI.CYLINDER/0012
+*SYSCALL.ERROREXIT/0012         *DCB.OILQUIESCENT/0013           NIOCHANNELS/0013               *SYSCALL.SETERROR/0013
+ CC.SETACTBLOCK/0014            *RDSI.SIZE/0014 *SYSCALL.GETERROR/0014           SDOS.RTI/0015  *SYSCALL.DISPERROR/0015
+*SYSCALL.DEBUG/0018              FCB.SIZE/001A   FDSKI/001B      CC.ACTIVATIONCK/001D            BREAKBIT/0020   IOCB.SIZE/0022
+*DCB.PROFILE/0028                SDOS.WAITEVENT/002A             DSKINFO.SECTORDB/002B           SC.GETLINEFLAGS/002C
+ SDOS.ERROR/002D                 SDOS.ERRORSAVE/0030             SDOS.ERRORED/0033               SDOS.CHECKRDLEN/0036
+ DSKINFO.OPSCOUNT/003C           TRACEBIT/0040   DCB.FDUNIT/0043                *DCB.RINGINBASE/004D
+*DCB.RINGOUTBASE/0059           *DCB.RINGOUTTHRESHOLD/005D      *DCB.LINEBUF/0067               *DCB.LINEBUFLEN/007A
+*DCB.TLBUFFER/007D              *ABORTBIT/0080  *SPECIALFN.POSN/0081            *SPECIALFN.CLEAR/0082           *SPECIALFN.EEOL/0083
+ FDRDC/008C     *DCB.OUTPUTTOBLK/00A1           *DCB.INPUTTOBLK/00A9             FDWRC/00AC     *DCB.TCB/00B1   *DCB.TASKSTACK/00B3
+*DCB.RESET/00B5 *DCB.CLEARIN/00CA                INPUTBUFLEN/00FA               *DCB.VTSIZE/00FD                 ERR.EOFHIT/03E9
+ ERR.ILLDEVICEOP/040A            ERR.PROGRAMKILLED/0411         *ERR.DEVICETIMEDOUT/0412         ERR.DISKREAD/0415
+ ERR.DISKWRITE/0416              ERR.DISKSEEK/0417               ERR.DSKWRTPROT/0418             ERR.DEVICENOTREADY/0424
+*ERR.WRONGDISKTYPE/076E          ERR.ACTIVATIONNOTINBUFFER/0773  ERR.ACTIVATIONRECEIVED/0775     DSKPOOLSIZE/079B
+ SWTPCINIT/3000  SINIT1/3003     SINIT2/300F     DRIVERBASE/7000                 SYSCALLIO/7000  CNFGTABLE/7003  INTSETUP/7027
+ INTDISABLE/703A                 INTENABLE/703C  IRQINT/703E     INTRTI/703F     IOINTPOLL/7040  NOTIMERINT/7044
+ BADINTERRUPTCOUNT/704E          TIMEOUTQUEUE/7050               FUSEBURNEDUP/7058               TASKQUEUE/705C  TASKSTACKINIT/7078
+*TASKSTACKTOP/7080               TASKWAKEUPFLAG/7081             TASKSETUP/7082  DCBNAME.TTY/708A                DCB.TTY/7093
+ CONSOLEDRIVER/709C              OKRTS/70B6      ILLDEVICEOP/70B8               *ERRETX/70BD     LMODE/70C3      LEN/70C4
+ PDATA/70C6      RPLEN/70C8      INPUTBUF/70CA   INPUTBUFP0/71C4                 INPUTBUFP1/71C6                 EOFFLAG/71C8
+ ECHOFLAG/71C9   NCOL/71CA       BASICFLAGS/71CB                 CTRLCNUM/71CC   EXPANDTABFLAG/71CD              CRFLAG/71CE
+ ACTIVATIONCHARSVECTOR/71CF      ACTIVATIONCHARSENSED/71DF       PRTCH/71E0     *PRT2/71EC       PRT3/71EF       PRT1/71F2
+ PRT4/71FA       INCH/7207       OPEN.TTY/720C   OPEN.TTY1/7221  CLOSE.TTY/7230  STATUS.TTY/7233                 ST0/7249
+ ST1/7252        ST2/725B        STATUSRET1/725D                 CONTROL.TTY/7264                RESET.TTY/7279  DECHO/727C
+ DNOECHO/7284    DACTIVATIONCK/728A              DACTIVATION1/7297               DSETACTIVATION/729A             DSETACT1/72A5
+ GETREADPARAMS/72BD              SETRPLEN/72DA   READB.TTY/72E8  READB1/72F1     READB2/7308     READA.TTY/730A  READA1/731A
+ READA2/7324     READA3/732F     READA4/7335     RD1NCOL/735C    RD2NCOL/735F    READA5/7373     READA6/7380     READINPUTBUF/738A
+ RINBUF/7393     RINCH/739C     *RCTRLC/73A6     RI1/73B8        RBACKSPACE/73C3                 RI2/73C8       *RCTRLD/73CC
+ SWTRET/73D5     RI3/73E0        RBAS/73F8       RI4/7400        RSTORECH/740D   RI5/7428        RI6/742D        RI7/7434
+ ACTIVBYTE/743E  ACTIVCHAR/7449  RENDOFINPUT/744F                BACKSPACE/7450  BACKSPC1/746C   BACKSPC2/7471   GETWRITEPARAMS/7472
+ WRITEA.TTY/7483                 WRITEB.TTY/748D                 WRITE.0/7493    WRITE.1/749B    WRITE.MODE/74A4
+ WRITE.2/74AD    WRITE.3/74B0    WRITE.9/74B9    WRITE.CHCR.ECHO/74BC            WRITE.CR.ECHO/74BF              WRITEA.CH.ECHO/74C1
+ WRITEA.CH/74C7  WRITEA.CH1/74CF                 WRITEA.CH2/74DC                 WRITEA.CH2A/74EE                WRITEA.CH2B/74F9
+ WRITEA.CH2C/74FD                WRITEA.CH3/7506                 WRITEA.CH4/7509                 PRTCH2/750A     WR1NCOL/7516
+ WR2NCOL/7519    WR3NCOL/751C    WR4NCOL/7521    DCBNAME.PORT/7526               DCB.PORT/752C   PORTDRIVER/7535
+ PORTMODE/754F   CH/7550         CONTROL.PORT/7551               STATUS.PORT/755B                STPO1/7568      STPO2/756A
+ OPEN.PORT/7571  CLOSE.PORT/7579                 CL1/7581        CL2/7590        CL3/75A2        DELAY1K/75A5    DELAY1KB/75A8
+ INNYBLE/75AC    INNYB1/75BC     INNYB4/75C4     INBYTE/75CC     INBYTEEOF/75DC  READA.PORT/75DE                 READB.PORT/75E5
+
+
+
+
+ASM/6800 1.4A0: 7C01                    
+08/16/82 00:00:00; Page 43; Form 1      Symbols Sorted by Value
+IOSWTPC6800.ASM
+ READ.PORT/75E8  RP1/760D        RP1START/7614   RPIN/761A       RP1A/7622       APORT.MODE/7626                 READAPORT/762A
+ CR1/763A        CR2/7647        CR0/764C        READBPORT/7659  SAVEREADPORTCH/7670             RP1EOF/7685     WRITEA.PORT/768A
+ WRITEB.PORT/7694                WRITE.PORT/7697                 WP0/76BF        WP1/76C4        WP1START/76CB   WPOUT/76CB
+ WP1A/76D3      *WRITEAPORT/76E5                 WRITEBPORT/76EA                 OUTNYBLE/76FE   OUTNYBLE1/7706  DCBNAME.D0/7709
+*DCB.D0/770D     DISKDCBS/770D   DCBNAME.D1/7751                 DCB.D1/7755     DCBNAME.D2/7799                 DCB.D2/779D
+ DCBNAME.D3/77E1                 DCB.D3/77E5     DSKDRIVER/7829  DSKCONTROL/783B                 DSKDISMOUNT/7842
+ FDTEARLSN/7844  DIV18/7860      DIV18.1/7868    DIV18.2/7870    DIV18.3/7878    DIV18.4/7880    DIV18.5/7888    DIV18.6/7890
+ DIV18.7/7898    DIV18.8/78A0    DSKOPSCOUNT/78A2                DSKOPSCOUNT1/78AC               DSKPREP/78AD    DSKREAD/78DF
+ DSKWRITE/78EC   DSKERR/78F9     DSKERR1/7911    DSKRESTORE/7921                 DSKWAITDONE/7921                RDSIPOINTER/7923
+ DRV/7925        TRK/7926        SECT/7927       SIDE/7928       DDATA/7929      CURDRV/792B     CTRK0/792C      RCNT/7930
+ SIDEBT/7931     INTDK/7932     *DUMMY/7943      RDSEC/7944      RDSEC1/7947     WRSEC/7953      WTSEC1/7956     QERR/7960
+ QUIT10/7961     READ/7962       READ1/7975      READ2/7982      READ3/798D      WBUSY/7990      WRITE/7998      WRITE1/79AB
+ WRITE2/79B8    *WRITE3/79C4     SEEK/79C7       SEEK2/79DF      SEEK3/79EC      DEL56U/79F0     DELAY2/79F3     DELAY3/79F6
+ FNDTRK/79F7     FNDTK2/79FF     FNDTK3/7A03     RESTOR/7A04     SELDRV/7A10     SELD1/7A2D      DCBNAME.HD/7A39
+ DCB.HD/7A3D     HDDRIVER/7A81   HDPREP/7A93     HDHLEOK/7AA9    HDREAD/7B21     HDERR/7B33      HDRDOK/7B36     HDWRITE/7B3B
+ CLOCKSTR/7B4F   CLOCKDCB/7B56   CLOCKDRIVER/7B5F                CLOCKCLOSE/7B79                 CLOCKOPEN/7B79  CLOCKPFRESTART/7B79
+ CLOCKSPRUNG/7B7C                CLOCKSTATUS/7B7F                CLOCKRESET/7B94                 CLOCKWRITEB/7B94
+ CLOCKREADB/7B97                 CLOCKRB1/7BA1   CLOCKRB2/7BAF   CLOCKREADA/7BB9                 CLOCKREADA0/7BCB
+ CLOCKREADA1/7BCD                CLOCKREADA2/7BD5                CLOCKREADA3/7BDC                TIMESTR/7BF0    ATTNCHECK/7C01
+ DEBUGSYSCALL/7C01               HDCMD/8010      HDDATA/8011     DRVREG/8014     CMDREG/8018     TRKREG/8019     SECREG/801A
+ DATREG/801B     IRQVECTOR/A000  PORECH/A00C     IOBUF/A080     *SWTGO/A080      BASICDEBUGFLAGS/A083            FCBS/A084
+ IOCBS/A376      IOCBPOINTERS/A5FC               INTERRUPTSTACK/A622             INTSTACKTOP/A662                DSKBUFFERPOOL/A663
+ IOBUFEND/AE00   SDOS/AE00       SWTMON/E0D0     INEEE/E1AC      OUTEEE/E1D1     RDON/E337       RDOFF/E347      PNCHON/E34D
+ PNCHOFF/E353
+
+437 Symbols.
+
+
+ *** No Assembly Errors.
