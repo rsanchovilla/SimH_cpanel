@@ -155,6 +155,7 @@
 #endif
 
 #include <math.h>
+
 #include "cpanel.h"
 
 // the control panel impementation for simulted computer

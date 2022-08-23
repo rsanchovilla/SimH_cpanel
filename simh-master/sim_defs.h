@@ -126,6 +126,9 @@ extern int sim_vax_snprintf(char *buf, size_t buf_size, const char *fmt, ...);
 #include <limits.h>
 #include <ctype.h>
 
+#define min(a,b) fmin(a,b)
+#define max(a,b) fmax(a,b)
+
 #ifndef EXIT_FAILURE
 #define EXIT_FAILURE 1
 #endif

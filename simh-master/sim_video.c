@@ -37,6 +37,8 @@
    11-Jun-2013  MB      First version
 */
 
+#include <math.h>
+
 #include "sim_video.h"
 #include "scp.h"
 
@@ -3789,7 +3791,6 @@ if (SDL_PushEvent (&user_event) < 0) {
 
 
 #include <SDL_audio.h>
-#include <math.h>
 
 const int AMPLITUDE = 20000;
 const int SAMPLE_FREQUENCY = 11025;
