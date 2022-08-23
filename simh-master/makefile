@@ -100,8 +100,10 @@ ifeq (old,$(shell gmake --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ if (
   $(warning *** Warning *** GNU Make Version $(GMAKE_VERSION) is too old to)
   $(warning *** Warning *** fully process this makefile)
 endif
+
 BUILD_SINGLE := ${MAKECMDGOALS} $(BLANK_SUFFIX)
 BUILD_MULTIPLE_VERB = is
+
 # building the pdp1, pdp11, tx-0, or any microvax simulator could use video support
 ifneq (,$(or $(findstring XXpdp1XX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS}))),$(findstring pdp11,${MAKECMDGOALS}),$(findstring tx-0,${MAKECMDGOALS}),$(findstring microvax1,${MAKECMDGOALS}),$(findstring microvax2,${MAKECMDGOALS}),$(findstring microvax3900,${MAKECMDGOALS}),$(findstring microvax2000,${MAKECMDGOALS}),$(findstring vaxstation3100,${MAKECMDGOALS}),$(findstring XXvaxXX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS})))))
   VIDEO_USEFUL = true
@@ -1690,6 +1692,8 @@ I7094_OPT = -DUSE_INT64 -I ${I7094D}
 # Simulators with CPANEL ======================= Start
 #
 
+CPANEL_EXTRALIBS=-lSDL2 -lSDL2_ttf
+
 I650D = ${SIMHD}/I650
 I650 = ${I650D}/i650_cpu.c ${I650D}/i650_cdr.c ${I650D}/i650_cdp.c \
        ${I650D}/i650_dsk.c ${I650D}/i650_mt.c ${I650D}/i650_sys.c ${I650D}/i650_cpanel.c \
@@ -1708,7 +1712,7 @@ NORC = ${NORCD}/NORC_cpu.c \
     ${SIMHD}/cpanel_vid.c 
 NORC_OPT = -I ${NORCD} -DUSE_INT64 -DUSE_SIM_CARD -DUSE_SIM_VIDEO -DHAVE_LIBSDL -DCPANEL
 
-I701D = ${SIMHD}/I701             
+I701D = ${SIMHD}/I701
 I701 = ${I701D}/i701_cpu.c \
     ${I701D}/i701_mt.c \
     ${I701D}/i701_cdr.c \
@@ -2162,7 +2166,7 @@ ALL = pdp1 pdp4 pdp7 pdp8 pdp9 pdp15 pdp11 pdp10 \
 # Simulators with CPANEL ======================= Start
 #
 
-ALL = i650 NORC i701 IBM360
+ALL = i650 NORC IBM360 i701
 
 #
 # Simulators with CPANEL ======================= End
@@ -2860,7 +2864,7 @@ i701 : ${BIN}i701${EXE}
 
 ${BIN}i701${EXE} : ${I701} ${SIM} 
 	${MKDIRBIN}
-	${CC} ${I701} ${SIM} ${I701_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+	${CC} ${I701} ${SIM} ${I701_OPT} ${CC_OUTSPEC} ${LDFLAGS} ${CPANEL_EXTRALIBS}
 ifneq (,$(call find_test,${I701D},i701))
 	$@ $(call find_test,${I701D},i701) ${TEST_ARG}
 endif
@@ -2869,7 +2873,7 @@ i650 : ${BIN}i650${EXE}
 
 ${BIN}i650${EXE} : ${I650} ${SIM} 
 	${MKDIRBIN}
-	${CC} ${I650} ${SIM} ${I650_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+	${CC} ${I650} ${SIM} ${I650_OPT} ${CC_OUTSPEC} ${LDFLAGS} ${CPANEL_EXTRALIBS}
 ifneq (,$(call find_test,${I650D},i650))
 	$@ $(call find_test,${I650D},i650) ${TEST_ARG}
 endif
@@ -2878,7 +2882,7 @@ NORC : ${BIN}NORC${EXE}
 
 ${BIN}NORC${EXE} : ${NORC} ${SIM} 
 	${MKDIRBIN}
-	${CC} ${NORC} ${SIM} ${NORC_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+	${CC} ${NORC} ${SIM} ${NORC_OPT} ${CC_OUTSPEC} ${LDFLAGS} ${CPANEL_EXTRALIBS}
 ifneq (,$(call find_test,${NORCD},NORC))
 	$@ $(call find_test,${NORCD},NORC) ${TEST_ARG}
 endif
@@ -2887,7 +2891,7 @@ IBM360 : ${BIN}IBM360${EXE}
 
 ${BIN}IBM360${EXE} : ${IBM360} ${SIM} 
 	${MKDIRBIN}
-	${CC} ${IBM360} ${SIM} ${IBM360_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+	${CC} ${IBM360} ${SIM} ${IBM360_OPT} ${CC_OUTSPEC} ${LDFLAGS} ${CPANEL_EXTRALIBS}
 ifneq (,$(call find_test,${IBM360D},IBM360))
 	$@ $(call find_test,${IBM360D},IBM360) ${TEST_ARG}
 endif
