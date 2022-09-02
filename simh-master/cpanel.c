@@ -158,6 +158,13 @@
 
 #include "cpanel.h"
 
+#ifndef MAX
+#define MAX(a,b)  (((a) >= (b)) ? (a) : (b))
+#endif
+#ifndef MIN
+#define MIN(a,b)  (((a) <= (b)) ? (a) : (b))
+#endif
+
 // the control panel impementation for simulted computer
 // provides this array with the needed callbacks
 extern CP_TYPE cp_types[];
@@ -2982,10 +2989,10 @@ void ControlPanel_Refresh(void)
                     // both rectangles overlap. calc if worth merge them
                     int npixelsA = cpvid[ncp].RectList.w[n-1] * cpvid[ncp].RectList.h[n-1]; 
                     int npixelsB = cpvid[ncp].RectList.w[n] * cpvid[ncp].RectList.h[n]; 
-                    int ix = min(cpvid[ncp].RectList.x[n-1], cpvid[ncp].RectList.x[n]);
-                    int iy = min(cpvid[ncp].RectList.y[n-1], cpvid[ncp].RectList.y[n]);
-                    int xx = max(cpvid[ncp].RectList.x[n-1] + cpvid[ncp].RectList.w[n-1], cpvid[ncp].RectList.x[n] + cpvid[ncp].RectList.w[n]);
-                    int yy = max(cpvid[ncp].RectList.y[n-1] + cpvid[ncp].RectList.h[n-1], cpvid[ncp].RectList.y[n] + cpvid[ncp].RectList.h[n]);
+                    int ix = MIN(cpvid[ncp].RectList.x[n-1], cpvid[ncp].RectList.x[n]);
+                    int iy = MIN(cpvid[ncp].RectList.y[n-1], cpvid[ncp].RectList.y[n]);
+                    int xx = MAX(cpvid[ncp].RectList.x[n-1] + cpvid[ncp].RectList.w[n-1], cpvid[ncp].RectList.x[n] + cpvid[ncp].RectList.w[n]);
+                    int yy = MAX(cpvid[ncp].RectList.y[n-1] + cpvid[ncp].RectList.h[n-1], cpvid[ncp].RectList.y[n] + cpvid[ncp].RectList.h[n]);
                     int npixelsAB = (xx-ix) * (yy-iy);
                     if (npixelsAB < npixelsA + npixelsB) {
                         // the merged rectangle has less pixels 

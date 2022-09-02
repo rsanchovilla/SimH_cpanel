@@ -6,7 +6,7 @@
 ;*              based on SSB I/O Package
 
 ;*              features implemented: 
-;                            mapalg: Only supports 0001
+;                            mapalg: Only supports mapping algorith 0001
 ;                            I/O Implemented using active wait (no interruption based)
 ;                            no clock interrupt
 ;                            no vt terminal driver. Just a minimal subset
@@ -17,6 +17,7 @@
 ;                                              ^Z to signal end of file
 ;                                              ^D to call monitor, J A080 to return to SDOS
 ;                                              basic debug keys ^B, ^T, ^G, ^V
+;                            support for 4 floppy disk
 ;                            only supported disk geometry: 5'25 floppy 2 sides x 35tr x 18 sec x 128 bytes
 ;                            supports for HLE 5MB Hard Disk
 ;                            PORT: device to read from PTR/punch to PTP
@@ -532,6 +533,7 @@ prt1		clr 	ncol
 prt4		jsr	outeee
 		ldaa	#32
 		jsr	outeee
+		dec 	ncol
 		ldaa	#8
 		jmp	outeee
 
@@ -574,7 +576,7 @@ STATUS.TTY	ldx     SDOS+SDOS.IOBLOCKPTR
 		bra	statusret1
 st0		cmpb	#SC.GETCOL
 		bne	st1
-		ldaa	ncol			; get the bumber of columns used in current line
+		ldaa	ncol			; get the number of columns used in current line
 		bra	statusret1
 st1		cmpb	#sc.geteof
 		bne 	st2		
@@ -861,7 +863,7 @@ write.MODE	ldab	#0			; if not ascii mode (that means, we are executing a writeb)
 		BEQ	WRITE.2			; br to print char without any further processing		
 		JSR	WRITEA.CH		; convert char <CR> -> <CR><LF>, ctrol char -> ^X
 		bra	write.3
-WRITE.2		JSR 	prtch2			; send char to console via swtbug
+WRITE.2		JSR 	prtch			; send char to console via swtbug
 write.3		LDX	LEN
 		DEX
 		STX	LEN
@@ -881,7 +883,7 @@ WRITEA.CH	cmpa	#12			; ^L -> do not print
 writea.ch1	andA 	#$7f		
 		CMPA	#13
 		BNE	WRITEA.CH2		; SEND A <LF> AFTER EACH <CR>
-		JSR 	prtch2
+		JSR 	prtch
 		LDAA    #10
 		bra	WRITEA.CH3	
 WRITEA.CH2  	cmpa	#9			; check for <TAB> (char 9 dec)
@@ -895,7 +897,7 @@ WRITEA.CH2  	cmpa	#9			; check for <TAB> (char 9 dec)
 		tab				; b=spaces that replaces tab=8-ncol
 WRITEA.CH2a	pshb
 		ldaa	#32
-		jsr	prtch2
+		jsr	prtch
 		pulb
 		decb
 		bne	WRITEA.CH2a
@@ -904,25 +906,11 @@ WRITEA.CH2b	cmpa	#32			; if ch < 32, print it as control char "^ch"
 		bcC	WRITEA.CH3		; BR IF A-REG >= 32
 WRITEA.CH2c	psha
 		ldaa	#'^
-		JSR 	prtch2
+		JSR 	prtch
 		pula
 		adda	#'@
-WRITEA.CH3	jsr 	prtch2
+WRITEA.CH3	jsr 	prtch
 WRITEA.CH4	RTS
-		
-prtch2		cmpa	#13			; handle ncol computing
-		beq	wr3ncol			; for writea.tty
-		cmpa	#8
-		beq	wr4ncol
-		cmpa	#10
-		beq	wr2ncol			; <LF> does not change ncol (char is ignored)
-wr1ncol		inc	ncol
-wr2ncol		jmp 	prtch
-wr3ncol		clr	ncol			; <CR> resets ncol
-		bra	wr1ncol
-wr4ncol		dec	ncol			; <BackSpace> ^H decr ncol
-		bra	wr2ncol				
-		
 		
 ; DEVICE CONTROL BLOCK FOR SIMH IO VIRTUAL PORT
 

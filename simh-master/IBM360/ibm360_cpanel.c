@@ -3937,7 +3937,7 @@ int get_mt_last_command(int unit)
         mt_info[unit].last_cmd=0; // tape idle -> clear last_cmd as it is already copied to cmd
     } else if (current_cmd == 0x07) {
         // MT_REW  -> Rewind command in progress 
-        extern uint32 TapeCmd_msec[8];           // duration of device operation
+        extern uint32 TapeCmd_msec[8]; 
         if (TapeCmd_msec[unit]==0) return 0; // rew durantion zero -> no rew to do
         return -1;  
     }
@@ -4010,7 +4010,7 @@ void Refresh_MagTape(void)
             memset (&mtcab[unit], 0, sizeof (mtcab[0]) ); // clear all
             mtcab[unit].state.MT_DoorOpen=bDoorOpen; // restore door state
             mtcab[unit].reel[0].color = 0; /* Left reel defaults to blue */
-            mtcab[unit].reel[1].color = 0; /* Right reel defaults to bñue */
+            mtcab[unit].reel[1].color = 0; /* Right reel defaults to bÃ±ue */
             cmode = ' ';
 
             MT_cab_opt[2] = '0' + unit;

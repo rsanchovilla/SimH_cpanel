@@ -38,7 +38,6 @@
 */
 
 #include <math.h>
-
 #include "sim_video.h"
 #include "scp.h"
 
@@ -632,9 +631,9 @@ while (1) {
         if (event.type == SDL_USEREVENT) {
             if (event.user.code == EVENT_EXIT)
                 break;
-            if (event.user.code == EVENT_OPEN) {
+            if (event.user.code == EVENT_OPEN) 
                 vid_video_events ((VID_DISPLAY *)event.user.data1);
-            } else {
+             else {
                 if (event.user.code == EVENT_SHOW)
                     vid_show_video_event ();
                 else {
@@ -676,8 +675,10 @@ user_event.user.data2 = NULL;
 
 SDL_PushEvent (&user_event);
 
+#if defined(CPANEL)
 sim_debug(CP_SDL, vptr->vid_dev, "SimH Thread: vid_create_window '%', w %d, h %d, vptr %x -> Push EVENT_OPEN to Main Thread\n", 
           vptr->vid_title, vptr->vid_width, vptr->vid_height, vptr);
+#endif
 
 // wait for event processed. Safety: max wait: 30 sec
 while ((!vptr->vid_ready) && (++wait_count < 300))  
@@ -1933,7 +1934,7 @@ void vid_update_texture_scaled(SDL_Rect T, SDL_Texture * texture, int scale,
 
   // texture_y, texture_x will iterate on texture rectangle to generate
   // for each texture pixel, will get the mean of equivanet surface pixels 
-  // the texture pìxel texture_x, texture_y maps with a rectangel in surface
+  // the texture pÃ¬xel texture_x, texture_y maps with a rectangel in surface
   // at coords x0intA|x0fractA, y0intA|y0fractA -> x0intB|x0fractB, y0intB|y0fractB
   // x0int is the integer part, x0frac is the fractional part (base 256 -> pixel coord 0.5 is 128)
   // to calc x9int|x0frac we use Sx, Sy that is coordinates x 65536
@@ -2096,7 +2097,7 @@ if ((vptr->RectList == NULL) || (vptr->RectList->Count<1) || (vptr->vid_flags & 
         TeRectList.Count = vptr->RectList->Count; 
         for (n=0; n<vptr->RectList->Count; n++) {
             if (vptr->RectList->flags[n] & RECTLIST_FLAG_NOSCALE) {
-                // copy rectagle from surface to texture, no scaling of size (scalen only position=¡)
+                // copy rectagle from surface to texture, no scaling of size (scalen only position=Â¡)
                 T.x=(x=vptr->RectList->x[n]) * scale / 100;        
                 T.y=(y=vptr->RectList->y[n]) * scale / 100; 
                 T.w=vptr->RectList->w[n]; 
@@ -2859,9 +2860,8 @@ vid_controllers_setup (vptr0->vid_dev);
     }
 #endif
 
-sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vptr0->vid_dev, "vid_thread() - Started\n");
-
 vptr0->vid_ready = TRUE;
+sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vptr0->vid_dev, "vid_thread() - Started\n");
 
 while (vid_active) {
 #if defined(CPANEL)
@@ -2990,26 +2990,40 @@ while (vid_active) {
                 /* EVENT_SCREENSHOT to take a screenshot */
                 /* EVENT_BEEP   to emit a beep sound */
                 while (vid_active && event.user.code) {
-                    vptr = vid_get_event_window (&event, event.user.windowID);
-                    if (vptr == NULL)
+                    /* Handle Beep first since it isn't a window oriented event */
+                    if (event.user.code == EVENT_BEEP) {
+                        vid_beep_event ();
+                        event.user.code = 0;    /* Mark as done */
                         continue;
+                        }
+                    vptr = vid_get_event_window (&event, event.user.windowID);
+                    if (vptr == NULL) {
+                        sim_debug (SIM_VID_DBG_VIDEO, vptr->vid_dev, "vid_thread() - Ignored event not bound to a window\n");
+                        event.user.code = 0;    /* Mark as done */
+                        break;
+                        }
                     if (event.user.code == EVENT_REDRAW) {
 #if defined(CPANEL)
                         if (event.user.data1) vid_update_ex ((SDL_UserEvent*)&event, vptr); 
-                        else vid_update (vptr);                        
+                        else vid_update (vptr);       
+                        // no need to check if multiple video update events are waiting
+                        // first vid_update_ex call sets vid_refresh_in_progress, last vid_update_ex
+                        // call clears vid_refresh_in_progress, so not worries
+                        event.user.code = 0;    /* Mark as done */
 #else
                         vid_update (vptr);
-#endif
                         event.user.code = 0;    /* Mark as done */
-if (0)                        while (SDL_PeepEvents (&event, 1, SDL_GETEVENT, SDL_USEREVENT, SDL_USEREVENT)) {
-                            if (event.user.code == EVENT_REDRAW) {
-                                /* Only do a single video update between waiting for events */
+                        while (SDL_PeepEvents (&event, 1, SDL_GETEVENT, SDL_USEREVENT, SDL_USEREVENT)) {
+                            if ((event.user.code == EVENT_REDRAW) &&
+                                (vptr == vid_get_event_window (&event, event.user.windowID))) {
+                                /* Only do a single video update to the same window between waiting for events */
                                 sim_debug (SIM_VID_DBG_VIDEO, vptr->vid_dev, "vid_thread() - Ignored extra REDRAW Event\n");
                                 event.user.code = 0;    /* Mark as done */
                                 continue;
                                 }
                             break;
                             }
+#endif
                         }
                     if (event.user.code == EVENT_CURSOR) {
                         vid_update_cursor (vptr, (SDL_Cursor *)(event.user.data1), (int)(event.user.data2));
@@ -3866,6 +3880,7 @@ user_event.user.data2 = NULL;
 #if defined (SDL_MAIN_AVAILABLE)
 while (SDL_PushEvent (&user_event) < 0)
     sim_os_ms_sleep (10);
+#else
 vid_beep_event ();
 #endif
 SDL_Delay (vid_beep_duration + 100);/* Wait for sound to finnish */

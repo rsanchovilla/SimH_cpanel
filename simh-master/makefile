@@ -82,6 +82,10 @@
 #
 # CC Command (and platform available options).  (Poor man's autoconf)
 #
+# building with SDL2 library on Linux
+#  
+#   make CFLAGS_G="-I /usr/include/SDL2"
+
 ifneq (,${GREP_OPTIONS})
   $(info GREP_OPTIONS is defined in your environment.)
   $(info )
