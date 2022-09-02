@@ -1,4 +1,4 @@
-/* norc_defs.h: IBM NORC simulator definitions
+/* NORC_defs.h: IBM NORC simulator definitions
 
    Copyright (c) 2020, Roberto Sancho
 

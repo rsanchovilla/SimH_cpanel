@@ -67,7 +67,7 @@
 */
 
 #include <math.h>
-#include "norc_defs.h"
+#include "NORC_defs.h"	        
 #if defined(CPANEL)
 #include "cpanel.h"
 int cpanel_gui_supported = 1;     
