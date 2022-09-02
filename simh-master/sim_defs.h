@@ -126,9 +126,6 @@ extern int sim_vax_snprintf(char *buf, size_t buf_size, const char *fmt, ...);
 #include <limits.h>
 #include <ctype.h>
 
-#define min(a,b) fmin(a,b)
-#define max(a,b) fmax(a,b)
-
 #ifndef EXIT_FAILURE
 #define EXIT_FAILURE 1
 #endif
@@ -521,9 +518,10 @@ struct DEVICE {
     t_stat              (*attach_help)(FILE *st, DEVICE *dptr,
                             UNIT *uptr, int32 flag, const char *cptr);
                                                         /* attach help */
-    void *help_ctx;                                     /* Context available to help routines */
+    void                *help_ctx;                      /* Context available to help routines */
     const char          *(*description)(DEVICE *dptr);  /* Device Description */
     BRKTYPTAB           *brk_types;                     /* Breakpoint types */
+    void                *type_ctx;                      /* Device Type/Library Context */
     };
 
 /* Device flags */
@@ -581,6 +579,7 @@ struct UNIT {
     char                *filename;                      /* open file name */
     FILE                *fileref;                       /* file reference */
     void                *filebuf;                       /* memory buffer */
+    void                *filebuf2;                      /* copy of initial memory buffer */
     uint32              hwmark;                         /* high water mark */
     int32               time;                           /* time out */
     uint32              flags;                          /* flags */
@@ -901,7 +900,7 @@ struct MEMFILE {
 
  */
 
-#define UDATA(act,fl,cap) NULL,act,NULL,NULL,NULL,0,0,(fl),0,(cap),0,NULL,0,0
+#define UDATA(act,fl,cap) NULL,act,NULL,NULL,NULL,NULL,0,0,(fl),0,(cap),0,NULL,0,0
 
 /* Internal use ONLY (see below) Generic Register declaration for all fields */
 #define _REGDATANF(nm,loc,rdx,wd,off,dep,desc,flds,qptr,siz,elesiz,macro) \
@@ -988,6 +987,7 @@ struct MEMFILE {
 /* Hidden Blob of Data - Only used for SAVE/RESTORE */
 #define SAVEDATA(nm,loc) \
     _REGDATANF(#nm,&(loc),0,8,0,1,NULL,NULL,0,sizeof(loc),sizeof(loc),SAVEDATA),(REG_HRO)
+#define STARTBIT             {"",  0x00000000, 0,  NULL, NULL}  /* Start at beginning bit */
 #define BIT(nm)              {#nm, 0xffffffff, 1,  NULL, NULL}  /* Single Bit definition */
 #define BITNC                {"",  0xffffffff, 1,  NULL, NULL}  /* Don't care Bit definition */
 #define BITF(nm,sz)          {#nm, 0xffffffff, sz, NULL, NULL}  /* Bit Field definition */
@@ -1075,6 +1075,7 @@ struct MEMFILE {
 /* Hidden Blob of Data - Only used for SAVE/RESTORE */
 #define SAVEDATA(nm,loc) \
     _REGDATANF("nm",&(loc),0,8,0,1,NULL,NULL,0,sizeof(loc),sizeof(loc)),SAVEDATA),(REG_HRO)
+#define STARTBIT             {"",   0x00000000, 0,  NULL, NULL} /* Start at beginning bit */
 #define BIT(nm)              {"nm", 0xffffffff, 1,  NULL, NULL} /* Single Bit definition */
 #define BITNC                {"",   0xffffffff, 1,  NULL, NULL} /* Don't care Bit definition */
 #define BITF(nm,sz)          {"nm", 0xffffffff, sz, NULL, NULL} /* Bit Field definition */
