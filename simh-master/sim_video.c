@@ -37,6 +37,7 @@
    11-Jun-2013  MB      First version
 */
 
+#include <math.h>
 #include "sim_video.h"
 #include "scp.h"
 
@@ -630,9 +631,9 @@ while (1) {
         if (event.type == SDL_USEREVENT) {
             if (event.user.code == EVENT_EXIT)
                 break;
-            if (event.user.code == EVENT_OPEN) {
+            if (event.user.code == EVENT_OPEN) 
                 vid_video_events ((VID_DISPLAY *)event.user.data1);
-            } else {
+             else {
                 if (event.user.code == EVENT_SHOW)
                     vid_show_video_event ();
                 else {
@@ -674,8 +675,10 @@ user_event.user.data2 = NULL;
 
 SDL_PushEvent (&user_event);
 
+#if defined(CPANEL)
 sim_debug(CP_SDL, vptr->vid_dev, "SimH Thread: vid_create_window '%', w %d, h %d, vptr %x -> Push EVENT_OPEN to Main Thread\n", 
           vptr->vid_title, vptr->vid_width, vptr->vid_height, vptr);
+#endif
 
 // wait for event processed. Safety: max wait: 30 sec
 while ((!vptr->vid_ready) && (++wait_count < 300))  
@@ -2857,9 +2860,8 @@ vid_controllers_setup (vptr0->vid_dev);
     }
 #endif
 
-sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vptr0->vid_dev, "vid_thread() - Started\n");
-
 vptr0->vid_ready = TRUE;
+sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vptr0->vid_dev, "vid_thread() - Started\n");
 
 while (vid_active) {
 #if defined(CPANEL)
@@ -2988,26 +2990,40 @@ while (vid_active) {
                 /* EVENT_SCREENSHOT to take a screenshot */
                 /* EVENT_BEEP   to emit a beep sound */
                 while (vid_active && event.user.code) {
-                    vptr = vid_get_event_window (&event, event.user.windowID);
-                    if (vptr == NULL)
+                    /* Handle Beep first since it isn't a window oriented event */
+                    if (event.user.code == EVENT_BEEP) {
+                        vid_beep_event ();
+                        event.user.code = 0;    /* Mark as done */
                         continue;
+                        }
+                    vptr = vid_get_event_window (&event, event.user.windowID);
+                    if (vptr == NULL) {
+                        sim_debug (SIM_VID_DBG_VIDEO, vptr->vid_dev, "vid_thread() - Ignored event not bound to a window\n");
+                        event.user.code = 0;    /* Mark as done */
+                        break;
+                        }
                     if (event.user.code == EVENT_REDRAW) {
 #if defined(CPANEL)
                         if (event.user.data1) vid_update_ex ((SDL_UserEvent*)&event, vptr); 
-                        else vid_update (vptr);                        
+                        else vid_update (vptr);       
+                        // no need to check if multiple video update events are waiting
+                        // first vid_update_ex call sets vid_refresh_in_progress, last vid_update_ex
+                        // call clears vid_refresh_in_progress, so not worries
+                        event.user.code = 0;    /* Mark as done */
 #else
                         vid_update (vptr);
-#endif
                         event.user.code = 0;    /* Mark as done */
-if (0)                        while (SDL_PeepEvents (&event, 1, SDL_GETEVENT, SDL_USEREVENT, SDL_USEREVENT)) {
-                            if (event.user.code == EVENT_REDRAW) {
-                                /* Only do a single video update between waiting for events */
+                        while (SDL_PeepEvents (&event, 1, SDL_GETEVENT, SDL_USEREVENT, SDL_USEREVENT)) {
+                            if ((event.user.code == EVENT_REDRAW) &&
+                                (vptr == vid_get_event_window (&event, event.user.windowID))) {
+                                /* Only do a single video update to the same window between waiting for events */
                                 sim_debug (SIM_VID_DBG_VIDEO, vptr->vid_dev, "vid_thread() - Ignored extra REDRAW Event\n");
                                 event.user.code = 0;    /* Mark as done */
                                 continue;
                                 }
                             break;
                             }
+#endif
                         }
                     if (event.user.code == EVENT_CURSOR) {
                         vid_update_cursor (vptr, (SDL_Cursor *)(event.user.data1), (int)(event.user.data2));
@@ -3789,7 +3805,6 @@ if (SDL_PushEvent (&user_event) < 0) {
 
 
 #include <SDL_audio.h>
-#include <math.h>
 
 const int AMPLITUDE = 20000;
 const int SAMPLE_FREQUENCY = 11025;
@@ -3865,6 +3880,7 @@ user_event.user.data2 = NULL;
 #if defined (SDL_MAIN_AVAILABLE)
 while (SDL_PushEvent (&user_event) < 0)
     sim_os_ms_sleep (10);
+#else
 vid_beep_event ();
 #endif
 SDL_Delay (vid_beep_duration + 100);/* Wait for sound to finnish */
