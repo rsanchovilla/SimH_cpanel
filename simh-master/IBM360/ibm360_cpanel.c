@@ -3936,7 +3936,7 @@ int get_mt_last_command(int unit)
         mt_info[unit].last_cmd=0; // tape idle -> clear last_cmd as it is already copied to cmd
     } else if (current_cmd == 0x07) {
         // MT_REW  -> Rewind command in progress 
-        extern int TapeCmd_msec[8]; 
+        extern uint32 TapeCmd_msec[8]; 
         if (TapeCmd_msec[unit]==0) return 0; // rew durantion zero -> no rew to do
         return -1;  
     }
