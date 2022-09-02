@@ -1934,7 +1934,7 @@ void vid_update_texture_scaled(SDL_Rect T, SDL_Texture * texture, int scale,
 
   // texture_y, texture_x will iterate on texture rectangle to generate
   // for each texture pixel, will get the mean of equivanet surface pixels 
-  // the texture pìxel texture_x, texture_y maps with a rectangel in surface
+  // the texture pÃ¬xel texture_x, texture_y maps with a rectangel in surface
   // at coords x0intA|x0fractA, y0intA|y0fractA -> x0intB|x0fractB, y0intB|y0fractB
   // x0int is the integer part, x0frac is the fractional part (base 256 -> pixel coord 0.5 is 128)
   // to calc x9int|x0frac we use Sx, Sy that is coordinates x 65536
@@ -2097,7 +2097,7 @@ if ((vptr->RectList == NULL) || (vptr->RectList->Count<1) || (vptr->vid_flags & 
         TeRectList.Count = vptr->RectList->Count; 
         for (n=0; n<vptr->RectList->Count; n++) {
             if (vptr->RectList->flags[n] & RECTLIST_FLAG_NOSCALE) {
-                // copy rectagle from surface to texture, no scaling of size (scalen only position=¡)
+                // copy rectagle from surface to texture, no scaling of size (scalen only position=Â¡)
                 T.x=(x=vptr->RectList->x[n]) * scale / 100;        
                 T.y=(y=vptr->RectList->y[n]) * scale / 100; 
                 T.w=vptr->RectList->w[n]; 

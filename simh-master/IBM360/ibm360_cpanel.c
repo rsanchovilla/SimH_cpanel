@@ -46,6 +46,7 @@
 #include "ibm360_defs.h"	        
 #include "sim_tape.h"
 #include "sim_card.h"
+
 #include <math.h>
 
 // cpu registers
@@ -4009,7 +4010,7 @@ void Refresh_MagTape(void)
             memset (&mtcab[unit], 0, sizeof (mtcab[0]) ); // clear all
             mtcab[unit].state.MT_DoorOpen=bDoorOpen; // restore door state
             mtcab[unit].reel[0].color = 0; /* Left reel defaults to blue */
-            mtcab[unit].reel[1].color = 0; /* Right reel defaults to bñue */
+            mtcab[unit].reel[1].color = 0; /* Right reel defaults to bÃ±ue */
             cmode = ' ';
 
             MT_cab_opt[2] = '0' + unit;
