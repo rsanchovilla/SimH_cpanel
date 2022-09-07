@@ -155,9 +155,9 @@
 #endif
 
 #include <math.h>
-
 #include "cpanel.h"
 
+// added to not depend on stdlib max() and min()
 #ifndef MAX
 #define MAX(a,b)  (((a) >= (b)) ? (a) : (b))
 #endif

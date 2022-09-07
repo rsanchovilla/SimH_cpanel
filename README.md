@@ -1,7 +1,7 @@
 # SimH_cpanel
 
 
-**NEW!: SWTPC 6800 Simulator**
+**NEW!: IBM 370/138 + DASD 3350 visuals + support for DOS/VS
 
 The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
@@ -9,7 +9,7 @@ The visuals covers interactive control panels (lights, switches, buttons) but al
 other devices: tapes, card readers, disk, etc.
 
 IBM360 and i7000 work is based on Richard Cornwell SimH fork, modified to use cpanel modules. 
-swtpc6800 work is based on SimH Bill Beech.
+swtpc6800 work is based on Bill Beech SimH simulator.
 i701, i650 and NORC simulators are my own SimH simulators
 
 <table>
@@ -44,14 +44,14 @@ Currently supports visuals emulation for:
   * MP-T Timer Card
   * subLogic Graphics One Terminal
 
-* IBM 360/370 (MAR/2022)
+* IBM 360/370 (SEP/2022)
   * IBM 2401, 2415 and 3420 Tapes
   * IBM 2450 and 3525 Card reader punch
   * IBM 1403 and 3203 Printer
-  * IBM 2314 and 3330 DASD
+  * IBM 2314, 3330 and 3350 DASD
   * IBM 1052 and 3210 Printer-Keyboard Console
   * IBM 360 CPU Model 30, 40, 50 and 65
-  * IBM 370 CPU Model 145 and 148
+  * IBM 370 CPU Model 145, 148 and 138
 
   Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20360%20Panels%20Screen%20Shots.png) to preview control panels.
    Source code in simh-master folder
@@ -198,6 +198,17 @@ Once uncompressed, you will find several ready to run .bat files:
 * execute `run swtp6800 SDOS 1.1G compile.bat` to run compile SDOS 1.1G Operating System binary files in /comp folder from sources in /build/src
 
 ## IBM 370
+
+### Model 138
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM370_DOSVS.zip) to download DOS/VS test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM 370-138 DOSVS r34 sysgen (1MB).bat` batch file to sysgen the operating system at real hw speed. Will need 5h30m aprox
+* execute `run CPanel IBM 370-138 DOSVS r34 (1977).bat` batch file to IPL the system. Then drop jcl file into card reader to run it.
+ 
+  ![IBM 370 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM370M138.png)
 
 ### Model 145
 

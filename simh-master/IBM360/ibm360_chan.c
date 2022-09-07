@@ -55,7 +55,7 @@
 #define STATUS_CHECK     0x0200             /* Unit check */
 #define STATUS_EXPT      0x0100             /* Unit excpetion */
 #define STATUS_PCI       0x0080             /* Program interupt */
-#define STATUS_LENGTH    0x0040             /* Incorrect lenght */
+#define STATUS_LENGTH    0x0040             /* Incorrect length */
 #define STATUS_PCHK      0x0020             /* Program check */
 #define STATUS_PROT      0x0010             /* Protection check */
 #define STATUS_CDATA     0x0008             /* Channel data check */
@@ -1102,6 +1102,12 @@ int testio(uint16 addr) {
         return 1;
     }
 
+    if (status & STATUS_BUSY) {             /* Device busy */
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x %x cc=2\n", addr,
+              chan->daddr, chan->ccw_cmd, chan->ccw_flags, status);
+        return 2;
+    }
+
     /* Everything ok, return cc=0 */
     sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x cc=0\n", addr,
               chan->daddr, chan->ccw_cmd, chan->ccw_flags);
@@ -1185,7 +1191,7 @@ int testchan(uint16 channel) {
     /* 360 Principles of Operation says, "Bit positions 21-23 of the
     sum formed by the addition of the content of register B1 and the
     content of the D1 field identify the channel to which the
-    instruction applies. Bit positions 24-31 of the address are ignored.
+    instruction applies. Bit positions 24-31 of the address are ignored."
     /67 Functional Characteristics do not mention any changes in basic or
     extended control mode of the TCH instruction behaviour.
     However, historic /67 code for MTS suggests that bits 19-20 of the

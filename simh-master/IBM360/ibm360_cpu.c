@@ -142,6 +142,7 @@ uint32       cpu_start_tm0 = 0;      // timestamp for cpu start. used to compute
 uint32       cpu_mem_addr = 0;       // save last accessed main storage addr accessed to be shown on control panel
 uint32       cpu_mem_data = 0;       // save last data read/write from/to main storage to be shown on control panel. Bit 31 signals value set
 addrcomp_rec cpu_mem_comp = {0};     // compare data to breakpoint execution if addr hit
+int          cpu_opcode = 0;         // last opcode executed
 int          cpu_psw_restart = 0;    // =1 when operator requested a psw restart
 int          InstrExec = 0;          // count of intructions executed so far (real instr, if cpu waiting, InstrExec do NO get incremented)
 int          InstrCycles = 0;        // count of intructions loops executed so far (if cpu waiting, do get incremented)
@@ -1701,7 +1702,7 @@ opr:
                  src1h = fpregs[reg1|1];
             else
                  src1h = 0;
-            if ((op & 0x40) == 0x40) {
+            if ((op & 0x40) != 0) {
                 if ((op & 0x10) == 0 && (addr1 & 0x3) != 0) {
                    storepsw(OPPSW, IRC_SPEC);
                    goto supress;
@@ -1749,6 +1750,10 @@ opr:
              hst[hst_p].src2 = src2;
         }
         sim_debug(DEBUG_TRACE, &cpu_dev, "S1=%08x S2=%08x ", src1, src2);
+
+#if defined(CPANEL)
+        cpu_opcode = op;
+#endif
 
         /* Preform opcode */
         switch (op) {
@@ -2054,19 +2059,20 @@ set_cc:
         case OP_S:
         case OP_SR:
         case OP_SH:
-                src2 = NEG(src2);
-                /* Fall through */
+                src2 ^= FMASK;
+                dest = src1 + src2 + 1;
+                src1h = (src1 & src2) | ((src1 ^ src2) & ~dest);
+                if ((((src1h << 1) ^ src1h) & MSIGN) != 0) {
+                    goto set_cc3;
+                }
+                goto set_cc;
 
         case OP_A:
         case OP_AR:
         case OP_AH:
                 dest = src1 + src2;
-                if ((((src1 & src2 & ~dest) |
-                       (~src1 & ~src2 & dest)) & MSIGN) != 0) {
-                    if ((op & 0x1f) == 0x1b && src1 == MSIGN && src2 == MSIGN) {
-                        dest = 0;
-                        goto set_cc;
-                    }
+                src1h = (src1 & src2) | ((src1 ^ src2) & ~dest);
+                if ((((src1h << 1) ^ src1h) & MSIGN) != 0) {
 set_cc3:
                     regs[reg1] = dest;
                     per_mod |= 1 << reg1;
@@ -2080,17 +2086,25 @@ set_cc3:
 
         case OP_SL:
         case OP_SLR:
-                src2 = NEG(src2);
-                /* Fall through */
+                src2 ^= FMASK;
+                dest = src1 + src2 + 1;
+                src1h = ((src1 & src2) | ((src1 ^ src2) & ~dest)) & MSIGN;
+                src1h = (src1h != 0);
+                cc = (dest != 0);
+                if (src1h != 0)
+                   cc |= 2;
+                regs[reg1] = dest;
+                per_mod |= 1 << reg1;
+                break;
 
         case OP_AL:
         case OP_ALR:
                 dest = src1 + src2;
-                cc = 0;
-                if ((uint32)dest < (uint32)src1)
+                src1h = ((src1 & src2) | ((src1 ^ src2) & ~dest)) & MSIGN;
+                src1h = (src1h != 0);
+                cc = (dest != 0);
+                if (src1h != 0)
                    cc |= 2;
-                if (dest != 0)
-                   cc |= 1;
                 regs[reg1] = dest;
                 per_mod |= 1 << reg1;
                 break;
@@ -3449,8 +3463,9 @@ save_dbl:
                                   dest = src1h + (((int)us) << 12);
                                   if (dest < src1h)
                                      src1++;
-                                  src1h = dest & ~0xfff;
+                                  src1h = dest;
                               }
+                              src1h &= ~0xfff;
                               if (WriteFull(addr1, src1))
                                  goto supress;
                               if (WriteFull(addr1+4, src1h))
@@ -6795,3 +6810,6 @@ cpu_description (DEVICE *dptr)
 // en swtpc: 
 // fdos, minidos de deramp.com
 
+//ibm360 bugs
+// cuando scp hace "send xxx", acelera la impresion en consola como si fuese fast mode
+// si rew en 2401 cuando justa hay cinta para un paso de HiSpeed rew, pasa de golpe de 8% a 0.4%

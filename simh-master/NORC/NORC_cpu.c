@@ -67,7 +67,7 @@
 */
 
 #include <math.h>
-#include "NORC_defs.h"
+#include "NORC_defs.h"	        
 #if defined(CPANEL)
 #include "cpanel.h"
 int cpanel_gui_supported = 1;     
@@ -119,7 +119,7 @@ struct {
 int                 IC;                          // Added register not part of cpu. Has addr of current intr in execution, just for displaying purposes. IBM NORC has no dedicated program counter
 int                 U;                           // Saved Program counter during opcode execution
 int                 V;                           // Address to be accesed in CRT memory
-int                 M4,M6,M8;                    // address modifier registers
+int                 M4,M6,M8;                    // Address modifier registers
 t_int64             IREG;                        // instruction register
 t_int64             REG1, REG2;                  // Storage registers
 int                 OV;                          // Overflow flag 

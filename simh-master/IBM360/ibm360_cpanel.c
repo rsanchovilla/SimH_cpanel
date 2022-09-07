@@ -31,7 +31,7 @@
    This module implements the following control panels:
 
    IBM 360 Model 30/40/50/65 Cpu Panel 
-   IBM 370 Model 145/148 Cpu Panel 
+   IBM 370 Model 145/148/138 Cpu Panel 
    IBM 1052/3210 Keyboard-printer console
    IBM 2540/3525 Card Read Punch
    IBM 1403/3203 Printer
@@ -166,6 +166,8 @@ static struct {
    int SW_Addr_Compare_Cntrl; 
    // IBM 370 Model 148 cpu panel
    int Reg_Sys_Status; 
+   // IBM 370 Model 138 cpu panel
+   int Reg_Sys_Check, Reg_Roller, Reg_Misc, Reg_SARB; 
    // odometer
    int Odo[7], OdoDigitWhite;
    // ocp (operator control panel) lights
@@ -339,6 +341,12 @@ CP_DEF IBM360_cp[] = {
     { &S360.Label_Roller1_L,       "Label_Roller1_L",                   NULL, "CpuType/3148"}, 
     { &S360.Label_Roller1_R,       "Label_Roller1_R",                   NULL, "CpuType/3148"}, 
     { &S360.BTN_Roller1,           "BTN_Roller1",                       &IBM360_OnClick_BTN, "CpuType/3148"},
+    // IBM 370 Model 138 cpu panel
+    { &S360.SwitchHandle,          "SwitchHandle",                      NULL, "CpuType/3138"}, 
+    { &S360.Reg_Sys_Check,         "Reg_Sys_Check",                     NULL, "CpuType/3138"}, 
+    { &S360.Reg_Roller,            "Reg_Roller",                        NULL, "CpuType/3138"}, 
+    { &S360.Reg_Misc,              "Reg_Misc",                          NULL, "CpuType/3138"}, 
+    { &S360.Reg_SARB,              "Reg_SARB",                          NULL, "CpuType/3138"}, 
     // odometer
     { &S360.Odo[1],                "Odo1",                              NULL}, 
     { &S360.Odo[2],                "Odo2",                              NULL}, 
@@ -372,11 +380,19 @@ CP_DEF IBM360_cp[] = {
     { &S360.SW_F,                  "SW_F",                              &IBM360_OnClick_Sw, "CpuType/3148"},
     { &S360.SW_G,                  "SW_G",                              &IBM360_OnClick_Sw, "CpuType/3148"},
     { &S360.SW_H,                  "SW_H",                              &IBM360_OnClick_Sw, "CpuType/3148"},
+    { &S360.SW_D,                  "SW_D",                              &IBM360_OnClick_Sw, "CpuType/3138"}, // on bitmap for 3138, rotary switches are named A..E 
+    { &S360.SW_E,                  "SW_E",                              &IBM360_OnClick_Sw, "CpuType/3138"}, // but the controls used are D..H to be the
+    { &S360.SW_F,                  "SW_F",                              &IBM360_OnClick_Sw, "CpuType/3138"}, // same as in 3145 and 3148
+    { &S360.SW_G,                  "SW_G",                              &IBM360_OnClick_Sw, "CpuType/3138"}, // switches A..C are not visible nor used
+    { &S360.SW_H,                  "SW_H",                              &IBM360_OnClick_Sw, "CpuType/3138"},
     { &S360.SW_Rate,               "SW_Rate",                           &IBM360_OnClick_Sw2},
     { &S360.SW_Rate,               "SW_Rate",                           &IBM360_OnClick_Sw3, "CpuType/3145"}, // redefine click event handler for 3145 cpu
+    { &S360.SW_Rate,               "SW_Rate",                           &IBM360_OnClick_Sw3, "CpuType/3138"}, // redefine click event handler for 3138 cpu
     { &S360.SW_Addr_Compare,       "SW_Addr_Compare",                   &IBM360_OnClick_Sw2, "CpuType/2030"},
     { &S360.SW_Addr_Compare,       "SW_Addr_Compare",                   &IBM360_OnClick_Sw3, "CpuType/3145"},
+    { &S360.SW_Addr_Compare,       "SW_Addr_Compare",                   &IBM360_OnClick_Sw3, "CpuType/3138"},
     { &S360.SW_Addr_Compare_Cntrl, "SW_Addr_Compare_Cntrl",             &IBM360_OnClick_Sw2, "CpuType/3145"},
+    { &S360.SW_Addr_Compare_Cntrl, "SW_Addr_Compare_Cntrl",             &IBM360_OnClick_Sw2, "CpuType/3138"},
     { &S360.SW_Storage_Select,     "SW_Storage_Select",                 &IBM360_OnClick_Sw3, "CpuType/3145"},
     { &S360.SW_Addr_Compare,       "SW_Addr_Compare",                   &IBM360_OnClick_Sw3, "CpuType/3148"},
     { &S360.SW_Addr_Compare_Cntrl, "SW_Addr_Compare_Cntrl",             &IBM360_OnClick_Sw2, "CpuType/3148"},
@@ -410,6 +426,9 @@ CP_DEF IBM360_cp[] = {
     { &S360.BTN_Set_IC,            "BTN_Set_IC",                        &IBM360_OnClick_BTN, "CpuType/3148"},
     { &S360.BTN_Store,             "BTN_Store",                         &IBM360_OnClick_BTN, "CpuType/3148"},
     { &S360.BTN_Display,           "BTN_Display",                       &IBM360_OnClick_BTN, "CpuType/3148"},
+    { &S360.BTN_Restart,           "BTN_Restart",                       &IBM360_OnClick_BTN, "CpuType/3138"},
+    { &S360.BTN_Set_IC,            "BTN_Set_IC",                        &IBM360_OnClick_BTN, "CpuType/3138"},
+    { &S360.SW_Lamp_Test,          "SW_Lamp_Test",                      &IBM360_OnClick_BTN, "CpuType/3138"},
     // IBM 2540 Card Read Punch
     { &S360.ReadHopper,            "ReadHopper",                        NULL,     "Card/2540" },
     { &S360.InputDeckBody,         "InputDeckBody",                     NULL,     "Card/2540" },
@@ -646,7 +665,7 @@ int nCardsInPunchStacker             = 0; // number of cards alredy draw in punc
 int bCardReadHopperBackgroundSet     = 0; // flag to allow grabbing background behind read hopper
 
 // for main cpu
-int bCpuModelIs                = 2030; // cpu model being displayed in control panel gui. Can be 2030, 2040, 2050, 2065, 3145, 3148
+int bCpuModelIs                = 2030; // cpu model being displayed in control panel gui. Can be 2030, 2040, 2050, 2065, 3145, 3148, 3138
 int bSystemResetKeyPressed     = 0; // set when system reset key is pressed
 int IPLaddr                    = 0; // IPL addr when channel starts IPL (triggered by boot scp command)
 int bRegBA_display             = 0; // signal reg B A displays PC when stopped, =1 will display MSDR
@@ -902,6 +921,16 @@ void IBM360_Init(void)
        SetRotatingSwitchSkew(S360.SW_A,   50, 3); 
        SetRotatingSwitchSkew(S360.SW_B,   30, 4); 
        SetRotatingSwitchSkew(S360.SW_C,   10, 4); 
+       SetRotatingSwitchSkew(S360.SW_D,  -10, 5); 
+       SetRotatingSwitchSkew(S360.SW_E,  -30, 5); 
+       SetRotatingSwitchSkew(S360.SW_F,  -50, 6); 
+       SetRotatingSwitchSkew(S360.SW_G,  -70, 7); 
+       SetRotatingSwitchSkew(S360.SW_H,  -90, 8); 
+    } else if (IsOption("CpuType/3138")) {
+       bCpuModelIs=3138; 
+       // process the rotating switches to add central handle and skew as needed
+       SetRotatingSwitchSkew(S360.SW_Addr_Compare,   0, 0); 
+       SetRotatingSwitchSkew(S360.SW_Rate,           0, 4); 
        SetRotatingSwitchSkew(S360.SW_D,  -10, 5); 
        SetRotatingSwitchSkew(S360.SW_E,  -30, 5); 
        SetRotatingSwitchSkew(S360.SW_F,  -50, 6); 
@@ -1796,7 +1825,6 @@ void SetCpuPanelLights_M145(int mode)
 
     if (mode==2) {
         // set all to ones, is lamp test
-        // this switch is only available for Model 145/148
         SetState(S360.Reg_SysChk_L, AllOnes);
         SetState(S360.Reg_SysChk_R, AllOnes);
         SetState(S360.Reg_Cpu_Status, AllOnes);
@@ -1843,8 +1871,8 @@ void SetCpuPanelLights_M145(int mode)
     flip_flop = 1-flip_flop; 
     n= n + (flip_flop << 13) + (irq_pend ? (1<<12):0) + ((InstrExec & 1) << 10) ; 
 
-    if (mode==0) TickCount(S360.Reg_Cpu_Status, n); 
-    else SetStateWithIntensity(S360.Reg_Cpu_Status, n); 
+    if (mode==0) { TickCount(S360.Reg_Cpu_Status, n); }
+    else { SetStateWithIntensity(S360.Reg_Cpu_Status, n); }
 
     // control panel info is described in 
     // http://bitsavers.informatik.uni-stuttgart.de/pdf/ibm/370/model145/GC38-0015-2_370_145_Operating_Procedures_sep72.pdf
@@ -1910,7 +1938,6 @@ void SetCpuPanelLights_M148(int mode)
 
     if (mode==2) {
         // set all to ones, is lamp test
-        // this switch is only available for Model 145/148
         SetState(S360.Reg_Sys_Status, AllOnes);
 
         SetState(S360.Reg_Roller1_L, AllOnes);
@@ -1941,8 +1968,7 @@ void SetCpuPanelLights_M148(int mode)
     n= (sim_is_running ? 0:(1<<2)) +       // EXEC CPLT
        ((cpu_mem_comp.hit) ? (1<<1):0);    // MATCH status
 
-    if (mode==0) TickCount(S360.Reg_Sys_Status, n); 
-    else SetStateWithIntensity(S360.Reg_Sys_Status, n); 
+    if (mode) SetState(S360.Reg_Sys_Status, n); 
 
     // no control panel info is available. Modeled after Model 145
     // both machines seems to share the same (may be evolved) microarchitecture
@@ -1984,6 +2010,97 @@ void SetCpuPanelLights_M148(int mode)
 
     if (mode==0) { TickCount(S360.Reg_Roller2_L, n4); TickCount(S360.Reg_Roller2_R, n2); }
     else { SetStateWithIntensity(S360.Reg_Roller2_L, n4); SetStateWithIntensity(S360.Reg_Roller2_R, n2); }
+}
+
+
+// set cpu panel lights for 370 Model 138
+// if mode=0 set TickCount (for tickcount callback)
+//         1 set SetStateWithIntensity (for refresh callback)
+//         2 set al lights to 1 (while lamp test button is pressed)
+void SetCpuPanelLights_M138(int mode)
+{
+    extern uint8        dat_en;           /* Translate addresses */
+    extern uint8        ec_mode;              /* EC mode PSW */
+    extern int          cpu_opcode;     // last opcode executed
+
+    t_uint64 AllOnes = (t_uint64)(-1);
+
+    uint32 n;  
+    int n1, n2, n3, n4;
+
+    if (mode==2) {
+        // set all to ones, is lamp test
+        SetState(S360.Reg_Sys_Check, AllOnes);
+        SetState(S360.Reg_Roller, AllOnes);
+        SetState(S360.Reg_Misc, AllOnes);
+        SetState(S360.Reg_SARB, AllOnes);
+
+        SetState(S360.LI_System, 1); 
+        SetState(S360.LI_Manual, 1); 
+        SetState(S360.LI_Wait, 1); 
+        SetState(S360.LI_Test, 1); 
+        SetState(S360.LI_Load, 1); 
+        return; 
+    }
+    // Inside Cpu Panel, Operator Console Panel (ocp) lights are realistic
+    n=((int)GetState(S360.SW_Rate) ? 1:0) || ((int)GetState(S360.SW_Addr_Compare_Cntrl) ? 1:0);
+    SetOCPPanelLights(mode, n, S360.SW_F, S360.SW_G, S360.SW_H); 
+    
+    // No check is to be shown
+    if (mode) SetState(S360.Reg_Sys_Check, 0);
+
+    // no info is availablr on meaning of misc status lights
+    // we implement the following based on IBM 148 panel
+    // MICRO IRPT Indicates that the address (real or logical) being used to access
+    //              main storage matches the address set into switches CDEFGH during an 
+    //              address match operation. The action taken by the CPU
+    //              as a result of the match condition is controlled by the setting of
+    //              the ADDRESS COMPARE CONTROL switch.    
+    // LEX MODE     Indicates dat features active
+    // EC MODE      Indicates Enhanced control active (ir 370 mode, vs BC - Basic Control mode aka 360 mode)
+    n= ((cpu_mem_comp.hit) ? (1<<1):0) +   // MICRO IRPT
+       (dat_en ? (1<<2):0) +               // LEX MODE
+       (ec_mode ? (1<<3):0);               // EC MODE
+
+    // if cpu is running, zone blinks (zone=storage zone accesed? main/local/control ...)
+    // this is an educated guess. No sure it is realistic
+    if (sim_is_running) {
+        // lit last as control store is being accessed because microcode is running
+        n= (1<<11);
+        // we take the zone from the opcode if not waiting
+        if ((flags & WAIT)==0) {
+            n1 = cpu_opcode ^ (cpu_opcode >> 4); 
+            n1 = cpu_opcode ^ (cpu_opcode >> 2);  
+            n1 = n1 & 0x03;
+            n |= (1<<(7+n1));
+        }
+    }
+
+    if (mode==0) { TickCount(S360.Reg_Misc, n); }
+    else { SetStateWithIntensity(S360.Reg_Misc, n); }
+
+    // to make nice blinkenlights, we put las addr assed in SARB, last
+    // data accessed in Roller. This is not realistic, but nice
+    n=cpu_mem_addr; 
+
+    n1= n & 0xFF; n1 |= (calculateParity(n1) << 8); n=n>>8; 
+    n2= n & 0xFF; n2 |= (calculateParity(n2) << 8); n=n>>8; 
+    n3= n & 0x07; n3 |= (calculateParity(n3) << 3); 
+    n4= (n3 << 18) | (n2 << 9) | n1;
+
+    if (mode==0) { TickCount(S360.Reg_SARB, n4); }
+    else { SetStateWithIntensity(S360.Reg_SARB, n4); }
+
+    n=cpu_mem_data; 
+
+    n1= n & 0xFF; n1 |= (calculateParity(n1) << 8); n=n>>8; 
+    n2= n & 0xFF; n2 |= (calculateParity(n2) << 8); 
+    n4= n2 << 9 | n1;
+
+    if (mode==0) { TickCount(S360.Reg_Roller, n4); }
+    else { SetStateWithIntensity(S360.Reg_Roller, n4); }
+    
+    // no control panel info is available. Modeled after Model 145
 }
 
 
@@ -4009,7 +4126,7 @@ void Refresh_MagTape(void)
             memset (&mtcab[unit], 0, sizeof (mtcab[0]) ); // clear all
             mtcab[unit].state.MT_DoorOpen=bDoorOpen; // restore door state
             mtcab[unit].reel[0].color = 0; /* Left reel defaults to blue */
-            mtcab[unit].reel[1].color = 0; /* Right reel defaults to blue */
+            mtcab[unit].reel[1].color = 0; /* Right reel defaults to bñue */
             cmode = ' ';
 
             MT_cab_opt[2] = '0' + unit;
@@ -4509,6 +4626,8 @@ void IBM360_TickIntensityCount(void)
 {
     if (bCpuModelIs == 3148) {
         SetCpuPanelLights_M148(0); // set tickcount
+    } else if (bCpuModelIs == 3138) {
+        SetCpuPanelLights_M138(0); // set tickcount
     } else if (bCpuModelIs == 3145) {
         SetCpuPanelLights_M145(0); // set tickcount
     } else if (bCpuModelIs == 2065) {
@@ -5047,6 +5166,14 @@ void Refresh_CpuPanel(void)
             // set register light in cpu panel
             SetCpuPanelLights_M148(1); 
         }  
+    } else if (bCpuModelIs == 3138) {
+        if (GetState(S360.SW_Lamp_Test)==1) {
+            // lamp test on -> lit everything!
+            SetCpuPanelLights_M138(2); 
+        } else {
+            // set register light in cpu panel
+            SetCpuPanelLights_M138(1); 
+        }  
     } else if (bCpuModelIs == 3145) {
         if (GetState(S360.SW_Lamp_Test)==1) {
             // lamp test on -> lit everything!
@@ -5235,13 +5362,15 @@ void Refresh_ShowInfo(int bOnlyInit)
     //                           real hardware speed for IBM 360 Model 30 is 34500 Instructions Cycles per second
     //       IPS = Instructions Per Second -> Instr executed each sec (when waiting, does not count on IPS)
 
-    // set the aprox speed of real hardware model 30. 40, 50, 65 to show the relative speed
+    // set the aprox speed of real hardware model 30, 40, 50, 65, 145, 148, 138 to show the relative speed
     if (bCpuModelIs == 3148) {
         RealHwIPS = 34500.0 * 3 * 4 * 1.25; // model 148 performance is 1.25 times of a system / 370 model 145
     } else if (bCpuModelIs == 3145) {
         RealHwIPS = 34500.0 * 3 * 4; // model 145 is five times faster than the IBM System/360 Model 40
+    } else if (bCpuModelIs == 3138) {
+        RealHwIPS = 34500.0 * 1.3 * 3 * 4; // model 138 is 30%e times faster than the IBM System/370 Model 135
     } else if (bCpuModelIs == 2065) {
-        RealHwIPS = 34500.0 * 10 * 3.5; // model 65 has more than 3 times performance of model 50
+        RealHwIPS = 34500.0 * 3 * 4; // model 65 has more than 3 times performance of model 50
     } else if (bCpuModelIs == 2050) {
         RealHwIPS = 34500.0 * 10; // model 50 has aprox 10 times performance of model 30
     } else if (bCpuModelIs == 2040) {
@@ -5578,6 +5707,17 @@ void SetAddrBreakPoint(void)
             cpu_mem_comp.addr = GetSwitchNum4(S360.SW_A, S360.SW_B, S360.SW_C, S360.SW_D); 
             cpu_mem_comp.match = 3; // Addr compare SAR -> compare any read/write addr
         }
+    } else if (bCpuModelIs == 3138)  {
+        if (GetState(S360.SW_Addr_Compare)) {
+            cpu_mem_comp.addr = GetSwitchNum6(0, S360.SW_D, S360.SW_E, S360.SW_F, S360.SW_G, S360.SW_H); 
+            cpu_mem_comp.match = 3; // Addr compare SAR -> compare any read/write addr
+            switch (GetState(S360.SW_Addr_Compare)) {
+               case 0: cpu_mem_comp.match = 16+3; break; // Addr compare ANY virtual -> compare virtual read/write addr
+               case 1: cpu_mem_comp.match = 8; break; // Addr compare IC counter real -> compare on PC addr at fetch instr
+               case 2: cpu_mem_comp.match = 4; break; // Addr compare I/O real -> compare on chan r/w addr
+               case 9: cpu_mem_comp.match = 1; break; // Addr compare Data Store real -> compare write addr
+            }
+        }
     } else if ((bCpuModelIs == 3145) || (bCpuModelIs == 3148))  {
         if (GetState(S360.SW_Addr_Compare_Cntrl)) {
             cpu_mem_comp.addr = GetSwitchNum6(S360.SW_C, S360.SW_D, S360.SW_E, S360.SW_F, S360.SW_G, S360.SW_H); 
@@ -5625,7 +5765,7 @@ void IBM360_OnClick_Sw(void)
     SetState(CP_Click.CId, n);
     if (bCpuModelIs==2030) {
         SetAddrBreakPoint();
-    } else if ((bCpuModelIs == 3145) || (bCpuModelIs == 3148))  {
+    } else if ((bCpuModelIs == 3145) || (bCpuModelIs == 3148) || (bCpuModelIs == 3138))  {
         SetAddrBreakPoint();
     }
 }
@@ -5659,8 +5799,12 @@ void IBM360_OnClick_Sw3(void)
         return;
     } else if (CP_Click.CId == S360.SW_Addr_Compare) {
         n=(int)GetState(CP_Click.CId);
-        if ((n > 4) && (n < 8)) SetState(CP_Click.CId, 8); // skip non-implemented states 5..7
-        SetAddrBreakPoint(); // this is addr compare handling for 3145 (model 145) and 3148 (model 148)
+        if (bCpuModelIs == 3138) {
+            if ((n > 2) && (n < 9)) SetState(CP_Click.CId, 9); // skip non-implemented states 3..8
+        } else {
+            if ((n > 4) && (n < 8)) SetState(CP_Click.CId, 8); // skip non-implemented states 5..7
+        }
+        SetAddrBreakPoint(); // this is addr compare handling for 3145, 3148, 3138
     } else if (CP_Click.CId == S360.SW_Storage_Select) {
         if (GetState(CP_Click.CId) < 2) SetState(CP_Click.CId, 2); 
         else SetState(CP_Click.CId, 0); // only states 0 (main storage) and 2 (local storage) allowed 
@@ -5867,14 +6011,16 @@ void IBM360_OnClick_BTN(void)
             PC = GetSwitchNum4(S360.SW_F, S360.SW_G, S360.SW_H, S360.SW_J);
         } else if ((bCpuModelIs==3145) ||(bCpuModelIs==3148)) {
             PC = GetSwitchNum6(S360.SW_C, S360.SW_D, S360.SW_E, S360.SW_F, S360.SW_G, S360.SW_H);
+        } else if (bCpuModelIs==3138) {
+            PC = GetSwitchNum6(0, S360.SW_D, S360.SW_E, S360.SW_F, S360.SW_G, S360.SW_H);
         }
     } else if (CP_Click.CId == S360.BTN_Interrupt) {
         // this key is available when cpu is running or stopped
         post_extirq();
     } else if (CP_Click.CId == S360.BTN_Load) {
         if (sim_is_running != 0) return; // if cpu is running key is ignored
-        if ((bCpuModelIs==3145) ||(bCpuModelIs==3148)) {
-            // Model 145 gets load addr from rotating switches F G H 
+        if ((bCpuModelIs==3145) || (bCpuModelIs==3148)  || (bCpuModelIs==3138)) {
+            // Model 145/148/138 gets load addr from rotating switches F G H 
            addr = GetSwitchNum4(0, S360.SW_F, S360.SW_G, S360.SW_H);
         } else if ((bCpuModelIs==2040) || (bCpuModelIs==2050) || (bCpuModelIs==2065)) {
             // Model 40, 50, 65 gets load addr from rotating switches A B C 

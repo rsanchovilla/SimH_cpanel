@@ -21,7 +21,7 @@
 
 */
 
-#include "NORC_defs.h"
+#include "NORC_defs.h"	        
 #include "sim_card.h"
 #include <ctype.h>
 
@@ -137,8 +137,8 @@ DEBTAB              dev_debug[] = {
 // representation of word digit 0-9 in card including Y(12) and X(11) punchs
 char    digits_ascii[31] = {
           '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',   /* 0-9 */  
-          '?', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I',   /* 0-9 w/HiPunch Y(12) */
-          '!', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',   /* 0-9 w/Negative Punch X(11) */
+          '?', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I',   /* 0-9 with HiPunch Y(12) */
+          '!', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',   /* 0-9 with Negative Punch X(11) */
           0};
 
 uint16          ascii_to_hol[128] = {

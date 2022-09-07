@@ -85,6 +85,7 @@
 #define MT_TRANS            0x02000       /* Translation turned on ignored 9 track  */
 #define MT_CONV             0x04000       /* Data converter on ignored 9 track  */
 #define MT_CMDREW           0x10000       /* Rewind being done */
+#define MT_CMDRUN           0x20000       /* Unload being done */
 
 /* Upper 11 bits of u3 hold the device address */
 
@@ -441,6 +442,9 @@ void cpanel_tape_cmd_info(UNIT * uptr, int * addr, int * cmd)
     if (uptr->CMD & MT_CMDREW) {
         // a rew is in progress -> retun MT_REW as current command in execution in tape unit
         *cmd = MT_REW; 
+    } else if (uptr->CMD & MT_CMDRUN) {
+        // a tape run is in progress -> retun MT_RUN as current command in execution in tape unit
+        *cmd = MT_RUN; 
     }
 }
 
@@ -510,8 +514,8 @@ uint8  mt_startio(UNIT *uptr) {
         sim_debug(DEBUG_CMD, dptr, "busy\n");
         return SNS_BSY;
     }
-    if ((uptr->CMD & (MT_CMDREW)) != 0) {
-        sim_debug(DEBUG_CMD, dptr, "rew\n");
+    if ((uptr->CMD & (MT_CMDREW|MT_CMDRUN)) != 0) {
+        sim_debug(DEBUG_CMD, dptr, "rew/run in progress\n");
         return SNS_BSY;
     }
     /* Check if controller is free */
@@ -541,9 +545,9 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
 #if defined(CPANEL)
-    if ((uptr->CMD & MT_CMDREW) == 0) {
+    if ((uptr->CMD & (MT_CMDREW|MT_CMDRUN)) == 0) {
         // set mt_info and TapeCmd_tm0/msec only if not rew in progress
-        // if rew in progress, any command but sense will return busy
+        // if rew/run in progress, any command but sense will return busy
         cpanel_start_tape_cmd(uptr, cmd); // start tape command
     }
 #endif
@@ -561,6 +565,12 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
          if ((uptr->CMD & MT_CMDREW) != 0) {
             sim_debug(DEBUG_CMD, dptr, "CMD rewinding unit=%d %x\n", unit, cmd);
             return SNS_BSY;
+         }
+         if ((uptr->CMD & MT_CMDRUN) != 0) {
+             sim_debug(DEBUG_CMD, dptr, "CMD unloading unit=%d %x\n", unit, cmd);
+             uptr->SNS |= SNS_INTVENT;
+             uptr->flags &= ~MT_BUSY;
+             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
          }
          if ((uptr->flags & UNIT_ATT) == 0) {
              uptr->SNS |= SNS_INTVENT;
@@ -731,6 +741,12 @@ t_stat mt_srv(UNIT * uptr)
         sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d\n done", unit);
         uptr->CMD &= ~(MT_CMDREW);
         set_devattn(addr, SNS_DEVEND); // second DEVEND issued on rew end 
+        return SCPE_OK;
+    }
+    if ((uptr->CMD & MT_CMDRUN) != 0) {
+        sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d done\n", unit);
+        uptr->CMD &= ~(MT_CMDRUN);
+        sim_tape_detach(uptr);
         return SCPE_OK;
     }
 
@@ -1333,13 +1349,15 @@ t_stat mt_srv(UNIT * uptr)
          case MT_RUN:
               mt_busy[bufnum] &= ~1;
               uptr->CMD &= ~(MT_CMDMSK);
-              r = sim_tape_detach(uptr);
-              set_devattn(addr, SNS_DEVEND);
+              uptr->CMD |= MT_CMDRUN;
 #if defined(CPANEL)
-              sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n", unit);
-              // run command will NOT be followed by other tape command. Maybe a new scp command attach, later
-              // so command execution end is done inmediatelly
+              sim_activate(uptr, 10000); // allow 1k cycles to be exec before detaching the file from unit
+                                         // during this time, any command to tape but sense will return BUSY
+#else
+              sim_activate(uptr, 1000 + (20 * uptr->pos));
 #endif
+              set_devattn(addr, SNS_DEVEND);
+              sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n started", unit);
               break;
          }
     }
