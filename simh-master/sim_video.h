@@ -1,6 +1,6 @@
 /* sim_video.c: Bitmap video output
 
-   Copyright (c) 2011-2013, Matt Burke
+   Copyright (c) 2011-2013, Matt Burke 
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -296,6 +296,14 @@ extern vidkeyb vid_keyb;
 extern char DropFile_FileName[];           // filename droped in
 extern int DropFile_x_pos, DropFile_y_pos; // pos in window DropFile_vptr where file is dropped in
 extern VID_DISPLAY * DropFile_vptr;        
+
+// added to not depend on stdlib max() and min()
+#ifndef MAX
+#define MAX(a,b)  (((a) >= (b)) ? (a) : (b))
+#endif
+#ifndef MIN
+#define MIN(a,b)  (((a) <= (b)) ? (a) : (b))
+#endif
 
 #endif
 #ifdef  __cplusplus

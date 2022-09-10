@@ -3637,8 +3637,8 @@ void vid_SetWindowSizeAndPos_event (VID_DISPLAY * vptr)
             // destroy and recreate the texture to change its size
             SDL_DestroyTexture(vptr->vid_texture);
             // texture remains at a max of 100% of surface size
-            vptr->vid_texture_width = min(new_w, vptr->vid_width); 
-            vptr->vid_texture_height = min(new_h, vptr->vid_height);
+            vptr->vid_texture_width = MIN(new_w, vptr->vid_width); 
+            vptr->vid_texture_height = MIN(new_h, vptr->vid_height);
             vptr->vid_texture = SDL_CreateTexture (vptr->vid_renderer,
                                      SDL_PIXELFORMAT_ARGB8888,
                                      SDL_TEXTUREACCESS_STREAMING,
