@@ -53,28 +53,24 @@ Currently supports visuals emulation for:
   * IBM 360 CPU Model 30, 40, 50 and 65
   * IBM 370 CPU Model 145, 148 and 138
 
-  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20360%20Panels%20Screen%20Shots.png) to preview control panels.
-   Source code in simh-master folder
+  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Doc/IBM%20360%20Panels%20Screen%20Shots.png) to preview control panels.
 
 * IBM 701 Electronic Data Processing Machine (JUL/2021)
   * IBM 726 tapes, IBM 711 card reader, IBM 721 card punch, IBM 716 printer
   * Main console (as in 1953), Early console model (as in Early 1952)
 
-  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20701%20Panels%20Screen%20Shots.png) to preview control panels.
-   Source code in simh-master folder
+  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Doc/IBM%20701%20Panels%20Screen%20Shots.png) to preview control panels.
 
 * IBM NORC Naval Ordnance Research Calculator (UPDATED JUL/2021)
   * panels for tapes, printer, indicator panel and main console
 
-  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20NORC%20Panels%20Screen%20Shots.png) to preview control panels.
-   Source code in simh-master folder
+  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Doc/IBM%20NORC%20Panels%20Screen%20Shots.png) to preview control panels.
 
 * IBM 650 Magnetic Drum Data Processing machine (UPDATED JUL/2021). 
   * IBM 727 tapes, IBM 533 card read punch, and IBM 355 RAMAC disk storage
   * panels for IBM 653 Storage Unit and IBM 652 Control Unit
 
-  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%20650%20Panels%20Screen%20Shots.png) to preview control panels.
-   Source code in simh-master folder
+  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Doc/IBM%20650%20Panels%20Screen%20Shots.png) to preview control panels.
 
 
 * IBM 7000 Series  
@@ -85,7 +81,7 @@ Currently supports visuals emulation for:
   * IBM 7617 Data channel console and IBM 729 tapes
   * IBM 711 card punch, IBM 7909 data channel panel, IBM 7631 file control panel and IBM 2302 disk 
        
-   Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/cpanel/bak/IBM%207000%20Panels%20Screen%20Shots.png) to preview how control panels.
+   Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Doc/IBM%207000%20Panels%20Screen%20Shots.png) to preview how control panels.
    Source code in sims-master folder
 
 # Test Run Software Kits
