@@ -36,7 +36,7 @@
    IBM 2540/3525 Card Read Punch
    IBM 1403/3203 Printer
    IBM 2401/2415/3420 Magnetic Tape
-   IBM 2314/3330 DASD
+   IBM 2314/3330/3350 DASD
 */
 
 // xxx_cpanel.c needs the preprocessor symbol CPANEL to be defined
@@ -480,7 +480,7 @@ CP_DEF IBM360_cp[] = {
     { &S360.LI_Cons_Req_Pending,   "LI_Cons_Req_Pending",               NULL,     "ConsType/3210"},
     { &S360.BTN_Cons_Cancel,       "BTN_Cons_Cancel",                   &IBM360_OnClick_BTN,   "ConsType/3210"},
     { &S360.BTN_Cons_End,          "BTN_Cons_End",                      &IBM360_OnClick_BTN,   "ConsType/3210"},
-    // IBM 2314 DASD 
+    // IBM 2314, 3330, 3350 DASD 
     { &S360.DASD_addr_digit[0][1], "DASD_diskA_digit1",                 NULL,     "dasd/1" },
     { &S360.DASD_addr_digit[0][2], "DASD_diskA_digit2",                 NULL,     "dasd/1" },
     { &S360.DASD_addr_digit[0][3], "DASD_diskA_digit3",                 NULL,     "dasd/1" },
@@ -5274,13 +5274,13 @@ void process_HotKeys(void)
 
 
 // draw text on given Control Id infopanel 
-void ShowInfo_DrawText(int CId, char * buf, int bNoScale)
+void ShowInfo_DrawText(int CId, char * buf)
 {
     int scale, ww,hh,ww2,hh2, chrsz;
     int ncp; 
 
     GetControlSurface(CId, 1, &ww, &hh); // get size of control surface where to draw info
-    if (bNoScale) {
+    if (GetControlInfo(CId, CINFO_NOSCALE)) {
         ww2=ww; hh2=hh; chrsz=1; // use full panel, char size x1
     } else {
         ncp=GetControlInfo(CId, CINFO_NCP);  // control panel window number where info is displayed
@@ -5379,7 +5379,7 @@ void Refresh_ShowInfo(int bOnlyInit)
         RealHwIPS = 34500.0; // model 30
     }
 
-    sprintf(buf, "FPS: %d Cpu Speed: x%0.1f (%0.1f %s)\n"
+    sprintf(buf, "FPS: %d, Cpu Speed: x%0.1f (%0.1f %s)\n"
                  "Cards in read hopper: %d\n"
                  "Cards punched: %d, Lines Printed: %d",
             fps, InstrCyclesPerSec / RealHwIPS, 
@@ -5388,7 +5388,7 @@ void Refresh_ShowInfo(int bOnlyInit)
             sim_card_output_hopper_count(&cdp_unit[0]), 
             lptPrintOutCount); 
   
-    ShowInfo_DrawText(S360.CtrlInfoPanel, buf, 0);
+    ShowInfo_DrawText(S360.CtrlInfoPanel, buf);
 
     // prepare panel for MT/DASD
     buf[0]=0; 
@@ -5540,8 +5540,8 @@ void Refresh_ShowInfo(int bOnlyInit)
     if (MT_DASD_InfoPanel_Size==0) {
         // Nothing to show in infopanel: no tapes attached, no dasd attached
         sprintf(buf, "\n (No tapes attached, no dasd attached)");
-        ShowInfo_DrawText(S360.MT_DASD_InfoPanel1, buf, 1);
-        SetState(S360.MT_DASD_InfoPanel2, 0); 
+        ShowInfo_DrawText(S360.MT_DASD_InfoPanel1, buf);
+        SetState(S360.MT_DASD_InfoPanel2, 0);  
     } else {
         // add fastmode condition
         if (bFastMode) {
@@ -5551,11 +5551,11 @@ void Refresh_ShowInfo(int bOnlyInit)
         }
         if (MT_DASD_InfoPanel_Size==1) {
             // only tapes or dasd visible, but no both -> use short panel
-            ShowInfo_DrawText(S360.MT_DASD_InfoPanel1, buf, 1);
+            ShowInfo_DrawText(S360.MT_DASD_InfoPanel1, buf);
             SetState(S360.MT_DASD_InfoPanel2, 0); 
         } else {
             // tapes and dasd visible -> use long panel
-            ShowInfo_DrawText(S360.MT_DASD_InfoPanel2, buf, 1);
+            ShowInfo_DrawText(S360.MT_DASD_InfoPanel2, buf);
         }
     }
 

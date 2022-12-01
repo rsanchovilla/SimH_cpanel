@@ -63,10 +63,10 @@ typedef struct CP_INTENSITY_COUNT CP_INTENSITY_COUNT;
 
 #define FPS                     50                    // update control panel  windows at this Frames Per Second rate 
 
-#define CP_DF           0x00000001                    // CPANEL debug flags: Definition File processing
-#define CP_REFRESH      0x00000002                    // refresh events
-#define CP_CMDS         0x00000010 
-#define CP_SDL          0x00000020                    // events in SDL Thread
+#define CP_DF           0x01000000                    // CPANEL debug flags: Definition File processing
+#define CP_REFRESH      0x02000000                    // refresh events
+#define CP_CMDS         0x04000000 
+#define CP_SDL          0x08000000                    // events in SDL Thread
 
 
 struct CP_DEF {
@@ -120,6 +120,7 @@ extern int GetCArrayCId(int CArrayId, int n);
 #define CINFO_NSTATES    5
 #define CINFO_NITEMS     6
 #define CINFO_NCP        7
+#define CINFO_NOSCALE    8
 extern int GetControlInfo(int Id, int mode); 
 // manage dynamic states
 extern uint32 * GetControlSurface(int CId, int State, int * ww, int * hh);

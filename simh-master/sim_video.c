@@ -2,6 +2,7 @@
 /* sim_video.c: Bitmap video output 
 
    Copyright (c) 2011-2013, Matt Burke
+   Copyright (c) 2020-2022, Roberto Sancho CPANELS additions
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -20,10 +21,15 @@
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-   Except as contained in this notice, the name of the author shall not be
+   Except as contained in this notice, the name of the authors shall not be
    used in advertising or otherwise to promote the sale, use or other dealings
-   in this Software without prior written authorization from the author.
+   in this Software without prior written authorization from the authors.
 
+   Oct-2022     RSV     Some internal fixes 
+                        tooltip has back and white frame (instead of only white) so looks 
+                        good over white background. New windows visibility functionality 
+                        (in vid_SetWindowSizeAndPos) that allows cpanels to be hidden 
+                        while setting its initial size. New read/write_png_file files funtions
    Dic-2021     RSV     Added support for multiple windows (sync with sim_video.c at SimH repo)
                         Added bilinear scaling for very nice displaying
                         reduce mem usage, improve scaling performance
@@ -51,12 +57,6 @@ static VID_QUIT_CALLBACK vid_quit_callback = NULL;
 static VID_GAMEPAD_CALLBACK motion_callback[10];
 static VID_GAMEPAD_CALLBACK button_callback[10];
 static int vid_gamepad_inited = 0;
-
-t_stat vid_register_quit_callback (VID_QUIT_CALLBACK callback)
-{
-vid_quit_callback = callback;
-return SCPE_OK;
-}
 
 static t_stat register_callback (void **array, int n, void *callback)
 {
@@ -337,8 +337,8 @@ static int SDL_SavePNG_RW(SDL_Surface *surface, SDL_RWops *dst, int freedst)
 #if defined(CPANEL)
 #define EVENT_SIZEANDPOS 11                             /* set windows size and/or pos */
 
-#define CP_SDL          0x00000020                      
-#define CP_CMDS         0x00000010                      
+#define CP_SDL          0x04000000                      
+#define CP_CMDS         0x08000000                      
 
 // on main SDL thread, do not call sim_debug () macro. This macro is NOT thread-safe, so will (probably) 
 // crash the simulation when both main simulation and SDL threads executes at the same time macro code
@@ -366,7 +366,6 @@ struct {
 
 void vid_update_cursor (VID_DISPLAY *vptr, SDL_Cursor *cursor, int visible); 
 void vid_refresh_ex (VID_DISPLAY *vptr, uint32 * pixels, void * RectList);
-int vid_refresh_in_progress = 0; 
 
 #define TOOLTIP_WIDTH   200
 #define TOOLTIP_HEIGHT  150
@@ -435,6 +434,8 @@ struct VID_DISPLAY {
    int32 vid_texture_width;                                // size of texture. = vid_width * scale (if scale <= 100)
    int32 vid_texture_height;                               //                  = vid_width (if scale >= 100)
    rectlist *RectList;                                     // pointer to rectangle list: indicate rectangles in pixels array to upadte on screen at given scale
+   VID_QUIT_CALLBACK vid_quit_callback;                    // quit callback for this window. If null, the global vid_quit_callback will be invoked
+   int redraw_in_progress;                                 // per window flag that indicates an EVENT_REDRAW is in progress
 #endif
    t_bool vid_ready;
    char vid_title[128];
@@ -460,6 +461,21 @@ static VID_DISPLAY vid_first;
 
 KEY_EVENT_QUEUE vid_key_events;                         /* keyboard events */
 MOUSE_EVENT_QUEUE vid_mouse_events;                     /* mouse events */
+
+t_stat vid_register_quit_callback (VID_QUIT_CALLBACK callback)
+{
+#if defined(CPANEL)
+    VID_DISPLAY *vptr;
+
+    // save quit callback in vptr of last window created
+    vptr = vid_first.next; // this is last windows created
+    vptr->vid_quit_callback = callback;
+#endif
+vid_quit_callback = callback;
+return SCPE_OK;
+}
+
+
 
 static VID_DISPLAY *vid_get_event_window (SDL_Event *ev, Uint32 windowID)
 {
@@ -498,6 +514,7 @@ for (vptr = &vid_first; vptr != NULL; vptr = vptr->next) {
        // windows leave event arriving late, when window has already been closed
        return NULL; 
    }
+   return NULL; 
 #endif
 
 switch (ev->type) {
@@ -1119,6 +1136,7 @@ if ((x_delta) || (y_delta)) {
         }
     vid_cursor_x = x;
     vid_cursor_y = y;
+
     if (vptr->vid_cursor_visible) {
         SDL_Event user_event;
 
@@ -2150,6 +2168,13 @@ SDL_RenderPresent (vptr->vid_renderer);
 
 }
 
+// return current value of vptr->redraw_in_progress
+int  vid_refresh_in_progress(VID_DISPLAY *vptr)
+{
+    return vptr->redraw_in_progress; 
+}
+
+// update screen using RectList
 void vid_refresh_ex (VID_DISPLAY *vptr, uint32 * pixels, void * RectList)
 {
 SDL_Event user_event;
@@ -2162,8 +2187,9 @@ user_event.user.code = EVENT_REDRAW;
 user_event.user.data1 = (void *) pixels;
 user_event.user.data2 = (void *) RectList; 
 
-vid_refresh_in_progress=1; 
-sim_debug_cp ("vid_refresh_ex: vid_refresh_in_progress=1 at %d\n", sim_os_msec());
+SDL_LockMutex (vptr->vid_draw_mutex);
+vptr->redraw_in_progress++; 
+SDL_UnlockMutex (vptr->vid_draw_mutex);
 
 if (SDL_PushEvent (&user_event) < 0)
     sim_printf ("%s: vid_refresh_ex SDL_PushEvent error: %s\n", vid_dname(vptr->vid_dev), SDL_GetError());
@@ -2174,20 +2200,19 @@ void vid_update_ex (SDL_UserEvent *event, VID_DISPLAY *vptr)
 {
     uint32 tm0=0; 
 
-    // if no args, sinal end of update
-    if (event->data2 == NULL) {
-        vid_refresh_in_progress=0; 
-        return; 
-    }
     sim_debug_cp ("vid_update_ex: start at %d\n", tm0=sim_os_msec());
-    
+
     vptr->pixels   = (uint32 *) event->data1; // set pixels on window;
     vptr->RectList = (rectlist *) event->data2; // set rectlist on window;
 
     vid_update_rectlist(vptr); 
     if ((tooltip.visible) && (tooltip.parent_vptr == vptr)) vid_update_tooltip(); 
-      
-    sim_debug_cp ("vid_update_ex: vid_refresh_in_progress=0, duration %d msec\n", sim_os_msec()-tm0);
+
+    SDL_LockMutex (vptr->vid_draw_mutex);
+    vptr->redraw_in_progress--; 
+    SDL_UnlockMutex (vptr->vid_draw_mutex);
+
+    sim_debug_cp ("vid_update_ex: duration %d msec\n", sim_os_msec()-tm0);
 }
 
 // tooltip is visible, update its contents to keep it sync with main window
@@ -2222,11 +2247,20 @@ void vid_update_tooltip(void)
         }
     }
     // draw a 3 pixel wide white border 
-    for (x=0;x<TOOLTIP_WIDTH;x++) tooltip.surface[x+0*TOOLTIP_WIDTH]=tooltip.surface[x+(TOOLTIP_HEIGHT-1)*TOOLTIP_WIDTH]=0xFFffFFff; 
-    for (x=1;x<TOOLTIP_WIDTH-1;x++) tooltip.surface[x+1*TOOLTIP_WIDTH]=tooltip.surface[x+(TOOLTIP_HEIGHT-2)*TOOLTIP_WIDTH]=0xFFffFFff; 
-    for (y=0;y<TOOLTIP_HEIGHT;y++) tooltip.surface[0+y*TOOLTIP_WIDTH]=tooltip.surface[(TOOLTIP_WIDTH-1)+y*TOOLTIP_WIDTH]=0xFFffFFff; 
-    for (y=1;y<TOOLTIP_HEIGHT-1;y++) tooltip.surface[1+y*TOOLTIP_WIDTH]=tooltip.surface[(TOOLTIP_WIDTH-2)+y*TOOLTIP_WIDTH]=0xFFffFFff; 
-    for (y=2;y<TOOLTIP_HEIGHT-2;y++) tooltip.surface[2+y*TOOLTIP_WIDTH]=tooltip.surface[(TOOLTIP_WIDTH-3)+y*TOOLTIP_WIDTH]=0xFFffFFff; 
+    for (x=0;x<TOOLTIP_WIDTH;x++) 
+        tooltip.surface[x+0*TOOLTIP_WIDTH]=tooltip.surface[x+(TOOLTIP_HEIGHT-1)*TOOLTIP_WIDTH]=0x000000; 
+    for (x=1;x<TOOLTIP_WIDTH-1;x++) 
+        tooltip.surface[x+1*TOOLTIP_WIDTH]=tooltip.surface[x+(TOOLTIP_HEIGHT-2)*TOOLTIP_WIDTH]=0xFFffFFff; 
+    for (x=2;x<TOOLTIP_WIDTH-2;x++) 
+        tooltip.surface[x+2*TOOLTIP_WIDTH]=tooltip.surface[x+(TOOLTIP_HEIGHT-3)*TOOLTIP_WIDTH]=0xFFffFFff; 
+    for (y=0;y<TOOLTIP_HEIGHT;y++) 
+        tooltip.surface[0+y*TOOLTIP_WIDTH]=tooltip.surface[(TOOLTIP_WIDTH-1)+y*TOOLTIP_WIDTH]=0x000000; 
+    for (y=1;y<TOOLTIP_HEIGHT-1;y++) 
+        tooltip.surface[1+y*TOOLTIP_WIDTH]=tooltip.surface[(TOOLTIP_WIDTH-2)+y*TOOLTIP_WIDTH]=0xFFffFFff; 
+    for (y=2;y<TOOLTIP_HEIGHT-2;y++) 
+        tooltip.surface[2+y*TOOLTIP_WIDTH]=tooltip.surface[(TOOLTIP_WIDTH-3)+y*TOOLTIP_WIDTH]=0xFFffFFff; 
+    for (y=3;y<TOOLTIP_HEIGHT-3;y++) 
+        tooltip.surface[3+y*TOOLTIP_WIDTH]=tooltip.surface[(TOOLTIP_WIDTH-4)+y*TOOLTIP_WIDTH]=0xFFffFFff; 
     
     if (SDL_UpdateTexture(tooltip.texture, NULL, tooltip.surface, TOOLTIP_WIDTH*sizeof(*tooltip.surface)))
         sim_printf ("vid_update_tooltip: SDL_UpdateTexture error: %s\n", SDL_GetError());
@@ -2409,8 +2443,11 @@ void vid_key_ex (SDL_KeyboardEvent *event)
         case SDLK_RETURN: case SDLK_BACKSPACE: case SDLK_TAB: case SDLK_ESCAPE: key=event->keysym.sym; 
         default: 
            if ((vid_keyb.Cntrl) && (event->keysym.sym >= 'a') && (event->keysym.sym <= 'z')) {
-              // control-A..Z -> ^A..^Z -> ascii codes 1..26
+              // Control-A..Z -> ^A..^Z -> ascii codes 1..26
               key = event->keysym.sym - 'a' + 1; 
+           } else if ((vid_keyb.Shift) && (event->keysym.sym >= 'a') && (event->keysym.sym <= 'z')) {
+              // Shift-A..Z -> ascii codes 'A' to 'Z'
+              key = event->keysym.sym - 'a' + 'A';
            }
      }
      // if key>0, it's a key not sensed by SDL_TEXTINPUT. Add it to keybuffer as it was
@@ -2431,7 +2468,7 @@ void vid_key_ex (SDL_KeyboardEvent *event)
         case SDLK_KP_MINUS:  key='-'; break; 
         case SDLK_KP_PLUS:   key='+'; break; 
      }
-     // key has alphabetic chars A..Z stores un lowercase as 'a'..'z'
+     // key has alphabetic chars A..Z stored as 'a'..'z' 
      // key has the ascii code, but if bit30 is 1 (1<<30) then bits 0..29 holds the scancode
      // KeyPress is set with key pressed right now, set to zero if key released. 
      // LastKeyPressed holds last value set in KeyPress, and is no cleared when key released (can be
@@ -2547,13 +2584,16 @@ event->data1 = NULL;
 static int vid_new_window (VID_DISPLAY *vptr)
 {
     int r; 
+    Uint32 flags; 
 
 #if defined(CPANEL)
     sim_debug_cp("SDL Thread: vid_new_window vptr %x \n", vptr);
     vptr->vid_window = NULL; // init as not done
 #endif
-
-    r=SDL_CreateWindowAndRenderer (vptr->vid_width, vptr->vid_height, SDL_WINDOW_SHOWN, 
+    flags=vptr->vid_flags & 0x8FFF; // get flags for windows creation
+    vptr->vid_flags=vptr->vid_flags & ~0x8FFF; // remove flags for windows creation
+    if (flags==0) flags = SDL_WINDOW_SHOWN; // no flags on creation -> normal windows shown 
+    r=SDL_CreateWindowAndRenderer (vptr->vid_width, vptr->vid_height, flags, 
                                    &vptr->vid_window, &vptr->vid_renderer);
     if (r) vptr->vid_window=NULL; 
 
@@ -2597,6 +2637,8 @@ if (!vptr->vid_texture) {
 vptr->vid_format = SDL_AllocFormat (SDL_PIXELFORMAT_ARGB8888);
 
 #if defined(CPANEL)
+// init redraws in progress flag
+vptr->redraw_in_progress=0; 
 // allow textinput depending on flag   
 if ((vptr->vid_flags & SIM_VID_FLAG_ALLOW_TEXTINPUT) || 
     (vptr->vid_flags & SIM_VID_FLAG_ALLOW_ALPHAINPUT)    ) {
@@ -2693,6 +2735,9 @@ SDL_DestroyWindow(vptr->vid_window);
 vptr->vid_window = NULL;
 SDL_DestroyMutex (vptr->vid_draw_mutex);
 vptr->vid_draw_mutex = NULL;
+#if defined(CPANEL)
+vptr->redraw_in_progress=0;
+#endif
 for (parent = &vid_first; parent != NULL; parent = parent->next) {
     if (parent->next == vptr)
         parent->next = vptr->next;
@@ -2969,8 +3014,8 @@ while (vid_active) {
                             break;
 #if defined(CPANEL)
                         case SDL_WINDOWEVENT_CLOSE:
-                            if (vid_quit_callback)
-                                vid_quit_callback ();
+                            if (vptr->vid_quit_callback) { vptr->vid_quit_callback(); break; } 
+                            if (vid_quit_callback) vid_quit_callback (); 
                             break;
 #endif
                         }
@@ -3007,8 +3052,6 @@ while (vid_active) {
                         if (event.user.data1) vid_update_ex ((SDL_UserEvent*)&event, vptr); 
                         else vid_update (vptr);       
                         // no need to check if multiple video update events are waiting
-                        // first vid_update_ex call sets vid_refresh_in_progress, last vid_update_ex
-                        // call clears vid_refresh_in_progress, so not worries
                         event.user.code = 0;    /* Mark as done */
 #else
                         vid_update (vptr);
@@ -3077,6 +3120,9 @@ while (vid_active) {
                 break;
             case SDL_QUIT:
                 sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vptr0->vid_dev, "vid_thread() - QUIT Event - %s\n", vid_quit_callback ? "Signaled" : "Ignored");
+#if defined(CPANEL)
+                if (vptr->vid_quit_callback) { vptr->vid_quit_callback(); break; } 
+#endif
                 if (vid_quit_callback)
                     vid_quit_callback ();
                 break;
@@ -3586,7 +3632,7 @@ while (WindowSizeAndPos.InProgress) SDL_Delay (20);
 
 void vid_SetWindowSizeAndPos_event (VID_DISPLAY * vptr)
 {
-    int x,y,w,h,set_x, set_y; 
+    int x,y,w,h,set_x, set_y, n; 
     int old_scale, new_scale, new_w, new_h; 
     char * cptr;
     char buf[sizeof(vptr->vid_title)];
@@ -3677,6 +3723,16 @@ void vid_SetWindowSizeAndPos_event (VID_DISPLAY * vptr)
     } else if (WindowSizeAndPos.Mode==5) {
         // raise window
         SDL_RaiseWindow(vptr->vid_window);
+    } else if (WindowSizeAndPos.Mode==6) {
+        // 0=Hide/1=Minimize/2=Show window
+        n=WindowSizeAndPos.x; 
+        if (n==0) {
+            SDL_HideWindow(vptr->vid_window);
+        } else if (n==1) {
+            SDL_MinimizeWindow(vptr->vid_window);
+        } else if (n==2) {
+            SDL_ShowWindow(vptr->vid_window);
+        }
     }
     WindowSizeAndPos.InProgress = 0;
     WindowSizeAndPos.Mode=0;
@@ -3692,6 +3748,7 @@ void vid_SetWindowSizeAndPos_event (VID_DISPLAY * vptr)
 //       3=move x,y (eg -3, +4 -> move window 3 pixels left, 4 down)
 //       4=(reserved, do not use. It is used to implement set title)
 //       5=raise window
+//       6=set windows visibility 0=Hide/1=Minimize/2=Show window
 t_stat vid_SetWindowSizeAndPos (VID_DISPLAY * vptr, int Mode, int x, int y)
 {
 SDL_Event user_event;
@@ -3801,7 +3858,286 @@ if (SDL_PushEvent (&user_event) < 0) {
     SDL_FreeCursor (cursor);
     }
 }
-#endif
+
+// decompose a surface uint32 to its rr,gg,bb components. return alpha channel
+int get_surface_rgb_color(uint32 color, int *r_Color, int *g_Color, int *b_Color)
+{
+    int alpha; 
+    if (sim_end) {
+        alpha = color >> 24; 
+        color = color & 0x00FFFFFF;
+        *r_Color = (color >> 16);
+        *g_Color = ((color & 0x00FF00) >>  8);
+        *b_Color = (color & 0x0000FF);
+    } else {
+        alpha = color & 0xFF; 
+        color = color >> 8;
+        *r_Color = (color & 0x0000FF);
+        *g_Color = ((color & 0x00FF00) >>  8);
+        *b_Color = (color >> 16);
+    }
+    return alpha; 
+}
+
+// compose a surface uint32 from rr,gg,bb values
+uint32 surface_rgb_color(uint32 r, uint32 g, uint32 b)  /* r,g,b are 8bit! */
+{
+    uint32 color;
+
+    color = sim_end ? 
+               (0xFF000000 | ((r & 0xFF) << 16) | ((g & 0xFF) << 8)  | (b & 0xFF)) : 
+               (0x000000FF | ((r & 0xFF) << 8)  | ((g & 0xFF) << 16) | ((b & 0xFF) << 24));
+    return color;
+}
+
+// compose a surface uint32 from rr,gg,bb values, alpha value
+uint32 surface_rgb_color_alpha(uint32 r, uint32 g, uint32 b, uint32 alpha)  /* r,g,b are 8bit! */
+{
+    uint32 color;
+
+    color = sim_end ? 
+               (  ((alpha & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8)  | (b & 0xFF)) : 
+               (  (alpha & 0xFF) | ((r & 0xFF) << 8)  | ((g & 0xFF) << 16) | ((b & 0xFF) << 24));
+    return color;
+}
+
+/*
+PNG load/save routine
+http://zarb.org/~gc/html/libpng.html
+
+*/
+#include <png.h>
+#define PNG_DEBUG 3
+
+// read png file, malloc and populate surface with image 
+// return it address or zero if error
+// set    WW, HH vith size of image
+uint32 * read_png_file(char* filename, int * WW, int * HH)
+{
+    FILE *fp;
+
+    png_byte color_type;
+    png_byte bit_depth;
+
+    png_structp png_ptr;
+    png_infop info_ptr;
+    int number_of_passes;
+    png_bytep * row_pointers;
+
+    char header[8];    // 8 is the maximum size that can be checked
+    png_bytep row; 
+    png_bytep px; 
+
+    int H, W, x, y, rr, gg, bb, aa, p;
+    uint32 col;
+    uint32 *pngsurface;
+
+    *HH = *WW = 0;
+
+    /* open file and test for it being a png */
+    fp = sim_fopen(filename, "rb");
+    if (!fp) {
+        fprintf(stderr, "PNG file %s could not be opened for reading\n", filename);
+        return 0;
+    }
+
+    sim_fread(header, 1, 8, fp);
+    if (png_sig_cmp((png_const_bytep) header, 0, 8)) {
+        fprintf(stderr, "PNG file %s is not recognized as a PNG file\n", filename);
+        fclose(fp);
+        return 0;
+    }
+
+    /* initialize stuff */
+    png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!png_ptr) {
+        fprintf(stderr, "PNG file %s png_create_read_struct failed\n", filename);
+        fclose(fp);
+        return 0;
+    }
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr) {
+        fprintf(stderr, "PNG file %s png_create_info_struct failed\n", filename);
+        free(png_ptr);
+        fclose(fp);
+        return 0;
+    }
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        fprintf(stderr, "PNG file %s Error during init_io\n", filename);
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        fclose(fp);
+        return 0;
+    }
+
+    png_init_io(png_ptr, fp);
+    png_set_sig_bytes(png_ptr, 8);
+    png_read_info(png_ptr, info_ptr);
+
+    W = png_get_image_width(png_ptr, info_ptr);
+    H = png_get_image_height(png_ptr, info_ptr);
+    color_type = png_get_color_type(png_ptr, info_ptr);
+    bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+
+    *HH=H, *WW=W;
+
+    // Read any color_type into 8bit depth, RGBA format. 
+    // See http://www.libpng.org/pub/png/libpng-manual.txt 
+ 
+    if(bit_depth == 16) png_set_strip_16(png_ptr); 
+    if(color_type == PNG_COLOR_TYPE_PALETTE) png_set_palette_to_rgb(png_ptr); 
+
+    // PNG_COLOR_TYPE_GRAY_ALPHA is always 8 or 16bit depth. 
+    if(color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) png_set_expand_gray_1_2_4_to_8(png_ptr); 
+ 
+    if(png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) png_set_tRNS_to_alpha(png_ptr); 
+ 
+    // These color_type don't have an alpha channel then fill it with 0xff. 
+    if(color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_PALETTE) {
+        png_set_filler(png_ptr, 0xFF, PNG_FILLER_AFTER); 
+    }
+    if(color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_GRAY_ALPHA) png_set_gray_to_rgb(png_ptr); 
+
+    number_of_passes = png_set_interlace_handling(png_ptr);
+    png_read_update_info(png_ptr, info_ptr);
+    
+    /* read file */
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        fprintf(stderr, "PNG file %s Error during read_image\n", filename);
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        fclose(fp);
+        return 0;
+    }
+        
+    row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * H);
+    for (y=0; y<H; y++) {
+        row_pointers[y] = (png_byte*) malloc(png_get_rowbytes(png_ptr,info_ptr));
+    }
+
+    png_read_image(png_ptr, row_pointers);
+
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    fclose(fp);
+
+    // alocate mem for read image surface
+    pngsurface = (uint32 *)malloc(W*H*sizeof(*pngsurface));
+    if (!pngsurface) {
+        fprintf(stderr, "PNG file %s surface malloc error\n", filename);
+        return 0;
+    }
+    p = 0;
+
+    for(y = 0; y < H; y++) { 
+        row = row_pointers[y]; 
+        for(x = 0; x < W; x++) { 
+            px = &(row[x * 4]); // get pixel at x,y
+            rr = px[0]; gg = px[1]; bb = px[2]; aa = px[3]; // extract RGBA, A=Alpha
+            col = surface_rgb_color(rr,gg,bb);
+            pngsurface[p++] = col;         
+        }
+    }
+
+    // free png mem
+    for (y=0; y<H; y++) {
+        free(row_pointers[y]);
+    }
+    free(row_pointers);
+
+    return pngsurface;
+}
+
+// write png file with given surface of given size
+t_stat write_png_file(char* filename, int WW, int HH, uint32 * surface)
+{
+    png_structp png_ptr;
+    png_infop info_ptr;
+    png_bytep * row_pointers;
+    FILE *fp; 
+    int x,y,p,rr,gg,bb,aa; 
+    png_bytep row; 
+    png_bytep px; 
+
+    /* create file */
+    fp = sim_fopen(filename, "wb");
+    if (!fp) return sim_messagef(SCPE_IOERR, "Write PNG: File %s could not be opened for writing", filename);
+
+    /* initialize stuff */
+    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!png_ptr) return sim_messagef(SCPE_IOERR, "Write PNG: png_create_write_struct failed");
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr) return sim_messagef(SCPE_IOERR, "Write PNG: png_create_info_struct failed");
+
+    if (setjmp(png_jmpbuf(png_ptr)))
+       return sim_messagef(SCPE_IOERR, "Write PNG: Error during init_io");
+
+    png_init_io(png_ptr, fp);
+
+    /* write header */
+    if (setjmp(png_jmpbuf(png_ptr)))
+        return sim_messagef(SCPE_IOERR, "Write PNG: Error during writing header");
+
+    png_set_IHDR(png_ptr, info_ptr, WW, HH,
+                 8, PNG_COLOR_TYPE_RGBA, PNG_INTERLACE_NONE,
+                 PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
+    png_write_info(png_ptr, info_ptr);
+
+    /* write bytes */
+    if (setjmp(png_jmpbuf(png_ptr)))
+       return sim_messagef(SCPE_IOERR, "Write PNG: Error writing data to file");
+
+    row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * HH);
+    for (y=0; y<HH; y++) {
+        row_pointers[y] = (png_byte*) malloc(4 * WW * sizeof(png_byte));
+    }
+
+    p=0; aa=255;
+    for(y = 0; y < HH; y++) { 
+        row = row_pointers[y]; 
+        for(x = 0; x < WW; x++) { 
+            get_surface_rgb_color(surface[p++], &rr, &gg, &bb); 
+            px = &(row[x * 4]); // point to pixel at x,y
+            px[0] = rr; px[1] = gg; px[2] = bb; px[3] = aa; // set RGBA (A=Alpha)
+        }
+    }
+
+    png_write_image(png_ptr, row_pointers);
+
+    /* end write */
+    if (setjmp(png_jmpbuf(png_ptr)))
+       return sim_messagef(SCPE_IOERR, "Write PNG: Error during end of write");
+
+    png_write_end(png_ptr, NULL);
+
+    /* cleanup heap allocation */
+    for (y=0; y<HH; y++) free(row_pointers[y]);
+    free(row_pointers);
+
+    fclose(fp);
+
+    return SCPE_OK; 
+}
+
+// same as vid_open_window, but sets initial window scale and position
+t_stat vid_open_window_ex (VID_DISPLAY **vptr, DEVICE *dptr, 
+                           const char *title, uint32 width, uint32 height, int flags, 
+                           int InitialScale, int InitialPosX, int InitialPosY)
+{
+    t_stat stat; 
+    stat = vid_open_window(vptr, dptr, title, width, height, flags | SDL_WINDOW_HIDDEN); 
+    if (stat) return stat; 
+    vid_SetWindowSizeAndPos(*vptr, SIM_SETWIN_POS,InitialPosX,InitialPosY);
+    if ((InitialScale>= 10) && (InitialScale <= 200) && (InitialScale != 100)) {
+        vid_SetWindowSizeAndPos(*vptr, SIM_SETWIN_SCALE, InitialScale, 0);
+    }
+    // and then make cpanel window visible
+    vid_SetWindowSizeAndPos(*vptr, SIM_SETWIN_VISIBILITY, 2, 0);
+    return 0;
+}
+
+
+#endif // end ifdef CPANEL
 
 
 #include <SDL_audio.h>

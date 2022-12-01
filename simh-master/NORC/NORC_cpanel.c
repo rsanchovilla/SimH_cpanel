@@ -2626,17 +2626,17 @@ void Refresh_ShowInfo(int bOnlyInit)
                                    "???", 
              msec);
     } else if (Console_TMOV) {
-        sprintf(buf, "FPS: %d Cpu Speed: x%0.2f TMOV: %d\n", 
+        sprintf(buf, "FPS: %d, Cpu Speed: x%0.2f TMOV: %d\n", 
             fps, 
             TickCountPerSec / 1000000.0,  Console_TMOV / 1000);
     } else if (PRT==0) {
         n=sim_activate_time(&lp_unit[1]) + sim_activate_time(&lp_unit[2]);
         msec=n / 1000; 
-        sprintf(buf, "FPS: %d Cpu Speed: x%0.2f PRT: %d\n", 
+        sprintf(buf, "FPS: %d, Cpu Speed: x%0.2f, PRT: %d\n", 
             fps, 
             TickCountPerSec / 1000000.0, msec);
     } else {
-        sprintf(buf, "FPS: %d Cpu Speed: x%0.2f (%0.1f %s)\n",
+        sprintf(buf, "FPS: %d, Cpu Speed: x%0.2f (%0.1f %s)\n",
             fps, 
             TickCountPerSec / 1000000.0,  
             ips, (ips_unit == 2) ? "MIPS" : (ips_unit == 1) ? "KIPS" : "IPS");

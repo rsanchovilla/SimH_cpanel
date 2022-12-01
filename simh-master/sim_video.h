@@ -256,12 +256,19 @@ extern int (*vid_display_kb_event_process)(SIM_KEY_EVENT *kev);
 #define SIM_VID_DBG_VIDEO   0x80000000
 
 #if defined(CPANEL)
-#define SIM_VID_FLAG_SCALE_PLUSMINUS       (1 << 8)      // allow hotkeys +,-, ^+, ^-, ^Y to control scale of GUI window. If TEXTINPUT present, allow only ^+ ^-  to control scale
-#define SIM_VID_FLAG_ALLOW_TEXTINPUT       (1 << 9)      // Allow text to be entered in window (but inhibits + - ^Y to scale)
-#define SIM_VID_FLAG_ALLOW_ALPHAINPUT      (1 << 10)     // Allow text to be entered in window (but does NOT inhibits + - ^Y to scale)
-#define SIM_VID_FLAG_FULL_TEXTURE_REDRAW   (1 << 11)     // request to update full texture from surface
-#define SIM_VID_FLAG_ALLOW_TOOLTIP         (1 << 12)     // allow tooltip on vptr window (made visible by right-clicking on GUI window)
-#define SIM_VID_FLAG_ALLOW_DRAG            (1 << 13)     // allow drag vptr window to move it (move mouse while left-button pressed)
+#define SIM_VID_FLAG_SCALE_PLUSMINUS       (1 << (16+0))     // allow hotkeys +,-, ^+, ^-, ^Y to control scale of GUI window. If TEXTINPUT present, allow only ^+ ^-  to control scale
+#define SIM_VID_FLAG_ALLOW_TEXTINPUT       (1 << (16+1))     // Allow text to be entered in window (but inhibits + - ^Y to scale)
+#define SIM_VID_FLAG_ALLOW_ALPHAINPUT      (1 << (16+2))     // Allow text to be entered in window (but does NOT inhibits + - ^Y to scale)
+#define SIM_VID_FLAG_FULL_TEXTURE_REDRAW   (1 << (16+3))     // request to update full texture from surface
+#define SIM_VID_FLAG_ALLOW_TOOLTIP         (1 << (16+4))     // allow tooltip on vptr window (made visible by right-clicking on GUI window)
+#define SIM_VID_FLAG_ALLOW_DRAG            (1 << (16+5))     // allow drag vptr window to move it (move mouse while left-button pressed)
+
+#define SIM_SETWIN_POS         1   // set windows pos x,y (can be negative)
+#define SIM_SETWIN_SCALE       2   // set windows size (scale x=10..200)
+#define SIM_SETWIN_MOVE        3   // move x,y (eg -3, +4 -> move window 3 pixels left, 4 down)
+//       4=(reserved, do not use. It is used to implement set title)
+#define SIM_SETWIN_RAISE       5   // raise window
+#define SIM_SETWIN_VISIBILITY  6   // set windows visibility if x=0->Hide window/=1 Minimize/=2 Show window
 
 extern t_stat vid_SetWindowSizeAndPos (VID_DISPLAY * vptr, int Mode, int x, int y); 
 extern int    vid_GetWindowSizeAndPos (VID_DISPLAY * vptr, char Mode); // Mode='X' or 'Y' return X/Y pos of window in screen coord. Mode='S' return scale 10..200
@@ -270,9 +277,13 @@ extern void vid_set_title(VID_DISPLAY * vptr, char * title);
 extern int icon_rgb_defined;
 extern void vid_set_system_cursor (int nCursor); // nCursor=0 -> slashed circle, =1 -> set arrow cursor, =2 -> hand cursor, =3 -> Four pointed arrow pointing north, south, east, and west, =4 -> wait
 extern void vid_refresh_ex (VID_DISPLAY *vptr, uint32 *pixels, void * RectList);
+extern int  vid_refresh_in_progress(VID_DISPLAY *vptr); 
+extern t_stat vid_open_window_ex (VID_DISPLAY **vptr, DEVICE *dptr, 
+                           const char *title, uint32 width, uint32 height, int flags, 
+                           int InitialScale, int InitialPosX, int InitialPosY);
 
-#define RECTLIST_MAX               300
-#define RECTLIST_FLAG_NOSCALE        1
+#define RECTLIST_MAX                   300
+#define RECTLIST_FLAG_NOSCALE            1
 typedef struct {
     int Count;                   // Count of rectangles in list. -1 if table full, and should repdraw the whole surface
     int x[RECTLIST_MAX];         // rectangle for surface to paint to texture aplying scale
@@ -281,7 +292,6 @@ typedef struct {
     int h[RECTLIST_MAX];
     int flags[RECTLIST_MAX];
 } rectlist;
-extern int vid_refresh_in_progress; 
 
 typedef struct {
     int Cntrl; // 1=control key is pressed right now. Value updated by key event processing, when the window has the focus
@@ -297,13 +307,21 @@ extern char DropFile_FileName[];           // filename droped in
 extern int DropFile_x_pos, DropFile_y_pos; // pos in window DropFile_vptr where file is dropped in
 extern VID_DISPLAY * DropFile_vptr;        
 
+extern int get_surface_rgb_color(uint32 color, int *r_Color, int *g_Color, int *b_Color); // decompose a surface uint32 to its rr,gg,bb components. return alpha channel
+extern uint32 surface_rgb_color(uint32 r, uint32 g, uint32 b);  // return surface pixel with r g b color. r,g,b are 8bit! 
+extern uint32 surface_rgb_color_alpha(uint32 r, uint32 g, uint32 b, uint32 alpha); 
+
+extern uint32 * read_png_file(char* filename, int * WW, int * HH);
+extern t_stat write_png_file(char* filename, int WW, int HH, uint32 * surface);
+
 // added to not depend on stdlib max() and min()
 #ifndef MAX
 #define MAX(a,b)  (((a) >= (b)) ? (a) : (b))
 #endif
 #ifndef MIN
 #define MIN(a,b)  (((a) <= (b)) ? (a) : (b))
-#endif
+
+#endif // for ifdef(CPANEL) 
 
 #endif
 #ifdef  __cplusplus

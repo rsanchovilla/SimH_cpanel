@@ -950,7 +950,7 @@ void Measure_run_CpuSpeed(t_int64 * elapsed, int * TPS, int * IPS, char * sBuf, 
         sprintf(sBuf, "%d min %d sec (%d sec)", (int)(*elapsed /60000), (int) (*elapsed % 60000) / 1000, (int) (*elapsed / 1000));
     } else if (*elapsed < 3600*1000) {
         sprintf(sBuf, "%d min", (int) (*elapsed / 60000));
-    } else {
+    } else { 
         sprintf(sBuf, "%d h %d min", (int) (*elapsed / 3600000), (int) (*elapsed % 3600000) / 60000);
     }
 }
@@ -1001,7 +1001,7 @@ int Control_CpuSpeed(int bFastMode)
 }  
 
 
-// symbolc trace commands: have the form of **cmd as comment in load command file
+// symbolc trace commands: have the form of **cmd as comment in load'ed file
 // Symbolic_Trace_tm0=sim_os_msec() when trace starts
 // sTrace points to **cmd string
 // return 1 if must reset Symbolic_Trace_tm0 value
@@ -1072,9 +1072,9 @@ int Symbolic_Trace(uint32 Symbolic_Trace_tm0, char * Symbolic_Buffer, char * sTr
         trace = 1;
     } else if(strstr(sTrace, "**m")) {
         // the "**m[o]NNNN[-LL][f][:xxxx]" string in symbolic buffer prints on console the contents
-        // of crt memory starting at NNNN. prints NN half words (defaults to 1). 
+        // of crt memory starting at NNNN. prints LL half words (defaults to 1). 
         // if "f" is present, print fullwords
-        // if "o" is present, NNNN and NN are octal numbers
+        // if "o" is present, NNNN and LL are octal numbers
         // if ":" is present, prints on console xxx (cannot have leading spaces, nor embebbed spaces, max 20 chars)
         sTrace +=3;
         addr=len=octal=0;
@@ -1102,7 +1102,7 @@ int Symbolic_Trace(uint32 Symbolic_Trace_tm0, char * Symbolic_Buffer, char * sTr
         }
         if (len==0) len=1;
         if (c=='f') {addr=-(addr & 0777776); c=*sTrace++; }
-        sprintf(buf, "Mem dump", addr);
+        sprintf(buf, "Mem dump %d", addr);
         if (c==':') {
             int len=0;
             while (c=*sTrace++) {
@@ -1657,4 +1657,6 @@ const char * cpu_description (DEVICE *dptr) {
 }   
  
 
+// en i701
+// nuevo sw: pact compiler
 

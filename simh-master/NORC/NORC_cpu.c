@@ -2256,6 +2256,10 @@ const char * cpu_description (DEVICE *dptr) {
     return "IBM Naval Ordnance Research Calculator (NORC) CPU";     
 }   
  
+// en NORC
+// poner en manual nombre de instr correctas
+// nuevo sw: compiler (que aplique a los prog hechos en crossasembler)
+
 
 
     

@@ -1650,11 +1650,13 @@ t_stat ExecOpcode(int opcode, int DA, int bFastMode,
                    sim_debug(DEBUG_EXP, &cpu_dev, "Arm out of range (should be 0..2)\n");
                    reason = STOP_IO; // selected arm or unit out of range
                    StopIOError = 3; 
+                   break;
                 }
                 if (unit > 3) {
                    sim_debug(DEBUG_EXP, &cpu_dev, "Unit out of range (should be 0..3)\n");
                    reason = STOP_IO; // selected arm or unit out of range
                    StopIOError = 3; 
+                   break; 
                 }
             }
             if (cpu_unit.flags & OPTION_1DSKARM) {
@@ -2681,4 +2683,13 @@ const char * cpu_description (DEVICE *dptr) {
     return "IBM 650 CPU";
 }
 
+
+
+// update disk arm image acording to this video:
+// IBM 355 disc arm moving (very high quality image)
+// https://www.youtube.com/watch?v=irPw9oyAju8
+// Minute 0806
+
+// en i650
+// nuevo sw: runcible
 

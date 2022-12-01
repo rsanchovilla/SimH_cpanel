@@ -6797,19 +6797,15 @@ cpu_description (DEVICE *dptr)
        return "IBM 360 CPU";
 }
 
-// en i650
-// nuevo sw: runcible
 
-// en NORC
-// poner en manual nombre de instr correctas
-// nuevo sw: compiler (que aplique a los prog hechos en crossasembler)
-
-// en i701
-// nuevo sw: pact compiler
-
-// en swtpc: 
-// fdos, minidos de deramp.com
 
 //ibm360 bugs
 // cuando scp hace "send xxx", acelera la impresion en consola como si fuese fast mode
-// si rew en 2401 cuando justa hay cinta para un paso de HiSpeed rew, pasa de golpe de 8% a 0.4%
+// si rew en 2401 cuando justo hay cinta para un paso de HiSpeed rew, pasa de golpe de 8% a 0.4%
+
+//falta
+// jcls para demo de COBOL-D, FFORTRAN, PL/I y Assembler
+// sysgen para 1Mb de RAM
+
+
+

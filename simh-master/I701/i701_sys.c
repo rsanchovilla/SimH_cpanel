@@ -98,6 +98,7 @@ DEBTAB              dev_debug[] = {
     {"DATA", DEBUG_DATA},
     {"DETAIL", DEBUG_DETAIL},
     {"EXP", DEBUG_EXP},
+    {"CARD", DEBUG_CARD},
     {0, 0}
 };
 
@@ -1177,9 +1178,11 @@ t_stat deck_load(CONST char *fn, Deck * DeckImage)
     uint16 image[80];    
     t_stat              r, r2;
     int32 sv_sim_switches = sim_switches; 
+    DEVICE               *dptr = find_dev_from_unit( uptr);
+
+    sim_debug(DEBUG_CARD, dptr, "deck_load\n");
 
     // attach file to cdr unit 0
-
     sim_switches |= SWMASK ('Q');
     r = (cdr_dev.attach)(uptr, fn);
     sim_switches = sv_sim_switches; 
@@ -1231,6 +1234,9 @@ t_stat deck_save(CONST char *fn, Deck * DeckImage, int card, int nCards)
     t_stat              r;
     int nc;
     int32 sv_sim_switches = sim_switches; 
+    DEVICE              *dptr = find_dev_from_unit( uptr);
+
+    sim_debug(DEBUG_CARD, dptr, "deck_save\n");
 
     if (nCards < 0) nCards=DeckImage->nCards;
     if (card + nCards > DeckImage->nCards) {

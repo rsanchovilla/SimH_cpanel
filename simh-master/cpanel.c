@@ -1,6 +1,6 @@
 /* cpanel.c: simulator control panel simulation
 
-   Copyright (c) 2017-2021, Roberto Sancho
+   Copyright (c) 2017-2022, Roberto Sancho
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   ROBERTO SANCHO BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -29,8 +29,15 @@
    27-Jan-21    RSV     Control panel support for IBM NORC mouse drag, alpha masks 
    22-Jun-21    RSV     Control panel support for IBM 701 reduce cpu usage, antialiasing at scale 50% and 25%
    21-Dec-21    RSV     Control panel support for IBM 360 support for multiple panels, bilinear scaling at any scale < 100%, 
-                                                          file drag and drop, NoScale controls, nested ifOpt
-                                                          removed deprecated functions (AutoNext, Panel Types)   
+                        file drag and drop, NoScale controls, nested ifOpt
+                        removed deprecated functions (AutoNext, Panel Types)   
+   09-Oct-22    RSV     Some internal fixes and performance improvements
+                        Create cpanel window hidden so initial resize and reposition is not visible.
+                        Support to set initial position of cpanel window before opening it.
+                        In WIN32 platform, allow control panel to be responsive and refreshed while 
+                        user in sim> command prompt (also INT-REFRESH _svc is called if active to refresh
+                        other visual devices while cpu is stopped). New function DrawText_surface to draw text
+                        on any surface
 
    These simulator commands controls the control panel
 
@@ -55,8 +62,8 @@
                                  interactive way. This command returns when
                                  user click on GUI window close icon (or if
                                  control panel issues a set cpanel off 
-                                 command) or user press the WRU key (default
-                                 Control-E) on console 
+                                 command) or user press enert or the WRU 
+                                 key (default Control-E) on console 
 
       SET CPANEL PRESS= name --> Simulates mouse clicking on given control name.
                                  Must be a single control, cannot be a control
@@ -108,7 +115,9 @@
 
       SET CPANEL POS=x/y     --> Sets the GUI window position at coord x,y
                                  (can be negative values)
-                                 Must be issued after SET CPANEL ON
+                                 This command can be issued even if panel is not 
+                                 displayed on GUI window (apply when window opens)
+                                 Must be issued after ATT CPANEL 
 
       SET CPANEL SELECT=ShortName | 0..9
 
@@ -131,31 +140,42 @@
 
       defaults: SET CPANEL OFF, SCALE=100, no file attached
 
-      CPANEL device cannot be disabled. If CPU is stopped, GUI window is not refreshed 
-      nor polled, so it will not react to mouse clicks (this is indicated by a slashed 
-      circle). Refresh and clicks reactions occurs on next scp command execution. 
-      Issue a SET CPANEL ON at any moment (or just press enter) to refresh the GUI 
-      window and see the results of previous scp command.
+      CPANEL device cannot be disabled. 
+      To just close the GUI window, use the SCP command SET CPANEL OFF.
 
-      When Simulated CPU is executing code, clicking on the close button of GUI windows 
-      ends the emulation (same as bye scp command). If CPU is stopped, the GUI close 
-      button does nothing. To just close the GUI window, use the SCP command
-      set cpanel off.
+      On Windows: 
+      Clicking on the close button of GUI windows exits SimH. 
+      The control panel is refreshed and active even if cpu is stopped, and console
+      shows the sim> prompt. In this case, any SCP command issued on button/switch/key 
+      press on cpanel will be printed on console and executed as if it was typed by user
+
+      Other platforms:
+      if cpu is stopped, console shows the sim> prompt but The control panel is NOT 
+      refreshed not active. Clicking on the close button of GUI windows WILL NOT exits SimH. 
+      warning, mouse envents on cpanel while cpu is stopped are processed when cpanel becomes
+      active again (in next GO commands, for example)
  
 */
 
-// cpanel.c needs the preprocessor symbol CPANEL, USE_SIM_VIDEO and HAVE_LIBSDL to be defined
+// To compile cpanel.c, the preprocessor symbol CPANEL, USE_SIM_VIDEO and HAVE_LIBSDL should be defined
 
 #if defined(CPANEL)
 
+#include <math.h>
+#include "cpanel.h"
+#if defined (_WIN32)
+    // needed by fgets_console and fgets_console_cancel
+    #include <io.h>
+    // under win32, cpanel is refreshed and active during fgets call (blocked while
+    // waiting for user input at sim> prompt, until user hit <cr>)
+    #define REFRESH_DURING_FGETS
+#endif
+
 #if defined(USE_SIM_VIDEO) && defined(HAVE_LIBSDL)
-// ok, both preprocessor vars are defined
+// ok, both preprocessor symbols are defined
 #else
 #error cpanel.c needs the preprocessor symbol CPANEL, USE_SIM_VIDEO and HAVE_LIBSDL to be defined
 #endif
-
-#include <math.h>
-#include "cpanel.h"
 
 // added to not depend on stdlib max() and min()
 #ifndef MAX
@@ -308,6 +328,11 @@ static struct {                                     // Control Panel main data
 char SCP_cmd[MAX_SCP_CMDS * MAX_SCP_CMD_LEN];       // stores scp commnads list queued by control panel pending to be executed
 int  SCP_cmd_count = 0;                             // number of commands in list
 int  SCP_cmd_echo  = 1;                             // echo DoSCP commands
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Control Panel Definition File (DF) processing
+// parses DF and build up CP array with control to display
+//
 
 // compare str up to len, case insensitive. len can be zero (compare upt to \0 char as end of strings)
 // return 1 if equal, 0 if not
@@ -532,208 +557,6 @@ void FontLoad(int bLoad)
         }
     }
 }
-
-// return info for given control Id
-int GetControlInfo(int Id, int mode)
-{
-    if (mode == CINFO_NITEMS) {
-       if (Id<CARRAY_START) return -1; 
-    } else {
-       if (CHK_CId(Id) < 0) return -1; 
-    }
-    switch (mode) {
-        case CINFO_X: return CP.Control[Id].X;
-        case CINFO_Y: return CP.Control[Id].Y;
-        case CINFO_W: return CP.Control[Id].W;
-        case CINFO_H: return CP.Control[Id].H;
-        case CINFO_NSTATES: return CP.Control[Id].nStates; 
-        case CINFO_NITEMS: return CP.CArray[Id-CARRAY_START].Items; 
-        case CINFO_NCP: return CP.Control[Id].ncp; 
-    }
-    fprintf(stderr, "GetControlInfo %d not defined on control %d\n", Id, mode);
-    return -1; 
-}
-
-// return pointer to surface for given state on control CId, so surface[0]=first pixel of image 
-// also sets W and H with control width and heigt (if param are not NULL)
-// if State == -1 -> return pos X,Y in main GUI windows in ww,hh params
-// if error, return zero
-uint32 * GetControlSurface(int CId, int State, int * ww, int * hh)
-{
-    int W, H, n; 
-    if (CHK_CId(CId) < 0) return 0; 
-    if (State == -1) {
-        if (ww) *ww=CP.Control[CId].X;
-        if (hh) *hh=CP.Control[CId].Y;
-        return 0;
-    }
-    if (State >= CP.Control[CId].nStates) return 0;
-    if (State < 0) return 0;
-    W = CP.Control[CId].W; if (ww) *ww=W;
-    H = CP.Control[CId].H; if (hh) *hh=H;
-    n = CP.Control[CId].iPos_surface;                                   // start of control's pixels
-    n = n + State * W * H;                                              // start of this state 
-    if (n >= CP.SurfaceItems) return 0;                                 // sanity check
-    return &CP.surface[n]; 
-}
-
-// copy pixels from one control to another. Copy pixels from given state to given destination state image
-// copy rectangle x0,y0,w,h from source state image (can be partially outside source image)
-// place copied rectangle at x1,y1 in destination state image (can be partially outside destination image)
-// source and destination control can be the same. Source and destination state can be the same but
-// in this case, source and destination rectangle cannot overlap
-// if w=h=0 -> use source control w and h
-// x0,y0 are relative to FromCId (0,0=top left image corner), x1,y1 are relative to ToCId (0,0=top left image corner)
-// if error return zero
-// if copies image (FromCId) has alfa channel set, its alfa channel is applied when drawing it on ToCId image
-// if FromCId or ToCId is zero, then the surface used is the cpvid surface. The value FromState/ToState select the 
-// ncp of window owner of surface to use
-int CopyControlImage(int FromCId, int FromState, int x0, int y0, int w, int h,
-                     int ToCId,   int ToState,   int x1, int y1)
-{
-    uint32 * surface0; 
-    uint32 * surface1;
-    uint32 col; 
-    int w0, h0, ww, hh, w1, h1; 
-    int x,y,p0,p1; 
-    uint32 AlphaMask = surface_rgb_color(0,0,0);
-    int rr,gg,bb, alpha, rr_bg,gg_bg,bb_bg;
-    
-    if ((w < 0) || (h < 0))   return 0;
-
-    // process source 
-    if (FromCId == 0) {
-        // source image is the full surface of ncp given in FromState parameter
-        int ncp=FromState; 
-        if (ncp >= MAX_CPVID_WINDOWS) return 0; //safety
-        surface0=get_surface(ncp, &ww, &hh);
-    } else {
-        // source image a control FromCId, state FromState
-        if (CHK_CId(FromCId) < 0) return 0;                                 // sanity check
-        surface0 = GetControlSurface(FromCId, FromState, &ww, &hh);
-    }
-    w0=ww; h0=hh;
-    if ((!surface0) || (ww<1) || (hh<1)) return 0;
-
-    // if w=0 or h=0, use source control size
-    if (w==0) w=w0; if (h==0) h=h0;
-
-    // check source rectange (x0, y0, w, h) is not outside source surface 
-    if ((x0>=w0) || (y0>=h0)) return 0;
-    if ((x0+w < 0) || (y0+h < 0)) return 0;
-    if ((x1+w < 0) || (y1+h < 0)) return 0;
-    
-    // process destination
-    if (ToCId == 0) {
-        // destination image is the full surface of ncp given in ToState parameter
-        int ncp=ToState; 
-        if (ncp >= MAX_CPVID_WINDOWS) return 0; //safety
-        surface1=get_surface(ncp, &ww, &hh);
-    } else {
-        // destination image a control ToCId, state ToState
-        if (CHK_CId(ToCId) < 0) return 0;                                 // sanity check
-        surface1 = GetControlSurface(ToCId, ToState, &ww, &hh);
-    }
-    w1=ww; h1=hh;
-    if ((!surface1) || (ww<1) || (hh<1)) return 0;
-
-    // check destination rectange (x1, y1, w, h) is not outside destination surface 
-    if ((x1>=w1) || (y1>=h1)) return 0;
-    
-    // simple-minded surface copy algorithm, but easy to understand and debug.
-    // programmed on the hope that smart-minded simulator writer will not call this function
-    // to copy rectangles from outside source surface to outside destination surface
-    for(y=0;y<h;y++) {
-        if (y0+y <  0) {y=-y0-1; continue;}
-        if (y0+y >=h0) break;
-        if (y1+y <  0) {y=-y1-1; continue;}
-        if (y1+y >=h1) break;
-        p0=x0+(y0+y)*w0;
-        p1=x1+(y1+y)*w1;
-        for (x=0;x<w;x++) {
-           if (x0+x <  0) {x=-x0-1; continue;}
-           if (x0+x >=w0) break;
-           if (x1+x <  0) {x=-x1-1; continue;}
-           if (x1+x >=w1) break;
-           col = surface0[p0+x];
-           if (col==0) continue; // source pixel color is transparent
-           if ((col & AlphaMask) != AlphaMask) {
-               // apply alpha on background
-               alpha=get_surface_rgb_color(col,&rr,&gg,&bb)+1;           // get control image pixel with alpha value
-               get_surface_rgb_color(surface1[p1+x],&rr_bg,&gg_bg,&bb_bg); // get background pixel
-               // if alpha=255 -> color is rr. If alfa=0 -> color is rr_bg
-               rr = rr_bg + (alpha * (rr-rr_bg)) / 256; 
-               gg = gg_bg + (alpha * (gg-gg_bg)) / 256; 
-               bb = bb_bg + (alpha * (bb-bb_bg)) / 256; 
-               col = surface_rgb_color(rr,gg,bb);
-           }            
-           surface1[p1+x]=col;
-        }
-    }
-    return 1; // success
-}                    
-
-// draw text in a control state bitmap. Used color is rr,gg,bb. Text is draw at x0, y0,w,h in
-// source state image (can be partially outside bitmap)
-// x0,y0 are relative to ToCId (0,0=top left image corner)
-// use 7x7 internal font (upper case only) in a 8x10 box. LF or CR allowed in buf to continue text in 
-// next line starting at x0
-// if error return zero
-int DrawTextImage   (int ToCId, int ToState,                 // ToCId, ToState: draw text in this control
-                     int x0, int y0, int w0, int h0,         // x0, y0, w0, h0: position and box in control where to draw text, if w0/h0 = 0 use control width/heigh
-                     int rr, int gg, int bb,                 // r,g,b: color of text
-                     char * buf, int chrsz)                  // string to print, char size: 1-> x1, 2-> x2
-{
-    uint32 * surface0; 
-    uint32 col; 
-    int ww, hh; 
-    int x,y,p0,g,ix,iy,n,x1; 
-    char c; 
-    
-    if (CHK_CId(ToCId)  < 0)    return 0;                                 // sanity check
-    if ((buf == NULL) || (buf[0]==0))   return 0;
-    if ((rr < 0) || (gg < 0) || (bb < 0))   return 0;
-    
-    surface0 = GetControlSurface(ToCId, ToState, &ww, &hh);
-    if ((!surface0) || (ww<1) || (hh<1)) return 0;
-
-    if (w0 == 0) w0=ww; 
-    if (h0 == 0) h0=hh; 
-    if ((x0 >= w0) || (y0 >= h0)) return 0;
-
-    col = surface_rgb_color(rr,gg,bb);
-
-    // draw chars 
-    n = 0;
-    x1 = x0; 
-    while((c=buf[n++]) > 0) {
-        c = sim_toupper(c);                   // convert to uppercase
-        if ((c==10) || (c==13)) {
-            y0 += 10*chrsz;
-            x1 = x0;
-            continue; 
-        }
-        if (c > 123) c=c-27;             // because lower case not defined in font
-        if ((c < 32) || (c > 127)) c=31; // sets undef char if any
-        c=c-31;
-        for (iy=0;iy<7*chrsz;iy++) {
-            y = y0 + iy; 
-            if (y >= h0) break; if (y < 0) continue;             
-            p0 = y * ww;
-            g = Font[c*7 + (iy / chrsz)];
-            for (ix=0;ix<5*chrsz;ix++) {
-                x = x1 + ix; 
-                if (x >= w0) break; 
-                if ((g & 1) && (x >= 0)) surface0[p0+x]=col;
-                if (   (chrsz==1) || 
-                       ((ix % chrsz)==(chrsz-1))   ) g = (g >> 1);
-            }
-        }
-        x1 += 8*chrsz;  
-    }
-    return 1; // success
-}
-
 
 // add pixels to control for given state. 
 // if col == 1 -> return pixel color instead of setting it
@@ -993,7 +816,6 @@ int AddPNGImage(char * ImgName, char * FileName)
     return 0;
     
 }
-
 
 char * IsOptionParam; // points to / of found OPT/PARAM, else NULL
 int nIsOption; // char num in Options array of found OPT/PARAM, else 0
@@ -1306,6 +1128,19 @@ int cpdf_num_param(char * s)
     return ok ? n : -1;
 }
 
+// return 1 if file exists (i.e. can be opened), else return 0
+int file_exists(char * filename)
+{
+    FILE *file;
+
+    if (filename == NULL) return 0;
+    file = sim_fopen (filename, "r");
+    if (file == NULL)                          // open failed? 
+        return 0;
+    fclose (file);
+    return 1;
+}
+
 // initialize intentisty ticks counter. 
 void InitTickCount(int nTick)
 {
@@ -1329,34 +1164,6 @@ int GetTickCountItem()
     InitTickCount(i);
     return i;
 }
-
-// Mark all controls to be redraw on next refresh
-// if ncp=-1 -> mark all
-void AllControlRedrawNeeded(int ncp)
-{
-    int n; 
-    for(n=0;n<CP.ControlItems;n++) {
-        if ((ncp>=0) && (CP.Control[n].ncp != ncp)) continue; 
-        if (CP.Control[n].nStates == 0) continue; // if nStates==0 -> control not drawn. Just it is used for click sense on its area 
-        if (CP.Control[n].X == -1) continue; // control not drawn nor sensed
-        CP.Control[n].LastState = -1; // set to -1 to force redraw of control into refresh routine
-    }
-}
-
-
-// return 1 if file exists (i.e. can be opened), else return 0
-int file_exists(char * filename)
-{
-    FILE *file;
-
-    if (filename == NULL) return 0;
-    file = sim_fopen (filename, "r");
-    if (file == NULL)                          // open failed? 
-        return 0;
-    fclose (file);
-    return 1;
-}
-
 
 
 #define DF_ERR_NLIN             fprintf(stderr, "Control Panel Definition File line %d: ", nLin)
@@ -2280,6 +2087,7 @@ void ControlPanel_Bind(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr)
     int  last_opt_cache = 0; 
 
     // load the resources from attached file and creates the controls & carrays
+
     ControlPanelLoad(cp_type, uptr, dptr);
     // locate the cp_def to use based on control panel type set in definition file
     cp_def = cp_type->cp_def;                         // get the control mapping for this type
@@ -2347,89 +2155,237 @@ void ControlPanel_Bind(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr)
 	cpanel_on = 0;
 }
 
-void ControlPanel_Refresh(void);
-void ControlPanel_init(DEVICE *dptr, int ncp)
+//////////////////////////////////////////////////////////////////////////////////////////
+// Control Panel API
+// functions to be called from simulator xxx_cpanel.c 
+//
+
+// return info for given control Id
+int GetControlInfo(int Id, int mode)
 {
-    int wx, wy, xPos, yPos, Scale, n, CId0; 
-    char buf[128]; 
-
-    CId0=-1; 
-    // locate first control for cpvid[ncp] entry of defined control panel
-    for (n=0; n<CP.ControlItems; n++) {
-        if (CP.Control[n].ncp == ncp) {
-            // found first control
-            CId0=n; 
-            break; 
-        }
-    }
-
-    if (CId0 < 0) {
-        fprintf(stderr, "No controls defined. Cannot init Control Panel GUI window\n");
-        return;
-    }
-    // first control is backgound and sets the control panel size
-    wx = CP.Control[CId0].W; 
-    wy = CP.Control[CId0].H;
-    if (cpvid_init(ncp, cpvid[ncp].long_name, wx, wy, dptr) < 0) {
-        fprintf(stderr, "Control Panel GUI window initialization failed\n");
-        return;
-    }
-    sim_debug (CP_CMDS, &cp_dev, "GUI window created: %s\n", cpvid[ncp].long_name);
-    xPos=90; yPos=50;
-    sim_debug (CP_CMDS, &cp_dev, "GUI Initial Pos x=%d, y=%d \n", xPos, yPos);
-    vid_SetWindowSizeAndPos(cpvid[ncp].vptr_cp, 1,xPos,yPos);
-    Scale = cpvid[ncp].InitialScale; 
-    if (Scale != 100) {
-        sim_debug (CP_CMDS, &cp_dev, "GUI initial Scale %d \n", Scale);
-        vid_SetWindowSizeAndPos(cpvid[ncp].vptr_cp, 2, Scale, 0);
-    }
-    sprintf(buf, "%s (Scale %d%%)", cpvid[ncp].long_name, Scale);
-    vid_set_title(cpvid[ncp].vptr_cp, buf);
-    cpanel_on = 1;  
-    cpanel_interactive = 0;
-    CP.LastTickCountNum = 0;
-    CP.LastTickIntensityInterval = SDL_GetPerformanceFrequency() / 30000; // call TickCount 30K times per second
-    // set all the controls of with invalid laststate so they will be redraw
-    AllControlRedrawNeeded(ncp); 
-    ControlPanel_Refresh();
-}
-
-void ControlPanel_done(void)
-{    
-    sim_debug (CP_CMDS, &cp_dev, "GUI window close requested\n");
-    if ((cpanel_on) && (CP.CP_Done != NULL)) CP.CP_Done();
-    cpanel_on = 0; 
-    cpanel_interactive = 0;
-    cpvid_close(-1); // close all cpvid GUI windows
-    if (CP.surface) free(CP.surface);
-    CP.surface = NULL; 
-    CP.ControlItems=0;
-    FontLoad(0); // unload internal font
-    sim_debug (CP_CMDS, &cp_dev, "GUI window closed\n");
-}
-// load and pop-up GUI window
-// power = 0 or 1 to create/destry the GUI window
-void ControlPanel_Load(int ncp, int power, 
-                       CP_TYPE *cp_type,  
-                       UNIT *uptr, DEVICE *dptr)
-{
-    if (power) { 
-        // power on control panel. 
-        if (cpvid[ncp].vptr_cp) {
-            ControlPanel_Refresh();
-            return;  // cpanel already there. nothing to do. just refresh
-        }
-        if (CP.ControlItems == 0) {
-            // no controls loaded -> Load DF, Bind controls
-            ControlPanel_Bind(cp_type, uptr, dptr); 
-        }
-        ControlPanel_init(dptr, ncp);
+    if (mode == CINFO_NITEMS) {
+       if (Id<CARRAY_START) return -1; 
     } else {
-        // ControlPanel_done sets cpanel_on variable to 0
-        if (cpanel_on) {
-            ControlPanel_done();
+       if (CHK_CId(Id) < 0) return -1; 
+    }
+    switch (mode) {
+        case CINFO_X: return CP.Control[Id].X;
+        case CINFO_Y: return CP.Control[Id].Y;
+        case CINFO_W: return CP.Control[Id].W;
+        case CINFO_H: return CP.Control[Id].H;
+        case CINFO_NSTATES: return CP.Control[Id].nStates; 
+        case CINFO_NITEMS: return CP.CArray[Id-CARRAY_START].Items; 
+        case CINFO_NCP: return CP.Control[Id].ncp; 
+        case CINFO_NOSCALE: return CP.Control[Id].NoScale; 
+    }
+    fprintf(stderr, "GetControlInfo %d not defined on control %d\n", Id, mode);
+    return -1; 
+}
+
+// return pointer to surface for given state on control CId, so surface[0]=first pixel of image 
+// also sets W and H with control width and heigt (if param are not NULL)
+// if State == -1 -> return pos X,Y in main GUI windows in ww,hh params
+// if error, return zero
+uint32 * GetControlSurface(int CId, int State, int * ww, int * hh)
+{
+    int W, H, n; 
+    if (CHK_CId(CId) < 0) return 0; 
+    if (State == -1) {
+        if (ww) *ww=CP.Control[CId].X;
+        if (hh) *hh=CP.Control[CId].Y;
+        return 0;
+    }
+    if (State >= CP.Control[CId].nStates) return 0;
+    if (State < 0) return 0;
+    W = CP.Control[CId].W; if (ww) *ww=W;
+    H = CP.Control[CId].H; if (hh) *hh=H;
+    n = CP.Control[CId].iPos_surface;                                   // start of control's pixels
+    n = n + State * W * H;                                              // start of this state 
+    if (n >= CP.SurfaceItems) return 0;                                 // sanity check
+    return &CP.surface[n]; 
+}
+
+// copy pixels from one control to another. Copy pixels from given state to given destination state image
+// copy rectangle x0,y0,w,h from source state image (can be partially outside source image)
+// place copied rectangle at x1,y1 in destination state image (can be partially outside destination image)
+// source and destination control can be the same. Source and destination state can be the same but
+// in this case, source and destination rectangle cannot overlap
+// if w=h=0 -> use source control w and h
+// x0,y0 are relative to FromCId (0,0=top left image corner), x1,y1 are relative to ToCId (0,0=top left image corner)
+// if error return zero
+// if copies image (FromCId) has alfa channel set, its alfa channel is applied when drawing it on ToCId image
+// if FromCId or ToCId is zero, then the surface used is the cpvid surface. The value FromState/ToState select the 
+// ncp of window owner of surface to use
+int CopyControlImage(int FromCId, int FromState, int x0, int y0, int w, int h,
+                     int ToCId,   int ToState,   int x1, int y1)
+{
+    uint32 * surface0; 
+    uint32 * surface1;
+    uint32 col; 
+    int w0, h0, ww, hh, w1, h1; 
+    int x,y,p0,p1; 
+    uint32 AlphaMask = surface_rgb_color(0,0,0);
+    int rr,gg,bb, alpha, rr_bg,gg_bg,bb_bg;
+    
+    if ((w < 0) || (h < 0))   return 0;
+
+    // process source 
+    if (FromCId == 0) {
+        // source image is the full surface of ncp given in FromState parameter
+        int ncp=FromState; 
+        if (ncp >= MAX_CPVID_WINDOWS) return 0; //safety
+        surface0=get_surface(ncp, &ww, &hh);
+    } else {
+        // source image a control FromCId, state FromState
+        if (CHK_CId(FromCId) < 0) return 0;                                 // sanity check
+        surface0 = GetControlSurface(FromCId, FromState, &ww, &hh);
+    }
+    w0=ww; h0=hh;
+    if ((!surface0) || (ww<1) || (hh<1)) return 0;
+
+    // if w=0 or h=0, use source control size
+    if (w==0) w=w0; if (h==0) h=h0;
+
+    // check source rectange (x0, y0, w, h) is not outside source surface 
+    if ((x0>=w0) || (y0>=h0)) return 0;
+    if ((x0+w < 0) || (y0+h < 0)) return 0;
+    if ((x1+w < 0) || (y1+h < 0)) return 0;
+    
+    // process destination
+    if (ToCId == 0) {
+        // destination image is the full surface of ncp given in ToState parameter
+        int ncp=ToState; 
+        if (ncp >= MAX_CPVID_WINDOWS) return 0; //safety
+        surface1=get_surface(ncp, &ww, &hh);
+    } else {
+        // destination image a control ToCId, state ToState
+        if (CHK_CId(ToCId) < 0) return 0;                                 // sanity check
+        surface1 = GetControlSurface(ToCId, ToState, &ww, &hh);
+    }
+    w1=ww; h1=hh;
+    if ((!surface1) || (ww<1) || (hh<1)) return 0;
+
+    // check destination rectange (x1, y1, w, h) is not outside destination surface 
+    if ((x1>=w1) || (y1>=h1)) return 0;
+    
+    // simple-minded surface copy algorithm, but easy to understand and debug.
+    // programmed on the hope that smart-minded simulator writer will not call this function
+    // to copy rectangles from outside source surface to outside destination surface
+    for(y=0;y<h;y++) {
+        if (y0+y <  0) {y=-y0-1; continue;}
+        if (y0+y >=h0) break;
+        if (y1+y <  0) {y=-y1-1; continue;}
+        if (y1+y >=h1) break;
+        p0=x0+(y0+y)*w0;
+        p1=x1+(y1+y)*w1;
+        for (x=0;x<w;x++) {
+           if (x0+x <  0) {x=-x0-1; continue;}
+           if (x0+x >=w0) break;
+           if (x1+x <  0) {x=-x1-1; continue;}
+           if (x1+x >=w1) break;
+           col = surface0[p0+x];
+           if (col==0) continue; // source pixel color is transparent
+           if ((col & AlphaMask) != AlphaMask) {
+               // apply alpha on background
+               alpha=get_surface_rgb_color(col,&rr,&gg,&bb)+1;           // get control image pixel with alpha value
+               get_surface_rgb_color(surface1[p1+x],&rr_bg,&gg_bg,&bb_bg); // get background pixel
+               // if alpha=255 -> color is rr. If alfa=0 -> color is rr_bg
+               rr = rr_bg + (alpha * (rr-rr_bg)) / 256; 
+               gg = gg_bg + (alpha * (gg-gg_bg)) / 256; 
+               bb = bb_bg + (alpha * (bb-bb_bg)) / 256; 
+               col = surface_rgb_color(rr,gg,bb);
+           }            
+           surface1[p1+x]=col;
         }
     }
+    return 1; // success
+}                    
+
+void DrawText_surface(uint32 * surface, int pitch, // surface addr to start writing to, surface width (the length of a row of pixels in bytes)
+                      int w0, int h0,              // box where text will be set (clipped to it). 0,0 if no box wanted
+                      uint32 col,                  // color of text
+                      char * buf, int chrsz)       // string to print, char size: 1-> x1, 2-> x2
+{
+    int x0, y0, x,y,p0,g,ix,iy,n,x1; 
+    char c; 
+
+    n=0; 
+    // 
+    if ((buf == NULL) || (buf[0]==0)) return; 
+    if (buf[0]==26) {
+        n++;
+        // erase box
+        p0=0;
+        for (y=0;y<h0;y++) {
+            memset(&surface[p0], 0, w0 * sizeof(surface[0])); 
+            p0+=pitch;
+        }
+    }
+    // draw chars 
+    x0 = y0 = 0;
+    x1 = x0; 
+    while((c=buf[n++]) > 0) {
+        c = sim_toupper(c);                   // convert to uppercase
+        if ((c==10) || (c==13)) {
+            y0 += 10*chrsz;
+            x1 = x0;
+            continue; 
+        }
+        if (c > 123) c=c-27;             // because lower case not defined in font
+        if ((c < 32) || (c > 127)) c=31; // sets undef char if any
+        c=c-31;
+        for (iy=0;iy<7*chrsz;iy++) {
+            y = y0 + iy; 
+            if ((h0) && (y >= h0)) break; if (y < 0) continue;             
+            p0 = y * pitch;
+            g = Font[c*7 + (iy / chrsz)];
+            for (ix=0;ix<5*chrsz;ix++) {
+                x = x1 + ix; 
+                if ((w0) && (x >= w0)) break; 
+                if ((g & 1) && (x >= 0)) surface[p0+x]=col;
+                if (   (chrsz==1) || 
+                       ((ix % chrsz)==(chrsz-1))   ) g = (g >> 1);
+            }
+        }
+        x1 += 8*chrsz;  
+    }
+}
+
+
+// draw text in a control state bitmap. Used color is rr,gg,bb. Text is draw at x0, y0,w0,h0 in
+// source state image (can be partially outside bitmap). Just draw pixel of present chars (space does not draw/erase anything)
+// x0,y0 are relative to ToCId (0,0=top left image corner)
+// use 7x7 internal font (upper case only) in a 8x10 box. 
+// control chars supported: 
+//    LF or CR continue text in next line starting at x0
+//    ^Z as first char in buf: erases the box (to black) before writing the text
+// if error return zero
+int DrawTextImage   (int ToCId, int ToState,                 // ToCId, ToState: draw text in this control
+                     int x0, int y0, int w0, int h0,         // x0, y0, w0, h0: position and box in control where to draw text, if w0/h0 = 0 use control width/heigh
+                     int rr, int gg, int bb,                 // r,g,b: color of text
+                     char * buf, int chrsz)                  // string to print, char size: 1-> x1, 2-> x2
+{
+    uint32 * surface0; 
+    uint32 col; 
+    int ww, hh; 
+    
+    if (CHK_CId(ToCId)  < 0)    return 0;                                 // sanity check
+    if ((buf == NULL) || (buf[0]==0))   return 0;
+    if ((rr < 0) || (gg < 0) || (bb < 0))   return 0;
+    
+    surface0 = GetControlSurface(ToCId, ToState, &ww, &hh);
+    if ((!surface0) || (ww<1) || (hh<1)) return 0;
+
+    if (w0 == 0) w0=ww; 
+    if (h0 == 0) h0=hh; 
+    if ((x0 >= ww) || (y0 >= hh)) return 0;
+    if (x0+w0 >= ww) w0=ww-x0; if (w0<1) return 0; 
+    if (y0+h0 >= hh) h0=hh-y0; if (h0<1) return 0; 
+
+    col = surface_rgb_color(rr,gg,bb);
+    DrawText_surface(&surface0[x0 + ww*y0], ww, 
+                     w0, h0, col, buf, chrsz); 
+    return 1; // success
 }
 
 // set/get state from single control/control array
@@ -2504,6 +2460,502 @@ int GetCArrayCId(int CArrayId, int n)
     CId = CP.CArrayCidItems[CId0 + n];
     return CId;
 }
+
+// analyze bits in param n. Increment the tick count for each bit to 1 found on n
+int TickCount(int Id, t_uint64 n) 
+{
+    int i, nTick;
+    if (Id < CARRAY_START) {
+        // single control. Just count tick based on bit 0 
+        if (CHK_CId(Id) < 0) return -1;                                // sanity check
+        nTick = CP.Control[Id].nTick;
+        if (n & 1) CP.TickCount[nTick].Bit[0]++;
+        CP.TickCount[nTick].Num++;
+    } else {
+        // control array -> set tick count on each single control
+        CHK_CArrayId(Id)
+        nTick = CP.CArray[Id - CARRAY_START].nTick;
+        i = 0;
+        while (n) {
+            if (n & 1) CP.TickCount[nTick].Bit[i]++;
+            n = n >> 1;
+            i++;
+        }
+        CP.TickCount[nTick].Num++;
+    }
+    return 0;
+}
+
+// return state that match the intensity of given bit number, based on ticks count
+int GetStateForIntensity(int nTick, int nbit, int nStates) 
+{
+    int n1, n2;
+
+    if ((nbit < 0) || (nbit > 63)) return 0;
+    n1 = CP.TickCount[nTick].Bit[nbit];
+    if (n1 < 1) return 0;  // 0 ticks counted -> 0 intensity
+    n2 = CP.TickCount[nTick].Num; 
+    if (n2 < 1) return 0;  // tick count = 0 -> no data -> no intensity
+    // apply bright correction. 0 .. 50% ... 100% maps to bright 0 .. 75% .. 100%
+    if (n1 < n2/2) {
+        n1=n1 * 3 / 2; 
+    } else {
+        n1 = (n2 + n1) / 2; 
+    }
+    n1 = (nStates * n1) / n2;
+    if (n1 < 1) return 0;  
+    if (n1 >= nStates-1) return 1; // state = 1 = full intensity
+    return n1+1;           // state = 2 .. nStates-2 = intermediate intensities
+}
+
+// Set control state, based on previous calls to TickCount
+int SetStateWithIntensity(int Id, t_uint64 n) 
+{
+    int nStates = 0;
+    int CId, CId0, i, sta, nTick;
+    if (sim_is_running == 0) {
+        // if cpu not running or no intensity tick data just do a normal setstate and reset tick counter
+        SetState(Id, n);
+        if (Id < CARRAY_START) {
+            if (CHK_CId(Id) < 0) return -1;                                // sanity check
+            nTick = CP.Control[Id].nTick;
+        } else {
+            CHK_CArrayId(Id)
+            nTick = CP.CArray[Id - CARRAY_START].nTick;
+        }
+        if (nTick >= 0) InitTickCount(nTick);
+        return 0;
+    }
+    // cpu is running and tick data available: go on for setting the intensity in function
+    // of number of times (tick count) a bit is set respect the total number of ticks counted
+    if (Id < CARRAY_START) {
+        // single control. Just calc intensity based on bit 0 and set it as control state
+        if (CHK_CId(Id) < 0) return -1;                                // sanity check
+        nTick = CP.Control[Id].nTick;
+        if ((nTick < 0) || (CP.TickCount[nTick].Num < 2)) {
+            SetState(Id, n);
+        } else {
+            nStates = CP.Control[Id].nStates;
+            sta = GetStateForIntensity(nTick, 0, nStates);
+            CP.Control[Id].State = sta;
+        }
+    } else {
+        // control array -> set intensity on each single control
+        CHK_CArrayId(Id)
+        nTick = CP.CArray[Id - CARRAY_START].nTick;
+        if ((nTick < 0) || (CP.TickCount[nTick].Num < 2)) {
+            SetState(Id, n);
+        } else {
+            for (i=0;i<CP.CArray[Id - CARRAY_START].Items;i++) {
+                CId0 = CP.CArray[Id - CARRAY_START].CId0;
+                CId = CP.CArrayCidItems[CId0 + i];
+                nStates = CP.Control[CId].nStates;
+                sta = GetStateForIntensity(nTick, i, nStates);
+                CP.Control[CId].State = sta;
+            }
+        }
+    }
+    if (nTick >= 0) InitTickCount(nTick);
+    return 0;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// DoSCP processing
+// issue (Enqueue) SCP commands to be executed by SCP
+//
+
+// add scp command given as param to list in SCP_cmd array
+void DoSCP(char *cmd)
+{
+    int i; 
+
+    if ((cmd == NULL) || (cmd[0] == 0)) return;
+    if (strcmp(cmd, "<NOECHO1>") == 0) {
+        SCP_cmd_echo=0; // disable DoSCP echo on next command sent
+        return; 
+    }
+    if (SCP_cmd_count >= MAX_SCP_CMDS) {
+        // if list full, discard list
+        SCP_cmd_count = 0;
+    }
+    // copy scp command to list at next free pos
+    for (i=0;(cmd[i]>0) && (i < MAX_SCP_CMD_LEN-1);i++) SCP_cmd[SCP_cmd_count * MAX_SCP_CMD_LEN + i] = cmd[i];
+    SCP_cmd[SCP_cmd_count * MAX_SCP_CMD_LEN + MAX_SCP_CMD_LEN-1] = 0; // paranoic preacution
+    SCP_cmd_count++;
+}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+// return number of SCP commands issued by control panel pending to be executed
+int ControlPanel_DoSCP_pending(void)
+{
+    return SCP_cmd_count; 
+}
+
+// set cmd with next pending scp command, and remove if from list
+// if called with cmd=NULL, just remove last cmd form list
+void ControlPanel_GetSCP_pending(char *cmd, int nSize)
+{
+    int i,c;
+    int bCmdOk = 1;
+
+    if ((nSize < 1) || (cmd == NULL)) bCmdOk = 0;
+    if (bCmdOk) cmd[0] = 0;          // clear retul scp cmd 
+    if (SCP_cmd_count == 0) return;  // no scp command pending
+    i = 0;
+    // copy first command to result cmd
+    while(bCmdOk) {
+        c = SCP_cmd[i];
+        cmd[i++] = c;
+        if (c == 0) break;
+        if (i >= nSize-1) {cmd[i]=0; break;}
+    }
+    // remove first command from lost
+    for (i=MAX_SCP_CMD_LEN; i< MAX_SCP_CMD_LEN*MAX_SCP_CMDS; i++) SCP_cmd[i-MAX_SCP_CMD_LEN] = SCP_cmd[i];
+    SCP_cmd_count--;
+}
+
+int Refresh_needed(void);
+void ControlPanel_Refresh(void);
+int Internal_Devices_Refresh(void); 
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// fget thread processing
+// refresh cpanel while in sim> prompt
+//
+
+#if defined(REFRESH_DURING_FGETS) 
+
+struct {
+    SDL_sem *sem;                                   // sync semaphore 
+    SDL_Thread *thread_handle;                      // handle for fgets thread
+    int refresh_done;                           
+    int terminate;                           
+} refresh_during_fgets = {0};
+
+// When cpu is stopped, stock SimH prints "sim>" prompt and then calls fgets to read the stdin 
+// input stream and get next scp command to execute. fgets in turn blocks until user has 
+// typed a command and press enter. 
+// We want the cpanel to be clickable even while user is prompted at "sim>" to type a command.
+// To do so, we will use a refresh thread that call does cpanel refresh and looks for SCP issued from  
+// cpanel. If a SCP is issued from cpanel, the thread cancels fgets so execution can 
+// continue on main thread
+
+// if StartUp=1 -> creates and start refresh_during_fgets thread (fget_thread_routine)
+//           =0 -> request fget_thread_routine to finish
+int  refresh_during_fgets_thread_routine (void *arg); 
+void refresh_during_fgets_start(int StartUp)
+{
+    if (StartUp) {        
+        if (refresh_during_fgets.sem==NULL) {
+            refresh_during_fgets.sem=SDL_CreateSemaphore(0);
+            if (refresh_during_fgets.sem==NULL) {
+                fprintf (stderr, "Error creating refresh_during_fgets.sem: %s\n", SDL_GetError ());
+                return; 
+            }
+        }
+        if (refresh_during_fgets.thread_handle==NULL) {
+            refresh_during_fgets.terminate=0; 
+            refresh_during_fgets.refresh_done=0; 
+            refresh_during_fgets.thread_handle = SDL_CreateThread (refresh_during_fgets_thread_routine , "simh-refresh-fget-thread", NULL);
+            if (refresh_during_fgets.thread_handle==NULL) {
+                fprintf (stderr, "Error creating fget-thread: %s\n", SDL_GetError ());
+                return; 
+            }
+        }
+    } else {
+        // terminate fget thread
+        if ((refresh_during_fgets.thread_handle) && (refresh_during_fgets.sem)) {
+            refresh_during_fgets.terminate=1;  // request thread to terminate
+            SDL_SemPost(refresh_during_fgets.sem); // assure nthread not waiting for semaphore
+            SDL_WaitThread (refresh_during_fgets.thread_handle, NULL);
+            refresh_during_fgets.thread_handle = NULL; 
+            SDL_DestroySemaphore(refresh_during_fgets.sem);
+            refresh_during_fgets.sem=NULL;
+        }
+    }
+}
+
+#if defined(_WIN32) 
+// this is the implementation of fgets_console_cancel() and fgets_console() for windows. 
+// Implementations for Linux and MacOS will/should/would follow (hopefully)
+
+// cancel a running console read on other thread
+// to do this, just inyect <esc><cr> into input stream, so ReadConsole will return normally
+void fgets_console_cancel(void)
+{
+    INPUT_RECORD		ir[2];
+    DWORD d;
+
+    // inyect <esc> to discard any already typed char
+    ir[0].EventType = KEY_EVENT;
+    ir[0].Event.KeyEvent.bKeyDown = TRUE;
+    ir[0].Event.KeyEvent.dwControlKeyState = 0;
+    ir[0].Event.KeyEvent.uChar.UnicodeChar = 27;
+    ir[0].Event.KeyEvent.wRepeatCount = 1;
+    ir[0].Event.KeyEvent.wVirtualKeyCode = VK_ESCAPE;
+    ir[0].Event.KeyEvent.wVirtualScanCode = MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC);
+
+    // inyect <cr> to make ReadConsole return
+    ir[1].EventType = KEY_EVENT;
+    ir[1].Event.KeyEvent.bKeyDown = TRUE;
+    ir[1].Event.KeyEvent.dwControlKeyState = 0;
+    ir[1].Event.KeyEvent.uChar.UnicodeChar = '\r';
+    ir[1].Event.KeyEvent.wRepeatCount = 1;
+    ir[1].Event.KeyEvent.wVirtualKeyCode = VK_RETURN;
+    ir[1].Event.KeyEvent.wVirtualScanCode = MapVirtualKey(VK_RETURN, MAPVK_VK_TO_VSC);
+
+    WriteConsoleInput(GetStdHandle(STD_INPUT_HANDLE), ir, 2, &d);
+}
+
+// read a line from console until user press <cr> 
+// fgets_console_cancel will inyect a <cr> in input stream to ReadConsole will return normally
+char * fgets_console(char *cptr, int32 size)
+{
+    int n; 
+    DWORD dwRead;
+    HANDLE hIn;
+
+    // get handle to stdin, to be used in console (stdin should be open)
+    hIn = GetStdHandle(STD_INPUT_HANDLE);
+    if(hIn==INVALID_HANDLE_VALUE){
+        fprintf(stderr, "Error in GetStdHandle \r\n");
+        return NULL; 
+    }
+
+    n = (int) ReadConsole(hIn, cptr, size-1, &dwRead, NULL);
+    if (n==0) {
+        fprintf(stderr, "Error in ReadConsole %d \r\n", GetLastError());
+        return NULL; 
+	} 
+
+    // add zero terminator
+    if (dwRead < ((DWORD)(size)) ) cptr[dwRead]=0; 
+    return cptr; 
+}
+
+#endif
+
+int refresh_during_fgets_thread_routine (void *arg)
+{
+    int st; 
+    int bUsingDeviceRefreshUnit=0; 
+
+    refresh_during_fgets.refresh_done=0;
+    while (1) {
+        // check if should terminate before blocking on semaphore
+        if (refresh_during_fgets.terminate) return 0; 
+        // wait here on semaphore. Main thread will allow to continue 
+        // (and start refreshing cpanel and capturing scp commands issued from cpanel)
+        // when main thread calls SDL_SemPost; 
+        st = SDL_SemWait(refresh_during_fgets.sem);
+        if (st) {
+           fprintf (stderr, "Error on SemWait: %s\n", SDL_GetError ());
+           refresh_during_fgets.thread_handle=NULL;
+           SDL_DestroySemaphore(refresh_during_fgets.sem);
+           refresh_during_fgets.sem=NULL;
+           break; 
+        }
+        // enter refresh loop
+        refresh_during_fgets.refresh_done=0;
+        while(1) {
+            // check if should terminate 
+            if (refresh_during_fgets.terminate) return 0; 
+            // check if should exit refresh loop
+            if (refresh_during_fgets.refresh_done) break; 
+            // refresh cpanel if needed
+            if (cpanel_on) {
+                if (Refresh_needed()>0) ControlPanel_Refresh();   // do the GUI window refresh
+                if (cpanel_stop_flag == 3) {
+                    // request close cpanel window without quit SimH
+                    cpanel_stop_flag = 0;        
+                    DoSCP("set cpanel off");               
+                }
+            }
+            // GUI window close button pressed?
+            if (cpanel_stop_flag == 4) {
+                // we gracefully issue a bye command to quit simh
+                cpanel_stop_flag = 0;  
+                DoSCP("bye"); 
+            }
+            // look for internal refresh devices that has unit active. 
+            // if any call its action routine to refresh the device 
+            bUsingDeviceRefreshUnit=Internal_Devices_Refresh(); 
+            if (bUsingDeviceRefreshUnit < 0) {
+                DoSCP("bye"); // send BYE scpe command is device refresh routine returns SCPE_EXIT
+            }
+            // is there any scp command issued from cpanel pending to be processed?
+            if (ControlPanel_DoSCP_pending()>0) {
+                // yes, control panel has generated a SCP command not yet executed
+                // so, cancel ongoing fgets. 
+                fgets_console_cancel(); 
+                // The main thread will go on and process the SCP command, 
+                // so this thread can be suspendend. Break from refresh loop
+                break; 
+            } 
+            // no scp command issued from cpanel. 
+            // we wait a little and iterate
+            if (bUsingDeviceRefreshUnit) {
+                sim_os_ms_sleep(5);  // small wait
+            } else {
+                sim_os_ms_sleep(25); // no devices are refreshing, just cpanel -> can wait more
+            }
+        }
+    }
+    return 0; 
+}
+
+// issue fgets (will read user input from console). fgets function will return when user press <cr>
+// a thread is issued to refresh the cpanel while fgets is waiting for user input
+// if a button/key/switch on cpanel generates a SCP command, then fgets is cancelled, and the SCP
+// command is returnes as if it was types by user
+char * cpanel_fgets_threaded(const char *prompt, char *cptr, int32 size, FILE *stream)
+{
+    char * cptr2; 
+
+    // start refresh loop
+    SDL_SemPost(refresh_during_fgets.sem); 
+    // get input from user from console
+    cptr2 = fgets_console(cptr, size); 
+    // request refresh loop to stop
+    refresh_during_fgets.refresh_done=1; 
+    // has user typed something?
+    if (cptr2) {
+        // yes, return it
+        return cptr2; 
+    } else {
+        // ReadConsole has been cancelled. Set cptr as "\r\n"
+        cptr[0]=13; cptr[1]=10; cptr[2]=0; 
+    }
+    // no, is there any scp command issued from cpanel pending to be processed?
+    if (ControlPanel_DoSCP_pending()>0) {
+       // yes, control panel has generated a SCP command not yet executed
+       // get it and return it 
+       ControlPanel_GetSCP_pending(cptr, size);		   
+       // if needed, print it as if it was typed by user (the prompt "sim>" is already on screen)
+       if (SCP_cmd_echo) sim_printf("%s\n", cptr);          
+       return cptr; 
+    } 
+    // no scp command issued from cpanel. 
+    return cptr; 
+}
+#endif
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Control Panel processing
+// refresh and operate on control panel window
+//
+
+// Mark all controls to be redraw on next refresh
+// if ncp=-1 -> mark all
+void AllControlRedrawNeeded(int ncp)
+{
+    int n; 
+    for(n=0;n<CP.ControlItems;n++) {
+        if ((ncp>=0) && (CP.Control[n].ncp != ncp)) continue; 
+        if (CP.Control[n].nStates == 0) continue; // if nStates==0 -> control not drawn. Just it is used for click sense on its area 
+        if (CP.Control[n].X == -1) continue; // control not drawn nor sensed
+        CP.Control[n].LastState = -1; // set to -1 to force redraw of control into refresh routine
+    }
+}
+
+
+static void cp_quit_callback (void)
+{
+    // note: quit callback is executed on sim_video thread, not in main emulator thread
+    // should not use sim_debug (is not thread safe) 
+    cpanel_stop_flag = 4; // request exit simh
+}
+
+void ControlPanel_init(DEVICE *dptr, int ncp)
+{
+    int wx, wy, Scale, n, CId0; 
+    char buf[128]; 
+
+    CId0=-1; 
+    // locate first control for cpvid[ncp] entry of defined control panel
+    for (n=0; n<CP.ControlItems; n++) {
+        if (CP.Control[n].ncp == ncp) {
+            // found first control
+            CId0=n; 
+            break; 
+        }
+    }
+
+    if (CId0 < 0) {
+        fprintf(stderr, "No controls defined. Cannot init Control Panel GUI window\n");
+        return;
+    }
+    // first control is backgound and sets the control panel size
+    wx = CP.Control[CId0].W; 
+    wy = CP.Control[CId0].H;
+    // create the cpanel window, but hidden
+    if (cpvid_init(ncp, cpvid[ncp].long_name, wx, wy, dptr, 
+                   cpvid[ncp].InitialScale, cpvid[ncp].InitialPosX, cpvid[ncp].InitialPosY) < 0) {
+        fprintf(stderr, "Control Panel GUI window initialization failed\n");
+        return;
+    }
+    sim_debug (CP_CMDS, &cp_dev, "GUI window created: %s\n", cpvid[ncp].long_name);
+    Scale = cpvid[ncp].InitialScale; 
+    // set title
+    sprintf(buf, "%s (Scale %d%%)", cpvid[ncp].long_name, Scale);
+    vid_set_title(cpvid[ncp].vptr_cp, buf);
+    // windows created, now continue
+    cpanel_on = 1;  
+    cpanel_interactive = 0;
+    // set quit callback. Register it linked to close button of last created window
+    vid_register_quit_callback (&cp_quit_callback);
+    CP.LastTickCountNum = 0;
+    CP.LastTickIntensityInterval = SDL_GetPerformanceFrequency() / 30000; // call TickCount 30K times per second
+    // set all the controls of with invalid laststate so they will be redraw
+    AllControlRedrawNeeded(ncp); 
+    ControlPanel_Refresh();
+    // start fgets thread to allow control panel to respond while user in sim> prompt
+    #if defined(REFRESH_DURING_FGETS) 
+    refresh_during_fgets_start(1);
+    #endif
+}
+
+void ControlPanel_done(void)
+{    
+    sim_debug (CP_CMDS, &cp_dev, "GUI window close requested\n");
+    if ((cpanel_on) && (CP.CP_Done != NULL)) CP.CP_Done();
+    cpanel_on = 0; 
+    cpanel_interactive = 0;
+    cpvid_close(-1); // close all cpvid GUI windows
+    if (CP.surface) free(CP.surface);
+    CP.surface = NULL; 
+    CP.ControlItems=0;
+    FontLoad(0); // unload internal font
+    #if defined(REFRESH_DURING_FGETS) 
+    refresh_during_fgets_start(0); // terminate fgets thread
+    #endif
+    sim_debug (CP_CMDS, &cp_dev, "GUI window closed\n");
+}
+
+// load and pop-up GUI window
+// power = 0 or 1 to create/destroy the GUI window
+void ControlPanel_Load(int ncp, int power, 
+                       CP_TYPE *cp_type,  
+                       UNIT *uptr, DEVICE *dptr)
+{
+    if (power) { 
+        // power on control panel. 
+        if (cpvid[ncp].vptr_cp) {
+            ControlPanel_Refresh();
+            return;  // cpanel already there. nothing to do. just refresh
+        }
+        if (CP.ControlItems == 0) {
+            // no controls loaded -> Load DF, Bind controls
+            ControlPanel_Bind(cp_type, uptr, dptr); 
+        }
+        ControlPanel_init(dptr, ncp);
+    } else {
+        // ControlPanel_done sets cpanel_on variable to 0
+        if (cpanel_on) {
+            ControlPanel_done();
+        }
+    }
+}
+
 
 int Into_Refresh = 0; // flag to avoid recursive call to ControlPanel_Refresh()
 
@@ -2702,7 +3154,7 @@ int cpanel_scale(int ncp, int Scale)
     if (Scale <  10) Scale= 10; // max scale range allowed: 10%..200%
     if (Scale > 200) Scale=200; 
     sim_debug (CP_CMDS, &cp_dev, "GUI ncp %d set Scale %d \n", ncp, Scale);
-    vid_SetWindowSizeAndPos(cpvid[ncp].vptr_cp, 2, Scale, 0); // resize GUI window
+    vid_SetWindowSizeAndPos(cpvid[ncp].vptr_cp, SIM_SETWIN_SCALE, Scale, 0); // resize GUI window
     return 0; 
 }
 
@@ -2715,7 +3167,7 @@ int CheckHotKeys(int c)
 
     if (c == sim_int_char) {
         // Control-E (^E = WRU) pressed while GUI has focus
-        cpanel_stop_flag = 1; 
+        if (sim_is_running) cpanel_stop_flag = 1; 
         return 1;
     } 
     if (c == ('t'-'a'+1)) {
@@ -2989,7 +3441,7 @@ void ControlPanel_Refresh(void)
                     // both rectangles overlap. calc if worth merge them
                     int npixelsA = cpvid[ncp].RectList.w[n-1] * cpvid[ncp].RectList.h[n-1]; 
                     int npixelsB = cpvid[ncp].RectList.w[n] * cpvid[ncp].RectList.h[n]; 
-                    int ix = MIN(cpvid[ncp].RectList.x[n-1], cpvid[ncp].RectList.x[n]);
+                    int ix = MIN(cpvid[ncp].RectList.x[n-1], cpvid[ncp].RectList.x[n]); 
                     int iy = MIN(cpvid[ncp].RectList.y[n-1], cpvid[ncp].RectList.y[n]);
                     int xx = MAX(cpvid[ncp].RectList.x[n-1] + cpvid[ncp].RectList.w[n-1], cpvid[ncp].RectList.x[n] + cpvid[ncp].RectList.w[n]);
                     int yy = MAX(cpvid[ncp].RectList.y[n-1] + cpvid[ncp].RectList.h[n-1], cpvid[ncp].RectList.y[n] + cpvid[ncp].RectList.h[n]);
@@ -3054,7 +3506,7 @@ void ControlPanel_Refresh(void)
     }
     // check key pressed
     if (vid_keyb.LastKeyPress && (CheckHotKeys(vid_keyb.LastKeyPress))) {
-       vid_keyb.LastKeyPress = 0; // clear key as it has been processed processed
+       vid_keyb.LastKeyPress = 0; // clear key as it has been processed 
     }
     // finalize
     CP.LastRefreshDone = sim_os_msec();
@@ -3097,47 +3549,6 @@ int Refresh_needed(void)
         return -1; // return can call tick intensity callback
     }  
     return 0; 
-}
-
-int ControlPanel_DoSCP_pending(void)
-{
-    return SCP_cmd_count; // return number of SCP commands issued by control panel pending to be executed
-}
-
-// set cmd with next pending scp command, and remove if from list
-// if called with cmd=NULL, just remove last cmd form list
-void ControlPanel_GetSCP_pending(char *cmd, int nSize)
-{
-    int i,c;
-    int bCmdOk = 1;
-
-    if ((nSize < 1) || (cmd == NULL)) bCmdOk = 0;
-    if (bCmdOk) cmd[0] = 0;          // clear retul scp cmd 
-    if (SCP_cmd_count == 0) return;  // no scp command pending
-    i = 0;
-    // copy first command to result cmd
-    while(bCmdOk) {
-        c = SCP_cmd[i];
-        cmd[i++] = c;
-        if (c == 0) break;
-        if (i >= nSize-1) {cmd[i]=0; break;}
-    }
-    // remove first command from lost
-    for (i=MAX_SCP_CMD_LEN; i< MAX_SCP_CMD_LEN*MAX_SCP_CMDS; i++) SCP_cmd[i-MAX_SCP_CMD_LEN] = SCP_cmd[i];
-    SCP_cmd_count--;
-}
-
-
-void ControlPanel_Refresh_CPU_Halted(void)
-{
-    if (Refresh_needed()>0) {
-        ControlPanel_Refresh();   // do the GUI window refresh
-    }
-    if (cpanel_stop_flag == 3) {
-        ControlPanel_done();
-        cpanel_stop_flag = 0;        
-        sim_debug (CP_CMDS, &cp_dev, "GUI Close Window\n");
-    }
 }
 
 t_stat ControlPanel_Refresh_CPU_Running(void)
@@ -3184,18 +3595,39 @@ t_stat ControlPanel_Refresh_CPU_Running(void)
     return SCPE_OK;
 }
 
+// look for internal refresh devices that has unit active. 
+// if any call its action routine (so refresh the device), and return 1
+// if refresh routine returns SCPE_EXIT, returns -1
+int Internal_Devices_Refresh(void)
+{ 
+    int i; 
+    DEVICE *dptr;
+    UNIT *uptr; 
+    t_stat reason; 
+    int bUsingDeviceRefreshUnit=0; 
+
+    for (i=0; sim_internal_device_count && (dptr = sim_internal_devices[i]); ++i) {
+       if (strncmp(dptr->name, "INT-REFRESH-", 12) != 0) continue; // not an internal refresh device
+       uptr=dptr->units; 
+       if (sim_is_active(uptr) == 0) continue; // unit not active
+       reason = uptr->action (uptr); // call the device refresh routine
+       bUsingDeviceRefreshUnit=1; 
+       if (reason==SCPE_EXIT) return -1; 
+    }
+    return bUsingDeviceRefreshUnit; 
+}
+
 // loop refreshing control panel, until either
 // - close GUI window
 // - ^E pressed
+// - Enter is pressed
 // - SCP command issed by control panel using DoSCP
 void ControlPanel_InteractiveLoop(void)
 {
     t_stat reason; 
     char c;
 
-    fflush(stdout);   // flush stdout so if user closes sim suring cpanel interacte, the log files are updated 
-    if (sim_log) fflush (sim_log);                          
-
+    printf ("(Control Panel Interactive mode, press Enter to exit)\n");                              
     cpanel_interactive = 2; // into interactive loop
     while (1) {
         reason = ControlPanel_Refresh_CPU_Running();
@@ -3207,7 +3639,6 @@ void ControlPanel_InteractiveLoop(void)
         if (reason != SCPE_OK) {     // some action during refresh (e.g. DoSCP)
             break;                   // just return to SCP
         }
-        sim_os_ms_sleep (25);        // this sleep is to let the user press a button without eating all the host cpu
         c = sim_poll_kbd() & 0177;   // poll keyboard to see if ^E (WRU) pressed during set cpanel interactive scp command execution
         if ((stop_cpu) || (c==13)) { // ^E or <CR> pressed -> exit interactive loop
             stop_cpu = 0;            // clean up
@@ -3215,39 +3646,37 @@ void ControlPanel_InteractiveLoop(void)
             break;                   // and return to SCP
         }
         CheckHotKeys(c);             // process cpanel hotkeys even if they are typed in console
+        c=Internal_Devices_Refresh(); 
+        if (c<0) {                   // check is a device has issued SCPE_EXIT (typically, becuase closing its window)
+            DoSCP("bye");
+            break;                   // return to SCP
+        }
+        // we wait a little and iterate
+        if (c) {
+            sim_os_ms_sleep(5);  // small wait, there is an internal device refresh active
+        } else {
+            sim_os_ms_sleep(25); // no devices are refreshing, just cpanel -> can wait more
+        }
     }
     if (cpanel_interactive) cpanel_interactive=1; 
-}
-
-
-// add scp command given as param to list in SCP_cmd array
-void DoSCP(char *cmd)
-{
-    int i; 
-
-    if ((cmd == NULL) || (cmd[0] == 0)) return;
-    if (strcmp(cmd, "<NOECHO1>") == 0) {
-        SCP_cmd_echo=0; // disable DoSCP echo on next command sent
-        return; 
-    }
-    if (SCP_cmd_count >= MAX_SCP_CMDS) {
-        // if list full, discard list
-        SCP_cmd_count = 0;
-    }
-    // copy scp command to list at next free pos
-    for (i=0;(cmd[i]>0) && (i < MAX_SCP_CMD_LEN-1);i++) SCP_cmd[SCP_cmd_count * MAX_SCP_CMD_LEN + i] = cmd[i];
-    SCP_cmd[SCP_cmd_count * MAX_SCP_CMD_LEN + MAX_SCP_CMD_LEN-1] = 0; // paranoic preacution
-    SCP_cmd_count++;
 }
 
 
 char * cpanel_fgets(const char *prompt, char *cptr, int32 size, FILE *stream)
 {
     if ((cpanel_on) && (cpanel_interactive) && (ControlPanel_DoSCP_pending()==0)) {
-        // if cpanel interactive and no pending scp command to issue, then enter interactive 
-        // loop waiting for actions on cpanels
-        printf ("(Control Panel Interactive mode, press Enter to exit)\n");                              
-        ControlPanel_InteractiveLoop();
+        // if cpanel interactive and no pending scp command to issue, then enter interactive mode
+         // are we already into sim> prompt?
+        if (prompt) {
+            // yes, we are at sim>. No need to start interactive mode, as sim> allows to use the cpanel
+            cpanel_interactive=0; 
+        } else {
+            // we are in a middle of script execution. Start inteactive mode to suspend script exec
+            // and loop waiting for actions on cpanels. Script will resume when user quits interactive
+            // mode (by typing enter in console) or by pressing a key/button/switch that issues a 
+            // SCP command (i.e. that calls DoSCP)
+            ControlPanel_InteractiveLoop();
+        }
     }
     if (ControlPanel_DoSCP_pending()>0) {
         // if control panel has generated a SCP command not yet executed, get it 
@@ -3259,14 +3688,23 @@ char * cpanel_fgets(const char *prompt, char *cptr, int32 size, FILE *stream)
         }
     } else {
         // no pending SCP commands generated by control panel
-        if (cpanel_on) {
-            // if cpanel visible, do a regular refresh of GUI window
-            ControlPanel_Refresh_CPU_Halted();
-            vid_set_system_cursor(0); // set arrow forbidden
-        }
         if (prompt) printf ("%s", prompt);                              
-        cptr = fgets (cptr, size, stream);     
-
+        if ((cpanel_on) && (prompt)) {
+            // if cpanel visible AND prompt to user in main console
+            #if defined(REFRESH_DURING_FGETS) 
+            // then handle cpanel refresh while reading console user input
+            cptr = cpanel_fgets_threaded(prompt, cptr, size, stream);
+            #else
+            // just do a regular blocking unadorned boring console read without refreshing the cpanel 
+            vid_set_system_cursor(0); // set arrow forbidden because cpanel is not refreshd nor avtive
+            cptr = fgets (cptr, size, stream);     
+            #endif
+        } else {
+            // cpanel not visible OR 
+            // cpanel visible but executing a script (so not waiting for user typed command at console)
+            // so perform a regular fgets
+            cptr = fgets (cptr, size, stream);     
+        }
     }
     SCP_cmd_echo=1; // restore echo of scp commands sent by DoSCP
     return cptr;
@@ -3284,109 +3722,16 @@ t_stat cpanel_interval_refresh(void)
     }
 }
 
-// analyze bits in param n. Increment the tick count for each bit to 1 found on n
-int TickCount(int Id, t_uint64 n) 
-{
-    int i, nTick;
-    if (Id < CARRAY_START) {
-        // single control. Just count tick based on bit 0 
-        if (CHK_CId(Id) < 0) return -1;                                // sanity check
-        nTick = CP.Control[Id].nTick;
-        if (n & 1) CP.TickCount[nTick].Bit[0]++;
-        CP.TickCount[nTick].Num++;
-    } else {
-        // control array -> set tick count on each single control
-        CHK_CArrayId(Id)
-        nTick = CP.CArray[Id - CARRAY_START].nTick;
-        i = 0;
-        while (n) {
-            if (n & 1) CP.TickCount[nTick].Bit[i]++;
-            n = n >> 1;
-            i++;
-        }
-        CP.TickCount[nTick].Num++;
-    }
-    return 0;
-}
-
-// return state that match the intensity of given bit number, based on ticks count
-int GetStateForIntensity(int nTick, int nbit, int nStates) 
-{
-    int n1, n2;
-
-    if ((nbit < 0) || (nbit > 63)) return 0;
-    n1 = CP.TickCount[nTick].Bit[nbit];
-    if (n1 < 1) return 0;  // 0 ticks counted -> 0 intensity
-    n2 = CP.TickCount[nTick].Num; 
-    if (n2 < 1) return 0;  // tick count = 0 -> no data -> no intensity
-    // apply bright correction. 0 .. 50% ... 100% maps to bright 0 .. 75% .. 100%
-    if (n1 < n2/2) {
-        n1=n1 * 3 / 2; 
-    } else {
-        n1 = (n2 + n1) / 2; 
-    }
-    n1 = (nStates * n1) / n2;
-    if (n1 < 1) return 0;  
-    if (n1 >= nStates-1) return 1; // state = 1 = full intensity
-    return n1+1;           // state = 2 .. nStates-2 = intermediate intensities
-}
-
-int SetStateWithIntensity(int Id, t_uint64 n) 
-{
-    int nStates = 0;
-    int CId, CId0, i, sta, nTick;
-    if (sim_is_running == 0) {
-        // if cpu not running or no intensity tick data just do a normal setstate and reset tick counter
-        SetState(Id, n);
-        if (Id < CARRAY_START) {
-            if (CHK_CId(Id) < 0) return -1;                                // sanity check
-            nTick = CP.Control[Id].nTick;
-        } else {
-            CHK_CArrayId(Id)
-            nTick = CP.CArray[Id - CARRAY_START].nTick;
-        }
-        if (nTick >= 0) InitTickCount(nTick);
-        return 0;
-    }
-    // cpu is running and tick data available: go on for setting the intensity in function
-    // of number of times (tick count) a bit is set respect the total number of ticks counted
-    if (Id < CARRAY_START) {
-        // single control. Just calc intensity based on bit 0 and set it as control state
-        if (CHK_CId(Id) < 0) return -1;                                // sanity check
-        nTick = CP.Control[Id].nTick;
-        if ((nTick < 0) || (CP.TickCount[nTick].Num < 2)) {
-            SetState(Id, n);
-        } else {
-            nStates = CP.Control[Id].nStates;
-            sta = GetStateForIntensity(nTick, 0, nStates);
-            CP.Control[Id].State = sta;
-        }
-    } else {
-        // control array -> set intensity on each single control
-        CHK_CArrayId(Id)
-        nTick = CP.CArray[Id - CARRAY_START].nTick;
-        if ((nTick < 0) || (CP.TickCount[nTick].Num < 2)) {
-            SetState(Id, n);
-        } else {
-            for (i=0;i<CP.CArray[Id - CARRAY_START].Items;i++) {
-                CId0 = CP.CArray[Id - CARRAY_START].CId0;
-                CId = CP.CArrayCidItems[CId0 + i];
-                nStates = CP.Control[CId].nStates;
-                sta = GetStateForIntensity(nTick, i, nStates);
-                CP.Control[CId].State = sta;
-            }
-        }
-    }
-    if (nTick >= 0) InitTickCount(nTick);
-    return 0;
-}
-
+//////////////////////////////////////////////////////////////////////////////////////////
+// SCP commands 
+// Implements SCP commands for cpanels
+//
 
 t_stat cp_set_cpanel_on (UNIT *uptr, int32 value, CONST char *cptr, void *desc) 
 {
     int power = value ? 1:0;
 
-    sim_debug (CP_CMDS, &cp_dev, "GUI CPanel On ncp=%d \n", selected_ncp);
+    sim_debug (CP_CMDS, &cp_dev, "GUI CPanel %s ncp=%d \n", power ? "ON":"OFF", selected_ncp);
     ControlPanel_Load(selected_ncp, power, 
         cp_types, 
         &cp_unit, &cp_dev); 
@@ -3430,12 +3775,17 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
         if (*tptr != '/') return SCPE_ARG;
         yPos = (int) strtotsv (++tptr, &tptr, 0);
         if (cptr == tptr) return SCPE_ARG;
-        if (cpanel_on == 0) {
-            fprintf(stderr, "No cpanel open\n");
-            return SCPE_OK; // no panel opened
+        if (cpvid[selected_ncp].vptr_cp == NULL) {
+            if ((cpvid_count) && (selected_ncp>=cpvid_count)) {
+                fprintf(stderr, "panel not defined\n");
+                return SCPE_OK; // no panel opened
+            }
+            cpvid[selected_ncp].InitialPosX=xPos; 
+            cpvid[selected_ncp].InitialPosY=yPos; 
+        } else {
+            vid_SetWindowSizeAndPos(cpvid[selected_ncp].vptr_cp, SIM_SETWIN_POS,xPos,yPos);
         }
         sim_debug (CP_CMDS, &cp_dev, "GUI Pos ncp=%d, x=%d, y=%d \n", selected_ncp, xPos, yPos);
-        vid_SetWindowSizeAndPos(cpvid[selected_ncp].vptr_cp, 1,xPos,yPos);
     } else if (value == 7) { // SET SCALE=10..200 
         num = (int32) get_uint (cptr, 10, 200, &r);
         if (r != SCPE_OK) return r;
@@ -3489,7 +3839,7 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
         }
         if ((ncp < cpvid_count) && (cpvid[ncp].vptr_cp)) {
             // select also raises the window if it exists
-            vid_SetWindowSizeAndPos(cpvid[ncp].vptr_cp, 5,0, 0); // raise GUI window, get focus
+            vid_SetWindowSizeAndPos(cpvid[ncp].vptr_cp, SIM_SETWIN_RAISE,0, 0); // raise GUI window, get focus
         }
         selected_ncp=ncp;   
     } else {
@@ -3497,11 +3847,6 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
         return SCPE_IERR;
     }
     return SCPE_OK;
-}
-
-static void cp_quit_callback (void)
-{
-    cpanel_stop_flag = 4; // request exit simh
 }
 
 /* Reset routine */
@@ -3522,9 +3867,6 @@ t_stat cp_reset (DEVICE *dptr)
     }
 
     sim_debug (CP_CMDS, &cp_dev, "Control Panel Reset\n");
-    if (!(dptr->flags & DEV_DIS)) {
-        vid_register_quit_callback (&cp_quit_callback);
-    }
     if ((cpanel_on) && (CP.CP_Reset != NULL)) CP.CP_Reset();
 
     return SCPE_OK;
@@ -3532,7 +3874,8 @@ t_stat cp_reset (DEVICE *dptr)
 
 t_stat cp_interactive(UNIT *uptr, int32 value, CONST char *cptr, void *desc)     
 { 
-    cpanel_interactive = 1; 
+    ControlPanel_InteractiveLoop();
+    cpanel_interactive = 0; 
     return SCPE_OK; 
 }
 

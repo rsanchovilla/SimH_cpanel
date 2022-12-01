@@ -2145,7 +2145,7 @@ void Refresh_ShowInfo(int bOnlyInit)
     //       cpu is waiting, aaaaa is the stall reason:
     //          MTn UNIT NOT READY       Tape instr stalled because tape unit not ready
 
-    sprintf(buf, "FPS: %d Cpu Speed: x%0.2f (%0.1f %s)\n"
+    sprintf(buf, "FPS: %d, Cpu Speed: x%0.2f (%0.1f %s)\n"
                  "Cards in read hopper: %d", 
             fps, 
             TickCountPerSec * 12 / 1000000.0,  
