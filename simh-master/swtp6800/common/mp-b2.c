@@ -242,7 +242,7 @@ int32 MB_get_mbyte(int32 addr)
         } else {
             val = RAM64k[addr]; 
         }
-        return; 
+        return val; 
     }
 
     switch(addr & 0xE000) {

@@ -63,7 +63,20 @@
 
 
 #define REFRESH_INTERVAL  1000      // for svr call 
-/* function prototypes */
+/* 
+Refresh strategy:
+
+- If program makes any changes in videoram or in appearence of screen 
+  (clear screen, draw a vector) 
+  then set refresh_needed flag=1
+- GraphicOne_svc() is shedulled with sim_activate() to be executed
+  each REFRESH_INTERVAL cpu instructions     
+- GraphicOne_svc() checks 
+     - Screen should be refreshed? (ie. refresh_needed!=0 ?) -> no, exit
+     - Has at least 20msec elapsed form frevious refresh? -> no, exit
+     - Clears flag: refresh_needed=0
+     - Send the whole SDL2 surface to GUI window for repainting
+*/ 
 
 t_stat GraphicOne_set_power_on (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
 t_stat GraphicOne_ClearScreen (UNIT *uptr, int32 value, CONST char *cptr, void *desc);

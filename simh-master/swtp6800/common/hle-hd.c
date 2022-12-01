@@ -188,7 +188,7 @@ void sim_debug_dump_buf(char * buf, int buf_mem_addr, int len, int debug_flag)
 int32 hd0cmd(int32 io, int32 data)
 {
     char buf[SECT_SIZE];
-    int i, tr, n, loc; 
+    int i, tr, n; 
 
     if ((hd_unit.flags & UNIT_DIS) || ((hd_unit.flags & UNIT_ATT) == 0)) {  
         // HD disabled or hd image file not attached, Respend as not connected

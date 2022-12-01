@@ -34,16 +34,22 @@
 */
 
 #include <stdio.h>
-#include "sim_video.h"
 #include "swtp_defs.h"
+#include "sim_video.h"
+
+#if defined(USE_SIM_VIDEO) && defined(HAVE_LIBSDL)
+// ok, both preprocessor vars are defined
+#else
+#error gt6144.c needs the preprocessor symbol USE_SIM_VIDEO and HAVE_LIBSDL to be defined
+#endif
 
 /* emulate a BW image  */
 
-#define H_RESOL         64          // Horizontal resolution (similated pixels)     
-#define V_RESOL         96          // Vertical resolution (similated pixels)   
+#define H_RESOL         64          // Horizontal resolution (simulated pixels)     
+#define V_RESOL         96          // Vertical resolution (simulated pixels)   
 
-#define X_MULT          12          // each simulated horiz pixel take 4 horiz GUI pixels on window
-#define Y_MULT          6           // each simulated vertical pixel take 3 vertical GUI pixels on window
+#define X_MULT          12          // each simulated horiz pixel takes 4 horiz GUI pixels on window
+#define Y_MULT          6           // each simulated vertical pixel takes 3 vertical GUI pixels on window
 
 #define H_OFFSET        50          // horizontal offset on left/right of addressable image (GUI pixels on window)
 #define V_OFFSET        30          // vertical offset on tob/bottom of addressable image (GUI pixels on window)
@@ -51,7 +57,20 @@
 #define JOY_STEP        3           // default joystick movement each time arrow key is pressed (keypad 5 centers joy)
 
 #define REFRESH_INTERVAL  1000      // for svr call 
-/* function prototypes */
+/* 
+Refresh strategy:
+
+- If program makes any changes in videoram or in appearence of screen 
+  (set on/off a pixel, enable/disable screen, reverse polarity) 
+  then set refresh_needed flag=1
+- gt6144_svc() is shedulled with sim_activate() to be executed
+  each REFRESH_INTERVAL cpu instructions
+- gt6144_svc() checks 
+     - Screen should be refreshed? (ie. refresh_needed!=0 ?) -> no, exit
+     - Has at least 20msec elapsed form frevious refresh? -> no, exit
+     - Clears flag: refresh_needed=0
+     - Send the whole SDL2 surface to GUI window for repainting
+*/ 
 
 t_stat gt6144_set_power_on (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
 t_stat ppj_set_sensitivity(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
@@ -68,7 +87,7 @@ int32 ppj_pia2(int32 io, int32 data);
 
 /* Local Variables */
 struct {
-    int power;           // 0=terminar powered off=no GUI window, 1=GUI window visible
+    int power;           // 0=terminal powered off=no GUI window, 1=GUI window visible
     uint32 * surface;    // GUI surface.  
     uint32 * blanked_surface; 
     uint32 color[2];     // black and white color
@@ -125,6 +144,8 @@ DEVICE gt6144_dev = {
 
 static void quit_callback (void)
 {
+    // note: quit callback is executed on sim_video thread, not in main emulator thread
+    // should not use sim_debug (is not thread safe) 
     if (sim_is_running) {
         gt6144.quit_requested=1; 
     }
@@ -140,11 +161,17 @@ t_stat gt6144_set_power_on (UNIT *uptr, int32 value, CONST char *cptr, void *des
     t_stat stat; 
 
     if (value == 1) {
-        if (gt6144.power == 1) return SCPE_OK; // already powered on
+        if (gt6144.power == 1) {
+            gt6144_Refresh (0); // force refresh: power on also refreshes the screen 
+            return SCPE_OK; // already powered on
+        }
         // create GUI window
         gt6144.wx=H_RESOL * X_MULT + 2 * H_OFFSET; 
         gt6144.wy=V_RESOL * Y_MULT + 2 * V_OFFSET; 
         gt6144.surface = (uint32 *)malloc (gt6144.wx * gt6144.wy * sizeof(uint32));
+        if (gt6144.surface == NULL) {
+            return SCPE_IERR;
+        }
         gt6144.color[0]=0;
         gt6144.color[1]=(uint32) (-1);
         gt6144.blanked_surface = (uint32 *)malloc (gt6144.wx * gt6144.wy * sizeof(uint32));
