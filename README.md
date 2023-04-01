@@ -130,13 +130,13 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/Ma
 
 Once uncompressed, you will find several ready to run .bat files (among others): 
 
-* execute `run CPanel MarkI - Brooker Autocode (1955).bat` batch file to run R.A.Brooker original Autocode
-* execute `run CPanel MarkI - Draughts Play (1952).bat` batch file to play Strachey's Draughts Game
-* execute `run CPanel MarkI - Love Letters (1952).bat` batch file to run Love Letter programme
-* execute `run CPanel MarkI - Scheme A (1951).bat` to run A.Turing Scheme A
+* execute `run CPanel MarkI - Brooker Autocode (1955).bat` batch file to run R.A.Brooker original Autocode compiler
+* execute `run CPanel MarkI - Draughts Play (1952).bat` batch file to play Christopher Strachey's Draughts Game. Board is displayed in scope tube.
+* execute `run CPanel MarkI - Love Letters (1952).bat` batch file to run Christopher Strachey's Love Letter programme
+* execute `run CPanel MarkI - Scheme A (1951).bat` to run Alan Turing Scheme A
 * execute `run CPanel MarkI - Scheme B (1952).bat` to run Brooker + Glennie Scheme B
 * execute `run CPanel MarkI - Scheme C (1953).bat` to run Brooker Scheme C
-* execute `run CPanel MarkI - Scheme T (1954).bat` to run Patterson Hume Scheme T
+* execute `run CPanel MarkI - Scheme T (1954).bat` to run Toronto University Scheme T
 
   ![Ferranti Mark I DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/MarkI.png)
 
