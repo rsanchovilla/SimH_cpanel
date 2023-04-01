@@ -52,7 +52,7 @@ i650, NORC, i701 and MarkI simulators are my own SimH simulators.
 
 Currently supports visuals emulation for:
 
-* Ferranti mark I Electronic Computer (APR/2023)
+* Ferranti Mark I Electronic Computer (APR/2023)
   * Creed 7B Teleprinter, Creed 6S Perforator, Creed 7P Perforator
   * Main console (as in 1951)
 
