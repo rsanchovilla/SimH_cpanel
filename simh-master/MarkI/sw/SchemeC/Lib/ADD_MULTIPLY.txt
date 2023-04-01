@@ -1,0 +1,200 @@
+ADD & MULTIPLY                    
+
+    Purpose: To add and multiply numbers expressed in the floating 
+             binary form
+            
+    Cue: Magnetic Storage: single half track
+         electronic storage: lines /# to YD in tube 4
+         The sequence must be first transferred to the electronic
+         store before they can be entered. This may be done either 
+         in the master routine or from the input tape
+
+    Link: closed
+
+    Input details: the routine is entered using
+    
+                       n   |  n  Q O   <-- B7=*
+                       n+1 | Y D / P   <-- transfer to addition
+                       n+2 | ...       <-- returns here 
+                      
+                       n   |  n  Q O   <-- B7=*
+                       n+1 | D # / P   <-- transfer to multiplication 1
+                       n+2 | ...       <-- returns here 
+
+                       n   |  n  $ O   <-- B7=* (spare bit set)
+                       n+1 | D # / P   <-- transfer to multiplication 2
+                       n+2 | ...       <-- returns here 
+
+    Effects:
+    
+    Lines /I to JI are used as working space.
+    Line pair #I and RI are the floating binary accumulator (f.b.a)
+    Line pair :I and II are the floating binary multiplicand (f.b.d)
+       
+    For addition:
+    
+        f.b.a = f.b.a + [float in AL AM]
+
+        +---------+---------------+-----------------------+ 
+        |  Lines  | Initial       | Final                 |
+        | altered | contents      | contents              |
+        +---------+---------------+-----------------------+ 
+        | /I @I   | Irrelevant    | Irrelevant            |
+        +---------+---------------+-----------------------+
+        | #I RI   | f.b.a = a.2^p | f.b.a = a.2^p + b.2^q | 
+        +---------+-------------------+-------------------+
+        | AL AM   | AL AM = b.2^q | AL = 0, AM = 0        |
+        +---------+---------------+-----------------------+
+        | D       | Irrelevant    | 2^10                  |
+        +---------+---------------+-----------------------+ 
+
+    For multiplication 1:
+    
+        f.b.a = f.b.a + [float in AL AM] * f.b.d 
+
+        +---------+---------------+-----------------------+ 
+        |  Lines  | Initial       | Final                 |
+        | altered | contents      | contents              |
+        +---------+---------------+-----------------------+ 
+        | /I @I   | Irrelevant    | Irrelevant            |
+        +---------+---------------+-----------------------+
+        | #I RI   | f.b.a = a.2^p | f.b.a = f.b.a +       |
+        |         |               |       (b.2^q) * f.b.d |
+        +---------+-------------------+-------------------+
+        | AL AM   | AL AM = b.2^q | AL = 0, AM = 0        |
+        +---------+---------------+-----------------------+
+        | D       | Irrelevant    | 2^10                  |
+        +---------+---------------+-----------------------+ 
+
+    For multiplication 2:
+    
+        f.b.a = [float in AL AM] * f.b.d 
+
+        +---------+---------------+-----------------------+ 
+        |  Lines  | Initial       | Final                 |
+        | altered | contents      | contents              |
+        +---------+---------------+-----------------------+ 
+        | /I @I   | Irrelevant    | Irrelevant            |
+        +---------+---------------+-----------------------+
+        | #I RI   | f.b.a = a.2^p | f.b.a =               |
+        |         |               |       (b.2^q) * f.b.d |
+        +---------+-------------------+-------------------+
+        | AL AM   | AL AM = b.2^q | AL = 0, AM = 0        |
+        +---------+---------------+-----------------------+
+        | D       | Irrelevant    | 2^10                  |
+        +---------+---------------+-----------------------+ 
+
+
+    Ferranti Mark I Programming Manual, third edition 
+    Bodleian Special Collection 
+    MS. Eng. misc. b. 260-C.41.pdf
+    p60, p65
+    
+    [Routine ADD & MULTIPLY ] 
+
+    [Col     # ]                        [        D ]              
+                                                                          
+    | / | $$VO |                        | / | RIT# | corrects exponent 2p=2p+2             
+x ->| E | II/J | AM=2(q+r)              | E | A:TC | 
+    | @ | /I/U | dumps b                | @ | RITA |          
+    | A | @I/U | dumps 2(q+r)           | A | #IT/ | replace original sum
+    | : | /I/K | forms rounded          | : | E:TD | rounds off
+    | S | :I/F | product bc             | S | #ITA |          
+    | I | ISTI |                        | I | Y:/C | restores multiplicand
+    | U | /I/U | AL+/-f=b.c             | U | :D/G | 
+    | # | @I/J | AM+/-=2(q+r)           | # | //EP | return to caller         
++ ->| D | /#QG | plants link & test     | D | W#// | control number
+    | R | //ZZ | entry instr            | R | @IT/ |          
+    | J | H#/T | n QO or n $O -> to WD  | J | RIQO | forms
+    | N | /I/U | dump number part (b)   | N | @IQG | 2(p-q)
+    | F | @I/U | dump exponent (2q)     | F | RITA | replaces p by q
+    | C | @IQO | forms 2(q-p)           | C | /I/F | AMf=b/2
+    | K | RIQG |                        | K | #I/K | D=a
+    | T | IS/C | D=0.5                  | T | DD/P | 
+    | Z | TD/T | jump if q>=p -> RD     | Z | QV$$ | constants
+    | L | #I/F | AMf=a/2                | L | GV$$ | 
+    | W | /I/K | D=b                    | W | RI/E | these instructions are obeyed in the case
+    | H | LDQG | forms in B7 the addr   | H | UD/P | where the product is to replace the f.b.a.
+    | Y | S:/O | of 2^-!p-q!-1          | Y | ##// | control number for + entry
+    | P | ZDQG |                        | P |      | \  
+    | Q | A:/O |                        | Q |      | !    
+    | O | A:/Q | case !p-q!>=40         | O |      | !    
+    | B | ///O |                        | B |      | !    
+    | G | /:UN | forms sum              | G |      | ! spare 
+    | " | #I/A | plants sum             | " |      | ! lines
+    | M | #ITK | double                 | M |      | ! <- index n1 of autocode
+    | X | DIQO | test if !sum!>=0.25    | X |      | !
+    | V | B#QG | if so, then use sum x2 | V |      | ! <- index n2 of autocode
+    | $ | S:/O |                        | $ |      | /
+                                                                          
+        
+    [End]
+
+  256  /  $$VO  
+  257  E  II/J  
+  258  @  /I/U  
+  259  A  @I/U  
+  260  :  /I/K  
+  261  S  :I/F  
+  262  I  ISTI  
+  263  U  /I/U  
+  264  #  @I/J  
+
+                Entry for Float ADD
+               
+  265  D  /#QG  prepare B7 (holds the return addr)
+  266  R  //ZZ  store B7 in cue list entry given by B1
+  267  J  H#/T  if (B>=0) goto ... -> transfer taken if are entering routine with n $O 
+  268  N  /I/U  [/I, EI]=AL, AL=AM, AM=0 -> get b= arg2 mantissa = BQTD ITRN
+  269  F  @I/U  [@I, AI]=AL, AL=AM, AM=0 -> get 2q=arg2 exp = 22 = P///  -> arg1=789.011718
+  270  C  @IQO  B7=[@I] -> set B7=2q to calc 2q-2p
+  271  K  RIQG  B7=B7-[RI] -> B7=2q-2p. 2p=16 -> B7=22-16=6
+  272  T  IS/C  D=//// ///T = 0.5
+  273  Z  TD/T  if (B>=0) goto 298 -> goto if exp arg2>fba
+  274  L  #I/F  
+  275  W  /I/K  
+  276  H  LDQG  
+  277  Y  S:/O  
+  278  P  ZDQG  
+  279  Q  A:/O  
+  280  O  A:/Q  
+  281  B  ///O  
+  282  G  /:UN  
+  283  "  #I/A  
+  284  M  #ITK  
+  285  X  DIQO  
+  286  V  B#QG  
+  287  $  S:/O  
+  288  /  RIT#  
+  289  E  A:TC  
+  290  @  RITA  
+  291  A  #IT/  
+  292  :  E:TD  
+  293  S  #ITA  
+  294  I  Y:/C  
+  295  U  :D/G  
+  296  #  //EP  
+  297  D  W#//  
+  298  R  @IT/  AL=[@I, AI]=arg2 exp=2q = 22
+  299  J  RIQO  B7=[RI]=fba exp=2p = 16
+  300  N  @IQG  B7=B7-[@I] -> B7=2p-2q -> B7=16-22=-6
+  301  F  RITA  [RI]=2p, A=0 -> set the base exponent (the higher one) = 22
+  302  C  /I/F  A=[/I]*D -> AM=b/2 = MJO: A#SI (=394)
+  303  K  #I/K  D=[#I] -> D=a = 
+  304  T  DD/P  
+  305  Z  QV$$  
+  306  L  GV$$  
+  307  W  RI/E  
+  308  H  UD/P  
+  309  Y  ##//  
+  310  P        
+  311  Q        
+  312  O        
+  313  B        
+  314  G        
+  315  "        
+  316  M        
+  317  X        
+  318  V        
+  319  $        
+                

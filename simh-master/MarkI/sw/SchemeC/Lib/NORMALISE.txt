@@ -1,0 +1,166 @@
+NORMALISE                         
+
+    Purpose: To normalise numbers expressed in the floating 
+             binary form
+            
+    Cue: Magnetic Storage: single half track
+         electronic storage: lines NI to WU in tube 3
+         The sequence must be first transferred to the electronic
+         store before they can be entered. This may ve done either 
+         in the master routine or from the input tape
+
+    Link: closed
+
+    Input details: the routine is entered using
+    
+                       n   |  n  Q O   <-- B7=*
+                       n+1 | C U / P   <-- transfer to normalise
+                       n+2 | ...       <-- normalise returns here 
+                      
+    Effects:
+    
+    Lines /I to JI are used as working space.
+    Line pair #I and RI are the floating binary accumulator (f.b.a)
+    Line pair :I and II are the floating binary multiplicand (f.b.d)
+       
+        +---------+-------------------+-------------------+ 
+        |  Lines  | Initial           | Final             |
+        | altered | contents          | contents          |
+        +---------+-------------------+-------------------+ 
+        | @I      | Irrelevant        | Irrelevant        |
+        +---------+-------------------+-------------------+
+  f.b.a | #I RI   | a.2^p             | a.2^p normal form |
+        +---------+-------------------+-------------------+
+        | AL      | Irrelevant        | AL  = a.2^p       |
+        |         |                   |   f               |
+        +---------+-------------------+-------------------+
+        | AM      | Irrelevant        | Clear             |
+        | D       | Irrelevant        | 2^10              |
+        +---------+-------------------+-------------------+ 
+
+    when normalising, if p>255, then a dynamic stop in line UU is encountered
+    if p<-256 then ALf is replaced by a number aprox equal to 2^-130.
+    
+    Before using normalise first time, it is necessary to set D = 2^10 and
+    to take account of initial setting of f.b.a.
+    
+    the punching proper for the sequence NORNALISE includes the settings of the 
+    line pairs /I to JI. these are empty except for the f.b.a. for which
+    [#I]=//// ///#, [RI]=//$$ $$$$. Thus the purposes of comparition
+    of exponents f.b.a may be regarded as clear
+
+    Ferranti Mark I Programming Manual, third edition 
+    Bodleian Special Collection 
+    MS. Eng. misc. b. 260-C.41.pdf
+    p60, p64
+    
+    [Routine NORMALISE      ] 
+
+    [Col     I ]                        [        U ]              
+                                                                          
+    | / | USED |                        | / | RITA | plants corrected exponent               
+    | E | USED |                        | E | H:/C | 
+    | @ | USED |                        | @ | #I/N | packs up number part
+    | A | USED |                        | A | @I/U | and exponent as ALf
+    | : | USED | number   \             | : | RI/F |          
+    | S | USED |   part   ! f.b.d.      | S | RIQO | tests magnitude of
+    | I | USED | exponent !             | I | W:QG | exponent: if p<-256
+    | U | USED |          /             | U | DS/O | then stops; if p<256
+    | # | //// | number   \             | # | TUQG | then ALf is replaced by
+    | D | ///# |   part   ! f.b.a.      | D | E:/O | "zero"   
+    | R | //$$ | exponent !             | R | OIT/ |          
+    | J | $$$$ |          /             | J | @I/A | clears AM
+    | N | #IT# | <- Enter               | N | Y:/C | restores multiplicand 2^10
+    | F | E:/M | plants modulus of      | F | E:TD | round off
+    | C | DSTJ | number part of f.b.a   | C | JI/G | dummy stop
+    | K | E:TD | in @I                  | K | //EP | returns to main sequence
+    | T | @ITA |                        | T | //$$ | -1024  \
+    | Z | @I/@ | most significant       | Z | :E// | 36     ! constants
+    | L | @I/A |  digit of [@I]         | L | N@// | 76     /
+    | W | DSQG | plants link            | W | //// | 
+    | H | //ZZ |                        | H |      | 
+    | Y | ZUQO | B7=36-2r               | Y |      | 
+    | P | @IQG |                        | P |      |      
+    | Q | @IQG |                        | Q |      |      
+    | O | /:UC | select multiplicand    | O |      |      
+    | B | E:/O | from PERM              | B |      |      
+    | G | DSUC |                        | G |      |      
+    | " | #I/F | normalises number      | " |      | 
+    | M | #ITA | part                   | M |      | Used by ARCTAN
+    | X | @ITK | corrects exponent      | X |      | 
+    | V | RITC | 2p=2p-2(38-r)          | V |      | 
+    | $ | LUTN |                        | $ |      | 
+                                                                          
+        
+    [End]
+
+Note by Roberto Sancho: there is a typo in address SU. The instr stated in 
+   original doc is IIQO, to load the exponent for testing it on next instructions.
+   But exponent is not stored in [II] lines, it is stored in [RI] line.
+   So we correct the instruction to RIQO
+
+  192  /I  USED 
+  193  EI  USED
+  194  @I  USED
+  195  AI  USED
+  196  :I  USED
+  197  SI  USED
+  198  II  USED
+  199  UI  USED
+  200  #I  ////
+  201  DI  ///#
+  202  RI  //$$
+  203  JI  $$$$
+
+  204  NI  #IT#  Entry: AL=[#I, DI]=fba mantissa a
+  205  FI  E:/M  if (A>=0) goto 207
+  206  CI  DSTJ
+  207  KI  E:TD  AL=AL OR E/// //// -> set last significant bit of mantissa to round up
+  208  TI  @ITA  [@I, AI]=AL -> save fba mantissa
+  209  ZI  @I/@  standarise -> AM=38
+  210  LI  @I/A  [@I]=38 = most significant bit
+  211  WI  DSQG  Incr B7
+  212  HI  //ZZ  Save return addr using [B1] (the stack pointer)
+  213  YI  ZUQO  B7=36
+  214  PI  @IQG  B7=B7- 2 x msb pos
+  215  QI  @IQG
+  216  OI  /:UC  
+  217  BI  E:/O
+  218  GI  DSUC
+  219  "I  #I/F
+  220  MI  #ITA
+  221  XI  @ITK
+  222  VI  RITC
+  223  $I  LUTN
+  224  /U  RITA
+  225  EU  H:/C
+  226  @U  #I/N
+  227  AU  @I/U
+  228  :U  RI/F
+  229  SU  RIQO  B7=exponent
+  230  IU  W:QG  B7=B7-2*256
+  231  UU  DS/O  if (B>=0) goto 231. Dynamic stop if exp 2p > 2*256
+  232  #U  TUQG
+  233  DU  E:/O
+  234  RU  OIT/
+  235  JU  @I/A
+  236  NU  Y:/C
+  237  FU  E:TD
+  238  CU  JI/G
+  239  KU  //EP
+  240  TU  //$$
+  241  ZU  :E//
+  242  LU  N@//
+  243  WU  ////
+  244  HU  
+  245  YU  
+  246  PU  
+  247  QU  
+  248  OU  
+  249  BU  
+  250  GU  
+  251  "U  
+  252  MU  
+  253  XU  
+  254  VU  
+  255  $U  

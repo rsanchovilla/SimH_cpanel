@@ -1,0 +1,303 @@
+   
+     MANCHESTER UNIVERSITY COMPUTING MACHINE LABORATORY
+    
+     Programme Sheet B                  Date. 22.May.1955
+
+    
+    [Routine TRANS(6)   ] p18-22
+
+    [Col /          E ]                 
+                                        
+opco| BIQO | / | E/// | ???    
+de__| /EUP | E | :/// | x    
+ent | VET/ | @ | I/// | y    
+TR(5| //ZA | A | #/// | z    
+ ___| CE/P | : | R/// | h    
+ (X)| QEQO | S | $@// | ???    
+ ___| NE/P | I | K/// | ???    
+ (Y)| OEQO | U | //// |     
+ ___| NE/P | # | //// |     
+ (Z)| BEQO | D | //// |     
+ ___| NE/P | R | O/// |                   
+ (H)| GEQO | J | Y/// | c.n 
+ ___| NE/P | N | F/// | c.n 
+ (T)| UEQO | F | $E// | c.n 
+    | ZNQB | C | TS// | c.n 
+asm_| FE/P | K | :A/J |\    
+or  | AIQO | T | /TQO |input
+exec| RE/T | Z | FS/P |  n  
+    | WET/ | L | :I#A |/    
+inp | FNTA | W | //O: |\    
+v   | YET/ | H | IA/J |input                      
+ ___| KNTA | Y | /TQO |  v                        
+call| MET/ | P | FS#P |/                
+TR(9| //ZA | Q | FA/: | c.r.                                   
+ ___| CE/P | O | CA/: | l.f.                      
+    | KET/ | B | KA/: | space   
+    | CNTA | G | //#L | stop                      
+    | ZET/ | " | LS/P | closure                                 
+    | TNTA | M | @/// | cue to         
+    | WEQO | X | UE@/ | TRANS(4)       
+    | FEQB | V | I@// | cue to         
+    | JE/P | $ | #E@/ | TRANS(5)       
+                                                                          
+               WE -> E/O:     ZA -> X@//
+                              V@    M@QO  B7=/L//
+                              Z@    X@/P  goto 94
+                              X@    R@//  c.n.
+                              M@    /L//  const
+                              J@    EFQB  [EF]=B7
+        
+    [End]
+
+Note by Roberto Sancho: The ASSEMBY routine expects the genreated instr to 
+    bet "matched", i.e. have the space bit set to 1. TRANS(6) states in address
+    QA, OA and BA the instr to generate a CR, and LF and a space. But these instr
+    are not matched!. They are correctly generated, but later ASSEMBLY routine 
+    discards them. This invalidates X Y Z chars commands. Also Z generates
+    incorrect code.
+
+    On R.A.Brooker autocode paper "An attempt to simplify coding for the 
+    Manchester electronic computer", 24/March/1954, these chars are described, among
+    with P char for printing the current line's z value. 
+    Nevertheless, on "The standard account of the simple machine" paper (3.6.55)
+    chars X Y Z are gone, and P char for print is replaced by *. 
+    The * command simplifies the output as it prints a <cr><lf> and then the numeric
+    value, then a space. * is convenient but we lose the control from program on 
+    the output format. 
+
+    On code, on INPUT(2) the P char is ignored, but chars X Y Z generates intr
+    that are later ignored. Is this a (documented) bug, a dead code resulting 
+    on a language evolution, or the source code that has survived is an early version
+    that does not reflects a code clearing done later. Hard to say.
+
+    On this autocode restoration we will 
+    - restore X Y Z to its working condition
+
+    There are no conflicts on both syntaxes and this allows to run progs for
+    both favours of autocode.
+
+
+    Modifications to do in TRANSLATE(6)
+
+         address    original    new
+         
+           QE        FA/:       FA#:  -> adds spare bit to mag instr so instr is checked                                 
+           OE        CA/:       CA#:
+           BE        KA/:       JA#:  -> fix addr for space mag instr constant
+
+    Modifications to do in MATRIX INSTRUCTIONS
+
+         address    original    new
+            
+           JK       (blank,     //Z/  -> add mag instr for space
+                   not used)     
+                              
+    Modifications to do in INPUT(1)
+
+         address    original    new
+            
+           @A        E:QO       SAQG  B7=B7-23  
+           AA        LD/P       BIQB  [BI]=B7  -> set incidental operation code    
+           :A        A:QO       VJ/P  goto 278 -> goto to translate the line
+           SA        LD/P       Q///  const 23
+           IA        JDQO       ////  spare
+           UA        LD/P       ////  spare
+
+        on entry in @A
+	B7=24 because PTR char is 'O' for autocode char X -> code to set in [BI]=1
+           25,                    'B'                                          2
+           26,                    'G'                                          3
+
+    Modifications to do in INPUT(2)
+
+         address    original    new
+            
+           BR        AA//       EA//  goto same addr (@A) as X to process Y print <lf> 
+           GR        SA//       EA//  goto same addr (@A) as X to process Z print space
+
+    X Y Z will generate code to print <CR>, <LF> and space respectively. These chars
+    should be at the beginning of the sentence, ot at its end. X, Y and Z resets the 
+    mode to figure shift, so if more than one are to be set in sequence, it is 
+    necessary to add the autocode figure shift (")
+
+           input tape: "O"B"G    -> works as autocode X Y Z
+                       "OBG      -> only "O is recognized as autocode X. 
+                                    B as fig shift as autocode 9, G as autocode +
+                       "O/"B/"G/ -> works as autocode X Y Z
+                               
+
+
+    each char X Y Z. The reason 
+
+   0  //  BIQO  B7=[BI] = incidental operation: 1->X (CR), 2->Y (LF), 3->Z (space), 4->H (halt), 5->T (tape), 6->I (Input)
+   1  E/  /EUP  if (B7=0) goto xxx  (=T)
+                if (B7=1) goto 5    X (print <CR>)
+                if (B7=2) goto 7    Y (print <LF>)
+                if (B7=3) goto 9    Z (print space)
+                if (B7=4) goto 11   H (Halt)
+                if (B7=5) goto 96   T (Tape)
+                if (B7=6) goto 16   I (input)
+
+   2  @/  VET/  AL=[VE]I@// #E@/ -> cue to TRANSLATE(5) addr 71
+   3  A/  //ZA  Store cue at [B1]
+   4  :/  CE/P  goto 177. call RCS as ad-routine
+
+                generate instr for print <CR>
+   5  S/  QEQO  B7=[QE]=FA#: -> instr to plant
+   6  I/  NE/P  goto 14
+
+                generate instr for print <CR>
+   7  U/  OEQO  B7=[QE]=CA#: -> instr to plant
+   8  #/  NE/P  goto 14
+
+                generate instr for Space
+   9  D/  BEQO  B7=[BE]=JA#: -> instr to plant 
+  10  R/  NE/P  goto 14
+
+                generate instr for Halt
+  11  J/  GEQO  B7=[GE]=//#L -> instr to plant. Is a dummy stop on /L
+  12  N/  NE/P  goto 14
+
+  13  F/  UEQO
+  14  C/  ZNQB  [ZN]=B7 -> plant instr
+  15  K/  FE/P  goto 64 to store or run planted instr
+
+                Incidental operation I
+
+  16  T/  AIQO  B7=[AI] = n/v switch
+  17  Z/  RE/T  if (B>=0) goto 25 -> input to integer var
+
+                Input to float var
+
+  18  L/  WET/  AL=[WE]=//O: IA/J 
+  19  W/  FNTA  [FN]=AL -> plant instr
+  20  H/  YET/  AL=[YE]=/TQO FS#P
+  21  Y/  KNTA  [KN]=AL -> plant instr
+  22  P/  MET/  AL=[ME]=@/// UE@/ -> cue to TRANSLATE(4)
+  23  Q/  //ZA  Store cue in [B1]
+  24  O/  CE/P  goto 177-> call RCS to link to cue as ad-routine
+
+                Input to integer var
+
+  25  B/  KET/  AL=[KE]=:A/J /TQO
+  26  G/  CNTA  [CN]=AL -> plant instr
+  27  "/  ZET/  AL=[ZE]=FS/P :I#A
+  28  M/  TNTA  [TN]=AL -> plant instr
+  29  X/  WEQO  B7=//O:
+  30  V/  FEQB  [FE]=B7
+  31  $/  JE/P  goto 22
+
+  32  /E  E///
+  33  EE  :///
+  34  @E  I///
+  35  AE  #///
+  36  :E  R///
+  37  SE  $@//
+  38  IE  K///
+  39  UE  ////
+  40  #E  ////
+  41  DE  ////
+  42  RE  O///
+  43  JE  Y///
+  44  NE  F///
+  45  FE  $E//
+  46  CE  TS//
+  47  KE  :A/J
+  48  TE  /TQO
+  49  ZE  FS/P
+  50  LE  :I#A
+  51  WE  //O:
+  52  HE  IA/J
+  53  YE  /TQO
+  54  PE  FS#P
+  55  QE  FA/:
+  56  OE  CA/:
+  57  BE  KA/:
+  58  GE  //#L
+  59  "E  LS/P
+  60  ME  @///
+  61  XE  UE@/
+  62  VE  I@//
+  63  $E  #E@/
+
+                Entry from TRANSLATE(5/8)
+                store or run: exam bracket switch 
+
+  64  /@  $A/:  Read directory: from Track 15L to Tube S4 S5 (cols # D R J)  
+  65  E@  MJQO  B7=[MJ] read from disk -> bracket switch? (bracket = parenthese)
+  66  @@  ZAUP  if (B7==0) goto 76 -> no parentheses
+                        1  goto 69 -> parenthese opened in previous line, but not closed in this sentence
+                        2  goto 67 -> parentheses has been closed in this autocode source line
+
+  67  A@  MJTB  [MJ]=0 -> clear bracket switch
+  68  :@  VA/:  Write directory from S4 S5 to Track 15 to save bracket switch cleared
+  69  S@  "AT/  AL=["A]=$/// NE@/ cue to TRANSLATE(9) entry 2
+  70  I@  @/ZA  Save cue in stack pointed by [B1]
+  71  U@  U@QO  B7=*
+  72  #@  KS/P  goto 173 -> call RCS subroutine 
+  73  D@  QAT/  AL=[QA]=$$// /E@/ cue to INPUT(1) 
+  74  R@  //ZA  Save cue in stack pointed by [B1]
+  75  J@  TA/P  goto 177 -> call RCS adroutine
+
+                prepare to economise or assembler 
+  76  N@  BAT/  AL=[BA]=$$// VE@/ cue to ECONOMISE
+  77  F@  XA/P  goto 70
+
+  78  C@      
+  79  K@  J@//
+  80  T@  "@/:
+  81  Z@  PITK
+  82  L@  PITA
+  83  W@  PIQO
+  84  H@  /#Q/
+  85  Y@  GCTA
+  86  P@  M@T/
+  87  Q@  CNTA
+  88  O@  V@T/
+  89  B@  TNTA
+  90  G@  FE/P
+  91  "@  $E/#
+  92  M@  //O:
+
+  93  X@  G@/J
+  94  V@  /TQO
+  95  $@  FS#P
+
+                generate instr for Tape
+
+  96  /A  HAT/  AL=[HA] = O@O/ //BA
+  97  EA  CNTA  [CN]=AL -> plant instr
+  98  @A  PAQO  B7=PD#P
+  99  AA  TNQB  [TN]=B7 -> plant instr
+ 100  :A  FE/P  goto 64
+ 101  SA      
+ 102  IA      
+ 103  UA      
+ 104  #A      
+ 105  DA      
+ 106  RA      
+ 107  JA      
+ 108  NA      
+ 109  FA      
+ 110  CA      
+ 111  KA      
+ 112  TA  TS//
+ 113  ZA  J@//
+ 114  LA  :@//
+ 115  WA  @@//
+ 116  HA      
+ 117  YA      
+ 118  PA      
+ 119  QA  $$//
+ 120  OA  /E@/
+ 121  BA  $$//
+ 122  GA  VE@/
+ 123  "A  $///
+ 124  MA  NE@/
+ 125  XA  S@//
+ 126  VA  K/R#
+ 127  $A  K/@#  MagInst K/@# -> Read: from Track 15L to Tube S4 S5 (cols # D R J)
+
+ 
+

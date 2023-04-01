@@ -1,0 +1,221 @@
+C/ROUTINE                        Date. 15.12.2022
+
+    Purpose: To serve as template for routine writing 
+             to be used only with R.C.S/C
+            
+    Cue: / / / / R / @ /    
+             
+                     
+    Magnetic Storage: variable      Electronic Storage: S0 S1
+    
+    Stores Altered:  
+    
+    Effects: On entry, execute a dummy instruction. 
+             Terminate with inst LS/P to return to caller.
+             
+    
+    [Routine ROUTINE       ] 
+
+    [Col /          E ]                 [Col @          A ]              
+                                                                          
+    |      | / |      |                 | //O/ | / | //// | 
+Inp | //T: | E | QA/J | InpFba          | USED | E | //T: | PrtTxt
+    | VA/J | @ | @EQO |                 |      | @ | /@/: |                                  
+    | A/QO | A | FS/P |                 | //T/ | A | E@/E | 
+    | FS/P | : | #I/S |                 | /A// | : | ///I | 
+    | @I/A | S | RI/E |                 | //Y/ | S | V:TC | 
+    | MA/J | I | LS/P |                 | //L/ | I | DS/J | 
+    | @/EA | U |      |                 | //W/ | U | LS/H | 
+    | @I/J | # | QA/J | InpFbd          |      | # | //T: | 
+    | D/QO | D | DEQO |                 |      | D | E@/J | 
+    | KS/P | R | FS/P |                 |      | R | A@/: | 
+    | LS/P | J | :I/S |                 |      | J | :@/P | 
+    |      | N | II/E |                 |      | N |      |               
+Prt | BAT/ | F | LS/P |                 |      | F |      |               
+Fba | @/ZA | C |      |                 |      | C |      |               
+    | //T: | K | QA/J | input and add   |      | K | I@/: | print <cr> Print crlf then echo PTR to printer
+    | #I/K | T | TEQO |                 |      | T | U@/: | print <lf>
+    | RIQO | Z | FS/P |                 |      | Z | I@/: | print <cr>    
+    | "//T | L | LEQO |                 |      | L | U@/: | print <lf>
+    | #SUN | W | YD/P |                 |      | W | S@/: | set letter shift
+    | @I/A | H | LS/P |                 |      | H | :@/P | goto start of echo
+    | @IT# | Y |      | input and       |      | Y |      |               
+    | $/PO | P | QA/J | mult 1   mult 2 | QA/J | P |      |                                    
+    | Q/QO | Q | QEQO |                 | Q@QO | Q | //// | cue for
+    | KS/P | O | FS/P |                 | FS/P | O | R/@/ | MathFloatTest - input float in AL AM
+    | LS/P | B | BEQO |                 | B@$O | B | $E// | cue for                                   
+    |      | G | D#/P |                 | D#/P | G | W/@/ | DECOUTPUT                                   
+    | "/// | " | LS/P |                 | LS/P | " | L/QO | return to H/ from RCS
+    | E:UN | M |      |                 |      | M | $$// | cue for       
+    | V//P | X |      |                 |      | X | Z/E/ | CONVERTER     
+    | Y/// | V |      |                 |      | V | $E// | cue for
+    | U/// | $ |      |                 |      | $ | L/@/ | DECINPUT              
+                                                                          
+    Tape: ROUTINE ONE                   Tape: ROUTINE TWO
+        
+    [End]
+
+    0  //   
+                 Inp routine: input float from PTR
+                   Call DECINPUT to read a number (+/-nnn.nnn) from PTR,
+                   then call CONVERTER to convert to float 
+                   return float in acc (AL=a, AM=2p)
+                 
+    1  E/  //T:  clear acc
+    2  @/  VA/J  AM=AM+[VA] -> AM=cue to DECINPUT $E// L/@/ 
+    3  A/  A/QO  B7=*
+    4  :/  FS/P  call RCS -> call DECINPUT to read a number from PTR in +/-nnn.nnn form. 
+                             Return AM=integral part/AL=decimal part
+    5  S/  @I/A  [@I]=AM, AM=0 -> save AM to temp var
+    6  I/  MA/J  AM=AM+[MA] -> AM=cue to CONVERT  $$// Z/E/
+    7  U/  @/EA  save cue in cue list, AM=0. Should use this form of RCS call to send AM as input parameter to called routine
+    8  #/  @I/J  AM=AM+[@I] -> restore AM
+    9  D/  D/QO  B7=*
+   10  R/  KS/P  call RCS preserving AM -> call CONVERT to convert input value 
+                              in Acc from fixed point (AM=integral part/AL=decimal part)
+                              to floating point (AL=a, AM=2p)
+   11  J/  LS/P  closure
+   12  N/      
+   
+                 PrtFba routine: print f.b.a 
+                   Convert f.b.a. float value to fixed point (AM=integral part/AL=decimal part)
+                   then call DECOUTPUT to print it
+                 
+   13  F/  BAT/  AL=[BA], AM=0 -> AL=cue to DECOUTPUT $E// W/@/ 
+   14  C/  @/ZA  save cue in cue list, A=0. Should use this form of RCS call to send AM as input parameter to called routine
+   15  K/  //T:  clear acc
+   16  T/  #I/K  D=2^10 signed
+   17  Z/  RIQO  B7=[RI] -> load in B7 the f.b.a exponent
+   18  L/  "//T  if (B>=0) goto 28 -> transfer if exponent positive
+   19  W/  #SUN  Shift Acc [19+B7] bits
+   20  H/  @I/A  [@I]=AM, AM=0 -> integer part is zero
+   21  Y/  @IT#  AL=[@I] -> set fractional part in AL
+   22  P/  $/PO  B6=7 -> parameter for DECOUT: set num of decimal digits to print 
+   23  Q/  Q/QO  B7=*
+   24  O/  KS/P  call RCS preserving AM -> call DECOUTPUT to print fixed point 
+                              value in Acc (AM=integral part/AL=decimal part)
+   25  B/  LS/P  closure
+   26  G/      
+   27  "/  "///
+   28  M/  E:UN  Shift Acc [B7] bits
+   29  X/  V//P  goto 22
+   30  V/  Y///
+   31  $/  U///
+   32  /E  
+   
+                 InpFba routine: input float from PTR into 
+                                 floating point accumulator (f.b.a)
+
+   33  EE  QA/J  AM=AM+[QA] -> AM=cue to Inp //// R/@/
+   34  @E  @EQO  B7=*
+   35  AE  FS/P  call RCS -> read float to Acc
+   36  :E  #I/S  [#I, DI]=AL=a  -> store mantissa a in f.b.a
+   37  SE  RI/E  [RI, JI]=AM=2p -> store exponent p in f.b.a
+   38  IE  LS/P  closure
+   39  UE      
+
+                 InpFbd routine: input float from PTR into 
+                                 floating multiplicand (f.b.d)
+   40  #E  QA/J  AM=AM+[QA] -> AM=cue to Inp //// R/@/
+   41  DE  DEQO  B7=*
+   42  RE  FS/P  call RCS -> read float to Acc
+   43  JE  :I/S  [:I, SI]=AL=a  -> store mantissa a in f.b.d
+   44  NE  II/E  [II, UI]=AM=2p -> store exponent p in f.b.d
+   45  FE  LS/P  closure
+   46  CE      
+                 Input and Add routine: input float from PTR, then add it to f.b.a
+                   Call DECINPUT to read a number (+/-nnn.nnn) from PTR,
+                   then call CONVERTER to convert to float in acc (AL=a, AM=2p)
+                   then call ADD&MULTIPLY (add entry) to add float acc to f.b.a
+
+   47  KE  QA/J  AM=AM+[QA] -> AM=cue to Inp //// R/@/
+   48  TE  TEQO  B7=*
+   49  ZE  FS/P  call RCS -> read float to Acc  
+   50  LE  LEQO  B7=*
+   51  WE  YD/P  call ADD -> add float acc to f.b.a  
+   52  HE  LS/P  closure
+   53  YE      
+                 Input and Mult 1 routine: input float from PTR, then calc 
+                   f.b.a = f.b.a + f.b.d * Input number
+                   Call DECINPUT to read a number (+/-nnn.nnn) from PTR,
+                   then call CONVERTER to convert to float in acc (AL=a, AM=2p)
+                   then call ADD&MULTIPLY (mult 1 entry) to add product to f.b.a
+   54  PE  QA/J  AM=AM+[QA] -> AM=cue to Inp //// R/@/
+   55  QE  QEQO  B7=*
+   56  OE  FS/P  call RCS -> read float to Acc  
+   57  BE  BEQO  B7=*
+   58  GE  D#/P  call MULT 1 -> add product to f.b.a  
+   59  "E  LS/P  closure
+   60  ME
+   61  XE
+   62  VE
+   63  $E
+   64  /@  //O/
+   65  E@  USED
+   66  @@      
+   67  A@  //T/
+   68  :@  /A//
+   69  S@  //Y/
+   70  I@  //L/
+   71  U@  //W/
+   72  #@      
+   73  D@      
+   74  R@      
+   75  J@      
+   76  N@
+   77  F@
+   78  C@
+   79  K@
+   80  T@
+   81  Z@
+   82  L@
+   83  W@
+   84  H@
+   85  Y@
+   86  P@
+   87  Q@
+   88  O@
+   89  B@
+   90  G@
+   91  "@
+   92  M@
+   93  X@
+   94  V@
+   95  $@
+   96  /A  ////
+   
+                 PrtTxt routine: 
+                   Read PTR and send chars to printer until $ char is read                                        
+   
+   97  EA  //T:  clear acc
+   98  @A  /@/:  read PTR  
+   99  AA  E@/E  save char from PTR in AM                                       
+  100  :A  ///I  swap AL<->AM
+  101  SA  V:TC  add //// ///E to AL                                     
+  102  IA  DS/J  add $$$$ $$$$ to AM -> A=0 if char was $, else negative 
+  103  UA  LS/H  if (A>=0) terminate routine (because a $ has been read on ptr)
+  104  #A  //T:  clear acc
+  105  DA  E@/J  restore char in AM                                
+  106  RA  A@/:  punch/print it
+  107  JA  :@/P  goto 97 -> read next char 
+  108  NA      
+  109  FA      
+  110  CA      
+  111  KA  I@/:
+  112  TA  U@/:
+  113  ZA  I@/:
+  114  LA  U@/:
+  115  WA  S@/:
+  116  HA  :@/P
+  117  YA      
+  118  PA      
+  119  QA  ////
+  120  OA  R/@/
+  121  BA  $E//
+  122  GA  W/@/
+  123  "A  L/QO
+  124  MA  $$//
+  125  XA  Z/E/
+  126  VA  $E//
+  127  $A  L/@/
+  

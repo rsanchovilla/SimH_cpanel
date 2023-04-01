@@ -1,0 +1,225 @@
+   
+     MANCHESTER UNIVERSITY COMPUTING MACHINE LABORATORY
+    
+     Programme Sheet B                  Date. 19.May.1955
+
+    
+    [Routine TRANS(5)      ] p16-p17
+
+    [Col  /    ]                        [     E    ]              
+                                                                          
+    | / | PITK |\ double a              | / | LNPB | plant DI$O (v) or :I$O (n)           
+    | E | PITA |/                       | E | "IQO |               
+    | @ | HIQO |\ examine v,n           | @ | JAUP |___                                     
+    | A | VAUP |/__ either 0,1          | A | K@T/ |\ >= plants USQG                                        
+ jna| : | PIT/ |\ form and plant        | : | PNTA |!           FA/O                                        
+    | S | BATC |! (GD+2a)QO             | S | F@/P |___                                     
+    | I | BNTA |/      /NQ/             | I | :AT/ |\ >  plants @IQB
+    | U | PAQO |\ plant NA/:            | U | HNTA |!           /:QO
+    | # | ONQB |/                       | # | IAT/ |!           @IQG                        
+    | D | WA/P |__jmp to plnt //ZA PD#P | D | PNTA |!           FA/O                        
+  ja| R | PIQO | B7=2a                  | R | F@/P |/__                                     
+    | J | YA/: | xfers cue to tubes 6,7 | J | /AT/ |\ != plants US$G   
+    | N | /#QF |\ test if cue has been  | N | HNTA |!           A:/O   
+    | F | LA/H |/ planted               | F | @AT/ |!           E:QG   
+    | C | /#Q/ |\ plant cue             | C | PNTA |!           FA/O   
+    | K | MCTA |/  in GC(=G@)           | K | F@/P |/__            
+    | T | QAT/ |\       / //T$          | T | M@T/ |\ =  plants E:/O  
+    | Z | ONTA |!       ! //T$$         | Z | HNTA |!           CA/Q  
+    | L | HAQO |! plant \ M@T/          | L | V@T/ |!           E:QG  
+    | W | GNQB |/                       | W | PNTA |/__         FA/M  
+    | H | WA/P |__jmp to plt //ZA PD#P  | H | GIQO | examine op switch
+    | Y | PIT/ |\ form and plant        | Y | L@/T |               
+    | P | "ATC |! (/N+2a)T/             | P | AIQO | examine n or v switch              
+    | Q | GNTA |/      //ZA             | Q | Z@/T |                                    
+    | O | PAT/ |\ plant NA/:            | O | O@T/ |\                                   
+    | B | ONTA |/       //T$            | B | XNTA |! plants intr to                    
+    | G | MAT/ |\ plant //ZA            | G | G@T/ |!  point v                          
+    | " | "NTA |/__     PD/P            | " | $NTA |/                                   
+    | M | ZAPO | prepare to             | M | #AT/ |\              
+    | X | AIQO | plant :I$O             | X | //ZA |! exit cue     
+    | V | E:/O | test for n or v        | V | RA/P |/__            
+    | $ | TAPO | prepare to plant DI$O  | $ | P@T/ |               
+                                                                                 
+    [End]
+
+Note by Roberto Sancho: the generated code for autocode jump statement plants 
+    the cue, then generates and plants a PD#P instr to call in RCS to follow the cue. 
+    The line [PD] belongs to SchemeC ADD&Multiply routine that is loaded for 
+    run-time execution of autocode program. In Stock SchemeC ADD&Multiply routine, 
+    line [PD] is spare and thus its value is ////. So we must modify ADD&Multuply 
+    so line [PD] contains TS// and thus autocode generated prog correcty enters 
+    to RCS on jumps. This modification is done when building the autocode tape
+    (see build.ini)
+
+                Handle j statement
+
+   0  //  PITK  AL=2*[PI] -> a=2a -> a=label num where to jump
+   1  E/  PITA  [PI]=AL -> save back 
+   2  @/  HIQO  B7=[HI] -> j n count
+   3  A/  VAUP  if (B7=0) goto 10
+                       1  goto 4
+
+                j na jump to computed label
+
+   4  :/  PIT/  AL=[PI] = 2*index number (i.e. n1 -> AL=2)
+   5  S/  BATC  AL=AL+GDQO /NQ/ -> instr to load the selected index
+   6  I/  BNTA  [BN]=AL -> plant instr
+   7  U/  PAQO  B7=NA/:
+   8  #/  ONQB  [ON]=B7 -> plant instr
+   9  D/  WA/P  goto 26
+
+                j a jump backwards to an already compiled addr
+
+  10  R/  PIQO  B7=[PI] -> 2 x dest label
+  11  J/  YA/:  Read label cue list from Track 64L to cols # D R J 
+  12  N/  /#QF  AL=-[/N + B7] -> get cue for dest label
+  13  F/  LA/H  if (A>=0) goto 21 -> label not yet defined
+  14  C/  /#Q/  AL=[/N + B7] -> get cue for dest label
+  15  K/  MCTA  [MC, XC]=AL -> plant cue
+  16  T/  QAT/  AL=//Z$ //Z$
+  17  Z/  ONTA  [ON, BN]=AL -> plant instr
+  18  L/  HAQO  B7=M@T/
+  19  W/  GNQB  [GN]=B7 -> plant instr
+  20  H/  WA/P  goto 26
+
+                j a jump forward to a undef label in cue list
+
+  21  Y/  PIT/  AL=[PI]= 2 x dest label = offset in cue list
+  22  P/  "ATC  AL=AL+["A]=AL+ /NT/ //ZA
+  23  Q/  GNTA  [GN]=AL -> plant instr
+  24  O/  PAT/  AL=[PA]=NA/: //Z$
+  25  B/  ONTA  [ON]=AL -> plant instr
+
+  26  G/  MAT/  AL=[MA]=//ZA PD#P            -> plants PD/P. [PD]=TS// on ADD&Mult routine
+  27  "/  "NTA  ["N]=AL  -> plant instr         so this is goto RCS entry for ad-routines
+  28  M/  ZAPO  B6=:I$O
+  29  X/  AIQO  B7=[AI], [AI]=n/v switch for x -> if = ///T -> x is va or vna
+  30  V/  E:/O  if (B>=0) goto 32 -> goto if 'n'
+  31  $/  TAPO  
+  32  /E  LNPB  [LN]=B6 -> plant instr
+  33  EE  "IQO  B7=["I] -> type of inequation: 1 -> >=, 2 -> >, 3 -> !=, 4 -> =
+  34  @E  JAUP  if (B7=0) goto 52 -> unconditional jump
+                       1  goto 35 -> jump if >=
+                       2  goto 38 -> jump if >
+                       3  goto 43 -> jump if !=
+                       4  goto 48 -> jump if =
+
+  35  AE  K@T/  AL=[K@]=US$G FA/O
+  36  :E  PNTA  [PN]=AL -> plant instr
+  37  SE  JA/P  goto 52
+ 
+                Handle conditional jump on x>y
+
+  38  IE  :AT/  AL=[:A]=US$G CA/O
+  39  UE  HNTA  [HN]=AL -> plant instr
+  40  #E  IAT/  AL=[IA]=E:QG FA/O
+  41  DE  PNTA  [PN]=AL -> plant instr
+  42  RE  JA/P  goto 52
+
+                Handle conditional jump on x!=y
+
+  43  JE  /AT/  AL=[/A]=US$G A:/O
+  44  NE  HNTA  [HN]=AL -> plant instr
+  45  FE  @AT/  AL=[@A]=E:QG FA/O
+  46  CE  PNTA  [PN]=AL -> plant instr
+  47  KE  JA/P 
+ 
+                Handle conditional jump on x=y
+
+  48  TE  M@T/  AL=[M@]=E:/O CA/Q
+  49  ZE  HNTA  [HN]=AL -> plant instr
+  50  LE  V@T/  AL=[V@]=E:QG FA/O
+  51  WE  PNTA  [PN]=AL -> plant instr
+
+                Enter from translate (4) to handle printing switch
+
+  52  HE  GIQO  B7=[GI] -> [GI]=print switch -> if = ///T -> swtich on: prints value stored in z 
+  53  YE  L@/T  if (B>=0) goto 60 -> goto if no print
+  54  PE  AIQO  B7=[AI] -> [AI]=n/v switch for x -> if = ///T -> x is va or vna, if = //// -> x is na or a  
+  55  QE  Z@/T  if (B>=0) goto 63
+
+                plants instr to print v
+  56  OE  O@T/  AL=[O@]=//O: @A/J 
+  57  BE  XNTA  [XN]=AL -> plants instr
+  58  GE  G@T/  AL=[G@]=/TQO FS#P
+  59  "E  $NTA  [$N]=AL -> plants instr
+
+                exit cue 
+  60  ME  #AT/  AL=[#A]=$E// DE@/, cue to TRANSLATE(6)
+  61  XE  //ZA  Store cue in [B1]
+  62  VE  RA/P  goto 177, call ad-routine
+
+                plants instr to print n
+  63  $E  P@T/  AL=//O: /A/J
+  64  /@  XNTA  [XN, VN]=AL -> plants instr
+  65  E@  G@T/  AL=/TQO FS#P
+  66  @@  $NTA  [$N, /F]=AL -> plants instr
+  67  A@  L@/P  goto 60 
+
+  68  :@  C@QO  
+  69  S@  LNQB  
+  70  I@  F@/P  
+
+                handle autocode jump j statement
+                or any other non z=... statement
+
+  71  U@  YIQO  B7=[YI], [YI]=j switch -> if = ///T -> processing a j source code statement
+  72  #@  F@/T  if (B>=0) goto 52 -> not a j jump
+  73  D@  DS/P  goto 0
+
+  74  R@        
+  75  J@        
+  76  N@        
+  77  F@        
+  78  C@        
+  79  K@  US$G  
+  80  T@  FA/O  
+  81  Z@  VE//  
+  82  L@  "E//  
+  83  W@        
+  84  H@        
+  85  Y@        
+  86  P@  //O:  
+  87  Q@  /A/J  
+  88  O@  //O:  
+  89  B@  @A/J  
+  90  G@  /TQO  
+  91  "@  FS#P  
+  92  M@  E:/O  
+  93  X@  CA/Q  
+  94  V@  E:QG  
+  95  $@  FA/O  
+  96  /A  US$G  
+  97  EA  A:/O  
+  98  @A  E:QG  
+  99  AA  FA/O  
+ 100  :A  US$G  
+ 101  SA  CA/O  
+ 102  IA  E:QG  
+ 103  UA  FA/O  
+ 104  #A  $E//  
+ 105  DA  DE@/  
+ 106  RA  TS//  
+ 107  JA  WE//  
+ 108  NA  @E//  
+ 109  FA  SE//  
+ 110  CA  RE//  
+ 111  KA  KE//  
+ 112  TA  DI$O  
+ 113  ZA  :I$O  
+ 114  LA  H///  
+ 115  WA  B///  
+ 116  HA  M@T/  
+ 117  YA  /@@#  
+ 118  PA  NA/:  
+ 119  QA  //Z$  
+ 120  OA  //Z$  
+ 121  BA  GDQO  
+ 122  GA  /NQ/  
+ 123  "A  /NT/  
+ 124  MA  //ZA  
+ 125  XA  PD#P  
+ 126  VA  D///  
+ 127  $A  A///  
+                
