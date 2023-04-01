@@ -324,7 +324,7 @@ static struct {                                     // Control Panel main data
 } CP = { 0, 0, 0, 0, 0 }; 
 
 #define MAX_SCP_CMDS        16                      // max number scp commnads can be queued by control panel
-#define MAX_SCP_CMD_LEN     80                      // max len of a scp command
+#define MAX_SCP_CMD_LEN     200                     // max len of a scp command
 char SCP_cmd[MAX_SCP_CMDS * MAX_SCP_CMD_LEN];       // stores scp commnads list queued by control panel pending to be executed
 int  SCP_cmd_count = 0;                             // number of commands in list
 int  SCP_cmd_echo  = 1;                             // echo DoSCP commands
@@ -438,15 +438,19 @@ int AddControl(int ncp, char *Name, int nStates,
 
 int CHK_CId(int CId)
 {
+    static int nMsg = 0; // max number of messages
     if ((CId < 0) || (CId > CP.ControlItems)) {
-        fprintf(stderr, "CId %d out of range (Items %d)\n", CId, CP.ControlItems); 
+        if (nMsg < 10) {
+            fprintf(stderr, "CId %d out of range (Items %d)\n", CId, CP.ControlItems); 
+            nMsg++; 
+        }
         return -1; 
     }
     return 0;
 }
 
-#define CHK_CArrayId(CArrayId)  if ((CArrayId < CARRAY_START) || (CArrayId > CARRAY_START+CP.CArrayItems)) {fprintf(stderr, "CArrayId %d out of range (Items %d)\n", CArrayId, CP.CArrayItems); return -1; }
-#define CHK_Item(CArrayId,n)    if ((n < 0) || (n >= CP.CArray[CArrayId-CARRAY_START].Items)) {fprintf(stderr, "Item %d out of range (CArrayId %d, Items %d)\n", n, CArrayId, CP.CArray[(CArrayId)-(CARRAY_START)].Items); return -1; }
+#define CHK_CArrayId(CArrayId)  if ((CArrayId < CARRAY_START) || (CArrayId > CARRAY_START+CP.CArrayItems)) {static int nMsg = 0; if (nMsg < 10) {fprintf(stderr, "CArrayId %d out of range (Items %d)\n", CArrayId, CP.CArrayItems); nMsg++;} return -1; }
+#define CHK_Item(CArrayId,n)    if ((n < 0) || (n >= CP.CArray[CArrayId-CARRAY_START].Items)) {static int nMsg = 0; if (nMsg < 10) {fprintf(stderr, "Item %d out of range (CArrayId %d, Items %d)\n", n, CArrayId, CP.CArray[(CArrayId)-(CARRAY_START)].Items); nMsg++;} return -1; }
 
 uint8 *Font = NULL;     // pointer to block of malloc mem that stores the internal font
 
@@ -1541,18 +1545,21 @@ process_tag:
                 }
                 break;
             case CPDF_TAG_STATERGB_AREA: 
-                // StateRgbArea=state number n, red color, green, blue
+                // StateRgbArea=state number n, red color, green, blue, X,  Y,  W,  H
                 // sets the image for control state n. Pixels are set to given r,g,b color (values 0 up to 255)
                 // in an area from X,Y for given Width and Heigh. Pixels outside control W and H are ignored
+                // if red color is set to 999, transparent color is used to fill the pixels
             case CPDF_TAG_STATERGB_CIRCLE: 
                 // StateRgbCircle=state number n, red color, green, blue [ X, Y, W [, H ]]
                 // sets the image for control state n. Draw a filled circle with given r,g,b color (values 0 up to 255)
                 // up to the defined Width and Heigh of control (or given W and H), centered in control (centered at X, Y)
                 // if W is indicated bute H is not present, H=W=radius is assumed
+                // if red color is set to 999, transparent color is used to fill the pixels
             case CPDF_TAG_STATERGB: 
                 // StateRgb=state number n, red color, green, blue
                 // sets the image for control state n. Pixels are set to given r,g,b color (values 0 up to 255)
                 // to the defined Width and Heigh of control. 
+                // if red color is set to 999, transparent color is used to fill the pixels
                 n = cpdf_num_param(lbuf);
                 r = cpdf_num_param(lbuf);
                 g = cpdf_num_param(lbuf);
@@ -2215,7 +2222,9 @@ uint32 * GetControlSurface(int CId, int State, int * ww, int * hh)
 // if error return zero
 // if copies image (FromCId) has alfa channel set, its alfa channel is applied when drawing it on ToCId image
 // if FromCId or ToCId is zero, then the surface used is the cpvid surface. The value FromState/ToState select the 
-// ncp of window owner of surface to use
+// ncp of window owner of surface to use. 
+// If FromCID/ToCID is zero, but cpvid not yet init (this happends if this func is called from cpanel_init event routine)
+// then the control to be used is number zero (the first control defined, i.e background of main window) to copy from/copy to
 int CopyControlImage(int FromCId, int FromState, int x0, int y0, int w, int h,
                      int ToCId,   int ToState,   int x1, int y1)
 {
@@ -2230,11 +2239,12 @@ int CopyControlImage(int FromCId, int FromState, int x0, int y0, int w, int h,
     if ((w < 0) || (h < 0))   return 0;
 
     // process source 
-    if (FromCId == 0) {
+    if (FromCId == NCP_SURFACE) {
         // source image is the full surface of ncp given in FromState parameter
         int ncp=FromState; 
         if (ncp >= MAX_CPVID_WINDOWS) return 0; //safety
         surface0=get_surface(ncp, &ww, &hh);
+        if (surface0==NULL) surface0 = GetControlSurface(0, FromState, &ww, &hh); // get control zero state
     } else {
         // source image a control FromCId, state FromState
         if (CHK_CId(FromCId) < 0) return 0;                                 // sanity check
@@ -2252,11 +2262,12 @@ int CopyControlImage(int FromCId, int FromState, int x0, int y0, int w, int h,
     if ((x1+w < 0) || (y1+h < 0)) return 0;
     
     // process destination
-    if (ToCId == 0) {
+    if (ToCId == NCP_SURFACE) {
         // destination image is the full surface of ncp given in ToState parameter
         int ncp=ToState; 
         if (ncp >= MAX_CPVID_WINDOWS) return 0; //safety
         surface1=get_surface(ncp, &ww, &hh);
+        if (surface1==NULL) surface1 = GetControlSurface(0, ToState, &ww, &hh); // get control zero state
     } else {
         // destination image a control ToCId, state ToState
         if (CHK_CId(ToCId) < 0) return 0;                                 // sanity check
@@ -3303,21 +3314,25 @@ void ControlPanel_Refresh(void)
     RefreshInterval = CP.LastRefreshInit - t0;
     if ((RefreshInterval > 1000000) || (RefreshInterval < 1)) RefreshInterval = 1000000;
     sim_debug (CP_REFRESH, &cp_dev, "GUI init Refresh at %d \n", Refresh_tnow); 
+    // Init RectList list before calling control panel refresh routine callback, just in case
+    // the callback want to add an entry to rectlist
+    for (ncp=0; ncp<cpvid_count; ncp++) cpvid[ncp].RectList.Count=0;
+    // init to check if something has changed in surface and should be redraw on GUI
+    bShouldUpdateGUI=0;
     // poll mouse, keyboard and DropFile
     if (cpanel_on) cpvid_poll ();
     // call control panel refresh routine callback
     if (CP.CP_Refresh != NULL) CP.CP_Refresh();
+    // if control panel refresh routine callback added an entry on rectlist -> set bShouldUpdateGUI=1
+    for (ncp=0; ncp<cpvid_count; ncp++) if (cpvid[ncp].RectList.Count) {bShouldUpdateGUI=1; break;};
     // set MarkCol flag for ^T display
     MarkCol = ((Refresh_Frames_Count >> 4) & 1);  // at 60 FPS >> 4 -> 3.8 FPS alternate marks colors
-    // init to check if something has changed in surface and should be redraw on GUI
-    bShouldUpdateGUI=0;
-    // itearate on controls and draw the ones that changed / are marked
+    // iterate on controls and draw the ones that changed / are marked
     ncp=-1; // init ncp to set all the needed rectlist to refresh all the controls
     for(i=0;i<CP.ControlItems;i++) {
         if (ncp != CP.Control[i].ncp) {
-            // a new ncp is being used. Init its RectList list
+            // a new ncp is being used. 
             ncp = CP.Control[i].ncp;
-            cpvid[ncp].RectList.Count=0;
             surface = (uint32 *) get_surface(ncp, &xpixels, &ypixels);
         }
         State = CP.Control[i].State;
@@ -3477,7 +3492,7 @@ void ControlPanel_Refresh(void)
         if ((CP_Click.CId >= 0) && (CP.CP_DropFile != NULL)) CP.CP_DropFile(CP_Click.CId, DropFile_FileName);
         DropFile_FileName[0]=0; 
     } 
-    // check if mouse button pressed (or release)
+    // check if mouse button pressed (or released)
     bClickbleControlAtPosXY=-1; // don't know yet if clickable control under mouse
     if (cpinput.mouse.b1) {
         if (ButtonPressed == 0) {
