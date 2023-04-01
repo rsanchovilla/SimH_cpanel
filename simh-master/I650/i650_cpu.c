@@ -2649,7 +2649,7 @@ t_stat cpu_set_speed(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
     MachineCycle_usec = 96; 
     CpuSpeed.WordTimeMax  = (int) (CpuSpeed.msec * CpuSpeed_Acceleration * 1000 / (100.0 * MachineCycle_usec));
     // 10416 Word times per second at x1.0 speed
-    CpuSpeed.WordTimeObjectivePerSec = (int) (1000000 * CpuSpeed_Acceleration / (MachineCycle_usec * 100));
+    CpuSpeed.WordTimeObjectivePerSec = (int) (1000000.0 * CpuSpeed_Acceleration / (MachineCycle_usec * 100.0));
     return SCPE_OK;
 }
 

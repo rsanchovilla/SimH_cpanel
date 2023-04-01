@@ -344,7 +344,7 @@ t_stat sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
         i=strlen(slin);
         if (i<30) {
             while (i<30) slin[i++]=' '; // pad with spaces
-            slin[i]=0;                  // new oend of line
+            slin[i]=0;                  // new end of line
         }
         // remove non printable chars
         i=strlen(slin);

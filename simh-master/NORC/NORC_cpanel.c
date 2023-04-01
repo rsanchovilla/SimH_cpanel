@@ -111,9 +111,6 @@ void NORC_OnClick_Sw2(void);
 void NORC_OnClick_BTN(void);
 void NORC_OnClick_BTN2(void);
 
-// cpanel types constants
-#define IS_NORC	1	// define CP type contants. must start on 1
-
 // control panel available types
 CP_TYPE cp_types = {
     NORC_cp, 

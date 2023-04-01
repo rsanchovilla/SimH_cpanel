@@ -99,9 +99,6 @@ void IBM701_OnClick_Sw2(void);
 void IBM701_OnClick_BTN(void);
 void IBM701_OnClick_BTN2(void);
 
-// cpanel types constants
-#define IS_IBM701	1	// define CP type contants. must start on 1
-
 // control panel available types
 CP_TYPE cp_types = {
      IBM701_cp, 
@@ -2031,7 +2028,7 @@ void process_HotKeys(void)
             sim_debug(DEBUG_DETAIL, &cpu_dev, "Measured speed: init because ^F pressed\n");
         }
     } else if (CpuSpeed_Acceleration == -1) {
-        // return to previos cpu speed setting
+        // return to previous cpu speed setting
         CpuSpeed_Acceleration = CpuSpeed_Acceleration_save;
         CpuSpeed_Acceleration_save=0; 
         // return to previous fast/realtime setting
@@ -2101,8 +2098,8 @@ void Refresh_ShowInfo(int bOnlyInit)
         TickCountPerSec =  InstrExecPerSec = fps = 0;
     } else {
         TickCountPerSec =  Measure_CpuSpeed(1); 
-        // limit speed display to 83333 (clock 83 KHz)
-        if ((TickCountPerSec < 0) || (TickCountPerSec > 83333 * 1000)) TickCountPerSec = 83333 * 1000;
+        // limit value to display
+        if ((TickCountPerSec < 0) || (TickCountPerSec > 100000 * 1000)) TickCountPerSec = 100000 * 1000;
 
         InstrExecPerSec =  fps = 0;
         msec = Refresh_tnow - ShowInfoTm0; 
