@@ -38,6 +38,7 @@
                         user in sim> command prompt (also INT-REFRESH _svc is called if active to refresh
                         other visual devices while cpu is stopped). New function DrawText_surface to draw text
                         on any surface
+  Mar/23        RSV     Defined NCP_SURFACE constant as parameter for CopyControlImage
 
    These simulator commands controls the control panel
 
