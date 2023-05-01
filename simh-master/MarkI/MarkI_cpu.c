@@ -110,6 +110,7 @@ int                 B[8];                        // 8 Index register: 20 bits
 int                 Qneg;                        // =1 -> B has become negative
 int                 H;                           // value Hand Switches (20 bits)
 int                 NCYCLE;                      // indicates current machine cycle to be executed. 
+int32               rand_seed;                   // rand seed for OPTION_REPEATABLE_RANDOM
 
 uint8               StopReason      = 0;         // saved stop reason to be displayed in control panel
 
@@ -847,7 +848,16 @@ t_stat ExecOpcode(int opcode, int opaddr, int Bindex,
             }
             break;
         case OP_RND:               // /W  011001    AL (lower 20 bits) = randon number generator
-            AL=(sim_rand() & MASK_20BITS);
+            if (cpu_unit.flags & OPTION_REPEATABLE_RANDOM) {
+               // if "SET CPU REPEATABLE_RANDOM" command has been issued, then we use the variable
+               // rand seed, so the random sequence will be repeatable across simulation sessions.
+               // KEC resets the repeatable randon sequence to start
+               sim_srand(rand_seed); 
+               n=rand_seed=sim_rand();       
+            } else {
+               n=sim_rand();
+            }
+            AL=(n & MASK_20BITS);
             sim_debug_acc("... Random Acc");
             break; 
         case OP_CLA:               // T:  100100    Clear A
@@ -873,7 +883,7 @@ t_stat ExecOpcode(int opcode, int opaddr, int Bindex,
             break; 
         case OP_S_LOAD_MA:         // TF  110110    A=-(sign extended S)
             d=ReadAddr40b(opaddr);
-            d=(-d) & MASK_40BITS; 
+            d=(-d) & MASK_40BITS;  
             AL=d; 
             AM=(d >> 39) ? MASK_40BITS:0; 
             sim_debug_acc("... Load with minus sign");
@@ -1134,7 +1144,7 @@ t_stat ExecOpcode(int opcode, int opaddr, int Bindex,
                 goto Transfer; 
             }
             break;
-        case OP_TR_REL_IF_B:       // /O  000011    if B=0 then C=C+S+1. B conditional relative transfer control
+        case OP_TR_REL_IF_B:       // /O  000011    if B>=0 then C=C+S+1. B conditional relative transfer control
             if (Qneg) { // Q set when B becomes negative
                 sim_debug(DEBUG_DATA, &cpu_dev, "... B<0 -> Transfer NOT taken \n");
             } else { // Q=0 when B positive
@@ -1355,27 +1365,6 @@ t_stat sim_instr(void)
         sim_cancel_step();
     }
 
-    if (cpu_unit.flags & OPTION_REPEATABLE_RANDOM) {
-        // if "SET CPU REPEATABLE_RANDOM" command has been issued, then we use the default
-        // sim_rand seed, so the random sequence will be repeatable across simulation sessions.
-        static int default_seed_set = 0; 
-        if (default_seed_set == 0) {
-            default_seed_set=1; 
-            sim_srand(1); 
-        }
-    } else {
-        // if not, execute this code to add the current time to seed to make the sequence 
-        // of random values returned by /W different in each session run
-        struct timespec now; 
-        struct tm *tmnow; 
-        unsigned int seed; 
-        clock_gettime (CLOCK_REALTIME, &now); // we fill the struct with unix-like raw time stamp
-        tmnow = localtime(&(now.tv_sec));     // we cook the raw time to get meaningfull values
-        seed = (tmnow->tm_yday + tmnow->tm_min + tmnow->tm_sec + sim_os_msec()); 
-        seed = seed % RAND_MAX; 
-        sim_srand(seed); 
-    }
-
     while (reason == SCPE_OK) {       
         /* loop until halted */
 
@@ -1587,6 +1576,7 @@ t_stat cpu_reset(DEVICE * dptr)
 t_stat cpu_kec_clear_everthing(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 {
     cpu_reset(&cpu_dev);
+    rand_seed=2; // init repeatable read random
     return SCPE_OK;
 }
 
@@ -1752,7 +1742,6 @@ t_stat cpu_show_speed(FILE *st, UNIT *uptr, int32 value, CONST void *desc)
     }
     return SCPE_OK; 
 }
-
 
 const char * cpu_description (DEVICE *dptr) { 
     return "Ferranti Mark I Electronic Computer";     
