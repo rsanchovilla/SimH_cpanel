@@ -287,6 +287,83 @@ t_stat convert_bautocode_to_stdcharset(int nLin, char * sLinIn, char * sLinOut)
 }
 
 
+// translate sLinIn to sLinOut (must have at least 1000 chars size)
+// uses an internal buffer, so sLinIn and sLinOut can be the same string on caller
+// if nLin>0, if error a msg is printed indicating the offening nLin line number
+t_stat convert_gautocode_to_stdcharset(int nLin, char * sLinIn, char * sLinOut)
+{
+    char sLin[1024]; 
+    int i, len, found, r; 
+    char c; 
+    char *pLinIn; 
+    char charset_BAutocode[40] = "/E@A:SIU#DRJNFCKTZLWHYPQOBG\"MXV$"; 
+
+    r=SCPE_OK; 
+    pLinIn=sLinIn; // pointer to read line input
+    len=0; // output len
+    while (c=*pLinIn++) {
+        if (c==';') break; // comment ends autocode source line
+        if ((c >= 'a') && (c <= 'z')) c = c - 'a' + 'A'; // to uppercase
+        if ((c=='-') && (*pLinIn == '>')) {
+           c = '"'; // convert 2-chars input '->' to '"'
+           pLinIn++; 
+        }
+        if ((c==13) ||(c==10)) break; // end of line
+        if (c <= 32) {
+           if ((*pLinIn) && (*pLinIn <= 32)) continue; // ignore double spaces
+           c = '/'; // convert space to separator
+        }
+        if (c=='+') c = 'P'; else if (c=='-') c = 'M'; // convert sign to char
+        if (c=='.') c = 'F'; // convert decimal point to char
+        if ((c>='0') && (c <= '9')) {
+           c = charset_BAutocode[c - '0']; // convert digit to regular perforator equivalent
+        }
+        // check if char belongs to perforator charset
+        found = 0; 
+        for (i=0; i<32; i++) {
+           if  (c==charset_BAutocode[i]) { found=1; break; }
+        }
+        if (found) {
+            sLin[len++]=c;
+        } else {
+            // char from sLinIn not in autocode charset -> signal error
+            sim_printf("\r\n"); 
+            if (nLin) sim_printf("line %d: %s\n", nLin, sLinIn); 
+            sim_printf("Invalid autocode char '%c' at pos %d\n", *pLinIn, pLinIn-sLinIn+1); 
+            r=SCPE_IERR; 
+            break; 
+        }
+        if (len >= 1000) break; 
+    }
+    if (len) {
+        // if some chars translated, add 8 separator chars / to end
+        // any START or FRACTIONS command
+        for (i=0; i<8; i++) {
+           sLin[len++]='/';
+        }
+    }
+    sLin[len]=0; 
+
+    // copies the source line as comment and terminates
+    // leave 30 first chars for chars translated
+    while (len<30) sLin[len++]=32;
+    sLin[len++]=';';
+    sLin[len++]=' ';
+    // copy the autocode source line 
+    pLinIn=sLinIn; // pointer to read line input
+    while (c=*pLinIn++) {
+        if ((c==13) || (c==10)) continue; 
+        sLin[len++]=c;
+        if (len >= 1000) break; 
+    }
+    sLin[len]=0; 
+    // copies sLin to sLinOut
+    strcpy(sLinOut, sLin); 
+    return r; 
+}
+
+
+
 /* Initialize vm  */
 void vm_init(void) {
     static int inited = 0;
@@ -299,6 +376,19 @@ void vm_init(void) {
     sim_vm_cmd = aux_cmds;                       /* set up the auxiliary command table */
 
     memset(lptPrintOut, 0, sizeof(lptPrintOut));
+
+    // execute this code to add the current time to seed to make the sequence 
+    // of random values returned by /W different in each session run
+    {
+        struct timespec now; 
+        struct tm *tmnow; 
+        unsigned int seed; 
+        clock_gettime (CLOCK_REALTIME, &now); // we fill the struct with unix-like raw time stamp
+        tmnow = localtime(&(now.tv_sec));     // we cook the raw time to get meaningfull values
+        seed = (tmnow->tm_yday + tmnow->tm_min + tmnow->tm_sec + sim_os_msec()); 
+        seed = seed % RAND_MAX; 
+        sim_srand(seed); 
+    }
 }
 
 // load a prog directly in Storage Tube
@@ -688,7 +778,7 @@ t_stat fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
 
     // ex -B nnnn    to display       10000 11111 01000 11000                              backwards binary (20 bits)
     // ex -T nnnn    to display       XXXX                                                 X=MarkI teleprinter code (20 bits)
-    // ex -M nnnn    to display       XXXX (addr=nnnn Bn func=XX) cccccccccccc             ccccc=opcode equation (20 bits)
+    // ex -M nnnn    to display       AA XXXX (addr=nnnn Bn func=XX) cccccccccccc          ccccc=opcode equation (20 bits), AA the address 
     // ex -S nnnn                     mmmm                                                 decimal value, signed (20 bits)
     // ex nnnn                        mmmm                                                 decimal value, unsigned (20 bits)
 
@@ -702,6 +792,11 @@ t_stat fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
         }
         fprintf(of, "  ");
         d = *val;
+        bOut=1; 
+    }
+    if (sw & SWMASK('M')) {
+        fprintf(of, "%c%c  ",
+            charset_MarkI[addr & 31][1], charset_MarkI[(addr >> 5) & 31][1]);
         bOut=1; 
     }
     if ((sw & SWMASK('T')) || (sw & SWMASK('M'))) {
@@ -870,6 +965,8 @@ t_stat parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int3
 // TYPEIN [-Q] ROUTINE[1..8] file.txt [S4|S5|...]    defaults load for S4. This param only applies when using K warning char
 // TYPEIN [-Q] BAUTOCODE LINE  autocode source line or input data  [; comment]  
 // TYPEIN [-Q] BAUTOCODE SOURCE file.txt             file.txt expected to use brooker's autocode charset
+// TYPEIN [-Q] GAUTOCODE LINE  autocode source line or input data  [; comment]  
+// TYPEIN [-Q] GAUTOCODE SOURCE file.txt             file.txt expected to use glennie's autocode charset
 //                                                   -q forces no echo only for this command
 t_stat perforator_typein_cmd(int32 flag, CONST char *cptr)
 {
@@ -893,6 +990,10 @@ t_stat perforator_typein_cmd(int32 flag, CONST char *cptr)
         // simulate typing a brooker's autocode prog in autocode-prepared perforator
         Mode=1; 
         cptr=get_glyph (cptr, gbuf, 0);                   // get next param
+    } else if (strcmp(gbuf, "GAUTOCODE") == 0) {
+        // simulate typing a glennie's autocode prog in regular perforator, using the language conventions
+        Mode=2; 
+        cptr=get_glyph (cptr, gbuf, 0);                   // get next param
     }
     if (strcmp(gbuf, "LINE") == 0) {
         // type the text line into output punch file and in console
@@ -901,9 +1002,10 @@ t_stat perforator_typein_cmd(int32 flag, CONST char *cptr)
         if (*cptr) {
             if (Mode==0) { 
                 perforator_typein((char *) cptr, 0, bQuietMode); 
-            } else if (Mode==1) {
+            } else if ((Mode==1) ||(Mode==2)) {
                 bEchoInput=1; 
-                r=convert_bautocode_to_stdcharset(0, (char *)cptr, sLin); 
+                if (Mode==1) r=convert_bautocode_to_stdcharset(0, (char *)cptr, sLin); else
+                if (Mode==2) r=convert_gautocode_to_stdcharset(0, (char *)cptr, sLin); 
                 if (r) return r; 
                 // perforator_typein will echo to console (if enabled) the input line with
                 // autocode source code as comment
@@ -914,7 +1016,7 @@ t_stat perforator_typein_cmd(int32 flag, CONST char *cptr)
     } else if (strncmp(gbuf, "SOURCE", 6) == 0) {
         // typing brooker autocode source or data
         if (Mode == 0) {
-            sim_messagef (SCPE_ARG, "SOURCE action needs BAUTOCODE modifier\n");
+            sim_messagef (SCPE_ARG, "SOURCE action needs BAUTOCODE or GAUTOCODE modifier\n");
         }
         cptr = get_glyph_quoted (cptr, fnam, 0); 
         if (fnam[0] == 0) return sim_messagef (SCPE_ARG, "Missing filename\n");
@@ -926,7 +1028,8 @@ t_stat perforator_typein_cmd(int32 flag, CONST char *cptr)
         while (fgets (sLin, sizeof(sLin)-1, fpin)) {
             sLin[sizeof(sLin)-1]=0; // safety
             n++; 
-            r=convert_bautocode_to_stdcharset(n, sLin, sLin); 
+            if (Mode==1) r=convert_bautocode_to_stdcharset(0, sLin, sLin); else
+            if (Mode==2) r=convert_gautocode_to_stdcharset(0, sLin, sLin); 
             if (r) break; 
             perforator_typein((char *) sLin, 1, bQuietMode); 
         }
@@ -936,7 +1039,7 @@ t_stat perforator_typein_cmd(int32 flag, CONST char *cptr)
         // typing standard routine coding sheets
         // get routine number, if present (default=1)
         if (Mode != 0) {
-            sim_messagef (SCPE_ARG, "ROUTINE action cannot be used with BAUTOCODE, Use SOURCE action to type-in an autocode prog\n");
+            sim_messagef (SCPE_ARG, "ROUTINE action cannot be used with autocode input, Use SOURCE action to type-in an autocode prog\n");
         }
         n=gbuf[7]-'0'; if ((n<1) || (n>8)) n=1; 
         while (sim_isspace (*cptr)) cptr++;                     // trim leading spc 
@@ -1069,12 +1172,14 @@ t_stat appendtotape_cmd(int32 flag, CONST char *cptr)
 // intercept    deposit IC or IR
 // DEP C  nnn     -> will reset to scan beat, so next GO will fetch the instr from mem (from addr C) to PI reg and then execute it 
 // DEP PI  nnn    -> will reset to execution beat, so next GO will execute instr in PI reg
+// DEP H tttt     -> deposit to H allows to deposit nnn decimal value OR tttt four teletype-char value
 t_stat MarkI_exdep_cmd (int32 flag, CONST char *cptr)
 {
     char gbuf[CBUFSIZE];
     extern FILE    *sim_ofile ;
     extern int     NCYCLE;                   
     const char * cptr2; 
+    int d; 
 
     cptr2 = get_glyph (cptr, gbuf, 0);                       // get param    
     while (gbuf[0]=='-') {
@@ -1094,7 +1199,17 @@ t_stat MarkI_exdep_cmd (int32 flag, CONST char *cptr)
             // deposit PI instruction register
             // set in intr cycle to skip fetch and go directly to decode and execute
             NCYCLE = 1;
-        } 
+        } else if ((strlen(gbuf) == 1) && (strncmp(gbuf, "H", 1)==0)) {
+            // deposit H , check if 4 teletype-chars follows
+            cptr2 = get_glyph (cptr2, gbuf, 0);                       // get param    
+            parse_n(&d, gbuf, 2, 4); // get MarkI 4-teleprinter chars, return -1 if not teleprinter chars
+            if (d>=0) {
+                // parsed a valid 4-teleprinter chars argument for DEP H
+                extern int H;    // value Hand Switches (20 bits)
+                H=d;             // set the hand switches
+                return SCPE_OK;  // and return
+            }
+        }
     }
     return exdep_cmd (flag, cptr);
 }
