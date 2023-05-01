@@ -1,0 +1,317 @@
+
+    Alick Glennie Autocode compiler 
+
+    Rewriten by Roberto Sancho Apr/2023 
+    using doc on compiler form original author
+            
+    https://archiveshub.jisc.ac.uk/data/gb133-muc/5-9/muc/9/14
+
+      (a) Photocopy of a 16-page typewritten manual describing 
+          Glennie’s AUTOCODE routine. (Probably a draft for a 
+          manual to be entitled The Routine AUTOCODE and its use).   
+
+      (b) Photocopy of 14 pages of Glennie’s lecture notes on 
+          ‘The automatic coding of an electronic computer’ dated 
+          14th December 1952.
+
+
+    [Col /          E ]                 [Col @          A ]              
+                                                            
+    | $$$$ | / | MA/P |                 | DSPG | / | MA$$ | c.n.
+    | E:PO | E | EEQO |                 | LIT/ | E | H/// | OP=1   ->a[r]     assing to a var, maybe indexed        
+    | /:YO | @ | QS/P |                 | RSTR | @ | #E// | OP=2   a->r       copy value of a var to an index       
+    | @/O: | A | @C/V |                 | YATC | A | IE// | OP=3   r->a       copy value of an index to a var       
+    | HISC | : | /:QO |                 | /#IS | : | RE// | OP=4   r-a        decr index                            
+    | LIY/ | S | XIQB |                 | DSPG | S | NE// | OP=5   +a[r]      add var, maybe indexed                
+    | E//S | I | H//P |                 | DSPG | I | HE// | OP=6   -a[r]      sub var, maybe indexed                
+    | E/QO | U | FAT/ |                 | /:QO | U | R@// | OP=7   +a[r]b[q]  add product of two vars, maybe indexed
+    | /U$/ | # | H//P |                 | XIQB | # | T@// | OP=8   -a[r]b[q]  sub product of two vars, maybe indexed
+    | Y:/N | D | CAT/ |                 | R@/P | D | M@// | OP=9   perform a command                                
+    | //SS | R | H//P |                 | M/$$ | R | J@$$ | c.n. 
+    | DSYG | J | KAT/ |                 | QAT/ | J | //TA | gen instr: ->a using AL
+    | E:PG | N | H//P |                 | LITC | N | ///A |            ->a usign AM
+    | A//T | F | XIYO |                 | E:QO | F | //TB | gen instr: r->a
+    | //T/ | C | A:/O |                 | MIQB | C | //TO | gen instr: a->r
+    | LI/S | K | TAT/ |                 | T@/P | K | //TG | gen instr: r-a
+    | VIPO | T | /A/P |                 | A@$$ | T | //T# | gen instr: +a clearing acc
+    | PIQO | Z | MIQO |                 | BAT/ | Z | //TC |            +a using AL
+    | /AUP | L | ZA$/ |                 | RA/P | L | ///J |            +a using AM
+    |      | W | HE/P |                 | VIPO | W | //TF | gen instr: -a clearing acc
+    | O/$$ | H | AE$$ |                 | F:PG | H | //TN |            -a using AL
+    | MIQO | Y | XIYO |                 | "A/T | Y | //TJ |            -a using AM
+    | JA$/ | P | A:/O |                 | M@PO | P | DSTJ |            -a using AM
+    | DSQO | Q | WAT/ |                 | VIPG | Q | ///K | gen instr: +ab
+    | XIQB | O | /A/P |                 | "A/T | O | ///F |            +ab
+    | LITC | B | MIQO |                 | F:PO | B | ///K | gen instr: -ab
+    | #STD | G | E:QG |                 | VIPB | G | ///D |            -ab
+    | /#IS | " | A:/O |                 | "A/P | " | /E$$ | c.n.
+    | DSPG | M | HAT/ |                 | ME// | M | L@$$ | c.n.
+    | VIPB | X | HE/P |                 | X@QO | X | /:QO | 
+    | K:PG | V | PAT/ |                 | QS/P | V | MIQB | 
+    | DS/O | $ | /#IS |                 | HC/V | $ | HE/P | 
+                                                            
+    [End]
+  
+                 Translate (i.e. generates machine code in S4 S5) 
+                 a sentence already parsed on INPUT routines     
+      
+                 entry: [OP]=Operation code: 
+                           1  ->a[r]     assing to a var, maybe indexed
+                           2  a->r       copy value of a var to an index
+                           3  r->a       copy value of an index to a var
+                           4  r-a        decr index
+                           5  +a[r]      add var, maybe indexed
+                           6  -a[r]      sub var, maybe indexed  
+                           7  +a[r]b[q]  add product of two vars, maybe indexed  
+                           8  -a[r]b[q]  sub product of two vars, maybe indexed  
+                           9  perform a command
+                        [FUNC]=command code if OP=9 (is a command)
+                        [LI] var0
+                        [WI] var1
+                        [HI] index0
+                        [YI] index1
+                        [GI] Label - the label param of command
+
+ 
+                        [MI] Use AM in arth: 0=use AL, 1=use AM
+                        [XI] Clear acc flag: 0=no clear acc, -1=clear acc before use
+                        [VI] sgen - next pos free in routine for generated instr
+
+
+    0  //  $$$$
+    1  E/  E:PO  B6=1
+
+                 replace vars by its address + index
+
+    2  @/  /:YO  B5=0
+    3  A/  @/O:  clear acc
+    4  :/  HISC  D=[HI + B5] = index[B5]
+    5  S/  LIY/  AL=[LI + B5] = var[B5]
+    6  I/  E//S  [E/]=var char
+    7  U/  E/QO  B7=[E/]
+    8  #/  /U$/  AL=[B7+/U]=get var address
+    9  D/  Y:/N  AL=AL+//E/ * D -> shift index to 3rd char, add to address
+   10  R/  //SS  [// + B5]=AL   -> will save var0+index0 in //, var1+index1 in E/
+   11  J/  DSYG  B5=B5+1
+   12  N/  E:PG  B6=B6-1
+   13  F/  A//T  if (B>=0) goto 3 loop for 0..1
+   14  C/  //T/  AL=[// E/]=var0+idx0  var1+idx1
+   15  K/  LI/S  [LI WI]=AL -> [LI]=var0+idx0  [HI]=var1+idx1
+
+                 goto operation code 
+
+   16  T/  VIPO  B6=[VI] sgen <- addr where code is to be generated (0..128)
+   17  Z/  PIQO  B7=[OP] operation code for parsed sentence
+   18  L/  /AUP  goto [B7+ /A] operation code jump table
+
+   19  W/  
+   20  H/  O/$$  cn goto 25 gen instr and terminate
+
+                 CODE GENERATION FOR:
+                 OP=1     ->a[r]     assing to a var, maybe indexed        
+                 
+                 if using r, add index to instr
+                 aa TA    S=AL, Clear A
+                 aa /A    S=AM, Clear AM  <-- if "upper arith mode flag" set
+                 set "clear acc flag"
+                 
+   21  Y/  MIQO  B7=[MI] Use AM in arth: 0=use AL, 1=use AM
+   22  P/  JA$/  AL=[JA+B7] -> get instr to generate
+
+                 gen instr and terminate (set "clear acc before use" flag)
+
+   23  Q/  DSQO  B7=-1
+   24  O/  XIQB  [XI]=clear acc before use=-1
+
+                 gen instr and terminate
+                 gen var0 + index over Instr given in AL on entry
+
+   25  B/  LITC  AL=AL + var0+idx0
+   26  G/  #STD  AL=AL OR //// $$$$  -> inst following AL's one is $$$$
+   27  "/  /#IS  [/# + B6]=AL -> save generated instr in S4 S5 (the generated routine)
+   28  M/  DSPG  B6=B6+1
+
+                 generation finished
+
+   29  X/  VIPB  [VI]=B6 save new sgen <- addr where code is to be generated (0..128)
+   30  V/  K:PG  B6=B6-128
+   31  $/  DS/O  if (B>=0) dynamic stop: routine too big
+                 OVERFLOW ERROR: routine too big
+   32  /E  MA/P  goto 83 skip end of S0  
+
+                 generating machine code terminates
+                 so proceed to compile next sentence
+
+   33  EE  EEQO  B7=*
+   34  @E  QS/P  transfer to adroutine
+   35  AE  @C/V  cue to INPUT.1 (read sentence)
+
+                 gen instr and terminate (reset clear acc before use flag)
+
+   36  :E  /:QO  B7=0
+   37  SE  XIQB  [XI]=clear acc before use=0
+   38  IE  M//P  goto 25 gen instr and terminate
+
+                 CODE GENERATION FOR:
+                 OP=3     r->a       copy value of an index to a var       
+                 
+                 aa TB+r  S=B
+
+   39  UE  FAT/  AL=[FA] -> get instr to generate
+   40  #E  M//P  goto 25 gen instr and terminate
+
+                 CODE GENERATION FOR:
+                 OP=2     a->r       copy value of a var to an index       
+                 
+                 aa TO+r  B=S
+
+   41  DE  CAT/  AL=[CA] -> get instr to generate
+   42  RE  M//P  goto 25 gen instr and terminate
+
+                 CODE GENERATION FOR:
+                 OP=4     r-a        decr index                            
+                 
+                 aa TG+r  B=B-S
+
+   43  JE  KAT/  AL=[CA] -> get instr to generate
+   44  NE  M//P  goto 25 gen instr and terminate
+
+                 CODE GENERATION FOR:
+                 OP=5     +a[r]      add var, maybe indexed                
+                 
+                 if using r, add index to instr
+                 aa T#    AL=S signed   <-- if "clear acc flag" set
+                 aa TC    AL=AL+S signed
+                 aa /J    AM=AM+S       <-- if "upper arith mode flag" set
+                 if "clear acc flag" set then {reset "clear acc flag", reset "upper arith mode flag"}
+
+   45  FE  XIYO  B5=[XI] Clear acc flag: 0=no clear acc, -1=clear acc before use
+   46  CE  A:/O  if (B>=0) skip 2 instr 
+   47  KE  TAT/  AL=[TA] -> get instr to generate (clears acc)
+   48  TE  /A/P  goto 85 gen instr and terminate (reset clear acc before use flag, set use AL flag)
+   49  ZE  MIQO  B7=[MI] Use AM in arth: 0=use AL, 1=use AM
+   50  LE  ZA$/  AL=[ZA+B7] -> get instr to generate
+   51  WE  HE/P  goto 36 gen instr and terminate (reset clear acc before use flag)
+   52  HE  AE$$  cn goto 36
+
+                 CODE GENERATION FOR:
+                 OP=6     -a[r]      sub var, maybe indexed                
+                 
+                 if using r, add index to instr
+                 aa TF    AL=-S signed  <-- if "clear acc flag" set
+                 aa TN    AL=AL-S signed
+
+                 DS TJ    A=A XOR -1    <-- if "upper arith mode flag" set
+                 aa /J    AM=AM+S   
+                 DS TJ    A=A XOR -1
+
+                 if "clear acc flag" set then {reset "clear acc flag", reset "upper arith mode flag"}
+
+   53  YE  XIYO  B5=[XI] Clear acc flag: 0=no clear acc, -1=clear acc before use
+   54  PE  A:/O  if (B>=0) skip 2 instr 
+   55  QE  WAT/  AL=[WA] -> get instr to generate (clears acc)
+   56  OE  /A/P  goto 85 gen instr and terminate (reset clear acc before use flag, set use AL flag)
+   57  BE  MIQO  B7=[MI] Use AM in arth: 0=use AL, 1=use AM
+   58  GE  E:QG  B7=B7-1
+   59  "E  A:/O  if (B>=0) skip 2 instr because using AM
+   60  ME  HAT/  AL=[HA] -> get instr to generate 
+   61  XE  HE/P  goto 36 gen instr and terminate (reset clear acc before use flag)
+
+   62  VE  PAT/  AL=[PA] -> get leading instr DSTJ 
+   63  $E  /#IS  [/# + B6]=AL -> save generated instr 
+   64  /@  DSPG  B6=B6+1
+   65  E@  LIT/  AL=var0+idx0 get var0 and var1
+   66  @@  RSTR  AL=AL AND $$$$//// isolate var0
+   67  A@  YATC  AL=AL+[YA] -> add instr to generate + trailing DSTJ (clears acc)
+
+                 gen 2 instr and terminate (reset "clear acc before use" flag)
+
+   68  :@  /#IS  [/# + B6]=AL -> save generated instr 
+   69  S@  DSPG  B6=B6+1 -> incr twice as 2 instr are generated
+   70  I@  DSPG  B6=B6+1
+   71  U@  /:QO  B7=0
+   72  #@  XIQB  [XI]=clear acc before use=0
+   73  D@  R@/P  goto 29 generation finished
+   74  R@  M/$$  cn goto 29
+
+                 CODE GENERATION FOR:
+                 OP=7     +a[r]b[q]  add product of two vars, maybe indexed
+                 
+                 if using r/q, add index to instr
+                 aa /K    D=S signed
+                 bb /F    A=A+D*S signed
+
+                 set "set upper arith mode flag"
+
+
+   75  J@  QAT/  AL=[QA] -> get instr to generate
+   76  N@  LITC  AL=AL+var0+idx0 add var0 and var1
+   77  F@  E:QO  B7=1
+   78  C@  MIQB  [MI]=B7=1 -> Use AM in arth: 0=use AL, 1=use AM
+   79  K@  T@/P  goto 68 gen 2 instr and terminate (reset "clear acc before use" flag)
+   80  T@  A@$$  cn goto 68
+
+                 CODE GENERATION FOR:
+                 OP=8     -a[r]b[q]  add product of two vars, maybe indexed
+                 
+                 if using r/q, add index to instr
+                 aa /K    D=S signed
+                 bb /D    A=A-D*S signed
+
+                 set "set upper arith mode flag"
+
+   81  Z@  BAT/  AL=[BA] -> get instr to generate
+   82  L@  RA/P  goto 76 
+   
+           skip end of S0
+   
+   83  W@  VIPO  B6=[sgen] next address where to put a generated instr
+   84  H@  F:PG  B6=B6-64                                     
+   85  Y@  "A/T  if (B>=0) goto 33 proceed to compile next sentence (because sgen >= 64)
+   86  P@  M@PO  B6=60                                        
+   87  Q@  VIPG  B6=B6-[sgen]
+   88  O@  "A/T  if (B>=0) goto 33 proceed to compile next sentence (because sgen <= 60)
+   89  B@  F:PO  B6=64 -> if sgen in 61..63, jump to 64                                       
+   90  G@  VIPB  [sgen]=B6
+   91  "@  "A/P  goto 33 proceed to compile next sentence
+   92  M@  ME//  const 60
+   
+   93  X@  X@QO  B7=*
+   94  V@  QS/P  transfer to adroutine
+   95  $@  HC/V  cue to TRANS.2 (translate command)
+
+   96  /A  command jump table
+   97  EA  
+   98  @A  
+   99  AA  
+  100  :A  
+  101  SA  
+  102  IA  
+  103  UA  
+  104  #A  
+  105  DA  
+  106  RA  
+  107  JA  
+  108  NA  
+  109  FA  
+  110  CA  
+  111  KA  
+  112  TA  
+  113  ZA  
+  114  LA  
+  115  WA  
+  116  HA  
+  117  YA  
+  118  PA  
+  119  QA  
+  120  OA  
+  121  BA  
+  122  GA  
+  123  "A  
+  124  MA  
+
+           gen instr and terminate (reset clear acc before use flag, set use AL flag)
+
+  125  XA  /:QO  B7=0
+  126  VA  MIQB  [MI]=0 -> Use AM in arth: 0=use AL
+  127  $A  HE/P  goto 36 gen instr and terminate (reset clear acc before use flag)
