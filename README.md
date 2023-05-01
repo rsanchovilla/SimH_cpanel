@@ -1,7 +1,7 @@
 # SimH_cpanel
 
 
-**NEW!: Ferranti Mark I + R.A.Brooker Autocode
+**NEW!: Ferranti Mark I + R.A.Brooker Autocode + Glennie Autocode
 
 The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
@@ -131,6 +131,7 @@ Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/Ma
 Once uncompressed, you will find several ready to run .bat files (among others): 
 
 * execute `run CPanel MarkI - Brooker Autocode (1955).bat` batch file to run R.A.Brooker original Autocode compiler
+* execute `run CPanel MarkI - Glennie Autocode (1952).bat` batch file to run A.Glennie Autocode compiler
 * execute `run CPanel MarkI - Draughts Play (1952).bat` batch file to play Christopher Strachey's Draughts Game. Board is displayed in scope tube.
 * execute `run CPanel MarkI - Love Letters (1952).bat` batch file to run Christopher Strachey's Love Letter programme
 * execute `run CPanel MarkI - Scheme A (1951).bat` to run Alan Turing Scheme A
