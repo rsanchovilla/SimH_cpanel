@@ -1,0 +1,299 @@
+Drum map
+
+   Types of routines:
+      Autocode   = routine is part of AutoCode compiler programme
+      SchemeC    = routine is part of SchemeC
+      FloatLib   = routine is part of SchemeC Float Library Routines
+      Working    = tracks used during AutoCode operation/Compiled program execution
+      Envionment = not part of AutoCode compiler, but used as helper on AutoCode setup
+      AutocodeR  = Rewritten/New routine needed/expected by AutoCode compiler 
+
+                          Load
+   Type       Track       Mag     Routine         Notes
+                          Instr 
+                          
+   Working     6LR        I/RN    Used to save and call in generated code to be exec when into brackets "(" .. ")"
+   
+   Autocode   15LR        K/@#    DIRECTORY
+   SchemeC    16LR        T/@/    TELEINPUT       Loaded on boot with H=T/@/ + operation of KEC switch
+   SchemeC    17L         Z//:    PERM            
+   SchemeC    17R         Z/E/    CONVERTER       
+   Autocode   18LR        L/@/    DECINPUT
+   Autocode   19LR        W/@/    DECOUTPUT/F + DECOUTPUT    DECOUTPUT/F belong to autocode compiler, DECOUTPUT to SchemeC. Both routines are always loaded and used together
+   FloatLib   20L         H//#    ADD&MULTIPLY
+   FloatLib   20R         H/EI    NORMALISE
+   Autocode   21L         Y///    DIVISION/F 
+   FloatLib   21R         Y/E@    DIVISION      
+   FloatLib   22LR        P/@/    SQUAREROOT/F + SQUAREROOT
+   FloatLib   23LR        Q/@/    COSINE/F + COSINE
+   FloatLib   24LR        O/@/    EXPONENT/F + EXPONENT
+   FloatLib   25LR        R/@/    NATURALOG/F + NATURALOG
+   FloatLib   26LR        G/@/    ARCTANGENT/F + ARCTANGENT
+   
+   Autocode   31L         $///    MODULUS INDEX DIVISION
+   Autocode   31R         $/ER    TRACK SELECTION
+   Autocode   32LR        /E@/    INPUT(1)
+   Autocode   33LR        EE@#    INPUT(2)
+   Autocode   34L         @E//    CONVERTER(SPECIAL)
+   Autocode   34R         @EEI    VARIABLES
+   Autocode   35LR        AE@N    INSTRUCTION MATRIX
+   Autocode   36LR        :E@/    TRANSLATE(1)
+   Autocode   37LR        SE@/    TRANSLATE(2)
+   Autocode   38LR        IE@/    TRANSLATE(3)
+   Autocode   39LR        UE@/    TRANSLATE(4)
+   Autocode   40LR        #E@/    TRANSLATE(5)
+   Autocode   41LR        DE@/    TRANSLATE(6)
+   Autocode   42LR        RE@/    TRANSLATE(7)
+   Autocode   43LR        JE@/    TRANSLATE(8)
+   Autocode   44LR        NE@/    TRANSLATE(9)
+   
+   Autocode   46LR        CE@/    ASSEMBLY
+   Autocode   47R         KEEI    ASSEMBLY(part 2)
+   Autocode   48L         TE//    COMPLEX ADDITION
+   Autocode   48R         TEE/    COMPLEX SUBTRACTION
+   Autocode   49L         ZE//    COMPLEX DIVISION
+   Autocode   49R         ZE@/    COMPLEX MULTIPLICATION
+   
+   AutocodeR  50LR        LE@/    RADIUS&ANGLE/F   Rewritten because original routine not included in autocode listing
+   AutocodeR  51LR        WE@/    ALTPRT           Alternate Print (needed to restore P char to working condition)
+   AutocodeR  52L         HE/N    COMPLEX DIV FIX  Mandatory fix to complex division
+   AutocodeR  53L         YE//    COMPLEX TO POLAR Rewritten because original routine not included in autocode listing
+
+   Autocode   62LR        VE@/    ECONOMISE
+   Autocode   63LR        $E@/    FUNCTION CUE DIRECTORY
+   Working    64LR        /@@#    Cue list of labels in autocode program (created during compilation)
+   Working    65LR..127LR E@@/    Generated Code tracks (created during compilation)
+   Working   128LR..255LR /:@N    Data tracks (contains variables values, used during compiled prog execution) 
+
+Memory map
+   during input of source line (up to <cr>)
+             /E @A   :S    IU      #D RJ      NF  CK
+             INPUT1 PERM  VARS     INPUT2     Directory
+             
+   during compilation
+             /E @A   :S    IU      #D RJ      NF  CK
+             TRANSn PERM   VARS    CueList    INSTRUCTION MATRIX
+           ASSEMBLY      ASSEMBLY  Directory  
+                                   TRKnn 
+                                       ^--- generated code track (65..127)   
+                                 
+   during execution of code in run-time
+             /E @A   :S    IU      #D RJ      NF  CK
+             TRKnn  PERM   ^       ^  TrkSel  DTRKnn <- var data track (128..255)
+                           |     ADD&SUB   ^ --- Indexes na + Track Selection Routine 
+                           NORMALISE   ^
+                                   ^   |
+                                   +---+-- Float routines
+[/I, EI]=instruction label
+[LI, LW]=int part of z
+[II, UI]=int part of x
+
+[GI]=print switch -> if = ///T -> swtich on: prints value stored in z preceeded with <CR><LF>
+                          //// -> do not print
+                          E//T -> swtich on: prints value stored in z bu without preceeded with <CR><LF>
+
+[AI]=n/v switch for x -> if = ///T -> x is va or vna
+                            = //// -> x is na or a  
+
+[ZI]=z switch -> if = //// -> source line in form jm.. | action_char
+                      ///T -> source line in form z=...
+
+[:I]=v/n count for x -> if = //// -> x is a
+                             E/// -> x is va or na
+                             @/// -> x is vna
+
+[YI]=j switch -> if = ///T -> processing a j source code statement
+                    = //// -> no j statement
+
+indexes "na" are stored as integers, 2 short lines per index
+    starting at address [MD, XD] for n1, [VD, $D] for n2, [/R, ER] for n3 and so
+    on up to n18. Higher indexes overwrites the runtime code. 
+    value is stored mult by 2: if n1=1 then [MD, XD]=@/// ///=2. When
+    printed of used the value is corrected.
+    All indexes resides allways in mem, are very fast to work with
+    
+variables "va" as stored as floats, 4 short lines per variable
+    stored in track 128 and following. Each track hols 32 variables
+    tracks 128..255 can hold 32*128=4096 float variables    
+    All indexes resides allways in drum. Code is generated to read 
+    the drum track where var resides, then write back on sentence's end
+    They are slow to vork with. there is no atempt to reduce the 
+    number of drum reads/writes based on variable being stored on 
+    same track
+    
+statement labels are stored in cue list track (track 64). Each cue 
+    has 2 short words, track has 128 short words -> possible labels 
+    goes from 1..63. A label with higher number will be stored outside 
+    the track's image in memory, thus overwritting the compiler code
+    
+When program execution terminates, a INPUT(1) is automatically called
+     to continue reading and processing autocode sentences
+     there is no way to quit autocode and return to 
+     SchemeC input
+    
+Only one incidental operation allowed per sentence (a sentence ends on <cr>)
+(except XYZ that can be repeated in a sentence)
+
+jump 'j' command allows to be used on indexes: j na
+This allows to create user subroutines
+No test is made on jumping to undef label. If this occurs, 
+cue //// //// will be called-in thus loading track 0
+
+Each time an statement label is encountered, its cue is stored in 
+cue list (keep in drum).
+Backwards jump uses a local copy of current cue value from cue 
+list as the label has been processed by compiler.
+Forwards jump/computed jump plants instr in generated code to 
+load cue list track at runtime and get from it the cue for desired label.
+The side effect of this approach is the fact that a label number 
+can be reused as long as it is called backwards with "j a". 
+Original reused label becomes innaccesible when called forward (or computed), 
+but remains accesible on the original program when called backwards
+
+on "("..")" mode, each instr is exec, but indexes "na" are reset to zero on 
+each sentence. This is because indexes are stored in cols D and R, but these
+cols are overwritten when loading the run time routines, wich happends for
+each autocode sentence being exec. 
+
+Uniry operators  z=+x  or  z=-x  are not supported, but there is no 
+warnings at all. Both are compiled as z=x
+integer division by 0 -> returns a near maxint (typically > 10^9) integer 
+number, but no error is issued
+
+When printing index, an integer is printed in form +|-nnn.
+
+When printing variables, if value < 2^20 then the value is
+printed as +|-nnn.nnn; with number of digits controlled by 
+bits 8,9 of hand switches (ab)
+
+   H=..... ...ab ..... .c...    ab=00 ->  5 decimals
+                                   10 ->  8 decimals 
+                                   01 -> 10 decimals 
+                                   11 -> 12 decimals 
+                                   
+                                c =0  -> print float as +|-nnn.mmm when possible
+                                   1  -> print float as +|-nnn.mmm +|-exp. allways
+                 
+Note that when float is printed as mantisa exponent, the value printed
+is v=mantisa.2^exponent
+                 
+there is no type conversion or even checking: v1=n3 is compiled as it was v1=v3.          
+index on variables has no cheching vn1 where n1 < 1 or n1 >= 4096 will lead to 
+code that selects a track outside intended range, and thus potentially overwriting
+programs on drum. There is no way to assign the value of an index to a variable,
+not to assign the value of a variable to an index
+
+For variables, v2=123 is allowed, and is interpreted as v2=123.0
+Also integer constants can be used with variables: v2=2+2 is same
+as v2=2.0+2.0 and both are the same as v2=4 and v2=4.0
+            
+On complex mode
+
+    Q v10=v20+v30   -> means v10, v11 as real and imaginary parts of 
+                                         resulting complex number
+                             v20, v21 as real and im. parts of x complex number
+                             v30, v31 as real and im. parts of y complex number
+                       
+    Operators + - / * can be used.      
+    Only variables can be used. Not na, nor constants, nor indexed vars vna.
+    If any of these are used, no errors, but incorrect code is generated
+    Variables for real and imaginary parts cannot cross the track boundary:
+    
+        Q v10 will involve v10 and v11
+        Q v15 will involve v15 and v16
+        Q v63 will involve V63 and V64, but will read v64 out of mem 
+        
+        The best is keep the complex var even.
+
+    Complex numbers cannot be printed with * or P. The char is gracefully ignored
+    Complex numbers cannot be assigned: Q v4=v2 generates code to call 
+    a null cue (thus call-in track 0)
+    
+    It is possible to call complex functions of only one parameter. 
+    
+       Q v2=F1(v4)    
+       
+       
+            
+Sentence Syntax:
+
+   [(] 
+   [label_num]                        sentence label
+   [Q]                                Set complex mode for this sentence
+   [X|Y|Z][X|Y|Z]...                  X -> print <CR>, Y -> print <LF>, Z -> print space. Exec when char encountered, before and P or *
+   [P]                                set print switch (without CR LF, space follows number)
+                                         prints '0' if number < 2^-40, 
+                                         prints '#' if number > 2^40)
+   [*]                                set print switch (with CR LF before each number, space follows number)
+                                         prints '+.' if number < 2^-40, 
+                                         prints '+|- n.nnnn +nn' if number > 2^40)
+   na = [+|-]bbb|nc                   set index a to signed integer value 
+   na = bbb|nc  +|-|x|/  bbb|nc       integer arithmetics on index
+   va|vna = [+|-]bbb[.bbb]|va|vna     set variable (maybe indexed) to a to float value 
+   va|vna = [+|-]bbb[.bbb]|va|vna   
+                +|-|x|/   
+            [+|-]bbb[.bbb]|va|vna     float arithmetics on variable (maybe indexed)  
+   va|vna = S|R|C|E|L|A|M [+|-]bbb[.bbb]|va|vna  call built-in functions by letter
+                                         S and R -> sqrt   C -> cos    A -> arctan(x)/pi
+                                         L -> log e        E = exp e   M -> Modulus (abs value)
+   va|vna = Fm([+|-]bbb[.bbb]|va|vna) call functions by number
+   va|vna = Fm([+|-]bbb[.bbb]|va|vna,  
+               [+|-]bbb[.bbb]|va|vna) call functions by number with two params
+
+   va|vna = I                         input float num from PTR. 
+   na|na  = I                         input integer num from PTR. 
+
+   ja                                 jump to label a
+   jna                                jump to label given by index na
+
+   j [a|na], [[+|-]a|na] 
+                =|!=|>|>= 
+             [[+|-]a|na]              jump condititional on index
+   j [a|na], [+|-]bbb[.bbb]|va|vna
+                =|!=|>|>= 
+             [+|-]bbb[.bbb]|va|vna    jump condititional on variable
+
+   H                                  halt  
+   T                                  Continue processing autocode prog from PTR Tape
+   [)]
+
+Each sentence ends with <CR>
+<LF>, space, $ are ignored
+
+   *=expr|float_var|index_var|int_value -> just print r-side without asigning it 
+
+Float Functions restored
+
+   F1(x) -> sqrt(x)
+   F2(x) -> cosine(2pi.x)
+   F3(x) -> exp(x)
+   F4(x) -> ln(x)
+   F5(x) -> arctan(x)/pi
+   F6(x) -> !x! = absolute value
+   F7(x) -> radius = sqrt(x^2+y^2)
+   F8(x) -> angle = arctan(y/x)
+                        
+Complex Function available
+
+   F5(vn) -> complex to polar. vn=real part a, vn+1=imaginary part b
+             returns           vn=angle        vn+1=radius  
+                                 =arctan(b/a)      =sqrt(a x a + b x b)
+
+During runtime:
+
+    [/I, EI, @I, AI] -> floating add, mult, normalise working space.
+    [#I, DI] = f.b.a mantisa (floating point accumulator)
+    [RI, JI] = f.b.a exponent
+    [:I, SI] = f.b.d mantisa (floating point divident)
+    [II, UI] = f.b.d exponent
+
+Addr of Directory loaded into cols # D R J
+
+   [GJ]=//// <- pos in code track of last magnetic instr (l.m.i) 
+   ["J]=//// <- code track of last magnetic instr (l.m.i) 
+   [MJ]=//// <- bracket flag
+   [XJ]=VJ// <- n=last free addr to use to plant constants
+   [VJ]=/#// <- l+1=next free addr to use to plant generated code
+   [$J]=E/// <- dir entry that contains cue to current track with generated code
+
+
