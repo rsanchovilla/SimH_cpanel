@@ -1202,12 +1202,16 @@ t_stat MarkI_exdep_cmd (int32 flag, CONST char *cptr)
         } else if ((strlen(gbuf) == 1) && (strncmp(gbuf, "H", 1)==0)) {
             // deposit H , check if 4 teletype-chars follows
             cptr2 = get_glyph (cptr2, gbuf, 0);                       // get param    
-            parse_n(&d, gbuf, 2, 4); // get MarkI 4-teleprinter chars, return -1 if not teleprinter chars
-            if (d>=0) {
-                // parsed a valid 4-teleprinter chars argument for DEP H
-                extern int H;    // value Hand Switches (20 bits)
-                H=d;             // set the hand switches
-                return SCPE_OK;  // and return
+            if ((gbuf[0]>='0') && (gbuf[0]<='9')) {
+               // regular decimal number
+            } else {
+                parse_n(&d, gbuf, 2, 4); // get MarkI 4-teleprinter chars, return -1 if not teleprinter chars
+                if (d>=0) {
+                    // parsed a valid 4-teleprinter chars argument for DEP H
+                    extern int H;    // value Hand Switches (20 bits)
+                    H=d;             // set the hand switches
+                    return SCPE_OK;  // and return
+                }
             }
         }
     }
