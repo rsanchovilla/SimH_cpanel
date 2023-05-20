@@ -15,11 +15,11 @@ Quick run
 
   - Decompress the Ferranti_MarkI.zip file. A MarkI folder will be created.
   - Open MarkI folder with Windows Explorer. Notice the "run*.bat" files.
-  - Each one of these files starts the MarkI simulator to run
+  - Each one of these files starts the simulator to run
     the named software program:
       - the "run CPanel*.bat" files starts simulator with Control Panel GUI.
         programs runs at realistic speed.
-      - the "run MarkI*.bat" files open starts simulator on text mode 
+      - the "run MarkI*.bat" files starts simulator on text mode 
         programs runs at max speed allowed by host.
   - Click on close window icon to quit the simulator.
 
