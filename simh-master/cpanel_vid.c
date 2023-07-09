@@ -84,7 +84,31 @@ int find_cpvid_by_vptr(VID_DISPLAY *vptr_cp)
     return -1; 
 }
 
-// create cpanel window at give cpvid entry. If short_name is empty, "MAIN" is used as default name
+// add a rectable to rectangle list for given cpvid entry
+void cpvid_AddRectList(int ncp, int x, int y, int w, int h, int flags)
+{
+    int n; 
+
+    if (ncp >= MAX_CPVID_WINDOWS) return; //safety
+    n=cpvid[ncp].RectList.Count; 
+    if (n==-1) {
+       // rect table full
+    } else if (n>=RECTLIST_MAX) {
+       // set rect table as full
+       cpvid[ncp].RectList.Count=-1; 
+    } else {
+       // room left on rectable table. can add entry
+       cpvid[ncp].RectList.flags[n]=flags;
+       cpvid[ncp].RectList.x[n]=x; 
+       cpvid[ncp].RectList.y[n]=y; 
+       cpvid[ncp].RectList.w[n]=w; 
+       cpvid[ncp].RectList.h[n]=h; 
+       cpvid[ncp].RectList.Count++;
+    }
+}
+
+
+// create cpanel window at given cpvid entry. If short_name is empty, "MAIN" is used as default name
 // initialize cpvid entry, alloc surface 
 int cpvid_init(int ncp, const char *title, int xp, int yp, void *dptr, 
                int InitialScale, int InitialPosX, int InitialPosY)

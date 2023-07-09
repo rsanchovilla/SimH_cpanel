@@ -1,0 +1,369 @@
+   
+     MANCHESTER UNIVERSITY COMPUTING MACHINE LABORATORY
+    
+     Programme Sheet B                  Date. 25.May.1955
+
+    
+    [Routine ASSEMBLY (Tube 0) ] p57
+
+    [Col  /    ]                        [     E    ]              
+                                                                          
+    | / | $A/: | xfers 3rd page y rout  | / | /NL/ |                                         
+    | E | VA/: | xfers directory 4,5    | E | //T$ | //T$              
+    | @ | DSLO | set r=$$               | @ | :UAT | 3-way switch                                        
+    | A | :ULB | set r0 = $$            | A | :ULO | replan r by r0                                       
+    | : | $JQO |                        | : | EUWO | l0+1 to B3                                       
+    | S | /#Q/ |                        | S | ZUHO | B4=BD/P                                       
+    | I | SSTC | form and plant         | I | DSWG |\ plant BD/P as link                                       
+    | U | GU/S |  reading instr         | U | $$WZ |/               
+    | # | ":TC |\ do instr              | # | "U/: | write current track                                       
+    | D | "UTA |/                       | D | VA/: | xfer directory              
+    | R | XJT/ |\ n0, l0+1              | R | $JQO |\                                        
+    | J | /U/S |/                       | J | DSQG |!              
+    | N | @UTA |  n,l+1                 | N | $JQB |/               
+    | F | E#Q/ |\ form cue next         | F | KUT/ |\ reset u0,l0+1 = VJ//, /#//              
+    | C | NUTA |/ routine transfer track| C | XJTA |/               
+    | K | GU/: |  xfer saved track      | K | XA/: | rewrite directory              
+    | T | JUT/ |\ plant ad-routine cue  | T | S:/P |___ -> S/
+    | Z | VJTA |/                    (L)| Z | "U/: |               
+ (Z)| L | DSLG | advance r              | L | VA/: | xfer directory              
+    | W | /N@C | select                 | W | /UT/ |\  u0, l+1             
+    | H | $:/N |\                       | H | XJTA |/               
+    | Y | LUTR |! examine               | Y | PE/P | fixed
+    | P | MUTA |! column                | P | LI// |___ see note
+    | Q | XUQO |! char (u 2nd char)  (T)| Q | E:YO | B5 = E/// set switch                                   
+    | O | /IUP |/__                     | O | E:WO |    single line needed                                
+    | B | E:WO | single line needed     | B | $I/P |___                                 
+    | G | /:YO |                  (@)(A)| G | /NL/ |\                                    
+    | " | XUWB | copy num of lines reqd | " | MUTA |! instr to B7                                   
+    | M | @UHO |\                       | M | MUQO |/               
+    | X | AUHG |! num of lines          | X | A:/O | start to test for short or long line
+    | V | E:HG |/   available           | V | A:WO |\ short line contant
+    | $ | XUHG | (lin avail)-(line reqd)| $ | QU/P |/  2 lines needed in programme
+                      
+                                                           
+    [End]
+    
+Note from Roberto Sancho: ASSEMBLY code works as expected. There is just an issue,
+   ECONOMISE routine expects the last magnetic instruction assembled to be set
+   in directory (track 15), at lines [GJ] and ["J] (when directory loaded at 
+   cols # D R J). On the original listing there is not such functionality. Just
+   some fragments of code that are never called that seems to do someting related.
+
+   To allow ECONOMISE to do its job, we fix these code fragments and link them to
+   the routine programme
+
+        addr  original value   new value
+
+   53   YD    XA/:             PE/P    goto 211  (was write back directory)
+   54   PD    LS/P             LI//    c.n.      (was close)
+   
+   71   U@    QU/P             WA/P    goto 116  (was goto 26)
+  
+  113   ZA    MUTA             ////    holds the addr of last mag instr assembled ...
+  114   LA    NUHB             ////    ... on this track (=mag instr to load the track)
+  115   WA    NUT/             WA//    c.n.
+  116   HA    ":TR             @UQO    B7=[@U]=n = last addr used in compiled code track where mag instr will be located
+  117   YA    ":TN             E:QG    decr B7 -> this is the addr that will be used by mag instr
+  118   PA    E:/M             ZAQB    save
+  119   QA    VI/P             GUQO    [GU]=reading instr for track where to store generated code
+  120   OA    GUWB             LAQB    save
+  121   BA    GUT/             QU/P    goto 26 -> continue, not a data track xfer
+  122   GA    G:TN             ////
+  123   "A    VCTA             ////
+
+  211   WI    GJTA             ZATF    AL=-[ZA]
+  212   HI    XA/:             A:/M    if (A>=0) skip 2 instr -> if no mag instr, do not update GJ in directory
+  213   YI    LS/P             ZAT/    AL=[ZA, LA]=addr of mag instr, track 
+  214   PI    YIT:             GJTA    [GJ]=AL  
+  215   QI    VI/P             XA/:    rewrite dir
+  216   OI                     LS/P    close
+
+               Entry from ECONOMISE
+
+   0  //  $A/: xfers 3rd page of ASSEMBLY routine -> Read: from Track 47R to Tube S3 (cols I U)
+   1  E/  VA/: xfers directory in S4 S5 -> Read: from Track 15LR to Tube S4 S5 (cols # D R J)
+   2  @/  DSLO B2=-1 -> set r=$$  -> B2=r=pointer to read generated code in col /N
+   3  A/  :ULB [:U]=B7 -> var [:U]=r0=-1
+   4  :/  $JQO B7=[$J] -> last addr of directory = dir entry that contains cue to current track with generated code
+
+   5  S/  /#Q/ AL=[/# + B7]=pos into dir 
+   6  I/  SSTC AL=AL + ///# ////    form and plant reading instr for track where to store generated code
+   7  U/  GU/S [GU]=AL -> 
+   8  #/  ":TC AL=AL + //#/ ////    do corresponding writing instr
+   9  D/  "UTA ["U]=AL, A=0
+  10  R/  XJT/ AL=[XJ, VJ] -> from dir -> n0, l0+1
+  11  J/  /U/S [/U]=AL -> n=[/U]=last free addr to use to plant constants
+  12  N/  @UTA [@U]=AL -> l+1=[@U]=next free addr to use to plant generated code
+  13  F/  E#Q/ AL=[E# + B7]=pos into dir  -> form ad-routine cue to next routine track
+  14  C/  NUTA [NU]=AL
+  15  K/  GU/: Read Track 65-> xfer current track in S4 (cols # D R J). This is the track where generated code will be panted
+  16  T/  JUT/ AL=[JU, NU]=$$WZ cue to next track
+  17  Z/  VJTA [VJ]=AL    -> plant ad-routine cue to next track 
+
+               Now read generated code in col N (using index B2), and copies it to cols #DRJ. This is the
+               data to be stored in generated code track. The code is stored at pos [@U], consts at [/U]
+               The generated code will be loaded at cols /E@A so it should be reloacted to these addresses
+
+  18  L/  DSLG B2=B2+1    -> advance r=pointer to read generated code in col /N
+  19  W/  /N@C D=[/N + B2]   -> get in D generated instr code (from col N routine) D=acaa ....
+  20  H/  $:/N Shift -> AL=///a caab
+  21  Y/  LUTR AL=AL AND [LU]=AL AND ..// $///
+  22  P/  MUTA [MU]=AL
+  23  Q/  XUQO B7=[XU] -> B7=c///  -> column of address part of generated instr
+  24  O/  /IUP goto 58 if B7=@///  -> relocate instr whose addr part points to cols @ A
+                    58 if B7=A/// 
+                    55 if B7=T///  -> recal addr part, used for B7=* instr
+                    18 if B7=Z/// -> dummy instr, skip it
+                    49 if B7=L/// -> finish 
+                    25       / E : S I U # D R J N F C K -> do not change
+
+  25  B/  E:WO B3=1    -> single line needed
+
+               Check if in code track there are B3 lines available
+
+  26  G/  /:YO B5=0
+  27  "/  XUWB [XU]=B3 -> copy num of lines needed
+  28  M/  @UHO B4=[@U] -> [@U]=n   -> num of lines available
+  29  X/  AUHG B4=B4-[AU] -> [AU]=l+1
+  30  V/  E:HG B4=B4-1
+  31  $/  XUHG B4=B4-num of lines needed  -> (lines available)-(lines required)
+  32  /E  /NL/ AL=[/N + B2] -> AL=generated inst to copy to dest track
+  33  EE  //T$ dummy
+  34  @E  :UAT if (B4>=0) goto if (B3=2) goto 84 -> 3-way switch if there are enought lines available
+                     B3=num of lines needed, B4<0 if track full
+                     if 3 lines needed (B3=2) goto 97
+                     if 2 lines needed (B3=2) goto 84
+                     if 1 line needed  (B3=1) goto 72
+               
+               Track full of generated code, select next track 
+
+  35  AE  :ULO B2=[:U]=r0 -> replace r by r0
+  36  :E  EUWO B3=[EU]=l0+1
+  37  SE  ZUHO B4=BD/P                          -> plants BD/P. On ADD&Mult routine used
+  38  IE  DSWG incr B3 -> plant BD/P as link       to link to next track of code using link at addr [VJ, $J]
+  39  UE  $$WZ [$$+B3]=B4
+  40  #E  "U/: write current track ["U] from S4 (cols # D)
+  41  DE  VA/: Read dir from Track 15LR to Tube S4 S5 (cols # D R J)
+  42  RE  $JQO B7=[$J] <- last entry of dir
+  43  JE  DSQG incr B7
+  44  NE  $JQB [$J]=B7 <- advances p
+  45  FE  KUT/ AL=VJ// /#//
+  46  CE  XJTA [XJ]=VJ//, [VJ]=/#// -> set n0, l0+1=VJ//, /#//
+  47  KE  XA/: Rewrite directory: Write: from Tube S4 S5 to Track 15LR (cols # D R J)
+  48  TE  S:/P goto 5
+
+               terminate code generation
+  49  ZE  "U/: write track ["U] from S4 S5 with generated code from cols # D R J
+  50  LE  VA/: read directory from Track 15L to S4 S5
+  51  WE  /UT/ record new values of n, l+1 
+  52  HE  XJTA in [XJ, VJ]
+
+          Original code
+  53  YE  XA/: write back directory
+  54  PE  LS/P close 
+
+          Fixed code  
+  53  YD  PE/P goto 211  
+  54  PD  LI// c.n.      
+
+               Letter T
+  55  QE  E:YO B5=1 -> set switch
+  56  OE  E:WO B3=1 -> 1 line needed
+  57  BE  $I/P goto 27
+
+               generated instr in col N points to columns @A
+               calc B3=number of short lines needed by instr
+
+  58  GE  /NL/ AL=[/N + B2] -> get generated instr from col N AL=acaa ....
+  59  "E  MUTA [MU]=AL      -> instr to B7
+  60  ME  MUQO B7=acaa
+  61  XE  A:/O if (B>=0) goto 64 -> test for short of long type
+  62  VE  A:WO 
+  63  $E  QU/P 
+  64  /@  CUWO B3=3 -> assume 3 lines will be needed
+  65  E@  ASQG B7=B7-///:  -> test for /: (i.e. if we are relocating a mag instr)
+  66  @@  E:/O if (B>=0) goto 68 
+  67  A@  QU/P goto 26
+  68  :@  X:QG B7=B7-//T/
+  69  S@  QU/T if (B>=0) goto 26 -> goto 26 because it is not a mag instr
+  70  I@  A:WO B3=2 -> the instr turns out to be /: in which case only 2 lines will be needed
+
+          Original code
+  71  U@  QU/P goto 26
+  
+          Fixed code
+  71  U@  WA/P goto 116  
+  
+               1 line needed
+  72  #@  VUSP if (B5=0) goto 73
+                      1  goto 80 -> set when letter is T  
+
+               prepare to plant instr
+  73  D@  MUTA [MU]=AL, A=0 -> [MU]=instr to plant
+  74  R@  MUHO B4=[MU] -> B4=generated and relocated instr to save in track
+  75  J@  AUWO B3=[AU] -> [AU]=l+1 = next free addr in track 
+  76  N@  DSWG incr B3
+  77  F@  AUWB [AU]=B3 -> update addr to plant instr
+  78  C@  $$WZ [B3-1]=B4 -> plant instr
+  79  K@  OUSP if (B5=0) goto 105
+                      1  goto 18 -> set when letter is T  
+
+               form n,QO or n,$O 
+  80  T@  HUTR AL=AL AND //$$ $$//
+  81  Z@  AUTC AL=AL+ [AU]
+  82  L@  Z:TN AL=AL- /#// ////  -> change addr as assemble will be exec in S0 S1 (cols /E@A)
+  83  W@  VU/P goto 73
+           
+               form and plant the instr needed for pointing to constant
+               on entry, AL=the generated instr
+               2 lines needed               
+
+  84  H@  YUTR AL=AL AND $$// //// -> get addr part of instr to plant
+  85  Y@  RUTC AL=AL + /N.. ....   -> add /N to addr part
+  86  P@  O@TA [O@]=AL
+  87  Q@  @UWO B3=[@U]=n = last addr free in compiled code track
+  88  O@  /NHO B4=[/N + addr of const] -> get into B4 the actual constant pointed by instr
+  89  B@  $$WZ [B3-1]=B4 -> store constant into last free addr of track
+  90  G@  E:WG decr B3
+  91  "@  @UWB [@U]=B3 -> update last free addr available on track (in fact, it is last addr unavailable in track)
+  92  M@  MUT/ AL=[MU] -> get again the generated instr
+  93  X@  HUTR AL=AL AND //$$ .... -> isolate the opcode part
+  94  V@  @UTC AL=AL + [@U = addr of constant]// ... -> add the new calculated addr at end of track
+  95  $@  Z:TN AL=AL - /#// //// -> relocate: change addr as assemble will be exec in S0 S1 (cols /E@A)
+  96  /A  VU/P goto 73
+
+               3 lines needed
+  97  EA  @UWO B3=[@U]=last free addr in track
+  98  @A  A:WG B3=B3-2
+  99  AA  YUTR AL=AL AND $$// ////
+ 100  :A  #UTC AL=AL + /NT/ //WA
+ 101  SA  IATA [IA]=AL
+ 102  IA  /NT/ AL=[/N + addr of const]
+ 103  UA  //WA store the constant in last free addr of track 
+ 104  #A  LU/P goto 91
+
+               test for matched instr 
+               (matched instr are the ones that have the spare bit set to 1) 
+ 105  DA  F:/N Shift instr in AL 6 bits
+ 106  RA  MUTA [MU]=AL
+ 107  JA  MUQO B7=[MU]
+ 108  NA  ZI/T if (B>=0) goto 18 -> goto 18 because instr does not have the spare bit to 1 -> it is not a generated instr
+
+               update last free used addr in directory
+ 109  FA  :ULB [:U]=B2 -> r0=r
+ 110  CA  @UT/ AL=[@U, AU]=last free addr in track, first free addr in track 
+ 111  KA  /UTA [/U, EU]=last free addr in track, first free addr in track -> n0, l0+1 = n, l+1
+ 112  TA  ZI/P goto 18
+
+          Original code
+          
+ 113  ZA  MUTA 
+ 114  LA  NUHB 
+ 115  WA  NUT/ 
+ 116  HA  ":TR 
+ 117  YA  ":TN 
+ 118  PA  E:/M 
+ 119  QA  VI/P 
+ 120  OA  GUWB 
+ 121  BA  GUT/ 
+ 122  GA  G:TN 
+ 123  "A  VCTA 
+  
+          Fixed code
+ 
+ 113  ZA  ////   holds the addr of last mag instr assembled ...
+ 114  LA  ////   ... on this track (=mag instr to load the track)
+ 115  WA  WA//   c.n.
+ 116  HA  @UQO   B7=[@U]=n = last addr used in compiled code track where mag instr will be located
+ 117  YA  E:QG   decr B7 -> this is the addr that will be used by mag instr
+ 118  PA  ZAQB   save
+ 119  QA  GUQO   [GU]=reading instr for track where to store generated code
+ 120  OA  LAQB   save
+ 121  BA  QU/P   goto 26 -> continue, not a data track xfer
+ 122  GA  ////
+ 123  "A  ////
+         
+ 
+ 124  MA       
+ 125  XA  K/R# 
+ 126  VA  K/@# MagInstr Read directory track 15LR 
+ 127  $A  KEEI MagInstr Read: from Track 47R to S3 (ASSEMBLY.2A)
+               
+ 192  /I  O///
+ 193  EI  O///
+ 194  @I  BE//
+ 195  AI  BE//
+ 196  :I  O///
+ 197  SI  O///
+ 198  II  O///
+ 199  UI  O///
+ 200  #I  O///
+ 201  DI  O///
+ 202  RI  O///
+ 203  JI  O///
+ 204  NI  O///
+ 205  FI  O///
+ 206  CI  O///
+ 207  KI  O///
+ 208  TI  PE//
+ 209  ZI  Z///
+ 210  LI  TE//
+ 
+          Original code
+ 211  WI  GJTA
+ 212  HI  XA/:
+ 213  YI  LS/P
+ 214  PI  YIT:
+ 215  QI  VI/P
+ 216  OI      
+ 
+          Fixed code
+ 217  WI  ZATF    AL=-[ZA]
+ 218  HI  A:/M    if (A>=0) skip 2 instr -> if no mag instr, do not update GJ in directory
+ 219  YI  ZAT/    AL=[ZA, LA]=addr of mag instr, track 
+ 220  PI  GJTA    [GJ]=AL  
+ 221  QI  XA/:    rewrite dir
+ 222  OI  LS/P    close
+          
+          
+ 217  BI      
+ 218  GI      
+ 219  "I      
+ 220  MI      
+ 221  XI  LI//
+ 222  VI  D@//
+ 223  $I  G///
+ 224  /U  USED
+ 225  EU  USED
+ 226  @U  USED
+ 227  AU  USED
+ 228  :U  USED
+ 229  SU  U@//
+ 230  IU  W@//
+ 231  UU  /A//
+ 232  #U  /NT/
+ 233  DU  //WA
+ 234  RU  /NHO
+ 235  JU  $$WZ
+ 236  NU  USED
+ 237  FU  USED
+ 238  CU  A///
+ 239  KU  VJ//
+ 240  TU  /#//
+ 241  ZU  BD/P
+ 242  LU  G@//
+ 243  WU  $///
+ 244  HU  //$$
+ 245  YU  $$//
+ 246  PU  ////
+ 247  QU  B///
+ 248  OU  #A//
+ 249  BU  Z///
+ 250  GU  USED
+ 251  "U  USED
+ 252  MU  USED
+ 253  XU  USED
+ 254  VU  #@//
+ 255  $U  K@//
+ 

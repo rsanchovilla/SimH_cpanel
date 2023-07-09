@@ -1,0 +1,124 @@
+
+     MANCHESTER UNIVERSITY COMPUTING MACHINE LABORATORY
+    
+     Programme Sheet B                  Date. 18.May.1955
+
+    
+    [Routine INPUT(2)      ] p7
+
+    [Col  R    ]                        [     J    ]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+                                                                          
+    | / | Z/// | fig shift              | / | Z/// | fig shift                               
+    | E | SU// | A arctan               | E | EE// | 1             
+    | @ | //// | B                      | @ | /E// | 2                                      
+    | A | $I// | C cos                  | A | YA// | * print                                      
+    | : | //// | D                      | : | V/// | 4                                      
+    | S | EU// | E exp                  | S | F#// | (                                      
+    | I | T#// | F                      | I | C#// | )                                      
+    | U | //// | G                      | U | "/// | 7             
+    | # | UA// | H halt                 | # | G/// | 8                                      
+    | D | "A// | I input                | D | WE// | !=                                     
+    | R | //// | J                      | R | ME// | =                                      
+    | J | //// | K                      | J | N@// | -             
+    | N | AU// | L log                  | N | Z@// | v             
+    | F | UU// | M modulus (=abs)       | F | D/// | line feed     
+    | C | //// | N                      | C | D/// | space         
+    | K | //// | O                      | K | K#// | ,             
+    | T | DU// | P print (w/o <CR>)     | T | :#// | 0             
+    | Z | OA// | Q                      | Z | KE// | >             
+    | L | L#// | R sqrt                 | L | ZE// | >=            
+    | W | L#// | S sqrt                 | W | $/// | 3             
+    | H | DA// | T tape                 | H | X@// | j (the "->" key in creed 7P N4 perforator)        
+    | Y | //// | U                      | Y | X/// | 5             
+    | P | //// | V                      | P | M/// | 6                                  
+    | Q | //// | W                      | Q | I@// | % or / (division)                                 
+    | O | EA// | X print <cr>           | O | :@// | x (circled cross -> this is the multiplication operator)
+    | B | AA// | Y print <lf>           | B | B/// | 9                                  
+    | G | SA// | Z print space          | G | #@// | +                                  
+    | " | W/// | letter shift           | " | W/// | letter shift                       
+    | M | FE// | .                      | M | FE// | .             
+    | X | //// | ?                      | X | W@// | n             
+    | V | //// | $                      | V | Y#// | <CR>          
+    | $ | D/// | (erase)                | $ | D/// | (erase)       
+                                                                                 
+    [End]
+
+Note by Roberto Sancho: some minor adjustements has been made to the jump
+   table. These corrections can easely had been fogotten on the day
+
+   - Removed VA// from letter V -> this makes V as synomym of * to print
+     current z value. This feature is not described in any doc
+   - Added T#// to letter F -> so this enables F for z=Fm( )
+   - Added L#// for S and R -> so S and R are squareroot func. On autocode 
+     paper, the squareroot func is S, on sources the squreroot function is 
+     described as been R. So we enable both
+
+   Also we restore to working state the built-in functions letter
+   C for COSINE, E for EXPONENTIAL, L for LOG, A for ARCTAN and M for modulus.
+   The functions are mentioned on tube 5 material original doc page. Its code is 
+   in INPUT(2), but gets overwritten by (non fully working) Fm() modification.
+
+   To fix we restore the overwritted code to unused column U in 
+   (VARIABLES routine in track 34R).
+
+	/U    A:QO  B7=2, main opcode = C func = built-in link to COSINE
+	EU    WD/P  goto 256
+	@U    JDQO  B7=3, main opcode = E func = built-in link to EXPONENTIAL
+	AU    WD/P  
+	:U    S:QO  B7=4, main opcode = L func = built-in link to LOG
+	SU    WD/P  
+	IU    NDQO  B7=5, main opcode = A func = built-in link to ARCTAN
+	UU    WD/P  
+	#U    FDQO  B7=6, main opcode = M func = built-in link to Modulus (absolute value)
+	DU    WD/P  
+
+   At INPUT(2), the jump table for C E L A M characters is pointing to 
+   overwritten code. We fix it to point to code at new location on column U.
+
+        addr  original value   new value
+        RE    D#//             SU//         A arctan 
+        AE    A#//             $I//         C cos
+        SE    S#//             EU//         E exp
+        NE    U#//             AU//         L log
+        FE    J#//             UU//         M modulus
+ 
+   we also restore P printing char to working state. P is different from *. 
+   * prints a <CR><LF> then the value, but P does not prints a new line. The formatting
+   and line layout should be controlled with X Y and Z chars.
+
+   To do this we use again the spare space in column U
+
+	RU    FUQU  B7=[FU]=E//T 
+	JU    GIQB  [GI]=B7 -> set E//T in p-switch to indicate prog uses 'P' instead or '*'
+	NU    J//P  goto 11 -> read next char
+        FU    E//T  constant: the value to set in p-switch
+
+   We also update the jump table for P char
+
+        addr  original value   new value
+        RE    ////             DU//         P print 
+
+   Now, on p-switch handling in TRANSLATE(5) we branch to ALTPRT routine to 
+   handle the new p-switch setting
+
+                original  new     original   new code
+        addr    code      code             
+        54  PE  AIQO      Y@/:    B7=[AI] -> Load ALTPTR routine overlaying current 
+                                             code, so next instr executed is at address
+                                             QE into ALTPTR routine
+
+        85  Y@  (spare,   WE//               Magnetic instr to bring to 
+                  not                        cols / E routine ALTPRT
+                 used)
+
+   To finish, DECOUTPUT/F we branch to ALTPRT routine to handle the 
+   case it is entered with AL=-1, signaling no CR LF is required
+ 
+                original  new     original   new code
+        addr    code      code             
+        00  //  :E/:      @//:    Figs    -> Load ALTPTR routine in cols @ A 
+        01  E/  ///Z      QE/P    S=H        goto addr 64
+        02  @/  ///C      WE/@               Magnetic instr to bring to 
+                                             cols @ A routine ALTPRT
+
+

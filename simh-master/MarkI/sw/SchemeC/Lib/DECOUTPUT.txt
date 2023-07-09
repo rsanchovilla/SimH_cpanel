@@ -1,0 +1,161 @@
+DECOUTPUT
+
+    Purpose: To output (i.e. to print and/or punch), with binary
+             decimal conversion, the number in the accumulator
+             interpreted as 
+             
+                AM   +    AL
+                  +         f 
+                  -
+            
+    Cue: Magnetic Storage: single half track
+         electronic storage: tube 1
+         control number: (1) $E, (2) U@
+         non-resetting
+
+    Link: closed
+
+    Input details: conventional procedure
+  
+    Effects:
+       
+        +---------+---------------------+-----------------+ 
+        |  Lines  | Initial             | Final           |
+        | altered | contents            | contents        |
+        +---------+---------------------+-----------------+ 
+        | AL      | fractional part     | Empty           |
+        |         |                     |                 |
+        | AM      | Integral part       | Empty           |
+        |         +---------------------+-----------------+
+        | D       |                Irrelevant             |
+        |         +---------------------------------------+ 
+        | B6      | n-1 (see below)     | n-1 (unaltered) |
+        +---------+---------------------+-----------------+
+
+    The printer is first shifted to figures position. Then the
+    number AL   +   AL   is output (see note(3) below) 
+             +-       f
+
+    in the following form:
+    
+                  L W + w. f Z       where L=carriage return
+                      -                    W=line feed
+                                           Z=space
+                                           
+    w denoting the integral part and f the fractional part.
+    
+    All unnecessary zeros are suppressed. i.e. both before and
+    after the decimal point, which is always printer however.
+    
+    The integral part may lie in the range -2^39 <= AL+- < 2^39
+    
+    The fractional part is printed to n decimals (given by B6 
+    on entry) unless it terminates beforehand- This if n >= 39 
+    then the fractional part is extended to its terminating 
+    decimal figure.
+    
+    In the case of entry by (2) the operations of figure shift, 
+    carriage return and line feed are omitted.
+    
+    Notes:
+    
+    (1) To output numbers as fractions on the + convention
+        (i.e. unsigned) they should be sent to accumulator with
+        a T/ instruction. To obtain output on the +/- convention
+        (i.e. signed) a T# instruction should be used.
+        
+    (2) To output numbers as integers on the +/- convention, clear
+        the accumulator and add in with a /J instruction. Except for
+        the space output ceases after the decimal point.    
+        
+        Examples         AL          AM          printed as
+        
+                         //// ///T   $$$$ $$$$    -.5
+                         //// ///T   //// ////    +.5
+                         //// ///:   S$$$ $$$$    -26.875
+                         //// ///M   G/// ////    +26.875
+                         //// ////   $$$$ $$$$    -1.
+                         //// ////   //// ////    +.
+
+    (3) All operations connected with printing layout (i.e. space,
+        carriage return and line feed) are affected by sending the
+        appropriate shift character (Z L and W) to M and obeing 
+        special magnetic function T. This takes more space in the
+        routine than merely obeying the special magnetic functions
+        Z, L and W, but has the advantage that is output is by punch,
+        there characters are actually punched on the tape. Thus if 
+        the punched tape is subsequently read by an ordinary 
+        teleprinter (on figure shift) the layout originally planned
+        is preserved.
+        
+        This facility enables programmes in which printing takes a 
+        large portion of the total time to be speeded up by usigne the 
+        punch output. the punch is more than twice as fast as the 
+        printer, and the tape produced can be printed out afterwards.
+        
+    OUTPUT operations on floating binary form numbers
+    
+        To convert f.b.a (with reasonable exponents) to AM integer + 
+        AL fractional form, use:
+        
+             |     T : | clears Acc
+             | # I / K | get number part as multiplicand
+             | R I Q O | 
+             | . . / T | test sign of exponent ---> | E : U N | number > 1/4
+             | # S U N | number < 1/4               | . . / P | transfer 
+             | @ I / A | @I used as a                  |
+             | @ I T # | working line                  |
+             |         | <-----------------------------+
+             |         | calls in 
+             |         | DECOUTPUT
+        
+
+    Note by Roberto Sancho: as this routine needs AM as input paramerter, so 
+    it cannot be called using regular RCS. See "To use AM as routine parameter"
+    into PARAM.txt file to details on how the routine call needs to be done.
+    
+    
+    Ferranti Mark I Programming Manual, third edition 
+    Bodleian Special Collection 
+    MS. Eng. misc. b. 260-C.41.pdf
+    p54
+    
+    [Routine DECOUTPUT      ] 
+
+    [Col     @ ]                        [        A ]              
+                                                                          
+    | / | QA/: | figure shift           | / | DA/H |                                         
+    | E | BA/A | dump AM to temp        | E | N@TF | 
+    | @ | N@/J | carriage return        | @ | QA/M |          
+    | A | EA/: |                        | A | A/T: |          
+    | : | V:/J | line feed              | : | V:/C |          
+    | S | EA/: |                        | S | N@/N |          
+    | I | @@/A | clears AM              | I | QATZ |          
+    | U | BA/J | restores AM            | U | Q@/I | 
+    | # | /@PB | plants digit count     | # | EA/: |          
+    | D | /:QO |                        | D | JAT: |          
+    | R | AA/M | test sign of A         | R | E:QG | tests for end of digit
+    | J | DSTJ | changes sign if        | J | UA/T | cycle
+    | N | E:TC |           -ve          | N | D@/J | outputs decimal point on
+    | F | DSQL | records change of sign | F | SA/J | 1st cycle; space on 2nd 
+    | C | @@/A | plants integral part   | C | EA/: | cycle
+    | K | YAUJ | prints + or -          | K | A:/M | tests for end of output process
+    | T | EA/: |                        | T | Y@T: | clears A
+    | Z | :@TA | plants fractional part | Z | LS/P | closure
+    | L | VA/C | (integral part) x      | L | R@TA | prepares to output fractional 
+    | W | @@/N | 2^40 x 10^-12          | W | QATB | part
+    | H | @@/J |                        | H | :@/J | 
+    | Y | "AQO | digit cnt for int part | Y | /@QO | 
+    | P | I@/U | plants num to be       | P | TA/P |      
+    | Q | #@/U | converted              | Q | I/HM |      
+    | O | MA/C | obtain next            | O |      | spare
+    | B | I@/N | decimal digit          | B | USED |      
+    | G | I@/U |                        | G | USED |      
+    | " | #@/N |                        | " | J/// | =11 (digit count for integral part)
+    | M | #@/S |                        | M | R/// | =10
+    | X | N@/E |                        | X | //// | 
+    | V | DSTJ | test for zero          | V | $P:T | =2^40 x 10^-12 - 1
+    | $ | E:TC | remainder              | $ | BMSA | 
+                                                                          
+        
+    [End]

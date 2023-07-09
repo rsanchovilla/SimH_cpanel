@@ -1,6 +1,6 @@
 /* cpanel.c: simulator control panel simulation
 
-   Copyright (c) 2017-2020, Roberto Sancho
+   Copyright (c) 2017-2022, Roberto Sancho
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -124,6 +124,7 @@ extern int GetCArrayCId(int CArrayId, int n);
 extern int GetControlInfo(int Id, int mode); 
 // manage dynamic states
 extern uint32 * GetControlSurface(int CId, int State, int * ww, int * hh);
+#define NCP_SURFACE    -1
 extern int CopyControlImage(int FromCId, int FromState, int x0, int y0, int w, int h, int ToCId, int ToState, int x1, int y1);
 extern int DrawTextImage   (int ToCId, int ToState, int x0, int y0, int w0, int h0, int rr, int gg, int bb, char * buf, int chrsz); 
 extern int AddCircle(int CId, int State, int W, int H, uint32 col1, int xctr, int yctr);
@@ -144,7 +145,7 @@ extern void RemoveOption(char * Name);
 extern int cpanel_scale(int ncp, int Scale); // get/set control panel scale
 extern int cpanel_visible(int ncp); // return 1 if control panel has its window open
 extern int DoClickEvent(int CId); 
-
+extern void AllControlRedrawNeeded(int ncp); // mark all controls for refresh
 
 
 

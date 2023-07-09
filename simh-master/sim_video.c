@@ -2467,7 +2467,7 @@ void vid_key_ex (SDL_KeyboardEvent *event)
      switch (event->keysym.sym) {
         case SDLK_KP_MINUS:  key='-'; break; 
         case SDLK_KP_PLUS:   key='+'; break; 
-     }
+     } 
      // key has alphabetic chars A..Z stored as 'a'..'z' 
      // key has the ascii code, but if bit30 is 1 (1<<30) then bits 0..29 holds the scancode
      // KeyPress is set with key pressed right now, set to zero if key released. 

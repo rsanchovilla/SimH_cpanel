@@ -1,0 +1,149 @@
+Scheme C PERM & the Routine Changing Sequence    Date: Aug 1952
+     
+    Written by R.A Brooker 
+
+    from Programming the mark I: Early Programming Activity at the 
+    University of Manchester (author: Martin Campbell-Kelly)
+
+        Scheme A              Spring 1951   By A.Turing
+        Scheme B              Spring 1952   Brooker and Glennie
+        TELEINPUT (Scheme C)  Early 1953    Brooker
+
+    Ferranti Mark I Programming Manual, third edition 
+    Bodleian Special Collection 
+    MS. Eng. misc. b. 260-C.41.pdf
+    p32, p43
+     
+    Explanation on how to use Scheme C can be found in Programming Manual 
+    Third edition: p31-p116 (section Chapter 3. Programming)
+    
+    
+    [Routine PERM & RCS ] 
+
+    [Col : S  Track 17L]                  
+                                               
+    | //// | / | //// |           
+    | E/// | E | ///@ |
+    | //// | @ | //// |          
+    | @/// | A | ///: |          
+    | //// | : | //// |          
+    | :/// | S | ///# |          
+    | //// | I | //// |          
+    | #/// | U | ///T |          
+    | //// | # | //// |          
+    | T/// | D | $$$$ |          
+    | //// | R | $$$$ |          
+    | /E// | J | @/EA | adds new cue to list  <- entry for subroutines
+    | //// | N | M$$$ | = -4
+    | /@// | F | RSQG | forms and plants control
+    | //// | C | //ZZ | number part of the link
+    | /:// | K | NSZG | +4 \  + 2 adjust B1
+    | //// | T | A:ZG | -2 /                  <- return from closed routines
+    | /#// | Z | E/E: | transfers new routine <- entry for ad-routines         
+    | //// | L | KS/G | dummy stop, control number
+    | /T// | W | //EP | enters new routine   
+    | //// | H | :/// | link to TELEINPUT    \ cuecue list 
+    | //E/ | Y | T/@/ |__                    ! 
+    | //// | P |      |                      ! 
+    | //@/ | Q |      |__                    !
+    | //// | O |      |                      V
+    | //:/ | B |      |__
+    | //// | G |      |
+    | //#/ | " |      |__
+    | //// | M |      |
+    | //T/ | X |      |__
+    | //// | V |      |
+    | ///E | $ |      |__
+                  
+    [End]
+                         
+    The m-th routine is called in as a sub-routine by the
+    group of instructions:
+    
+           n-1 |  s  / J     AM = cue of new routine
+           n   |  n  Q O     B7=* (copies itself into B7)
+           n+1 | F S / P     enters RCS
+           n+2 | ...         <- re-entry. execution will continue here when subrourine
+                                          returns (with NS/P instr)
+
+    B1 index Acts as stack pointer.
+    dir is in track 15LR. 
+
+    A subroutine call needs 4 short lines.
+    On entry of subroutine, AM holds the cue of new routine to call
+                            AL and D can hold parameter for routine                
+    
+    and as an ad-routine by 
+    
+           n-1 |  s  / J     \ replaces cue of current routine
+           n   | / / E A     / by the cue of new routine
+           n+1 |  t  / P     enters RCS, where t contains 
+                             the control number TS
+    The chain of link is kept in HS, PS, OS, ...
+    s is the address where the cue of called routine is stored
+    
+    A closed routine is terminated by instruction LS/P
+    Initially the (original) cue to the master routine
+    stans in HS and B1 contains HSI/. When a new subroutine
+    is called, the cue of new routine is placed in PS.
+
+    WHen calling a routine, AM holds the cue, B7=caller routine 
+    addr, B1=stack pointer. AL, D, B2..B6 can be used as input
+    params to called routine.
+
+    To use AM as routine parameter and preserve it on routine call
+    via RCS, the following sequence must be used
+
+
+               |  s  T /     AM=0, AL=cue for called routine (cue stored at s addr)
+               | @ / Z A     save cue in cue list at B1 position
+                 ...         load AL and AM with values to pass to routine
+           n   |  n  Q O     B7=* (copies itself into B7)
+           n+1 | K S / P     enters RCS at FS address
+           n+2 | ...         <- re-entry. execution will continue here when subrourine
+                                          returns (with NS/P instr)
+
+
+S U M M A R Y
+    
+    Normal uses of pages                                       
+    
+    Column   Page   Use
+    
+    /        S0     Instructions
+    E
+    
+    @        S1     Instructions
+    A
+    
+    :        S2     PERM
+    S
+    
+    I        S3     free 
+    U               free 
+    
+    #        S4     free 
+    D
+    
+    R        S5     free 
+    J
+    
+    N        S6     free 
+    F               free 
+    
+    C        S7     free 
+    K               free 
+    
+Annotated program
+
+   171  JS  @/EA  call subroutine entry: [B1 + 2]=AM -> save cue on next free cue entry
+   172  NS  M$$$  Dummy, const -4
+   173  FS  RSQG  incr B7 -> this is the return addr
+   174  CS  //ZZ  [B1]=B7 -> save return addr on current cue entry
+   175  KS  NSZG  B1=B1+4
+   176  TS  A:ZG  B1=B1-2 -> incr current cue on list  <- return from closed routines
+   177  ZS  E/E:  Load Track using maginstr at [B1+1]  <- entry for ad-routines         
+   178  LS  KS/G  Dummy stop /G
+   179  WS  //EP  transfer to [B1]
+
+

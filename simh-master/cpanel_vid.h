@@ -74,5 +74,5 @@ extern int  cpvid_init(int ncp, const char *, int, int, void *, int, int, int); 
 extern void cpvid_close(int ncp);                      // close GUI window of given cpanel name
 extern char cpvid_getkey(int ncp);
 extern int  find_cpvid_by_vptr(VID_DISPLAY * ); 
-
+extern void cpvid_AddRectList(int ncp, int x, int y, int w, int h, int flags); 
                                                    

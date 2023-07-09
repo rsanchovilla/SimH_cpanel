@@ -1,0 +1,259 @@
+FC/DECINPUT                        Date.   14.7.52
+
+    Purpose: Decimal input for use with FLOATCODE (Cosed routine)
+            
+    Cues:  G J / / . . @ #    (for use with R.C.S/B)
+          
+    Magnetic Storage: variable     Electronic Storage: S4 S5
+    
+    Stores Altered: WI  HI  B5 B6  S4 S5
+    
+    Effects: 
+    Reads a sequence if numbers in floating decimal form x = a x 10^p
+    (1.0 <= |a| < 10, |p| < 76), converts them into floating binary 
+    form x = b x 2^q (0.25 <= |b| < 0.5, |q| < 256), packs each into a 
+    single long line in the form suitable for FLOATCODE and puts them 
+    into successive long lines in the store, the first address being 
+    specified by B5 on entry. The numbers should be punched on the tape
+    in the form a, + or - ,p, + or - omitting the decimal point in a.
+   
+    characters other than 0-9, + - have the following effects:
+
+    $ indicates error. Causes the part of the number already read to be
+      ignored. The tape is then read for the corrected number, starting
+      afresh with the new a
+
+    Y causes the next two characters to be taken as the address of the 
+      first number in a new sequence , i.e. Yab, sets B5=ab// and returns 
+      read further numbers
+
+    " causes the routine to be replaced on S4 and S5 by FLOATCODE C and D
+      and then enters R.C.S. by the instruction NS/P
+
+    Any other character is assumed to be a punching error, and the machine 
+    comes to a dynamic stop in line M#
+
+    Numbers can be places anywhere in the store (including S0 and S1)
+    except on S3, S4, S5 and the lines VI, HI and the R.C.S.
+
+    Notes: 1. WI and HI, which are working space in FLOATCODE, have the final
+              values HD/: and NS/P respectively
+
+           2. If it is desired to punch the numbers on a separate tape this
+              should start with a Y-sequence. Blank tape before this will have
+              no effect.
+
+    Note by Roberto Sancho: WARNING! there is NO zero representation!!. 
+    Zero is encoded as lowest possible float number: 1+75-
+    the input 0+nn+ will end on an infinite loop (when trying to normalize
+    the zero mantisa)
+ 
+
+    Floatcode - Bodleian Special Collection 
+    MS. Eng. misc. b. 260-C.42.pdf
+    p7-8
+    
+    [Routine FC/DECINPUT] 
+    
+    [Col #          D ]                 [Col R          J ]       
+                                               
+    | VR// | / | V:TN |                 | DSQG | / | A:PG |                   
+    | /:PO | E | PR/H |                 | U:/O | E | J#/P |
+    | PJT/ | @ | VJT/ |                 | VJ/F | @ | //// |                  
+    | HJTA | A | /:PG |                 | VJ/A | A | ///O |                  
+    | GJ/S | : | KDUP |                 | XRPG | : | MD/T |                  
+    | VJ/S | S | ZD/: |                 | XD/P | S | /:QO |                  
+    | ZD/: | I | MJ/A |                 | FIWB | I | GJQG |                  
+    | MJ/A | U | V:/C |                 | NIWB | U | A:PO |                  
+    | MJT/ | # | MJ/N |                 | E:PG | # | GR/C |                  
+    | WDTN | D | ZD/: |                 | @J/J | D | "D/I |                  
+    | LR/H | R | MJ/A |                 | VJ/J | R | S:/Q |                  
+    | S#T: | J | Y:/C |                 | VJ/E | J | X$$$ |
+    | J:/C | N | MJ/N |                 | :S/J | N | VJ/F |
+    | MJ/N | F | MJ/A |                 | TR/H | F | VJ/E |
+    | MJ/A | C | MJYO |                 | GJPB | C | LJPG |
+    | HJIC | K | HDUP |                 | H:/C | K | JJQG |
+    | OJ/N | T | :D/Y |                 | URT: | T | DJ/T |
+    | HJ/A | Z | /#O$ |                 | VJ/N | Z | KJ/P |                  
+    | VJP/ | L | LI/" |                 | M#/I | L | R/// |                  
+    | MJIN | W | AJ/M |                 | GJ/N | W | //// |
+    | A:/O | H | I/@D |                 | GJ/N | H | //// |
+    | GJTA | Y | /#/T |                 | //YA | Y | //// |
+    | J#/P | P | GJQO |                 | B#YG | P | IWBN |
+    | VJTA | Q | A:PO |                 | ZD/P | Q | IWB/ |
+    | J#/P | O | OR/C |                 | //// | O | GNIW | 
+    | V$$$ | B | VJ/F |                 | //#$ | B | BNIA | 
+    | E:QG | G | VJ/A |                 | "OJG | G | VSTA |
+    | A:/O | " | MRPG |                 | FLO/ | " | VJT/ |
+    | DS/Q | M | XRQG |                 | P$$$ | M | WITA | 
+    | S:QO | X | $D/T |                 | A/// | X | ZD/P |
+    | MJT# | V | IR/C |                 | VJTF | V | HD/: |
+    | CDQJ | $ | ODT: |                 | VJTA | $ | AU/P | (*) was NS/P
+                                        
+        
+    [End]
+
+    Note by Roberto Sancho: the code from original doc returns to RSC/B
+    by executing instr NS/P. instead of this, we use AU/P to return 
+    back to floatcode
+
+   256  /#  VR//  
+   257  E#  /:PO  B6=0: start char processing
+   258  @#  PJT/  
+   259  A#  HJTA  
+   260  :#  GJ/S  [GJ, "J]=0
+   261  S#  VJ/S  [VJ, $J]=0
+   262  I#  ZD/:  read PTR digit char
+   263  U#  MJ/A  [MJ, XJ]=.... ...n
+   264  ##  MJT/  AL=[MJ, XJ]
+   265  D#  WDTN  Sub .... ...D
+   266  R#  LR/H  if (A>=0) goto 285 (goto if char is > '9')
+   267  J#  S#T:  A=0
+   268  N#  J:/C  D=/E// ////
+   269  F#  MJ/N  SHift -> AL=0, AM=n/// ////
+   270  C#  MJ/A  [MJ, XJ]=n... ...., A=0
+   271  K#  HJIC  D=?
+   272  T#  OJ/N  A=A+D*S
+   273  Z#  HJ/A  
+   274  L#  VJP/  
+   275  W#  MJIN  
+   276  H#  A:/O  
+   277  Y#  GJTA  
+   278  P#  J#/P  
+   279  Q#  VJTA  
+   280  O#  J#/P  goto 262
+   281  B#  V$$$  
+
+                  identify non digit char
+   282  G#  E:QG  dec B7
+   283  "#  A:/O  if (B>=0) goto 286
+   284  M#  DS/Q  Dynamic stop at this address
+   285  X#  S:QO  B7=4
+   286  V#  MJT#  gets back read char to AL: AL=.... ...c, AM=$$$$ $$$$
+   287  $#  CDQJ  A = A XOR [B7 + CD] -> XOR .... ...M if B7=4
+                                             .... ..."       3
+                                             .... ...$       2
+                                             .... ...Y       1     
+                                             .... ...P       0
+                      
+                                                     
+   288  /D  V:TN  A=A-//// ///E
+   289  ED  PR/H  if (A>=0) goto 282 -> if A!=0 -> XORed dones not result in zero -> char does not match -> goto try next match
+
+   290  @D  VJT/  char matched: A=[VJ]=number read so far
+   291  AD  /:PG  decr B6
+   292  :D  KDUP  goto ([KD]+B7) -> if B7=0 goto 309 (char +)
+                                    if B7=1 goto 293 (char Y)
+                                    if B7=3 goto 223 (char ")
+
+                  process char Y
+   293  SD  ZD/:  read PTR char (addr char 1)
+   294  ID  MJ/A  
+   295  UD  V:/C  
+   296  #D  MJ/N  
+   297  DD  ZD/:  read PTR char (addr char 2)
+   298  RD  MJ/A  
+   299  JD  Y:/C  
+   300  ND  MJ/N  
+   301  FD  MJ/A  set [MJ]=ab//  the address given in Yab 
+   302  CD  MJYO  Set addr to store float numbers as B5=[MJ]
+   303  KD  HDUP  goto ([HD]+B7] -> if B7=1 goto 257
+
+   304  TD  :D/Y  
+   305  ZD  /#O$  
+   306  LD  LI/"  
+   307  WD  AJ/M  
+   308  HD  I/@D  
+                  process char +
+   309  YD  /#/T  if (B>=0) goto 351 (on first + = sign of mantissa), continue on second + (sign of exponent)
+   310  PD  GJQO  B6=2
+   311  QD  A:PO  
+   312  OD  OR/C  
+   313  BD  VJ/F  
+   314  GD  VJ/A  
+   315  "D  MRPG  B6=B6+10
+   316  MD  XRQG  B7=B7-3
+   317  XD  $D/T  if (B>=0) goto XXX
+   318  VD  IR/C  
+   319  $D  ODT:  A=0
+   320  /R  DSQG  B7=0
+   321  ER  U:/O  if (B>=0) goto 330
+   322  @R  VJ/F  
+   323  AR  VJ/A  
+   324  :R  XRPG  
+   325  SR  XD/P  
+   326  IR  FIWB  
+   327  UR  NIWB  
+   328  #R  E:PG  dec B6
+   329  DR  @J/J  AM=AM+[@J]
+   330  RR  VJ/J  AM=AM+[VJ]
+   331  JR  VJ/E  [VJ]=AM
+   332  NR  :S/J  AM=AM+ //// ///#
+   333  FR  TR/H  if (A>=0) goto 328
+   334  CR  GJPB  [GJ]=B6
+   335  KR  H:/C  
+   336  TR  URT:  
+   337  ZR  VJ/N  
+   338  LR  M#/I  
+   339  WR  GJ/N  
+   340  HR  GJ/N  -> AL=the float number
+   341  YR  //YA  Store the float number [B5, B5+1]=AL
+   342  PR  B#YG  B5=B5+2
+   343  QR  ZD/P  goto 257 -> read next number
+
+   344  OR  ////  
+   345  BR  //#$  
+   346  GR  "OJG  
+   347  "R  FLO/  
+   348  MR  P$$$  
+   349  XR  A///  
+   350  VR  VJTF  
+                  process char +
+   351  $R  VJTA  
+   352  /J  A:PG  B6=2
+   353  EJ  J#/P  goto 262 -> continue reading digits
+   354  @J  ////  
+   355  AJ  ///O  
+   356  :J  MD/T  
+   357  SJ  /:QO  
+   358  IJ  GJQG  
+   359  UJ  A:PO  
+   360  #J  GR/C  
+   361  DJ  "D/I  
+   362  RJ  S:/Q  
+   363  JJ  X$$$  
+   364  NJ  VJ/F  
+   365  FJ  VJ/E  
+   366  CJ  LJPG  
+   367  KJ  JJQG  
+   368  TJ  DJ/T  
+   369  ZJ  KJ/P  
+   370  LJ  R///  
+   371  WJ  ////  
+   372  HJ  ////  
+   373  YJ  ////  
+   374  PJ  IWBN  
+   375  QJ  IWB/  
+   376  OJ  GNIW  
+   377  BJ  BNIA  
+   378  GJ  VSTA  
+
+   379  "J  VJT/  Entry: patch exit instr in [WI] address 211
+   380  MJ  WITA  
+   381  XJ  ZD/P  goto 257
+   382  VJ  HD/:  
+   383  $J  NS/P  
+   
+
+"J  PJT/  Entry: patch exit instr in [WI] address 211
+    //TA  
+    OJT/
+    @/TA
+    ZD/P  goto 257
+    
+
+PJ  //  LE@#  Mag Instr to load from track 50L FLOACODE CD into cols #D RJ
+    E/  ///:  Read back FLOACODE CD that was overwritted by DECINPUT 
+
+OJ  @/  AU/P  return from subroutine
+

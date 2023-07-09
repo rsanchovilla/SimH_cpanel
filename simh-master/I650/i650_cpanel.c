@@ -94,9 +94,6 @@ void IBM650_OnClick_Sw(void);
 void IBM650_OnClick_BTN(void);
 void IBM650_OnClick_BTN2(void);
 
-// cpanel types constants
-#define IS_IBM650	1	// define CP type contants. must start on 1
-
 // control panel available types
 CP_TYPE cp_types = {
     IBM650_cp, 

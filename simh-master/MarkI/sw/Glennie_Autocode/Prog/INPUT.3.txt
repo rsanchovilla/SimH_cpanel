@@ -1,0 +1,236 @@
+
+    Alick Glennie Autocode compiler 
+
+    Rewriten by Roberto Sancho Apr/2023 
+    using doc on compiler form original author
+            
+    https://archiveshub.jisc.ac.uk/data/gb133-muc/5-9/muc/9/14
+
+      (a) Photocopy of a 16-page typewritten manual describing 
+          Glennie’s AUTOCODE routine. (Probably a draft for a 
+          manual to be entitled The Routine AUTOCODE and its use).   
+
+      (b) Photocopy of 14 pages of Glennie’s lecture notes on 
+          ‘The automatic coding of an electronic computer’ dated 
+          14th December 1952.
+
+
+    [Col /          E ]                 [Col @          A ]              
+                                                            param jump table
+    | QIYB | / | EE/T |                 |      | / | /@$$ | no param
+    | //PB | E | UE$$ |                 | B@QO | E | N/$$ | one teleprinter char as param label 
+    | //O: | @ | E/T/ |                 | PIQB | @ | /@$$ | fractions param
+    | $$$$ | A | G@/C |                 | $$$$ | A | P/$$ | loop param
+    | $$$$ | : | I//N |                 | $$$$ | : | NE$$ | repeat param
+    | $$$$ | S | I//S |                 | $$$$ | S | R/$$ | start param
+    | $$$$ | I | B//P |                 | I@QO | I | IA$$ | 
+    | //QO | U |      |                 | QS/P | U | O@QG | 
+    | /AUP | # | I/QO |                 | CC/V | # | DSQG | 
+    |      | D | YIQB |                 |      | D | TSO: | 
+    |      | R | JE/P |                 |      | R | DA/: | 
+    | /:PO | J | KE$$ |                 |      | J | ://A | 
+    | E:/Q | N |      |                 |      | N | ://C | 
+    | DSPO | F | U:YO |                 |      | F | J:/N | 
+    | U:YO | C | CEQO |                 |      | C | E//A | 
+    | $$$$ | K | IA/P |                 |      | K | E/T/ | 
+    | T/QO | T | E/QO |                 |      | T | V@TN | 
+    | IA/P | Z | /K$/ |                 |      | Z | LA/H | 
+    | E/QO | L | M@TR |                 |      | L | #A$$ | 
+    | GIQB | W | $:TJ |                 |      | W | E/T/ | 
+    | /A/P | H | E:TN |                 |      | H | E:TN | 
+    |      | Y | DS/M |                 |      | Y | PA/H | 
+    |      | P | $$$$ |                 |      | P | "A$$ | 
+    | //O: | Q | /KUC |                 |      | Q | E:YG | 
+    | I//S | O | //O: |                 | //QO | O | LA/T | 
+    | B/$$ | B | Y:/N |               9 | D/// | B | /:PG | 
+    | /:YO | G | X@TR |              10 | R/// | G | PA/T | 
+    | /:PO | " | ://S |                 | //// | " | DS/Q | 
+    | M/QO | M | S/QO |                 | ///$ | M | :/QB | 
+    | IA/P | X | HIQB |                 | //// | X | ://P | 
+    | E/QO | V | /A/P |                 | $/// | V |      | 
+    | G@QG | $ |      |                 | //// | $ |      | 
+                                                            
+    [End]
+  
+                 process command parameters 
+
+                 read commands params           
+                 enter with B5=func num, B6=param type
+
+    0  //  QIYB  [FUNC]=B5 -> save command number in sentence
+    1  E/  //PB  [//]=B6   -> save B6=param type
+    2  @/  //O:  clear acc
+    3  A/  $$$$
+    4  :/  $$$$
+    5  S/  $$$$
+    6  I/  $$$$
+    7  U/  //QO  B7=param type
+    8  #/  /AUP  goto [B7 + /A] param jump table
+                   if 0 (/) -> goto 65  no param 
+                   if 1 (E) -> goto 13  one teleprinter char as param label 
+                   if 2 (@) -> goto 65  fractions param
+                   if 3 (A) -> goto 23  loop param
+                   if 4 (:) -> goto 45  repeat param
+                   if 5 (S) -> goto 11  start param: one optional teleprinter char as param label 
+
+    9  D/  
+   10  R/  
+
+                 one optional teleprinter char as param label    
+
+   11  J/  /:PO  B6=0 flag allows / as label
+   12  N/  E:/Q  skip next instr
+
+                 one teleprinter char as param label    
+
+   13  F/  DSPO  B6=-1 flag -> char / not allowed as return char
+   14  C/  U:YO  B5=8 max number of leading / to skip allowed
+   15  K/  $$$$
+
+   16  T/  T/QO  B7=*
+   17  Z/  IA/P  call read param char from PTR
+   18  L/  E/QO  B7=c/// the param char
+   19  W/  GIQB  [GI]=B7 Label - the label param of command
+   20  H/  /A/P  goto process command
+   21  Y/  
+   22  P/  
+
+                 loop param nnnr
+                 n is 0..9 (/E@A:SIU#D)
+                 r is index (KLNOQR)
+
+   23  Q/  //O:  clear A
+   24  O/  I//S  [I/] value = 0
+   25  B/  B/$$  cn goto 26 - read digit
+   26  G/  /:YO  B5=0 no skip leading / 
+   27  "/  /:PO  B6=0 flag allows / as digit
+   28  M/  M/QO  B7=*
+   29  X/  IA/P  call read param char from PTR
+   30  V/  E/QO  B7=c/// the param char
+   31  $/  G@QG  B7=B7-10
+   32  /E  EE/T  if (B>=0) goto 40 end of value
+   33  EE  UE$$  cn goto 40 end of value
+   34  @E  E/T/  AL=[/E] digit char 0..9
+   35  AE  G@/C  D=10
+   36  :E  I//N  AL=AL+D*[I/] value
+   37  SE  I//S  [I/] value = AL
+   38  IE  B//P  goto 26 read digit
+   39  UE  
+   40  #E  I/QO  B7=[I/] the param value nnn
+   41  DE  YIQB  [YI] index1 = B7 -> save loop value nnn in index1
+   42  RE  JE/P  goto determine index 
+   43  JE  KE$$  cn goto determine index 
+   44  NE  
+
+                 repeat param r
+                 r is index (KLNOQR)
+
+   45  FE  U:YO  B5=8 skip leading / 
+   46  CE  CEQO  B7=*
+   47  KE  IA/P  call read param char from PTR
+
+                 determine index
+
+   48  TE  E/QO  B7=c/// the param char
+   49  ZE  /K$/  AL=[/K + B7] -> get the flags for index  
+   50  LE  M@TR  AL=AL AND ///$ ////
+   51  WE  $:TJ  AL=AL XOR ///E ////
+   52  HE  E:TN  AL=AL-1
+   53  YE  DS/M  if (A>=0) dynamic stop because error: char is not an index
+                 SYNTAX ERROR: param char should be an index in loop/repeat
+   54  PE  $$$$  
+   55  QE  /KUC  D=[/K + B7] -> get the flags for index
+   56  OE  //O:  clear acc
+   57  BE  Y:/N  shift. Now AL=xxxx ixxx  where i=index num 1..6
+   58  GE  X@TR  AL=AL AND //// $///
+   59  "E  ://S  [:/ S/]=//// i/// save in temp
+   60  ME  S/QO  B7=index 2..7
+   61  XE  HIQB  [HI] index0 = B7 -> save loop/repeat index 1..6 in index0
+   62  VE  /A/P  goto process command
+   63  $E  
+   64  /@  
+
+                 params read, now process command
+                 SENTENCE command [parameters] (OP=9)
+
+   65  E@  B@QO  B7=9
+   66  @@  PIQB  [PI] OP=9 operation is command function
+   67  A@  $$$$
+   68  :@  $$$$
+   69  S@  $$$$
+   70  I@  I@QO  B7=*
+   71  U@  QS/P  transfer to adroutine
+   72  #@  CC/V  cue to INPUT.4 (process command)
+   73  D@  
+   74  R@  
+   75  J@  
+   76  N@  
+   77  F@  
+   78  C@  
+   79  K@  
+   80  T@  
+   81  Z@  
+   82  L@  
+   83  W@  
+   84  H@  
+   85  Y@  
+   86  P@  
+   87  Q@  
+
+   88  O@  consts
+   89  B@  
+   90  G@  
+   91  "@  
+   92  M@  
+   93  X@  
+   94  V@  
+   95  $@  
+
+   96  /A  param jump table
+   97  EA  
+   98  @A  
+   99  AA  
+  100  :A  
+  101  SA  
+  102  IA  IA$$  cn goto 103 read param char
+
+                 read param char subroutine
+
+                 call with    ssQO  B7=*
+                              IA/P  call read param
+                 enter with B5=0 -> number of leading /'s to skip (=0 -> no leading / skiped)
+                            B6=0 -> allow return /, =-1 -> generates sintax error
+                 return [E/]=c/// //// -> the read char form PTR
+
+  103  UA  O@QG  B7=B7+1
+  104  #A  DSQG  B7=B7-//QO -> set the return address
+  105  DA  TSO:  clear acc
+  106  RA  DA/:  read PTR
+  107  JA  ://A  [:/ S/]=AM -> Save char //// ///c, AM=0
+  108  NA  ://C  D=//// ///c char read
+  109  FA  J:/N  shift -> AL=0, AM=c/// ////
+  110  CA  E//A  [E/ @/]=AM=c/// ////, AM=0
+
+                 check if $ char, if so go back to read ch (skipped char)
+
+  111  KA  E/T/  AL=c/// ////, AM=0
+  112  TA  V@TN  AL=AL-$/// ////
+  113  ZA  LA/H  if (A>=0) goto 106 -> read ch was $ -> ignore char -> read again
+  114  LA  #A$$  cn goto 105 read PTR
+
+                 check if / char, 
+
+  115  WA  E/T/  AL=c/// ////, AM=0
+  116  HA  E:TN  AL=AL-1
+  117  YA  PA/H  if (A>=0) goto return (char is not /, its a regular char)
+  118  PA  "A$$  cn goto 124 return
+  119  QA  E:YG  B5=B5-1 -> number of /'s to skip. 
+  120  OA  LA/T  if (B>=0) goto 106 -> skip the read / -> read again
+  121  BA  /:PG  /:PG  B6=B6-0 -> just it allow check for its sign
+  122  GA  PA/T  if (B>=0) goto return. allow / as label
+  123  "A  DS/Q  goto * -> if cmd not found then dynamic stop here
+                 SYNTAX ERROR: missing param (cannot be / nor $)  
+  124  MA  :/QB  [:/]=B7
+  125  XA  ://P  goto return to caller
+  126  VA  
+  127  $A  

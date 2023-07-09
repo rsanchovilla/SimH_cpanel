@@ -1,0 +1,242 @@
+   
+     MANCHESTER UNIVERSITY COMPUTING MACHINE LABORATORY
+    
+     Programme Sheet B                  Date. 18.May.1955
+
+    
+    [Routine ECONOMISE     ] p35
+
+    [Col  /    ]                        [     E    ]              
+                                                                          
+    | / | @IQO |\ ignore Q              | / | /NPB | replace mag instr                       
+    | E | PA/O | !  type instr          | E | "KPB | replace m.i by dummy
+    | @ | $$$$ |/__                     | @ | /UHB |___                                     
+    | A | ZIQO |\ ignore instr          | A | JIQO |\ test for y                            
+    | : | PA/T |/  num 2 is involved    | : | CA/T |/ --> num y                             
+    | S | VCT/ | pick up /:// or /Z$$   | S | RIQO |                                        
+    | I | /IQO |\ test for label if     | I | /:HO | examine nature y                       
+    | U | E:QG |! present ignore limit  | U | /:PO |               
+    | # | A:/O |/                       | # | QAUP |___                                     
+    | D | XA/: |\ select cue            | D | YKHO |                                        
+    | R | GJT/ |/                       | R | $CPO |                                        
+    | J | @UTA | dump in @U             | J | /UT/ |               
+    | N | Y@/P |                        | N | YKTJ |               
+    | F | AU/: |                        | F | VATR | treatement as for x
+    | C | //W/ |\ select limit          | C | E:TN |               
+    | K | /UTA |/                       | K | A:/M |               
+    | T | AIQO |                        | T | INPB |               
+    | Z | PA/T |->an n type instr       | Z | YKPB |               
+    | L | SIQO |                        | L | /UHB |               
+    | W | CA/T |-> no x                 | W | TIQO |\ examine z type
+    | H | :IQO |                        | H | HAUP |/__            
+    | Y | /:HO |                        | Y | /UT/ |               
+    | P | /:PO |                        | P | WKTJ | deals with va                      
+    | Q | GAUP |___exam type y          | Q | VATR |                                    
+    | O | "KHO |                        | O | E:TN |                                    
+    | B | $CPO | these inst are obeyed  | B | $CPO |                                    
+    | G | /UT/ | in cue va              | G | A:/M |                                    
+    | " | "KTJ |                        | " | LNPB |                                    
+    | M | VATR |                        | M | WKPB |___            
+    | X | E:TN |                        | X | @UTF |\ test if it is possible
+    | V | //T$ |                        | V | WA/H |/ to eliminate a instr
+    | $ | A:/M |                        | $ | "KT/ |               
+                                                                                 
+    [End]
+
+Note by Roberto Sancho: we choose to interpret Q switch as 
+   Q mode (complex mode) set when value of [@I] is ////. 
+   (see note on INPUT.1B.txt). Thus we have to reverse the test made
+   on [@I] here:
+
+        addr  original value   new value
+        E/    E:/O             PA/O         if (B>=0) skip next instr -> if (B>=0) goto 80 
+        @/    PA/P             $$$$         goto 80                   -> Dummy instr
+
+Note by Roberto Sancho: original code does not check the case l.m.i is zero
+   This can be a bug, or can be a side effect of missing code on ASSEMBLY
+   on l.m.i handling. We just add the check to avoid breaking the compilation
+   by loading lmi track //// (that will overwrite the compiler)
+
+        addr  original value   new value
+   12   N/    @UWO             Y@/P         B3=[@U]   ->  goto 85
+
+   85                          Y@  Y@//     c.n.
+   86                          P@  @UTF     AL=-[@U]
+   87                          Q@  PA/H     if (A>=0) goto 80 -> no economise if l.m.i. is zero 
+   88                          O@  @UWO     B3=[@U] 
+   89                          B@  G@/P     goto 13  
+   90                          G@  N///     c.n.        
+
+
+
+                Entry from TRANSLATE(6)
+   0  //  @IQO  B7=[@I] -> B7 = Q switch (defaults to ///T)   
+
+   original code
+   1  E/  E:/O  if (B>=0) goto 3
+   2  @/  PA/P  goto 80
+
+   fixed code
+   1  E/  E:/O  if (B>=0) goto 80 -> no economise to be done on complex mode instr
+   2  @/  $$$$  dummy
+
+                identify & remove unnecessary data track read/writes
+
+   3  A/  ZIQO  B7=[ZI] = z switch
+   4  :/  PA/T  if (B>=0) goto 80 -> no economise if no z value
+
+   5  S/  VCT/  AL=[VC] = /:// /Z$$
+   6  I/  /IQO  B7=[/I] = instr label
+   7  U/  E:QG  decr B7
+   8  #/  A:/O  if (B>=0) goto 11 -> skip load [GJ] from dir if label set, so [GJ] keeps no match value for x
+
+   9  D/  XA/:  load directory at cols # D R J
+  10  R/  GJT/  AL=[GJ, "J] -> last mag instr (l.m.i.)
+
+  11  J/  @UTA  [@U, AU]=AL -> last mag instr (l.m.i.) from dir
+
+  original code
+  12  N/  @UWO  B3=[@U]
+
+  Fixed code
+  12  N/  Y@/P goto 85 
+ 
+  13  F/  AU/:  exec mag instr [AU] -> read in # D R J the code for lmi
+  14  C/  //W/  AL=[B3] -> get the l.m.i
+  15  K/  /UTA  [/U]=AL
+  16  T/  AIQO  B7=[AI]= n/v switch for x (///T -> x is va or vna)
+  17  Z/  PA/T  if (B>=0) goto 80 -> no economise if x is 'n'
+  18  L/  SIQO  B7=[SI] = x switch
+  19  W/  CA/T  if (B>=0) goto xxx  -> goto if no x
+  20  H/  :IQO  B7=[:I]=v/n count for x
+  21  Y/  /:HO  B4=0
+  22  P/  /:PO  B6=0
+  23  Q/  GAUP  if (B7=0) goto 35 -> x is a float constant
+                       1       24 -> x is va float variable
+                       2       33 -> x is vna float indexed variable
+
+                economise on x=va 
+
+  24  O/  "KHO  B4=["K] get x data track read from matrix instr
+  25  B/  $CPO  B6=[$C] = /Z$$ from matrix instr
+  26  G/  /UT/  AL=[/U] = get l.m.i from directory
+  27  "/  "KTJ  AL=AL XOR ["K]
+  28  M/  VATR  AL=AL AND $$// ////
+  29  X/  E:TN  decr AL
+  30  V/  //T$  dummy
+  31  $/  A:/M  if (A>=0) goto 34 -> goto if ["K]!=[/U] -> not same data track as last one
+  32  /E  /NPB  [/N]=B6 -> overwrite with dummy instr because this data track access is unnecessary
+  33  EE  "KPB  ["K]=B6 -> overwrite with dummy instr
+  34  @E  /UHB  [/U]=B4 = set new l.m.i = the one used to load x
+
+  35  AE  JIQO  B7=[JI] = y switch
+  36  :E  CA/T  if (B>=0) goto xxx -> goto if no y 
+  37  SE  RIQO  B7=[RI] = v/n count for y
+  38  IE  /:HO  B4=0
+  39  UE  /:PO  B6=0
+  40  #E  QAUP  if (B7=0) goto xxx -> y is a float constant
+                       1       41  -> y is va float variable
+                       2       xxx -> y is vna float indexed variable
+                
+                economise on y=va 
+
+  41  DE  YKHO  B4=[YN] get y data track read from matrix instr
+  42  RE  $CPO  B6=[$C] = /Z$$ from matrix instr
+  43  JE  /UT/  AL=[/U] = get l.m.i, the one used to load x
+  44  NE  YKTJ  AL=AL XOR [YK]
+  45  FE  VATR  AL=AL AND $$// ////
+  46  CE  E:TN  decr AL
+  47  KE  A:/M  if (A>=0) goto 50 -> goto if [YK]!=[/U] -> not same data track as last one  
+  48  TE  INPB  [IN]=B6 -> overwrite with dummy instr because this data track access is unnecessary
+  49  ZE  YKPB  [YK]=B6 -> overwrite with dummy instr 
+  50  LE  /UHB  [/U]=B4 = set new l.m.i = the one used to load y
+
+  51  WE  TIQO  B7=[TI] = v/n count for z
+  52  HE  HAUP  if (B7=0) goto xxx -> z is a float constant
+                       1       53  -> z is va float variable
+                       2       xxx -> z is vna float indexed variable
+                
+                economise on z=va
+ 
+  53  YE  /UT/  AL=[/U] = get l.m.i, the one used to load y
+  54  PE  WKTJ  AL=AL XOR [WK], [WK]= z data track write from matrix instr
+  55  QE  VATR  AL=AL AND $$// ////
+  56  OE  E:TN  decr AL
+  57  BE  $CPO  B6=[$C] = /Z$$ from matrix instr
+  58  GE  A:/M  if (A>=0) goto 61 -> goto if [WK]!=[/U] -> not same data track as last one  
+  59  "E  LNPB  [IN]=B6 -> overwrite with dummy instr because this data track access is unnecessary
+  60  ME  WKPB  [WK]=B6 -> overwrite with dummy 
+
+  61  XE  @UTF  AL=-[@U] last mag instr from dir
+  62  VE  WA/H  if (A>=0) goto 77 -> last mag instr from dir was =0
+  63  $E  "KT/  ["K]=AL
+  64  /@  YKTR  AL=AL AND [YK] and with mag instr read y
+  65  E@  WKTR  AL=AL AND [WK] and with mag instr write z
+  66  @@  USTR  AL=AL AND //// ///T
+  67  A@  USTN  AL=AL - //// ///T
+  68  :@  E:/M  if (AL>=0) goto 70
+  69  S@  WA/P  goto 77
+  70  I@  @UT/  AL=[@U] -> last mag instr (l.m.i.) from dir
+  71  U@  G:TC  AL=AL+//// //#/
+  72  #@  /UTA  [/U, EU]=AL
+  73  D@  DSHO  B4=$$$
+  74  R@  DSWG  incr B3
+  75  J@  $$WZ  [B3]=$$$$
+  76  N@  EU/:  write back in # D R J the code for lmi
+
+  77  F@  ZAT/  AL=$$// CE@/ -> cue to ASSEMBLY
+  78  C@  //ZA  Store AL in [B1]
+  79  K@  TA/P  goto 177 -> call RCS -> goto ASSEMBLY
+
+  80  T@  HAQO  B7=[HA]         -> set n switch
+  81  Z@  KKQB  [KK]=B7 = #@//
+  82  L@  WA/P  goto 77
+  83  W@          
+  84  H@   
+
+  Fixed code       
+  85  Y@  Y@//  c.n.
+  86  P@  @UTF  AL=-[@U]
+  87  Q@  PA/M  if (A>=0) goto 80 -> no economise if l.m.i. is zero 
+  88  O@  @UWO  B3=[@U] 
+  89  B@  G@/P  goto 13  
+  90  G@  N///  c.n.        
+
+  91  "@          
+  92  M@          
+  93  X@          
+  94  V@          
+  95  $@          
+  96  /A      
+  97  EA  
+  98  @A  
+  99  AA  
+ 100  :A  
+ 101  SA  
+ 102  IA  
+ 103  UA  
+ 104  #A  
+ 105  DA  
+ 106  RA  
+ 107  JA  
+ 108  NA  
+ 109  FA  
+ 110  CA  LE//     
+ 111  KA  ////     
+ 112  TA  TS//     
+ 113  ZA  $$//     
+ 114  LA  CE@/     
+ 115  WA  N@//     
+ 116  HA  #@//     
+ 117  YA  HE//     
+ 118  PA  K@//     
+ 119  QA  LE//     
+ 120  OA  #E//     
+ 121  BA  TE//     
+ 122  GA  @E//     
+ 123  "A  Q///     
+ 124  MA  /E//     
+ 125  XA  K/@#     
+ 126  VA  $$//     
+ 127  $A  ////     
+

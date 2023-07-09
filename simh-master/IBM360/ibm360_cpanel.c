@@ -4756,7 +4756,7 @@ void Refresh_CardReadPunch_2540(void)
         x=GetControlInfo(S360.ReadHopper, CINFO_X);
         y=GetControlInfo(S360.ReadHopper, CINFO_Y);
         ncp=GetControlInfo(S360.ReadHopper, CINFO_NCP);
-        CopyControlImage(0, ncp,                      x, y, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
+        CopyControlImage(NCP_SURFACE, ncp,             x, y, 0, 0,  // FromCId, FromState, x0, y0, w, h, 
                          S360.ReadHopper, 0,           0, 0); // ToCId, ToState,     x1, y1
         bCardReadHopperBackgroundSet=2; 
     }

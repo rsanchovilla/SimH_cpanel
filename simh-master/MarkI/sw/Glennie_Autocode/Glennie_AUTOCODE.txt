@@ -1,0 +1,198 @@
+GAUTOCODE
+
+Tracks 10..14 y 16 -> 6 full tracks (750 instr aporx)
+boot con H=F/@/ (i.e. entry in track 13)
+use SchemeB
+
+$ char ignored
+" char for ->
+
+FS   0123456789            +     -
+LS   /E@A:SIU#DRJNFCKTZLWHYPQOBG"MXV$
+
+type sv@vvvvvvvivivvivvivvv+iivva-vv$
+     dddddddddd7 4  2  3    65        index          
+
+     char type
+      $ ignore char 
+      s separator
+      i index
+      @ define var addr
+      a assign ->
+      v var 
+      + sign 
+      - sign 
+
+
++a[r]      if using r, add index to instr
+           aa T#    AL=S signed   <-- clear acc flag (also clears upper arith mode flag)
+           aa TC    AL=AL+S signed
+           aa /J    AM=AM+S       <-- upper arith mode flag
+           
+           
+-a[r]      if using r, add index to instr
+  
+           aa TF    AL=-S signed   <-- clear acc flag (also clears upper arith mode flag)
+
+           aa TN    AL=AL-S signed
+
+           DS TJ    A=A XOR $$$$ $$$$  <-- upper arith mode flag
+           aa /J
+           DS TJ    A=A XOR $$$$ $$$$
+
++a[r]b[q]  if - use instr /D instead of /F
+-          aa /K    D=S signed
+           bb /F    A=A+D*S signed  
+           set upper arith mode flag    
+
+-> b[r]    if using r, add index to instr
+           bb TA    S=AL, Clear A
+           bb /A    S=AM, Clear AM  <-- upper arith mode flag
+           clear acc flag
+           
+           
+r->a       aa TB+r  S=B           
+r-a        aa TW+r  B=B-S
+a->r       aa TO+r  B=S
+
+a @ tt     set addr of [a]=tt
+
+FRACTIONS/+12->a/+034->b////    [aa] = +0.12 value. [aa] must be S0 or S1
+
+TESTA/l      if (A>=0) goto ENTRY/l
+
+             clear acc flag  
+             if addr_cn for label l = 0 then 
+                // label not yet defined. create a forward reference
+             
+                s  :   s+1 /H      
+                s+1:   //  $$  <-- this is the control number cn    
+                set addr_cn for label l  = s+1 $$
+             
+             else 
+                // label already defined. Use its control number
+                s  :   addr_cn  /H      
+             
+TESTB/l      if (B>=0) goto ENTRY/l
+
+             idem que TESTA pero con instr /T (IF (B>=0) goto) en vez de /H
+
+CONTROL/l    goto ENTRY/l
+             idem que TESTA pero con instr /P (goto) en vez de /H
+
+
+ENTRY/l      clear acc flag 
+             if addr_cn for label l = 0 then  
+                // first time this label is used. create the control number
+                set addr_cn for label l  = s $$
+                s:   s  $$      <-- this is the control number cn 
+             else
+                // we are satisfaying a forward reference
+                set at address addr_cn : s-1 $$
+
+
+ERASE/l      clear acc flag    
+             set addr_cn for label l = 0 
+
+LOOP/10r     r should be an index
+
+             cn for label_idx r = s //
+             s   : s+2  TO+r    B=S
+             s+1 : E:   /Q      skip next instr
+             s+2 : const        loop const x 2
+             
+             
+REPEAT/r     A: TG+r            B=B-2   
+             cn /T              if (B>=0) goto cn for label_idx r
+             
+SUBROUTINE/t   s: s   QO        B7=*
+                  GS  /P        call RCS
+                  t*2 /V        subroutine t
+                  
+ADROUTINE/t    s: s   QO        B7=*
+                  QS  /P        call RCS
+                  t*2 /V        ad-routine t
+                  
+CLOSE          NS/P             return from subroutine
+
+WRITE/t      save compiled routine as t
+
+     write S0 y/o S1 segun cod y consts
+     usa track ya definifo en dir entry (Tr 34 L) para generar cue
+          genera mag instr para load routine 
+          entry point es $$$$ 
+          esto hace el cue y la escribe en la dir entry
+     S3 S4 S5 cleared
+
+START/t               
+START//////// -> cue es routine 0 del dir
+
+   init B1 
+   call t as adroutine
+
+
+Dynamic Stops during compilation
+
+O/  DS/O  SYNTAX ERROR: @ with no var      
+C@  DS/Q  SYNTAX ERROR: unknown command                  
+YE  DS/M  SYNTAX ERROR: param char should be an index in loop/repeat
+"A  DS/Q  SYNTAX ERROR: missing param char (cannot be / nor $)  
+I@  DS/Q  SYNTAX ERROR: FRACTIONS cannot assign value to undef var
+#@  DS/M  SYNTAX ERROR: FRACTIONS cannot assing value to var outside S0 S1
+$/  DS/O  OVERFLOW ERROR: routine too big
+
+Run time library
+
+SUBROUTINE W -> DECINPUT/A cue to input signed fractions (to AL)
+SUBROUTINE H -> DECINPUT/A cue to input signed integer (to AL)
+SUBROUTINE Y -> PRINT CR LF, clear Acc
+SUBROUTINE P -> PRINT INTEGER (from AL), then space, clear Acc
+SUBROUTINE Q -> PRINT NUMBER WITH DECIMALS (AM.AL), then CR LF, clear Acc
+SUBROUTINE O -> DIVISION return AL=x/AL, assuming x@MI and y@VI 
+SUBROUTINE B -> SQUAREROOT return AL=sqrt(AL)
+
+
+Hints
+
+; print c as integer using DECOUTPUT (should load c in AM, not in AL)
+z@VA        ; z= constant 0
+FRACTIONS +0->VA
++z +zz +c  SUBROUTINE Q 
+
+; get index value
+b@IS c@MA   ; b=constant from PERM = -0.5 (as signed fraction)
+LOOP 10n
+   n->c     ; c=20 on first iteration
+   -bc ->c  ; c=-(-0.5)*c, result in AM
+REPEAT n
+   
+; set index value
++c +c ->c c->n  ; index hold the value mult by 2
+
+; incr index value
+i@DS        ; i=contant from PERM = -1 (as integer)
+n-i n-i     ; n=n-(-1) so increment index twice
+
+; print contents of a var (fraction)
++x SUBROUTINE Q
+
+; print contents of a var (integer)
++x SUBROUTINE P
+
+; read a fraction from paper tape 
+; (number in form .nnnn+ or .nnnn-)
+SUBROUTINE W ->x 
+
+; read an integer from paper tape 
+; (number in form nnnn+ or nnnn-)
+SUBROUTINE H ->x 
+
+; division
+in order to give meaningfull results, the following 
+restrictions apply
+
+uses x@MI y@VI
+on entry:
+    abs(x) should be < abs(AL)
+    abs(x/AL) should be < 0.5
+returns: AL=x/AL

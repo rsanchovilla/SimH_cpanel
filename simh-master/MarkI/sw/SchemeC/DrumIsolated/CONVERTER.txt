@@ -1,0 +1,141 @@
+CONVERTER
+
+    Purpose: To convert the number in the accumulator interpreted 
+             in the form 
+                           AM     +   AL
+                             +/-        f
+
+             to the normalised floating binary form
+
+    Cue: magnetic Storage: single half track
+         electronic storage: tube 0
+         control number: $$
+         self-resetting
+
+    Link: closed
+
+    Input details: conventional procedure
+  
+    Effects:
+       
+        +---------+---------------------+-----------------+ 
+        |  Lines  | Initial             | Final           |
+        | altered | contents            | contents        |
+        +---------+---------------------+-----------------+ 
+        | AL      |                     | AL       = a    |
+        |         |                     |   +/-f          |
+        |         | x = AM    +   AL    |                 |
+        |         |       +/-       f   | AM       = 2p   |
+        | AM      |                     |   +/-           |
+        |         +---------------------+-----------------+
+        | D       |                Irrelevant             |
+        +---------+---------------------------------------+ 
+
+        x=a.2^p where 0.5 > |a| >0.25, 256 > p > -256
+
+    Time: approx 40 ms. in the case AM!=0; otherwise approx 45 ms
+
+    Notes: May be used to convert the results of the DIVISION and
+           DECINPUT routines. For this reason the routine is
+           designed for tube 0
+
+    Note by Roberto Sancho: as this routine needs AM as input parameter, it
+       cannot be called using regular RCS. See "To use AM as routine parameter"
+       into PARAM.txt file to details on how the routine call needs to be done.
+
+       CONVERTER returns the float number in AL and AM. Can be stored directly 
+       to floating binary accumulator (f.b.a) at address #I..JI
+                
+                           | # I / S | <- [#I, DI] = AL = a
+                           | R I / E | <- [RI, JI] = AM = 2p
+
+            sets [#I, DI] = a  = AL (signed fractional form)
+                 [RI, JI] = 2p = AM (signed integral form)
+
+                 float number = a.2^p   where 0.5 > |a| >= 0.25
+                                              256 > p > -256
+                                        range approx 4*10^-78 .. 2*10^76
+
+       when stored in memory, float number is packed in two short line:
+
+            float = 40 bit quantity (two short lines)
+
+                    bits 0 ..29 -> contains a in signed fraction form
+                    bits 30..39 -> contains 2p in signed integer form
+
+       To load f.b.a from line pair [s, s+1] it is necessary to unpack it
+
+                           | / / T : | <-- clear acc
+                           | H : / C | <-- D=2^10
+                           |  s  / N | <-- shift [s, s+1] 10 bits into AL and AM
+                           | # I / S | <-- [#I, DI] = AL = a
+                           | R I / E | <-- [RI, JI] = AM = 2p
+                 
+       To store f.b.a into line pair [s, s+1] it is necessary to pack it
+
+                           | / / T : | <-- clear acc
+                           | H : / C | <-- D=2^10
+                           | # I / N | <-- shift a value 10 bits 
+                           | @ I / U | <-- save AL, AL=AM, AM=0
+                           | R I / F | <-- shift exp value 10 bits -> AL=packed float 
+                           |  s  / S | <-- save packed float in [s, s+1]  
+
+        To convert f.b.a (with reasonable exponents) to AM integer + 
+        AL fractional form, use:
+        
+             |     T : | <-- clears Acc
+             | # I / K | <-- D=2^10 signed
+             | R I Q O | <-- B7=[RI] -> load in B7 the f.b.a exponent
+             | . . / T | <-- if exponent >=0 goto ---> | E : U N | Shift Acc [B7] bits
+             | # S U N | Shift Acc [19+B7] bits        | . . / P | transfer 
+             | @ I / A | @I used as a                     |
+             | @ I T # | working line                     |
+             |         | <--------------------------------+
+             |         | calls in 
+             |         | DECOUTPUT
+                         
+
+    Ferranti Mark I Programming Manual, third edition 
+    Bodleian Special Collection 
+    MS. Eng. misc. b. 260-C.41.pdf
+    p51
+    
+    [Routine CONVERTER    ] 
+
+    [Col     / ]                        [        E   Track 17R]              
+                                                                          
+    | / | E:TD | round-off              | / | VETA |                                         
+    | E | ME/S | copy ALf               | E | VE/J | 
+    | @ | VE/E | copy AM+/-             | @ | ME/N |          
+    | A | A:/M | test sign of x         | A | VE/U | AL+/-f=a 
+    | : | DSTJ | changes sign           | : | GE/J | AM+/- =2p
+    | S | E:TC | if -ve                 | S | E:TD | round off
+    | I | OE/S | copies !x!=w+f         | I | LS/P | close    
+    | U | GE/E |                        | U | :E// | 
+    | # | DS/J | tests if w=0           | # | IS/C | These instr are
+    | D | U:/M |                        | D | ME/N | obeyed if w=0 and f >= 0.5
+    | R | ISTI | tests if f>=0.5        | R | ME/U | in this case a=0.5 and p=1
+    | J | CE/H |                        | J | VE/F | 
+    | N | MET/ | replaces AM+/- by      | N | VE/A | 
+    | F | VETA | ALf and ALf by 0       | F | A:/J | 
+    | C | META |                        | C | UE/P | 
+    | K | OET/ | replaces w by f        | K | :E// | =36
+    | T | GETA |                        | T | T@// | =80
+    | Z | E:/Q |                        | Z | //// | 
+    | L | TET/ | AL+=80                 | L | N@// | =76
+    | W | GE/@ | AM=r                   | W | //// | 
+    | H | PE/A |                        | H |      | 
+    | Y | PETC |                        | Y |      | 
+    | P | PETC | forms                  | P | USED | r    
+    | Q | LETN | 0+2r-76                | Q | USED |      
+    | O | GETA | or 80+2r-76            | O | USED | f    
+    | B | KEQO | B7=36                  | B | USED |      
+    | G | PEQG | B7=36-2r               | G | USED | w    
+    | " | PEQG |                        | " | USED | 
+    | M | /:UC |                        | M | USED | AL
+    | X | E:/O | these instr mult       | X | USED |   f
+    | V | DSUC | by 2^(38-r)            | V | USED | AM
+    | $ | VE/F |                        | $ | USED |   +/-
+                                                                          
+        
+    [End]

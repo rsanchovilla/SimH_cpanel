@@ -1,7 +1,7 @@
 # SimH_cpanel
 
 
-**NEW!: IBM 370/138 + DASD 3350 visuals + support for DOS/VS
+**NEW!: Ferranti Mark I + R.A.Brooker Autocode + Glennie Autocode
 
 The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
@@ -10,21 +10,36 @@ other devices: tapes, card readers, disk, etc.
 
 IBM360 and i7000 work is based on Richard Cornwell SimH fork, modified to use cpanel modules. 
 swtpc6800 work is based on Bill Beech SimH simulator.
-i701, i650 and NORC simulators are my own SimH simulators
+i650, NORC, i701 and MarkI simulators are my own SimH simulators.
 
 <table>
 <thead>
 <tr>
+<th>Ferranti Mark I</th>
 <th>IBM 360/370</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/MarkI_animated.gif" alt="MarkI" title="Ferranti Mark I" /></p>
+</td>
+<td>
+<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360_animated.gif" alt="IBM360" title="IBM 360" /></p>
+</td>
+</tr>
+</tbody>
+</table>
+
+<table>
+<thead>
+<tr>
 <th>IBM 701</th>
 <th>IBM 650</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>
-<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360_animated.gif" alt="IBM360" title="IBM 360" /></p>
-</td>
 <td>
 <p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701_animated.gif" alt="IBM701" title="IBM 701" /></p>
 </td>
@@ -36,6 +51,12 @@ i701, i650 and NORC simulators are my own SimH simulators
 </table>
 
 Currently supports visuals emulation for:
+
+* Ferranti Mark I Electronic Computer (APR/2023)
+  * Creed 7B Teleprinter, Creed 6S Perforator, Creed 7P Perforator
+  * Main console (as in 1951)
+
+  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Doc/Ferranti%20MarkI%20Screen%20Shots.png) to preview control panels.
 
 * SWTPC 6800 (MAY/2022)
   * SWTPC MF68 Floppy Disk
@@ -102,6 +123,24 @@ Hot keys are available when GUI window has the focus:
 
 Press power button to quit the simulator.
 (On i7000 control panels, only ^E, ^Y and ^T available)
+
+## Ferranti Mark I
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/Ferranti_MarkI.zip) to download test run.
+
+Once uncompressed, you will find several ready to run .bat files (among others): 
+
+* execute `run CPanel MarkI - Brooker Autocode (1955).bat` batch file to run R.A.Brooker original Autocode compiler
+* execute `run CPanel MarkI - Glennie Autocode (1952).bat` batch file to run A.Glennie Autocode compiler
+* execute `run CPanel MarkI - Draughts Play (1952).bat` batch file to play Christopher Strachey's Draughts Game. Board is displayed in scope tube.
+* execute `run CPanel MarkI - Love Letters (1952).bat` batch file to run Christopher Strachey's Love Letter programme
+* execute `run CPanel MarkI - Scheme A (1951).bat` to run Alan Turing Scheme A
+* execute `run CPanel MarkI - Scheme B (1952).bat` to run Brooker + Glennie Scheme B
+* execute `run CPanel MarkI - Scheme C (1953).bat` to run Brooker Scheme C
+* execute `run CPanel MarkI - Scheme T (1954).bat` to run Toronto University Scheme T
+
+  ![Ferranti Mark I DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/MarkI.png)
+
 
 ## SWTPC 6800
 

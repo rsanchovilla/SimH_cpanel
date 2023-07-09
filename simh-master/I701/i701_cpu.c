@@ -193,7 +193,7 @@ int usec_to_ticks(int usec)
 // input: d is 36bits fullword or 18bits half word in ibm 701 format
 //        addr is -4095 .. 4096. if addr==-4096 -> write full word at addr 0 (as addr was -0)
 // return 0 if write addr invalid
-//        MR is updated with 36 bits word are readed from CRT
+//        MR is updated with 36 bits word writen to CRT
 int WriteAddr(int addr, t_int64 d, char * msg)
 {
     if ((addr > 4095) || (addr < -4096)) return 0;
@@ -225,7 +225,7 @@ int WriteAddr(int addr, t_int64 d, char * msg)
 
 // return 0 if read addr invalid
 //        d is 36bits fullword or 18bits half word in ibm 701 format
-//        MR is updated with 36 bits word are readed from CRT
+//        MR is updated with 36 bits word readed from CRT
 int ReadAddr(int addr, t_int64 * d, char * msg)
 {
     if ((addr > 4095) || (addr < -4096)) return 0;
@@ -1185,7 +1185,7 @@ t_stat sim_instr(void)
 
     /* How CPU execution is simulated
 
-    Sim Interval count one simulated machine cicle time (12 msec) = one tick
+    Sim Interval count one simulated machine cycle time (12 msec) = one tick
     A IBM 701 instruction is divided into interpretation cycle and execution cycle
     and needs CpuTicksUsed ticks to be executed
     
@@ -1622,7 +1622,7 @@ t_stat cpu_set_speed(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
     MachineCycle_usec = 12; 
     CpuSpeed.TicksMax  = (int) (CpuSpeed.msec * CpuSpeed_Acceleration * 1000 / (100.0 * MachineCycle_usec));
     // Clock set to 83 KHz (ticks per sec)
-    CpuSpeed.TicksObjectivePerSec = (int) (1000000 * CpuSpeed_Acceleration / (MachineCycle_usec*100) );
+    CpuSpeed.TicksObjectivePerSec = (int) (1000000.0 * CpuSpeed_Acceleration / (MachineCycle_usec*100.0) );
     return SCPE_OK;
 }
 

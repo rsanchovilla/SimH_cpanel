@@ -1,0 +1,67 @@
+
+; FLOATCODE Test routines
+; Flotcode is implemented as a working PERM, so machine should be started with H=/A@E
+
+; Prepare directory setting sequences
+K /# @ //O$ R/@/        ; the master routine, entered as floatcode intructions code
+K @# @ //// LE@#        ; FLOATCODE part 2 (is the entry point)
+K :# @ GJ// WE@#        ; FC.DECINPUT
+K I# @ :/// HE//        ; FC.DECPRINT
+K ## @ $$// YE//        ; FC.PRINTA
+K R# @ $$// QE//        ; FC.SQUAREROOT
+K N# @ $$Q$ PE//        ; FC.ARCOT
+K C# @ Y/// OE//        ; FC.EXPONENTIAL
+K T# @ $$// BE//        ; FC.NATURALOG
+K L# @ //// /A@E        ; B.INPUT (to return to B.INPUT on master routine termination)
+K H# @ //// ////        
+K P# @ //// ////
+K O# @ //// ////
+K G# @ //// ////
+K M# @ //// ////
+K V# @ //// ////
+YTP
+
+; paramterize FC.DECINPUT with the track where FLOATCODE CD is stored. 
+; This is necessary as FC.DECINPUT uses cols #D RJ, and thus overwrites FLOATCODE CD 
+; so when FC.DECINPUT terminates, should bring back to S4 and S5 the routine FLOATCODE CD 
+H:/          ; load FC.DECINPUT into in S4 S5 
+K HD E LE@D  ; set Mag Instr to load from track 50L (50L -> LE) FLOACODE CD back into cols #D RJ
+Y:/          ; save back FC.DECINPUT 
+
+; parametrize FC.ARCOT with the FC.SQUAREROOT routine number
+; ARCOT calls FC.SQUAREROOT, so the FC.SQUAREROOT routine number should be
+; provided
+HN/	     ; load FC.SQUAREROOT into in S4 S5 
+K J# E R//V  ; FLOATCODE function to call routine R/ (the FC.SQUAREROOT routine number)
+YN/
+
+LA/	; sets FLOATCODE part 2 in S4 and S5 (the mag instr LE@# is in addr A/)
+G//     ; sets S2 and S3 (FLOATCODE part 1, the working PERM), and calls in the 
+        ; given routine from dir (//) -> the master routine
+
+; now follows input data for master routine
+; input float numbers for FC.DECINPUT called inside master routine
+; note: do not input 0+nn+: it hangs the program. To set a zero value
+; use 1+75- 
+
+Y /F    	; DECINPUT warning char Y indicates that data will be stored at /F and following addresses
+25+      1+	; this is 2.5x10^1     = 25     stored in [/F, EF]
+1+      75-	; this is 1x10^(-75)   = 0      stored in [@F, AF]
+3330001- 2+	; this is 1x10^(0)     = 1      stored in [:F, SF]
+3141592+ 0+	; this is 3.141592     = PI     stored in [IF, UF]
+4-       0+	; this is 4x10^(0)     = 4      stored in [#F, DF]
+"               ; terminates input, return from FC.DECINPUT routine to master routine
+
+; Should print
+;
+;  +2.1590 4213  -78  -> value for zero
+;  +2.4999 9999  +01  -> 25 read by DECINPUT
+;  +4.9999 9999  +00  -> 5=SQRT(25)
+;  +1.6094 3727  +00  -> 1.6..=LN(5)
+;  +4.9999 9997  +00  -> 5=EXP(1.6...)
+;  -3.9999 9999  +00  -> -4 read by DECINPUT
+;  +3.1415 9199  +00  -> PI read by DECINPUT
+;  -7.8539 8000  -01  -> -0.78 = PI/(-4)
+;  -9.0502 2678  -01  -> -0.9 = COT(-PI/4)
+;  -3.3300 0099  +02  -> -333 read by DECINPUT
+;   010 -325195 40982 -> -0.32519540982 * 2^10 = -333.0

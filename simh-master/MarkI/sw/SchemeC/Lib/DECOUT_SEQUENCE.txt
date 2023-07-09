@@ -1,0 +1,112 @@
+SEQUENCE CONTROL for DECOUTPUT
+
+    Purpose: To output a sequence of long signed numbers with
+             automatic round off
+            
+    Cue: Magnetic Storage: single half track
+         electronic storage: tube 0
+         control number: $$
+         non-resetting
+
+    Link: closed, 
+          The SEQUENCE CONTROL uses DECOUTPUT as a subroutine
+
+    Input details: conventional procedure: line TE involves a preset 
+                   parameter, the magnetic half cue of DECOUTPUT.
+                   This is most simply arranged by following the punching
+                   proper with the sequence KTDE ...
+  
+    Effects:
+       
+        +---------+--------------------------+------------+ 
+        |  Lines  | Initial                  | Final      |
+        | altered | contents                 | contents   |
+        +---------+--------------------------+------------+ 
+        | AL      | AL           = see below | Empty      |
+        |         | bits 0..19               |            |
+        |         |                          |            |
+        |         | AL           = (2m-2)//  |            |
+        |         | bits 20..39              |            |
+        |         |                          |            |
+        | AM      | Irrelevant               | Empty      |
+        |         |                          |            |
+        | D       | 2^40 > l >= 0            | Irrelevant |
+        |         |                          |            |
+        | B6      | (n-1)///                 | Unaltered  |
+        |         |                          |            |
+        | B5      | (c-1)///                 | Irrelevant |
+        +---------+--------------------------+------------+ 
+
+    AL bits 0..19 =  ab:C  or  ab:K   according as to whether the number are
+    to be treated on the + (unsigned) or +/- (signed) convention
+    
+    The SEQUENCE CONTROL call in DECOUTPUT repeatedly to output a sequence
+    of m signed numbers stanting in the line pairs ab+2m-2, ab+2m-4, etc
+    the last number standing in ab.
+    
+    Each number is first multiplied into an empty accumulator by l+1
+    (2^40 > l >= 0) and rounded off before calling in DECOUTPUT. the 
+    fractional part of each number is output to n decimal places, the round 
+    off quantity 0.5x10^-n being calculated from (n-1)/// given in B6 on
+    entry.
+  
+    The numbers are arranged in c columns (given by B5 on entry), the punching
+    taking the form
+    
+            L W + w1. f1 Z,  + w2. f2 Z,          ...   + wc. fc Z, 
+                -            -                          -
+
+            L W + wc+1. fc+1 Z,  + wc+2. fc+2 Z,  ...   + w2c. f2c Z, 
+                -                -                      -
+                  
+    where L=carriage return, W=line feed, Z=space
+    
+    By setting l=$$$$ $$$$ the routine may be used to output the whole
+    numbers; l=0 correspond to fractions, l=$$$$ //// enables numbers
+    with a middle binary point to be treated
+                                           
+
+    Ferranti Mark I Programming Manual, third edition 
+    Bodleian Special Collection 
+    MS. Eng. misc. b. 260-C.41.pdf
+    p56
+    
+    [Routine DECOUT_SEQUENCE ] 
+
+    [Col     / ]                        [        E ]              
+                                                                          
+    | / | //HB | copies B4              | / | A:/O | test for new line                       
+    | E | E/YB | copies B5              | E | E/YO | reset column count
+    | @ | /:YO | clears B5              | @ | REQO | plants control number part of cue for DECOUTPUT
+    | A | @/TA | plants AL              | A | @/ZZ |          
+    | : | @/QO | plants ab:C            | : | :EQO | enters DECOUTPUT
+    | S | B/QB |     or ab:K            | S | KS/P |          
+    | I | A/HO | sets counter for seq   | I | A:HG | test for end of sequence
+    | U | E:/N | copy l into @/         | U | NE/T | 
+    | # | @//S | 2^40>l>=0              | # | //HO | restores B4
+    | D | DS/J | if l=2^40-1 then round | D | LS/P | closure  
+    | R | E:TC | off constant omitted   | R | $E// |          
+    | J | V//H |                        | J | WETC | round off (+ve case)
+    | N | W/T: |                        | N | P//P | 
+    | F | :/PB |                        | F | U@// | 
+    | C | ZE/C | calculates 0.5.10^-n   | C | WETA | sets rounding off
+    | K | WE/N | where n=num of fract   | K | N//P | const equal to zero
+    | T | WE/A | digits to output       | T | W/E@ | mag instr for transfering DECOUTPUT to S1
+    | Z | E:PG |                        | Z | GNIW | =1/10
+    | L | NS/O |                        | L | BNIA | 
+    | W | :/PO | restores digit count   | W | //// | becomes 0.5*10^-n
+    | H | DSQO | plants electronic      | H | ///T | (initially n=0)
+    | Y | E/ZZ | link                   | Y |      | 
+    | P | X/T: | clears A               | P |      |      
+    | Q | TEQO | plants mag part of     | Q |      |      
+    | O | A/ZZ | cue for DECOUTPUT      | O |      |      
+    | B | USED | becomes ab:C or ab:K   | B |      |      
+    | G | @//N | mult [ab] * (l+1)      | G |      |      
+    | " | E:/N |                        | " |      | 
+    | M | @E/H | test sign for round    | M |      | 
+    | X | WETN | off purpose            | X |      | 
+    | V | FEQO | control number         | V |      | 
+    | $ | E:YG |                        | $ |      | 
+                                                                          
+        
+    [End]

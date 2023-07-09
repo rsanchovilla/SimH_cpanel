@@ -1,0 +1,312 @@
+
+    Alick Glennie Autocode compiler 
+
+    Rewriten by Roberto Sancho Apr/2023 
+    using doc on compiler form original author
+            
+    https://archiveshub.jisc.ac.uk/data/gb133-muc/5-9/muc/9/14
+
+      (a) Photocopy of a 16-page typewritten manual describing 
+          Glennie’s AUTOCODE routine. (Probably a draft for a 
+          manual to be entitled The Routine AUTOCODE and its use).   
+
+      (b) Photocopy of 14 pages of Glennie’s lecture notes on 
+          ‘The automatic coding of an electronic computer’ dated 
+          14th December 1952.
+
+
+    [Col /          E ]                 [Col @          A ]              
+                                                            command jump table       
+    | VIPO | / | #IQZ |                 | $@/P | / | @/// |  0 write                    
+    | QIQO | E | HI/C |                 | "AQG | E | @/// |  1 fractions                
+    | /AUP | @ | PAT/ |                 | :@QB | @ | NE// |  2 testa                    
+    | DS/Q | A | Y:/N |                 | //YO | A | NE// |  3 testb                    
+    | CAT/ | : | VITC |                 | XXXX | : | NE// |  4 control                  
+    | #STD | S | A:TC |                 | //T/ | S | CE// |  5 entry                    
+    | /#IS | I | /#IS |                 | V@/P | I | @/// |  6 erase                    
+    | DSPG | U | DSPG |                 | M@/T | U | X/// |  7 loop                     
+    | #/QO | # | QAT/ |                 | QIQO | # | H/// |  8 repeat                   
+    | QS/P | D | /#IS |                 | PA$C | D | R/// |  9 subroutine               
+    | PC/V | R | DSPG |                 | Y:TC | R | R/// | 10 adroutine                
+    | KAT/ | J | YITK |                 | V@/P | J | A/// | 11 close                    
+    | VITC | N | V@/P |                 | VIT/ | N | @/// | 12 start                    
+    | /#IS | F | E:HO |                 | E:TC | F | //$$ | const
+    | DSPG | C | E:/Q |                 | QIHO | C | NS/P | gen instr: close
+    | UA$/ | K | /:HO |                 | PAMC | K | //QO | gen instr: adroutine
+    | /#IS | T | DSQO |                 | /#IS | T | GS/P |            subroutine
+    | DSPG | Z | XIQB |                 | DSPG | Z | QS/P |            adroutine
+    | GITK | L | VIT/ |                 | //T/ | L | ///V |            ad/subroutine
+    | LATC | W | FATD |                 | E:TC | W |      |
+    | V@/P | H | ///S |                 | ///S | H | A:TG | gen instr: repeat
+    | HI/C | Y | GIQO |                 | X@/P | Y | ///T |            repear
+    | HAT/ | P | /N$/ |                 |      | P | //TO | gen instr: loop
+    | Y:/N | Q | @//S |                 |      | Q | E:/Q |            loop
+    | /#IS | O | @/YO |                 |      | O | ///H | gen instr: testa
+    | DSPG | B | XA:P |                 |      | B | ///T |            testb
+    | HIQO | G | X@/T |                 |      | G | ///P |            control 
+    | #I$/ | " | MAYG |                 |      | " | /HRI | const to generate instr
+    | YATC | M | $EYB |         goto 76 | J@// | M | /ODI | const to generate instr
+    | V@/P | X | //YO |         goto 65 | /@// | X | BE// | \ 2-way transfer: entry processing
+    | HIQO | V | E:YG |         goto  5 | :/// | V | I@// | /                 transfer processing 
+    | $AQG | $ | XXXX |         goto  8 | U/// | $ | //BQ | const 
+                                                     
+                                                         
+    [End]
+  
+                 Translate (i.e. generates machine code in S4 S5) 
+                 a command sentence already parsed on INPUT routines     
+      
+                 entry: [FUNC]=command code: 
+                           0  write 
+                           1  fractions
+                           2  testa
+                           3  testb
+                           4  control
+                           5  entry
+                           6  erase
+                           7  loop
+                           8  repeat
+                           9  subroutine
+                          10  adrotuine
+                          11  close
+                          12  start
+                        [HI] index0 - the index on loop/repeat
+                        [YI] index1 - the start loop value
+                        [GI] Label - the label of command
+
+                        [MI] Use AM in arth: 0=use AL, 1=use AM
+                        [XI] Clear acc flag: 0=no clear acc, -1=clear acc before use
+                        [VI] sgen - next pos free in routine for generated instr
+
+
+    0  //  VIPO  B6=[VI] sgen <- addr where code is to be generated (0..128)
+    1  E/  QIQO  B7=[FUNC] command code for parsed sentence
+
+                 goto command code
+
+    2  @/  /AUP  goto [B7+ /A] operation code jump table
+
+                 compiler internal error. this command does not generates 
+                 machine code. Landing here should not happend
+
+    3  A/  DS/Q  dynamic stop
+                 INTERNAL ERROR: Landing here should not happend
+
+                 CODE GENERATION FOR:
+                 FUNC=11    CLOSE 
+                 
+                 NS /P
+
+    4  :/  CAT/  AL=[CA] -> get instr to generate
+
+                 gen instr and terminate 
+
+    5  S/  #STD  AL=AL OR //// $$$$ 
+    6  I/  /#IS  [/# + B6]=AL -> save generated instr in S4 S5 (the generated routine)
+    7  U/  DSPG  B6=B6+1
+
+                 terminate 
+
+    8  #/  #/QO  B7=*
+    9  D/  QS/P  transfer to adroutine
+   10  R/  PC/V  cue to TRANS.1 (generation finished)  
+
+                 CODE GENERATION FOR:
+                 FUNC=9     SUBROUTINE n
+                 FUNC=10    ADROUTINE n
+                 
+                 ss QO    B7=*
+
+                 GS /P    call RCS to transfer to subroutine
+                 QS /P    call RCS to transfer to adroutine, or use ...
+
+                 2n /V    n=routine number
+
+   11  J/  KAT/  AL=[KA] -> get 1st instr to generate
+   12  N/  VITC  AL=AL+sgen
+   13  F/  /#IS  [/# + B6]=AL -> save 2 generated instr in S4 S5 (the generated routine)
+   14  C/  DSPG  B6=B6+1
+   15  K/  UA$/  AL=[TA + B7 - 9] -> get 2nd instr to generate
+   16  T/  /#IS  [/# + B6]=AL -> save 2 generated instr in S4 S5 
+   17  Z/  DSPG  B6=B6+1
+   18  L/  GITK  AL=2*[GI] Label - the label param of command
+   19  W/  LATC  AL=AL + ///V -> form the routine to call for RCS
+   20  H/  V@/P  goto 5 gen instr and terminate
+
+                 CODE GENERATION FOR:
+                 FUNC=8     REPEAT r
+                 
+                 A: TG+r  B=B-2
+                 cn /T    if (B>=0) goto loop cn 
+
+   21  Y/  HI/C  D=[HI] index0 - the index r on command
+   22  P/  HAT/  AL=[HA] -> get 1st instr to generate
+   23  Q/  Y:/N  AL=AL+//E/ * D -> shift index to 3rd char, add to instr
+   24  O/  /#IS  [/# + B6]=AL -> save generated instr in S4 S5 
+   25  B/  DSPG  B6=B6+1
+   26  G/  HIQO  B7=[HI] index0 -> the index on loop/repeat
+   27  "/  #I$/  AL=[B7-2+RI] -> get the loop repeat address
+   28  M/  YATC  AL=AL+[YA] -> add 2nd instr to generate
+   29  X/  V@/P  goto 5 gen instr and terminate
+
+                 CODE GENERATION FOR:
+                 FUNC=7     LOOP nnnr
+                 
+                 cn for repeat on r = s 
+
+                 s+2 TO+r  B=S   load the constant nnn into index
+                 E:  /Q    skip next instr (to skip the constant)
+                 const nnn       loop const x 2
+
+   30  V/  HIQO  B7=[HI] index0 -> the index on loop/repeat = 2..7
+   31  $/  $AQG  B7=B7 - //BQ to change B7 to B6 and instr QZ to VB (same instr as PB)
+   32  /E  #IQZ  [B7-2+RI]=B6  save the loop return address
+   33  EE  HI/C  D=[HI] index0 - the index r on command
+   34  @E  PAT/  AL=[PA] -> get 1st instr to generate 
+   35  AE  Y:/N  AL=AL+//E/ * D -> shift index to 3rd char, add to instr
+   36  :E  VITC  AL=AL+sgen 
+   37  SE  A:TC  AL=AL+2
+   38  IE  /#IS  [/# + B6]=AL -> save 1st generated instr in S4 S5 
+   39  UE  DSPG  B6=B6+1
+   40  #E  QAT/  AL=[QA] -> get 2nd instr to generate 
+   41  DE  /#IS  [/# + B6]=AL -> save 2nd generated instr in S4 S5 
+   42  RE  DSPG  B6=B6+1
+   43  JE  YITK  AL=2*[YI] -> get contant value (held in index2), but doubled  
+   44  NE  V@/P  goto 5 gen instr and terminate
+
+                 CODE GENERATION FOR:
+                 FUNC=2     TESTA l    -> transfer instr is /H
+                 FUNC=3     TESTB l    -> transfer instr is /T
+                 FUNC=4     CONTROL l  -> transfer instr is /P
+                 
+                 set "clear acc flag"
+                 if addr_cn for label l = 0 then
+                    // label not yet defined. create a forward reference
+                    s  :   s+1 /P  <-- use the transfer instr needed (/P /H or /T depending on FUNC)
+                    s+1:   //  $$  <-- this is the control number cn    
+                    set addr_cn for label l  = s+1 $$
+                 else 
+                    // label already defined. Use its control number
+                    s  :   addr_cn  /P <-- use the transfer instr needed (/P /H or /T depending on FUNC)
+
+   45  FE  E:HO  B4=1 <- B4=1 signals it is a transfer to a label
+   46  CE  E:/Q  skip next instr
+   
+                 CODE GENERATION FOR:
+                 FUNC=5     ENTRY l
+ 
+                 set "clear acc flag"
+                 if addr_cn for label l = 0 then  
+                    // first time this label is used. create the control number
+                    set addr_cn for label l  = s $$
+                    s:   s  $$      <-- this is the control number cn 
+                 else
+                    // we are satisfaying a forward reference
+                    set at address addr_cn : s-1 $$
+
+   47  KE  /:HO  B4=0 <- B4=0 signals it is a label definition
+   
+   48  TE  DSQO  B7=-1
+   49  ZE  XIQB  [XI]=-1 -> Clear acc flag: -1=clear acc before use
+   
+   50  LE  VIT/  AL=sgen 
+   51  WE  FATD  AL=AL OR //$$ xxxx -> fill last chars
+   52  HE  ///S  [//]=AL save to temp    ->  [//] ss $$ = cn, the control number at current sgen addr
+   
+   53  YE  GIQO  B7=[Label] as parameter on command
+   54  PE  /N$/  AL=[/N + B7] get from label address 
+   55  QE  @//S  [@/]=AL save to temp    -> B7=label
+   56  OE  @/YO  B5=[@/]                 -> B5=[@/]=AL=addr_cn as "addr_cn $$"
+   57  BE  XA:P  jump on [B4] to entry processing (if B4=0), or transfer processing (if B4=1)
+   
+                 entry processing
+
+   58  GE  X@/T  if (B>=0) -> if (B5=addr_cn=0) then is first occurence of label, so goto create control number.
+                
+                 satisfy a forward reference
+ 
+   59  "E  MAYG  B5=B5-/ODI  =-(-/#PB)=+/#PB= +//E/ +/#YB  -> generate into B5 the instruction [addr_cn]=B5    
+   60  ME  $EYB  [J@]=B5 <- save the generated instr 
+   61  XE  //YO  B5=[//] -> B5=s   $$, the control number cn at current sgen addr 
+   62  VE  E:YG  B5=B5-1 -> B5=s-1 $$, the control number cn at sgen-1 addr  
+   63  $E  XXXX  instr replaced with generated instr [addr_cn]=B5    
+   64  /@  $@/P  goto 8 terminate, no instr generated
+ 
+                 first occurence of label
+                 create the control number          
+                 
+   65  E@  "AQG  B7=B7-/HRI = B7-(-/NYB)= +nNYB -> generate into B7 the instruction [label address]=B5  
+   66  @@  :@QB  [T@]=B7 <- save the generated instr                                         
+   67  A@  //YO  B5=[//] -> B5=s   $$, the control number cn at current sgen addr 
+   68  :@  XXXX  instr replaced with generated instr [label address]=B5       
+   69  S@  //T/  AL=[//] -> also generate the cn
+   70  I@  V@/P  goto 5 gen instr and terminate       
+  
+                 transfer processing
+   
+   71  U@  M@/T  if (B>=0) -> if (B5=addr_cn=0) then is first occurence of label, so goto create control number.
+     
+                 label already defined. 
+                 Use its control number
+                 
+   72  #@  QIQO  B7=[FUNC] command code for parsed sentence
+   73  D@  PA$C  AL=AL+[B7-2 + OA]=AL+[B7+PA] -> sgen $$ + transfer instr
+   74  R@  Y:TC  AL=AL+//E/ -> convert ..$$ to ..//
+   75  J@  V@/P  goto 5 gen instr and terminate       
+    
+                 label not yet defined. 
+                 create a forward reference
+   
+   76  N@  VIT/  AL=sgen 
+   77  F@  E:TC  AL=AL+1
+   78  C@  QIHO  B4=[FUNC] command code for parsed sentence
+   79  K@  PAMC  AL=AL+[B4-2 + OA]=AL+[B4+PA] -> sgen+1 + transfer instr
+   80  T@  /#IS  [/# + B6]=AL -> save generated instr in S4 S5 (the generated routine)
+   81  Z@  DSPG  B6=B6+1      
+   82  L@  //T/  AL=[//]
+   83  W@  E:TC  AL=AL+1
+   84  H@  ///S  [//]=AL
+   85  Y@  X@/P  goto 65 create the control number for first occurence of label 
+   86  P@  
+   87  Q@  
+   88  O@  
+   89  B@  
+   90  G@  
+   91  "@  
+   92  M@  
+   93  X@  
+   94  V@  
+   95  $@  
+
+   96  /A  jump table
+   97  EA  
+   98  @A  
+   99  AA  
+  100  :A  
+  101  SA  
+  102  IA  
+  103  UA  
+  104  #A  
+  105  DA  
+  106  RA  
+  107  JA  
+  108  NA  
+  109  FA  
+  110  CA  
+  111  KA  
+  112  TA  
+  113  ZA  
+  114  LA  
+  115  WA  
+  116  HA  
+  117  YA  
+  118  PA  
+  119  QA  
+  120  OA  
+  121  BA  
+  122  GA  
+  123  "A  
+  124  MA  
+  125  XA  
+  126  VA  
+  127  $A  

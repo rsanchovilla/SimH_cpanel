@@ -1,0 +1,210 @@
+DECINPUT/A                        Date.   Apr/2023
+
+    Purpose: Input one signed integer of fraction into the
+    accumulator: for use only with R.C.S/B
+             
+    Cues:  / @ / / J E / /    fractions
+           Y @ / / J E / /    integer
+    
+    Effects: 1. To input a fraction 
+    
+                Input paper tape
+                
+                .02345+     F02345+     
+                
+                represents fraction +0.02345 returned in AL (AM set to zero)
+                / character before initial . (or F) are skipped
+                 
+             2. To input an integer 
+             
+                2345+
+                
+                represents integer +2345 returned in AL (AM set to zero)
+                Any leading / or 0 are skipped
+
+    Based on INPUT/B
+    Floatcode - Bodleian Special Collection 
+    MS. Eng. misc. b. 260-C.42.pdf
+    p16
+    
+    [Routine DECINPUT/A     ] 
+    
+    [Col /          E ]                 [Col @          A ]              
+                                    
+    | Q/// | / | WET: |                 |      | / | NS/P |                          
+    | XEQO | E | OEPO |                 | $$$$ | E |      |
+    | :EQB | @ | PEPB |                 | $$$$ | @ |      |                         
+    | J/QB | A | E:/C |                 | XAPB | A |      |                         
+    | //QO | : | /E/P |                 | A@O: | : |      |                         
+    | "//P | S | BE/C |                 | XE/: | S |      |                         
+    | XE/: | I | @//N |                 | ///I | I |      |                         
+    | CE/M | U | I//U |                 | E:TN | U |      |
+    | "/PO | # | ://N |                 | E:/M | # |      |                         
+    | I/PB | D | "E/C |                 | :@/P | D |      |                         
+    | E:PO | R | @//N |                 | C@QO | R |      |                         
+    | VEPB | J | #//U |                 | OEQB | J |      |
+    | "//A | N | ://N |                 | //O: | N |      |
+    | ///A | F | @//U |                 | VA/P | F |      |
+    | ///C | C | S//U |                 | C@/P | C |      |
+    | J:/N | K | D:/C |                 | ///U | K |      |
+    | VE/C | T | S//N |                 | XAPO | T |      |
+    | ://N | Z | :/TA |                 | NS/P | Z |      |
+    | A//I | L | #//N |                 |      | L |      |
+    | @//N | W | #//U |                 |      | W |      |
+    | @//U | H | @//N |                 |      | H |      |
+    | ://U | Y | ://J |                 |      | Y |      |
+    | E:QG | P | DSTJ |                 | $$$$ | P |      |                     
+    | CE/T | Q | E:TC |                 | //O: | Q |      |                     
+    | "//J | O | NS/P |                 | XAPB | O |      |                     
+    | E:/M | B | QFXC |                 | X@QO | B |      |                     
+    | L//Q | G | @SRL |                 | OEQB | G |      |                     
+    | W/T: | " | Y:/H |                 | MAQO | " |      |                     
+    | XE/: | M | BPSO |                 | $A/P | M | /@// | const 64                                                     
+    | XE/M | X | X$O$ |                 | X@/P | X | //// | save B6
+    | @S/J | V | R/// |                 | ///A | V | //$$ | cn goto 1 entry to read faction
+    | L//M | $ | //// |                 | XAPO | $ | :/$$ | cn goto 5 entry to read integer
+          
+    Tape: INPUT D ONE 
+    Destination Sequence: KAK@///#XEEZ
+          
+    [End]
+     
+    0  //  Q///  
+    1  E/  XEQO  Entry point, input fractions
+    2  @/  :EQB  patch for fractions ...
+    3  A/  J/QB  ... addr 11 set to dummy
+    4  :/  //QO  Entry point, input integer: B7=23 
+    5  S/  "//P  goto 20
+
+    6  I/  XE/:  Read PTR
+    7  U/  CE/M  if (AM>=0) goto 13 (will be <0 on reading +, - or $ char)
+    8  #/  "/PO  patch read PTR instr on addr 6 ...
+    9  D/  I/PB  ... to be clear Acc
+   10  R/  E:PO  B6=1
+   11  J/  VEPB  dummy when reading fractions
+   12  N/  "//A  ["/]=AM <- save sign //// ///P or //// ///M
+   13  F/  ///A  save read digit char [//]=AM=...n, AM=0
+   14  C/  ///C  D=//// ///n, n=0..9 the read-from-ptr digit
+   15  K/  J:/N  Shift -> AL=0, AM=n
+   16  T/  VE/C  D=10
+   17  Z/  ://N  A=A+10*[:/] -> AM=digit + 10*value in [:/]
+   18  L/  A//I  Swap AM<->AL
+   19  W/  @//N  A=A+10*[@/]
+   20  H/  @//U  [@/]=AL, AL=AM, AM=Clear \ save full acc in @/ A/ :/ S/
+   21  Y/  ://U  [:/]=AL, AL=AM, AM=Clear /
+   22  P/  E:QG  decr B7
+   23  Q/  CE/T  if (B>=0) goto 6
+   24  O/  "//J  AL=["/] -> will be //// ///P or //// ///M (sign +/-)
+   25  B/  E:/M  if (A>=0) goto xxx (not taken)
+   26  G/  L//Q  goto 30
+   27  "/  W/T:  
+   28  M/  XE/:  
+   29  X/  XE/M  
+   30  V/  @S/J  AM=AM + //// ///: -> will be ///G for +, //// for -
+   31  $/  L//M  if (A>=0) goto xxx -> goto take for minus
+   32  /E  WET:  clear acc
+   33  EE  OEPO  patch addr 54 with ...
+   34  @E  PEPB  ... NS/P to return to caller
+   35  AE  E:/C  D=1
+   36  :E  /E/P  patched to dummy
+   37  SE  BE/C  D=QFXC @SRL
+   38  IE  @//N  
+   39  UE  I//U  
+   40  #E  ://N  
+   41  DE  "E/C  
+   42  RE  @//N  
+   43  JE  #//U  
+   44  NE  ://N  
+   45  FE  @//U  
+   46  CE  S//U  
+   47  KE  D:/C  
+   48  TE  S//N  
+   49  ZE  :/TA  
+   50  LE  #//N  
+   51  WE  #//U  
+   52  HE  @//N  
+   53  YE  ://J  AL,AM=80 bit fract read from PTR
+   54  PE  DSTJ  return to caller
+   55  QE  E:TC  
+   56  OE  NS/P  
+   57  BE  QFXC  const 
+   58  GE  @SRL  
+   59  "E  Y:/H  
+   60  ME  BPSO  
+   61  XE  X$O$  
+   62  VE  R///  
+   63  $E  ////  
+
+   64  /@    
+   65  E@  $$$$  Entry to read fraction in form F012345+  (same as .012345+)
+   66  @@  $$$$
+   67  A@  XAPB  [XA]=B6 -> save B6 index, to be restored on routine close  
+   68  :@  A@O:  clear acc
+   69  S@  XE/:  Read PTR
+   70  I@  ///I  swap AM<->AL
+   71  U@  E:TN  AL=AL-1
+   72  #@  E:/M  if (A>=0) goto 69 -> read a non zero char (should be F or .) -> skip next instr
+   73  D@  :@/P  goto read PTR again (skip zero char) 
+   74  R@  C@QO  B7=instr F@/P
+   75  J@  OEQB  patch to return to 78 on read fraction terminated
+   76  N@  //O:  clear acc
+   77  F@  VA/P  goto read fraction
+   78  C@  C@/P
+   79  K@  ///U  AL=AM, AM=0 -> store read fraction into AL (was in AM)
+   80  T@  XAPO  B6=[XA] restore B6
+   81  Z@  NS/P  return to caller
+   82  L@   
+   83  W@   
+   84  H@   
+   85  Y@   
+   86  P@  $$$$  Entry to read integer in form 12345+                         
+   87  Q@  //O:  Clear Acc
+   88  O@  XAPB  [XA]=B6 -> save B6 index, to be restored on routine close    
+   89  B@  X@QO  B7=instr X@/P                                                        
+   90  G@  OEQB  patch to return to 94 on read integer terminated
+   91  "@  MAQO  B7=64  
+   92  M@  $A/P  goto read integer number                                       
+   93  X@  X@/P
+   94  V@  ///A  AM=0 
+   95  $@  XAPO  B6=[XA] restore B6 
+   96  /A  NS/P  return to caller 
+   97  EA   
+   98  @A   
+   99  AA   
+  100  :A  #A/:  entry: print <cr><lf>
+  101  SA  DA/:  
+  102  IA  #A/:
+  103  UA  NS/P
+  104  #A  $$L$  CR  
+  105  DA  $$W$  LF
+  106  RA  $$Z$  Space
+
+                 Entry for PRINT INTEGER in AL. 
+                 Prints also a space, and returns with acc=0
+
+  107  JA  ///S  Save AL. 
+  108  NA  //O:  Clear acc
+  109  FA  ///J  AM=value
+  110  CA  CAQO  B7=*
+  111  KA  GS/P  call as subroutine
+  112  TA  PE/V  DECOUTPUT/A print single number print single numbers with both integral (in AM) and fractional part (in AL).             
+  113  ZA  RA/:  print space
+  114  LA  //O:  clear acc
+  115  WA  NS/P  return to caller
+  116  HA  
+
+                 Entry for PRINT NUMBER in AM (integer part) and AL (fraction part). 
+                 Prints CR LF, and returns with acc=0
+
+  117  YA  YAQO  B7=*
+  118  PA  GS/P  call as subroutine
+  119  QA  PE/V  DECOUTPUT/A print single number print single numbers with both integral (in AM) and fractional part (in AL).             
+  120  OA  AAO:  clear acc
+  121  BA  OA/P  goto 100 -> print <CR><LF>
+  122  GA  
+  123  "A  
+  124  MA  
+  125  XA  
+  126  VA  
+  127  $A  
+                 

@@ -104,10 +104,8 @@ ifeq (old,$(shell gmake --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ if (
   $(warning *** Warning *** GNU Make Version $(GMAKE_VERSION) is too old to)
   $(warning *** Warning *** fully process this makefile)
 endif
-
 BUILD_SINGLE := ${MAKECMDGOALS} $(BLANK_SUFFIX)
 BUILD_MULTIPLE_VERB = is
-
 # building the pdp1, pdp11, tx-0, or any microvax simulator could use video support
 ifneq (,$(or $(findstring XXpdp1XX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS}))),$(findstring pdp11,${MAKECMDGOALS}),$(findstring tx-0,${MAKECMDGOALS}),$(findstring microvax1,${MAKECMDGOALS}),$(findstring microvax2,${MAKECMDGOALS}),$(findstring microvax3900,${MAKECMDGOALS}),$(findstring microvax2000,${MAKECMDGOALS}),$(findstring vaxstation3100,${MAKECMDGOALS}),$(findstring XXvaxXX,$(addsuffix XX,$(addprefix XX,${MAKECMDGOALS})))))
   VIDEO_USEFUL = true
@@ -1602,27 +1600,6 @@ H316 = ${H316D}/h316_stddev.c ${H316D}/h316_lp.c ${H316D}/h316_cpu.c \
 	${H316D}/h316_hi.c ${H316D}/h316_mi.c ${H316D}/h316_udp.c 
 H316_OPT = -I ${H316D} -D VM_IMPTIP
 
-
-HP2100D = ${SIMHD}/HP2100
-HP2100 = ${HP2100D}/hp2100_baci.c ${HP2100D}/hp2100_cpu.c \
-        ${HP2100D}/hp2100_cpu_fp.c ${HP2100D}/hp2100_cpu_fpp.c \
-        ${HP2100D}/hp2100_cpu0.c ${HP2100D}/hp2100_cpu1.c \
-        ${HP2100D}/hp2100_cpu2.c ${HP2100D}/hp2100_cpu3.c \
-        ${HP2100D}/hp2100_cpu4.c ${HP2100D}/hp2100_cpu5.c \
-        ${HP2100D}/hp2100_cpu6.c ${HP2100D}/hp2100_cpu7.c \
-        ${HP2100D}/hp2100_di.c ${HP2100D}/hp2100_di_da.c \
-        ${HP2100D}/hp2100_disclib.c ${HP2100D}/hp2100_dma.c \
-        ${HP2100D}/hp2100_dp.c ${HP2100D}/hp2100_dq.c \
-        ${HP2100D}/hp2100_dr.c ${HP2100D}/hp2100_ds.c \
-        ${HP2100D}/hp2100_ipl.c ${HP2100D}/hp2100_lps.c \
-        ${HP2100D}/hp2100_lpt.c ${HP2100D}/hp2100_mc.c \
-        ${HP2100D}/hp2100_mem.c ${HP2100D}/hp2100_mpx.c \
-        ${HP2100D}/hp2100_ms.c ${HP2100D}/hp2100_mt.c \
-        ${HP2100D}/hp2100_mux.c ${HP2100D}/hp2100_pif.c \
-        ${HP2100D}/hp2100_pt.c ${HP2100D}/hp2100_sys.c \
-        ${HP2100D}/hp2100_tbg.c ${HP2100D}/hp2100_tty.c
-HP2100_OPT = -DHAVE_INT64 -I ${HP2100D}
-
 HP3000D = ${SIMHD}/HP3000
 HP3000 = ${HP3000D}/hp_disclib.c ${HP3000D}/hp_tapelib.c ${HP3000D}/hp3000_atc.c \
 	${HP3000D}/hp3000_clk.c ${HP3000D}/hp3000_cpu.c ${HP3000D}/hp3000_cpu_base.c \
@@ -1755,6 +1732,42 @@ SWTP6800MP-A = ${SWTP6800C}/mp-a.c ${SWTP6800C}/m6800.c ${SWTP6800C}/m6810.c \
 	${SWTP6800C}/mp-s.c ${SWTP6800D}/mp-a_sys.c \
 	${SWTP6800C}/mp-b2.c ${SWTP6800C}/mp-8m.c 
 SWTP6800_OPT = -I ${SWTP6800D} -DUSE_SIM_VIDEO -DHAVE_LIBSDL 
+
+HP2100D = ${SIMHD}/HP2100
+HP2100 = ${HP2100D}/hp2100_baci.c ${HP2100D}/hp2100_cpu.c \
+        ${HP2100D}/hp2100_cpu_fp.c ${HP2100D}/hp2100_cpu_fpp.c \
+        ${HP2100D}/hp2100_cpu0.c ${HP2100D}/hp2100_cpu1.c \
+        ${HP2100D}/hp2100_cpu2.c ${HP2100D}/hp2100_cpu3.c \
+        ${HP2100D}/hp2100_cpu4.c ${HP2100D}/hp2100_cpu5.c \
+        ${HP2100D}/hp2100_cpu6.c ${HP2100D}/hp2100_cpu7.c \
+        ${HP2100D}/hp2100_di.c ${HP2100D}/hp2100_di_da.c \
+        ${HP2100D}/hp2100_disclib.c ${HP2100D}/hp2100_dma.c \
+        ${HP2100D}/hp2100_dp.c ${HP2100D}/hp2100_dq.c \
+        ${HP2100D}/hp2100_dr.c ${HP2100D}/hp2100_ds.c \
+        ${HP2100D}/hp2100_ipl.c ${HP2100D}/hp2100_lps.c \
+        ${HP2100D}/hp2100_lpt.c ${HP2100D}/hp2100_mc.c \
+        ${HP2100D}/hp2100_mem.c ${HP2100D}/hp2100_mpx.c \
+        ${HP2100D}/hp2100_ms.c ${HP2100D}/hp2100_mt.c \
+        ${HP2100D}/hp2100_mux.c ${HP2100D}/hp2100_pif.c \
+        ${HP2100D}/hp2100_pt.c ${HP2100D}/hp2100_sys.c \
+        ${HP2100D}/hp2100_tbg.c ${HP2100D}/hp2100_tty.c \
+        ${HP2100D}/hp2100_graph.c \
+        ${HP2100D}/hp2100_plt.c \
+        ${HP2100D}/hp2100_scope.c \
+        ${HP2100D}/hp2100_tv.c \
+        ${HP2100D}/hp2100_cpanel.c \
+        ${SIMHD}/cpanel.c \
+        ${SIMHD}/cpanel_vid.c 
+HP2100_OPT = -DHAVE_INT64 -I ${HP2100D} -DUSE_SIM_VIDEO -DHAVE_LIBSDL -DCPANEL
+
+MarkID = ${SIMHD}/MarkI
+MarkI = ${MarkID}/MarkI_cpu.c \
+    ${MarkID}/MarkI_iodev.c \
+    ${MarkID}/MarkI_sys.c \
+    ${MarkID}/MarkI_cpanel.c \
+    ${SIMHD}/cpanel.c \
+    ${SIMHD}/cpanel_vid.c 
+MarkI_OPT = -I ${MarkID} -DUSE_INT64 -DUSE_SIM_VIDEO -DHAVE_LIBSDL -DCPANEL
 
 #
 # Simulators with CPANEL ======================= End
@@ -2170,7 +2183,7 @@ ALL = pdp1 pdp4 pdp7 pdp8 pdp9 pdp15 pdp11 pdp10 \
 # Simulators with CPANEL ======================= Start
 #
 
-ALL = i650 NORC IBM360 i701
+ALL = i650 NORC i701 IBM360 HP2100 MarkI
 
 #
 # Simulators with CPANEL ======================= End

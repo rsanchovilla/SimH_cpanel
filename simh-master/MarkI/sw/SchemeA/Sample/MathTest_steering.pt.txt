@@ -1,0 +1,593 @@
+
+; ---------------------------
+; Test the following routines
+;    INPUT C
+;    DECOUT D
+;    DECOUT C
+;    DIVISION A 
+;    EXPONENTIAL A
+;    DECOUTPUT
+;    DIVISION B
+;    DECOUTPUT A
+;    COSFAST
+;    INPUT D
+; ---------------------------
+
+; -------------------------
+; store some integer inputs (/F = addr 416)
+; using warning char "
+; -------------------------
+
+" /F 10+
+" @F 2000-
+" :F 300000+
+" IF 40000000-
+
+Q"TEST:INPUT/C###############
+; -------------------------
+; set cue for INPUT C
+; -------------------------
+K VS @ V@EV #EEZ
+
+; -------------------------
+; store fractions using INPUT C (#F = addr 424)
+; -------------------------
+
+Y " #F 5+
+Y " RF 05-
+Y " NF 0066666+
+Y " CF 000777777777-
+Y " TF 0000008888888888888+
+
+Q"TEST:DECOUT/D#PRT#INTEGER##
+; -------------------------
+; set cue for DECOUT D Routine
+; -------------------------
+K VS @ //O$ QEEZ	; cue (1) print integer values 
+; -------------------------
+; set DECOUT D input params 
+; -------------------------
+K /C E :///	; print 4 (:///) successive long lines
+K EC E /F//     ; addr of first line to print 
+; -------------------------
+; call DECOUT D Routine via cue
+; -------------------------
+Y
+; -------------------------
+; Should print:
+;   +10.  -2000.  +300000.
+;   -40000000.
+; -------------------------
+
+
+Q"TEST:DECOUT/D#PRT#FRACT####
+; -------------------------
+; set cue for DECOUT D Routine
+; -------------------------
+K VS @ S/O$ QEEZ	; cue (2) print signed frac values
+; -------------------------
+; set DECOUT D input params 
+; -------------------------
+K /C E S///	; print 5 (S///) successive long lines
+K EC E #F//     ; addr of first line to print 
+; -------------------------
+; call DECOUT D Routine via cue
+; -------------------------
+Y
+; -------------------------
+; Should print:
+;   -.49999R  -.04999R  +.006667
+;   -.000778  +.000001
+; -------------------------
+
+
+Q"TEST:DECOUT/C#PRT#INTEGER##
+; -------------------------
+; set cue for DECOUT C Routine
+; -------------------------
+K VS @ R@AQ PEEZ	; cue (1) print integer values 
+; -------------------------
+; set DECOUT C input params 
+; -------------------------
+K /C E :///	 ; print 4 (:///) successive long lines
+K EC E /F//      ; addr of first line to print 
+; -------------------------
+; call DECOUT C Routine via cue
+; -------------------------
+Y
+; -------------------------
+; Should print:
+;   +000000000010.
+;   -000000002000.
+;   +000000300000.
+;   -000040000000.
+; -------------------------
+
+
+Q"TEST:DECOUT/C#PRT#FRACT####
+; -------------------------
+; set cue for DECOUT C Routine
+; -------------------------
+K VS @ Q@AQ PEEZ	; cue (2) print fract values 
+; -------------------------
+; set DECOUT C input params 
+; -------------------------
+K /C E S///	 ; print 5 (S///) successive long lines
+K EC E #F//      ; addr of first line to print 
+K @C E @///      ; n1=2 -> print with n1 digits before decimal point
+K AC E I///      ; n2=6 -> print with n2 digits after decimal point
+" IC 10000+	 ; = 10^(12-n1-n2) = 10^(12-2-6) = 10^4 = 10000 as 40bit value
+" :C 1000000+ 	 ; = [IC]*10^(n1) -> scaling factor on print
+; -------------------------
+; call DECOUT C Routine via cue
+; -------------------------
+Y
+; -------------------------
+; Should print:
+;   -00.500000
+;   -00.050000
+;   +00.006667
+;   -00.000778
+;   +00.000001
+; -------------------------
+
+; -------------------------
+; Set input data for DIVISION/A function test
+; set cue for INPUT C
+; -------------------------
+K VS @ V@EV #EEZ
+
+  " @C 15+	; [@C]=x integer part     
+Y " /C 1+	; [/C]=x fractional part  x=15.1 
+  " :C 200+	; [:C]=y integer part     y=200  (|y| should be > |x|)
+
+Q"TEST:DIVISION/A############ 
+; -------------------------
+; set cue and call DIVISION A -> result x/y in [@C] (unsigned fractional part)
+; -------------------------
+K VS @ H@KZ HEEZ
+Y
+
+Q"TEST:DECOUTPUT#USGN#FRACT##
+; -------------------------
+; set cue(3) and call DEC-OUTPUT Routine to print unsigned fractional value
+; -------------------------
+K VS @ BEZ/ AEEZ	
+K /C E U///	; print 7 decimal digits
+K EC E @C//     ; addr of first line to print 
+Y
+; -------------------------
+; Should print:
+;   0754999     -> 0.0754999; exact value 15.1/200=0.0755
+; -------------------------
+
+
+; -------------------------
+; Set input data for EXPONENTIAL/A function test
+; set cue for INPUT C
+; -------------------------
+K VS @ V@EV #EEZ
+
+Y " /C 4+	; [/C]=x fractional part  x=0.4
+
+
+Q"TEST:EXPONENTIAL/A######### 
+; -------------------------
+; set cue and call EXPONENTIAL A -> result exp(x)-1 in [:C] (signed fractional part)
+; -------------------------
+K VS @ /@KZ HEEZ
+Y
+
+Q"TEST:DECOUTPUT#SGN#FRACT###
+; -------------------------
+; set cue(4) and call DEC-OUTPUT Routine to print signed fractional value
+; -------------------------
+K VS @ QEZ/ AEEZ	
+K /C E U///	; print 7 decimal digits
+K EC E :C//     ; addr of first line to print 
+Y
+; -------------------------
+; Should print:
+;   +4918246     -> 0.4948246; exact value e^(0.4)-1 = 0.4948246
+; -------------------------
+
+
+
+; -------------------------
+; Set input data for DIVISION/B function test
+; -------------------------
+
+  " /C 22+	; [/C]=x integer part     
+  " :C 7+	; [:C]=y integer part     
+
+
+Q"TEST:DIVISION/B############ 
+; -------------------------
+; set cue and call DIVISION B -> result x/y in [@C] (signed integral part)
+;                                              [/C] (unsigned fractional part)
+; -------------------------
+K VS @ /@BT YEEZ
+Y
+
+Q"TEST:DECOUTPUT/A#INT#FRACT#
+; -------------------------
+; set cue and call DECOUTPUT A Routine to print signed int - unsigned fractional value
+; -------------------------
+Q:PPA:
+K VS @ /@VO BEEZ	
+Y
+; -------------------------
+; Should print:
+;   Q:PPA:+3.142857142  ; exact value 22/7=3.142857142
+; -------------------------
+
+
+  " /C 22-		; [/C]=x integer part     
+  " :C 7+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MPA:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 22-		; [/C]=x integer part     
+  " :C 7-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MMA:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 22+		; [/C]=x integer part     
+  " :C 7-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PMA:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 123456+		; [/C]=x integer part     
+  " :C 7+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PPB:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 123456-		; [/C]=x integer part     
+  " :C 7+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MPB:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 123456-		; [/C]=x integer part     
+  " :C 7-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MMB:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 123456+		; [/C]=x integer part     
+  " :C 7-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PMB:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11+		; [/C]=x integer part     
+  " :C 12+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PPC:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11-		; [/C]=x integer part     
+  " :C 12+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MPC:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11-		; [/C]=x integer part     
+  " :C 12-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MMC:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11+		; [/C]=x integer part     
+  " :C 12-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PMC:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11+		; [/C]=x integer part     
+  " :C 32+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PPD:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11-		; [/C]=x integer part     
+  " :C 32+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MPD:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11-		; [/C]=x integer part     
+  " :C 32-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MMD:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11+		; [/C]=x integer part     
+  " :C 32-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PMD:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11+		; [/C]=x integer part     
+  " :C 3211+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PPE:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11-		; [/C]=x integer part     
+  " :C 3211+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MPE:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11-		; [/C]=x integer part     
+  " :C 3211-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MME:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 11+		; [/C]=x integer part     
+  " :C 3211-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PME:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 0+		; [/C]=x integer part     
+  " :C 3211+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PPF:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 0-		; [/C]=x integer part     
+  " :C 3211+		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MPF:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 0-		; [/C]=x integer part     
+  " :C 3211-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:MMF:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+  " /C 0+		; [/C]=x integer part     
+  " :C 3211-		; [:C]=y integer part     
+K VS @ /@BT YEEZ	; div [@C]=x/y
+Y
+Q:PMF:			; print result
+K VS @ /@VO BEEZ	
+Y
+
+; -------------------------
+; Should print:
+;   Q:MPA:-3.142857142
+;   Q:MMA:+3.142857142
+;   Q:PMA:-3.142857142
+;   Q:PPB:+17636.571428571
+;   Q:MPB:-17636.571428571
+;   Q:MMB:+17636.571428571
+;   Q:PMB:-17636.571428571
+;   Q:PPC:+0.916666666
+;   Q:MPC:-0.916666666
+;   Q:MMC:+0.916666666
+;   Q:PMC:-0.916666666
+;   Q:PPD:+0.343749999
+;   Q:MPD:-0.34375
+;   Q:MMD:+0.343749999
+;   Q:PMD:-0.34375
+;   Q:PPE:+0.003425724
+;   Q:MPE:-0.003425724
+;   Q:MME:+0.003425724
+;   Q:PME:-0.003425724
+;   Q:PPF:+0.
+;   Q:MPF:+0.
+;   Q:MMF:+0.
+;   Q:PMF:+0.
+; -------------------------
+
+
+; -------------------------
+; Set input data for COSFAST function test
+; set cue for INPUT C
+; -------------------------
+K VS @ V@EV #EEZ
+
+Y " /C 0+	; [/C]=x fractional part  x=0.0
+
+
+Q"TEST:COSFAST###############
+; -------------------------
+; set cue and call COSFAST -> result 0.5*cos(2*PI*alpha) in [:C] (signed fractional part)
+; -------------------------
+K VS @ $$HO U/EZ
+Y
+
+Q"TEST:DECOUTPUT#SGN#FRACT###
+; -------------------------
+; set cue(4) and call DEC-OUTPUT Routine to print unsigned fractional value
+; -------------------------
+K VS @ QEZ/ AEEZ	
+K /C E U///	; print 7 decimal digits
+K EC E :C//     ; addr of first line to print 
+Y
+; -------------------------
+; Should print:
+;   +4999999     -> 0.4999999; exact value 0.5*cos(0) = 0.5
+; -------------------------
+
+K VS @ V@EV #EEZ
+Y " /C 5-	  ; x=-0.5
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 4-	  ; x=-0.4
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 3-	  ; x=-0.3
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 2-	  ; x=-0.2
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 1-	  ; x=-0.1
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 0+	  ; x=0.0
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 1+	  ; x=+0.1
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 2+	  ; x=+0.2
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 3+	  ; x=+0.3
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 4+	  ; x=+0.4
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+K VS @ V@EV #EEZ
+Y " /C 5+	  ; x=+0.5
+K VS @ $$HO U/EZ
+Y                 ; [:C]=cos
+K VS @ QEZ/ AEEZ	
+K /C @ U/// :C//
+Y
+
+; -------------------------
+; Should print:
+;   +4999999
+;   -4981122
+;   -4168491
+;   -1629913
+;   +1520213
+;   +4043180
+;   +4999999
+;   +4043180
+;   +1520213
+;   -1629913
+;   -4168491
+;   -4981122
+; -------------------------
+
+Q"TEST:INPUT/D###############
+; -------------------------
+; set cue for MATHTEST Routine in Track 10LR and call it
+; MATHTEST routine calls INPUT/D
+; -------------------------
+K VS @ //// R/@/
+Y
+
+; data to be read by INPUT/D. Its sum is stored into [:C]
+1+ 02+ 004+ 0006- 0+ "
+
+Q"TEST:DECOUTPUT#SGN#FRACT###
+; -------------------------
+; set cue(4) and call DEC-OUTPUT Routine to print unsigned fractional value
+; -------------------------
+K VS @ QEZ/ AEEZ	
+K /C E #///	; print 8 decimal digits
+K EC E :C//     ; addr of first line to print 
+Y
+; -------------------------
+; Should print:
+;   +12340000  -> 0.1234; exact value 0.1+0.02+0.004-0.0006+0=0.1234
+; -------------------------
+
