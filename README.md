@@ -157,9 +157,9 @@ Once uncompressed, you will find several ready to run .bat files (among others):
    * `run CPanel HP2116C - RTE MH (Moving Head) (1971).bat`
    * `run CPanel HP21MX M-Series - RTE-II (1973).bat`
    * `run CPanel HP1000 M-Series - RTE-III (1976).bat`
+   * `run CPanel HP21MX E-Series - RTE-IV (1978).bat`
    * `run CPanel HP1000 E-Series - RTE-IVB (1980).bat`
    * `run CPanel HP1000 F-Series - RTE-6VM (1981).bat`
-   * `run CPanel HP21MX E-Series - RTE-IV (1978).bat`
    
 * Start DOS operating system by executing one of the following batch files:
    * `run CPanel HP2115A - DOS (1969).bat` 
