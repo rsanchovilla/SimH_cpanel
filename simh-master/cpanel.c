@@ -177,6 +177,12 @@
 #else
 #error cpanel.c needs the preprocessor symbol CPANEL, USE_SIM_VIDEO and HAVE_LIBSDL to be defined
 #endif
+#if defined(HAVE_EDITLINE)
+#error cpanel.c needs the preprocessor symbol HAVE_EDITLINE to be *not* defined
+#endif
+#if defined(SIM_HAVE_DLOPEN)
+#error cpanel.c needs the preprocessor symbol SIM_HAVE_DLOPEN to be *not* defined
+#endif
 
 // added to not depend on stdlib max() and min()
 #ifndef MAX

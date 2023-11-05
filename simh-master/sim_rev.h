@@ -31,7 +31,7 @@
 #define SIM_MAJOR       4
 #endif
 #ifndef SIM_MINOR
-#define SIM_MINOR       0
+#define SIM_MINOR       1
 #endif
 #ifndef SIM_PATCH
 #define SIM_PATCH       0
@@ -56,10 +56,8 @@
   information as a consequence of the "sim_rev.h export-subst" 
   line in the .gitattributes file.
  */
-#if !defined(SIM_GIT_COMMIT_ID)
-#define SIM_GIT_COMMIT_ID 0bc77c4d90e9b8307341ee3556fea5701bafbf9d
-#define SIM_GIT_COMMIT_TIME 2021-09-10T11:38:37-07:00
-#endif
+#define SIM_ARCHIVE_GIT_COMMIT_ID 793149d1bdf6fcdbf9ad54632285e3bd13b9e1c8
+#define SIM_ARCHIVE_GIT_COMMIT_TIME 2023-05-11T17:44:25+02:00
 
 /*
   The comment section below reflects the manual editing process which was in place

@@ -54,7 +54,16 @@
    sim_byte_swap_data -      swap data elements inplace in buffer
    sim_shmem_open            create or attach to a shared memory region
    sim_shmem_close           close a shared memory region
-
+   sim_chdir                 change working directory
+   sim_mkdir                 create a directory
+   sim_rmdir                 remove a directory
+   sim_getcwd                get the current working directory
+   sim_copyfile              copy a file
+   sim_filepath_parts        expand and extract filename/path parts
+   sim_dirscan               scan for a filename pattern
+   sim_get_filelist          get a list of files matching a pattern
+   sim_free_filelist         free a filelist
+   sim_print_filelist        print the elements of a filelist
 
    sim_fopen and sim_fseek are OS-dependent.  The other routines are not.
    sim_fsize is always a 32b routine (it is used only with small capacity random
@@ -146,7 +155,7 @@ if ((size == 0) || (count == 0))                        /* check arguments */
 c = fread (bptr, size, count, fptr);                    /* read buffer */
 if (sim_end || (size == sizeof (char)) || (c == 0))     /* le, byte, or err? */
     return c;                                           /* done */
-sim_buf_swap_data (bptr, size, count);
+sim_buf_swap_data (bptr, size, c);
 return c;
 }
 
@@ -347,6 +356,58 @@ if (NULL == _sim_expand_homedir (path, pathbuf, sizeof (pathbuf)))
 return rmdir (pathbuf);
 }
 
+static void _sim_filelist_entry (const char *directory, 
+                                 const char *filename,
+                                 t_offset FileSize,
+                                 const struct stat *filestat,
+                                 void *context)
+{
+char **filelist = *(char ***)context;
+char FullPath[PATH_MAX + 1];
+int listcount = 0;
+
+snprintf (FullPath, sizeof (FullPath), "%s%s", directory, filename);
+if (filelist != NULL) {
+    while (filelist[listcount++] != NULL);
+    --listcount;
+    }
+filelist = (char **)realloc (filelist, (listcount + 2) * sizeof (*filelist));
+filelist[listcount] = strdup (FullPath);
+filelist[listcount + 1] = NULL;
+*(char ***)context = filelist;
+}
+
+char **sim_get_filelist (const char *filename)
+{
+t_stat r;
+char **filelist = NULL;
+
+r = sim_dir_scan (filename, _sim_filelist_entry, &filelist);
+if (r == SCPE_OK)
+    return filelist;
+return NULL;
+}
+
+void sim_free_filelist (char ***pfilelist)
+{
+char **listp = *pfilelist;
+
+if (listp == NULL)
+    return;
+while (*listp != NULL)
+    free (*listp++);
+free (*pfilelist);
+*pfilelist = NULL;
+}
+
+void sim_print_filelist (char **filelist)
+{
+if (filelist == NULL)
+    return;
+while (*filelist != NULL)
+    sim_printf ("%s\n", *filelist++);
+}
+
 
 /* OS-dependent routines */
 
@@ -508,6 +569,40 @@ if (CopyFileA (sourcename, destname, !overwrite_existing))
 return sim_messagef (SCPE_ARG, "Error Copying '%s' to '%s': %s\n", source_file, dest_file, sim_get_os_error_text (GetLastError ()));
 }
 
+static void _time_t_to_filetime (time_t ttime, FILETIME *filetime)
+{
+t_uint64 time64;
+
+time64 = 134774;                /* Days betwen Jan 1, 1601 and Jan 1, 1970 */
+time64 *= 24;                   /* Hours */
+time64 *= 3600;                 /* Seconds */
+time64 += (t_uint64)ttime;      /* include time_t seconds */
+
+time64 *= 10000000;             /* Convert seconds to 100ns units */
+filetime->dwLowDateTime = (DWORD)time64;
+filetime->dwHighDateTime = (DWORD)(time64 >> 32);
+}
+
+t_stat sim_set_file_times (const char *file_name, time_t access_time, time_t write_time)
+{
+char filename[PATH_MAX + 1];
+FILETIME accesstime, writetime;
+HANDLE hFile;
+BOOL bStat;
+
+_time_t_to_filetime (access_time, &accesstime);
+_time_t_to_filetime (write_time, &writetime);
+if (NULL == _sim_expand_homedir (file_name, filename, sizeof (filename)))
+    return sim_messagef (SCPE_ARG, "Error Setting File Times - Problem Source Filename '%s'\n", filename);
+hFile = CreateFileA (filename, GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+if (hFile == INVALID_HANDLE_VALUE)
+    return sim_messagef (SCPE_ARG, "Can't open file '%s' to set it's times: %s\n", filename, sim_get_os_error_text (GetLastError ()));
+bStat = SetFileTime (hFile, NULL, &accesstime, &writetime);
+CloseHandle (hFile);
+return bStat ? SCPE_OK : sim_messagef (SCPE_ARG, "Error setting file '%s' times: %s\n", filename, sim_get_os_error_text (GetLastError ()));
+}
+
+
 #include <io.h>
 #include <direct.h>
 int sim_set_fsize (FILE *fptr, t_addr size)
@@ -611,7 +706,7 @@ return ftruncate(fileno(fptr), (off_t)size);
 
 #include <sys/stat.h>
 #include <fcntl.h>
-#if HAVE_UTIME
+#if defined (HAVE_UTIME)
 #include <utime.h>
 #endif
 
@@ -666,6 +761,22 @@ if (st == SCPE_OK) {
 return st;
 }
 
+t_stat sim_set_file_times (const char *file_name, time_t access_time, time_t write_time)
+{
+t_stat st = SCPE_IOERR;
+#if defined (HAVE_UTIME)
+struct utimbuf utim;
+
+utim.actime = access_time;
+utim.modtime = write_time;
+if (!utime (file_name, &utim))
+    st = SCPE_OK;
+#else
+st = SCPE_NOFNC;
+#endif
+return st;
+}
+
 int sim_set_fifo_nonblock (FILE *fptr)
 {
 struct stat stbuf;
@@ -681,8 +792,11 @@ if ((stbuf.st_mode & S_IFIFO)) {
 return -1;
 }
 
-#if defined (__linux__) || defined (__APPLE__) || defined (__CYGWIN__) || defined (__FreeBSD__)
+#if defined (__linux__) || defined (__APPLE__) || defined (__CYGWIN__) || defined (__FreeBSD__) || defined(__NetBSD__) || defined (__OpenBSD__)
+
+#if defined (HAVE_SHM_OPEN)
 #include <sys/mman.h>
+#endif
 
 struct SHMEM {
     int shm_fd;
@@ -751,7 +865,7 @@ if ((*shmem)->shm_base == MAP_FAILED) {
 return SCPE_OK;
 #else
 *shmem = NULL;
-return SCPE_NOFNC;
+return sim_messagef (SCPE_NOFNC, "Shared memory not available - Missing shm_open() API\n");
 #endif
 }
 
@@ -860,7 +974,7 @@ return getcwd (buf, buf_size);
  *
  * In the above example above %I% can be replaced by other 
  * environment variables or numeric parameters to a DO command
- * invokation.
+ * invocation.
  */
 
 char *sim_filepath_parts (const char *filepath, const char *parts)

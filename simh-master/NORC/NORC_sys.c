@@ -1,6 +1,7 @@
 /* norc_sys.c: IBM NORC Simulator system interface.
 
    Copyright (c) 2020, Roberto Sancho
+   https://github.com/rsanchovilla/SimH_cpanel
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

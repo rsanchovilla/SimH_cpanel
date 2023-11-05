@@ -622,7 +622,6 @@ sim_read_card(UNIT * uptr, uint16 image[80])
              }
          }
     }
-
     if ((*img)[0] & CARD_EOF)
         r = CDSE_EOF;
     else if ((*img)[0] & CARD_ERR)
@@ -1354,10 +1353,6 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
 
         /* Go read the deck */
         r = _sim_read_deck(uptr, eof);
-        /* Remove added eof from count */
-        if (eof) {
-            previous_cards++;
-        }
         uptr->pos = saved_pos;
         detach_unit(uptr);
         if (was_attached) {
@@ -1475,7 +1470,7 @@ return SCPE_OK;
 
 #include <setjmp.h>
 
-t_stat sim_card_test (DEVICE *dptr)
+t_stat sim_card_test (DEVICE *dptr, const char *cptr)
 {
 t_stat stat = SCPE_OK;
 #if defined(USE_SIM_CARD) && defined(SIM_CARD_API) && (SIM_MAJOR > 3)
@@ -1541,7 +1536,7 @@ t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, cons
     return SCPE_OK;
 }
 
-t_stat sim_card_test (DEVICE *dptr)
+t_stat sim_card_test (DEVICE *dptr, const char *cptr)
 {
     return SCPE_OK;
 }

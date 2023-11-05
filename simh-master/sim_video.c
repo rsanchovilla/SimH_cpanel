@@ -43,6 +43,9 @@
    11-Jun-2013  MB      First version
 */
 
+#if defined(HAVE_LIBPNG) && defined(USE_SIM_VIDEO) && defined(HAVE_LIBSDL)
+#include <png.h>
+#endif
 #include <math.h>
 #include "sim_video.h"
 #include "scp.h"
@@ -159,7 +162,6 @@ static char tmp_key_name[40];
  * http://www.libpng.org/pub/png/src/libpng-LICENSE.txt
  */
 #include <SDL.h>
-#include <png.h>
 #include <zlib.h>
 
 #define SUCCESS 0
@@ -324,18 +326,20 @@ static int SDL_SavePNG_RW(SDL_Surface *surface, SDL_RWops *dst, int freedst)
      
  */
 
-#define EVENT_REDRAW     1                              /* redraw event for SDL */
-#define EVENT_CLOSE      2                              /* close event for SDL */
-#define EVENT_CURSOR     3                              /* new cursor for SDL */
-#define EVENT_WARP       4                              /* warp mouse position for SDL */
-#define EVENT_DRAW       5                              /* draw/blit region for SDL */
-#define EVENT_SHOW       6                              /* show SDL capabilities */
-#define EVENT_OPEN       7                              /* vid_open request */
-#define EVENT_EXIT       8                              /* program exit */
-#define EVENT_SCREENSHOT 9                              /* produce screenshot of video window */
-#define EVENT_BEEP      10                              /* audio beep */
+#define EVENT_REDRAW      1                              /* redraw event for SDL */
+#define EVENT_CLOSE       2                              /* close event for SDL */
+#define EVENT_CURSOR      3                              /* new cursor for SDL */
+#define EVENT_WARP        4                              /* warp mouse position for SDL */
+#define EVENT_DRAW        5                              /* draw/blit region for SDL */
+#define EVENT_SHOW        6                              /* show SDL capabilities */
+#define EVENT_OPEN        7                              /* vid_open request */
+#define EVENT_EXIT        8                              /* program exit */
+#define EVENT_SCREENSHOT  9                              /* produce screenshot of video window */
+#define EVENT_BEEP       10                              /* audio beep */
+#define EVENT_FULLSCREEN 11                              /* fullscreen */
+#define EVENT_SIZE       12                              /* set window size */
 #if defined(CPANEL)
-#define EVENT_SIZEANDPOS 11                             /* set windows size and/or pos */
+#define EVENT_SIZEANDPOS 19                             /* set windows size and/or pos */
 
 #define CP_SDL          0x04000000                      
 #define CP_CMDS         0x08000000                      
@@ -452,12 +456,13 @@ struct VID_DISPLAY {
    VID_DISPLAY *next;
    t_bool vid_blending;
    SDL_Rect *vid_dst_last;
+   SDL_Rect vid_rect;
    uint32 *vid_data_last;
 };
 
 SDL_Thread *vid_thread_handle = NULL;                   /* event thread handle */
 
-static VID_DISPLAY vid_first;
+static VID_DISPLAY vid_first = {0};
 
 KEY_EVENT_QUEUE vid_key_events;                         /* keyboard events */
 MOUSE_EVENT_QUEUE vid_mouse_events;                     /* mouse events */
@@ -474,8 +479,6 @@ t_stat vid_register_quit_callback (VID_QUIT_CALLBACK callback)
 vid_quit_callback = callback;
 return SCPE_OK;
 }
-
-
 
 static VID_DISPLAY *vid_get_event_window (SDL_Event *ev, Uint32 windowID)
 {
@@ -494,7 +497,9 @@ SDL_UserEvent *uev;
    if ((tooltip.window) && (ev->window.windowID==SDL_GetWindowID (tooltip.window))) return NULL; 
    // possible bug in original sim_video.c 
    // check EVENT_OPEN: it holds vptr in user.data1, instead of having to search it with vid_windowID not yet created
-   if ((ev->type==SDL_USEREVENT) && (ev->user.code==EVENT_OPEN)) return (VID_DISPLAY *) ev->user.data1; 
+   if ((ev->type==SDL_USEREVENT) && (ev->user.code==EVENT_OPEN)) {
+       return (VID_DISPLAY *) ev->user.data1; 
+   }
    // EVENT_CURSOR is system wide. Tie it to first window
    if ((ev->type==SDL_USEREVENT) && (ev->user.code==EVENT_CURSOR))        return (VID_DISPLAY *) &vid_first; 
 #endif
@@ -623,8 +628,13 @@ main_argc = argc;
 main_argv = argv;
 
 SDL_SetHint (SDL_HINT_RENDER_DRIVER, "software");
+#if defined (SDL_HINT_VIDEO_ALLOW_SCREENSAVER)
+/* If this hint is defined, the default is to disable the screen saver.
+    We want to leave the screen saver enabled. */
+SDL_SetHint (SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
+#endif
 
-status = SDL_Init (SDL_INIT_VIDEO);
+status = SDL_Init (SDL_INIT_EVENTS);
 
 if (status) {
     fprintf (stderr, "SDL Video subsystem can't initialize: %s\n", SDL_GetError ());
@@ -648,9 +658,11 @@ while (1) {
         if (event.type == SDL_USEREVENT) {
             if (event.user.code == EVENT_EXIT)
                 break;
-            if (event.user.code == EVENT_OPEN) 
+            if (event.user.code == EVENT_OPEN) {
+                SDL_Init (SDL_INIT_VIDEO);
                 vid_video_events ((VID_DISPLAY *)event.user.data1);
-             else {
+            }
+            else {
                 if (event.user.code == EVENT_SHOW)
                     vid_show_video_event ();
                 else {
@@ -697,8 +709,8 @@ sim_debug(CP_SDL, vptr->vid_dev, "SimH Thread: vid_create_window '%', w %d, h %d
           vptr->vid_title, vptr->vid_width, vptr->vid_height, vptr);
 #endif
 
-// wait for event processed. Safety: max wait: 30 sec
-while ((!vptr->vid_ready) && (++wait_count < 300))  
+// wait for event processed. Safety: max wait: 5 sec
+while ((!vptr->vid_ready) && (++wait_count < 50))  
     sim_os_ms_sleep (100);
 
 if ((!vptr->vid_ready) || (vptr->vid_window == NULL)) {
@@ -831,6 +843,7 @@ vptr->vid_height = height;
 vptr->vid_mouse_captured = FALSE;
 vptr->vid_cursor_visible = (vptr->vid_flags & SIM_VID_INPUTCAPTURED);
 vptr->vid_blending = FALSE;
+vptr->vid_ready = FALSE;
 
 #if defined(CPANEL)
 sim_debug(CP_SDL, dptr, "SimH Thread: vid_init_window '%s', w %d, h %d, vptr %x \n", 
@@ -868,7 +881,7 @@ return SCPE_OK;
 t_stat vid_open_window (VID_DISPLAY **vptr, DEVICE *dptr, const char *title, uint32 width, uint32 height, int flags)
 {
 t_stat r;
-*vptr = (VID_DISPLAY *)calloc (1, sizeof (VID_DISPLAY));
+*vptr = (VID_DISPLAY *)calloc (1, sizeof (VID_DISPLAY)); // to guaratee zero values everywhere just in case
 if (*vptr == NULL)
     return SCPE_NXM;
 
@@ -1833,14 +1846,32 @@ if (SDL_SemWait (vid_mouse_events.sem) == 0) {
     if (SDL_SemPost (vid_mouse_events.sem))
         sim_printf ("%s: Mouse Button Event: SDL_SemPost error: %s\n", vid_dname(vptr->vid_dev), SDL_GetError());
     }
-    
 #if defined(CPANEL)
     if (vid_mouse_b3) {
         // mouse right button pressed while mouse not moving ->show tooltip window
         ShowTooltipAtMousePos(event->x, event->y, vptr); 
     }
 #endif
-    
+}
+
+void vid_set_window_size (VID_DISPLAY *vptr, int32 w, int32 h)
+{
+SDL_Event user_event;
+
+vptr->vid_rect.h = h;
+vptr->vid_rect.w = w;
+
+user_event.type = SDL_USEREVENT;
+user_event.user.windowID = vptr->vid_windowID;
+user_event.user.code = EVENT_SIZE;
+user_event.user.data1 = NULL;
+user_event.user.data2 = NULL;
+#if defined (SDL_MAIN_AVAILABLE)
+while (SDL_PushEvent (&user_event) < 0)
+    sim_os_ms_sleep (100);
+#else
+    SDL_SetWindowSize(vptr->vid_window, w, h);
+#endif
 }
 
 t_bool vid_is_fullscreen_window (VID_DISPLAY *vptr)
@@ -1855,10 +1886,22 @@ return vid_is_fullscreen_window (&vid_first);
 
 t_stat vid_set_fullscreen_window (VID_DISPLAY *vptr, t_bool flag)
 {
+SDL_Event user_event;
+
+user_event.type = SDL_USEREVENT;
+user_event.user.windowID = vptr->vid_windowID;
+user_event.user.code = EVENT_FULLSCREEN;
+user_event.user.data1 = (flag) ? vptr : NULL;
+user_event.user.data2 = NULL;
+#if defined (SDL_MAIN_AVAILABLE)
+while (SDL_PushEvent (&user_event) < 0)
+    sim_os_ms_sleep (100);
+#else
 if (flag)
     SDL_SetWindowFullscreen (vptr->vid_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 else
     SDL_SetWindowFullscreen (vptr->vid_window, 0);
+#endif
 return SCPE_OK;
 }
 
@@ -1886,6 +1929,12 @@ else {
     r->h = vptr->vid_height * w / vptr->vid_width;
     r->x = 0;
     r->y = (h - r->h) / 2;
+    }
+if (vptr->vid_flags & SIM_VID_IGNORE_VBAR) {
+    r->w = w;
+    r->h = h;
+    r->x = 0;
+    r->y = 0;
     }
 }
 
@@ -2583,19 +2632,18 @@ event->data1 = NULL;
 
 static int vid_new_window (VID_DISPLAY *vptr)
 {
-    int r; 
-    Uint32 flags; 
-
 #if defined(CPANEL)
+    Uint32 flags; 
     sim_debug_cp("SDL Thread: vid_new_window vptr %x \n", vptr);
     vptr->vid_window = NULL; // init as not done
-#endif
     flags=vptr->vid_flags & 0x8FFF; // get flags for windows creation
     vptr->vid_flags=vptr->vid_flags & ~0x8FFF; // remove flags for windows creation
     if (flags==0) flags = SDL_WINDOW_SHOWN; // no flags on creation -> normal windows shown 
-    r=SDL_CreateWindowAndRenderer (vptr->vid_width, vptr->vid_height, flags, 
-                                   &vptr->vid_window, &vptr->vid_renderer);
-    if (r) vptr->vid_window=NULL; 
+    SDL_CreateWindowAndRenderer (vptr->vid_width, vptr->vid_height, flags, 
+                                 &vptr->vid_window, &vptr->vid_renderer);
+#else
+SDL_CreateWindowAndRenderer (vptr->vid_width, vptr->vid_height, SDL_WINDOW_SHOWN, &vptr->vid_window, &vptr->vid_renderer);
+#endif
 
 if ((vptr->vid_window == NULL) || (vptr->vid_renderer == NULL)) {
     sim_printf ("%s: Error Creating Video Window: %s\n", vid_dname(vptr->vid_dev), SDL_GetError());
@@ -2635,6 +2683,13 @@ if (!vptr->vid_texture) {
     }
 
 vptr->vid_format = SDL_AllocFormat (SDL_PIXELFORMAT_ARGB8888);
+
+#ifdef SDL_WINDOW_RESIZABLE
+if (vptr->vid_flags & SIM_VID_RESIZABLE) {
+    SDL_SetWindowResizable(vptr->vid_window, SDL_TRUE);
+    SDL_RenderSetIntegerScale(vptr->vid_renderer, SDL_TRUE);
+}
+#endif
 
 #if defined(CPANEL)
 // init redraws in progress flag
@@ -3018,12 +3073,15 @@ while (vid_active) {
                             if (vid_quit_callback) vid_quit_callback (); 
                             break;
 #endif
+                        default:
+                            sim_debug (SIM_VID_DBG_VIDEO, vptr->vid_dev, "Did not handle window event: %d - %s\n", event.window.event, windoweventtypes[event.window.event]);
+                            break;
                         }
                     }
                 break;
 
             case SDL_USEREVENT:
-                /* There are 9 user events generated */
+                /* There are 12 user events generated */
                 /* EVENT_REDRAW to update the display */
                 /* EVENT_DRAW   to update a region in the display texture */
                 /* EVENT_SHOW   to display the current SDL video capabilities */
@@ -3034,6 +3092,9 @@ while (vid_active) {
                 /*              it notice vid_active has changed */
                 /* EVENT_SCREENSHOT to take a screenshot */
                 /* EVENT_BEEP   to emit a beep sound */
+                /* EVENT_SIZE        to change screen size */
+                /* EVENT_FULLSCREEN  to change fullscreen */
+                /* EVENT_SIZEANDPOS  to change scale and position of window under control of CPANEL */
                 while (vid_active && event.user.code) {
                     /* Handle Beep first since it isn't a window oriented event */
                     if (event.user.code == EVENT_BEEP) {
@@ -3041,12 +3102,18 @@ while (vid_active) {
                         event.user.code = 0;    /* Mark as done */
                         continue;
                         }
-                    vptr = vid_get_event_window (&event, event.user.windowID);
-                    if (vptr == NULL) {
-                        sim_debug (SIM_VID_DBG_VIDEO, vptr->vid_dev, "vid_thread() - Ignored event not bound to a window\n");
-                        event.user.code = 0;    /* Mark as done */
-                        break;
+                    if (event.user.code != EVENT_OPEN) {
+                        vptr = vid_get_event_window (&event, event.user.windowID);
+                        if (vptr == NULL) {
+                            if (vid_first.vid_dev != NULL) {
+                            	sim_debug (SIM_VID_DBG_VIDEO, vid_first.vid_dev, "vid_thread() - Ignored event not bound to a window\n");
+                            } else {
+                                sim_printf ("vid_thread() - Ignored event not bound to a window\n");
+                            }
+                            event.user.code = 0;    /* Mark as done */
+                            break;
                         }
+                    }
                     if (event.user.code == EVENT_REDRAW) {
 #if defined(CPANEL)
                         if (event.user.data1) vid_update_ex ((SDL_UserEvent*)&event, vptr); 
@@ -3064,12 +3131,13 @@ while (vid_active) {
                                 event.user.code = 0;    /* Mark as done */
                                 continue;
                                 }
+                            vptr = vid_get_event_window (&event, event.user.windowID);
                             break;
                             }
 #endif
                         }
                     if (event.user.code == EVENT_CURSOR) {
-                        vid_update_cursor (vptr, (SDL_Cursor *)(event.user.data1), (int)(event.user.data2));
+                        vid_update_cursor (vptr, (SDL_Cursor *)(event.user.data1), (t_bool)((size_t)event.user.data2));
                         event.user.data1 = NULL;
                         event.user.code = 0;    /* Mark as done */
                         }
@@ -3103,6 +3171,17 @@ while (vid_active) {
                         event.user.data1 = NULL;
                         }
 #endif
+                    if (event.user.code == EVENT_SIZE) {
+                        SDL_SetWindowSize (vptr->vid_window, vptr->vid_rect.w, vptr->vid_rect.h);
+                        event.user.code = 0;    /* Mark as done */
+                        }
+                    if (event.user.code == EVENT_FULLSCREEN) {
+                        if (event.user.data1 != NULL)
+                            SDL_SetWindowFullscreen (vptr->vid_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                        else
+                            SDL_SetWindowFullscreen (vptr->vid_window, 0);
+                        event.user.code = 0;    /* Mark as done */
+                        }
                     if (event.user.code == EVENT_BEEP) {
                         vid_beep_event ();
                         event.user.code = 0;    /* Mark as done */
@@ -3149,6 +3228,11 @@ VID_DISPLAY *vptr = (VID_DISPLAY *)arg;
 int stat;
 
 SDL_SetHint (SDL_HINT_RENDER_DRIVER, "software");
+#if defined (SDL_HINT_VIDEO_ALLOW_SCREENSAVER)
+/* If this hint is defined, the default is to disable the screen saver.
+    We want to leave the screen saver enabled. */
+SDL_SetHint (SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
+#endif
 
 stat = SDL_Init (SDL_INIT_VIDEO);
 
@@ -3337,6 +3421,8 @@ for (i = 0; i < SDL_GetNumRenderDrivers(); ++i) {
     }
 if (vid_active) {
     SDL_RendererInfo info;
+
+    info.name = "";
 
     for (vptr = &vid_first; vptr != NULL; vptr = vptr->next) {
         if (vptr->vid_active_window) {
@@ -4364,6 +4450,11 @@ return SCPE_OK;
 }
 
 void vid_set_cursor_position_window (VID_DISPLAY *vptr, int32 x, int32 y)
+{
+return;
+}
+
+void vid_set_window_size (VID_DISPLAY *vptr, int32 w, int32 h)
 {
 return;
 }

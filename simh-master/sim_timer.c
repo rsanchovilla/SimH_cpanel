@@ -1,6 +1,6 @@
 /* sim_timer.c: simulator timer library
 
-   Copyright (c) 1993-2010, Robert M Supnik
+   Copyright (c) 1993-2022, Robert M Supnik
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -23,6 +23,11 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from Robert M Supnik.
 
+   27-Sep-22    RMS     Removed OS/2 and Mac "Classic" support
+   01-Feb-21    JDB     Added cast for down-conversion
+   22-May-17    RMS     Hacked for V4.0 CONST compatibility
+   23-Nov-15    RMS     Fixed calibration lost path to reinitialize timer
+   28-Mar-15    RMS     Revised to use sim_printf
    21-Oct-11    MP      Fixed throttling in several ways:
                          - Sleep for the observed clock tick size while throttling
                          - Recompute the throttling wait once every 10 seconds
@@ -88,6 +93,9 @@
 #include "sim_defs.h"
 #include <ctype.h>
 #include <math.h>
+#ifdef HAVE_WINMM
+#include <windows.h>
+#endif
 
 #define SIM_INTERNAL_CLK (SIM_NTIMERS+(1<<30))
 #define SIM_INTERNAL_UNIT sim_internal_timer_unit
@@ -462,7 +470,7 @@ return 0;
 }
 #endif /* CLOCK_REALTIME */
 
-#elif defined (_WIN32)
+#elif defined (_WIN32)  ||  defined(HAVE_WINMM)
 
 /* Win32 routines */
 
@@ -529,92 +537,6 @@ GetSystemTimeAsFileTime((FILETIME*)&now);
 now -= unixbase;
 tp->tv_sec = (long)(now/10000000);
 tp->tv_nsec = (now%10000000)*100;
-return 0;
-}
-#endif
-
-#elif defined (__OS2__)
-
-/* OS/2 routines, from Bruce Ray */
-
-const t_bool rtc_avail = FALSE;
-
-uint32 sim_os_msec (void)
-{
-return 0;
-}
-
-void sim_os_sleep (unsigned int sec)
-{
-}
-
-uint32 sim_os_ms_sleep_init (void)
-{
-return 0;
-}
-
-uint32 sim_os_ms_sleep (unsigned int msec)
-{
-return 0;
-}
-
-/* Metrowerks CodeWarrior Macintosh routines, from Ben Supnik */
-
-#elif defined (__MWERKS__) && defined (macintosh)
-
-#include <Timer.h>
-#include <Mactypes.h>
-#include <sioux.h>
-#include <unistd.h>
-#include <siouxglobals.h>
-#define NANOS_PER_MILLI     1000000
-#define MILLIS_PER_SEC      1000
-
-const t_bool rtc_avail = TRUE;
-
-uint32 sim_os_msec (void)
-{
-unsigned long long micros;
-UnsignedWide macMicros;
-unsigned long millis;
-
-Microseconds (&macMicros);
-micros = *((unsigned long long *) &macMicros);
-millis = micros / 1000LL;
-return (uint32) millis;
-}
-
-void sim_os_sleep (unsigned int sec)
-{
-sleep (sec);
-}
-
-uint32 sim_os_ms_sleep_init (void)
-{
-return _compute_minimum_sleep ();
-}
-
-uint32 sim_os_ms_sleep (unsigned int milliseconds)
-{
-uint32 stime = sim_os_msec ();
-struct timespec treq;
-
-treq.tv_sec = milliseconds / MILLIS_PER_SEC;
-treq.tv_nsec = (milliseconds % MILLIS_PER_SEC) * NANOS_PER_MILLI;
-(void) nanosleep (&treq, NULL);
-return sim_os_msec () - stime;
-}
-
-#if defined(NEED_CLOCK_GETTIME)
-int clock_gettime(int clk_id, struct timespec *tp)
-{
-struct timeval cur;
-
-if (clk_id != CLOCK_REALTIME)
-  return -1;
-gettimeofday (&cur, NULL);
-tp->tv_sec = cur.tv_sec;
-tp->tv_nsec = cur.tv_usec*1000;
 return 0;
 }
 #endif
@@ -1994,16 +1916,33 @@ switch (sim_throt_state) {
                     d_cps = (double) sim_throt_val * 1000.0;
                 else
                     d_cps = (sim_throt_peak_cps * sim_throt_val) / 100.0;
-            if (d_cps > a_cps) {
+            if (d_cps >= a_cps) {
+                /* the initial throttling calibration measures a slower cps rate than the desired cps rate, */
                 sim_debug (DBG_THR, &sim_timer_dev, "sim_throt_svc() CPU too slow.  Values a_cps = %f, d_cps = %f\n", 
                                                     a_cps, d_cps);
-                sim_throt_state = SIM_THROT_STATE_INIT;
-                sim_printf ("*********** WARNING ***********\n");
-                sim_printf ("Host CPU is too slow to simulate %s %s per second\n", sim_fmt_numeric(d_cps), sim_vm_interval_units);
-                sim_printf ("Host CPU can only simulate %s %s per second\n", sim_fmt_numeric(sim_throt_peak_cps), sim_vm_interval_units);
-                sim_printf ("Throttling disabled.\n");
-                sim_set_throt (0, NULL);
-                return SCPE_OK;
+                /* if the measured rate is well below the measured peak rate? */
+                if (sim_throt_peak_cps >= (2.0 * d_cps)) {
+                    /* distrust the measured rate and instead use half the peak rate as measured 
+                       cps rate. */
+                    sim_printf ("*********** WARNING ***********\n");
+                    sim_printf ("Host CPU could be too slow to simulate %s %s per second\n", sim_fmt_numeric(d_cps), sim_vm_interval_units);
+                    sim_printf ("Host CPU did only simulate %s %s per second\n", sim_fmt_numeric(a_cps), sim_vm_interval_units);
+                    sim_printf ("But peak rate was: %s %s per second\n", sim_fmt_numeric(sim_throt_peak_cps), sim_vm_interval_units);
+
+                    a_cps = (sim_throt_peak_cps / 2.0) + 1.0;
+
+                    sim_printf ("Assuming rate: %s %s per second\n", sim_fmt_numeric(a_cps), sim_vm_interval_units);
+                    }
+                else {
+                    sim_throt_state = SIM_THROT_STATE_INIT;
+                    sim_printf ("*********** WARNING ***********\n");
+                    sim_printf ("Host CPU is too slow to simulate %s %s per second\n", sim_fmt_numeric(d_cps), sim_vm_interval_units);
+                    sim_printf ("Host CPU did only simulate %s %s per second\n", sim_fmt_numeric(a_cps), sim_vm_interval_units);
+                    sim_printf ("Peak rate: %s %s per second\n", sim_fmt_numeric(sim_throt_peak_cps), sim_vm_interval_units);
+                    sim_printf ("Throttling disabled.\n");
+                    sim_set_throt (0, NULL);
+                    return SCPE_OK;
+                    }
                 }
             while (1) {
                 sim_throt_wait = (int32)                /* cycles between sleeps */

@@ -48,10 +48,12 @@ typedef uint32          t_lba;                          /* disk logical block ad
 #define DKUF_F_STD       1                              /* SIMH format */
 #define DKUF_F_RAW       2                              /* Raw Physical Disk Access */
 #define DKUF_F_VHD       3                              /* VHD format */
-#define DKUF_V_UF       (DKUF_V_FMT + DKUF_W_FMT)
+#define DKUF_V_NOAUTOSIZE (DKUF_V_FMT + DKUF_W_FMT)     /* Don't Autosize disk option */
+#define DKUF_V_UF       (DKUF_V_NOAUTOSIZE + 1)
 #define DKUF_WLK        UNIT_WLK
 #define DKUF_FMT        (DKUF_M_FMT << DKUF_V_FMT)
 #define DKUF_WRP        (DKUF_WLK | UNIT_RO)
+#define DKUF_NOAUTOSIZE (1 << DKUF_V_NOAUTOSIZE)
 
 #define DK_F_STD        (DKUF_F_STD << DKUF_V_FMT)
 #define DK_F_RAW        (DKUF_F_RAW << DKUF_V_FMT)
@@ -67,6 +69,7 @@ typedef void (*DISK_PCALLBACK)(UNIT *unit, t_stat status);
 
 /* Prototypes */
 
+t_stat sim_disk_init (void);
 t_stat sim_disk_attach (UNIT *uptr, 
                         const char *cptr, 
                         size_t memory_sector_size,  /* memory footprint of sector data */
@@ -87,6 +90,18 @@ t_stat sim_disk_attach_ex (UNIT *uptr,
                            int completion_delay,        /* Minimum Delay for asynch I/O completion */
                            const char **drivetypes);    /* list of drive types (from smallest to largest) */
                                                         /* to try and fit the container/file system into */
+t_stat sim_disk_attach_ex2 (UNIT *uptr, 
+                            const char *cptr, 
+                            size_t memory_sector_size,  /* memory footprint of sector data */
+                            size_t xfer_element_size, 
+                            t_bool dontchangecapac,     /* if false just change uptr->capac as needed */
+                            uint32 dbit,                /* debug bit */
+                            const char *dtype,          /* drive type */
+                            uint32 pdp11tracksize,      /* BAD144 track */
+                            int completion_delay,       /* Minimum Delay for asynch I/O completion */
+                            const char **drivetypes,    /* list of drive types (from smallest to largest) */
+                                                        /* to try and fit the container/file system into */
+                             size_t reserved_sectors);  /* Unused sectors beyond the file system */
 t_stat sim_disk_detach (UNIT *uptr);
 t_stat sim_disk_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 t_stat sim_disk_rdsect (UNIT *uptr, t_lba lba, uint8 *buf, t_seccnt *sectsread, t_seccnt sects);
@@ -113,7 +128,8 @@ t_bool sim_disk_vhd_support (void);
 t_bool sim_disk_raw_support (void);
 void sim_disk_data_trace (UNIT *uptr, const uint8 *data, size_t lba, size_t len, const char* txt, int detail, uint32 reason);
 t_stat sim_disk_info_cmd (int32 flag, CONST char *ptr);
-t_stat sim_disk_test (DEVICE *dptr);
+t_stat sim_disk_set_noautosize (int32 flag, CONST char *cptr);
+t_stat sim_disk_test (DEVICE *dptr, const char *cptr);
 
 #ifdef  __cplusplus
 }

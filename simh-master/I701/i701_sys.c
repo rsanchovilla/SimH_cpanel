@@ -1,6 +1,7 @@
 /* i701_sys.c: IBM 701 Simulator system interface.
 
 Copyright (c) 2021, Roberto Sancho
+https://github.com/rsanchovilla/SimH_cpanel
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
