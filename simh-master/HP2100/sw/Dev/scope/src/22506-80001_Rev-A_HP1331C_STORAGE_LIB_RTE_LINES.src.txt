@@ -1,0 +1,177 @@
+ASMB,R,B,L
+      NAM LINES,7 
+      ENT LINES 
+      EXT .ENTR,EXEC
+* 
+**      SUBROUTINE TO OUTPUT A LINE ON THE STORAGE SCOPE
+**   HP 1331C.
+**   CALLING SEQUENCE : 
+**      CALL LINES(LU,IX1,IY1,IX2,IY2)
+**      WHERE : 
+**        LU = LOGICAL UNIT NUMBER OF SCOPE.
+**        IX1,IY1 = COORDINATES OF FIRST POINT. 
+**        IX2,IY2 = COORDINATES OF SECOND POINT.
+**   A LINE WILL BE DRAWN BETWEEN THE 2 POINTS. 
+**
+**                        WIM ROELANDTS, HP BRUSSELS
+**
+* 
+      SKP 
+.LU   BSS 1 
+IX1   BSS 1 
+IY1   BSS 1 
+IX2   BSS 1 
+IY2   BSS 1 
+LINES NOP 
+      JSB .ENTR 
+      DEF .LU 
+* 
+      LDA IX2,I 
+      AND B377
+      STA IX2 
+      LDA IX1,I 
+      AND B377
+      STA B 
+      BLF,BLF       MOVE UP TO GIVE ROOM
+      STB IX1       SAVE AS GUN LOCATION
+      CMA,INA       CALCULATE DIFFERENCE
+      ADA IX2 
+      STA DX
+      SSA           AND ABSOLUTE DIFFERNCE
+      CMA,INA 
+      STA ADX 
+* 
+      LDA IY2,I 
+      AND B377
+      STA IY2 
+      LDA IY1,I 
+      AND B377
+      STA B 
+      BLF,BLF 
+      STB IY1 
+      CMA,INA 
+      ADA IY2 
+      STA DY        DO SAME FOR Y 
+      SSA,RSS       MAKE NEGATIF
+      CMA,INA 
+      ADA ADX       TO SEE WHICH IS BIGGEST 
+      SSA 
+      JMP ONEY      DY IS BIGGEST 
+      LDA DX        DX IS BIGGEST, GO CALCULATE 
+      LDB DY        THE INCREMENT 
+      JSB CALC
+      STA DDY 
+      STB DDX 
+      JMP LIN1
+ONEY  LDA DY
+      LDB DX        DY IS BIGGEST, GET INCREMENT
+      JSB CALC
+      STA DDX 
+      STB DDY 
+* 
+**   NOW WE HAVE INCREMNTS, DO THE OUTPUT 
+* 
+LIN1  LDA .BUF      SET BUFFER POINTER
+      STA PBUF
+      LDA MD10      BUFFER COUNTER
+      STA CNT 
+      CLA           WORD COUNTER
+      STA LEN 
+LIN2  LDA IX1       GET AN X VALUE
+      ADA DDX       ADD INCREMENT 
+      STA IX1       SAVE FOR NEXT 
+      ALF,ALF 
+      AND B377      ISOLATE THE X VALUE 
+      STA B 
+      LDA IY1       DO SAME FOR Y 
+      ADA DDY 
+      STA IY1 
+      AND M1774     ISOLATE UPPER PART
+      IOR B         ADD X VALUE 
+      STA PBUF,I    SAVE IN BUFFER
+      ISZ PBUF
+      ISZ LEN 
+      ISZ TEL1
+      JMP LIN3
+      JSB OUT 
+      JMP LINES,I   ALL DONE !
+LIN3  ISZ CNT       BUFFER FULL ? 
+      JMP LIN2      NO, CONTINUE
+      JSB OUT       YES, GET IT EMPTY 
+      JMP LIN1      AND CONTINUE
+      SKP 
+* 
+**   ***   S U B R O U T I N E S   ***
+* 
+* 
+**   OUTPUT SUBROUTINE
+* 
+OUT   NOP 
+      JSB EXEC
+      DEF *+5 
+      DEF D2        OUTPUT
+      DEF .LU,I 
+.BUF  DEF BUF 
+      DEF LEN 
+      JMP OUT,I     AND RETURN
+* 
+** SUBROUTINE TO DO THE CALCULATIONS OF THE INCREMENT 
+** ON ENTRY : <A> = LARGEST DIFFERENCE (DL) 
+**            <B> = SMALLEST DIFFERNCE (DS) 
+** ON RETURN : <A> = SMALLEST INCREMENT (DDS = (DS*400B)/ABS(DL)) 
+**             <B> = LARGEST INCREMENT (DDL = +/- 400B) 
+* 
+CALC  NOP 
+      STB ADX 
+      STA B 
+      CMB,INB       <B> = - DL
+      SZA,RSS       LARGEST = 0?
+      JMP ONEP      YES, DO ONE POINT ONLY !
+      CLE,SSA       NEGATIF ? 
+      CCE           YES, SET E
+      SSA           NEGATIF ? 
+      SWP           YES, SET POSITIF IN A, NEGATIF IN B 
+      STA DIVI      SAVE A AS DIVISOR 
+      STB TEL1      AND B AS COUNTER
+      LDB B400      GET LARGEST INCREMENT 
+      SEZ           WAS POSITIF ? 
+      CMB,INB       NO, SET INCREMENT NEGATIF 
+      LDA ADX       GET SMALLEST AGAIN
+      STB ADX       SAVE LARGEST INCREMENT
+      CLB 
+      SSA           NEGATIF ? 
+      CCB           YES, SET B ALSO NEGATIF 
+      ALF,ALF 
+      DIV DIVI      DIVIDE BY LARGEST 
+      LDB ADX 
+      JMP CALC,I
+* 
+ONEP  CCA 
+      STA TEL1
+      CLA 
+      JMP CALC,I
+      SKP 
+* 
+**   ***   D A T A   ***
+* 
+* 
+B     EQU 1 
+* 
+D2    DEC 2 
+B377  OCT 377 
+B400  OCT 400 
+MD10  DEC -10 
+M1774 OCT 177400
+* 
+TEL1  BSS 1 
+ADX   BSS 1 
+DX    BSS 1 
+DY    BSS 1 
+DDX   BSS 1 
+DDY   BSS 1 
+BUF   BSS 10
+PBUF  EQU ADX 
+CNT   EQU IX2 
+LEN   EQU IY2 
+DIVI  EQU IY2 
+      END 

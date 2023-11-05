@@ -1,0 +1,380 @@
+ASMB,L,B,C     DOS/RT ASSEMBLER FEBRUARY 1970 
+      HED *** DOS/RTE ASMB4  FALL 1971 ***
+      NAM ASMB4,5,99
+      ENT ASMB4,?INS? 
+      EXT ?BPKU,?RSTA,?PKUP,?SYMK,?CHOP,?ENDS,?PNLE 
+      EXT ?DRFL,?MSYS,?ASMB,?SEGM,EXEC,?ERPR,?X 
+      EXT ?MOVE,?BFLG,?LFLG,?TFLG,?CHPI 
+      EXT    ?V,?ASM1,?MESX,?BNCN,?PRNT 
+      EXT ?LWA,?TSTR,?WEOF,?RDSC,?RLUN,?LUNI
+      SUP 
+TEMP  BSS 225B      RESERVE TEMPORARY AREA
+#     EQU TEMP     SAME AS DATA ORIGIN
+VAL0  EQU TEMP+1    'ASCN' AND  'SYMK'
+DCNT  EQU TEMP+4
+...1  EQU TEMP+7
+.1    EQU ...1
+.12   EQU .1+7
+..M1  EQU .12+6 
+L     EQU ..M1+6
+.9    EQU #+41B 
+.29   EQU #+42B 
+.M29  EQU #+45B 
+BLNK  EQU #+46B     =40B(LOWER BLANK) 
+.IL   EQU #+47B 
+.MBLN EQU #+50B 
+.NO   EQU #+51B 
+BLNS  EQU #+55B 
+.E    EQU #+61B 
+NAMI  EQU #+71B    LOC'N FOR TEMP SYMBOL STORAGE
+NAME  EQU #+72B    FOR USE BY 'OPLK'
+SUMP  EQU #+100B   RUNNING SUM FOR 'CHOP' 
+CFRA  EQU #+105B   'ASCN' 
+CNTB  EQU #+106B
+CODE  EQU #+107B   OPCODE TYPE(FROM OPTABLE)
+INST  EQU #+113B   OPCODE FORMAT
+PLCN  EQU #+117B   PROGRAM LOCATION COUNTER 
+PNTR  EQU #+121B L POINTS AT LAST OER CURRENT CHAR. 
+SCN1  EQU #+125B   STATE LNG/OPCODE/OPERAND/LABEL(4)
+SYMI  EQU #+132B   ADDR CNTR FOR SYMBOL TBL (SYMK)
+SYMP  EQU #+133B   SYMBOL LNG/ AND LOC'N
+ENTV  EQU #+141B
+*             * I/O STATEMENT BUFFER *
+IOBF  EQU #+142B    50 WORDS + END OF STATEMENT BUFF
+*             *(INPUXFFER(BUFF) STARTS IN 11TH WORD)* 
+BUFF EQU IOBF+12B 
+PBUF  BSS 17        SAVES THE 'NAN' RECORD INFO 
+BFLAG EQU ?BFLG 
+BPKUP EQU ?BPKU 
+CHOPI EQU ?CHPI 
+ERPR  EQU ?ERPR 
+LFLAG EQU ?LFLG 
+MOVE  EQU ?MOVE 
+MSYMS EQU ?MSYS 
+PKUP  EQU ?PKUP 
+RSTA  EQU ?RSTA 
+X     EQU ?X
+      SPC 1 
+ASMB4 JSB RSTA
+      LDA CODE
+      CPA .12+3 'HED' STATE?
+      JMP IXH   YES 
+      STA ?ASM1     CLEAR 'CS' AND 'INIT' FLAGS 
+      LDB .2000 
+      STB PLCN      INITIALIZE PROGRAM COUNTER
+      CPA .1        IS OPCODE AN ORG? 
+      JMP HI12
+      LDA .NO       'NO'= NO ORG STATEMENT
+     JSB ERPR 
+      JMP HA32+1
+IXH   JSB INST,I  GO TO HEDSB 
+      JMP ASMB4 
+HI12  JSB ?CHOP     PROCESS AN ORIGIN VALUE 
+      JMP HA32+1    ERROR RETURN
+      STB PLCN      SET INITIAL COUNTER VALUE 
+      JMP HA32      GO TO START PASS 1
+      BSS PBUF-*+60  MAKE ROOM FOR REST OF PUNCH BUF
+      SKP 
+HA32 JSB RSTA 
+      LDA CODE
+      CPA .12 
+     JMP HB00 TO END
+      CPA BLNK      (40B)  SUP/UNS? 
+      JMP HA32
+      ADA ..M1+2  -3
+      SSA 
+      JMP HA64      ORR OR ORG FOUND
+      CPA .12B      NAM?
+      JMP HA63     YES, ERROR 
+      ADA ..M1+2 (-3) 
+      SSA      'COM','ENT' OR 'EXT' ? 
+      JMP HA63      YES - ERROR 
+      CPA ...1+4  'EQU'?
+     JMP HA56 TO EQU
+      CPA .9        (11B)  HED? 
+      JMP HA32
+      CPA .12  (14B) SKP? 
+      JMP HA32
+      CPA .12+1 (15B) SPC?
+      JMP HA32
+      CPA .12+2 (16B) LST/UNL?
+      JMP HA32
+* 
+*             * TEST FOR LABEL FIELD
+      LDA SCN1+3  GET LABEL LENGTH
+      SZA,RSS      LABEL PRESENT ?
+      JMP HALB      NO, DONE
+      STA SYMP      SET CHAR COUNT
+      LDB FFUB
+      STB SYMP+1  SET LABEL ADDR. 
+      CLA           SET A=0 FOR ABSOLUTE VALUE
+      LDB PLCN
+      JSB INSR    INSERT LABEL INTO SYMBOL TABLE
+      NOP      ERROR EXIT 
+HALB  LDA CODE      OPCODE INDICATOR
+      CPA DEX 
+      JMP HA40      IT'S A 'DEX'
+      CPA .29  REP? 
+      JMP HA64  YES 
+      CPA ...1+6  (7) 
+     JMP HA54 TO ASC
+      CPA .26B     INTEGER ARITH(HARDWARE)? 
+      JMP HA70     YES....
+      CPA ...1+5  (6) ARITH MACRO?
+      JMP HA63      YES, ERROR
+      ADA .M10      -10 
+     SSA OCT OR DEC?
+     JMP HA40   YES.
+     OCT 2003 BSS?
+      JMP HA3M  TO BSS PROC.
+HA3B CLA,INA  TO ADD 1 TO PLCN
+* 
+*             * INCREMENT PROGRAM LOCN. CNTR. * 
+HA3Z  ADA PLCN   (HA3B+1) 
+     STA PLCN 
+     JMP HA32 
+.26B  OCT 26       FOR HARDWARE ARITHMETIC
+      SPC 1 
+*             * PROCESS BSS * 
+HA3M  JSB CHOPI EVAL.OPERAND
+     JMP HA32  ERROR
+      LDA 1   B TO A
+      JMP HA3B+1
+.12B  OCT 12
+.M10  DEC -10 
+DEX   OCT 25        OP TYPE FOR 'DEX' 
+      SKP 
+*        *************************************************
+*        * INSR: ADD ENTRY TO THE SYMBOL TABLE, W HACCOU *
+*        *  LINKAGE:            B = VALUE ON INPUT       *
+*        *   (OUTPUT) SYMP=NO.OF CHARS., SYMN=ENTRY FWA  *
+*        *            L    JSB INSR,I                    *
+*        *           L+1   ERROR RETN ('SO' OR 'DD'PRNTD)*
+*        *           L+2   NORMAL RETN                   *
+*        *************************************************
+.DD   ASC 2,DDSO
+INSR  NOP 
+     STB NAME+3    SAVE VALUE 
+      JSB ?SYMK     SYMBOL TABLE LOOKUP 
+     JMP INS1 
+      LDA .DD       NO, 'DD' ERROR (MULTIPLE SYMBOL)
+INSX  JSB ERPR
+      JMP INSR,I    GET OUT HERE
+INS1 LDB NAMI 
+      ADB TEMP+2
+      STB VAL0  SET LIMIT 
+      LDA ?LWA      GET LWA AVAIL. MEM. 
+      CMA,INA 
+      ADA SYMI  TEST FOR SYMBOL TBL 
+      ADA TEMP+2    OVERFLOW
+     SSA
+     JMP *+3       NO 
+      LDA .DD+1     'SO' SYMBOL TABLE OVERFLOW
+      JMP INSX 'SO' ERROR 
+     LDA NAME+3    MOVE VALUE 
+      STA 1,I       UP
+     LDA NAMI 
+      LDB 0,I  ADD ENTRY  (FROM *+6)
+     STB SYMI,I    TO SYMBOL
+      CPA VAL0
+      JMP INSEX     EXIT
+     INA
+     ISZ SYMI 
+      JMP *-6 
+INSEX ISZ INSR      BUMP EXIT POINT FOR A+2 EXIT
+      JMP INSR,I    EXIT HERE 
+HA63  LDA .IL       NAM IS ILLEGAL AFTER START
+      JMP HA55+2  TO ERPR 
+      SKP 
+*             *********************** 
+*             * PROCESS OCT AND DEC * 
+*             *********************** 
+HA40  CLB,INB       B=1 
+      CPA DEX       CHECK CODE FOR 'DEX'
+      ADB .1+1      B=3 IF CODE IS 'DEX'
+      STB DCNT      SET LOCN COUNT BUMPER 
+      CLA 
+     STA CNTB 
+      STA TEMP
+      LDA SCN1+2
+      STA PNTR      SET POINTER 
+* 
+*             * PICK UP AND EXAMINE A CHARACTER * 
+HA41  JSB PKUP   (HA40+4 WAS HA41)
+      LDB DCNT      GET COUNT BUMPER
+      CPA L+4   COMMA?
+      JMP HA44      YES, GO SCAN FOR NEXT PARAM.
+      CPB .1+2      IS IT=3(I.E. DEX)?
+      JMP HA42      YES 
+      CPA L+6  PERIOD?
+     JMP HA48 
+      CPA .E        'E' ? 
+     JMP HA48 
+HA42  CPA BLNK      END OF STATEMENT? 
+      JMP HA49      YES 
+      JMP HA41
+* 
+*             * RESET FLT PT FLAG, SKIP BLANKS FOR NEXT CHAR *
+HA44  CLA 
+      STA TEMP
+      JSB BPKUP 
+      LDB DCNT      GET 'BUMP' COUNT
+      JMP HA48+4
+* 
+*             * FLT PT TEST FOR NUMBER USING BOTH . AND E * 
+HA48  LDA TEMP
+      ISZ TEMP
+      SZA           E OR '.' COUNTED YET? 
+      CLB           YES, SET B=0. 
+* 
+      ADB CNTB      (HA48+4)
+      STB CNTB      ADD TO WORD COUNT 
+      JMP HA41
+* 
+*             * END OF NUMERIC PSEUDO-OP PROCESSOR *
+HA49  LDA DCNT
+      ADA CNTB      SET A=NO OF LOCNS TO BE USED
+      JMP HA3B+1  EXIT
+      SKP 
+*             ********************************
+*             * PROCESS ASC (GET VALUE OF N) *
+*             ********************************
+HA54  LDA ...1+1 (2) 'ASC' INDIC.FOR CHOP 
+      JSB ?CHOP 
+     JMP HA3B ERROR 
+     SZA
+     JMP HA55     ERROR-NOT ABS.VAL.
+      ADB .M29      -29 
+      LDA SUMP
+      SSB      SKIP IF >28 WORDS
+      JMP HA3B+1
+HA55 ISZ PLCN   * ERROR EXIT  * 
+      LDA .MBLN     'M' ERROR(BAD OPERAND)
+      JSB ERPR  TO PRINT ERROR DIAG.
+     JMP HA32 
+*             **********************
+*             * PROCESS EQU PSEUDO *
+*             **********************
+HA56 JSB CHOPI   EVALUATE OPERAND 
+     JMP HA32   *ERROR* 
+      CPA ...1+3 (4) EXT ?
+      LDA ...1+4 (5) SET FOR NON-PNCH EXT 
+      STA TEMP  NO
+      STB TEMP+1
+     OCT 6404 CLB,INB 
+     JSB MSYMS  GO TO MEAS.SYMBOL, SET SYMP/SYMN
+      LDA TEMP
+      LDB TEMP+1
+*             * SEND LABEL TO TABLE * 
+      JSB INSR      TO SYMBOL TABLE INSERTION RTN 
+     NOP
+     JMP HA32 
+*         ******************************
+*         *     ORG ORR HED PROC.JUMPS *
+*         ******************************
+HA64  JSB INST,I  GO TO SUBROUTINE
+     JMP HA32 
+HA70 LDA  .1+1      A=2 
+     JMP  HA3Z
+      SKP 
+*             ************************
+*             * PASS 1 END PROCESSOR *
+*             ************************
+      DEF BUFF
+HB00  LDA ?TFLG     GET TABLE OUTPUT FLAG 
+      SZA,RSS 
+      JMP HB08      TABLE NOT REQUESTED - FINISH PASS 
+      LDA HB00-1
+      ADA .1+3
+      STA HB00-1    SET HB00-1 = L(BUFF+4)
+      LDA X         GET FWA OF AVAILABLE MEMORY 
+      STA ENTV   TO ENTV
+HBX   LDA ENTV,I  TEST 1ST WORD OF ENTRY
+      SZA,RSS       COMPLETED?
+      JMP HB08      YES - GO TO FINISH PASS 1 
+      LDB ENTV      GET TBL ENTRY LOCATION
+      CMB,INB 
+*             * SEND ADDR. TO MOVE LINKAGE
+     STB HMOV5
+*             * MOVE BLANKS TO BUFFER 
+      LDB BLNS
+      STB BUFF
+      STB BUFF+1
+      STB BUFF+2
+      STB BUFF+3
+      LDB FFUB  ADDR. OF BUFF TO B
+      SPC 1 
+*             * MOVE CHARS FROM SYMBOL TABLE *
+      ALF 
+      AND ...1+6 (7) FOR NO.OF WRDS.
+      STA SUMP
+      CPA ...1+1 (2)
+      CLA 
+     IOR ...1 
+      JSB MOVE
+HMOV5 NOP 
+* 
+*             * GET VALUE OF SYMBOL * 
+     LDB SUMP (NO.OF WORDS IN ENTRY)
+      ADB ..M1
+      ADB ENTV
+      STB ENTV
+      LDA 1,I 
+     ISZ ENTV 
+      CLE      SET E = 0 FOR OCTAL CONV.
+      JSB ?BNCN 
+*             * STORE ASCI VALUE INTO BUFF
+      LDB HB00-1    GET L(BUFF+4) 
+      JSB ?V
+      LDB FFUB     SET PRINT PARAMETERS 
+      LDA .12+2  (14) 
+      JSB ?PRNT     GO TO PRINT 
+      JMP HBX  ENTRY DONE.
+.PASS ASC 2,PASS
+* 
+*             * ERRORS PRINTED *
+HB08  JSB ?ENDS     GO TO END PASS PROCESSOR
+      LDB ?DRFL     GET THE DISC FLAG 
+      SZB           DISK BEING USED?
+      JMP HB08R     NO. 
+      LDA ?LUNI     GET INPUT LUN 
+      CPA .1+1      IS IT THE DISC? 
+      RSS           YES, SKIP THE FOLLOWING WRITE 
+      JSB ?WEOF     WRITE REST OF LAST SECTOR 
+      LDA ?TSTR     YES, GET INITIAL CODE WORD
+      JSB ?RDSC     GO INITIALIZE FOR NEW START 
+      LDA ?RLUN 
+      STA ?LUNI     SET INPUT LUN = DISC
+      JMP HB09      YES, SKIP'END PASS' MESSAGE 
+HB08R LDA .PASS     ** PUT OUT "*END ASMB PASS" MESS
+      LDB .PASS+1 
+      JSB ?MESX 
+      JSB EXEC      GO TO OPERATOR SUSPEND ROUTINE
+      DEF *+2 
+      DEF .1+6      OPERATOR SUSPEND REQ. CODE
+      SPC 1 
+*                   * START PASS 2 HERE  *
+*             * TEST FOR PUNCH OUTPUT 
+      SPC 1 
+HB09 LDA BFLAG
+      SZA,RSS       PUNCH REQUESTED?
+      JMP *+5       NO
+      JSB EXEC      YES, OUTPUT THE LEADER
+      DEF *+3 
+      DEF .1+2      READER REQ CODE 
+      DEF ?PNLE     LEADER/TRAILER CW 
+      LDA LFLAG     GET THE LIST FLAG 
+      ADA BFLAG     GET PUNCH FLAG
+      SZA           LIST OR PUNCH?
+      JMP HB11     START PASS 2 
+      JMP ?ASMB     ASSEMBLER EXIT
+HB11  LDA *+2       PICK UP ENT CODE TO GET ASMB5 
+      JMP ?SEGM     GO TO LOADER FOR NEXT SEGMENT 
+      ASC 1,5 
+.2000 OCT 2000
+FFUB  DEF BUFF
+********************************************************************
+********** CHANGE LOC'N. Z IN ASMB IF THIS PROGS. LWA > 1310B ******
+********************************************************************
+?INS? EQU INSR
+      END ASMB4 

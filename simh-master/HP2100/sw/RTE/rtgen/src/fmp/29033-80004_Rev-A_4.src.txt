@@ -1,0 +1,107 @@
+ASMB,B,R,L,C
+      NAM FCONT,7 
+      ENT FCONT 
+      EXT .ENTR,EXEC
+* 
+*     THIS IS THE TYPE ZERO CONTROL ROUTINE OF
+*     THE RTE FILE MANAGEMENT PACKAGE.
+* 
+*     A STANDAD  RTE  CONTROL  REQUEST IS ISSUED
+*     TO THE  DEVICE  VIA  THE EXEC  IF THE 
+*     PCB  IS  OPEN  TO A TYPE  ZERO FILE.
+*     CALLING  SEQUENCE 
+*     CALL FCONT(IDCB,IERR,ICON1,ICON2) 
+*       WHERE:
+*         IDCB   IS THE DATA CONTROL BLOCK FOR
+*                 THE FILE. 
+*         IERR   IS THE LOCATION FOR RETURNED 
+*                 ERRORS. 
+*                 POSSIBLE ERRORS ARE:
+*              0 NO  ERRORS 
+*              -11 DCB NOT OPEN 
+*              -12       EOF SENSED 
+*              >0  NOT A TYPE ZERO FILE (IERR=TYPE) 
+*     ICON1   IS CONTROL WORD #1 - THE DEVICE 
+*              LU IS MURGED INTO THE LOW
+*              6 BITS  OF  THIS WORD
+*     ICON2   IS CONTROL WORD TWO - OPTIONAL
+*               ZERO  IS USED IF NOT SPECIFIED
+*     ON   RETURN     A =  IERR 
+*                     B =  DEVICE STATUS
+      SPC 3 
+*     PRE  CONSTANT  AREA 
+.2    OCT 2 
+.3    OCT 3 
+TYPE  NOP 
+.7    OCT 7 
+      SPC 3 
+IDCB  DEF ZERO      PARAMETER 
+IERR  DEF ZERO       ADDRESS
+ICON1 DEF ZERO        AREA
+ICON2 DEF ZERO
+      SPC 1 
+FCONT NOP           ENTRY POINT 
+      JSB .ENTR      FETCH PARAMETERS 
+      DEF IDCB
+      LDB IDCB      GET DCB 
+      ADB .2         ADDRESS
+      STB TYPE        OF TYPE 
+      ADB .7           AND
+      LDB B,I           OPEN FLAG 
+      CPB XEQT      OPEN? 
+      JMP OK        YES, CONTINUE 
+      LDA N11       NO; SEND NOT OPEN ERROR 
+EXIT  STA IERR,I    TO CALLER 
+      LDB DZERO     RESET 
+X     REP 4         ENTRY 
+      STB *-X+IDCB  ADDRESS 
+      CLB           CLEAR DUMMY 
+      STB ZERO      ZERO
+      LDB STAT      STATUS TO B AND 
+      JMP FCONT,I   RETURN
+      SPC 2 
+*     MID  CONSTANT  AREA 
+      SPC 1 
+N11   DEC -11 
+DZERO DEF ZERO
+ZERO  NOP 
+STAT  NOP 
+      SPC 1 
+B77   OCT 77
+      SPC 3 
+OK    LDA TYPE,I    GET FILE TYPE 
+      SZA           ZERO? 
+      JMP EXIT      NO;  EXIT : TYPE IN A 
+      SPC 1 
+      ISZ TYPE      YES;  STEP  TO  WORD  WITH LU 
+      LDA TYPE,I    GET LU
+      AND B77        AND ISOLATE  THEN
+      STA B         SAVE
+      LDA ICON1,I   GET THE FUNCTION
+      AND B1777     MAKE SURE THE LOW END IS ZERO 
+      IOR B         PUT THEM TOGETHER 
+      STA ICON1     SET FOR CALL
+      JSB EXEC      CALL EXEC TO
+      DEF EXRTN      DO 
+      DEF .3          THE 
+      DEF ICON1        CONTROL
+      DEF ICON2,I       FUNCTION
+EXRTN STA STAT      SAVE STATUS FOR RETURN
+      AND B200      MASK  EOF  BIT
+      SZA           EOF ? 
+      LDA N12       YES; SEND EOF CONDITION 
+      JMP EXIT      GO; EXIT
+      SPC 3 
+*     POST   CONSTANT AREA
+      SPC 1 
+B1777 OCT 177700
+B200  OCT 200 
+N12   DEC -12 
+      SPC 2 
+A     EQU 0 
+B     EQU 1 
+XEQT  EQU 1717B 
+      SPC 1 
+END   EQU * 
+      SPC 1 
+      END 

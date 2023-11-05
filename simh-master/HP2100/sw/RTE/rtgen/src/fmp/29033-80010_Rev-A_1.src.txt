@@ -1,0 +1,173 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME TR..(8)
+        NAM TR..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT TR..
+        EXT .ENTR 
+        EXT .DRCT 
+        EXT OPEN. 
+        EXT READF 
+        EXT IER.
+        EXT EE..
+        EXT P.TR
+        EXT CAMS. 
+        EXT TMP.
+        EXT I.BUF 
+        EXT N.OPL 
+        EXT CAM.O 
+        EXT .E.R. 
+        EXT FM.AB 
+        EXT CAM.I 
+DCB14   BSS 1 
+.1      OCT 000016
+RC      BSS 1 
+NFA     BSS 1 
+PR      BSS 1 
+.5      OCT 000000
+.6      OCT 000000
+        OCT 000000
+NFI     BSS 1 
+.9      OCT 177771
+RS      BSS 1 
+PTRAD   BSS 1 
+.11     OCT 177774
+.12     OCT 177770
+.14     OCT 000410
+.17     OCT 177733
+.18     OCT 000015
+C.BUF   BSS 1 
+.22     OCT 000001
+*003  !    THE GRAND TR ROUTINE 
+*004        LET OPEN.,READF,IER.,EE.. BE SUBROUTINE ,EXTERNAL 
+*005        LET P.TR,CAMS.,TMP.,I.BUF,N.OPL,CAM.O BE INTEGER,EXTERNAL 
+*006        LET P.TR,CAMS.,.E.R.  BE INTEGER,EXTERNAL 
+*007        LET FM.AB     BE LABEL,EXTERNAL 
+*008  ! 
+*009  TR..: SUBROUTINE(N,LIS,ERR)GLOBAL!TRANSFER SUBROUTINE 
+N       NOP 
+LIS     NOP 
+ERR     NOP 
+TR..    NOP 
+        JSB .ENTR 
+        DEF N 
+*010        LET CAM.I     BE INTEGER,EXTERNAL 
+*011  ! 
+*012        DCB14_@CAM.I+14 
+        JSB .DRCT 
+        DEF CAM.I 
+        ADA .1
+        STA DCB14 
+*013        RC_0          !SET THE RECORD COUNT TO ZERO 
+        CLA 
+        STA RC
+*014        NFA_@LIS+1    !GET THE ADDRESS OF THE NEW INPUT DEVICE
+        LDA LIS 
+        INA 
+        STA NFA 
+*015        IF $NFA<0 THEN[PR_$NFA;UNTIL PR=0 DO[TR..(0,0.0);\
+*                               PR_PR+1];GOTO FM.AB]
+        LDB NFA,I 
+        SSB,RSS 
+        JMP .4
+        LDA NFA,I 
+        STA PR
+.2      LDB PR
+        SZB,RSS 
+        JMP .3
+        JSB TR..
+        DEF *+3 
+        DEF .5
+        DEF .6
+        LDA PR
+        INA 
+        STA PR
+        JMP .2
+.3      JMP FM.AB 
+*016        NFI_[IF $NFA THEN NFA,ELSE P.TR-7]!SET ADDRESS OF NEXT FILE 
+.4      LDA NFA,I 
+        SZA,RSS 
+        JMP .7
+        LDA NFA 
+        JMP .8
+.7      LDA P.TR
+        ADA .9
+.8      STA NFI 
+*017  ! 
+*018        IFNOT $NFA THEN[RC_$(P.TR-4);$(P.TR+1)_0;RS_$[P.TR,PTRAD_P.T
+        LDA NFA,I 
+        SZA 
+        JMP .10 
+        LDA P.TR
+        ADA .11 
+        LDA .A.,I 
+        STA RC
+        LDA P.TR
+        INA 
+        CLB 
+        STB .A.,I 
+        LDA P.TR
+        ADA .12 
+        STA P.TR
+        STA PTRAD 
+        LDA .A.,I 
+        STA RS
+*019  ! 
+*020        IF P.TR<@CAMS. THEN EE.. ! TR ON FIRST FILE IS END
+.10     JSB .DRCT 
+        DEF CAMS. 
+        CMA,INA 
+        ADA P.TR
+        SSA,RSS 
+        JMP .13 
+        JSB EE..
+        DEF *+1 
+*021        OPEN.(CAM.I,$NFI,N.OPL,410K)!OPEN THE NEW INPUT FILE
+.13     JSB OPEN. 
+        DEF *+5 
+        DEF CAM.I 
+        DEF NFI,I 
+        DEF N.OPL 
+        DEF .14 
+*022        IFNOT $NFA THEN $PTRAD_RS !RESET RECORD COUNT IF NEEDED 
+        LDA NFA,I 
+        SZA 
+        JMP .15 
+        LDA RS
+        STA PTRAD,I 
+*023        IF P.TR-@CAMS.>36 THEN[ERR_13;RETURN] 
+.15     JSB .DRCT 
+        DEF CAMS. 
+        CMA,INA 
+        ADA P.TR
+        ADA .17 
+        SSA 
+        JMP .16 
+        LDA .18 
+        STA ERR,I 
+        JMP TR..,I
+*024        IF RC THEN[\
+*          UNTIL $DCB14=RC DO[READF(CAM.I,.E.R.,C.BUF,1);IER. ]]
+.16     LDA RC
+        SZA,RSS 
+        JMP .21 
+.19     LDB DCB14,I 
+        CPB RC
+        JMP .21 
+        JSB READF 
+        DEF *+5 
+        DEF CAM.I 
+        DEF .E.R. 
+        DEF C.BUF 
+        DEF .22 
+        JSB IER.
+        DEF *+1 
+        JMP .19 
+*025        RETURN
+.21     JMP TR..,I
+*026        END 
+*027  ! 
+*028        END 
+        END 
+*029       END$ 

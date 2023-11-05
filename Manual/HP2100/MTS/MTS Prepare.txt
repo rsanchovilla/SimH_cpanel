@@ -1,0 +1,487 @@
+                               MAGNETIC TAPE SYSTEM
+
+The Magnetic Tape System provides the capability to store the standard software
+systems and user programs on an HP 2020A/B Magnetic Tape unit and to access
+them through a simple loading procedure. The same magnetic tape is also utilized
+by the software systems for temporary storage of intermediate or scratch files.
+Auxiliary routines are provided to perform the following functions:
+
+1. Configure SIO drivers and magnetic tape Inter-Pass Loader.
+
+2. Create the absolute and relocatable (Program Library) files on magnetic
+   tape.
+
+3. Exchange the magnetic tape loader for the paper tape loader (Basic Bi-
+   nary Loader).
+
+4. Exchange the paper tape loader for the magnetic tape loader.
+
+The minimum configuration for Magnetic Tape System operation is:
+
+        HP 2116A or 2115A Computer with 8K memory
+
+        HP 2752A Teleprinter
+
+        HP 2737A Punched Tape Reader
+
+        HP 2020A/B Magnetic Tape Unit
+
+ALLOCATION OF FILES
+
+The tape consists of two files with the remaining portion used as a scratch file or
+area.
+
+   --------------------------------------------------------------------
+  | File 1 (Absolute)    | File 2 (Program Library)    | Scratch ...
+   --------------------------------------------------------------------
+
+File 1 is the Absolute File; it may contain any program in absolute binary fcrmat:
+
+The four standard software systems may be configured for magnetic tape input/
+output: FORTRAN, Assembler, Basic Control System and Cross Reference Gen-
+erator.
+
+Standard Software systems configured for paper tape input/output: FORTRAN, As-
+sembler Basic Control System, Symbolic Editor, etc.
+
+Any user programs in absolute form.
+
+Exchange Magnetic for Paper Tape Loader program (reguired to re-load Basic Bi-
+nary Loader when absolute programs are to be loaded from paper tape).
+
+
+8-1
+
+The format of a File 1 record is as follows:
+
+Tape                 Computer Word
+Format               Equivalent                   Content
+------               -------------                -------
+                          1                       Record length in com-
+                                                  puter words (excluding
+                                                  words 1-3)
+
+                          2                       Absolute starting ad-
+                                                  dress of program
+[IMAGE]
+                          3                       Program identification
+                                                  number (0 for continu-
+                                                  ation record)
+
+                         4-n                      Absolute binary pro-
+                                                  gram (n-3 = record
+                                                  length)
+
+
+When constructing File 1, the user supplies an identification number in the range 1
+to 177776 for each program. If the program consists of more than one paper tape
+(e.g., SIO routines or the Inter-Pass Loader reguired), a 0 is supplied as the iden-
+tification number for each continuation tape.
+
+File 2 is named the Library File. It contains relocatable programs. IncIuded are
+the standard Program Library routine,and any relocatable programs added by the
+user. The Record formats are identical to the paper tape library program.
+
+The scratch area is used by the Assembler and by FORTRAN for intermediate stor-
+age of the user's program during assembly or compilation. The scratch area could
+also be used by the user's object program during execution.
+
+CONFIGURING THE SOFTWARE
+
+Prior to the preparation of File 1, FORTRAN, the Assembler, the Cross-Reference
+Generator, and the Basic Control System must be configured for use with magnetic
+tape. BCS is configured through standard Prepare Control System processing; the
+HP 2020 BCS driver is included and the tape unit is designated as the Program
+Library unit. (Note that the 2020 driver requires that two interrupt entry points be
+specified: I.21 for the data channel, and C.21 for the command channel.)
+
+The other programs are configured through use of the magnetic tape version of the
+System Input/Output (SIO) Dump routine. t  Any of three methods may be used:
+
+1. A complete configured tape may be prepared for each system. The
+   identification number assigned during prepare Tape System processing
+   is then entered to locate and load the entire system (see MAGNETIC TAPE
+   SYSTEM PREPARATION). Use of this method results in the most effi-
+   cient loading operation.
+
+   For the magnetic tape version of FORTRAN, the output paper tape would
+   contain Pass 1 of FORTRAN; the Teleprinter, Tape Punch (if required
+   by the installation), Punched Tape Reader, and Magnetic Tape Unit
+
+-------------------
+t Systems which are to be configured for paper tape usage should also be processed
+  by the magnetic tape version of the SIO Dump routine; more efficient loading from
+  magnetic tape results.
+
+8-2
+   drivers; and the Inter-Pass Loader. For magnetic tape versions of the
+   Assembler and the Cross-Reference Generator, only the required drivers
+   would be added. (Note: The Assembler must be loaded before the
+   Magnetic Tape Unit driver.)
+
+2. A separate tape may be prepared for each required combination of SIO
+   subroutines. The subroutine tape would then be attached as a continuation
+   record of the system. This method reduces the amount of SIO Dump
+   routine processing while still allowing each system to be called by one
+   identification number only. Loading efficiency, however, is somewhat
+   reduced.
+
+3. A separate tape may be prepared for each required combination of SIO
+   subroutines as in the above method. Each subroutine tape, however,
+   would then be stored on magnetic tape as a complete program with its
+   own identification number. This method allows increased flexibility and
+   also uses the least amount of tape. Since two identification numbers
+   must be entered and two programs loaded, it does reduce overall loading
+   efficiency. 
+
+MAGNETIC TAPE SYSTEM PREPARATION 
+
+The tape is created through use of the Prepare Tape System routine.  For each
+program in File 1, the user supplies an identification number in the range 1 to 
+17776. (The number 177777 is reserved for Pass 2 of FORTRAN.) This number
+should be noted since it must be entered into the Switch Register in order to locate
+the program on the tape.  If the program to be transferred to magnetic tape is a
+continuation record of another program, a zero is specified as the identification
+number.
+The user must also specify the absolute starting address of each program. This 
+number is usually 2 or 100. The Basic Control System and absolute programs 
+generated by the Basic Control System have starting addresses of 2. All other
+standard software systems have starting addresses of 100. If a tape containing con-
+figured SIO drivers is stored as a separate program, a starting address of 100 is
+used.
+The Prepare Tape System reads each absolute binary program from the paper tape 
+input device, stores it on the magnetic tape, and requests the next identification
+number. When all File 1 programs are processed, the Prepare Tape System is
+ready to process relocatable programs for File 2. The Program Library is copied
+from the paper tape input device to the magnetic tape. The user may add other
+relocatable programs to File 2; if user programs are referenced more frequently
+or if they contain a number of references to library routines, they should precede
+the Program Library on tape. To terminate the loading of relocatable programs.
+Switch 15 of the Switch Register is set up following the message "LOAD."
+
+USING THE TAPE SYSTEM
+
+In order to user the Magnetic Tape System, the Magnetic Tape Binary Loader must
+be stored in the protected area of memory. This is accomplished by the Exchange
+Paper for Magnetic Tape Loader program (see page 8-7).  With the Magnetic Tape
+Binary Loader in memory, the user sets the identification number of the absolute
+program into the Switch Register. The Loader searches for the routine and loads it.
+To initiate execution, the user presses the RUN switch.
+
+Assembler Processing
+
+When using the Extended Assembler with magnetic tape, the user submits the
+source language program one time only. The Assembler copies the program onto
+the scratch area of the tape during the first pass. At the end of the first pass, the
+Symbol Table is printed on the Teleprinter (if that option was selected). To initiate
+the second pass, the tape is backspaced to the beginning of the scratch area making
+the source program again available for processing. The second pass is performed
+and the output produced on the punch and list device requested.
+
+8-3
+FORTRAN Processing 
+
+The FORTRAN Compiler operating with magnetic tape uses the scratch area for
+storage of intermediate binary code. Pass 1 of FORTRAN writes the intermediate
+program. At the end of Pass 1, FORTRAN calls the Inter-Pass Loader; it searches
+for and loads Pass 2 of FORTRAN. (Pass 2 is identified by the number 177777
+which is reserved for this purpose. ) Pass 2 spaces forward to the scratch area,
+processes the intermediate code and produces output on the punch and list devices
+as requested.
+
+Inter-Pass Loader 
+
+The Inter-Pass Loader is used to locate and load the second pass of FORTRAN.
+It must be configured with the other SIO routines through use of the SIO Dump
+routine. During this processing, it requires specification of the channel number
+(lower) af the Magnetic Tape Unit.
+
+The Inter-Pass Loader may also be used by any absolute program to locate program
+segments on magnetic tape and load them in memory overlaying program segments
+that have already been executed.
+
+The request to read in a new segment is initiated by performing a JMP instruction
+with the A-Register containing the identification number of the program segment to
+be loaded. (The number is assigned to the program segment during Prepare Tape
+System processing. ) When the new program has been located and loaded, the Inter-
+Pass Loader passes control to it via a JMP 3,I.
+
+The calling sequence of the program segment initially in memory is:
+
+      LDA <identification>             Where <identification is an octal
+      JMP 6,I                          number in the range 1-177776.
+
+The first instructions of the program segment to be loaded by the Inter-Pass Loader
+might be:
+
+      ORG 3
+      DEF <start of program segment>
+
+The Inter-Pass Loader resides in the area 6, X6322 - X6420 (X depends on the size
+of memory and is always in the last page of memory) and must not be overlaid by
+new program segments.
+
+Basic Control System Processing 
+
+The Basic Control System may be configured to process the Program Library from
+magnetic tape. When Switch 2 is set up (after the user's relocatable program has
+been loaded from a paper tape device), it will search File 2 for library routines
+referenced in the user's program. If, at the end of searching forward through this
+file, there exist unmatched references (external references for which no entry
+points could be located), a list of these references is printed on the Teleprinter.
+If these routines are on magnetic tape (e.g., a user program near the end of the file
+referring to a library routine near the beginning of the file), Switch 2 is left in
+up position and the RUN switch is pressed; BCS repeats the search of the Library
+file. If the routines are on paper tape, Switch 2 is set down, the tape placed in the
+paper tape device, and the RUN switch is pressed. Any number of user programs
+may be entered via a paper tape device after the library routines have been loaded.
+
+PAPER TAPE OPERATION 
+
+The paper tape loader (Basic Binary Loader) can be restored in the protected area
+of memory through use of the Exchange Magnetic for Paper Tape Loader program.
+The Exchange Magnetic for Paper Tape Loader program must be stored as part of
+the Absolute file on magnetic tape.
+
+8-4
+PREPARE TAPE SYSTEM OPERATING PROCEDURES
+
+Before initiating the preparation of the files on magnetic tape, the Prepare Tape
+System must be configured; the user supplies the I/O channel numbers for the
+available devices.
+
+Configuring The Software Systems
+
+The SIO routines, the Inter-Pass Loader and the Basic Control System must be
+configured prior to being stored as part of File 1. For procedures to configure the
+SIO routines and the Inter-Pass Loader, see the SIO Dump routine. For procedures
+to configure BCS, see the Prepare Control System Routine.
+
+Configuring The Prepare Tape System Routine
+
+1. Load the PTS routine using the Basic Binary Loader.
+
+2. Set Switch Register to:  000100
+
+3. Press LOAD ADDRESS
+
+4. Set Switches 5-0 of the Switch Register to the channel number for the printer/
+   punch unit (the lower numbered of the two assigned channels) of the Teleprinter.
+
+5. Press RUN.
+
+6. The computer prints:
+
+        HSINPUT
+
+7. Type channel number of Punch Tape Reader. The reply is terminated by a (CR)(LF).
+
+8. The computer prints:
+
+        MAG TAPE
+
+9. Type the channel number of the data channel (the lower numbered of the two
+   assigned channels) of the Magnetic Tape Unit. The reply is terminated by a
+   (CR)(LF).
+
+10. The computer prints:
+
+        LWA MEM?
+
+11. Type in the upper limit of available memory; for an 8K configuration, type:
+
+        17677
+
+Preparing The Magnetic Tape Files
+
+1. Following the type-in of the last word address of available memory, the com-
+   puter prints:
+
+        I.D.
+
+2. Type in the program identification number (1-17777) starting in position l. f
+   If the tape to be loaded is a continuation tape of the tape that was loaded pre-
+------------------
+t An absolute program may be added to the end of a previously prepared File 1:
+  Type /A in response to "I.D." The tape is positioned at the end of the file 
+  and a new ID number requested. (The previously prepared File 2 will be 
+  destroyed and must therefore be recreated.)
+
+8-5
+   viously, (e.g., SIO drivers and Inter-Pass Loader) type an identification num-
+   ber of "0". Comments may be appended to the ID number (to the end of the
+   line) providing a space separates the comments from the number. The reply
+   is terminated by a (CR(LF).
+
+3. The computer prints:
+
+        S.A.
+
+4. Type in the absolute starting address of the program (usually 2 or 100). Com-
+   ments may be appended providing a space separates the comments from the
+   address. The reply is terminated by a (CR)(LF).
+
+5. The computer prints:
+
+        LOAD
+
+6. Place the paper tape in the input device and press RUN.
+
+7. Repeat steps 1 through 6 for each absolute tape (steps 3 and 4 are bypassed for
+   continuation tape.)
+
+8. To terminate input for File 1, type:
+
+        /E (CR)(LF)
+
+   in response to "I.D."
+
+9. The computer prints:
+
+        LIBRARY FILE
+        LOAD
+
+10. Place the Program Library tape in the input device and press RUN. (Switch
+    15 should be down).
+
+11. When the Program Library is stored on the tape in File 2, the computer prints:
+
+        LOAD
+
+12. The user may then load any relocatable programs that are to be added in File
+    2. $ After each program is loaded, the computer prints:
+
+        LOAD
+
+13. To terminate input for File 2, set Switch 15 up. The computer prints:
+
+        *END
+
+    and rewinds the magnetic tape.
+
+----------------
+$ If user program refers to library routines, or if they are accessed more fre-
+  quently, they should be loaded first.
+
+8-6
+During operation of Prepare Tape System, the following diagnostics may be printed
+on the Teleprinter:
+
+  Message              Explanation                 Action
+   
+*EOT                   End-of-Tape                 Use larger tape or fewer pro-
+                                                   grams. Start over.
+
+*ADDRESS ERROR         The program being writ-     Reposition tape, then press RUN
+                       ten on tape would de-       to reread record,otherwise re-
+                       story the loader if load-   start.
+                       ing attempted.
+
+INPUT ERROR,           Identification is illegal.  Retype identification number.
+TRY AGAIN
+
+WRITE NOT              Write Enable Ring not in-   Insert ring and start over.
+ENABLED                serted in reel.
+
+TAPE UNIT IN                                       Press AUTO button.  Then press
+LOCAL                                              RUN to continue.
+
+CHECKSUM ERROR          Checksum error occur-      Reposition paper tape at begin
+                        red while reading paper    ning of record (indicated by
+                        tape                       four feed frames) and press
+                                                   RUN. Otherwise, restart.
+
+Loading Magnetic Tape Binary Loader 
+
+Prior to loading absolute programs from magnetic tape, the paper tape loader (Basic
+Binary Loader) must be exchanged forthe Magnetic Tape Binary Loader. The steps
+are as follows:
+
+1. Load Exchange Paper for Magnetic Tape Loader program using the Basic
+   Binary Loader.
+
+2. Set Switch Register to starting address of the routine:
+
+        000002
+
+3. Press LOAD ADDRESS.
+
+4. Set Switches 5-0 of the Switch Register to the channel number of the data chan-
+   nel (the lower numbered of the two assigned channels) of the magnetic tape unit.
+
+5. Set Loader switch to ENABLED.
+
+6. Press RUN.
+
+7. When the computer halts with 102077 in the T-Register, the Basic Binary
+   Loader has been replaced with the Magnetic Tape Binary Loader.
+
+8. Set Loader switch to PROTECTED.
+
+8-7
+Loading Absolute Programs From Magnetic Tape
+
+1. Set Switch Register to starting address of Magnetic Tape Loader. For 8K
+   configuration, use 017700.
+
+2. Press LOAD ADDRESS
+
+3. Set absolute program identification number in the Switch Register. (Make sure
+   tape unit is in "AUTO" mode and the proper density has been selected.)
+
+4. Press PRESET.
+
+5. Set Loader switch to ENABLED
+
+6. Press RUN.
+
+7. The computer halts at location 1 with 102077 in the T-Register. The program
+   has been located and loaded.
+
+8. Set Loader switch to PROTECTED.
+
+9. Press RUN to initiate execution of the absolute program.
+
+If the computer halts with 10211 in the T-Register, a locating or loading error has
+occurred. If the A-Register contains 000200, the requested program can not be
+located; set correct number in Switch Register and repeat procedure. If the A-
+Register does not contain 000200, a tape read error (timing or parity) has occurred;
+restart at step 1.
+
+Restoring The Basic Binary Loader 
+
+To load absolute binary programs from paper tape, the Magnetic Tape Binary Loader
+must be exchanged for the Basic Binary Loader. The steps are as follows:
+
+1. Set Switch Register to starting address of Magnetic Tape Loader. For 8K
+   configuration, use 017700.
+
+2. Press LOAD ADDRESS.
+
+3. Set File 1 identification number of the Exchange Magnetic for Paper Tape
+   Loader program in the Switch Register.
+
+4. Press PRESET.
+
+5. Set Loader switch to ENABLED.
+
+6. Press RUN.
+
+7. The computer halts with 102077 in the T-Register. Set switches 5-0 of the
+   Switch Register to the channel number of the paper tape input device.
+
+8. Let Loader switch remain in ENABLED position.
+
+9. Press RUN.
+
+8-8
+
+10. The computer halts with 102077 in the T-Register indicating that the Basic
+    Loader has replaced the Magnetic Tape Binary Loader. Set Loader switch to
+    PROTECTED.
+
+11. To recopy the Basic Binary Loader in the protected area (e.g., an incorrect
+    channel number was entered), leave Loader switch in ENABLED position and
+    RUN. The program returns to Step 7.
+
+8-9

@@ -1,0 +1,342 @@
+ASMB,R,B,L,X
+      HED EXECUTION PROCESSORS & MISC. SUBROUTINES
+      NAM XEC3,7
+      SPC 2 
+      ENT SETDP,VLFIL,FDATA,INCAL,FETCH,SETPT 
+      ENT XECBR 
+      ENT FDAT4 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGHT,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,FSCHA,TEMP5 
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM FFLG,TEMP4,EORFL,NCH,TEMP6,STRLN,ATIM,LT5 
+      COM ASTYP,ASBFP,ORDNO,ATMP(2),RETCD 
+      COM DCCNT,NXTDT,VL0,RCRD#,PMASK,ITEMP 
+      COM OPTRQ 
+      SPC 2 
+      EXT SCHLB,EXIT3,CMPL0,SBFIX,RQSTR,INF 
+      EXT GTTYP,OUTCR,SCHIN,GETCR,BCKSP 
+      EXT EASN,XEC1,ELET,EGOTO,EIF,EFOR,ENEXT,EGOSB 
+      EXT ERTRN,EXIT,EINPT,EREAD,EPRIN,ERSTR
+      EXT EENTR,ELET,OPCHK,LWAUS,EXIT,FORMX 
+      EXT EMAT,ECHAN
+      SPC 2 
+OPMSK OCT 77000 
+DATOP OCT 62000 
+B4000 OCT 4000
+PRTOP OCT 65000 
+B2000 OCT 2000
+B377  OCT 377 
+M72   DEC -72 
+B77   OCT 77
+IWT   OCT 160003
+**                                    **
+***  SET POINTERS TO DATA STATEMENT  ***
+**                                    **
+* 
+*  STARTING WITH THE STATEMENT REFERENCED BY (B) UPON 
+*  ENTRY, FIND THE NEXT <DATA STATEMENT> AND SET THE DATA 
+*  BLOCK POINTERS APPROPRIATELY.  IF NO <DATA STATEMENT>
+*  IS FOUND, SET THE POINTERS TO THE 'OUT OF DATA'
+*  CONFIGURATION AND EXIT WITH (A) = -1.
+* 
+SETDP NOP 
+#STDP CPB SYMTB     PROGRAM EXHAUSTED?
+      JMP SETD2     YES, SET 'OUT OF DATA' CONDITION
+      ADB .+2       NO, 
+      LDA 1,I         STATEMENT 
+      ADB .-1           OF
+      AND OPMSK           TYPE
+      CPA DATOP             'DATA'? 
+      JMP SETD1     YES 
+      ADB 1,I       NO, COMPUTE 
+      ADB .-1         ADDRESS OF
+      JMP #STDP         NEXT STATEMENT
+SETD1 LDA 1,I       LOAD STATEMENT LENGTH 
+      INB           SET 
+      CMA,INA         DATA
+      INA,RSS           COUNTER 
+SETD2 CCA                 TO
+      STA DCCNT             1-STATEMENT LENGTH
+      STB NXTDT     SET POINTER ONE WORD
+      JMP SETDP,I     ABOVE FIRST DATA CONSTANT 
+**                             ** 
+***  VALIDATE A FILE REQUEST  *** 
+**                             ** 
+* 
+*  EXIT TO (P+2) IF (TEMP1)+1 DOES NOT BEGIN A FILE REFERENCE;
+*  ELSE EVALUATE THE FILE REFERENCE AND VERIFY ITS CORRESPONDENCE 
+*  WITH A REQUESTED FILE.  IF A RECORD REFERENCE IS ALSO PRESENT, 
+*  EVALUATE IT AND CALL FOR ITS SWAPPING INTO THE CORE BUFFER.
+* 
+VLFIL NOP 
+#VLFI LDB TEMP1     IS
+      INB 
+      CPB PRGCT       NEXT
+      JMP VLFI0 
+      LDA 1,I           OPERATOR
+      AND OPMSK 
+      CPA B4000           A '#' ? 
+      JMP VLFI1     YES 
+VLFI0 ISZ VLFIL     NO, EXIT
+      JMP VLFIL,I     TO (P+2)
+VLFI1 CCB           SET 
+      LDA TEMP1,I     VL0 = 0 
+      AND OPMSK         FOR 
+      CPA PRTOP           'PRINT',
+      CLB                   ELSE
+      STB VL0                 VL0 = -1
+      ISZ TEMP1     EVALUATE
+      JSB FETCH       FILE REFERENCE
+      JSB SBFIX     15-BIT INTEGER? 
+      JSB RERRS+35,I  NO
+      STB FILE#     YES, SAVE IT
+      LDA TEMP1,I   NEXT
+      AND OPMSK       OPERATOR
+      CPA B2000         A COMMA?
+      JMP VLFI3     YES 
+      CCB           NO, USE NULL RECORD 
+VLFI2 STB RCRD# 
+      SSB           NULL RECORD?
+      LDB .-2       YES, DO NOT ADJUST FILE POINTER 
+      LDA FILE# 
+      ISZ VL0       WRITE REQUEST?
+      CMA           YES 
+      JSB RQSTR     VALIDATE FILE/RECORD REQUEST
+      JMP VLFIL,I 
+VLFI3 JSB FETCH     EVALUATE RECORD REFERENCE 
+      JSB SBFIX     15-BIT INTEGER? 
+      LDB INF       NO, LOAD IMPOSSIBLE RECORD
+      JMP VLFI2     YES 
+**                     ** 
+***  FETCH DATA ITEM  *** 
+**                     ** 
+* 
+*  UPON ENTRY (B) = 1 IF A NUMBER IS REQUESTED OR (B) = 2 IF A
+*  STRING IS REQUESTED.  FDATA FILLS THE REQUEST FROM A FILE IF 
+*  ONE IS REFERENCED BY THE CALLER, ELSE FROM THE DATA BLOCK. 
+*  TYPE MATCH IS CHECKED.  NUMBERS RETURN IN (A) AND (B); STRINGS 
+*  ARE PREPARED AS SOURCE STRINGS.  FDATA MOVES TO NEW FILE 
+*  RECORDS OR <DATA STATEMENT>S AS NECESSARY. 
+* 
+FDATA NOP 
+#FDAT LDA FILE#     READ FROM 
+      SSA,RSS         FILE? 
+      JMP FDAT3     YES 
+      ISZ DCCNT     NO, DATA IN CURRENT STATEMENT?
+      JMP FDAT1     YES 
+      STB TEMP5     NO, SAVE (B)
+      LDB NXTDT     MOVE TO NEXT
+      JSB SETDP       <DATA STATEMENT>
+      LDB TEMP5     RETRIEVE (B)
+      ISZ DCCNT     DATA FOUND? 
+      RSS           YES 
+      JSB RERRS+21,I  NO, OUT OF DATA 
+FDAT1 ISZ DCCNT     INCREMENT COUNTER 
+      LDA NXTDT,I   CORRECT 
+      ISZ NXTDT 
+      RBR             TYPE OF 
+      XOR 1 
+      SSA               DATA? 
+      JSB RERRS+22,I  NO
+      SSB,RSS       YES, STRING?
+      JMP FDAT2     YES 
+      DLD NXTDT,I   NO, LOAD NUMBER 
+      ISZ NXTDT     UPDATE
+      ISZ NXTDT       POINTER 
+      ISZ DCCNT 
+      JMP FDATA,I 
+FDAT2 LDA NXTDT,I   LOAD STRING LENGTH
+      ISZ NXTDT     SET 
+      LDB NXTDT       START-OF-STRING 
+      RBL 
+      STB TEMP4           ADDRESS 
+      AND B377      SET 
+      CMA             TRANSFER STRING 
+      STA TPRME         LENGTH
+      CMA,INA       UPDATE
+      ARS 
+      LDB 0 
+      ADA NXTDT       DATA
+      STA NXTDT 
+      ADB DCCNT 
+      STB DCCNT         POINTERS
+      JMP FDATA,I 
+FDAT3 LDA FBASE     GET 
+      ADA .+5 
+      LDA 0,I         PROTECT 
+      STA PMASK            MASK 
+      STB TEMP5     SAVE DATA REQUEST TYPE
+      LDB RCRD#     GET TYPE
+      STB EORFL       OF NEXT ITEM
+      JSB GTTYP         IN FILE 
+      CPA TEMP5     MATCHING TYPES? 
+      JMP FDAT5     YES 
+      CPA .+4       NO, END-OF-RECORD?
+      JMP FDAT4     YES 
+      CPA .+3       NO, END-OF-FILE?
+      RSS           YES 
+      JSB RERRS+22,I  NO, TYPE MISMATCH 
+FDAT4 ISZ FBASE     LOAD
+      LDB FBASE,I     EOF/EOR ADDRESS 
+      SZB,RSS       NULL? 
+      JSB RERRS+37,I  YES, UNPROTECTED EOF/EOR
+      STB PRGCT     NO
+      LDB FORST     CLEAN UP
+      JSB SETPT       EXECUTION STACKS
+      JMP XEC1
+FDAT5 LDB FBASE,I   LOAD DATA ADDRESS 
+      SLA,RSS       STRING? 
+      JMP FDAT6     YES 
+      DLD 1,I       NO, LOAD NUMBER 
+      XOR PMASK     MASK
+      STA SWPTP 
+      LDA 1 
+      LDB SWPTP 
+      XOR PMASK      DATA 
+      STA SWPTP 
+      LDA 1 
+      LDB SWPTP 
+      ISZ FBASE,I   ADJUST RECORD POINTER 
+      ISZ FBASE,I     PAST DATA 
+      JMP FDATA,I 
+FDAT6 LDA 1,I       LOAD STRING HEADER
+      INB           SET 
+      RBL 
+      STB TEMP4         ADDRESS 
+      RBR 
+      AND B377      SET 
+      CMA             TRANSFER
+      STA TPRME         LENGTH
+      CMA,INA       ADJUST
+      ARS             RECORD POINTER
+      ADB 0             PAST
+      STB FBASE,I         STRING
+      JMP FDATA,I 
+SWPTP NOP 
+      SKP 
+**                             ** 
+***  REQUEST AN INPUT RECORD  *** 
+**                             ** 
+* 
+*  SERVICES REQUESTS FOR TELETYPE INPUT.  IF (A) = 0 EMIT A '?' 
+*  AND 'X-ON' ELSE EMIT A LINE FEED, TWO '?', AND AN 'X-ON'.
+* 
+INCAL NOP 
+#INCL STA ITEMP     SAVE FLAG 
+      LDA MAIN      DOES THIS USER
+      INA             HAVE THE
+      CPA PRIST         LINE PRINTER? 
+      JSB WERRS+9,I YES - RELEASE IT
+      LDA ITEMP     RESTORE FLAG
+      SZA           INITIAL REQUEST?
+      JMP INCL2     NO
+      LDA CHRCT     YES 
+      ADA M72       LINE
+      SSA             FULL? 
+      JMP INCL1     NO
+      LDA .+15B     YES, OUTPUT 
+      JSB OUTCR       CARRIAGE RETURN 
+      LDA .+12B         AND 
+      JSB OUTCR           LINE FEED 
+INCL1 LDA B77       OUTPUT
+      JSB OUTCR       '?' 
+      LDA .+21B     OUTPUT
+      JSB OUTCR       AN X-ON 
+      CLA           RESET 
+      STA CHRCT       OUTPUT CHARACTER COUNTER
+      STA IFCNT         AND INPUT ITEM COUNTER
+      LDA IWT 
+      JSB SCHIN 
+      JSB GETCR     FIRST 
+      JMP INCL2       CHARACTER A 
+      CPA .+3           'CONTROL C' ? 
+      JMP EXIT
+      JSB BCKSP     NO, RETURN
+      JMP INCAL,I     TO CALLER 
+INCL2 LDA .+12B     OUTPUT A
+      JSB OUTCR       LINE FEED 
+      LDA B77           AND 
+      JSB OUTCR           A '?' 
+      JMP INCL1 
+**                            **
+***  EXECUTION BRANCH TABLE  ***
+**                            **
+XECBR DEF XECTB-42B,I 
+XECTB DEF EASN      ASSIGN
+      DEF XEC1      USING 
+      DEF XEC1      IMAGE 
+      DEF XEC1      COM 
+      DEF ELET      LET 
+      DEF XEC1      DIM 
+      DEF XEC1      DEF 
+      DEF XEC1      REM 
+      DEF EGOTO     GOTO
+      DEF EIF       IF
+      DEF EFOR      FOR 
+      DEF ENEXT     NEXT
+      DEF EGOSB     GOSUB 
+      DEF ERTRN     RETURN
+      DEF EXIT      END 
+      DEF EXIT      STOP
+      DEF XEC1      DATA
+      DEF EINPT     INPUT 
+      DEF EREAD     READ
+      DEF EPRIN     PRINT 
+      DEF ERSTR     RESTORE 
+      DEF EMAT      MAT 
+      DEF XEC1      FILES 
+      DEF ECHAN     CHAIN 
+      DEF EENTR     ENTER 
+      DEF ELET      'IMPLIED' LET 
+**                         ** 
+***  FETCH FORMULA VALUE  *** 
+**                         ** 
+* 
+*  RETURN WITH THE RESULT IN (A) AND (B)
+* 
+FETCH NOP 
+#FTCH JSB FORMX     EVALUATE FORMULA
+      JSB OPCHK     UNSTACK ADDRESS 
+      DLD 1,I       LOAD RESULT 
+      JMP FETCH,I 
+**                            **
+***  SET EXECUTION POINTERS  ***
+**                            **
+* 
+*  SETS POINTERS TO THOSE STACKS WHOSE LOCATION MAY CHANGE
+*  DURING EXECUTION, USUALLY DUE TO INITIATION OR COMPLETION
+*  OF FOR-LOOPS.
+* 
+SETPT NOP 
+#STPT STB FORST     SET TOP OF FOR-STACK
+      ADB .+4       SET POINTER TO TOP
+      STB TMPST       OF TEMPORARY STACK
+      ADB .+20      SET POINTER TO TOP
+      STB OPDST       OF OPERAND STACK
+      ADB .+3       SET POINTER TO BOTTOM 
+      STB OPTRQ       OF OPERATOR STACK 
+      CMB           OUT 
+      ADB LWAUS       OF
+      SSB               STORAGE?
+      JSB RERRS+10,I  YES 
+      LDB OPTRQ     NO, SET POINTER TO TOP
+      STB PBPTR       OF OPERATOR STACK 
+      JMP SETPT,I 
+      END 

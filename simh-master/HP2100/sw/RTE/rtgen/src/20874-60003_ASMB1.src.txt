@@ -1,0 +1,817 @@
+ASMB,L,B,C     DOS/RT ASSEMBLER FEBRUARY 1970 
+      HED *** DOS/RTE ASMB1  FALL 1971 ***
+      NAM ASMB1,5,99
+      ENT ASMB1 
+      ENT ?LITI,?CMQ,?INSR,?HA3Z,?ENP,?EXP
+      EXT ?RSTA,?ERPR,?MOVE,?CHPI,?OPER,?PLIT,?ORGS 
+      EXT ?ASCN,?BPKU,?MSYM,?PKUP,?SYMK,?CHOP,?ENDS 
+      EXT ?DRFL,?MSYS,?ASMB,?SEGM,EXEC,?PNCH,?X 
+      EXT ?ICSA,?BFLG,?LFLG,?TFLG,?LTFL,?CNTR,?PNLE 
+   EXT ?V,?ARTL,?ASM1,?ORRP,?BNCN,?DCOD,?MESX,?PRNT 
+      EXT ?LABE,?LWA,?TSTR,?WEOF,?RDSC
+      EXT ?RLUN,?LUNI,?LGFL 
+      SUP 
+TEMP  BSS 225B      RESERVE TEMPORARY AREA
+#     EQU TEMP     SAME AS DATA ORIGIN
+VAL0  EQU TEMP+1    'ASCN' AND  'SYMK'
+DCNT  EQU TEMP+4
+...1  EQU TEMP+7
+.1    EQU ...1
+.12   EQU .1+7
+..M1  EQU .12+6 
+L     EQU ..M1+6
+.9    EQU #+41B 
+.29   EQU #+42B 
+.M15  EQU #+44B 
+.M29  EQU #+45B 
+BLNK  EQU #+46B     =40B(LOWER BLANK) 
+.IL   EQU #+47B 
+.MBLN EQU #+50B 
+.NO   EQU #+51B 
+BLNS  EQU #+55B 
+BIT15 EQU #+60B 
+.E    EQU #+61B 
+.B    EQU #+62B 
+NAMI  EQU #+71B    LOC'N FOR TEMP SYMBOL STORAGE
+NAME  EQU #+72B    FOR USE BY 'OPLK'
+SUMP  EQU #+100B   RUNNING SUM FOR 'CHOP' 
+CFRA  EQU #+105B   'ASCN' 
+CNTB  EQU #+106B
+CODE  EQU #+107B   OPCODE TYPE(FROM OPTABLE)
+FLEX  EQU CFRA     (ASCN) 
+INST  EQU #+113B   OPCODE FORMAT
+LAST  EQU #+114B
+PEEK  EQU #+116B   LAST CHAR PICKED UP
+PLCN  EQU #+117B   PROGRAM LOCATION COUNTER 
+PLEN  EQU #+120B LIT LENGTH PASS 1/LIT ORG PASS 2 
+PNTR  EQU #+121B L POINTS AT LAST OER CURRENT CHAR. 
+SCN1  EQU #+125B   STATE LNG/OPCODE/OPERAND/LABEL(4)
+SYMI  EQU #+132B   ADDR CNTR FOR SYMBOL TBL (SYMK)
+SYMP  EQU #+133B   SYMBOL LNG/ AND LOC'N
+TEST  EQU #+135B   TEST CHARACTER 
+ENT.  EQU #+137B
+ENTC  EQU #+140B
+ENTV  EQU #+141B
+*             * I/O STATEMENT BUFFER *
+IOBF  EQU #+142B    50 WORDS + END OF STATEMENT BUFF
+*             *(INPUXFFER(BUFF) STARTS IN 11TH WORD)* 
+BUFF EQU IOBF+12B 
+PBUF  BSS 17        SAVES THE 'NAN' RECORD INFO 
+WCNT  EQU PBUF  WORD(BLK) CNT FOR BIN.RECRD.
+      SPC 1 
+ASCN  EQU ?ASCN 
+BFLAG EQU ?BFLG 
+BPKUP EQU ?BPKU 
+CHOPI EQU ?CHPI 
+CNTR  EQU ?CNTR 
+ERPR  EQU ?ERPR 
+LFLAG EQU ?LFLG 
+LTFLG EQU ?LTFL 
+MOVE  EQU ?MOVE 
+MSYM  EQU ?MSYM 
+MSYMS EQU ?MSYS 
+OPERR EQU ?OPER 
+ORGSV EQU ?ORGS 
+PKUP  EQU ?PKUP 
+PNCH  EQU ?PNCH 
+RSTA  EQU ?RSTA 
+X     EQU ?X
+      SPC 1 
+ASMB1 JSB RSTA
+      LDA CODE
+      CPA .12+3 'HED' STATE?
+      JMP IXH   YES 
+      STA ?ASM1     CLEAR 'CS' AND 'INIT' FLAGS 
+      CPA .12+1  (13) NAM ? 
+      JMP HI12
+* 
+*             * NO NAM OR ORG * 
+* 
+      LDA .NO       'NO'= NO ORG OR NAM STATEMENT 
+     JSB ERPR 
+      JMP HA32+1
+IXH   JSB INST,I  GO TO HEDSB 
+      JMP ASMB1 
+* 
+*             * PROCESS NAME FOR BINARY RECORD *
+* 
+PNSAV OCT 0,0       FOR USE IN 'NAM' SETUP
+HI12  LDB SCN1+2
+      JSB MSYM      MEASURE THE NAME
+      STB HI14
+      STA PNSAV     SAVE # OF CHARS IN THE PARAMETER
+      LDB TEST      GET CONTINUATOR 
+      STB PNSAV+1   AND SAVE IT 
+      LDB CSAD
+      JSB MOVE      MOVE IT TO THE 'NAM' RECORD 
+HI14  NOP 
+      LDA PNSAV+1   GET THE CONTINUATOR 
+      CPA L+4       COMMA?(ANOTHER PARAMETER?)
+      RSS           YES 
+      JMP HI16      NO - GO TEST FOR END
+      LDA PNSAV     GET # OF CHARS IN CURRENT PARAME
+      ADA PNTR
+      INA 
+      STA PNTR      SET POINTER TO NEXT PARAMETER 
+      JSB BPKUP     SCAN TO NEXT PARAM. 
+      JSB MSYM      MEASURE IT
+      STA PNSAV     SAVE # OF CHARS IN THE PARAMETER
+      ALF,ALF 
+      INA           FOR DECIMAL CONV
+      ALF,ALF       POSITION IT 
+      STA 1         PARAM. FOR 'ASCN' TO 'B' REG. 
+      LDA TEST      GET CONTINUATOR 
+      STA PNSAV+1   AND SAVE IT 
+      LDA PNTR      GET POSITION OF NUMBER
+      JSB ASCN      GO CONVERT THE NUMBER 
+      CLA           ERROR RETURN, SET 'A' =0
+      STA PBF9,I
+      ISZ PBF9
+      JMP HI14+1
+PBF9  DEF PBUF+9
+HI16  CPA BLNK      LEGAL?
+      RSS           YES 
+      JSB OPERR     NO - PRINT 'M' ERROR
+      LDA PBUF+9
+      SZA,RSS       IS TYPE=0(SYSTEM)?
+      STA PBUF+10   YES,  SET PRIORITY = 0. 
+HA32 JSB RSTA 
+      LDA CODE
+      CPA .12 
+     JMP HB00 TO END
+      CPA BLNK      (40B)  SUP/UNS? 
+      JMP HA32
+      ADA ..M1+2  -3
+      SSA 
+      JMP HA64 ORR/ORB/ORG
+      CPA .12B      NAM?
+      JMP HA63     YES, ERROR 
+      ADA ..M1+2 (-3) 
+      SSA      'COM','ENT' OR 'EXT' ? 
+      JMP INST,I    JUMP TO ROUTINE DESIGNATED IN IN
+      CPA ...1+4  'EQU'?
+     JMP HA56 TO EQU
+      CPA .9        (11B)  HED? 
+      JMP HA32
+      CPA .12  (14B) SKP? 
+      JMP HA32
+      CPA .12+1 (15B) SPC?
+      JMP HA32
+      CPA .12+2 (16B) LST/UNL?
+      JMP HA32
+* 
+*             * TEST FOR LABEL FIELD
+     JSB LABEL
+     LDA CODE  OPCODE INDICATOR 
+      CPA DEX 
+      JMP HA40      IT'S A 'DEX'
+      CPA .29  REP? 
+      JMP HA64  YES 
+      CPA ...1+6  (7) 
+     JMP HA54 TO ASC
+      CPA .26B     INTEGER ARITH(HARDWARE)? 
+      JMP HA70     YES....
+      CPA ...1+5  (6) ARITH MACRO?
+      JMP INST,I    YESM JUMP TO PROCESS IT.. 
+      ADA .M10      -10 
+     SSA OCT OR DEC?
+     JMP HA40   YES.
+     OCT 2003 BSS?
+      JMP HA3M  TO BSS PROC.
+      CPA ...1+3 (4) MEM REF? 
+      JMP HA3L  YES,TEST FOR LITERAL
+HA3B CLA,INA  TO ADD 1 TO PLCN
+* 
+*             * INCREMENT PROGRAM LOCN. CNTR. * 
+* 
+HA3Z  ADA PLCN   (HA3B+1) 
+     STA PLCN 
+     JMP HA32 
+.26B  OCT 26       FOR HARDWARE ARITHMETIC
+      SPC 1 
+*             * PROCESS BSS * 
+* 
+HA3M  JSB CHOPI EVAL.OPERAND
+     JMP HA32  ERROR
+      LDA 1   B TO A
+      JMP HA3B+1
+HA3L  LDA LTFLG 
+      SZA,RSS  LITERAL PRESENT
+      JMP HA3B  NO
+      LDA INST
+      SLA    IS LITERAL LEGAL WITH INST?
+      JMP *+3   YES 
+      JSB OPERR  NO 'M' ERROR 
+      JMP HA3B
+      JSB ?PLIT     PROCESS LITERAL 
+      NOP           IGNORE ERROR
+      JMP HA3B
+.12B  OCT 12
+.M10  DEC -10 
+DEX   OCT 25        OP TYPE FOR 'DEX' 
+CSAD  DEF PBUF+3   POINTS AT PUNCHBUFFER
+ENFLG NOP           FLAG FOR PROCESSING ENTRY POINTS
+S     BSS 1 
+      SKP 
+* PROCESS 'COMMON' DECLARATION
+CMQ   LDA SCN1+2
+      STA PNTR      SET POINTER 
+     STA TEST  SET TEST (U) = 0.
+      LDB PNTR
+      JSB MSYMS    SET SYMP/SYMN
+      JSB SPNTR     ALIGN POINTER 
+      LDB PBF10,I 
+      STB S 
+     LDB TEST 
+      CPB L+4  COMMA? 
+      JMP HM2  YES
+     CPB BLNK 
+      JMP HM2 IT'S = BLANK
+      CPB L LEFT PAREN? 
+     RSS       = (
+      JMP HA55+1  ERROR 1ST PASS
+     JSB BPKUP  SKIP BLANKS 
+     STB TEMP+1  SAVE POINTER 
+     JSB MSYM  MEASURE COM LENGTH 
+      STA TEMP SAVE NUMBER OF CHARACTERS
+      JSB SPNTR     ALIGN POINTER 
+     LDA TEST 
+      CPA L+1 RT PAREN? 
+     RSS       = )
+      JMP HA55+1  1ST PASS ERROR
+     STA PEEK 
+     LDB TEMP 
+     LDA LAST 
+     ADB ..M1  LENGTH-1 TO B REG
+      CPA .B        =B? (OCTAL VALUE) 
+     RSS       YES-SKIP 
+      ADB .401B     NO, SET FOR DECIMAL 
+     LDA TEMP+1 
+      JSB ASCN      GO TO ASCII CONVERSION ROUTINE
+      JMP HA32  ERROR EXIT
+      ADA PBF10,I   BUMP LENGTH OF OOMMON 
+      STA PBF10,I 
+*              INSERT 
+HM3   LDA ...1+2 SET RELOC=COMMON 
+      LDB S  VALUE TO B 
+      JSB INSR  INSERT SYMBOL 
+      NOP   ERROR EXIT
+     LDA PEEK 
+     CPA BLNK  BLANK? 
+      JMP HA32   YES, EXIT TO HA32
+      CPA L+4  COMMA? 
+     RSS       YES
+     JSB PKUP  GET NEXT CHAR
+      JSB ENDTS     TEST FOR TERMINATION
+      JMP CMQ+2 
+HM2   ISZ PBF10,I 
+     STB PEEK  SAVE TEST
+      JMP HM3 
+PBF10 DEF PBUF+10B  L(PBUF+10B) 
+      SPC 1 
+*             * PROCESS 'EXT' DECLARATION * 
+EXP   LDA SCN1+2
+      STA PNTR      SET POINTER 
+      LDB PNTR
+      JSB MSYMS  SET SYMP/SYMN
+      JSB SPNTR     ALIGN POINTER 
+     LDB CNTR  VALUE TO B 
+      LDA ...1+3 (4) EXT INDIC. 
+      JSB INSR      GO TO INSERTION ROUTINE 
+      JMP *+2  ERROR EXIT 
+     ISZ CNTR  BUMP EXT CNTR
+     LDA TEST 
+      JSB ENDTS  TEST FOR TERMINATION 
+      JMP EXP+2     GO BACK, THERE'S ANOTHER 'EXT'!!
+* 
+*             * PROCESS 'ENT' DECLARATION * 
+ENP   LDA .10B     SET ENFLG = 10B
+      STA ENFLG 
+      LDA SCN1+2
+      STA PNTR      SET POINTER 
+ENP1  LDB PNTR
+      JSB MSYMS 
+      JSB SPNTR     ALIGN POINTER 
+       LDA .10B 
+      CLB 
+      JSB INSR      INSERT INTO THE SYMBOL TABLE
+      NOP 
+      LDA TEST
+     JSB ENDTS  TEST FOR TERMINATION
+      JMP ENP1
+ENDTS NOP       TEST FOR TERMINATION
+      CPA BLNK    OF COM,ENT OR EXT 
+      JMP HA55E 
+      CPA L+4 COMMA?
+      RSS         YES 
+      JMP HA55+1    NOT AN ERROR EXIT 
+      JSB BPKUP  SCAN TO NEXT CHAR. 
+      JMP ENDTS,I 
+HA55E CLA 
+      STA ENFLG     CLEAR 'ENT'FLAG 
+      JMP HA32      EXIT ON A BLANK 
+      SPC 1 
+*        * PNTR+1+'A' TO PNTR * 
+* 
+SPNTR NOP 
+   ADA PNTR 
+   INA
+   STA PNTR 
+      JMP SPNTR,I 
+.10B  OCT 10
+      SPC 2 
+HA63  LDA .IL       NAM IS ILLEGAL AFTER START
+      JMP HA55+2  TO ERPR 
+   SKP
+*        *************************************************
+*        * INSR: ADD ENTRY TO THE SYMBOL TABLE, W HACCOU *
+*        *  LINKAGE: A = TYPE   B = VALUE ON INPUT       *
+*        *   (OUTPUT) SYMP=NO.OF CHARS., SYMN=ENTRY FWA  *
+*        *            L    JSB INSR,I                    *
+*        *           L+1   ERROR RETN ('SO' OR 'DD'PRNTD)*
+*        *           L+2   NORMAL RETN                   *
+*        *************************************************
+.EN   ASC 3,ENDDSO
+INSR  NOP 
+      STA FLX1   SAVE TYPE
+     STB NAME+3    SAVE VALUE 
+      JSB ?SYMK     SYMBOL TABLE LOOKUP 
+     JMP INS1 
+      AND ...1+6  GET RELOC VALUE 
+      LDB ENFLG 
+      SZB,RSS       IN ENTRY PROC?
+      JMP INSY      NO
+INSQ1 CPA .1       RELOCATABLE? 
+      JMP INSC      YES 
+      LDA .EN       'EN' ENTRY POINT ERROR
+      JMP INSX
+INSY  LDB FLEX      GET CURRENT FW
+      BLF 
+      SSB,RSS       ENTRY POINT?
+      JMP INSG      NO
+      SZA           YES - IS IT IN ALREADY? 
+      JMP INSX-1    YES - 'DD' ERROR
+      LDA NAME+3
+      STA VAL0,I    SET VALUE INTO ENTRY
+      LDA FLX1      GET TYPE
+      LDB 0        REL TYPE TO 'B'
+      JMP INSQ1 
+INSG  CPA .1+6      LITERAL?
+      JMP INSR,I    YES, EXIT 
+      CPA ...1+3  EXT?
+      JMP *+4     YES, TEST 
+      LDA .EN+1     NO, 'DD' ERROR (MULTIPLE SYMBOL)
+INSX  JSB ERPR
+      JMP INSR,I    GET OUT HERE
+      CPA FLX1   ARE BOTH EXT'S?
+      JMP INSR,I  YES, FAKE 'DD'EXIT
+      JMP *-5    GO TO ERROR PRNT 
+INS1  LDA FLX1
+     OCT 1727      ALF,ALF
+     ADA NAME      TYPE IN FIRST WORD 
+     STA NAME          OF ENTRY 
+     LDB NAMI 
+      ADB TEMP+2
+      STB VAL0  SET LIMIT 
+      CLA 
+      ADA ?LWA      LWA-FWA AVAIL MEM. IN A 
+      CMA,INA 
+      ADA SYMI  TEST FOR SYMBOL TBL 
+      ADA TEMP+2    OVERFLOW
+     SSA
+     JMP *+3       NO 
+      LDA .EN+2     'SO' SYMBOL TABLE OVERFLOW
+      JMP INSX 'SO' ERROR 
+     LDA NAME+3    MOVE VALUE 
+      STA 1,I       UP
+     LDA NAMI 
+      LDB 0,I  ADD ENTRY  (FROM *+6)
+     STB SYMI,I    TO SYMBOL
+      CPA VAL0
+      JMP INSEX     EXIT
+     INA
+     ISZ SYMI 
+      JMP *-6 
+INSC  LDA 1        RELOC TYPE TO 'A'
+      ALF,ALF      POSITION IT
+      IOR TEMP+4,I
+      STA TEMP+4,I  SET ENTRY POINT TYPE
+INSEX ISZ INSR      BUMP EXIT POINT FOR A+2 EXIT
+      JMP INSR,I    EXIT HERE 
+*          ************************************ 
+*          * INSERT LITERAL INTO SYMBOL TABLE * 
+*          ************************************ 
+LITIN NOP 
+      LDA ?ICSA     GET LOC'N OF ASCI BUFFER
+      STA SYMP+1
+      LDA ...1+6 (7)
+      STA LTFLG 
+      LDB PLEN
+      JSB INSR    INSERT SYMBOL 
+      JMP LITIN,I ERROR RETN. 
+      ISZ PLEN  BUMP LITERAL LOC'N CNTR 
+      ISZ LITIN 
+      JMP LITIN,I  EXIT(NORMAL) 
+*             *********************** 
+*             * PROCESS OCT AND DEC * 
+*             *********************** 
+HA40  CLB,INB       B=1 
+      CPA DEX       CHECK CODE FOR 'DEX'
+      ADB .1+1      B=3 IF CODE IS 'DEX'
+      STB DCNT      SET LOCN COUNT BUMPER 
+      CLA 
+     STA CNTB 
+      STA TEMP
+      LDA SCN1+2
+      STA PNTR      SET POINTER 
+* 
+*             * PICK UP AND EXAMINE A CHARACTER * 
+HA41  JSB PKUP   (HA40+4 WAS HA41)
+      LDB DCNT      GET COUNT BUMPER
+      CPA L+4   COMMA?
+      JMP HA44      YES, GO SCAN FOR NEXT PARAM.
+      CPB .1+2      IS IT=3(I.E. DEX)?
+      JMP HA42      YES 
+      CPA L+6  PERIOD?
+     JMP HA48 
+      CPA .E        'E' ? 
+     JMP HA48 
+HA42  CPA BLNK      END OF STATEMENT? 
+      JMP HA49      YES 
+      JMP HA41
+* 
+*             * RESET FLT PT FLAG, SKIP BLANKS FOR NEXT CHAR *
+HA44  CLA 
+      STA TEMP
+      JSB BPKUP 
+      LDB DCNT      GET 'BUMP' COUNT
+      JMP HA48+4
+* 
+*             * FLT PT TEST FOR NUMBER USING BOTH . AND E * 
+HA48  LDA TEMP
+      ISZ TEMP
+      SZA           E OR '.' COUNTED YET? 
+      CLB           YES, SET B=0. 
+* 
+      ADB CNTB      (HA48+4)
+      STB CNTB      ADD TO WORD COUNT 
+      JMP HA41
+* 
+*             * END OF NUMERIC PSEUDO-OP PROCESSOR *
+HA49  LDA DCNT
+      ADA CNTB      SET A=NO OF LOCNS TO BE USED
+      JMP HA3B+1  EXIT
+*             ********************************
+*             * PROCESS ASC (GET VALUE OF N) *
+*             ********************************
+HA54  LDA ...1+1 (2) 'ASC' INDIC.FOR CHOP 
+      JSB ?CHOP 
+     JMP HA3B ERROR 
+     SZA
+     JMP HA55     ERROR-NOT ABS.VAL.
+      ADB .M29      -29 
+      LDA SUMP
+      SSB      SKIP IF >28 WORDS
+      JMP HA3B+1
+HA55 ISZ PLCN   * ERROR EXIT  * 
+      LDA .MBLN     'M' ERROR(BAD OPERAND)
+      JSB ERPR  TO PRINT ERROR DIAG.
+     JMP HA32 
+*             **********************
+*             * PROCESS EQU PSEUDO *
+*             **********************
+HA56 JSB CHOPI   EVALUATE OPERAND 
+     JMP HA32   *ERROR* 
+      CPA ...1+3 (4) EXT ?
+      LDA ...1+4 (5) SET FOR NON-PNCH EXT 
+      STA TEMP  NO
+      STB TEMP+1
+     OCT 6404 CLB,INB 
+     JSB MSYMS  GO TO MEAS.SYMBOL, SET SYMP/SYMN
+      LDA TEMP
+      LDB TEMP+1
+*             * SEND LABEL TO TABLE * 
+      JSB INSR      TO SYMBOL TABLE INSERTION RTN 
+     NOP
+     JMP HA32 
+*         ******************************
+*         *     ORG ORR HED PROC.JUMPS *
+*         ******************************
+HA64  JSB INST,I  GO TO SUBROUTINE
+     JMP HA32 
+HA70  LDB LTFLG    GET LITERAL FLAG 
+      SZB          IS A LITERAL IN THE OPERAND? 
+      JSB ?ARTL     GO PROCESS THE LITERAL
+     LDA  .1+1      A=2 
+     JMP  HA3Z
+   SKP
+*             ************************
+*             * PASS 1 END PROCESSOR *
+*             ************************
+      DEF BUFF
+HB00  LDA ?TFLG     GET TABLE OUTPUT FLAG 
+      SZA,RSS 
+      JMP HB08      TABLE NOT REQUESTED - FINISH PASS 
+      LDA HB00-1
+      ADA .1+3
+      STA HB00-1    SET HB00-1 = L(BUFF+4)
+      LDA X         GET FWA OF AVAILABLE MEMORY 
+      STA ENTV   TO ENTV
+HBX   LDA ENTV,I  TEST 1ST WORD OF ENTRY
+      SZA,RSS       COMPLETED?
+      JMP HB08      YES - GO TO FINISH PASS 1 
+      JSB MBLNK    SET UP BLANKS IN SYMBOL OUT AREA 
+* 
+*             * GET RELOCATION INDIC. CHAR. 
+      LDA  ENTV,I 
+     OCT 1727 
+      AND ...1+6  (7) 
+      CPA ...1+6  LITERAL ENTRY?
+      JMP HBY     YES.
+      JSB ?DCOD 
+      STB BUFF+3
+* 
+*             * GET VALUE OF SYMBOL * 
+     LDB SUMP (NO.OF WORDS IN ENTRY)
+      ADB ..M1
+      ADB ENTV
+      STB ENTV
+      LDA 1,I 
+     ISZ ENTV 
+      CLE      SET E = 0 FOR OCTAL CONV.
+      JSB ?BNCN 
+*             * STORE ASCI VALUE INTO BUFF
+      LDB HB00-1    GET L(BUFF+4) 
+      JSB ?V
+      LDB FFUB     SET PRINT PARAMETERS 
+      LDA .12+2  (14) 
+      JSB ?PRNT     GO TO PRINT 
+      JMP HBX  ENTRY DONE.
+HBY   LDA SUMP  NO.WDS IN ENTRY 
+      ADA ENTV   + ADDR OF ENTRY
+      STA ENTV   = ADDR OF NEXT ENTRY 
+      JMP HBX 
+.PASS ASC 2,PASS
+* 
+*             * ERRORS PRINTED *
+HB08  JSB ?ENDS     CLOSE OUT THE PASS
+      LDB ?DRFL     GET THE DISC FLAG 
+      SZB           DISK BEING USED?
+      JMP HB08R     NO. 
+      LDA ?LUNI     GET INPUT LUN 
+      CPA .1+1      IS IT THE DISC? 
+      RSS           YES, SKIP THE FOLLOWING WRITE 
+      JSB ?WEOF     WRITE REST OF LAST SECTOR 
+      LDA ?TSTR     YES, GET INITIAL CODE WORD
+      JSB ?RDSC     GO INITIALIZE FOR NEW START 
+      LDA ?RLUN 
+      STA ?LUNI     SET INPUT LUN = DISC
+      JMP HB09      YES, SKIP'END PASS' MESSAGE 
+HB08R LDA .PASS     ** PUT OUT "*END ASMB PASS" MESS
+      LDB .PASS+1 
+      JSB ?MESX 
+      JSB EXEC      GO TO OPERATOR SUSPEND ROUTINE
+      DEF *+2 
+      DEF .1+6      OPERATOR SUSPEND REQ. CODE
+      SPC 1 
+*                   * START PASS 2 HERE  *
+*             * TEST FOR PUNCH OUTPUT 
+HB09  LDA BFLAG     GET PUNCH FLAG
+      SZA           PUNCH REQUESTED?
+      JMP NMP       YES - GO PUT OUT START OF BIN DK
+      LDA ?LGFL     LOAD/GO FLAG
+      SZA           LOAD/GO REQUESTED?
+      JMP HNPL      YES, GO , BUT SKIP LEADER OUTPUT
+      JSB HNP      GO TO ENTRY POINT PROCESSOR
+      JSB GNMP     GO SET UP SOME 'NAM' PARAMETERS
+      LDA LFLAG     GET THE LIST FLAG 
+      ADA BFLAG     GET PUNCH FLAG
+      ADA ?LGFL     LOAD/GO FLAG
+      SZA           LIST OR PUNCH?
+      JMP HB11     START PASS 2 
+      JMP ?ASMB     ASSEMBLER EXIT
+HB11  LDA *+2       PICK UP ENT CODE TO GET ASMB2 
+      JMP ?SEGM     GO TO LOADER FOR NEXT SEGMENT 
+      ASC 1,2 
+   SKP
+*             * MOVE ENT NAMES/ADDRESS TO PUNCH BUFFER. 
+*             * IF UNDEFINED, PRINT DIAGNOSTIC. 
+HNP   NOP 
+      LDA .10B      FOR "ENT" TYPE = 10B
+      STA ENFLG 
+      LDB .2000     FOR WORDS PER ENTRY = 4 
+      LDA .M15      FOR 15 ENTRIES/RECORD 
+      JSB ENEXT 
+      CLA 
+      STA ENFLG 
+      JMP HNP,I 
+* 
+*             * PUNCH BINARY OUTPUT FOR RELOCATABLE PROGRAMS *
+*             * (NAM,ENT, AND EXT RECORDS ONLY)             * 
+*             * OUTPUT 'NAM' RECORD * 
+      OCT 1400,4400 
+NMP   JSB EXEC      GO TO EXEC TO OUTPUT THE LEADER 
+      DEF *+3 
+      DEF .1+2      READER REQ CODE 
+      DEF ?PNLE     LEADER/TRAILER CW 
+HNPL  JSB GNMP     GO SET UP SOME PARAMETERS
+      JSB PNCH   GO TO PUNCH 'NAM' RECORD 
+* 
+*             * OUTPUT 'ENT' RECORD * 
+      JSB HNP  GO TO 'ENT' MOVE/TEST RTN. 
+* 
+*     PROCESS 'EXT' RECORD HERE 
+      LDA CNTR
+      CPA ...1
+      JMP HB11     EXIT ON CNTR=1 
+      LDA .M20      -20 
+      LDB NMP-2     1400B   FOR EXT WCNT = 3/ENTRY
+      JSB ENEXT 
+      JMP HB11      EXIT
+BLUP  OCT 20000     BLANK UPPER 
+.M20  DEC -20 
+      SPC 1 
+ENEXT NOP 
+      STA ENT.      SAVE SYMBOL COUNT 
+      STB ORBS+1    SAVE WORD COUNT PER ENTRY 
+      LDA X         FWA OF AVAILABLE MEMORY 
+      STA ENTV   ENTV=ORG ADDR OF ENTRY 
+* 
+*             * INITIALIZE FOR NEXT BINARY OUTPUT IMAGE * 
+* 
+HX1  LDA CSAD 
+      STA ORBS   ORBS=DEST ADDR IN BIN REC. 
+      LDA BIT15     100000B 
+      LDB ENFLG 
+      SZB           ENT PROC? 
+      RAR           YES, SET RIC = 2
+      STA PBUF+1  SET RIC = 4 
+      LDA NMP-2     1400B (FOR STARTING WORD COUNT) 
+      STA WCNT  SET BLK CNT = 3 
+       LDA ENT. 
+      STA ENTC    ENTC = RECRD COUNTER
+HX2   LDA ENTV,I
+      SZA,RSS    END OF TABLE?
+      JMP HX9  YES
+      ALF,ALF    NO-PICK UP SYMBOL TYPE 
+       LDB ENFLG
+      RAR,RAR 
+      SZB,RSS      ARE WE PROCESSING THE ENT TABLE ENTRYS 
+      JMP HX3      NO...
+      RAR,SLA,RAL   CHECK FOR ENT 
+       JMP HX12 
+HXN   RAR,RAR  NO 
+      AND ...1+6 (7) ADD ENTRY
+      ADA ENTV   -LENGTH
+      STA ENTV   -TO ENTV 
+      JMP HX2 
+* 
+*             * PROCESS END OF TABLE *
+* 
+HX9   LDA ENTC
+      CPA ENT.      ANY SYMBOLS LEFT? 
+      RSS NO
+      JSB PNCH  GO TO PUNCH 
+      CLA 
+      STA WCNT      CLEAR WORD COUNT IF NO SYMBOL OUT 
+      JMP ENEXT,I   EXIT HERE 
+HX3   SLA,RSS      IS THIS AN EXT ENTRY?
+      JMP HXN      NO.. 
+      RAL,RAL      TEST FOR EXTERNAL EQU NOW
+     SLA,RSS
+     JMP *+3
+     RAR,RAR
+      JMP HXN 
+HX5   ISZ ENTC      END OF BIN RECORD?
+      JMP *+3    NO 
+      JSB PNCH  GO TO PUNCH 
+      JMP HX1 
+* 
+*         * PLACE CURRENT EXT OR ENT SYMBOL INTO BINARY RECORD *
+* 
+      LDA ENTV
+      CMA,INA 
+      STA HMOV5  ORG.ADDR.TO MOVE LINK
+      LDB ORBS
+      LDA BLNS
+      STA ORBS,I  SET DEST.AREA TO BLANKS 
+      ISZ ORBS
+      STA ORBS,I
+      LDA BLUP      GET UPPER BLANK. LOWER HALF OF
+      ISZ ORBS  -DEST WORD = 0
+      STA ORBS,I
+      LDA ENTV,I
+      JSB MTABL  MOVE CHARS TO BIN REC
+      ISZ PBUF+1  BUMP NO. OF ENTRIES IN REC. 
+      LDA SUMP  NO.WORDS IN SYMBOLIC ENTRY
+      ADA ENTV
+      STA ENTV  UPDATE ENTV(SYMBOL PNTR)
+      ADA ..M1
+      LDB 0,I    ENTRY VALUE TO B 
+      LDA ENFLG 
+      SZA,RSS       ENTRY POINT?
+      ADB ORBS,I    NO, SET EXT ORDINAL 
+      SZA 
+      ISZ ORBS
+      STB ORBS,I  STORE INTO RECORD 
+      ISZ ORBS   UPDATE ORBS (RECRD PNTR) 
+      LDA WCNT
+      ADA ORBS+1
+      STA WCNT   UPDATE WORD COUNT
+      JMP HX2 
+HX12  AND HSMSK    LEAVE RELOCATION BITS
+      SZA          HAS ENTRY POINT BEEN DEFINED?
+      JMP HX5      YES, GO PUT INTO THE PUNCH BUFFER
+* 
+*             * ENT ERROR DIAGNOSTIC ROUTINE *
+      LDA ENTV,I   NO,  GET THE SYMBLO ADDR FOR DIAG. 
+      JSB MBLNK    MOVE A SYMBOL TO BUFF THRU BUFF+2
+      LDA .EN       'EN'
+      STA IOBF+5    SAVE 'EN' IN PRINT BUFFER 
+      LDB BLNS      GET BLANKS FOR BUFFER 
+      STB IOBF+6
+      STB IOBF+9
+      LDB SNOB      GET ASCII ZEROES
+      STB IOBF+7
+      STB IOBF+8
+      LDA .12+3     15 WORD OUTPUT
+      LDB SNOB+1    GET BUFFER ORIGIN 
+      JSB ?PRNT     GO PRINT THE 'EN' ERROR 
+      LDA ENTV,I
+      ALF 
+      JMP HXN+1 
+SNOB  ASC 1,00
+      DEF IOBF+5    (AT SNOB+1) BUFFER ORIGIN 
+HSMSK OCT 40000 
+.2000 OCT 2000
+FLX1  BSS 1        (ASCN) 
+.401B OCT 401 
+ORBS  BSS 2 
+*     *   *********************************** 
+*     *   * PICK UP A SYMBOL TO BE PRINTED  * 
+*     *   * 'A' HAS DESTINATION ADDRESS     * 
+*     *   *********************************** 
+MBLNK NOP 
+      LDB ENTV      GET TBL ENTRY LOCATION
+      CMB,INB 
+*             * SEND ADDR. TO MOVE LINKAGE
+     STB HMOV5
+*             * MOVE BLANKS TO BUFFER 
+      LDB BLNS
+      STB BUFF
+      STB BUFF+1
+      STB BUFF+2
+      LDB FFUB  ADDR. OF BUFF TO B
+     JSB MTABL MOVE SYMBL TO PRINT BUFF 
+      JMP MBLNK,I  EXIT HERE
+      SPC 1 
+*             * MOVE CHARS FROM SYMBOL TABLE *
+*   -A CONTAINS 1ST WORD OF SYMBOL ENTRY
+*   -B CONTAINS DESTINATION ADDR. 
+*   -HMOV5 CONTAINS ORIGIN ADDR.
+MTABL NOP 
+      ALF 
+      AND ...1+6 (7) FOR NO.OF WRDS.
+      STA SUMP
+      CPA ...1+1 (2)
+      CLA 
+     IOR ...1 
+      JSB MOVE
+HMOV5 NOP 
+      JMP MTABL,I 
+*         *************************************************** 
+*         * GNMP - SET UP PROGRAM LENGTH                    * 
+*         *         SET UP 'PLEN' FOR LITERALS(IF PRESENT). * 
+*         *************************************************** 
+GNMP  NOP 
+      JSB ?ORRP     RESET PROG LOC'N COUNTERS 
+      LDA PLCN    NO
+      STA PBUF+6  SET MAIN PROG. LENGTH 
+* 
+*             * TEST FOR 'ORG' EXTENT BEYOND MAIN PROGRAM * 
+      LDB ORGSV     GET ORG SECTION LWA 
+      CMA,INA 
+      ADA ORGSV 
+      SSA,RSS    IS ORG VALUE GRTR? 
+      STB PBUF+6  YES, CHANGE MAIN PROG. LENGTH 
+* 
+*          * TEST FOR LITERALS *
+      LDA PBUF+6
+      LDB PLEN
+      SZB     LITERALS PRESENT? 
+      STA PLEN YES SET START OF AREA
+      ADA 1   ADD LENGTH OF REGION
+      STA PBUF+6  TO PROG LENGTH. 
+      JMP GNMP,I   EXIT FROM THE GNMP ROUTINE 
+FFUB  DEF BUFF
+********************************************************************
+********** CHANGE LOC'N. X IN ASMB IF THIS PROGS. LWA > 1430B ******
+********************************************************************
+?CMQ  EQU CMQ 
+?ENP  EQU ENP 
+?EXP  EQU EXP 
+?HA3Z EQU HA3Z
+?INSR EQU INSR
+LABEL EQU ?LABE 
+?LITI EQU LITIN 
+      END ASMB1 

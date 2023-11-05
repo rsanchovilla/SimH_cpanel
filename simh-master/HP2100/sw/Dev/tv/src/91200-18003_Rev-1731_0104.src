@@ -1,0 +1,689 @@
+ASMB,A,B,L,C,X    TV INTFC. CARD DIAGN. 
+      HED  TV INTFC CARD DIAG.   A-91300-16003-2  12/27/77  REV.D(1731) 
+      ORG 2B        START ADDRESS 
+      JMP GONGO,I   START FOR GO-NOGO TEST
+      JMP CNFG,I    START FOR CONFIGURING 
+      JSB PFL,I     POWER FAIL - AUTO RESTART 
+      SUP 
+      SPC 4 
+*       TV INTERFACE CARD DIAGNOSTIC TEST 
+* 
+*         BY DENTON B. ANDERSON 
+*           HEWLETT-PACKARD, DSD -- CUPERTINO, CALIFORNIA 
+* 
+****************************************************************
+*                                                              *
+*                                                              *
+* MODIFIED FROM MOS DISPLAY CARD DIAGNOSTIC                    *
+*                                                              *
+*     FROM THE FOLLOWING:                                      *
+*                                                              *
+* PROGRAMMER- ARTHUR L. FOX                                    *
+* DIVISION- HP MEDICAL ELECTRONICS DIVISION                    *
+*               WALTHAM, MASSACHUSETTS                         *
+*                                                              *
+*   DATED: 12/4/72                                             *
+*                                                              *
+*                                                              *
+****************************************************************
+* 
+*  THE PURPOSE OF THIS DIAGNOSTIC IS TO ALLOW THE OPERATOR TO:
+*     1.  CHECK TV INTERFACE CARD FOR PROPER OPERATION. 
+*     2.  CHECK AND ADJUST HORIZONTAL AND VERTICAL GAIN & POSITION. 
+*     3.  CHECK AND ADJUST FOCUS & ASTIGMATISM. 
+*     4.  CHECK FOR PIN CUSHION DISTORTION. 
+*     5.  CHECK TV INTERFACE CARD FOR MISSING STORAGE BITS. 
+*     6.  CHECK ERASE TIME USING A 44MS SOFTWARE TIMER. 
+*     7.  SHOW OFF THE DISPLAY. 
+* 
+* 
+*  POWER FAIL - AUTO RESTART IS IMPLIMENTED.
+      SPC 4 
+*   A TABLE OF CONTENTS FOR THIS LISTING BEGINS 
+*     ON THE NEXT PAGE. 
+      SKP 
+*                TABLE OF CONTENTS
+*                =================
+* 
+*  PAGE                      CONTENTS 
+*  ----  ------------------------------------------------ 
+* 
+*    1   COVER SHEET WITH TITLE AND DRAWING NUMBER. 
+* 
+*    2   STATEMENT OF PURPOSE AND CONTROL STATEMENT.
+* 
+*    3   TABLE OF CONTENTS. 
+* 
+*    4   TABLE OF CONTENTS, CONTINUED.
+* 
+*    5   TABLE OF CONTENTS, CONTINUED.
+* 
+*    6   TABLE OF CONTENTS, CONTINUED.
+* 
+*    7   INSTRUCTIONS FOR CONFIGURING.
+* 
+*    8   INSTRUCTIONS FOR COLOR SELECTION.
+* 
+*    9   INSTRUCTIONS FOR GO-NOGO TEST. 
+* 
+*   10   INSTRUCTIONS FOR "SUPER TEST". 
+* 
+*   11   INSTRUCTIONS FOR "SUPER TEST", CONTINUED.
+* 
+*   12   INSTRUCTIONS FOR RAM TEST. 
+* 
+*   13   INSTRUCTIONS FOR COLOR OR GRAY BAR TEST. 
+* 
+*   14   TRAP CELL CONTENTS ESTABLISHED.
+* 
+*   15   STARTING ADDRESSES AND LINKAGES. 
+* 
+*   16   STORAGE LOCATIONS. 
+* 
+*   17   CONSTANTS. 
+* 
+*   18   CONSTANTS, CONTINUED.  PLUS MISC. VALUES.
+* 
+*   19   CONSTANTS FOR GAIN ROUTINE (ARROWS). 
+* 
+*   20   RAM TEST - CHECKS ANY RAM FOR MISSING BITS.
+      SKP 
+*                 TABLE OF CONTENTS, CONTINUED
+*                 ============================
+* 
+*  PAGE                       CONTENTS
+*  ----  -------------------------------------------------
+* 
+*   21   CNFGR - CONFIGURING ROUTINE. 
+* 
+*   22   CNFGR, CONTINUED.
+* 
+*   23   STARTING POINT OF GO-NOGO TEST.
+*          PLUS IOCHK - CHECKS I/O OPERATION. 
+* 
+*   24   IOCHK, CONTINUED.
+* 
+*   25   PATTERN SELECTION FOR GO-NOGO TEST.
+* 
+*   26   START OF "SUPER TEST", CALLS PATTERNS. 
+* 
+*   27   SWRG - USED BY PATTERN SELECTER TO READ SWITCH REG.
+*        SAVE - SAVES SWITCH SETTINGS IN BIT WORDS. 
+* 
+*   28   GAIN - DRAWS 256 POINT SQUARE WITH ARROWS TO CENTER
+*                 USED TO SET VERTICAL AND HORIZONTAL ON TV.
+* 
+*   29   GAIN, CONTINUED. 
+* 
+*   30   PIN - DRAWS CROSHATCH PATTERN FOR PINCUSHION ADJUSTMENTS.
+* 
+*   31   PIN, CONTINUED.
+* 
+*   32   SETTM - WRITES SMALL SQUARES IN ALL FOUR CORNERS,
+*                  USED TO CHECK SETTLING TIME OF TV. 
+* 
+*   33   QUICK - QUICKLY WRITES ALL POINTS. 
+*                  (ERASES SELECTIVELY IN GO-NOGO TEST.)
+* 
+*   34   QUICK, CONTINUED.
+* 
+*   35   LOGO - DISPLAYS HP LOGO.  USES DMA IF POSSIBLE.
+* 
+*   36   BLANK - ERASES SCREEN. 
+*        ..HLT - BIT 14 HALT CHECK ROUTINE. 
+*        .HALT - BIT 14 HALT ROUTINE. 
+* 
+*   37   FLASH - FLASHES VIDEO POLARITY BACK AND FORTH.  FOR
+*                  GO-NOGO TEST IT WRITES LOGO FIRST. 
+* 
+*   38   FLASH, CONTINUED.
+      SKP 
+*                TABLE OF CONTENTS, CONTINUED 
+*                ============================ 
+* 
+*  PAGE                      CONTENTS 
+*  ----  ------------------------------------------------ 
+* 
+*   39   BRS - WRITES COLOR OR GRAY SCALE BARS. 
+* 
+*   40   BRS, CONTINUED.
+* 
+*   41   SQUAR - WRITES SQUARES, CALLED BY GAIN AND SETTM.
+* 
+*   42   ERASE - BULK ERASE ROUTINE CALLED FROM MANY PLACES.
+*        TIMER - TIME DELAY TO CHECK DURATION OF BULK ERASE.
+* 
+*   43   TIME5 - GENERALLY USED TIME DELAY (5S, 1S, <1S). 
+*        TIMEF - TIME DELAY FOR FLASHING RATE IN GO-NOGO TEST.
+* 
+*   44   OUTR - OUTPUT THE POINT DEFINED BY A REGISTER. 
+*        DEL - TIME DELAY FOR SWITCH REGISTER DE-BOUNCING.
+*        MODE1 - SET ERASE MODE.
+* 
+*   45   MODE - SET WRITE MODE. 
+*        SETMD - OUTPUT REQUESTED MODE (FROM A REGISTER). 
+*        SET - INITIALIZES TEST PARAMETERS. 
+* 
+*   46   PFAIL - POWER FAIL - AUTO RESTART ROUTINE. 
+* 
+*   47   MAP - GETS COLOR INFORMATION FROM SW. REG. 
+* 
+*   48   SETUP - SETS COMPLIMENTARY BACKGROUND FOR FLASH. 
+*        INC - INCREMENTS COLORS. 
+* 
+*   49   START OF LOGO BUFFER.
+* 
+*   50   LOGO BUFFER, CONTINUED.
+* 
+*   51   LOGO BUFFER, CONTINUED.
+* 
+*   52   LOGO BUFFER, CONTINUED.
+      SKP 
+*                TABLE OF CONTENTS, CONTINUED 
+*                ============================ 
+* 
+*  PAGE                      CONTENTS 
+*  ----  ------------------------------------------------ 
+* 
+*   53   LOGO BUFFER, CONTINUED.
+* 
+*   54   LOGO BUFFER, CONTINUED.
+* 
+*   55   LOGO BUFFER, CONTINUED.
+* 
+*   56   LOGO BUFFER, CONTINUED.
+* 
+*   57   LOGO BUFFER, CONTINUED.
+* 
+*   58   LOGO BUFFER FINISHES.  END OF PROGRAM. 
+* 
+*   59   CROSS REFERENCE BEGINS.
+* 
+*   60   CROSS REFERENCE, CONTINUED.
+* 
+*   61   CROSS REFERENCE, CONTINUED.
+* 
+*   62   CROSS REFERENCE, CONTINUED.
+* 
+*   63   CROSS REFERENCE, CONTINUED.
+* 
+*   64   CROSS REFERENCE, CONTINUED.
+* 
+*   65   CROSS REFERENCE, CONTINUED.
+* 
+*   66   CROSS REFERENCE, CONTINUED.
+* 
+*   67   CROSS REFERENCE, CONTINUED.
+* 
+*   68   CROSS REFERENCE, CONTINUED.
+* 
+*   69   CROSS REFERENCE, CONTINUED.
+* 
+*   70   CROSS REFERENCE, CONTINUED.
+* 
+*   71   CROSS REFERENCE FINISHED.
+      SKP 
+*          OPERATING INSTRUCTIONS FOR CONFIGURING 
+* 
+* 
+****************************************************************
+*                                                              *
+*** NOTE ***  THIS PROGRAM IS PRE-CONFIGURED FOR SELECT CODE   *
+*               10 WITH NON-STANDARD SCAN MODE AND FOR USE     *
+*               WITH A 2100 COMPUTER.  USE THE CONFIGURING     *
+*               ROUTINE ONLY IF ONE OR MORE OF THESE           *
+*               CONDITIONS IS DIFFERENT.                       *
+*                                                              *
+****************************************************************
+* 
+* 
+*    1.  LOAD OBJECT PROGRAM USING THE BASIC BINARY LOADER. 
+*    2.  SET UP A STARTING ADDRESS OF 3B. 
+*    3.  SET THE SWITCH REGISTER BITS 0-5 FOR THE SELECT CODE 
+*          OF THE TV INTERFACE CARD.
+*    4.  PRESS PRESET, RUN.  SHOULD OBSERVE A HALT 0. 
+*    5.  SET THE SWITCH REGISTER BITS 0-2 FOR THE MODEL NUMBER
+*          OF THE COMPUTER USING THE FOLLOWING CODES: 
+* 
+*                   2100 - 0
+*                   2114 - 1
+*                   2115 - 1
+*                   2116 - 2
+*                   21MX - 3
+*                 21MX-E - 4
+* 
+*    6.  PRESS PRESET, RUN.  SHOULD OBSERVE A HALT 1. 
+*    7.  SET THE SWITCH REGISTER BIT 0 FOR THE SCAN MODE
+*          USED BY THE TV INTERFACE CARD UNDER TEST 
+*          USING THE FOLLOWING CODES: 
+* 
+*              AMERICAN STANDARD SCAN - 1 
+*              EUROPEAN STANDARD SCAN - 0 
+*              NON-STANDARD SCAN      - 0 
+* 
+*    8.  PRESS PRESET, RUN.  SHOULD OBSERVE A HALT 77B. 
+*    9.  GO TO THE SPECIFIC TEST. 
+      SKP 
+*                  ----   COLOR SELECTION   ----
+* 
+*  FOR ALL TESTS, SWITCHES 0, 1, AND 2 SELECT THE SCREEN COLOR
+*  AS FOLLOWS:
+* 
+*   2-1-0  #  3-CARD   3-CARD       2-CARD    2-CARD       1-CARD 
+*             COLOR     B/W         COLOR      B/W          B/W 
+* 
+*   0-0-0  0  WHITE    7/8 (WHITE)  YELLOW    3/4 (WHITE)  WHITE
+*   0-0-1  1  BLACK    BLACK        BLACK     BLACK        BLACK
+*   0-1-0  2  RED      1/2          RED       1/2          NOT USED 
+*   0-1-1  3  GREEN    1/4          GREEN     1/4          NOT USED 
+*   1-0-0  4  BLUE     1/8          NOT USED  NOT USED     NOT USED 
+*   1-0-1  5  YELLOW   3/4          NOT USED  NOT USED     NOT USED 
+*   1-1-0  6  MAGENTA  5/8          NOT USED  NOT USED     NOT USED 
+*   1-1-1  7  CYAN     3/8          NOT USED  NOT USED     NOT USED 
+* 
+* 
+* 
+*  SWITCH 3 SET TO 1 WILL COMPLIMENT THE COLORS (INVERTS THE VIDEO).
+      SKP 
+*          OPERATING INSTRUCTIONS FOR GO-NOGO TEST
+* 
+* 
+*    1.  LOAD OBJECT PROGRAM USING THE BASIC BINARY LOADER. 
+*    2.  CONFIGURE THE PROGRAM IF NEEDED (SEE PAGE 6).
+*    3.  SET UP A STARTING ADDRESS OF 2B. 
+*    4.  PRESS PRESET, RUN. 
+* 
+* 
+*  A HALT 77B INDICATES A GOOD TEST.
+*  A HALT 2B INDICATES NOT FINISHING BULK ERASE.
+*  A HALT 5B INDICATES I/O FAILURES WITH FAIL CODE IN A AS FOLLOWS: 
+*     0 - FLAG NOT SET, OR BAD SFS. 
+*     1 - SFC BAD.
+*     2 - MODE PROBLEM, FLAG NOT SETTING AT END OF MODE.
+*     3 - FLAG NOT CLEARING, OR MODE NOT CLEARING.
+*     4 - SFC BAD.
+*     5 - SELECT CODE DECODING BAD (LSB). 
+*     6 - SELECT CODE DECODING BAD (MSB). 
+*     7 - PRIORITY BEING HELD OFF FOR OTHER CARDS.
+*    10 - NO INTERRUPT. 
+*    11 - NO WRITE RESPONSE.
+* 
+* 
+*  TO LOOP ON IOCHK, START AT 103B. 
+*     IF START WAS AT 2 AND AN I/O ERROR WAS DETECTED (HALT 5B),
+*       THEN PUSHING RUN WILL REPEAT THE I/O TEST.
+* 
+*  TO JUST FLASH, START AT 102B.
+* 
+*  FOR PATTERNS ONLY, START AT 101B.
+* 
+* 
+*  SET BIT 15 OF SWITCH REGISTER TO CONTINUOUSLY LOOP ON
+*    ANY OF THESE TESTS INDIVIDUALLY OR ALL TOGETHER. 
+* 
+*  ALL THE ABOVE IS DONE IN WHITE WITH 1, 2, OR 3 CARD SYSTEMS. 
+*    TO RUN TEST IN VARIOUS COLORS SET THE SWITCH REGISTER
+*    BITS 0-3 AS SHOWN IN THE LIST ON PAGE 7. 
+* 
+* 
+*  IN ALL THE ABOVE TESTS SETTING SWITCH 14 WILL CAUSE
+*    THE COLORS TO INCREMENT FOR EACH REPEAT.  SWITCH 
+*    15 MUST ALSO BE SET. 
+      SKP 
+*          OPERATING INSTRUCTIONS FOR "SUPER TEST"
+* 
+* 
+*    1.  LOAD OBJECT PROGRAM USING BASIC BINARY LOADER. 
+*    2.  CONFIGURE THE PROGRAM IF NEEDED (SEE PAGE 6).
+*    3.  SET STARTING ADDRESS OF 100B.
+*    4.  CLEAR SWITCH REGISTER. 
+*    5.  PRESS PRESET, RUN. 
+*    6.  SELECT THE APPROPRIATE TEST CONDITIONS USING THE 
+*          SWITCH REGISTER (SEE LIST BELOW).
+*    7.  SELECT COLOR WITH SWITCH REGISTER (SEE LIST ON PAGE 7).
+*    8.  SELECT THE DESIRED TEST(S) WITH THE SWITCH 
+*          REGISTER (SEE LIST BELOW). 
+* 
+* 
+* 
+* 
+*   SWITCH REGISTER OPTIONS : 
+*   ========================= 
+* 
+*                       -- TEST CONDITIONS -- 
+* 
+* SW#   SWITCH SETTING                   ACTION 
+* 
+* 15         0          INDIVIDUAL TEST OCCURS ONCE 
+*            1          TESTS CONTINUE AND REPEAT WITH SPACING SET
+*                         BY TIME DELAY (SWITCHES 11-13 BELOW)
+* 
+* 14         0          TESTS CONTINUE
+*            1          HLT 77B END OF TEST (CAUSES RESTART OF PROG)
+* 
+* 13         0          TIME DELAY IS ABOUT 5 SECONDS\ OVERRIDDEN 
+*            1          TIME DELAY IS ABOUT 1 SECOND /  BY SW # 12
+* 
+* 12         0          TIME DELAY IS ABOUT 1 OR 5 SECONDS
+*            1          TIME DELAY IS LESS THAN 1 SECOND
+* 
+* 11         0          STANDARD TIME DELAYS
+*            1          TIME DELAY SPEED-UP (3 TIMES FASTER)
+* 
+* 10         0          NORMAL OPERATION
+*            1          FLASH TEST BACK AND FORTH (WHITE-ON-BLACK 
+*                         TO BLACK-ON-WHITE) AT THE RATE SET BY 
+*                         SW 11-13 (ONLY IF SW 15 IS 0) 
+      SKP 
+*                   -- TEST SELECTION --
+* 
+* 
+*   SWITCHES 4 THROUGH 8 SELECT THE TEST: 
+* 
+*  4   GAIN - APPROXIMATE GAIN, POSITION, & FOCUS ADJUST: 
+*              A SQUARE OR RECTANGLE IS DRAWN AROUND THE
+*              CIRCUMFERENCE OF THE TV (256 X 256 OR 256 X 240),
+*              ENCLOSING A PATTERN OF ARROWS POINTING TO THE CENTER.
+* 
+*  5    PIN - PRECISION ADJUST AND PIN CUSHION TEST:
+*              A GRID OF VERTICAL AND HORIZONTAL LINES ARE DRAWN
+*              COVERING THE ENTIRE TV SCREEN.  THE CENTER 
+*              LINES ARE HEAVY, ALLOWING ADJUSTMENT OF POSITION.
+* 
+*  6   BURN - BURN TEST:
+*              ALL MATRIX POINTS ARE WRITTEN AND OPTIONALLY ERASED
+*              (SEE SWITCH 0 OPTION). 
+* 
+*  7  SETTM - CORNER TEST:
+*              AN 8 X 8 SQUARE IS DRAWN IN EACH OF THE FOUR 
+*              CORNERS ON THE TV SCREEN.
+* 
+*  8   LOGO - WRITES TITLE WITH HP LOGO.
+* 
+*  9  BLANK - ERASES SCREEN.
+* 
+* A HALT 2B INDICATES THAT THE TV INTERFACE ERASE TIME EXCEEDED 
+* SPECIFICATION.        YOU MAY PROCEED BY PRESSING THE RUN BUTTON. 
+      SKP 
+*               OPERATING INSTRUCTIONS FOR RAM TEST 
+* 
+* 
+*    1.  LOAD OBJECT PROGRAM USING BASIC BINARY LOADER. 
+*    2.  CONFIGURE THE PROGRAM IF NEEDED (SEE PAGE 6).
+*    3.  SET STARTING ADDRESS OF 2000B. 
+*    4.  SET RAM NUMBER (0-17B) INTO SWITCH REGISTER, BITS 12-15. 
+*    5.  SELECT COLOR WITH SWITCH REGISTER (SEE LIST ON PAGE 7).
+*    6.  PRESS PRESET, RUN.  SHOULD OBSERVE A HALT 77B. 
+*          ALL POINTS IN THE SELECTED RAM HAVE BEEN 
+*          WRITTEN AND SHOULD BE DISPLAYED.  THE HALT 
+*          CODE AGREES WITH THE RAM NUMBER SELECTED.
+*          FOR EXAMPLE: HLT 15B IF RAM #15 WAS
+*          SELECTED IN THE SWITCH REGISTER. 
+* 
+*  A HALT 2B WITHOUT ANY POINTS WRITTEN ON THE SCREEN INDICATES 
+*    THAT THE TV INTERFACE ERASE TIME EXCEEDED SPECIFICATION. 
+*    YOU MAY PROCEED BY PRESSING THE RUN BUTTON.
+* 
+*    7.  PRESS RUN AGAIN (NO PRESET).  SHOULD OBSERVE A HALT
+*          WITH ALL POINTS IN THE SELECTED RAM SELECTIVELY ERASED.
+*          AGAIN, THE HALT CODE AGREES WITH THE RAM SELECTED. 
+      SKP 
+*              OPERATING INSTRUCTIONS FOR COLOR OR GRAY BARS
+* 
+* 
+*     1.  LOAD OBJECT PROGRAM USING BASIC BINARY LOADER.
+*     2.  CONFIGURE THE PROGRAM IF NEEDED (SEE PAGE 6). 
+*     3.  SET STARTING ADDRESS OF 104B. 
+*     4.  PRESS PRESET, RUN.  YOU SHOULD OBSERVE A HALT 77B.
+*           WITH A COLOR BAR OR GRAY BAR PATTERN ON THE SCREEN. 
+*           THIS IS ONLY USEABLE WITH MULTI-CARD COLOR OR 
+*           MULTI-LEVEL GRAY SYSTEMS. 
+* 
+* 
+*  A HALT 2B IDICATES THAT THE TV INTERFACE ERASE TIME EXCEEDED 
+*    SPECIFICATION.  YOU MAY PROCEED BY PRESSING THE RUN BUTTON.
+* 
+* 
+*  SETTING SWITCH 15 ON CAUSES TEST TO REPEAT CONTINUOUSLY. 
+* 
+*  SETTING SWITCH 10 ON CAUSES PATTERN TO FLASH VIDEO POLARITY. 
+* 
+*  WHEN REPEATING OR FLASHING REFER TO TIME DELAY SWITCH
+*    DEFINITIONS FOR SUPER TEST (PAGE 9) TO SET REPEAT OR 
+*    FLASH RATE.
+      SKP 
+      ORG 10B 
+      SPC 1 
+      JMP ENDER,I 
+      JMP SW,I
+      HLT 12B       ESTABLISH INVALID INTERRUPT 
+      HLT 13B         FOR ALL UNUSED SELECT CODES 
+      HLT 14B       \                            /
+      HLT 15B        \                          / 
+      HLT 16B         \                        /
+      HLT 17B          \                      / 
+      HLT 20B           \                    /
+      HLT 21B            \                  / 
+      HLT 22B             \                /
+      HLT 23B              \              / 
+      HLT 24B               \            /
+      HLT 25B                \          / 
+      HLT 26B       \         \        /         /
+      HLT 27B        \         \      /         / 
+      HLT 30B         \         \    /         /
+      HLT 31B          \         \  /         / 
+      HLT 32B           \         \/         /
+      HLT 33B            \                  / 
+      HLT 34B             \                /
+      HLT 35B              \              / 
+      HLT 36B               \            /
+      HLT 37B                \          / 
+      HLT 40B       \         \        /         /
+      HLT 41B        \         \      /         / 
+      HLT 42B         \         \    /         /
+      HLT 43B          \         \  /         / 
+      HLT 44B           \         \/         /
+      HLT 45B            \                  / 
+      HLT 46B             \                /
+      HLT 47B              \              / 
+      HLT 50B               \            /
+      HLT 51B       \        \          /        /
+      HLT 52B        \        \        /        / 
+      HLT 53B         \        \      /        /
+      HLT 54B          \        \    /        / 
+      HLT 55B           \        \  /        /
+      HLT 56B            \        \/        / 
+      HLT 57B             \                /
+      HLT 60B              \              / 
+      HLT 61B               \            /
+      HLT 62B                \          / 
+      HLT 63B                 \        /
+      HLT 64B                  \      / 
+      HLT 65B                   \    /
+      HLT 66B                    \  / 
+      HLT 67B                     \/
+      SKP 
+****************************************************************
+*                                                              *
+*              -- VARIOUS STARTING ADDRESSES --                *
+*                                                              *
+****************************************************************
+      SPC 1 
+      ORG 100B
+      JMP RSTRT,I   START "SUPER TEST"
+      JMP PTRN,I    START PATTERNS FROM GO-NOGO 
+      JMP FLSHR,I   START LOGO FLASHER FROM GO-NOGO 
+      JMP CHKR,I    START I/O CHECK FROM GO-NOGO
+      JMP BARS,I    START OF COLOR OR GRAY BARS 
+      SPC 4 
+****************************************************************
+*                                                              *
+*              -- LINKAGE ADDRESSES --                         *
+*                                                              *
+****************************************************************
+      SPC 1 
+RSTRT DEF RESTT     START OF "SUPER TEST" 
+GONGO DEF BEGIN     START OF GO-NOGO
+ENDER DEF ENDE      ERASE INTERRUPT POINT 
+FLSHR DEF FLSH      START OF LOGO FLASH (GO-NOGO) 
+CHKR  DEF IOCHK     START OF I/O CHECK (GO-NOGO)
+SW    DEF INTX      TVX INTERRUPT POINT \ (I/O
+SW1   DEF INT       TV INTERRUPT POINT  /   CHECK)
+PTRN  DEF PATRN     START OF PATTERNS (GO-NOGO) 
+CNFG  DEF CNFGR     START OF CONFIGURING ROUTINE
+PFL   DEF PFAIL     POWER FAIL - AUTO RESTART INT 
+BARS  DEF BRS       COLOR OR GRAY SCALE BARS START
+      SKP 
+****************************************************************
+*                                                              *
+*              -- STORAGE LOCATIONS --                         *
+*                                                              *
+****************************************************************
+      SPC 1 
+ATMP1 NOP 
+BIT4  NOP 
+BIT5  NOP 
+BIT6  NOP 
+BIT7  NOP 
+BIT8  NOP 
+BIT9  NOP 
+BUFF  NOP 
+CNT4  NOP 
+COMP  NOP 
+DOTC  NOP           DOT COUNTER 
+DUN   NOP 
+FCNTR NOP 
+HALT? NOP 
+HORZ1 NOP 
+HORZ2 NOP 
+LOOPC NOP           LOOP COUNTER
+MODE2 NOP 
+MD    NOP 
+MSK0  NOP 
+MSK6  NOP 
+MSK9  NOP 
+POL   NOP 
+POSC  NOP           POSITION COUNTER
+TEMP  NOP 
+TEMP1 NOP 
+TEMP2 NOP 
+TESTA NOP 
+TESTB NOP 
+TESTC NOP 
+TESTM NOP 
+TCON  NOP 
+TOGG  NOP 
+VERT1 NOP 
+VERT2 NOP 
+W.E   NOP 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- CONSTANTS --                                 *
+*                                                              *
+****************************************************************
+      SPC 1 
+ALL   OCT 40000 
+B1    OCT 1 
+B2    OCT 2 
+B3    OCT 3 
+B4    OCT 4 
+B5    OCT 5 
+B6    OCT 6 
+B7    OCT 7 
+B10   OCT 10
+B11   OCT 11
+B13   OCT 13
+B14   OCT 14
+B15   OCT 15
+B16   OCT 16
+B17   OCT 17
+B20   OCT 20
+B300  OCT 300 
+B500  OCT 500 
+B600  OCT 600 
+B1000 OCT 1000
+B1300 OCT 1300
+B4000 OCT 4000
+B4100 OCT 4100
+B5000 OCT 5000
+B5600 OCT 5600
+B774X OCT 41760 
+CLHLT OCT 137777
+CLR   OCT 176017
+CNT1  DEC -25000
+CON1  OCT -400
+CON2  OCT 3400
+CON7  OCT 400 
+CW1   OCT 100010
+D11   DEC -11 
+FIN   OCT 177760
+FIRST OCT 40
+FS    OCT 140 
+FST   OCT 340 
+FT    OCT 240 
+FTIME OCT 177670
+LOOPS DEC -8
+MASK0 OCT 100000
+MASK1 OCT 70000 
+MASK2 OCT 177400
+MASK3 OCT 377 
+MASK4 OCT 170 
+MASK5 OCT 73400 
+MASK6 OCT 74000 
+MASK7 OCT 177 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- CONSTANTS CONTINUED --                       *
+*                                                              *
+****************************************************************
+      SPC 1 
+MASK8 OCT 200 
+MASK9 OCT 77400 
+MASKA OCT 77
+MASKB OCT 177770
+MILC5 DEC -6764 
+MILC6 DEC -8975 
+MILCE DEC -8731 
+MILCT DEC -8457 
+MILCX DEC -8751 
+POSIT OCT -5        NUMBER OF POSITIONS TO BE DRAWN 
+SA0   OCT 77575 
+SA1   OCT 76577 
+SA2   OCT 174370
+SC    OCT 10
+SECND OCT 100 
+STADR OCT 174000
+SXA2  OCT 164370
+SXA3  OCT 164000
+SYMBL DEC -12 
+TEST  OCT 1 
+TCON1 DEC -30769
+TCON5 DEC -25 
+TCONF DEC -10000
+XCONN OCT -1
+YAMER DEC 240 
+      SPC 3 
+****************************************************************
+*                                                              *
+*              -- MISCELLANEOUS VALUES --                      *
+*                                                              *
+****************************************************************
+      SPC 1 
+A     EQU 0 
+B     EQU 1 
+HLT0  HLT 0 
+HLT1  HLT 1 
+HLT2  HLT 2 
+HLT5  HLT 5 
+HLT77 HLT 77B 
+LIA0  LIA 0 
+TRAP1 JMP SW,I
+TRAP2 JMP SW1,I 
+TRAPC JMP ENDER,I 
+TV    EQU 10B 
+TVX   EQU 11B 
+TVY   EQU 20B 
+XRSS  RSS 
+      SKP 

@@ -1,0 +1,166 @@
+ASMB,B,R,L,C
+      NAM OPEN,7
+      ENT OPEN
+      EXT EXEC,CLOSE,RMPAR,$OPEN
+      EXT .ENTR 
+      SUP 
+* 
+*  OPEN    IS THE FILE OPEN ROUTINE OF THE REAL TIME
+*          FILE MANAGEMENT PACKAGE
+* 
+*       THE FORTRAN CALLING SEQUENCE IS:
+* 
+*     CALL OPEN (IDCB,IERR,NAME,IOP,IS,ILU) 
+* 
+*  W H E R E: 
+* 
+*     IDCB          IS A 144-WORD DATA CONTROL BLOCK (ARRAY)
+*                   TO BE USED WITH ALL ACCESS TO THE FILE
+*                   UNDER THIS OPEN.
+* 
+*     IERR          IS THE RETURN ERROR CODE (ALSO RETURNED IN A) 
+* 
+*     NAME          IS THE 6-CHARACTER (3 WORD) NAME ARRAY. 
+* 
+*     IOP           (OPTIONAL); IS THE OPEN OPTION FLAG WORD
+*                    OPTIONS ARE: 
+*                     BIT   MEANING IF SET
+*                     0     NON-EXCLUSIVE OPEN
+*                     1     UPDATE OPEN 
+*                     2     FORCE TO TYPE 1 OPEN
+* 
+*     IS            (OPTIONAL); IS THE EXPECTED SECURITY CODE.
+* 
+*     ILU           (OPTIONAL); IS THE DISC SPECIFIED.
+*                     IF ILU >0 THEN USE DISC LABELED ILU 
+*                     IF ILU <0 THEN USE DISC AT LOGICAL UNIT (-ILU)
+* 
+*       OPEN ERRORS ARE AS FOLLOWS: 
+* 
+*     -1    DISC ERROR
+*     -6    FILE NOT FOUND
+*     -7    WRONG SECURITY CODE 
+*     -8    FILE IS CURRENTLY OPEN (IF EXCLUSIVE REQUEST) OR
+*                IS CURRENTLY OPEN TO 7 OTHER PROGRAMS
+*     -9    ATTEMPT TO OPEN TYPE 0 AS TYPE 1
+*     -10   NOT ENOUGH PARAMETERS 
+*     -13   DISC LOCKED 
+* 
+* 
+      SKP 
+DCB   NOP 
+ERR   NOP 
+NAME  DEF ZERO
+OP    DEF ZERO
+SC    DEF ZERO
+LU    DEF ZERO
+      SPC 1 
+OPEN  NOP           ENTRY POINT 
+      JSB .ENTR     TRANSFER PARAMETERS 
+      DEF DCB       TO LOCAL AREA 
+      LDA N10 
+      LDB NAME      DID WE GET
+      CPB DZERO      ENOUGH PARAMETERS? 
+      JMP EXIT        NO; ERROR - EXIT
+      SPC 1 
+      JSB CLOSE     CLOSE 
+      DEF *+2        IF 
+      DEF DCB,I      OPEN 
+      SZA           SKIP IF NO ERRORS 
+      CPA N11        OR IF NOT OPEN 
+      CLE,RSS 
+      JMP EXIT      ELSE TAKE ERR EXIT
+      LDA NAME,I    GET NAME WORD1
+      LDB OP,I       AND OPTION 
+      ERB             EXCLUSIVE BIT TO E
+      CME              INVERT AND 
+      RAL,ERA           SET IN SIGN OF A
+      STA NAME1     SET FOR CALL TO D.RTR 
+      ISZ NAME      GET 
+      DLD NAME,I     REST OF
+      DST NAME1+1     NAME AND SET FOR D.RTR CALL 
+      LDA XEQT      GET ID
+      CCE            AND
+      RAL,ERA         SET 
+      STA ID           SIGN FOR D.RTR CALL
+SCDRT JSB EXEC      SCHEDULE
+      DEF SCRTN      D.RTR
+      DEF .9          WITH WAIT 
+      DEF D.RTR        TO OPEN
+X     REP 4             THE FILE
+      DEF ID+*-X
+      DEF LU,I
+SCRTN SZA           SCHEDULE OK?
+      JMP SCDRT     NO; TRY AGAIN 
+      JSB RMPAR     YES; GET THE RETURN 
+      DEF *+2        CODES
+      DEF ID          TO LOCAL AREA 
+      LDA ID        GET ERROR WORD
+      SSA            IF ERROR 
+      JMP EXIT        EXIT
+      DLD ID+1      ELSE SET
+      DST DCB,I      THE DCB FOR $OPEN
+      CLO           SET O 
+      LDA OP,I       TO 
+      RAR,SLA,RAR     INDICATE
+      STO              UPDATE OPTION
+      ERA               AND E FOR TYPE 1 OVER-RIDE
+      STA LU        SAVE FLAG 
+      LDA DCB       GET DCB ADDRESS 
+      LDB SC,I       AND SECURITY CODE
+      JSB $OPEN       AND GO SET UP THE DCB 
+      DEF ID+4      ADDRESS OF NO OF SECTORS PER TRACK
+      JMP OPEN1     ERROR - CLOSE AND EXIT
+      SSA           IF OPEN PROTECT 
+      SSB            AND CODE MISMATCH THEN SKIP
+      JMP OPEN2       ELSE GO EXIT - GOOD OPEN
+      SPC 2 
+      LDA N7        SET EXIT CODE 
+OPEN1 STA ID        IN ID 
+      JSB CLOSE     ILLEGAL OPEN SO CLOSE 
+      DEF *+2        THE
+      DEF DCB,I       FILE
+OPEN2 LDA ID        SEND ERROR CODE 
+      LDB LU        GET SUB FUNCTION FLAG 
+      SLB           IF NOT SET
+      SZA           OR NOT TYPE ZERO
+      JMP EXIT      THEN EXIT 
+      SPC 1 
+      LDB DCB       CACULATE DCB SUB FUNCTION 
+      ADB .3        ADDRESS 
+      STB DCB       SAVE IT 
+      LDA OP,I      GET THE OPTIN SUB FUNCTION
+      AND B3700     MASK IT OFF 
+      STA B         AND SAVE IT 
+      LDA DCB,I     GET THE CURRENT WORD
+      AND B77       SAVE THE LU 
+      ADA B         ADD IN THE NEW SUB FUNCTION 
+      STA DCB,I     SET IT IN THE DCB 
+      CLA           CLEAR A AND EXIT
+      SPC 1 
+EXIT  LDB DZERO     RESET THE 
+Y     REP 4          DEFAULT
+      STB NAME+*-Y    PARAMETERS
+      STA ERR,I     SET THE ERROR CODE
+      JMP OPEN,I     AND RETURN 
+      SPC 2 
+      SPC 3 
+DZERO DEF ZERO
+N10   DEC -10 
+N11   DEC -11 
+ID    NOP 
+NAME1 BSS 4 
+N7    DEC -7
+ZERO  NOP 
+D.RTR ASC 3,D.RTR 
+.3    DEC 3 
+B3700 OCT 3700
+B77   OCT 77
+.9    DEC 9 
+      SPC 3 
+A     EQU 0 
+B     EQU 1 
+XEQT  EQU 1717B 
+      SPC 3 
+END   EQU * 
+      END 

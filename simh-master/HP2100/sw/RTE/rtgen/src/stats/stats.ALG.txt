@@ -1,0 +1,196 @@
+HPAL,L,B,"STATS",0,3,99
+    BEGIN
+  INTEGER LU := 1 ;
+  INTEGER OUT := 2 ;
+  INTEGER TIMECALL := 11 ;
+  INTEGER ASTERISKS := "**" ;
+  INTEGER COLON := "::" ;
+  INTEGER ZERO := "00" ;
+  INTEGER SPACES := "  " ;
+  INTEGER COMMA := ",," ;
+  INTEGER EQTA := @1650 ;
+  INTEGER NUMBEROFEQTS := @1651 ;
+  INTEGER KEYWD := @1657 ;
+  INTEGER EQTADDRESS ;
+  INTEGER I ;
+  INTEGER CHARACTERS ;
+  INTEGER STATUS ;
+  INTEGER INDEX ;
+  INTEGER TLIST ;
+    LABEL START1,START2,
+          IOSUSPEND,
+          TIMELIST,
+          FINIS ;
+  INTEGER 
+    ARRAY TIMEARRAY[1:5] ;
+  INTEGER 
+    ARRAY TIME[18:21] := 100,60,60,24 ;
+  INTEGER 
+    ARRAY DATA[-1:35] := @16436,@17036,@17036 ;
+  INTEGER 
+    ARRAY HEADER[0:35] := @17036,@17036,"*N","AM","ES",",T",",P","R*",
+                          "DO","RM","T*","SC","HE","D*"," I","/O"," ,",
+                          "EQ","T ","#*","ME","MR","Y*","DI","SC"," *",
+                          "OP","ER"," *"," N","EX","T ","TI","ME","  ",
+                          " *" ;
+PROCEDURE EXEC2(NO1,NO2) ;
+  INTEGER NO1,NO2 ;
+     CODE ;
+PROCEDURE EXEC4(NO1,NO2,NO3,NO4) ;
+  INTEGER NO1,NO2,NO3,NO4 ;
+     CODE ;
+  INTEGER
+PROCEDURE IGET(ADDRESS) ;
+  INTEGER ADDRESS ;
+     CODE ;
+  INTEGER
+PROCEDURE CONVERT(NUMBER) ;
+    VALUE NUMBER ;
+  INTEGER NUMBER ;
+    BEGIN
+  CONVERT := ZERO ;
+  CONVERT :=   CONVERT + ROTATE(NUMBER\10)
+                       + NUMBER MOD 10 ;
+      END CONVERT ;
+  INTEGER
+PROCEDURE KEYWORD(NUMBER) ;
+    VALUE NUMBER ;
+  INTEGER NUMBER ;
+    BEGIN
+  INTEGER ADDRESS ;
+          ADDRESS := IGET(KEYWD)+NUMBER ;
+  KEYWORD := IGET(ADDRESS) ;
+      END KEYWORD ;
+  INTEGER
+PROCEDURE ID(ELEMENT) ;
+    VALUE ELEMENT ;
+  INTEGER ELEMENT ;
+    BEGIN
+  INTEGER ADDRESS ;
+          ADDRESS := KEYWORD(INDEX)+ELEMENT ;
+       ID := IGET(ADDRESS) ;
+      END ID ;
+  INTEGER
+PROCEDURE ASTERISK ;
+    BEGIN FOR I := 2 STEP 1 UNTIL 35
+          DO DATA[I] := ASTERISKS ;
+      END ASTERISK ;
+PROCEDURE DISPLAY(INFORMATION) ;
+  INTEGER INFORMATION ;
+    BEGIN EXEC4(OUT,LU,INFORMATION,CHARACTERS) ;
+      END DISPLAY ;
+  BOOLEAN
+PROCEDURE LISTSEARCH(LISTADDRESS,IDSEGMENT) ;
+    VALUE LISTADDRESS,IDSEGMENT ;
+  INTEGER LISTADDRESS,IDSEGMENT ;
+    BEGIN
+    LABEL S0 ;
+S0:       IF LISTADDRESS=IDSEGMENT
+          THEN LISTADDRESS := TRUE
+          ELSE IF LISTADDRESS#0
+               THEN BEGIN
+                    LISTADDRESS := IGET (LISTADDRESS) ;
+                    GO TO S0 ;
+                    END 
+               ELSE LISTADDRESS := FALSE ;
+      END LISTSEARCH ;
+PROCEDURE CONVERTTIME(WHERE) ;
+    VALUE WHERE ;
+  INTEGER WHERE ;
+    BEGIN FOR I := 0 STEP 1 UNTIL 1
+          DO BEGIN
+             DATA[WHERE+3*I] := CONVERT(TIMEARRAY[4-2*I]) ;
+             DATA[WHERE+2+3*I] := CONVERT(TIMEARRAY[3-2*I]) ;
+             DATA[WHERE+1+3*I] := COLON AND @177400
+                                 OR ROTATE(DATA[WHERE+2+3*I]
+                                 AND @177400 ) ;
+             DATA[WHERE+2+3*I] := ROTATE(DATA[WHERE+2+3*I]
+                                 AND @377) OR COLON AND @377 ;
+             END ;
+          DATA[WHERE+5] := DATA[WHERE+5] AND @177400
+                    OR ZERO AND @377 ;
+      END CONVERTTIME ;
+PROCEDURE TIMEOFDAY ;
+    BEGIN EXEC2(TIMECALL,TIMEARRAY[1]) ;
+          DATA[2] := HEADER[32] ;
+          DATA[3] := HEADER[33] ;
+          DATA[4] := SPACES ;
+          CONVERTTIME(5) ;
+      END TIMEOFDAY ;
+COMMENT   DISPLAY
+2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 
+********************************************************************
+*NAMES,T,PR*DORMT*SCHED* I/O ,EQT #*MEMRY*DISC *OPER * NEXT TIME  **
+********************************************************************
+NAME ,T,PR**  00 *  01 *  02 *  EQ *  04 *  05 *  06 *HH:MM:SS:MM0**
+          HEADER ;
+START1:   TIMEOFDAY ;
+          CHARACTERS := -24 ;
+          DISPLAY(DATA[-1]) ;
+          ASTERISK;
+          CHARACTERS := -72 ;
+          DISPLAY(DATA[0]) ;
+          DISPLAY(HEADER[0]) ;
+          DISPLAY(DATA[0]) ;
+          INDEX := 0 ;
+          WHILE KEYWORD(INDEX) # 0
+          DO BEGIN
+START2:      STATUS := ID(15) AND @7 ;
+             TLIST := ID(17) AND @10000 ;
+             IF (STATUS OR TLIST) # 0
+             THEN BEGIN
+                  ASTERISK ;
+                  DATA[2] := ID(12) ;
+                  DATA[3] := ID(13) ;
+                  DATA[4] := ID(14) AND @177400
+                             OR COMMA AND @377 ;
+                  DATA[5] := ROTATE(CONVERT(ID(14) AND @7) AND @377)
+                            OR COMMA AND @377 ;
+                  DATA[6] := CONVERT(ID(6) AND @177) ;
+                  DATA[7] := SPACES AND @177400
+                            OR ASTERISKS AND @377 ;
+                  I := 3*STATUS ;
+                  DATA[I+8] := SPACES ;
+                  DATA[I+9] := CONVERT(STATUS) ;
+                  DATA[I+10] := SPACES AND @177400
+                            OR ASTERISKS AND @377 ;
+
+                  CHARACTERS := -2*(I+11) ;
+IOSUSPEND:        IF STATUS=2
+                  THEN BEGIN
+                       FOR EQTADDRESS := IGET(EQTA) STEP 15 UNTIL
+                                         IGET(EQTA)+15*
+                                        (IGET(NUMBEROFEQTS) -1)
+                       DO IF LISTSEARCH(EQTADDRESS,
+                                        KEYWORD(INDEX))=TRUE
+                          THEN BEGIN
+                               DATA[16] := SPACES AND @177400
+                                          OR COMMA AND @377 ;
+                               DATA[17] := SPACES;
+                               DATA[18] := CONVERT((EQTADDRESS-
+                                           IGET(EQTA))\15+1);
+                               DATA[19] := SPACES AND @177400
+                                          OR ASTERISKS AND @377 ;
+                               CHARACTERS := -40 ;
+                               GO TO TIMELIST ;
+                               END ;
+                       GO TO START2 ;
+                       END ;
+TIMELIST:         IF TLIST#0
+                  THEN BEGIN
+                       FOR I := 1 STEP 1 UNTIL 4
+                       DO TIMEARRAY[I] := TIME[17+I]+ID(17+I) ;
+                       CONVERTTIME(29) ;
+                       CHARACTERS := -72
+                       END ;
+                  DISPLAY(DATA[0]) ;
+                  END ;
+             INDEX := INDEX + 1 ; 
+             END ;
+FINIS:    TIMEOFDAY ;
+          DATA[2] := "T." ;
+          DATA[3] := "EN" ;
+          DATA[4] := "D " ;
+          CHARACTERS := -22 ;
+          DISPLAY(DATA[0]) ;
+      END ;

@@ -1,0 +1,315 @@
+ASMB,B,X,L
+*001  SPL, L, O, M
+*002        NAME MS..(8)
+        NAM MS..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT MS..
+        EXT .ENTR 
+        EXT OPEN. 
+        EXT IWRIS 
+        EXT WEOFS 
+        EXT READF 
+        EXT EXEC
+        EXT MSS.
+        EXT FM.ER 
+        EXT CONV. 
+        EXT PRTM
+        EXT WRIS
+        EXT IER.
+        EXT IPUT
+        EXT ID.A
+        EXT BUF.
+        EXT I.BUF 
+        EXT N.OPL 
+        EXT CUSE. 
+        EXT .E.R. 
+MS      OCT 020114
+        OCT 051440
+        OCT 046125
+MSI     OCT 020130
+MST     OCT 020124
+        OCT 051101
+        OCT 041513
+        OCT 020130
+MS2     OCT 054130
+ED      OCT 042504
+        OCT 044524
+        OCT 020000
+LIS9    BSS 1 
+LIS5    BSS 1 
+LIS1    BSS 1 
+.1      OCT 000004
+.2      OCT 177777
+.3      OCT 000005
+.4      OCT 000000
+ID      BSS 1 
+.8      DEF ED
+.9      BSS 1 
+.10     OCT 000016
+.11     OCT 000410
+T       BSS 1 
+TR      BSS 1 
+LU      BSS 1 
+.13     OCT 077400
+.14     OCT 000001
+.15     OCT 000377
+.16     OCT 000003
+.17     OCT 003737
+.18     OCT 000011
+L       BSS 1 
+.19     OCT 000106
+.25     OCT 001656
+.26     OCT 001755
+.27     OCT 001717
+.28     OCT 177600
+.29     OCT 044510
+.31     OCT 001767
+*003  ! 
+*004  !     THIS ROUTINE IS PART OF THE RTE 
+*005  !     FILE MANAGEMENT PACKAGE 
+*006  !     FMGR PROGRAM. 
+*007  !     IT MOVES A FILE INTO THE SYSTEM 
+*008  !     AREA AND SETS UP THE TAT
+*009  !     FOR THE TRACKS USED TO
+*010  !     POINT TO THE INDICATED PROGRAM. 
+*011  !     ENTRY IS ON A : 
+*012  !     LS,NAMR,PROG,IH 
+*013  !           1  5    9 
+*014  !     WHERE:
+*015  !     LS GETS TO THIS ROUTINE 
+*016  !     NAMR IS THE FILE NAME REFERENCE INCLUDING SECURITY AND
+*017  !              CARTRIDGE INFORMATION
+*018  !     PROG    IS PRESENT THE FILE IS TO 
+*019  !             BE ASSIGNED TO THE NAMED
+*020  !             PROGRAM (IF NOT GIVEN THE 
+*021  !             LS AREA IS ASSIGNED TO
+*022  !             THE EDIT PROGRAM) 
+*023  !     IH      (OPTIONAL) INDICATES THE FILE 
+*024  !             IS NOT TO BE SET UP AS THE CURRENT
+*025  !             LS FILE.
+*026  !     DEFINE EXTERNALS
+*027  !     SUBS. 
+*028        LET OPEN.,IWRIS,WEOFS,\ 
+*            READF,EXEC, MSS.,\ 
+*            FM.ER,CONV.,PRTM,\ 
+*            WRIS,IER. ,IPUT      BE SUBROUTINE,EXTERNAL
+*029  ! 
+*030  !     FUNCTIONS 
+*031  ! 
+*032        LET   ID.A           BE FUNCTION,EXTERNAL 
+*033  ! 
+*034  !     ARRAYS AND INTEGERS 
+*035  ! 
+*036        LET   BUF.,I.BUF,N.OPL,CUSE.,.E.R.   BE INTEGER,EXTERNAL
+*037  ! 
+*038  !     DEFINE CONSTANTS. 
+*039  ! 
+*040        LET TAT       BE CONSTANT (1656K) 
+*041        LET TATLG     BE CONSTANT (1755K) 
+*042        LET XEQT      BE CONSTANT (1717K) 
+*043        LET MS(3),MSI,MST(4),MS2  BE INTEGER
+*044        INITIALIZE MS    ,MSI,MST   ,MS2 TO " LS LU X TRACK XXX"
+*045        LET ED(3) BE INTEGER
+*046        INITIALIZE ED TO "EDIT "
+*047        LET A         BE CONSTANT (    0  ) 
+*048  ! 
+*049  ! 
+*050  MS..: SUBROUTINE(CO,LIS,ER)  GLOBAL 
+CO      NOP 
+LIS     NOP 
+ER      NOP 
+MS..    NOP 
+        JSB .ENTR 
+        DEF CO
+*051  ! 
+*052        LIS9 _[LIS5 _[LIS1_@LIS+1]+4 ]+4 !SET PRAM ADDRESSES
+        LDA LIS 
+        INA 
+        STA LIS1
+        ADA .1
+        STA LIS5
+        ADA .1
+        STA LIS9
+*053        EXEC (5,-1) 
+        JSB EXEC
+        DEF *+3 
+        DEF .3
+        DEF .2
+*054        PRTM(0) 
+        JSB PRTM
+        DEF *+2 
+        DEF .4
+*055        ID_ ID.A ($[IF $LIS5  THEN  LIS5 ,ELSE\\
+*       @ ED   ])?[ER_14;RETURN]
+        LDA LIS5,I
+        SZA,RSS 
+        JMP .5
+        LDA LIS5
+        JMP .6
+.5      LDA .8
+.6      STA .9
+        JSB ID.A
+        DEF *+2 
+        DEF .9,I
+        SEZ,RSS 
+        JMP .7
+        LDA .10 
+        STA ER,I
+        JMP MS..,I
+.7      STA ID
+*056        OPEN. (I.BUF, $LIS1,N.OPL,410K) 
+        JSB OPEN. 
+        DEF *+5 
+        DEF I.BUF 
+        DEF LIS1,I
+        DEF N.OPL 
+        DEF .11 
+*057        CUSE._0  !SET SEGMENT ABSENT FLAG TO PREVENT REUSE
+        CLA 
+        STA CUSE. 
+*058        DO [IWRIS(T); TR_ $A; IF T THEN[\ 
+*               ER_5; RETURN]]
+        JSB IWRIS 
+        DEF *+2 
+        DEF T 
+        LDA .4,I
+        STA TR
+        LDA T 
+        SZA,RSS 
+        JMP .12 
+        LDA .3
+        STA ER,I
+        JMP MS..,I
+*059  !                         REPORT THE TRACK
+*060  ! 
+*061        LU_(TR AND 77400K)-<8 ! SET LU
+.12     LDA TR
+        AND .13 
+        ALF,ALF 
+        STA LU
+*062  ! 
+*063        CONV.(LU,MSI,1)            ! PUT IN MESS
+        JSB CONV. 
+        DEF *+4 
+        DEF LU
+        DEF MSI 
+        DEF .14 
+*064  ! 
+*065        CONV.(TR AND 377K,MS2,3) ! PUT TRACK
+        LDA TR
+        AND .15 
+        STA .9
+        JSB CONV. 
+        DEF *+4 
+        DEF .9
+        DEF MS2 
+        DEF .16 
+*066  ! 
+*067        MSS.(2015)                  ! TELL HIM ITS
+        JSB MSS.
+        DEF *+2 
+        DEF .17 
+*068  ! 
+*069        FM.ER(1,MS,9)               ! COMMING. SEND IT
+        JSB FM.ER 
+        DEF *+4 
+        DEF .14 
+        DEF MS
+        DEF .18 
+*070  ! 
+*071  LSRD: READF (I.BUF,.E.R., BUF.,70,L)
+LSRD    JSB READF 
+        DEF *+6 
+        DEF I.BUF 
+        DEF .E.R. 
+        DEF BUF.
+        DEF .19 
+        DEF L 
+*072        IER.
+        JSB IER.
+        DEF *+1 
+*073        IF L<0 THEN GOTO LSEOF
+        LDB L 
+        SSB 
+        JMP LSEOF 
+*074  ! 
+*075        WRIS (BUF.,-(L-<1),T) 
+        LDA L 
+        RAL 
+        CMA,INA 
+        STA .9
+        JSB WRIS
+        DEF *+4 
+        DEF BUF.
+        DEF .9
+        DEF T 
+*076  ! 
+*077        IF  T   THEN [ER_5;RETURN]
+        LDA T 
+        SZA,RSS 
+        JMP .20 
+        LDA .3
+        STA ER,I
+        JMP MS..,I
+*078  ! 
+*079        GO TO  LSRD 
+.20     JMP LSRD
+*080  ! 
+*081  LSEOF:WEOFS(T)
+LSEOF   JSB WEOFS 
+        DEF *+2 
+        DEF T 
+*082  ! 
+*083        FOR  T_ $TAT  TO $TAT-$TATLG DO[\ 
+*           IF $T = $XEQT  THEN IPUT(T,ID)] 
+        LDA .25,I 
+        STA T 
+        JMP .22 
+.21     LDA T 
+        INA 
+        STA T 
+.22     LDA .26,I 
+        CMA,INA 
+        ADA .25,I 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .23 
+        LDB T,I 
+        CPB .27,I 
+        RSS 
+        JMP .24 
+        JSB IPUT
+        DEF *+3 
+        DEF T 
+        DEF ID
+.24     JMP .21 
+*084  ! 
+*085        TR_(TR-<7) AND  177600K 
+.23     LDA TR
+        ALF 
+        ALF,RAR 
+        AND .28 
+        STA TR
+*086        IF   $LIS9  # "IH" THEN  IPUT (1767K, TR) 
+        LDB LIS9,I
+        CPB .29 
+        JMP .30 
+        JSB IPUT
+        DEF *+3 
+        DEF .31 
+        DEF TR
+*087  ! 
+*088        PRTM(TR)      ! RETURN THE LS WORD
+.30     JSB PRTM
+        DEF *+2 
+        DEF TR
+*089  ! 
+*090        RETURN
+        JMP MS..,I
+*091        END 
+*092        END 
+        END 
+*093        END$

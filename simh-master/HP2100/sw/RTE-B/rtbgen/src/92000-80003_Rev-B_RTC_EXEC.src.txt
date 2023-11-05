@@ -1,0 +1,3375 @@
+ASMB,R,F,B,C,L
+      HED * REAL TIME (RTC) EXEC. CONTROL A-92000-60003-2 REV. B
+*     NAME:         RTC 
+*     LISTING:      A-92000-60003-2 
+*     SOURCE:       92000-80003 
+*     RELOC:        92000-60003 
+* 
+*   **********************************
+******************************
+*   * THIS PROGRAM CONTAINS INFORMATION WHICH IS PROPRIETARY TO    *
+*   * THE HEWLETT-PACKARD COMPANY. IT IS NOT TO BE DISCLOSED TO    *
+*   * ANY THIRD PARTIES OR REPRODUCED EXCEPT FOR ARCHIVE PURPOSES  *
+*   **********
+******************************************************
+      NAM RTC,7  92000-60003 750404 REV.B 
+      SUP 
+* 
+* 
+* 
+* 
+*  ENTRY POINTS FOR SYSTEM
+* 
+* 
+* 
+      ENT $LIST,$XCIC,$CIC,$STRT,EXEC,$TIME 
+      ENT $LIBX,$LIBR,.OPSY 
+      ENT $T
+MP1,$TMP2,$TMP3,$TMP4,$TMPW 
+      ENT $ER04,$XEQ,$RXIT,$IOER,$WRD2
+      ENT $L.13,$L.51,$L.55,$R02,$L.10
+      ENT $CVEQ,$SCLK,$UPIO 
+      ENT $PWR5,$MESS,$WORK 
+      ENT $L.16,$L.56,$R06
+* 
+      EXT $ALC,$RTN 
+* 
+* 
+* 
+*****  < EXEC >   PR
+OGRAM  DESCRIPTION  ***** 
+* 
+*  THE PRIMARY FUNCTION OF THIS PROGRAM IS
+* TO PROVIDE GENERAL CHECKING AND EXAMINATION 
+* OF SYSTEM SERVICE REQUESTS AND TO CALL THE
+* APPROPRIATE PROCESSING ROUTINE IN OTHER 
+* SECTIONS OF THE REAL-TIME EXECUTIVE.
+* 
+*  THIS PROGRAM IS CALLED BY THE USERS PROGRAM. 
+* 
+*   SYSTEM REQUEST FORMAT:
+*   ----------------------
+* 
+*     THE GENERAL FORMAT OF A SYSTEM REQUEST IS 
+*    A BLOCK CONTAINING AN EXECUTABLE INSTRUCTION 
+*    TO GAIN ENTRY TO THE EXECUTIVE AN
+D AN ADDRESS
+*    LIST OF PARAMETERS. THE FIRST PARAMETER IS 
+*    A NUMERIC CODE IDENTIFYING THE REQUEST TYPE. 
+*    THE LENGTH OF THE PARAMETER LIST VARIES
+*    ACCORDING TO THE AMOUNT OF INFORMATION RE- 
+*    QUIRED FOR EACH REQUEST (OR VARIATIONS 
+WITHIN
+*    A SINGLE REQUEST). THIS FORMAT ALLOWS SYSTEM 
+*    REQUESTS TO BE SPECIFIED IN A FORTRAN CALL 
+*    STATEMENT IN ADDITION TO ASSEMBLY LANGUAGE FORMAT. 
+* 
+*        CALL  EXEC  (P1,P2,...PN)
+* 
+*     OR
+* 
+*        EXT   EXEC 
+*       
+ JSB   EXEC 
+*        DEF   *+1+N  DEFINE EXIT POINT, N= # PARAMETERS
+*        DEF   RCODE  DEFINE REQUEST CODE 
+*        DEF   P1     DEFINE PARAMETER LIST, 1 TO N 
+*        .
+*        .            (PARAMETERS MAY BE INDIRECTLY 
+*        .          
+   REFERENCED, E.G. DEF P3,I) 
+*        DEF   PN 
+*        --        ERROR RETURN IF NEGATIVE RCODE 
+*        --        NORMAL RETURN
+*       - EXIT POINT -
+* 
+*     RCODE  DEC  N 
+*     P1     DEC/OCT/DEF,ETC  TO DEFINE A VLAUE 
+* 
+* 
+* 
+      
+SKP 
+* 
+EXEC  NOP 
+      CLF 0 
+      LDB EXEC
+* ANALYZE SYSTEM REQUEST
+* 
+      LDA B,I      GET EXIT ADDRESS,
+      ADB N1
+      STB XSUSP,I     SAVE SUSPEND LOCATION 
+      INB 
+      STA RQRTN     SAVE IN BASE PAGE 
+      STB TEMP1    SAVE 
+REQUEST WORD 2 ADDRESS. 
+      CMB,INB      SUBTRACT WORD 2 ADDRESS FROM 
+      ADA B         EXIT ADDRESS. 
+       ADA N2 
+      STA RQCNT     AND SAVE # OF ACTUAL PARAMETERS.
+      STA B 
+* 
+      ADA N9        IS GREATER
+      SSA,RSS       THAN
+      JMP RQERR     8.
+* 
+      LDA RQP1A     SET (TEMP2) = 
+      STA TEMP2     ADDRESS OF RQP1 IN B.P. 
+      CMB 
+      ISZ TEMP1     SET (TEMP1) = ADDR OF WORD 4
+R1    JSB EFFAD     GET EFFECTIVE ADDRESS 
+      STA TEMP2,I   SET IN B.P. 
+    
+  ISZ TEMP2     INDEX 
+      ISZ TEMP1     ADDRESSES AND 
+      INB,SZB       PARAMETER COUNT.
+      JMP R1       - CONTINUE - 
+      SKP 
+* 
+* CHECK LEGALITY OF REQUEST CODE
+* 
+      LDA RQP1,I    GET REQUEST CODE
+      LDB XEQT      GET ID SEG A
+DDR 
+      ADB .15       COMPUTE STATUS WORD ADDRESS 
+      STB TEMP1     AND SAVE
+      LDB B,I       GET STATUS WORD 
+      RAL,CLE,ERA   PUT aBORT OPTION IB (E) 
+      RBL,ERB       PUT ABORT OPTION
+      STB TEMP1,I   IN STATUS WORD
+      SSB   
+        IF ABORT OPTION SET 
+      ISZ RQRTN     THEN INCREMENT RETURN 
+      STA RQP1      SAVE REQUEST CODE 
+      SZA,RSS       ERROR IF
+      JMP RQERR      ZERO 
+      CMA,INA 
+      SSA,RSS 
+      JMP RQERR      SUBTRACT FROM #
+      ADA .3
+      SSA,RSS 
+      JMP R3
+      CPA N10 
+R3    JMP IOREQ    IF REQ=1,2,3,6 OR 13 ITS OK
+      CPA N3     IS THIS EXEC(6)/COMPLETION REQUEST 
+      JMP PCOMP  YES! 
+      JMP RQERR 
+* 
+* SUBROUTINE  <EFFAD>,  COMPUTE EFFECTIVE ADDRESS 
+* 
+EFFAD 
+NOP 
+      LDA TEMP1,I       GET ADDRESS 
+      SZA,RSS      ERROR IF 
+      JMP RQERR     ADDRESS = 
+      CPA .1         0 OR 1 
+      JMP RQERR       (A OR B REGISTERS)
+      RAL,CLE,SLA,ERA   TEST I-BIT AND CLEAR
+      RSS               -INDIREC
+T-
+      JMP EFFAD,I       RETURN WITH (A) = ADDRESS.
+      LDA A,I      GET NEXT ADDRESS IN INDIRECT 
+      JMP EFFAD+2   CHAIN AND PROCESS.
+      SPC 1 
+.3    DEC 3 
+N1    DEC -1
+N2    DEC -2
+N9    DEC -9
+RQP1A DEF RQP1
+* 
+* 
+*  PROGRAM COMPL
+ETION REQUEST 
+* 
+*    ALL PARAMETERS OTHER THAN REQUEST CODE=6 
+*     ARE IGNORED. PROGRAM IS PUT IN DORMANT LIST 
+* 
+* 
+PCOMP LDA XEQT   ID SEG ADDR OF CURRENT PROGRAM 
+      STA *+3 
+      JSB $LIST  DORMANT REQUEST
+      OCT 100 
+      DEF * 
+      JMP $XEQ
+* 
+      HED SIMULATED $LIBR AND $LIBX SUBR.   A-92000-60003-2 REV. B
+* 
+*CALLING SEQUENCES:  ENTRY               TERMINATION
+* 
+*PRIVILEGED:         JSB $LIBR           JSB $LIBX
+*                    NOP                 DEF (PROGRA
+M ENTRY PT) 
+* 
+*RE-ENTRANT:         JSB $LIBR           JSB $LIBX
+*                    DEF TDB             DEF TDB
+*                                        DEC 0 OR 1 
+* 
+*     BASIC ASSUMPTION: PRIVILEGED ROUTINES MAY NO CALL 
+*     RE-ENTRANT ROU
+TINES 
+* 
+* 
+$LIBR NOP 
+      CLF 0         OFF THE INTERRUPTS
+      STA TEMPA                SAVE A 
+      LDA $LIBR,I 
+      ISZ $LIBR                SET RETURN ADDRESS 
+      SZA                      NOP(PRIV) OR DEF TDB(RE-ENT) 
+      JMP RENT
+R                RE-ENTRANT 
+      ISZ PRIV                 ADD ONE TO PRIV FLAG 
+      JMP EXITR                EXIT 
+RENTR ADA .2                   A=DEF TDB+2=RETURN ADDRESS 
+      STB TEMPB                SAVE B 
+      ERB 
+      STB TEMPE       
+         SAVE E 
+      LDB $LIBR 
+      ADB N3                   B=WORD BEFOR "JSB $LIBR" 
+*                              =RETURN ADDRESS
+      LDB B,I                  LOAD RETURN ADDRESS
+      STB A,I                  AND STORE IN TDB+2 
+      LDB 
+TEMPE 
+      ELB                      RESTORE E
+      LDB TEMPB                RESTORE B
+EXITR LDA TEMPA                RESTORE A
+      JMP $LIBR,I              RETURN 
+* 
+$LIBX NOP 
+      STA TEMPA                SAVE A 
+      STB TEMPB           
+     SAVE B 
+      ERB 
+      STB TEMPE                SAVE E 
+      LDA $LIBX,I 
+      LDB PRIV                 IF PRIV = 0? 
+      SZB,RSS 
+      JMP RENTX                THIS IS A RE-ENTRANT ROUTINE 
+      ADB N1                   ELSE PRIVILEGED
+      STB PRIV                 SET PRIV=PRIV-1
+      LDA A,I                  A=RETURN ADDRESS 
+      JMP EXITX                EXIT 
+RENTX ADA .2                   A=DEF TDB+2
+      LDA A,I                  A=ADDRESS IN TDB+2 
+      ISZ $LIBX       
+         $LIBX POINTS TO DEC 0 OR 1 
+      ADA $LIBX,I              ADD O OR 2 TO RETURN ADDRESS 
+EXITX STA $LIBX 
+      CLA 
+      CPA PRIV
+      LDA STFO
+      STA STFX
+      LDA TEMPA                RESTORE A
+      LDB TEMPE 
+      ELB         
+             RESTORE E
+      LDB TEMPB                RESTORE B
+STFX  NOP 
+      JMP $LIBX,I              RETURN 
+* 
+PRIV  OCT 0 
+STFO  STF 0 
+* 
+* 
+      HED SYSTEM ABORT SECTION              A-92000-60003-2 REV. B
+* 
+* 
+* ROUTINE:    < ABORT 
+> 
+* 
+*  PURPOSE:  THIS ROUTINE PROVIDES FOR REMOVING 
+*           A USER PROGRAM FROM EXECUTION USUALLY 
+*           AFTER AN ERROR CONDITION IS DETECTED
+*           WHICH PROHIBITS CONTINUED EXECUTION.
+*           THE PROGRAM IS THEN RESTARTED.
+* 
+*  CALL:    (P)    JMP ABORT
+*           (P+1)  DOES NOT RETURN
+* 
+ABORT JSB IOCL      CLEAR I/O DEVICE QUEUE
+      JSB $LIST    REMOVE PROGRAM FROM SCHEDULE LIST
+      OCT 100 
+ABP   NOP 
+RSTRT JSB $LIST    RESCEDULE BASIC
+      OCT 101 
+BASA  
+NOP 
+      JMP $XEQ
+* 
+RS1   OCT 25000     RESET VALUE FOR TIME
+RS2   OCT 177574
+$TIME OCT 25000     TIME OF DAY IN NEG 10S OF MS
+      OCT 177574
+      OCT 33633   DAY 000  YEAR 197X
+.2    OCT 2 
+* 
+* 
+      HED REAL TIME CLOCK PROCESSOR       
+  A-92000-60003-2 REV. B
+********************************************************************
+*        THE REAL TIME CLOCK PROCESSOR SECTION OF HP-2100 REAL TIME*
+*     EXECUTIVE HANDLES ALL TIME DEPENDENT FUNCTIONS:              *
+*        1. INCREMEN
+T REAL TIME CLOCK VALUES EVERY 10 MILLISECOND. *
+*        2. RESTARTS THE REAL TIME CLOCK AFTER POWER FAILURES.     *
+********************************************************************
+**
+**    THE $SCLK ROUTINE IS CONFIGURED IN THE STARTUP ROUTINE A
+ND   *
+**           IS CALLED BY THE POWER FAIL ROUTINE.                  *
+**    ONCE ENTERED, $SCLK RESTARTS THE SYSTEM CLOCK AND EXITS      *
+**           BACK TO THE POWER FAIL DRIVER.                        *
+* 
+* 
+$SCLK NOP 
+      LDA .2      
+  SETUP TIME BASE 
+OTATB OTA 0         CONFIGURED TO STC TBG 
+STCTB OCT 1100      CONFIGURED TO STC TBG,C 
+STFTB OCT 1600      CONFIGURED TO STF TBG 
+      JMP $SCLK,I   EXIT
+* 
+* 
+* 
+* 
+*        THE $CLCK ROUTINE FUNCTIONS AS FOLLOWS:            
+       *
+*              THE ROUTINE IS ENTERED EVERY 10 MILLISECOND DUE     *
+*                  TO TIME BASE GENERATOR INTERRUPTS.              *
+*              THE TIME VALUE IS INCREMENTED BY 100MS              *
+*              THE TIME-OUT CLOCKS F
+OR ALL ACTIVE DEVICES ARE 
+*                   UPDATED.  IF ANY DEVICE HAS TIMED-OUT,
+*                   RTIOC IS ENTERED TO PROCESS THE CONDITION.
+*                                                                  *
+* 
+$CLCK ISZ $TIME     INCREMENT 
+TIME BY 10MS
+      JMP IOTOP 
+      ISZ $TIME+1 
+      JMP IOTOP 
+      LDA RS1       RESET THE COUNTER 
+      LDB RS2       TO THE FULL DAYS WORTH
+      STA $TIME     OF TENS OF MS.
+      STB $TIME+1 
+* 
+*   PROCESS DEVICE TIME-OUT CLOCKS
+* 
+IO
+TOP LDA EQT#      SET NEGATIVE OF 
+      CMA,INA        NUMBER OF EQT
+      STA TEMP       ENTRIES FOR INDEX
+      LDA EQTA      POINT TO WORD 15
+IOTO2 ADA .14    OF EQT ENTRY 
+      LDB A,I       LOAD WORKING CLOCK- 
+      SZB           IS IT ACTIVE
+? 
+      ISZ A,I        YES: INCREMENT IT
+      INA,RSS       IT HAS NOT TIMED-OUT
+      JMP $DEVT     GO TO TIME-OUT PROCESSOR
+      ISZ TEMP      THRU? 
+      JMP IOTO2      NO: GO DO NEXT ONE 
+* 
+* 
+* 
+* 
+* 
+* 
+* 
+      SKP 
+      HED ** R
+EAL TIME SYSTEM SCHEDULER **  A-92000-60003-2 REV. B
+* 
+*        THE $XEQ SECTION OF THE HP-2100 REAL TIME EXECUTIVE       *
+*    PERFORMS THE FOLLOWING FUNCTIONS:                             *
+*        1. IDLE LOOP WHEN NO PROGRAMS ARE SCHEDULED OR CA
+NNOT BE  *
+*           EXECUTED.                                              *
+* 
+*     CALLING SEQUENCE
+*       JMP $XEQ
+* 
+$XEQ  LDA SKEDD   GET ID SEQ ADDRESS
+      SZA          IF ZERO, THEN NO PROG SCHED
+      JMP X0010    GO TO PROCESS SCHED
+ LIST 
+* 
+*     NO PROGRAM SCHEDULED--SETUP FOR IDLE LOOP 
+*                                                                  *
+*        THE IDLE LOOP SECTION CONSISTS OF:                        *
+*              CLEARING XEQT WORD TO SIGNIFY THAT NO P
+ROGRAM       *
+*                   CURRENTLY EXECUTING.                           *
+*              STORE ADDRESS OF 4 DUMMY WORDS INTO XSUSP-XSUSP+3   *
+*                   DUE TO I/O PROCESSING.                         *
+*              TURN INTERRUPT 
+SYSTEM BACK ON                       *
+*              JUMP TO *                                           *
+*                                                                  *
+      LDA N4    SET XSUSP TO XSUSP+3 TO ADDR
+      STA TMP           OF FOU
+R DUMMY WORDS 
+      LDB DSUSP    ADDRESS OF XSUSP 
+      LDA VSUSP    ADDRESS OF IDLE DUMMY WORDS
+      STA B,I 
+      INA 
+      INB 
+      ISZ TMP 
+      JMP *-4 
+      CLA 
+      STA XEQT     CLEAR XEQT ADDRESS VALUE 
+      STF 0         TURN
+ ON INTERRUPTS
+      JMP *        IDLE LOOP
+XQDEF DEF XEQT     XEQT TABLE ADDRESS 
+DSUSP DEF XSUSP    ADDRESS OF XEQT SUSPEND VALUE
+VSUSP DEF *+1      ADDRESS OF IDLE DUMMY WORDS
+      BSS 4        DUMMY XEQT IDLE WORDS
+* 
+*        THE SWITCHING SEC
+TION USES THE SCHEDULE LIST TO DETERMINE *
+*        WHICH PROGRAM TO EXECUTE-STARTING FROM TOP OF LIST.       *
+*              IF PROGRAM FROM LIST OF LOWER PRIORITY, THEN        *
+*                   EXECUTION OF CURRENT PROGRAM CONINUES.         *
+* 
+             IF PROGRAM FROM LIST OF HIGHER PRIORITY          * 
+*                          EXECUTION SWITCHING TAKES PLACE.*
+* 
+X0010 STA ZWORK    SCHED LIST PROG ID SEG ADDR
+      ADA .6
+      STA ZPRIO    PRIORITY ADDRESS 
+      LDA XEQT     IS PR
+OGRAM CURRENTLY EXECUTING 
+      SZA,RSS      YES! 
+      JMP X0040    NO, SO EXECUTE IT
+      LDA XPRIO,I  IS CURRENT PRIO=NEW PRIO 
+      CMA,INA 
+      ADA ZPRIO,I 
+      SZA,RSS      NO!
+      JMP X0020    YES,CONTINUE EXISTING PROG 
+      SSA 
+         IS NEW PROG HIGHER PRIO
+      JMP X0040    YES! 
+X0020 LDA XSUSP,I  CONTINUE AT PT OF SUSPENSION 
+X0025 STA TEMP      RETURN ADDRESS STORED 
+*     RESTORE REGISTERS, MEMORY PROTECT, AND TURN ON INTERRUPT SYSTEM 
+      LDA XEO,I      RESTORE
+      CLO           E,
+      SLA,ELA       OVERFLOW
+      STF 1 
+      LDA XA,I      A AND 
+      LDB XB,I      B REGISTERS 
+      STF 0         TURN ON INTERRUPTS
+      JMP TEMP,I   GO TO EXECUTE PROGRAM
+* 
+* 
+* 
+* 
+*     LOAD PROGRAM ID SEGMEN
+T ADDRESSES INTO XEQT AREA
+X0040 LDA N12     LOAD PROGRAM TO BE EXECUTED 
+      STA TMP       INTO XEQT AREA
+      LDA XQDEF 
+      LDB ZWORK 
+      STB 0,I 
+      INA 
+      STB 0,I 
+      INB 
+      ISZ TMP 
+      JMP *-4 
+      LDA XSUSP,I  C
+HECK IF PROGRAM SUSPENDED 
+      SZA,RSS      NO, SO START AT PRIMARY ENTRY
+      LDA XPENT,I   SET TO PRIMARY START ADDRESS
+      JMP X0025    GO TO SET FENCE,REGISTERS AND XEQ
+* 
+* 
+* 
+LLIST DEF DORMT     TOP OF LIST ADDRESSES 
+* 
+.14   DEC 14
+.15   DEC 15
+N12   DEC -12 
+* 
+      HED RTE SCHED.LIST PROCESSOR SECTION  A-92000-60003-2 REV. B
+* 
+*        THE $LIST PROCESSOR SECTION OF THE HP-2100 REAL TIME      *
+*     EXECUTIVE PROCESSES THE FOLLOWING LIST REQUESTS              *
+*     1. D
+ORMANT                                                   *
+*     2. SCHEDULE                                                  *
+*     3. OPERATOR SUSPEND                                          *
+*     4. NON-OPERATOR SUSPEND                           
+           *
+*        A. I/O                                                    *
+*        B. MEMORY AVAILABLE                                       *
+* 
+* 
+*        CALLING SEQUENCE                                          *
+* 
+*               JSB 
+$LIST                                          *
+*               OCT (ADDRESS CODE)(FUNCTION CODE) 
+*               DEF (ADDRESS) 
+* 
+*               WHERE 
+*                   FUNCTION CODE 
+*                       0 = DORMANT REQUEST 
+*           
+            1 = SCHEDULE REQUEST
+*                       2 = I/O SUSPEND REQUEST 
+*                       3 = *****NOT CURRENTLY USED*****
+*                       4 = MEMORY AVAILABEL REQUEST
+*                       6 = OPERATOR SUSPEND REQUEST
+*     
+                 17 = RELINK PROGRAM REQUEST
+*                      10 THRU 16 ARE NOT ASSIGNED
+* 
+*                   ADDRESS CODE
+*                       1 = ID SEGMENT ADDRESS
+*                       2 = ASCII PROGRAM NAME
+*                       
+3 = NOT USED
+*                       4 = ID SEGMENT ADDRESS IN (B) 
+* 
+* 
+*                   ADDRESS 
+*                       1 = ID SEGMENT ADDRESS
+*                       2 = ASCII PROGRAM NAME ADDRESS
+* 
+*                         :THIS WORD MUS
+T NOT BE SUPPLIED 
+*                          FOR ADDRESS CODE = 4 
+* 
+      SKP 
+$LIST NOP          ENTRY/EXIT 
+      LDA $LIST,I  WORD 1 
+      AND .15 
+      STA $WORK      SAVE REQUEST CODE
+      XOR $LIST,I    FORM 
+      ALF,ALF            A
+DDRESS
+      RAL,RAL                   CODE
+      CPA .4         SEG. ADDR. IN B-REG.?? 
+      JMP XXXX       YES, GO PROCESS REQUEST
+      ISZ $LIST     STEP TO ADDRESS WORD
+      LDB $LIST,I   GET IT TO B 
+      CPA .1        DEF TO SEG. 
+      JM
+P XXXX      ADDRESS IN B-REG??
+* 
+      JSB TNAME     ADDRESS OF ASCII NAME IN B
+      SZA,RSS       ID SEG.ADDR. FOUND??? 
+      JMP $LIST,I   NO. THIS IS AN ERROR RETURN 
+* 
+* 
+XXXX  STB WORK
+      STB WLINK    LINKAGE ADDRESS
+      ADB .6
+    
+  STB WPRIO    PRIORITY ADDRESS 
+      ADB .2
+      STB WSUSP 
+      ADB .7
+      STB WSTAT    STATUS ADDRESS 
+      LDA WSTAT,I  GET OLD STATUS 
+      LDB $WORK     GET REQUEST CODE FROM TEMP STORAGE
+      STB WSTAT,I  SET NEW STATUS 
+      AND .1
+5 
+      RRR 16       SWAP REGISTERS 
+      HED LINK UPDATE PROCESSOR             A-92000-60003-2 REV. B
+* 
+*        THE LINK PROCESSOR SECTION OF THE HP-2116 REAL TIME       *
+*     EXECUTIVE                                                    *
+*   
+  1. REMOVES A PROGRAM FROM A LIST                             *
+*      AND                                                         *
+*     2. ENTERS THE PROGRAM INTO ANOTHER LIST AT THE PROPER PLACE  *
+*        ACCORDING TO PRIORITY LEVEL.             
+                 *
+*                                                                  *
+* 
+* 
+*              WHERE
+*                B   =   CODE OF REMOVAL LIST 
+*                A   =   CODE OF INSERTION LIST 
+*              THE ID SEGMENT IS ASSUM
+ED TO BE LOCATED IN WORK
+*              AND WLINK AND WPRIO SET
+* 
+*                                                                  *
+*        THE REMOVAL OF PROGRAM FROM A LIST CONSISTS OF:           *
+*              1. IF I/O LIST (CODE 2), THEN T
+HIS IS SPECIAL CASE  *
+*                 AND DOES NOT REQUIRE REMOVAL.                    *
+*              2. IF NULL LIST, THEN ERROR EXIT TAKEN.             *
+*              3. IF FIRST AND ONLY PROGRAM IN LIST, THEN LIST     *
+*                 VALU
+E SET TO ZERO.                               *
+*              4. IF FIRST PROGRAM IN LIST, BUT NOT THE ONLY       *
+*                 PROGRAM IN LIST(LINKAGE NOT ZERO), THEN SET LIST *
+*                 VALUE TO THE LINKAGE VALUE.                      *
+*              5. IF IN MIDDLE OF LIST, THE LINKAGE OF THE ID SEG  *
+*                 MENT WHICH POINTS TO THE PROGRAM TO BE REMOVED   *
+*                 IS SET TO THE LINKAGE VALUE OF THE PROGRAM THAT  *
+*                 IS REMOVED.               
+                       *
+*              6. IF LAST PROGRAM IN LIST, THE LINKAGE VALUE OF    *
+*                 PREVIOUS PROGRAM IN LIST IS SET TO ZERO.         *
+* 
+      SZB           REMOVAL CODE IN B IGNORE DORMANT
+      CPB .2        I/O LISj REQ
+UESTS 
+      JMP LK100      YES, SEE IF ADDITION.
+      ADB LLIST     ADD TOP OF LIST POINTER 
+* 
+LK010 STB TEMP     TOP OF REMOVAL LIST
+      LDB B,I      GET TOP OF LIST POINTER
+      SZB,RSS      END OF LIST? 
+      JMP LK150     YES, RETURN 
+  
+    CPB WORK     MATCHES PROGRAM? 
+      RSS           YES 
+      JMP LK010     NO, KEEP SEARCHING
+      LDB WLINK,I  UPDATE LINKAGE TO BYPASS 
+      STB TEMP,I   THE DELETED ID SEG 
+      HED LINK PROC.-ADD PROGRAM TO A LIST  A-92000-60003-2 REV. B
+* 
+*     ADD A PROGRAM TO A LIST 
+* 
+*        THE ADDITION OF PROGRAM TO A LIST CONSISTS OF:            *
+*              1. IF I/O LIST (CODE 2), THEN THIS IS SPECIAL CASE  *
+*                 AND NO ADDITION MADE TO LIST.                    *
+*     
+         2. IF NULL LIST, THEN LIST VALUE SET TO POINT TO ID *
+*                 SEGMENT OF PROGRAM TO BE ADDED AND THE LINKAGE   *
+*                 SET TO ZERO.                                     *
+*              3. IF NOT NULL LIST, THE PROGRAM IS I
+NSERTED INTO   *
+*                 LIST ACCORDING TO PRIORITY LEVEL AND LINKAGES    *
+*                 CHANGED TO REFLECT THIS INSERTION.               *
+*              4. IF OF LOWER PRIOR. THAN ANY PROGRAM IN LIST, THEN*
+*                 LAST LINKA
+GE IS SET TO POINT TO THE PROGRAM TO   *
+*                 BE ADDED AND THE PROGRAM LINKAGE IS CLEARED.     *
+* 
+LK100 SZA,RSS       TEST FOR DORMANT REQUEST
+      JMP CLRID     CLEAR ID SEG PT OF SUSPENSION 
+      CPA .2        I/O LIST REQUESTS 
+  
+    JMP LK150      YES, RETURN
+LK101 ADA LLIST     ADD TOP OF LIST POINTER 
+* 
+LK110 STA TEMP      SAVE TOP OF LIST POINTER
+      LDA A,I       GET POINTER 
+      SZA,RSS       END OF LIST?
+      JMP LK140      YES, LINK IN NEW PROG
+      CPA WORK  
+   IS IT A DUPLIC. PROG?
+      JMP LK150     YES, DUPLIC SO RETURN 
+      STA B        NOT DUPLIC, COMPARE PRIORITY 
+      ADB .6         OF WORK ID SEG 
+      LDB B,I        AGAINST
+      CMB,INB        CURRENT
+      ADB WPRIO,I    ID SEG 
+      SS
+B,RSS       WORK < CURRENT? 
+      JMP LK110      NO, SEE NEXT ONE 
+* 
+LK140 STA WLINK,I   LINK THIS TO FOLLOW WORK
+      LDA WORK      LINK WORK TO FOLLOW 
+      STA TEMP,I     PREVIOUS PROG
+* 
+LK150 ISZ $LIST     INCRE RETURN ADDR 
+* 
+      CLA 
+          *FORCE XEQT RE-LOAD*
+      STA XEQT      CLEAR CURRENTLY " EXECUTING" POINTER
+* 
+      JMP $LIST,I    FOR RETURN 
+* 
+* 
+*  CLEAR PROGRAM ID SEG FOR RESTART 
+* 
+* 
+CLRID STA OPFLG  CLEAR OPERATOR FLAG
+      STA WSUSP,I CLEAR SUSPENSION P
+OINT
+      STA XEQT
+      JMP LK150 
+* 
+.6    OCT 6 
+* 
+      HED PROGRAM ID SEARCH ROUTINE         A-92000-60003-2 REV. B
+********************************************************************* 
+****************PROGRAM ID SEARCH ROUTINE*************
+*************** 
+*                                                                   * 
+*                                                                   * 
+*                                                                   * 
+*     ON ENTRY        
+                                              * 
+*        (B)=ADDRESS OF ASCII PROGRAM NAME                          * 
+*                                                                   * 
+*     ON RETURN                                               
+      * 
+*        IF ID SEGMENT FOUND.                                       * 
+*           (B)=ADDRESS OF REQUESTED SEGMENT                        * 
+*           (E)=0                                                   * 
+*                             
+                                      * 
+*        IF ID SEGMENT NOT FOUND.                                   * 
+*           (A)=0                                                   * 
+*           (E)=1                                                   * 
+*                                                                   * 
+********************************************************************* 
+* 
+TNAME NOP           ENTRY EXIT
+      CCE           SET E FOR ERROR RETURN
+      STB TMP10     ADDRESS OF
+ NAME CHAR 1&2
+      INB           INCREMENT ADDRESS POINTER 
+      STB TMP11     ADDRESS OF NAME CHAR 3&4
+      INB           INCREMENT ADDRESS POINTER 
+      LDA B,I       FETCH CHAR 5&X
+      AND MASKU     (OCT 177400) AND OFF X
+      STA TMP5.   
+  SAVE CHARACTER 5
+      SZA 
+      LDA KEYWD     FETCH TOP OF KEYWORD LIST 
+      STA KEY       SET FOR SEARCH
+* 
+* 
+TN005 LDA KEY,I     CHECK TOP OF LIST 
+      SZA,RSS       IF END
+      JMP TNAME,I   ERROR RETURN
+      ADA .12       INCREMENT 
+TO NAME CHAR 1&2
+      LDB A,I       FETCH ASCII NAME CHAR 1&2 
+      CPB TMP10,I   COMPARE WITH REQUESTED CHAR 1&2 
+      INA,RSS       COMPARES
+      JMP TN030     DOES NOT COMPARE-GO TO NEXT PROG. 
+      LDB A,I       FETCH CHAR 3&4
+      CPB TMP1
+1,I   COMPARE WITH REQUESTED CHAR 3&4 
+      INA,RSS       COMPARES
+      JMP TN030     DOES NOT COMPARE-GO TO NEXT PROG
+      LDA A,I       FETCH CHAR 5
+      AND MASKU     MASK OFF EXTRA CHAR 
+      CPA TMP5.     COMPARE WITH REQUESTED CHAR 5 
+    
+  JMP TN040     COMPARES
+* 
+* 
+TN030 ISZ KEY       INCREMENT TO NEXT ID SEGMENT
+      JMP TN005     GO COMPARE NEXT PROGRAM 
+* 
+* 
+TN040 LDB KEY,I     PLACE ID SEGMENT ADDRESS IN B 
+      CLE           CLEAR E FOR NORMAL RETURN 
+      JMP TNAME,I 
+EXIT
+* 
+* 
+MASKU OCT 177400
+.12   DEC 12
+      HED MESSAGE PROCESSOR SIMULATOR ROUTINE  A-92000-60003-2 REV. B 
+*************************************************************** 
+*************************************************************** 
+*     
+THE MESSAGE PROCESSOR ROUTINE PROVIDES                  * 
+*     COMPATABILITY FOR THE POWER-FAIL DRIVER.                * 
+*     THEREFORE,$MESS CAN ONLY BE CALLED BY                   * 
+*     DVP43. THE CALL IS THEN MAPPED INTO A CALL              * 
+*     TO $LIST(TO ABORT AUTOR) .                              * 
+*                   PRIOR TO CALLING $LIST, A SEARCH OF ID.   * 
+*     SEGMENTS IS PERFORMED(VIA A CALL TO TNAME).             * 
+*                   IF AUTOR IS NOT FOUND,A 1 IS RETURNE
+D TO  * 
+*     DVP43 IN THE A-REGESTER. IF AUTOR IS FOUND, $LIST       * 
+*     IS CALLED AND AUTOR IS ABORTED.RETURN IS TO $XEQ.       * 
+*************************************************************** 
+************************************************
+*************** 
+$MESS NOP 
+      ADA .2        POSITION POINTER TO 
+      RRR 16        ASCII NAME(AUTOR) 
+      JSB TNAME     SEARCH ID SEGMENTS
+* 
+      SEZ,INA       AUTOR NOT FOUND 
+      JMP $MESS,I   RETURN TO P/F ROUTINE 
+* 
+      JSB $LIS
+T     ABORT AUTOR 
+      OCT 400       ID SEG ADDR. IN B 
+      JMP $XEQ      EXIT
+      HED SYSTEM START UP                   A-92000-60003-2 REV. B
+********************************************************************
+*        THE START SECTION:     
+                                   *
+*              CLEARS INTERRUPT SYSTEM.                            *
+*              SETS THE FENCE REGISTER TO 0.                       *
+*              CLEARS XEQT.                                        *
+*       
+       CONFIGURES AND STARTS THE SYSTEM CLOCK              *
+*              CALCULATES SYSTEM AVAILABLE MEMORY AND              *
+*              INITIALIZES THE MEMORY ALOCATION ROUTINE.           *
+*              CAN BE ENTERED ONLY ONCE FOR START UP. 
+             *
+*              AFTER THAT IT IS USED FOR TEMP STORAGE              *
+********************************************************************
+* 
+* 
+$STRT CLC 0         CLEAR INTERRUPT SYSTEM
+* 
+WPRIO CLA 
+      STA FENCE     SET FENCE TO
+ 0
+      OTA 5B
+WLINK STA XEQT      CLEAR XEQT WORD 
+WSUSP LDB KEYWD     FIND THE LAST ID SEGMENT
+WSTAT LDA B,I       IN KEYWORD TABLE BECAUSE
+WORK  INB           THE EXECUTBLE PROGRAM 
+ZWORK SZA           WILL ALWAYS BE IN THAT
+ZPRIO JMP WSTAT     
+POSITION. OR ELSE!
+TEMP  ADB N2
+TMP   LDA B,I       GOT THE LAST ID SEGMENT ADDRESS 
+COMPL STA BASA      SET UP START UP PROGRAM 
+TEMP1 STA SSP       SET UP SUSPEND PTR
+TEMP2 STA ABP       SET UP ABORT POTR 
+* 
+      SPC 1 
+TEMP3 LDA TBG       SET 
+UP TIME BASE
+TEMP4 IOR OTA 
+TEMP5 STA TEMPL 
+TMP5. STA OTATB 
+TEMP6 IOR M1100 
+TEMP9 STA TEMPW 
+KEY   STA STCTB 
+CONFL XOR STFTB 
+SCONF STA STFTB 
+TEMP0 LDA .2
+TEMPL OTA 0         SET TBG INTERVAL TO 10MS
+TEMPW STC 0,C 
+* 
+      LDB AVMEM     
+RELEASE AVAIL.
+      STB FWA.
+      CMB,INB       MEMORY FOR USE
+      ADB BKORG     BY $ALC 
+      STB RTN.
+      JSB $RTN
+FWA.  NOP 
+RTN.  NOP 
+      JMP $ALC      GO INITIALIZE MEMORY ALLOCATION ROUTINE 
+$WORK LDA BEGIN     RETURN FROM $ALC INI
+TIALIZATION 
+TMP10 JSB SYSMG     OUTPUT "SET TIME" MESSAGE 
+TMP11 JMP RSTRT 
+* 
+      SPC 1 
+* 
+BEGIN DEF *+1 
+N10   DEC -10 
+$PWR5 OCT 6412      DO NOT USE FOR TEMPORARY STORAGE
+      ASC 4,SET TIME
+* 
+      SPC 1 
+OTA   OTA 0 
+M1100 OCT 1100
+* 
+      HED ** CENTRAL INTERRUPT CONTROL **   A-92000-60003-2 REV. B
+* 
+* 
+ MODULE  OF THE  R E A L - T I M E  E X E C U T I V E 
+* 
+* 
+*  THIS INCLUDES THE FOLLOWING MAJOR SECTIONS:
+* 
+*    1)  CENTRAL  INTERRUPT  CONTROL
+* 
+*    2)  INPUT  /  OUTPUT  CONTROL
+*         - I/O REQUEST PROCESSING
+*         - I/O COMPLETION
+ PROCESSING 
+*         - GENERAL I/O ERROR PROCESSING
+* 
+*    3)  SYSTEM ERROR DIAGNOSTIC PRINT ROUITNE
+* 
+*    4)  PROCESSOR FOR OPERATOR I/O STATEMENTS
+* 
+      HED < CENTRAL  INTERRUPT  CONTROL >   A-92000-60003-2 REV. B
+* 
+*** C E N T R A L   
+I N T E R R U P T   C O N T R O L  ***
+* 
+*   THE PROCESSING OF SYSTEM INTERRUPTS IS CONTROLLED 
+*  BY DIRECTING ALL SOURCES TO THE ENTRY POINT < CIC >. 
+*  < CIC > IS RESPONSIBLE FOR SAVING AND RESTORING
+*  THE CURRENT STATE OF THE MACHINE, ANALYSING
+ THE
+*  SOURCE OF THE INTERRUPT, AND ACTIVATING THE
+*  APPROPRIATE PROCESSOR. THIS ROUTINE IS TABLE-DRIVEN
+*  BY THE *INTERRUPT TABLE*.
+* 
+*   SPECIAL PROCESSING FOR A "PRIVILEGED" CLASS OF
+*  INTERRUPTS IS PROVIDED BY CIC. THIS IS DESCRIBED 
+*  FUL
+LY IN SECTION III BELOW. BRIEFLY, A SPECIAL 
+*  I/O CARD CAN BE USED TO SEPARATE SPECIAL INTERRUPTS
+*  FROM NORMAL SYSTEM CONTROLLED INTERRUPTS. THE
+*  PRESENCE AND LOCATION OF THE SPECIAL CARD IS 
+*  NOTED AT SYSTEM CONFIGURATION TIME. IF IT IS 
+*  P
+RESENT, THE EXEC OPERATIONS ARE NOT PERFORMED 
+*  WITH THE INTERRUPT SYSTEM DISABLED BUT RATHER
+*  WITH THE CONTROL SET ON THE SPECIAL CARD TO
+*  HOLD OFF SYSTEM I/O INTERRUPTS.
+* 
+* I. INTERRUPT TABLE (INTBL)
+* 
+*     A TABLE, ORDERED BY HARDWARE I
+NTERRUPT PRIORITY,
+*    DESIGNATES THE ASSOCIATED SOFTWARE PROCESSOR AND 
+*    THE PROCEDURE FOR INITIATING THE PROCESSOR. THIS 
+*    TABLE IS CONSTRUCTED BY  *RTGEN* ON INFORMATION
+*    SUPPLIED BY THE USER IN CONFIGURING THE SYSTEM.
+*    THE TABLE C
+ONSISTS OF ONE ENTRY PER INTERRUPT
+*    SOURCE: EACH ENTRY CONTAINS ONLY ONE WORD. THE 
+*    CONTENTS OF EACH VALID ENTRY IS THE IDENTIFIER 
+*    OF THE PROCESSOR. SYSTEM PROCESSORS ARE NOTED
+*    BY POSITIVE VALUES, USER PROCESSORS BY NEGATIVE
+*    V
+ALUES:
+* 
+*      1. SYSTEM -  THE IDENTIFIER IS THE ADDRESS OF
+*            THE EQT ENTRY IDENTIFYING THE I/O DEVICE.
+* 
+*      2. USER   -  THE ADDRESS OF THE PROGRAM
+*            IDENTIFICATION SEGMENT IS IN 2-S COMPLEMENT
+*            FORM IN THE
+ ENTRY. 
+* 
+*      3. ILLEGAL  -  AN ENTRY CORRESPONDING TO AN
+*            ILLEGAL INTERRUPT SOURCE CONTAINS ZERO.
+* 
+*     A PROCESSOR IS CALLED DIRECTLY IF IT RESPONDS 
+*    TO STANDARD SYSTEM INTERRUPT (E.G., CLOCK, 
+*    MEMORY PROTECT, I/O DEV
+ICE CONTROLLED BY A 
+*    SYSTEM DRIVER) OR IS SCHEDULED IN THE NORMAL 
+*    PRIORITY ORDER IF IT RESPONDS TO A USER
+*    CONTROLLED DEVICE OR INTERRUPT SOURCE. 
+      SKP 
+* II.   INTERRUPT PROCESSING
+* 
+*     INTERRUPT ACKNOWLEDGEMENT BY THE CPU C
+AUSES 
+*    THE INSTRUCTION IN THE WORD CORRESPONDING
+*    TO THE I/O CHANNEL ADDRESS TO BE EXECUTED. 
+*    FOR ALL ACTIVE I/O CHANNELS ( PLUS LOCATIONS 
+*    5-7 ) CONTROLLED BY THE SYSTEM, THE INSTRUCTION
+*    SET IN EACH INTERRUPT LOCATION IS A JUM
+P 
+*    SUBROUTINE INDIRECTLY TO < CIC >.
+* 
+      SKP 
+*    <CIC> PERFORMS THE FOLLOWING:
+* 
+*       1. DISABLES THE INTERRUPT SYSTEM. 
+* 
+*       2. SAVES ALL REGISTERS PLUS THE INTERRUPT 
+*          RETURN POINT IN THE EXECUTING
+*          ID 
+SEGMENT.
+* 
+*       3. CLEARS THE FLAG OF THE INTERRUPT SOURCE. 
+* 
+* 
+*       6. TRANSFERS DIRECTLY TO THE INTERRUPT
+*          PROCESSOR FOR SOURCES OF:
+* 
+*          (TBG) - TIME BASE GENERATOR
+* 
+*          FOR OTHER SOURCES, THE INTERRUPT SO
+URCE
+*          CODE IS USED TO INDEX THE INTERRUPT TABLE. 
+*          THE CONTENTS OF THE INTBL ENTRY DETERMINES 
+*          THE MANNER IN INITIATING THE PROCESSOR:
+* 
+*         A. +, THE CONTENTS OF THE ENTRY IS
+*            ASSUMED TO BE THE FWA O
+F AN EQT ENTRY. 
+*            THE ADDRESSES OF THE 15-WORD ENTRY 
+*            ARE SET IN <EQT1 - EQT15> AND CONTROL
+*            TRANSFERRED DIRECTLY TO THE COMPLETION 
+*            SECTION ADDRESS (WORD 3 OF EQT ENTRY). 
+* 
+*          B. -, THE VAL
+UE IS SET POSITIVE AND IS 
+*            SET IN A CALL TO <LIST> IN THE 
+*            SCHEDULING MODULE- THE CALL IS MADE IF              B
+*            THE USER PROGRAM IS DORMANT- CONTROL IS
+*            TRANSFERRED TO $XEQ. IF THE PROGRAM IS 
+*     
+       NOT DORMANT, IT IS NOT SCHEDULED AND THE 
+*            DIAGNOSTIC "SC03 INT XXXXX" IS OUTPUT
+*            TO THE SYSTEM TTY- XXXXX IS THE PROGRAM
+*            NAME. CONTROL IS RETURNED TO THE INTER-
+*            RUPTED SEQUENCE. 
+* 
+*         
+ C. 0, ILLEGAL OR UNDEFINED INTERRUPTS ARE
+*               NOT PROCESSED BUT THE DIAGNOSTIC
+*               "ILL INT XX" IS OUTPUT TO THE SYSTEM
+*               TTY. XX IS THE INTERRUPT CODE.
+* 
+*       7. I/O DRIVER RETURNS INDICATE CONTINUATION 
+* 
+        OR COMPLETION OF THE OPERATION BY THE 
+*         DRIVER OR DEVICE: 
+* 
+*          A. RETURN AT (P+1): COMPLETION OF THE
+*                              OPERATION. CIC TRANS-
+*                              FERS DIRECTLY TO THE 
+*               
+               IOC COMPLETION SECTION 
+*                              AT  < IOCOM >. CONTROL 
+*                              IS NOT RETURNED TO 
+*                              < CIC >. 
+* 
+*          B. RETURN AT (P+2): CONTINUATION OF THE
+*         
+                     OPERATION. CIC RETURNS 
+*                              TO THE INTERRUPTED 
+*                              SEQUENCE AS DESCRIBED
+*                              IN STEP 8 FOLLOWING. 
+* 
+      SKP 
+CIC   NOP 
+* 
+CLF   CLF 0       
+ DISABLE  INTERRUPT SYSTEM
+* 
+* PRESERVE CURRENT STATUS OF MACHINE
+* 
+      DST XA,I      SAVE REGISTERS
+      ERA,ALS        A,B
+      SOC            E AND
+      INA            OVERFLOW 
+      STA XEO,I 
+      LIA 4        GET INTERRUPT SOURCE CO
+DE. 
+      IOR CLF      CONSTRUCT A  CLF XX  INSTRUCTION 
+      STA *+1       AND CLEAR INTERRUPT FLAG TO 
+*                                    ALLOW SPECIAL USER INTERRUPTS
+      NOP             TO BE ACKNOWLEDGED. 
+* 
+$XCIC LIA 4    ### SPECIAL ENT
+RY TO SKIP CLF ###
+      STA INTCD     SAVE INTERRUPT SOURCE CODE. 
+* 
+      LDB INTCD 
+      LDA CIC      SAVE P-REGISTER AS POSSIBLE
+      STA XSUSP,I    POINT OF SUSPENSION. 
+* 
+* CHECK FOR TRANSFER TO NON-I/O SYSTEM PROCESSOR
+* 
+      CPB TBG 
+     IF TIME BASE GENERATOR,
+      JMP $CLCK   PROCESS CLOCK INERRUPT
+* 
+* CHECK LEGALITY OF INTERRUPT 
+* 
+      LDA INTCD     INTERRUPT 
+      ADA N6        CODE - 6. 
+      STA B         (SAVE FOR TABLE INDEX)
+      SSA          - ERROR IF CODE
+      JMP CIC.4     LT 6, ISSUE DIAGNOSTIC. 
+      CMA          CHECK FOR BEYOND RANGE 
+      ADA INTLG     OF INTERRUPT TABLE
+      SSA          ERROR IF 
+      JMP CIC.4      NEGATIVE, ISSUE DIAG.
+* 
+* GET PROCESSOR IDENT FROM INTERRUPT TABLE
+* 
+      ADB INTBA    INDEX TO PROPER ENTRY BY SOURCE
+      LDA B,I       CODE. GET CONTENTS OF ENTRY 
+      SZA,RSS      UNDEFINED INTERRUPT
+      JMP CIC.4       IF VALUE = 0, ISSUE DIAG. 
+* 
+* 
+      LDB INTCD     REMOVE
+      CPB .6         BIT 15 
+OF INTBL WORD 
+      RSS            IF DMA 
+      CPB .7         CHANNEL
+      RAL,CLE,ERA    INTERRUPT. 
+* 
+      SSA,RSS      SYSTEM PROCESSOR IS TO BE CALLED 
+      JMP CIC.2     IF VALUE IS POSITIVE. 
+* 
+      SPC 1 
+* 
+* 
+* ASSUME PROCESSOR
+ FOR CODE GT= 6 IS A
+*  SYSTEM I/0 DRIVER. VALUE OF INTERRUPT
+*  TABLE ENTRY IS THE STARTING ADDRESS
+*  OF THE EQUIPMENT TABLE ENTRY CORRESPONDING 
+*  TO THE INTERRUPTING DEVICE.
+* 
+CIC.2 JSB SETEQ    SET EQT ENTRY ADDRESSES. 
+* 
+      LDA INTCD   
+   (A) = INTERRUPT SOURCE CODE
+* 
+CIC.6 LDB EQT14,I   SET DEVICE
+      STB EQT15,I    TIME-OUT CLOCK 
+* 
+* CALL I/O PROCESSOR, COMPLETION SECTION
+* 
+      LDB EQT3,I   CALL  DRIVER 
+      JSB B,I       *COMPLETION* SECTION. 
+* 
+      JMP IOCOM  (
+P+1): *COMPLETION RETURN* 
+* 
+      CLA        (P+2): *CONTINUATION RETURN* 
+      LDB OPATN    CHECK FOR OPERATOR ATTENTION.
+      STA OPATN     CLEAR OPERATOR FLAG 
+      SZB          IF FLAG SET, 
+      JMP $TYPE    ACKNOWLEDGE. 
+      JMP X0020 
+    RETURN TO INTERRUPTED SEQUENCE
+* 
+*  ILLEGAL OR UNDEFINED INTERRUPT 
+* 
+CIC.4 LDA INTCD    GET INTERRUPT CODE 
+      CLB 
+      RRR 3         CONVERT IT TO ASCII 
+      ALF,ALS 
+      RRL 3 
+      IOR FILL
+      STA CICM1+6 
+      LDA CICM1 
+   PRINT
+      JSB SYSMG     "ILL INT XX", 
+      JMP X0020    RETURN TO INTERRUPTED SEQUENCE.
+* 
+INTCD NOP       HOLDS INTERRUPT SOURCE CODE 
+      SKP 
+* 
+CICM1 DEF *+1 
+      DEC -10 
+      ASC 5,ILL INT XX
+FILL  OCT 30060     ASCII MASK
+    
+  HED < RT EXEC.INPUT/OUTPUT CONTROL >  A-92000-60003-2 REV. B
+***  I N P U T  /  O U T P U T  C O N T R O L  ***
+* 
+*  THE I/O SCHEDULING AND CONTROL MODULE  < IOC > 
+* IS RESPONSIBLE FOR ALLOCATING THE USE OF ALL
+* STANDARD I/O DEVICES AND THE TWO D
+MA CHANNELS.
+*  I/O DRIVERS OPERATE UNDER CONTROL OF <IOC> AND 
+* <CIC> FOR INITIATION AND COMPLETION OF SYSTEM 
+* AND USER DIRECTED I/O OPERATIONS. I/O DRIVERS 
+* ARE INDEPENDENT PROGRAMS IDENTIFIED TO <IOC>
+* BY THE DEVICE ASSOCIATED EQUIPMENT TABLE
+. DRIVERS 
+* ARE COMPOSED TO TWO SECTIONS: *INITIATION* AND
+* *COMPLETION*.  THE *INITIATION* SECTION IS
+* CALLED BY <IOC> TO EXAMINE AND INITIATE AN I/O
+* OPERATION. THE *COMPLETION* SECTION IS CALLED 
+* BY <CIC> TO CONTINUE OR COMPLETE THE OPERATION
+. 
+* DRIVERS PROVIDE FOR SIMULTANEOUS MULTI-DEVICE 
+* CONTROL BY USING THE DEVICE EQT ENTRY FOR 
+* VARIABLE STORAGE. 
+* 
+* I.   * EQUIPMENT TABLE * (EQT)
+* 
+*   EACH I/O DEVICE CONTROLLED BY THE IOC/DRIVER
+*  RELATIONSHIP IS DEFINED BY STATIC AND D
+YNAMIC
+*  INFORMATION IN THE EQUIPMENT TABLE. THE EQT
+*  IS A SYSTEM RESIDENT TABLE WHICH IS CONSTRUCTED
+*  FROM USER DIRECTIVES BY <RTGEN>.  EACH EQT 
+*  ENTRY IS COMPOSED OF 15-WORDS IN THE FOLLOWING FORMAT: 
+* 
+      SKP 
+* 
+*  WORD            C
+ONTENTS 
+*  ----  ------------------)--------- 
+*    1   * I/O LIST . LINK POINTER  * 
+*    2   *DRIVER *INITIATION ADDRESS* 
+*    3   *DRIVER *COMPLETION ADDRESS* 
+*    4   *DB//T/////UNIT#--CHANNEL #* 
+*    5   *AV-TYPE CODE- UNIT  STATUS* 
+*    6
+   *REQUEST   CONTROL    WORD * 
+*    7   *REQUEST  BUFFER   ADDRESS * 
+*    8   *REQUEST  BUFFER   LENGTH  * 
+*    9   *TEMPORARY OR DISC TRACK # * 
+*   10   *TEMPORARY OR DISC SECTOR #* 
+*   11   *DRIVER   TEMPORARY STORAGE* 
+*   12   *  "         
+ "        "   * 
+*   13   *  "          "        "   * 
+*   14   * DEVICE CLOCK RESET VALUE * 
+*   15   *   "      "  WORKING  "   * 
+* 
+*  D: =1 IF A DMA CHANNEL REQUIRED FOR TRANSFER 
+*  B: =1 IF AUTOMATIC OUPUT BUFFERING DESIRED 
+*  T: DEVICE TIM
+E-OUT BIT - CLEARED BEFORE EACH 
+*              IO INITIATION; SET IF DEVICE TIMES-OUT.
+*  UNIT#: OPTIONAL FOR DEVICES REQUIRING
+*          SUB-CHANNEL DESIGNATION
+*  CHANNEL#: I/O SELECT CODE (LOWER # IF
+*             MULTI-BOARD INTERFACE)
+*  AV (A
+VAILABILITY INDICATOR): 
+*     =0, UNIT AVAILABLE FOR OPERATION
+*     =1, UNIT DISABLED 
+*     =2, UNIT CURRENTLY IN OPERATION 
+*     =3, UNIT WAITING FOR DMA CHANNEL
+*  TYPE CODE: CODE IDENTIFYING TYPE OF I/O DEVICE 
+*  UNIT STATUS: ACTUAL OR SIMULA
+TED UNIT STATUS 
+*              AT END OF OPERATION
+* 
+* II. * DEVICE REFERENCE TABLE * (DRT)
+* 
+*  THE DEVICE REFERENCE TABLE PROVIDES FOR
+* LOGICAL ADDRESSING OF PHYSICAL UNITS DEFINED
+* IN THE EQUIPMENT TABLE. THE *DRT* CONSISTS
+* OF 1-WORD ENTR
+IES CORRESPONDING TO THE RANGE
+* OF USER-SPECIFIED "LOGICAL" UNITS, 1 TO N 
+* WHERE N IS LT OR = TO 63(10). THE CONTENTS OF 
+* THE WORD CORRESPONDING TO A LOGICAL UNIT IS 
+* THE RELATIVE POSITION OF THE  EQT ENTRY 
+* DEFINING THE ASSIGNED PHYSICAL UNI
+T,IN
+* BITS 5 - 0, AND THE SUBCHANNEL OF THE 
+* EQT ENTRY TO BE REFERENCED BY THIS
+* LOGICAL UNIT NUMBER, IN BITS 13 - 11. 
+* 
+*  CERTAIN LOGICAL UNIT #S ARE PERMANENTLY
+* ASSIGNED TO FACILITATE SYSTEM, USER AND 
+* SYSTEM SUPPORT I/O OPERATIONS. THE
+SE ARE: 
+      SKP 
+*     1  -   SYSTEM  TELETYPEWRITER 
+*     2  -   SYSTEM  DISC 
+*     3  -   AUXILIARY DISC 
+*     4  -   'STANDARD' PUNCH UNIT
+*     5  -   'STANDARD' INPUT UNIT
+*     6  -   'STANDARD' LIST  UNIT
+*     7  - ASSIGNED 
+*     . 
+    BY
+*     .      USER 
+*     63 -
+* 
+* III.  INPUT/OUTPUT REQUESTS 
+* 
+*    I/O REQUESTS INCLUDE COMMANDS FOR
+*   READ, WRITE, CONTROL(FUNCTIONS) AND STATUS. 
+*   THE FORMAT OF THESE REQUESTS CONFORM TO 
+*   THE GENERAL SYSTEM REQUEST FORMAT. T
+HE
+*   NUMBER OF PARAMETERS VARIES DEPENDING 
+*   ON THE TYPE OF REQUEST AND THE CHARAC-
+*   TERISTICS OF THE REFERENCED DEVICE. 
+* 
+*    A USER I/O REQUEST IS DIRECTED TO <IOC>
+*   AT -IOREQ- BY THE EXECUTIVE REQUEST 
+*   PROCESSOR <RTRQP>. SYSTEM 
+I/O REQUESTS
+*   ARE IN A DIFFERENT FORMAT AND ARE PROCESSED 
+*   AT THE SECTION -XSIO- IN <IOC>. REFER TO
+*   THAT SECTION FOR DETAILED DESCRIPTION.
+* 
+*    A *STATUS* REQUEST IS PROVIDED 
+*   FOR USER AND SYSTEM SUPPORT PROGRAMS
+*   WHICH REQUIRE 
+KNOWLEDGE OF DEVICE 
+*   CONDITIONS OR TYPE BEFORE A READ/WRITE/ 
+*   CONTROL REQUEST IS MADE. THE PROGRAM
+*   IS NOT SUSPENDED ON THIS CALL.
+*   A PARAMETER WORD IS INCLUDED IN THE 
+*   REQUEST TO CONTAIN THE DEVICE STATUS ON 
+*   RETURN TO THE USER
+. THIS STATUS IS FROM WORD
+*   5 OF THE EQT ENTRY FOR THE DEVICE.
+*   ALSO, AN ADDITIONAL PARAMETER WORD CAN BE 
+*   INCLUDED IN THE REQUEST- WORD 4 OF THE
+*   EQT ENTRY IS RETURNED IF THE ADDITIONAL 
+*   PARAMETER WORD IS INCLUDED. 
+* 
+*    A DYNAM
+IC STATUS REQUEST CAN BE MADE BY
+*   MEANS OF A CONTROL REQUEST, THE FORMAT
+*   OF WHICH IS DEFINED BELOW.  IN THIS CASE, 
+*   THE REQUEST IS QUEUED, THE DRIVER IS ENTERED, 
+*   AND THE STATUS IS RETURNED TO THE CALLING 
+*   PROGRAM IN THE A REGISTER.
+* 
+      SKP 
+* 
+*  A.   READ/WRITE REQUEST FORMAT 
+* 
+*         EXT  EXEC 
+*         JSB  EXEC 
+*         DEF  EXIT     (DEFINE EXIT POINT) 
+*         DEF  RCODE    (DEFINE READ (1) OR WRITE(2)) 
+*         DEF  CONWD    (DEFINE CONTROL WORD) 
+*         DEF  BUFFR    (DEFINE BUFFER LOCATION)
+*         DEF  BUFFL    (DEFINE BUFFER LENGTH)
+*         DEF  DTRAK   (OPTIONAL - DISC TRACK #)
+*         DEF  DSECT   (OPTIONAL - DISC SECTOR #) 
+*    EXIT --- 
+*          .
+*          .
+*   RCODE DE
+C  1 OR 2 
+*   CONWD OCT  NNNNN   CONTROL INFO/LOGICAL UNIT #
+*   BUFFL DEC  N OR -N  WORD OR CHARACTER LENGTH
+*   DTRAK DEC  N       DISC TRACK # 
+*   DSECT DEC  N       STARTING SECTOR #
+* 
+* 
+*  B.   CONTROL   REQUEST FORMAT
+* 
+*         EXT  E
+XEC 
+*         JSB  EXEC 
+*         DEF  EXIT     (DEFINE EXIT POINT) 
+*         DEF  RCODE    (DEFINE REQUEST CODE) 
+*         DEF  CONWD    (DEFINE CONTROL WORD) 
+*         DEF  PARAM    (DEFINE OPTIONAL PARAMETER) 
+*    EXIT --- 
+*          .
+* 
+         .
+*   RCODE DEC  3
+*   CONWD OCT  NNNNN   CONTROL CODE/LOGICAL UNIT #
+*   PARAM DEC  N      PARAMETER REQUIRED BY TYPE OF CODE
+* 
+*    CONTROL CODES (FIELD 10-06 OF CONTROL WORD): 
+* 
+*      01 -   WRITE END-OF-FILE    --/  PRIMARILY 
+*   
+   02 -   BACKSPACE 1 RECORD     /    FOR 
+*      03 -   FORWARD SPACE 1 RECORD /  MAGNETIC
+*      04 -   REWIND                 /    TAPE
+*      05 -   REWIND STANDBY         /    UNITS 
+*      06 -   DYNAMIC STATUS       --/
+*      07 -   SET EOT ST
+ATUS (FOR PAPER TAPE INPUT) 
+*      10 -   GENERATE LEADER FOR PAPER TAPE
+*      11 -   LIST OUTPUT LINE SPACING
+      SKP 
+* 
+*  C.  DEVICE   STATUS  REQUEST FORMAT
+* 
+*         EXT  EXEC 
+*         JSB  EXEC 
+*         DEF  EXIT     (DEFINE EXIT
+ POINT) 
+*         DEF  RCODE    (DEFINE REQUEST CODE) 
+*         DEF  CONWD    (DEFINE CONTROL WORD) 
+*         DEF  STAT1    (DEFINE STATUS WORD 1)
+*         DEF  STAT2    (DEFINE STATUS WORD 2  -- OPTIONAL) 
+*    EXIT --- 
+*          .
+*         
+ .
+*   RCODE DEC  13      STATUS REQUEST CODE = 13 
+*   CONWD OCT  NN      LOGICAL UNIT # 
+*   STAT1 NOP         WORD 5 OF EQT ENTRY FOR 
+*                      DEVICE STORED IN THIS WORD.
+*   STAT2 NOP         WORD 4 OF EQT ENTRY FOR 
+*             
+        DEVICE STORED IN THIS WORD
+*                     IF PRESENT IN REQUEST.
+* 
+* 
+* IV. GENERAL OPERATION 
+* 
+*    ALL INPUT/OUTPUT OPERATIONS ARE PERFORMED
+*   CONCURRENTLY WITH PROGRAM COMPUTATION IN THE
+*    OVERALL SYSTEM. AN I/O OPERATION 
+IS CONSIDERED 
+*    TO BE NON-BUFFERED TO THE REQUESTING USER
+*   PROGRAM AS THE PROGRAM IS SUSPENDED UNTIL 
+*   THE TRANSMISSION OR OPERATION IS COMPLETED. 
+*   THE EXCEPTION TO THIS IS IN PROVIDING FOR 
+*   AUTOMATIC BUFFERING OF OUTPUT TO USER-
+* 
+  DESIGNATED DEVICES. IN THIS CASE, THE USER
+*   BUFFER IS MOVED TO SYSTEM AVAILABLE MEMORY
+*   AND THE USER PROGRAM IS NOT SUSPENDED.
+      SKP 
+IOREQ CLA          SET CONTROL FLAG = 0 TO MEAN 
+      STA CONFL     *REQUEST* SECTION ENTERED 
+* 
+    
+  LDA RQCNT    INSURE 
+      ADA N1        THAT AT LEAST 1 
+      SSA            PARAMETER WAS SUPPLIED.
+      JMP ERR01     - NO, ISSUE DIAGNOSTIC. 
+* 
+* LOGICAL UNIT REFERENCE VALIDITY CHECK 
+* 
+      LDA RQP2,I   EXTRACT LOGICAL UNIT # FROM
+    
+  AND MASK1     PARAMETER 1 
+      STA B         (SAVE #)
+      CMA,INA,SZA,RSS CHECK FOR ZERO AND
+      JMP ERR02        FOR A
+      ADA LUMAX     VALUE GT THE LARGEST
+      SSA            DEFINED #. 
+      JMP ERR02     - ERROR, EXCEEDS RANGE. 
+* 
+      ADB N1       INDEX TO 
+      ADB DRT       DEVICE-REFERENCE-TABLE
+      LDA B,I      GET EQT ASSIGNMENT.
+      AND MASK2     MASK OUT SUBCHANNEL 
+      SZA,RSS       -ERROR
+      JMP ERR03      IF NOT ASSIGNED. 
+      JSB CVEQT    CONVERT TO 
+ABSOLUTE EQT ADDRESSES
+* 
+* REQUEST CODE ANALYSIS 
+* 
+      LDB RQP1     GET REQUEST CODE (PARAMETER 1).
+      CPB .3       IF REQUEST IS <CONTROL>, 
+      JMP L.02      SKIP FURTHER ANALYSIS.
+* 
+      CPB .13      TRANSFER IF
+      JMP L.15      
+* STATUS * REQUEST. 
+* 
+      LDA RQCNT    CHECK # OF 
+      ADA  N3       PARAMETERS SUPPLIED 
+      SSA            FOR READ OR WRITE. 
+      JMP  ERR01    -ERROR, LT 3. 
+* 
+* BUFFER LEGALITY CHECK FOR INPUT.
+* 
+      LDA RQP4,I    GET THE LENGTH
+      CLE,SSA,RSS    CONVERT TO 
+      JMP *+3         WORDS IF
+      ARS              CHARACTERS 
+      CMA,INA           SET POSITIVE AND
+      STA TEMP2          SAVE.
+      SPC 1 
+      CPB .2       IF WRITE REQUEST,
+      JMP L.02      SKIP B
+UFFER CHECK.
+      SPC 1 
+      LDA RQP3      GET THE BUFFER ADDRESS
+      CMA            AND CHECK TO SEE IF
+      ADA RTORG       BELOW THE PROGRAMS
+      CLE,SSA,RSS     AREA. ERROR IF ATTEMPT TO READ
+      JMP ERR04      INTO SYSTEM AREA.
+* 
+  
+    LDB TEMP2     CHECK TO SEE IF EXCEEDING 
+      ADB RQP3       LWA MEMORY.
+      SEZ          ERROR IF NEGATIVE WRAP-AROUND
+      JMP ERR04     WITH OVERFLOW.
+      CMB,INB       -IF WRAP-AROUND 
+      ADB BKLWA      ERROR, 
+      SSB,INB,SZB    I
+SSUE
+      JMP ERR04      ERROR 4 DIAGNOSTIC 
+* 
+      SPC 1 
+* 
+* 
+* CHECK FOR AUTOMATIC BUFFERING REQUIREMENT 
+* 
+L.02  LDB RQP1     SKIP CHECK 
+      CPB .1        IF REQUEST
+      JMP L.10       IS INPUT.
+      LDA EQT4,I   CHECK THE UNIT DE
+SCRIPTOR
+      RAL           WORD IN ITS EQT ENTRY,BIT 14, 
+      SSA            FOR BUFFERING
+      JMP $L.16      YES,AUTOMATIC BUFFERING
+      SKP 
+* 
+* REQUEST IS A NORMAL WRITE, CONTROL OR READ. 
+*  THE PARAMETERS OF THE REQUEST ARE MOVED
+*  I
+NTO THE ID SEGMENT OF THE REQUESTING
+*  PROGRAM. THE ID SEGMENT IS THEN LINKED 
+*  INTO THE I/O LIST FOR THE REFERENCED DEVICE. 
+*  THE -SCHEDULER- IS THEN CALLED TO REMOVE 
+*  THE PROGRAM FROM THE SCHEDULED LIST AND TO 
+*  CHANGE THE PROGRAM STATUS T
+O I/O SUSPENSION. 
+* 
+L.10  JSB WORD2     ASSEMBLE CONTROL WORD 
+      STA XTEMP,I    SAVE IN TEMPORARY #1.
+      LDB RQP1     (B) = REQUEST CODE.
+      LDA RQP3     SET BUFFER ADDRESS 
+      CPB .3        OR CONTROL
+      LDA RQP3,I    PARAMETER 
+      STA XTEMP+1,I  WORD,
+      LDA RQP4,I     BUFFER 
+      STA XTEMP+2,I   LENGTH AND
+      LDA RQP5,I     ADDITIONAL PARAMETERS IF 
+      STA XTEMP+3,I   PROVIDED, 
+      LDA RQP6,I       E.G., DISC 
+      STA XTEMP+4,I     TRACK/SECTOR ADDRESSES
+. 
+* 
+      LDA XPRIO,I   SET PRIORITY OF REQUESTING
+      STA TEMP2      PROGRAM IN TEMP2.
+      LDA XLINK     SET ADDRESS OF LINK WORD
+      STA TEMP1      IN TEMP1.
+      STA L.11
+* 
+      JSB $LIST    CALL SCHEDULER TO SUSPEND
+      OCT 102 
+L.11  NOP           - ADDRESS OF ID SEGMENT.
+* 
+* CALL -LINK- TO PERFORM THE LINKING OF THE NEW 
+*             BLOCK INTO THE DEVICE QUEUE OF
+*             WAITING OPERATIONS. 
+* 
+L.13  JSB LINK. 
+* 
+      SZA,RSS       IF QUE WAS EMPTY CALL DRIVR.
+* 
+* EMPTY LIST, CALL TO INITIATE CURRENT REQUEST. 
+* 
+      JSB DRIVR 
+      JMP L.14      - OPERATION INITIATED - 
+      LDA RQRTN 
+      STA XSUSP,I 
+      JMP NOTRD 
+* 
+L.14  LDA RQRTN    SET REQUEST -EXIT- ADDRESS 
+      STA XSUSP,I   AS P
+OINT OF SUSPENSION. 
+      JMP $XEQ   TRANSFER TO EXECUTE SECTION
+* 
+*  STATUS REQUEST SECTION 
+* 
+L.15  LDA RQCNT     INSURE THAT AT LEAST 2
+      ADA N2         PARAMETERS PROVIDED - ONE
+      SSA            TO STORE STATUS WORD.
+      JMP ERR01 
+    -NO, ERROR '01'.
+* 
+      LDB EQT5,I    STORE WORD 5 OF EQT ENTRY IN
+      STB RQP3,I     'STAT1'
+      LDB EQT4,I    STORE WORD 4 OF EQT ENTRY IN
+      CPA .1         'STAT2' IF PARAMETER 3 IS
+      STB RQP4,I      PRESENT.
+* 
+* 
+      JMP L.
+14     GO TO RETURN TO XEQ. 
+* 
+* 
+.1    OCT 1 
+      SKP 
+* 
+* AUTOMATIC BUFFERING SECTION 
+* 
+* 
+$L.16 CLA 
+      CPB .3       IF REQUEST IS FOR -CONTROL-, 
+      JMP L.03      SKIP BUFFER SIZE CHECK. 
+      LDA $TMP2     GET THE XFER LENGTH 
+      CMA,INA        SET NEG AND
+      STA $TMP3     -SET AS MOVE INDEX
+      CMA,INA      (SET POSITIVE) 
+L.03  ADA .5       ADD 5 FOR BLOCK CONTROL WORDS. 
+      STA L.04     SET TOTAL LENGTH FOR ALLOCATION. 
+      ADA .2       CHECK FOR BUFFER 
+      CMA,INA       SIZE TO BE GREATER
+      LDB AVMEM     THAN MAXIMUM
+      CMB,INB       AMOUNT
+      ADB BKORG     OF SYSTEM 
+      ADA B         AVAILABLE MEMORY. 
+      SSA          IF YES, THEN ABORT 
+      JMP $ER04     PROGRAM 
+* 
+* ALLOCA
+TE BLOCK IN TEMPORARY STORAGE 
+* 
+      JSB $ALC     CALL AT SYSTEM ENTRY POINT 
+L.04  NOP           - REQUESTED LENGTH OF BLOCK - 
+* 
+      JMP L.10      NO MEMORY EVER, GO TRY NON-BUFFEREDFERED
+      RSS           NO MEMORY NOW-GO SUSPEND
+      JM
+P L.06      BLOCK AVAILABLE, (A) CONTAINS STARTING ADDR.
+* 
+* NO MEMORY AVAILABLE FOR BLOCK - CALLING USER
+*  PROGRAM IS TO BE LINKED INTO MEMORY SUSPENSION 
+*  LIST AND RE-SCHEDULED AT POINT OF REQUEST
+*  WHEN A PREVIOUSLY ALLOCATED BLOCK IS RELEASED
+. 
+* 
+      LDA XEQT     SET PROGRAM ID SEGMENT ADDRESS 
+      STA L.05      IN CALL TO LINK 
+      JSB $LIST    CALL TO LINK PROGRAM INTO
+      OCT 104     MEMORY SUSPEND
+L.05  NOP 
+      JMP $XEQ
+      SKP 
+*  SET REQUEST PARAMETERS, PROGRAM PRI
+ORITY AND 
+*   USER BUFFER INTO TEMPORARY BLOCK. 
+* 
+L.06  STB L.05     SET ACTUAL BLOCK LENGTH. 
+      STA $TMP1    SAVE 
+      STA B         LOCATION
+      INB 
+      STB $TMPW      SAVE ADDRESS 
+      JSB $WRD2     ASSEMBLE CONTROL WORD 
+      
+IOR MASK5    SET <T> = 1 FOR BUFFERING. 
+      LDB $TMPW 
+      STA B,I       AND SET IN WORD 2 OF BLOCK. 
+      INB 
+      LDA XPRIO,I  SET REQUESTING PROGRAM PRIORITY
+      STA B,I       IN WORD 3.
+      STA $TMP2    SAVE PRIORITY FOR LINKING
+    
+  INB 
+      LDA L.05     SET BLOCK LENGTH IN
+      STA B,I       WORD 4. 
+      INB 
+      LDA .3       IF REQUEST 
+      CPA RQP1      IS -CONTROL-, SKIP
+      JMP  L.08     BUFFER MOVE 
+      LDA RQP4,I   SET USER BUFFER LENGTH 
+      STA B,I   
+    IN WORD 5.
+      SZA,RSS      IF LENGTH = 0, 
+      JMP $L.13     SKIP BUFFER MOVE
+* 
+* MOVE USER BUFFER TO TEMPORARY BLOCK.
+* 
+      INB 
+      LDA RQP3     SET USER BUFFER
+      STA $TMP4     ADDRESS FOR MOVE
+L.07  LDA $TMP4    PERFORM
+    
+  LDA A,I 
+      STA B,I       BUFFER MOVE 
+      ISZ $TMP4     ((B) = BLOCK ADDRESS
+      INB            (TEMP4) = BUFFER ADDRESS,
+      ISZ $TMP3      (TEMP3) = BUFFER LENGTH INDEX) 
+      JMP  L.07 
+      JMP $L.13    GOTO EXIT SECjION
+* 
+L.08  
+LDA  RQP3,I  FOR CONTROL REQUEST, SET WORD 3
+      STA  B,I      (PARAM) IN PLACE OF RECORD
+      JMP $L.13      LENGTH 
+      SKP 
+* 
+* 
+* RELEASE AUTOMATIC BUFFERING BLOCK 
+* 
+$L.56 LDA $TMP3     BY PASS RELEASE OF
+      SZA            BUFFER IF
+ MALFUNCTION
+      JMP $IOER      OCCURED
+      ADB .2        GET TOTAL 
+      LDB B,I        BLOCK LENGTH AND 
+      STB L.50+1      SET IN RELEASE CALL.
+      LDB EQT1,I    SET ADDRESS OF BLOCK
+      STB L.50       IN CALL. 
+      LDA B,I       SE
+T LINK TO NEXT STACKED
+      STA EQT1,I     REQUEST IN EQT ENTRY - WORD 1. 
+* 
+      JSB $RTN     RELEASE BLOCK TO AVAILABLE MEM.
+L.50  NOP            - BLOCK ADDRESS -
+      NOP            - BLOCK LENGTH - 
+      JMP $L.55 
+* RELEASE BUFFER BLOCK D
+UE TO ILLEGAL REQUEST ERROR 
+* 
+$R06  ADB .2       BUFFERED BLOCK 
+      LDB B,I      GET TOTAL BLOCK LENGTH.
+      STB R01+1    SET IN RELEASE CALL. 
+      LDA EQT1,I   SET FWA OF BLOCK 
+      STA R01       IN RELEASE CALL.
+      JSB $RTN     RELEA
+SE BLOCK. 
+R01   NOP           - FWA - 
+      NOP           - # WORDS - 
+      JMP $RXIT 
+* 
+MASK5 OCT 40000 
+      SKP 
+* 
+*  ASSEMBLE CONTROL WORD
+* 
+WORD2 NOP 
+      LDA RQP2,I    COMBINE REQUEST CODE WITH 
+      AND MASK3      CONTROL INFOR
+MATION
+      IOR RQP1       IN PARAMETER TWO AND 
+      STA B          TEMPORARILY STORE IT-
+      LDA RQP2,I    EXTRACT LOGICAL UNIT #
+      AND MASK1      FROM PARAMETER TWO 
+      ADA N1        INDEX TO ENTRY IN 
+      ADA DRT        DEVICE REFERE
+NCE TABLE 
+      LDA A,I       GET SUBCHANNEL
+      AND MASK9      ASSIGNMENT AND COMBINE 
+      IOR B          IT WITH CONTROL WORD 
+      JMP WORD2,I    EXIT - 
+      SPC 1 
+      SPC 1 
+MASK3 OCT 3700
+.13   DEC 13
+N3    DEC -3
+      SKP 
+*  SUBROUTINE:  -LINK-
+* 
+* PURPOSE: THIS ROUTINE PROVIDES FOR ADDING 
+*         AN I/O REQUEST INTO THE SUSPENDED 
+*         LIST (QUEUE) CORRESPONDING TO THE 
+*         REFERENCED DEVICE. THE PROCEDURE
+*         OF ADDING AN ENTRY INTO 
+THE LIST
+*         INVOLVES ONLY THE ALTERATION OF 
+*         THE LINKAGE VALUE IN THE NEW ENTRY
+*         AND IN THE ENTRY PRECEDING THE
+*         NEW ONE IN THE PRIORITY CHAIN.
+*         THE NEW ENTRY IS LINKED ACCORDING 
+*         TO ITS PRIORITY 
+AND ON A FIFO 
+*         BASIS WITHIN THE SAME PRIORITY
+*         LEVEL. THE END OF A LIST IS MARKED
+*         BY A LINKAGE VALUE OF ZERO. THE 
+*         FIRST ENTRY IN A LIST IS SKIPPED
+*         BECAUSE IT IS ASSUMED TO BE THE 
+*         REQUESTOR 
+FOR THE CURRENT I/O 
+*         OPERATION. IF THE LIST IS EMPTY,
+*         THE LINK WORD IN THE EQT ENTRY
+*         IS SET TO POINT TO THE NEW ENTRY
+*         AND AN INDICATION IS GIVEN TO 
+*         THE CALLER OF -LINK- THAT THE 
+*         NEW REQUES
+T MAY BE INITIATED. 
+* 
+* CALL:   THE FOLLOWING LOCATIONS MUST BE 
+*          SET TO THE INDICATED VALUES
+*          BEFORE THE CALL IS MADE: 
+* 
+*          TEMP1 = LOCATION OF NEW REQUEST
+*                  TO BE LINKED INTO THE
+*                 
+ I/O LIST DEFINED BY THE
+*                  CURRENT EQT ENTRY. THE 
+*                  ADDRESS OF THE LINKAGE 
+*                  WORD IN THE EQT ENTRY
+*                  IS IN -EQT1-.
+* 
+*          TEMP2 = PRIORITY OF THE NEW
+*                  REQ
+UEST. 
+* 
+* 
+*         -  JSB  LINK
+*         -  (RETURN)  (A) = 0 IF THE NEW 
+*                 REQUEST IS THE ONLY ENTRY 
+*                 IN THE I/O LIST, I.E. THE 
+*                 DRIVER MAY BE CALLED TO 
+*                 INITIATE THE NEW O
+PERATION. 
+* 
+*            THERE ARE NO ERROR CONDITIONS
+*             DETECTED OR DIAGNOSED BY THIS 
+*             ROUTINE.
+* 
+* 
+      SKP 
+LINK. NOP 
+      LDB EQT1,I   IF THE I/O LIST IS NULL, 
+      SZB,RSS       EQT LIST POINTER = 0, 
+    
+  JMP LINK4      SKIP TO ADD NEW REQUEST. 
+* 
+* FIRST ENTRY IN LIST IS SKIPPED BECAUSE IT 
+*  IS THE CALLER FOR THE CURRENT OPERATION
+*  ACTIVE ON THE I/O DEVICE.
+* 
+      JMP LINK7     GO START THE SCAN 
+* 
+LINK1 STB TEMP3    TEMP3 = ADDRESS OF CU
+RRENT ENTRY.
+      INB          EXAMINE THE
+      LDA B,I       TYPE FIELD IN WORD 2 OF BLOCK 
+      INB           TO DETERMINE LOCATION 
+      RAL,SLA        OF PRIORITY. 
+      JMP LINK5     IF SYS REQ, SET PR=0
+      SSA,RSS      IF NORMAL USER RE
+QUEST, PRIORITY 
+      ADB .4        IS IN WORD 7 OF ID SEGMENT. 
+      LDA B,I      GET PRIORITY OF CURRENT ENTRY. 
+LINK2 LDB TEMP3 
+      CMA,INA      SUBTRACT CURRENT PRIORITY FROM 
+      ADA TEMP2     PRIORITY OF NEW REQUEST.
+      SSA          I
+F CURRENT IS LOWER PRIORITY 
+      JMP LINK3     (HIGHER #), GO TO LINK NEW. 
+LINK7 STB TEMP5     SAVE PREVIOUS ENTRY POINTER 
+      LDB B,I        GET NEXT ENTRY 
+      SZB          IF END-OF-LIST, SKIP.
+      JMP LINK1    -CONTINUE SCAN.
+* 
+* PROP
+ER POSITION (BY PRIORITY) IS FOUND IN LIST, 
+*  OR ELSE THE SCAN OF THE LIST IS FINISHED AND 
+*  THE NEW REQUEST IS ADDED AS THE LAST ENTRY.
+* 
+LINK3 LDA TEMP1    SET ADDRESS OF NEW ENTRY IN
+      STA TEMP5,I   LINKAGE VALUE OF PREVIOUS ENTRY.
+LINK6 
+STB TEMP1,I  SET ADDRESS OF NEXT OR 0 IF LAST 
+      JMP LINK.,I   IN NEW - EXIT TO CALLER 
+* 
+* NULL LIST- REQUEST IS MADE FIRST IN LIST AND FLAG FOR SET FOR CALLER. 
+* 
+LINK4 LDA TEMP1    SET ADDRESS OF NEW IN LIST POINT-
+      STA EQT1,I    ER IN 
+EQT ENTRY.
+      CLA          SET NEXT LINK ADDR. IN NEW = 0.
+      JMP LINK6     GO FINISH LINK AND EXIT 
+      SPC 1 
+* A SYSTEM REQUEST HAS BEEN FOUND IN THE QUE
+* 
+LINK5 CLA          SYSTEM REQUEST, SET
+      JMP LINK2     PRIORITY=0, LINK OLD R
+EQUEST
+      SKP 
+      SKP 
+* SUBROUTINE:  -DRIVR-
+* 
+*  PURPOSE: THIS ROUTINE PROVIDES A CENTRAL POINT 
+*            FOR CALLING AN I/O DRIVER TO INITIATE
+*            A NEW OPERATION. THIS ROUTINE, BEFORE
+*            CALLING A DRIVER, SETS THE 
+REQUEST 
+*            PARAMETERS INTO THE APPROPRIATE WORDS
+*            IN THE EQT ENTRY CORRESPONDING TO THE
+*            REFERENCED DEVICE AND ASSIGNS A DMA
+*            CHANNEL IF REQUIRED. 
+*            IT ALSO SETS THE DEVICE TIME-OUT CLOCK.
+* 
+*  REQUIREMENTS: THE ADDRESSES OF THE EQUIPMENT 
+*            TABLE ENTRY (15 WORDS) MUST BE SET 
+*            IN EQT1 TO EQT15 BEFORE THE ROUTINE
+*            IS CALLED. 
+* 
+*  CALLING SEQUENCE:   - PARAMETER SET UP AS ABOVE- 
+*                   
+   - (REGISTERS  MEANINGLESS) - 
+* 
+*                   (R)   JSB DRIVR 
+*                   (P+1) -OPERATION INITIATED OR STACKED 
+*                   (P+2) -OPERATION REJECTED OR COMPLETED- 
+* 
+*  ERRORS/DIAGNOSTICS: A DRIVER IS CALLED ONLY
+*     
+                 IF THE UNIT IS AVAILABLE 
+*                      AND NOT BUSY; OTHERWISE, 
+*                      RETURN IS MADE TO THE
+*                      CALLER.  IF THE DRIVER 
+*                      FINDS THE UNIT UNAVAILABLE 
+*               
+       OR THE REQUEST ILLEGAL FOR 
+*                      THE UNIT, THE INDICATION IS
+*                      RETURNED TO THE CALLER FOR 
+*                      FURTHER ACTION.
+* 
+DRIVR NOP 
+      LDA EQT5,I   CHECK AVAILABILITY 
+      RAL,RAL       
+OF
+      AND .3         DEVICE.
+      STA TEMP6    SAVE AVAILABILITY STATUS.
+      CPA .1       IF DOWN OR NOT READY 
+      JMP DRIVR,I   EXIT IMMEDIATELY. 
+      CPA .2       IF CURRENTLY BUSY, 
+      JMP DRIVR,I   ALSO EXIT.
+* 
+* DEVICE IS AVAILA
+BLE - CHECK FOR DMA REQUIREMENT 
+* 
+      CPA .3         IF IN DMA QUE
+      JMP DVR00       GO ATTEMPT ASSIGNMENT 
+      LDA EQT4,I   SKIP DMA CHANNEL ASSIGNMENT IF 
+      SSA,RSS       NOT REQUIRED ( D FIELD = 0 )
+      JMP DRV02     IN WORD 4 OF E
+QT ENTRY. 
+      SPC 1 
+*                     LDB EQT1,I   SKIP DMA CHANNEL ASSIGNMENT IF 
+*                     INB           CONTROL REQUEST (CODE = 3)
+*                     LDA B,I 
+*                     AND .3
+*                     CPA .3
+*     
+                JMP DRV02+2 
+* 
+* DMA CHANNEL REQUIRED - ATTEMPT TO ASSIGN CHANNEL
+* 
+DVR0  LDA DMACF      IF DMA QUE IS NOT EMPTY
+      SZA 
+      JMP DVR1       THEN JUST ADD THIS EQT TO QUE. 
+* 
+DVR00 LDA .6       INITIALIZE FOR 
+      STA  CHA
+N     CHANNEL 6 (DMA # 1 )
+      LDB INTBA    ADDR. OF DMA 1 IN INTERRUPT TABLE
+      CLA          IF DMA CHANNEL # 1 
+      CPA B,I       AVAILABLE   (INTBL ENTRY = 0),
+      JMP DRV01    GO TO ASSIGN IT TO THIS UNIT.
+      INB          SET FOR CHANN
+EL 7, 
+      ISZ  CHAN     DMA CHANNEL # 2.
+      CPA B,I      IF THIS CHANNEL AVAILABLE, 
+      JMP DRV01     GO TO ASSIGN IT.
+* 
+* NO CHANNEL AVAILABLE - SET FLAGS AND RETURN 
+* 
+DVR1  LDA EQT5,I   IF DEVICE
+      SSA           IS ALREADY WAITING
+ FOR DMA, 
+      JMP DRIVR,I   EXIT. 
+      IOR MASK4    SET AVAIL TO SAY WAITING FOR 
+      STA EQT5,I    DMA, ADD 1 TO 
+      ISZ DMACF     # DEVICES WAITING.
+      JMP DRIVR,I   - EXIT TO CALLER -
+* 
+* ASSIGN AVAILABLE CHANNEL
+* 
+DRV01 LDA EQT1
+     SET EQT ENTRY ADDRESS IN INTER-
+      STA B,I       RUPT TABLE ENTRY FOR CHANNEL. 
+      LDB DMACF    IF UNIT WAS
+      LDA TEMP6     PREVIOUS WAITING
+      CPA .3        FOR A DMA 
+      ADB N1        CHANNEL, SUBTRACT 1 FROM # OF 
+      STB DM
+ACF     UNITS WAITING.
+      LDA EQT5,I   CLEAR
+      AND MASK6     <AVAIL> 
+      STA EQT5,I     FIELD. 
+* 
+* TRANSFER REQUEST PARAMETERS TO EQT ENTRY
+* 
+DRV02 LDB EQT1,I   GET CURRENT REQUEST ADDRESS
+      INB           FROM LINK WORD OF EQT ENTR
+Y.
+      LDA B,I      GET REQUEST CONTROL WORD,
+      AND MASKS     SET SUBCHANNEL BITS TO ZERO 
+      STA EQT6,I    SET IN EQT 6. 
+      XOR B,I       SET SUBCHANNEL
+      ALF,ALF        NUMBER INTO
+      ALF,RAR        BITS 8-6 
+      STA TEMPL   
+   OF EQT4
+      LDA B,I 
+      RAL          IF REQUEST IS
+      SSA           HELD AS A TEMPORARY BLOCK FOR 
+      JMP DRV03      BUFFERING, JUMP. 
+      INB 
+      LDA B,I      SET BUFFER 
+      STA EQT7,I     ADDRESS. 
+      INB 
+      LDA B,I 
+     SET BUFFER 
+      STA EQT8,I     LENGTH.
+      INB 
+      DLD B,I       SET ADDITIONAL 2
+      DST EQT9,I     PARAMETERS IF SUPPLIED.
+      JMP DRV05 
+* 
+DRV03 ADB .3        * TEMPORARY BLOCK * 
+      RAR,SLA       CHECK REQUEST CODE. 
+      
+RSS           - CONTROL REQUEST - 
+      JMP DRV04     - WRITE   REQUEST - 
+      LDB B,I       SET CONTROL PARAMETER 
+      JMP DVR4       IN THE EQT 
+DRV04 LDA B,I      GET BUFFER LENGTH
+      STA EQT8,I     OF THE BLOCK.
+      INB          ADDRESS
+ OF WORD 6 IS 
+DVR4  STB EQT7,I    THE BUFFER ADDRESS. 
+      CLA          CLEAR
+      STA EQT9,I    WORDS 9 AND 10 OF 
+      STA EQT10,I    EQT ENTRY. 
+* 
+* CALL DRIVER -INITIATION- SECTION
+* 
+DRV05 LDA EQT14,I   SET DEVICE
+      STA EQT15,I    T
+IME-OUT CLOCK 
+      LDA EQT4,I    ZERO TIME-OUT 
+      AND MASK7      BIT AND SET
+      IOR TEMPL      IN SUBCHANNEL
+      STA EQT4,I    SET (A) = CHANNEL 
+      AND MASK1     # OF I/O DEVICE.
+      LDB EQT2,I   CALL DRIVER *INITIATION* 
+      JSB 
+B,I        SECTION. 
+      SKP 
+* DRIVER RETURNS AN INDICATION OF THE ACCEPTANCE
+*  OR REJECTION OF THE REQUESTED OPERATION: 
+*   (A) = 0, OPERATION SUCCESSFULLY INITIATED 
+*   (A) NOT = 0, OPERATION REJECTED AND (A) 
+*                CONTAINS A NUME
+RIC CODE
+*                IDENTIFYING THE CAUSE OF 
+*                THE REJECT.
+* 
+*        = 1    READ OR WRITE REQUEST ILLEGAL FOR DEVICE
+*        = 2    CONTROL REQUEST ILLEGAL OR NOT DEFINED
+*        = 3    EQUIPMENT MALFUNCTION OR NOT READY
+* 
+       = 4    IMMEDIATE COMPLETION OF OPERATION 
+*        = 5    DRIVER REQUIRES DMA BUT FLAG IS NOT SET IN EQT
+* 
+      STA TEMP6    SAVE DRIVER CODE.
+      SZA          IF REJECTED, 
+      JMP DRV06     EXAMINE REASON
+* 
+* OPERATION INITIATED 
+* 
+      LDA EQT5,I   SET
+      IOR MSIGN     <AVAIL> = 2 TO SAY DEVICE 
+      STA EQT5,I     IN OPERATION.
+      JMP DRIVR,I   EXIT. 
+* 
+*  OPERATION REJECTED 
+* 
+DRV06 STB TEMPW     SAVE (B)
+      CLA           CLEAR DEVICE
+      STA EQT15,I    T
+IME-OUT CLOCK 
+      JSB CLDMA     CLEAR DMA IF ALLOCATED
+      LDA TEMP6    (A) = REJECT CODE. 
+      CPA .5        IF DMA REQUIRED 
+      JMP DVR0       GO ATTEMPT ASSIGNMENT
+      ISZ DRIVR    SET RETURN TO (P+2). 
+      CPA .3        IF NOT READY
+ THEN 
+      JMP DRIVR,I   -EXIT.
+      JMP ILLCD     ELSE GO TO SEND THE MESSAGE 
+      SPC 1 
+MASK7 OCT 173077
+MASK9 OCT 34000 
+MASKS OCT 143777
+      HED < I/O  SUBSECT- SYS RQST PROC >   A-92000-60003-2 REV. B
+* SYSTEM I/O REQUEST PROCESSOR  - 
+XSIO -
+* 
+*  A PRIVATE ENTRY IS PROVIDED AT ENTRY POINT 
+* < XSIO > TO ALLOW MODULES OF THE REAL TIME
+* EXECUTIVE TO CALL FOR I/O OPERATIONS WITHOUT
+* INCURRING THE OVERHEAD AND PROCEDURES 
+* INVOLVED WITH USER I/O REQUESTS. NO ERROR 
+* CHECKING IS 
+PERFORMED, THE REQUEST IS LINKED
+* INTO THE APPROPRIATE I/O LIST AT A PRIORITY 
+* LEVEL OF ZERO (HIGHEST PRIORITY), AND CONTROL 
+* IS RETURNED TO THE FIRST WORD FOLLOWING THE 
+* REQUEST CALL. 
+* REQUEST FORMAT: A SYSTEM I/O REQUEST DIFFERS
+*         
+        FROM THE USER I/O REQUEST IN
+*                 FORMAT AND POWER. SPECIFICALLY, 
+*                 A COMPLETION ADDRESS CAN BE 
+*                 SPECIFIED FOR OPERATION OF
+*                 AN OPEN SUBROUTINE AT THE 
+*                 END OF T
+HE OPERATION. THIS
+*                 FACILITY IS ONLY AVAILABLE
+*                 TO SYSTEM ROUTINES AND IS 
+*                 USED TO RESET FLAGS, ETC. 
+*                 BECAUSE AN OPERATION IS 
+*                 ALWAYS BUFFERED TO THE
+*           
+      SYSTEM. A ZERO COMPLETION 
+*                 ADDRESS INDICATES ABSENCE 
+*                 OF A COMPLETION ROUTINE.
+*      WORD 
+*      ----   EXT   XSIO
+*        1    JSB   XSIO
+*        2    OCT   <LOGICAL UNIT #>
+*        3    DEF   <COMPLET
+ION ROUTINE ADDRESS>
+*        4    NOP   <LIST POINTER WORD SET BY SYSTEM> 
+*        5    OCT   <CONTROL INFO, REQUEST CODE>
+*        6    DEF   <BUFFER ADDRESS>
+*        7    DEC   <BUFFER LENGTH> 
+* 
+      SKP 
+* 
+XSIO  NOP 
+      LDB XSIO,I   G
+ET LOGICAL UNIT #.
+      ADB N1       SUBTRACT 1 AND INDEX TO
+      ADB DRT       DEVICE REFERENCE TABLE. 
+      LDA B,I       GET ASSIGNED EQT ENTRY #. 
+      AND MASK9     MASK OUT SUBCHANNEL 
+      STA TEMPL       AND SAVE IT 
+      XOR B,I       
+ EQT # INTO A 
+      JSB CVEQT    CONVERT TO ABSOLUTE EQT ADDRESSES
+* 
+      LDB XSIO      SET ADDRESS 
+      ADB .2        OF LIST POINTER WORD IN 
+      STB TEMP1     REQUEST FOR <LINK>. 
+* 
+      CCE,INB      SET
+      LDA B,I       <T> FIELD (B
+ITS 15-14) OF 
+      AND MASKS 
+      IOR TEMPL       WORD 5 = 2 FOR SYSTEM REQUEST 
+      ELA,RAR         AND SET IN SUBCHANNEL NUMBER
+      STA B,I        IDENTIFICATION.
+      CLA           SET PRIORITY OF REQUEST = 0 
+      STA TEMP2      FOR <LI
+NK>,
+      STA CONFL      SET CONTROL FLAG = 0 (REQUEST).
+      ADB .3        SET B  TO RETURN ADDR 
+      STB XSIO       AND SAVE IT. 
+      JSB LINK.   CALL TO LINK REQUEST IN I/O LIST
+* 
+      SZA,RSS        IF DEVICE NOT BUSY 
+* 
+      JSB DRIV
+R    CALL DRIVER TO INITIATE OPERATION
+      JMP XSIO,I      -GOOD REQUEST,EXIT
+* 
+      LDB XSIO      BAD NEWS SO TRANSFER THE
+      STB XSIOE     RETURN ADDRESS FOR NR ROUTINE 
+* 
+      JMP NOTRD     PRINT DIAGNOSTIC. 
+      SPC 1 
+XSIOE NOP 
+  
+    HED <I/O CONTROL-COMPLETION SUBSECT>  A-92000-60003-2 REV. B
+* 
+* I/O COMPLETION SUBSECTION 
+* 
+*  THIS SECTION IS RESPONSIBLE FOR THE INITIATION 
+*   OF STACKED I/O OPERATIONS, PLACING A USER 
+*   PROGRAM BACK IN A SCHEDULED STATE WHEN ITS
+*   
+I/O OPERATION IS COMPLETED, DYNAMIC ALLOCATION
+*   OF THE TWO DMA CHANNELS AMONG SYNCHRONOUS 
+*   DEVICES, AND CALLING FOR OPERATOR NOTIFICATION
+*   OF EQUIPMENT MALFUNCTION. 
+* 
+*  <IOCOM> IS ENTERED DIRECTLY FROM INTERRUPT CONTROL 
+*   WHEN AN I/O 
+OPERATION IS TERMINATED AND ALL 
+*   ERROR RECOVERY PROCEDURES HAVE BEEN ATTEMPTED.
+*   ON ENTRY TO THIS SECTION, (B) CONTAINS THE
+*   NUMBER OF WORDS TRANSFERRED. THE ADDRESSES OF 
+*   THE EQUIPMENT TABLE ENTRY ARE SET IN -EQT1- TO
+*   - EQT 15-.
+* 
+*  REQUESTS ARE STACKED IN LISTS FOR EACH DEVICE
+*   ACCORDING TO PRIORITY. THE REQUESTS ARE EITHER
+*   USER (NORMAL), USER (AUTOMATIC OUTPUT BUFFERING)
+*   OR SYSTEM - IDENTIFICATION OF REQUEST TYPE
+*   THE CODE IN BITS 15-14 OF THE <CONTROL WORD>
+*   IN EACH REQUEST CALL. THE FORMATS OF THE THREE
+*   TYPES OF REQUESTS AS THEY APPEAR IN THE I/O 
+*   LISTS ARE:
+* 
+*     1)  USER (NORMAL OPERATION) 
+* 
+*        THE PARAMETERS FROM THE REQUEST ARE STORED 
+*       IN THE TEMPORARY AREA OF THE PRO
+GRAM ID 
+*       SEGMENT. THE LINK WORD OF THE SEGMENT IS
+*       USED TO LINK INTO THE I/O LIST. 
+* 
+*        WORD         CONTENTS
+*        ----         --------
+*         1   < LINKAGE WORD           >
+*         2   <T, CONTROL INFO, CODE   >
+* 
+        3   <BUFFER ADDRESS          >
+*         4   <BUFFER LENGTH           >
+*         5   <DISC TRACK ADDR OR ZERO >
+*         6   <DISC SECTOR ADDR OR ZERO>
+*         7   <PROGRAM PRIORITY        >
+*         .   -REMAINDER OF ID SEGMENT .
+* 
+* 
+      SKP 
+*     2)  USER (AUTOMATIC OUTPUT BUFFERING) 
+* 
+*        REQUESTS OF THIS TYPE ARE CONSTRUCTED
+*       IN THE SECTION OF SYSTEM AVAILABLE MEMORY.
+* 
+*        WORD         CONTENTS
+*        ----         --------
+*         1   < LINKAGE 
+WORD           >
+*         2   <T, CONTROL INFO, CODE   >
+*         3   <PRIORITY OF REQUESTOR   >
+*         4   <TOTAL BLOCK LENGTH WORDS>
+*         5   <USER BUFFER LENGTH      >
+*         6   <WORD 1 OF USER BUFFER   >
+*         .      .       .  
+      . 
+*         .      .       .        . 
+*         N+5 <WORD N OF USER BUFFER   >
+* 
+* 
+*     3)  SYSTEM REQUEST
+* 
+*        THE SYSTEM REQUEST IS LINKED INTO
+*       THE I/O LIST BY USING WORD 4 OF THE 
+*       CALL AS A LINK WORD. A SYSTEM 
+*       REQUEST ASSUMES THE PRIORITY LEVEL
+*       OF ZERO (HIGHEST PRIORITY). 
+* 
+*        WORD         CONTENTS
+*        ----         --------
+*         1   <       JSB  XSIO        >
+*         2   <     LOGICAL UNIT #     >
+*         3   <COMPL
+ETION ROUTINE ADDR >
+*         4   <   LINKAGE WORD         >
+*         5   <T, CONTROL INFO, CODE   >
+*         6   <BUFFER ADDR OR DISC CNTL>
+*         7   <BUFFER LENGTH OR PRIORITY> 
+* 
+*  THE <T> FIELD (BITS 15-14 IN CONTROL WORD) 
+*   IDENTIFI
+ES THE REQUEST TYPE AS: 
+* 
+*      00   USER (NORMAL OPERATION) 
+*      01   USER (AUTOMATIC BUFFERING)
+*      10   SYSTEM
+* 
+* 
+      SKP 
+IOCOM RAL,CLE,ERA   CLEAR THE SIGN BIT AND SAVE IN E
+      STA TEMP3     SAVE STATUS FROM DRIVER AND 
+    
+  STB TLOG      TRANSMISSION LOG
+* 
+      CLA           CLEAR 
+      STA  COMPL    CLEAR COMPLETION ADDRESS. 
+      STA EQT15,I   CLEAR TIME-OUT CLOCK
+* 
+      LDA EQT4,I    SET THE COMPLETION SECTION FLAG 
+      STA CONFL     AND TEST FOR DMA RETUR
+N 
+      SEZ,RSS        SIGN OF A IS EXPLICID RETURN OF
+      SSA            DMA CHANNEL, CALL TO 
+      JSB CLDMA       RELEASE ITS ASSIGNMENT. 
+* 
+      LDB EQT1,I    GET CONTROL WORD FROM 
+      SZB,RSS       IF ILLEGAL ENTRY
+      JMP CIC.4     
+ SEND ERROR MESSAGE 
+      INB            REQUEST BLOCK TO 
+      LDA B,I         EXTRACT  <T> FIELD. 
+      STA TEMP0     SAVE CONTROL WORD.
+      RAL,SLA      IF BIT 15 = 1  (<T> = 2) 
+      JMP L.53       PROCESS AS SYSTEM REQUEST. 
+      SSA     
+      IF <T> = 0, PROCESS 
+      JMP $L.56     RELEASE AUTO BUFFER BLOCK 
+* 
+* 
+* NORMAL USER OPERATION COMPLETION
+* 
+L.51  LDB EQT1,I    GET ID SEGMENT ADDRESS
+      LDA B,I       SET NEXT LINK ADDRESS 
+      STA EQT1,I     IN WORD 1 OF EQT ENTRY.
+      STB L.52      SET CURRENT ADDR. FOR SCHEDULER.
+* 
+      ADB .9        SET (B) = ADDR. OF XA IN ID SEG.
+      LDA TEMP3      GET COMPLETION STATUS
+      CLE,SZA         SET BIT 14
+      CCE             IN STATUS WORD
+      LDA EQT5,I      IF T
+HE STATUS 
+      RAL,RAL       IS NON-ZERO 
+      ERA,CLE,ERA   AND SAVE IN USER A-REG. 
+      STA B,I        CONTENTS OF PROGRAM. 
+      INB 
+      STB TEMP9      SAVE TRANSMISSION LOG ADDRESS
+      LDA TLOG     SET TRANSMISSION LOG AS
+      STA B,
+I        SAVED B-REGISTER.
+* 
+      JSB $LIST   CALL SCHEDULER MODULE TO PLACE
+      OCT 101 USER PROGRAM INTO SCHEDULE
+L.52  NOP             LIST. 
+      JMP L.54
+* 
+* SYSTEM REQUEST COMPLETION 
+* 
+L.53  LDB EQT1,I   GET CURRENT REQUEST <LINK> AD
+DR. 
+      LDA B,I       SET NEXT LINK ADDRESS 
+      STA EQT1,I     IN EQT ENTRY.
+* 
+      ADB N1        GET WORD 3 OF REQUEST 
+      LDA B,I         <COMPLETION ROUTINE ADDRESS>. 
+      STA COMPL    SAVE COMPLETION ADDR. OR ZERO. 
+* 
+* < L.54 >  
+: AT THIS POINT:
+*        1) A TEMPORARY BUFFER HAS BEEN RELEASED, 
+*        2) A NORMAL OPERATION HAS CAUSED THE 
+*            REQUESTING PROGRAM TO BE LINKED
+*            BACK INTO THE <SCHEDULE> LIST, OR
+*         3) A SYSTEM REQUEST COMPLETION ADD
+RESS
+*            HAS BEEN SAVED.
+* 
+L.54  LDA TEMP3     BY PASS INITIATING THE NEXT 
+      SZA            OPERATION IF A MALFUNCTION HAS 
+      JMP IOERR      OCCURRED ON THIS DEVICE. 
+* 
+* 
+L.55  LDA EQT5,I   CHECK <AVAIL> FIELD. 
+      SSA,RSS 
+       IF AV SAYS BUSY
+      JMP IOCX        SKIP ELSE GO EXIT 
+* 
+* SECTION  <60> PROVIDES FOR INITIATING THE NEXT
+*  OPERATION WAITING FOR THE COMPLETED DEVICE.
+* 
+L.60  LDA EQT5,I   SET <AVAIL>
+      AND MASK6     FIELD 
+      STA EQT5,I     = 0
+ TO SAY AVAILABLE.
+      JMP L.68      GO START THE NEXT REQUEST 
+* 
+.11   DEC 11
+      SPC 1 
+* 
+* THIS DEVICE IS COMPETING WITH OTHER DEVICES FOR 
+*  THE USE OF THE AVAILABLE DMA CHANNEL. THE <A>
+*  FIELD IN THE CURRENT ENTRY IS SET = 3 TO MEAN
+*  WAITING FOR DMA. THE EQT IS THEN SCANNED FROM
+*  FIRST TO LAST ORDER (#1 TO N) TO FIND THE FIRST
+*  UNIT WAITING FOR DMA. THEREFORE, THE ORDER OF
+*  THE EQT DETERMINES PRIORITY FOR DYNAMIC ASSIGN-
+*  MENT OF DMA CHANNELS - THE SYSTEM DISC SHOULD
+* 
+ BE THE FIRST ENTRY IN THE EQT. 
+* 
+L.63  LDA EQT#      SET # OF
+      CMA,INA        EQT ENTRIES
+      STA TEMP1       AS AN INDEX VALUE.
+      LDB EQTA      INITIALIZE TO FIRST EQT ENTRY.
+* 
+L.64  STB TEMP2     SAVE CURRENT ENTRY ADDR.
+      ADB 
+.4        EXTRACT 
+      LDA B,I        <A> FIELD FROM 
+      AND AFLD        WORD 5. 
+      CPA DMACW     IF A = 3, GO TO 
+      JMP L.66       ASSIGN DMA.
+* 
+L.65  ADB .11      SET (B) FOR NEXT ENTRY.
+      ISZ TEMP1     END OF EQT? 
+      JMP L.
+64       - NO, CONTINUE SCAN
+      JMP IOCX1      -YES, EXIT 
+* 
+L.66  CLA,INA       IF ONLY 1 DEVICE WAITING
+      CPA DMACF      FOR  DMA, GO TO
+      JMP L.67        ASSIGN TO THIS DEVICE.
+      LDA TEMP2     IF CURRENT UNIT IS
+      CPA EQTA    
+   FIRST IN EQT (I.E SYSTEM DISC) 
+      JMP L.67       ASSIGN ANYWAY. 
+      CPA EQT1      IF SAME DEVICE JUST COMPLETED,
+      JMP L.65       ALLOW OTHER DEVICES DMA TIME.
+* 
+L.67  LDA TEMP2     IF DEVICE TO BE INITIATED IS
+      CPA EQT1       SAM
+E AS INTERRUPTING DEVICE, 
+      JMP L.68       SKIP SETTING EQT ADDRESSES.
+* 
+      JSB SETEQ     SET EQT ADDRESSES.
+* 
+* CALL <DRIVR> IF A REQUEST IS STACKED OR A 
+*  WAITING UNIT IS ASSIGNED A DMA CHANNEL.
+* 
+L.68  LDA EQT1,I    IF NO REQUEST 
+      SZA,RSS        WAITING, 
+      JMP IOCX        EXIT. 
+* 
+      JSB DRIVR     CALL  <DRIVR> 
+      RSS            IF GOOD REQUEST THEN SKIP
+      JMP NOTRD     DIAGNOSTIC IF NOT AVAILABLE.
+* 
+* I/O COMPLETION  - EXIT SECTION. 
+* 
+* THIS ROUTI
+NE CHECK FOR A DMA QUE AND IF ANY AND IF A CHANNEL IS 
+* AVAILABLE THE CHANNEL ASSIGNMENT ROUTINE IS ENTERED.
+* 
+IOCX  LDA DMACF      GET THE DMA QUE FLAG 
+      SZA,RSS         IF EMPTY QUE THEN 
+      JMP IOCX1       GO EXIT 
+* 
+      DLD INTBA,I 
+    ELSE GET THE DMA FLAGS
+      SZA             IF ANY
+      SZB,RSS          AVAILABLE
+      JMP L.63      GO ALLOCATE IT. 
+* 
+IOCX1 LDA  COMPL     IF SYSTEM REQUEST
+      LDB TLOG
+      SZA           COMPLETION ROUTINE SPECIFIED, 
+      JMP  COM
+PL,I  OPERATE IT. 
+* 
+      LDB OPATN    GET OPERATOR ATTENTION FLAG
+      STA OPATN     CLEAR OPERATOR FLAG 
+      SZB          IF OPERATOR DESIRES CONTROL, 
+      JMP $TYPE   ACKNOWLEDGE 
+      JMP $XEQ    TRANSFER TO EXECUTE SECTION 
+* 
+      HE
+D I/O REQUEST ERROR SECTION         A-92000-60003-2 REV. B
+* 
+* 
+* 
+* I/O  REQUEST ERROR SECTION
+* 
+*  PART 1: ERRORS ENCOUNTED IN ANALYSING A
+*          USER REQUEST CAUSE A DIAGNOSTIC
+*          TO BE PRINTED ON THE SYSTEM
+*          TELETYPEWRI
+TER AND THE USER
+*          PROGRAM ABORTED. THE FORMAT OF 
+*          THE DIAGNOSTIC IS: 
+* 
+*            'ERR-XX' 
+* 
+*       WHERE XX IS AS FOLLOWS: 
+* 
+* 
+*          XX = RQ     EXEC REQUEST ERROR 
+*               PA     NOT ENOUGH PARAMETERS
+*               LU     ILLEGAL LOGICAL UNIT 
+*               EQ     LOGICAL UNIT NOT ASSIGNED
+*               BF     USER BUFFER VIOLATES SYSTEM
+*               RW     READ OR WRITE ILLEGAL FOR DEVICE 
+*           BY THE ROUTINE -ERMSG- IN 
+* 
+* 
+*           CODE IDENTIFYING THE ERROR TYPE.
+* 
+RQERR LDA RQ    REQUEST ERROR 
+      JMP ERRM
+* 
+ERR01 LDA PA    PARAMETER ERR 
+      JMP ERRM
+* 
+ERR02 LDA LU    LU ERR
+      JMP ERRM
+* 
+ERR03 LDA EQ    EQT ERR 
+      JMP ERRM
+* 
+ERR04 LDA BF
+    BUFFER ERR
+      JMP ERRM
+* 
+ERR07 LDA RW    READ/WRITE ILLEGAL
+ERRM  STA MSG+2 
+      JSB CKABT     GO TEST ABORT OPTION
+      LDA MSGA
+* 
+      JSB SYSMG WRITE MESSAGE 
+      JMP ABORT 
+* 
+* 
+RQ    ASC 1,RQ
+PA    ASC 1,PA
+LU    ASC 1,LU
+EQ    ASC 1,EQ
+BF    ASC 1,BF
+RW    ASC 1,RW
+* 
+MSGA  DEF *+1 
+N6    DEC -6
+MSG   ASC 3,ERR-XX
+* 
+      SPC 10
+* 
+*     SUBROUTINE TO CHECK FOR ABORT OPTION
+* 
+*         IF"NO ABORT" OPTION SET- RESCHEDULE 
+* 
+*         IF "NO ABORT"OPTION 
+NOT SET-ABORT 
+* 
+* 
+CKABT NOP 
+      STA XA,I      SAVE ERROR CODE ( IN A REG) 
+      LDB XEQT      GET ADDRESS OF CURRENT ID ENTRY 
+      STB CKBT1     SAVE ID ENTRY FOR RESCHEDULE
+      ADB .8        GET DISPLACEMENT RETURN ADDRESS 
+      STB SY
+SMG     SAVE FOR NO ABORT OPTION
+      ADB .7        GET TO STATUS WORD
+      LDA B,I 
+      RAL,CLE,SLA,ERA IS ABORT FLAG SET?
+      RSS           YES---DO NOT ABORT
+      JMP CKABT,I   NO--STANDARD ABORT
+      CCA 
+      ADA RQRTN     GET ERROR RE
+TURN ADDRESS
+      STA SYSMG,I   SAVE RETURN ADDRESS 
+* 
+      JSB $LIST     RESTART PROGRAM 
+      OCT 101 
+CKBT1 NOP           ID SEG ADDRESS
+* 
+      CLA           CLEAR XEQT
+      STA XEQT      FORCING A RELOAD
+      LDA SCONF     RESTORE 
+  
+    STA CONFL     *CONTROL FLAG*
+      LDA TEMP9     RESTORE UNIT
+      JSB SETEQ 
+      LDA MSG+2     GET ERROR CODE
+      CPA RW        IS IT A READ/WRITE ERROR??
+      JMP REXIT     YES--CHECK OTHER DEVICES AND TERMINATE
+      JMP $XEQ      NO--IN
+ITATOR ERROR
+.8    DEC 8 
+      SKP 
+*  PART 2:  ILLEGAL REQUEST DETECTED BY 
+*          I/O DRIVER. THE REASON IS A READ OR
+*          WRITE OPERATION IS ILLEGAL FOR THE 
+*          DEVICE OR A CONTROL REQUEST IS 
+*          MEANINGLESS FOR THE DEV
+ICE.
+*           AN ADDITIONAL REASON FOR TRANSFER TO THIS 
+*          SECTION IS AN "IMMEDIATE COMPLETION" (CODE 4)
+*          RETURN FROM THE DRIVER; PROCESSED AS A 
+*          CONTROL REJECT.
+* 
+* 
+*          ERROR PROCEDURE IS:
+*          1. IF
+ THE REQUEST IS PROCESSED AS
+*             BUFFERED OUTPUT, THE TEMPORARY
+*             BLOCK IS RELEASED TO AVAILABLE
+*             MEMORY. 
+* 
+*          2. THE REJECT IS IGNORED IF A SYSTEM 
+*             PROGRAM GENERATED THE REQUEST - 
+*       
+      HOWEVER, A COMPLETION ROUTINE,
+*             IF SPECIFIED IN THE REQUEST, IS 
+*             OPERATED. (NOTE: THIS PHILOSOPHY
+*             IS BASED ON THE ASSUMPTION THAT 
+*             THIS CONDITION SHOULD NEVER OCCUR.) 
+* 
+*          3. A US
+ER CONTROL REQUEST WHICH IS 
+*             REJECTED IS TREATED AS IF IT
+*             WAS PERFORMED. THE PROGRAM IS 
+*             LINKED BACK INTO THE SCHEDULE LIST. 
+* 
+*          4. A USER READ OR WRITE REQUEST REJECT 
+*             CAUSES A DIAGN
+OSTIC TO BE ISSUED
+*             AND THE PROGRAM ABORTED.
+      SKP 
+ILLCD CPA .4        IF CODE =4 FOR IMMEDIATE
+      LDA .2         COMPLETION, TREAT AS CONTROL 
+      STA TEMP4      REJECT,  SAVE CODE.
+      LDB EQT1,I   GET LOCATION OF
+      LDA B,I       ILLEGAL REQUEST (LINK ADDR.)
+      STA TEMP0   
+ SAVE NEXT REQUEST ADDRESS. 
+      INB          GET CONTROL WORD 
+      LDA B,I       OF REQUEST BLOCK
+      STA EQT6,I     SAVE FOR REXIT 
+      RAL          CHECK <T> FIELD
+      SSA           FOR TYPE OF REQUEST BLOCK 
+      JMP $R06      RELEASE 
+BLOCK 
+* 
+R02   SLA,RSS      CHECK <T> FIELD AGAIN. 
+      JMP R03       -USER PROGRAM REQUEST-
+* 
+      ADB N2       GET WORD IN SYSTEM REQUEST 
+      LDA B,I       CONTAINING -COMPLETION ROUTINE- 
+      STA  COMPL    ADDRESS OR 0 AND SAVE IT. 
+  
+    JMP REXIT 
+* 
+R03   LDA TEMP4    USER REQUEST-
+      CPA .2        CONTINUE IF CONTROL REQUEST 
+      JMP R04        REJECTED.
+      LDA EQT1,I     SET ID SEGMENT ADDRESS OF PROGRAM
+      STA XEQT      CONTAINING ERROR
+      ADA .8        GET PT
+ OF SUSPENSION ADDR.
+      LDB A,I       GET RETURN ADDRESS
+      STB RQRTN     AND SAVE ON B.P.
+      INA           SET XSUSP TO POINT
+      STA XSUSP     TO SAVED INITIAL CALL ADDRESS 
+      LDA EQT1      SAVE CURRENT
+      STA TEMP9     EQT ADDRES
+S 
+      LDA CONFL     SAVE CURRENT
+      STA SCONF     *CONTROL FLAG*
+      JMP ERR07     ILLEGAL READ OR WRITE 
+R04   LDA EQT1,I   SET PROGRAM ID SEGMENT 
+      STA R05+2     ADDR. IN LIST CALL. 
+      ADA .9       (A) = ADDR. OF XA IN ID SEGMENT. 
+      LDB EQT5,I   SET DEVICE STATUS
+      STB A,I       WORD IN XA. 
+      LDB TEMP6 
+      CPB .2         STORE TLOG IF IMMEDIATE RETURN 
+      CLB,RSS        FROM DRIVER (A)=4; 
+      LDB TEMPW      OTHERWISE, STORE ZERO
+      INA           TRAN
+SMISSION LOG
+      STB A,I       IN XB.
+R05   JSB $LIST    CALL SCHEDULER 
+      OCT 101      TO LINK PROGRAM BACK 
+      NOP           INTO SCHEDULE LIST. 
+* 
+REXIT LDA TEMP0    SET NEXT LIST
+      STA EQT1,I    ENTRY ADDRESS.
+      LDB CONFL    I
+F THE IOC *COMPLETION*
+      SZB           SECTION IS IN CONTROL,
+      JMP L.60       RETURN TO L.60 FOR NEXT REQUEST
+* 
+      LDA EQT6,I   REJECT OCCURRED IN IOC *REQUEST* 
+      SSA           SECTION. RETURN TO
+      JMP XSIO,I        SYSTEM CALLE
+R.
+      LDA TEMP4    IF REJECTING 
+      LDB RQRTN     A CONTROL REQUEST TO IOREQ, 
+      CPA .2        SET EXIT IN POINT 
+      STB XSUSP,I   OF SUSPENSION.
+      JMP $XEQ   EXECUTE SECTION IN SCHEDULER 
+      SKP 
+* 
+* I/O DEVICE ERROR SECTION
+* 
+*  THIS SECTION IS ENTERED WHEN A DEVICE
+* IS UNAVAILABLE FOR INITIATION OF AN 
+* OPERATION OR WHEN AN ERROR IS DETECTED
+* AT THE END OF AN OPERATION. A DIAGNOSTIC
+* IS PRINTED ON THE SYSTEM TELETYPE IN THE
+* FOLLOWING FORMAT: 
+* 
+*     I/O ERR 
+MN
+* 
+*  WHERE NN IS THE EQT ENTRY # OF THE DEVICE
+*   AND MN IS A MNEMONIC DESCRIBING THE 
+*   CONDITION:
+* 
+*     1.  NR  - DEVICE NOT READY
+*     2.  ET  - END OF TAPE OR TAPE SUPPLY LOW
+*     3.  PE  - TRANSMISSION PARITY ERROR 
+*     4.  TO  
+- DEVICE TIMED-OUT
+*     - NEW CODES MAY BE ADDED -
+* 
+*  ON ENTRY TO THE SECTION, (A) CONTAINS A #
+*   CORRESPONDING TO THE ASSOCIATED MNEMONIC
+*   AND EQT1 CONTAINS ADDRESS OF DEVICE.
+* 
+* 
+NOTRD CLA,INA -SPECIAL NOT READY ENTRY- 
+* 
+IOERR ADA 
+ERTBL    INDEX TO ERROR CODE TABLE. 
+      LDA A,I      GET MNEMONIC AND 
+      STA MSG2+2   SET IN DIAG MESSAGE
+* 
+      LDA EQT1
+      STA TEMP9 
+* 
+      LDA EQT5,I   GET STATUS WORD FROM EQT 
+      AND MASK6    SET <AVAIL FLAG> FIELD 
+      IO
+R MASK0    = TO 1 
+      STA EQT5,I   -UNIT DOWN-
+* 
+      LDA CONFL    SAVE CURRENT 
+      STA SCONF     *CONTROL FLAG*
+* 
+      LDA MSGA2    ADDRESS OF MESSAGE 
+      JSB SYSMG    CALL TO PRINT. 
+* 
+* 
+      LDA SCONF    RESTORE *CONTROL FLAG*.
+      STA CONFL 
+      LDB TEMP9 
+      CPB SYSTY 
+      JMP L.60
+      LDB B,I       GET <T> FIELD 
+      INB           WORD
+      LDB B,I        TO B.
+      SZA           SECTION IN CONTROL, 
+      JMP IOCX        GO EXIT IOC 
+      SSB       
+   *REQUEST* SECTION. IF SYSTEM 
+      JMP XSIOE,I    REQUEST, RETURN TO CALLER. 
+      JMP $XEQ   EXECUTE SECTION IN SCHEDULER 
+* 
+* I/O DEVICE ERROR MNEMONIC TABLE - ORDERED 
+*  BY ERROR CODE DESCRIBING CONDITION 
+* 
+ERTBL DEF * 
+* 
+      ASC 1,
+NR      - NOT READY - 
+* 
+      ASC 1,ET      - END OF TAPE (INFORMATION)  -
+* 
+      ASC 1,PE      - TRANSMISSION PARITY ERROR - 
+* 
+      ASC 1,TO      - TIMED-OUT  -
+* 
+* NEW CODES ADDED AT THIS POINT 
+* 
+* 
+MSGA2 DEF *+1 
+      DEC -6
+MSG2
+  ASC 3,ERR-XX
+      HED < IO-DEVICE TIME-OUT PROCESSOR >  A-92000-60003-2 REV. B
+* 
+* 
+*  AFTER A DEVICE IS DISCOVERED TO HAVE TIMED-OUT 
+*        BY THE SCHEDULER'S CLOCK PROCESSOR,THIS
+*        ROUTINE IS ENTERED.  ITS PURPOSE IS TO 
+*        CLE
+AR THE PENDING IO TRANSFER AND ENTER
+*        IOCOM IN SUCH A WAY AS TO SIMULATE AN IO 
+*        COMPLETION RETURN FROM THE DRIVER ITSELF.
+* 
+* 
+*  ENTER FROM  SCHEDULER MODULE:
+* 
+*        (A) <ADDRESS OF EQT15 OF TIMED-OUT DEVICE> 
+* 
+* 
+$DEVT 
+ADA N14       POINT TO EQT
+      JSB SETEQ     SET EQT ADDRESSES 
+      LDA EQT4,I
+      IOR MASK8     SET TIME-OUT BIT
+      STA EQT4,I
+      STA B         SAVE WORD IN B FOR TEST 
+      AND MASK1      SELECT CODE TO A 
+      BLF,SLB         IF DRI
+VER TO HANDLE TIME
+      JMP CIC.6        OUT GO CALL THE DRIVER.
+      JSB CLCHS     CLEAR ALL CHANNELS
+      LDA .4        SERVICED BY THIS ENTRY
+      CLB           SIMULATE COMPLETION 
+      JMP IOCOM      RETURN FROM DRIVER 
+      SPC 1 
+N14   
+DEC -14 
+      HED <I/O CONTROL MODULE-DATA SECTION> A-92000-60003-2 REV. B
+* CONSTANT AND VARIABLE STORAGE AREA
+.4    DEC 4 
+.5    DEC 5 
+.7    DEC 7 
+.9    DEC 9 
+* 
+MASK1 OCT 77
+MASK2 OCT 377 
+MASK4 OCT 140000
+MASK6 OCT 37777 
+MASK8 OCT 4000
+MSIGN OCT 100000
+* 
+TEMPA EQU TEMP1 
+TEMPB EQU TEMP2 
+TEMPE EQU TEMP3 
+* 
+TLOG  NOP 
+AFLD  EQU MASK4 
+DMACW EQU MASK4 
+DMACF NOP           FLAGS USED IN ALLOCATING
+      HED <I/O CONTROL-SUBROUTINE SECTION>  A-92000-60003-2 REV. B
+* 
+* SUBROU
+TINE:  < SYSMG >  (SYSTEM MESSAGE)
+* 
+*  PURPOSE: THIS ROUTINE PROVIDES FOR THE 
+*           OUTPUT OF SYSTEM MESSAGES AND 
+*           ERROR DIAGNOSTICS ON THE SYSTEM 
+*           TELEPRINTER.
+* 
+*  CALL:    (A) = ADDRESS OF FIRST WORD OF
+*       
+          MESSAGE BLOCK - THIS WORD 
+*                 CONTAINS THE CHARACTER
+*                 LENGTH OF THE MESSAGE AS
+*                 A NEGATIVE VALUE. 
+* 
+*           (P)      JSB  SYSMG 
+*           (P+1)    -RETURN- 
+* 
+SYSMG NOP 
+      LD
+B A,I 
+      STB SLEN   SET UP MESSAGE LENGTH
+      INA 
+      STA SBAD    SET UP MESSAGE ADDRESS
+      JSB XSIO    PRINT MESSAGE 
+      OCT 1 
+      NOP 
+      NOP 
+      OCT 2 
+SBAD  NOP 
+SLEN  NOP 
+      JMP SYSMG,I 
+* 
+      SKP 
+* SUBROU
+TINE:  <CVEQT>
+* 
+*  PURPOSE: THIS ROUTINE CONVERTS AN EQT
+*           ENTRY # TO AN EQT DISPLACEMENT
+*           AND CALLS  <SETEQ> TO SET THE 
+*           ENTRY ADDRESSES.
+* 
+*  CALLING SEQUENCE:
+* 
+*       (A) = EQT ENTRY # 
+* 
+*     (P)     
+JSB CVEQT 
+*     (P+1)   -RETURN-  REGISTERS MEANINGLESS 
+* 
+* 
+CVEQT NOP 
+$CVEQ EQU CVEQT 
+      ADA N1       SUBTRACT 1 AND 
+      STA B         MULTIPLY EQT ENTRY #
+      CMB,INB        BY 15
+      ALF            TO 
+      ADA B          COMPU
+TE THE
+      ADA EQTA       ABSOLUTE ADDRESS.
+* 
+      JSB SETEQ    SET ALL 15 ADDRESSES.
+* 
+      JMP CVEQT,I    -RETURN- 
+      SKP 
+      HED  I/O CLEAR SECTION                A-92000-60003-2 REV. B
+* SPECIAL SECTION "I/O CLEAR "
+* 
+*  PURPOSE
+: THE FUNCTION OF THIS ROUTINE
+*          IS TO REMOVE A PROGRAM FROM AN 
+*          I/O HANG-UP CONDITION RESULTING
+*          FROM AN INPUT REQUEST NOT BEING
+*          COMPLETED BY THE DEVICE. 
+* 
+*          THIS "CLEARING" PROCEDURE IS 
+*       
+   INITIATED BY THE OPERATOR IN 
+*          REQUESTING AN ABORT OPERATION
+* 
+*  PROCESS: THE LIST OF EACH EQT ENTRY
+*          IS SEARCHED TO FIND THE QUEUED 
+*          REQUEST CORRESPONDING TO THE 
+*          ID SEGMENT OF THE REFERENCED 
+*       
+   PROGRAM.  THE ENTRY IS REMOVED 
+*          FROM THE LIST AND THE LIST IS
+*          APPROPRIATELY LINKED TO REFLECT
+*          THE CHANGE.
+* 
+*          IF THE ENTRY WAS THE FIRST ONE 
+*          IN THE LIST (I.E. THE ACTIVE 
+*          REQUEST),
+ THE DEVICE'S CHANNELS
+*          AND DMA CHANNEL, IF ASSIGNED,ARE 
+*          CLEARED.  THE DEVICE'S TIME-OUT
+*          CLOCK IS CLEARED.
+* 
+*  CALLING SEQUENCE:
+* 
+*          (A)= ID SEGMENT ADDRESS OF PROGRAM 
+* 
+*         (P) JSB IOCL
+* 
+* 
+           -NO RETURN - 
+* 
+* 
+      SKP 
+* 
+IOCL  NOP 
+      CLA 
+      STA OPFLG 
+      LDA EQT#      SET TEMP2 = NEGATIVE
+      CMA,INA        NUMBER OF EQT
+      STA TEMP2       ENTRIES.
+      LDA EQTA      INITIALIZE FOR
+* 
+      STA IOCL
+5      EQT ENTRY WORD 
+      STA IOCL6       1 ADDRESS.
+* 
+IOCL1 LDA A,I       GET LINK ADDRESS. 
+      CPA ABP       JUMP IF A 
+      JMP IOCL2      MATCH TO PROGRAM.
+* 
+      SZA           IF NOT END OF LIST, 
+      JMP IOCL1-1    CONTINUE SCAN. 
+* 
+      LDA IOCL5     SET (A) = ADDRESS OF
+      ADA .15        NEXT EQT ENTRY.
+      ISZ TEMP2     IF NOT END OF EQT, GO 
+      JMP IOCL1-2    TO SCAN NEXT ENTRY LIST. 
+      JMP IOCL,I    RETURN
+* 
+* PROGRAM REQUEST ENTRY FOUND, UNLINK REQUEST.
+* 
+IOCL2 LDB A,I       GET NEXT LINK AND SET 
+      STB IOCL6,I    IN PREVIOUS LINK.
+      LDA IOCL5     IF PROGRAM REQUEST WAS
+      CPA IOCL6      CURRENT REQUEST
+      CLB,RSS         SKIP TO LEAR DEVICE 
+      JMP IOCL,I    RETURN
+* 
+      JS
+B SETEQ 
+      STA CONFL     FOR IOCOMPLETION
+      STB COMPL     COMPLETION FLAG 
+      STB EQT15,I   CLEAR TIME OUT FLAG 
+      JSB CLCHS 
+      LDA EQT5,I    CLEAR BUSY BIT
+      AND MASK6 
+      STA EQT5,I
+      JMP IOCL,I    RETURN
+      SPC 
+1 
+IOCL5 NOP 
+IOCL6 NOP 
+      SKP 
+      HED UP-IO-SECTION                     A-92000-60003-2 REV.B 
+* 
+* 
+*     THE UP - IO SECTION IS CALLED BY THE
+*     POWER-FAIL DRIVER TO HELP IN RESTARTING 
+*     THE DMA CHANNELS. 
+* 
+* 
+* 
+$UPIO JSB 
+CLDMA     GO CLEAR DMA CHANNEL
+       LDA EQT5,I   GET AVAILABILITY
+       ISZ CONFL    SET CONTROL FLAG
+       SSA,RSS      IF DOWN OR AVAIL. 
+       JMP L.60     GO TRY TO OPERATE 
+       JMP $XEQ     CONTINUE
+      HED SET EQT TABLE               
+      A-92000-60003-2 REV. B
+* SUBROUTINE: < SETEQ > 
+* 
+*  PURPOSE: THIS ROUTINE SETS THE ADDRESSES 
+*           OF THE 15 WORDS OF AN 
+*           EQUIPMENT TABLE ENTRY IN THE
+*           15  WORDS IN BASE PAGE COMMUNICATION
+*           AREA LABEL
+LED -EQT1- TO -EQT15-.
+* 
+*   CALLING SEQUENCE: 
+* 
+*           (A) - STARTING ADDRESS OF THE EQT 
+*                 ENTRY FOR THE REFERENCED
+*                 I/O UNIT. 
+* 
+*        (P)     JSB  SETEQ 
+*        (P+1)  - RETURN - (A),(B) MEANINGLE
+SS
+* 
+*          THERE ARE NO ERROR RETURNS OR
+*           ERROR CONDITIONS DETECTED.
+* 
+* 
+SETEQ NOP 
+      STA EQT1
+      INA 
+      STA EQT2
+      INA 
+      STA EQT3
+      INA 
+      STA EQT4
+      INA 
+      STA EQT5
+      INA 
+      
+STA EQT6
+      INA 
+      STA EQT7
+      INA 
+      STA EQT8
+      INA 
+      STA EQT9
+      INA 
+      STA EQT10 
+      INA 
+      STA EQT11 
+      INA 
+      STA EQT12 
+      INA 
+      STA EQT13 
+      INA 
+      STA EQT14 
+      INA 
+      STA EQT15 
+      JMP SETEQ,I 
+* 
+* 
+      SKP 
+      HED SYSMG BUFF & PRIV I-O CONFIG      A-92000-60003-2 REV. B
+* 
+*  ROUTINE TO CLEAR DMA CHANNEL IF ASSIGNED TO DEVICE 
+* 
+CLDMA NOP 
+      LDB INTBA      GET THE INTERRUPLE ADDRESS TO B
+      LDA B,I         AND DMA 6 ENTRY TO A
+      RAL,CLE,ERA      CLEAR THE SIGN BIT 
+      CPA EQT1       THIS CHANNEL ASSIGNED? 
+      CLA,RSS         YES- SKIP 
+      JMP IOCL3       NO TRY NEXT CHANNEL 
+      CLC 6          CLEAR CHANNEL
+      ST
+F 6            6. 
+      STA B,I        SET IT AVAILABLE IN INTBA
+      SPC 1 
+IOCL3 INB            STEP TO DMA 7 ENTRY
+      LDA B,I         GET TO A  AND 
+      RAL,CLE,ERA      CLEAR THE SIGN BIT 
+      CPA EQT1       THIS CHANNEL ASSIGNED? 
+    
+  CLA,RSS         YES - SKIP
+      JMP CLDMA,I     NO - EXIT CHANNELS CLEARED
+      CLC 7           CLEAR CHANNEL 7 
+      STF 7           AND 
+      STA B,I         MAKE IT AVAILABLE.
+      JMP CLDMA,I 
+* 
+*  ROUTINE TO CLEAR ALL CHANNELS SERVICED 
+BY EQT ENTRY
+* 
+CLCHS NOP 
+      JSB CLDMA       CLEAR DMA CHANNEL IF ASSIGNED 
+      LDA INTLG     STORE INTERRUPT 
+      CMA,INA        TABLE LENGTH-
+      ADA .2         RELATED INDEX
+      STA TEMPW 
+      LDA CLR10     STORE INITIAL 
+      ST
+A CLCSC      CLC S.C. 
+      LDA INTBA      INSTRUCTION
+      ADA .2
+CLRNX LDB A,I       GET NEXT TABLE ENTRY- 
+      CPB EQT1      DOES IT REFERENCE THIS EQT? 
+CLCSC CLC 00B        YES-GO CLEAR IT
+      ISZ TEMPW     THRU TABLE? 
+      INA,RSS     
+   NO-INDEX TO NEXT ENTRY 
+      JMP CLCHS,I    YES-EXIT 
+      ISZ CLCSC 
+      JMP CLRNX 
+* 
+CLR10 CLC 10B 
+      HED OUTPUT * ON SYTEM TELETYPE        A-92000-60003-2 REV. B
+**************************************************************
+*     TH
+E $TYPE SECTION FUNCTIONS AS FOLLOWS: 
+*       ENTRY IS MADE BY STRIKING ANY KEY ON THE SYSTEM TTY * 
+*       IF TELETYPE IS NOT BUSY,THEN * IS OUTPUT AND REQUEST* 
+*       IS MADE FOR INPUT.IF FLAG IS SET THEN IQNORE REQUEST *
+*       ON COMPLETION OF
+ INPUT THE MESSAGE  IS DECODED AND IF*
+*       THE MESSAGE IS A "GO","AB","SS", OR "UP" THEN THE 
+*       CORRECT ACTION IS TAKEN ELSE "?" IS PRINTED.
+**************************************************************
+* 
+$TYPE LDA OPFLG   CHECK SYSTEM TTY
+ FLAG 
+      SZA 
+      JMP $XEQ   BUSY SO IGNORE 
+* 
+      LDA COLON 
+      JSB SYSMG   OUTPUT ASTERISK 
+* 
+      JSB XSIO      INPUT OPERATOR MESSAGE
+      OCT 1 
+      DEF TYP10     GO HERE ON COMPLETION 
+      NOP 
+      OCT 401 
+      DEF 
+BUFFR 
+      DEC -4
+* 
+      ISZ OPFLG    SET SYSTEM TTY BUSZ
+      JMP $XEQ
+* 
+TYP10 CLA 
+      STA OPFLG 
+      LDA BUFFR    GET MESSAGE
+      CPA AB
+      JMP ABORT   ABORT PROGRAM 
+      CPA GO
+      JMP TYP20 
+      CPA SS
+      JMP STP 
+    STOP EXECUTION(SUSPEND) 
+      CPA UP      UP LOGICAL UNIT 
+      JMP UPLU
+* 
+      LDA QMRKA 
+      JSB SYSMG   OUTPUT ? AND CONTINUE 
+      JMP $XEQ
+* 
+TYP20 CLA    CLEAR TTY FLAG 
+      CPA SUSP5 
+      JMP $XEQ    CONTINUE EXECUTION
+* 
+      JMP RSTRT   ITS SUSPENDED,SO RESTART
+STP   JSB $LIST    SUSPEND PROGRAM
+      OCT 106 
+SSP   NOP 
+* 
+* UP A DOWNED LOGICAL UNIT
+* 
+UPLU  LDB EQTA      GET EQT ADDRS 
+      ADB .4        ADDRESS OF STATUS WORD
+      CLA,INA       START COUNTI
+NG EQTS 
+UPLU1 STA TEMP
+      LDA B,I       GET STATUS WORD 
+      AND MASK0     SEE IF THIS DEVICE IS DOWN
+      SZA,RSS 
+      JMP NXTEQ     NO,ITS NOT! 
+      LDA TEMP      YES,ITS DOWN
+      JSB CVEQT     SET EQT ADDRESSES 
+      CLA,INA 
+    
+  STA CONFL    SET CONTROL FLAG=1 FOR IOCOM 
+      CLA 
+      STA OPFLG    CLEAR OPER. FLAG 
+      STA COMPL    CLEAR COMPLETION FLAG
+      JMP L.60     GOTO IOCOM 
+* 
+NXTEQ ADB .15      INCREMENT TO NEXT EQT
+      LDA TEMP
+      CPA EQT#     HAVE 
+WE LOOKED AT ALL EQTS 
+      JMP $XEQ      YES!
+      INA 
+      JMP UPLU1    NO,GOTO NEXT ONE 
+* 
+AB    ASC 1,AB
+GO    ASC 1,GO
+SS    ASC 1,SS
+UP    ASC 1,UP
+* 
+QMRKA DEF *+1 
+      DEC -1
+      ASC 1,? 
+COLON DEF *+1 
+N4    DEC -4
+      OC
+T 6412   CR,LF
+      ASC 1,:_          PROMPT
+BUFFR BSS 2 
+MASK0 OCT 40000 
+      SKP 
+* 
+      HED SYSTEM DEFINE ROUTINE             A-92000-60003-2 REV. B
+* 
+* 
+* 
+*     CALLING SEQUENCE: 
+* 
+*          JSB .OPSY
+* 
+*     RESULT IN A REGIST
+ER
+* 
+*         A = -3
+* 
+* 
+.OPSY NOP 
+      LDA N3
+      JMP .OPSY,I   RETURN
+* 
+* 
+* 
+* 
+      SKP 
+      HED * SYSTEM BASE PAGE COMM. AREA *   A-92000-60003-2 REV. B
+A     EQU 0 
+B     EQU 1 
+* 
+$CIC EQU CIC
+$L.13 EQU L.13
+$L.51 EQU 
+L.51
+$L.55 EQU L.55
+$L.10 EQU L.10
+$R02  EQU R02 
+$TMP1 EQU TEMP1 
+$TMP2 EQU TEMP2 
+$TMP3 EQU TEMP3 
+$TMP4 EQU TEMP4 
+$TMPW EQU TEMPW 
+$WRD2 EQU WORD2 
+$ER04 EQU ERR04 
+$RXIT EQU REXIT 
+$IOER EQU IOERR 
+* 
+* 
+* 
+.     EQU 1650B     ESTABLIS
+H ORIGIN OF AREA
+* 
+* SYSTEM TABLE DEFINITION * 
+* 
+EQTA  EQU .+0      FWA  OF  EQUIPMENT TABLE 
+EQT#  EQU .+1       # OF EQT ENTRIES
+DRT   EQU .+2      FWA  OF  DEVICE REFERENCE TABLE
+LUMAX EQU .+3       # OF LOGICAL UNITS (IN DRT) 
+INTBA EQU .+4 
+     FWA  OF  INTERRUPT TABLE 
+INTLG EQU .+5       # OF INTERRUPT TABLE ENTRIES
+KEYWD EQU .+7      FWA  OF  KEYWORD BLOCK 
+* 
+* I/O MODULE/DRIVER COMMUNICATION 
+* 
+EQT1  EQU .+8      ADDRESSES
+EQT2  EQU .+9 
+EQT3  EQU .+10      OF
+EQT4  EQU .+11
+EQT5  EQU .+12      CURRENT 
+EQT6  EQU .+13
+EQT7  EQU .+14      15-WORD 
+EQT8  EQU .+15
+EQT9  EQU .+16      EQT 
+EQT10 EQU .+17
+EQT11 EQU .+18      ENTRY 
+EQT12 EQU .+81
+EQT13 EQU .+82
+EQT14 EQU .+83
+EQT15 EQU .+84
+* 
+CHAN  EQU .+19     CURRENT
+ DMA CHANNEL #
+TBG   EQU .+20     I/O ADDRESS OF TIME-BASE CARD
+SYSTY EQU .+21     EQT ENTRY ADDRESS OF SYSTEM TTY
+* 
+* SYSTEM REQUEST PROCESSOR /'EXEC' COMMUNICATION *
+* 
+RQCNT EQU .+22     # OF REQUEST PARAMETERS -1 
+RQRTN EQU .+23      RETURN POI
+NT ADDRESS
+RQP1  EQU .+24      ADDRESSES 
+RQP2  EQU .+25
+RQP3  EQU .+26       OF REQUEST 
+RQP4  EQU .+27
+RQP5  EQU .+28       PARAMETERS 
+RQP6  EQU .+29
+RQP7  EQU .+30       (SET FOR MAXIMUM OF
+RQP8  EQU .+31        8 PARAMETERS) 
+* 
+* DEFINITION
+ OF SYSTEM LISTS (QUEUES) * 
+* 
+DORMT EQU .+32     ADDRESS OF 'DORMANT' LIST, 
+SKEDD EQU .+33      'SCHEDULE' LIST,
+SUSP3 EQU .+36      'AVAILABLE MEMORY' LIST,
+SUSP5 EQU .+38      'OPERATOR SUSPEND' LIST 
+* 
+* DEFINITION OF EXECUTING PROGRAM  ID SE
+GMENT' *
+* 
+XEQT  EQU .+39     ID SEGMENT ADDR. OF CURRENT PROG.
+XLINK EQU .+40       'LINKAGE'
+XTEMP EQU .+41       'TEMPORARY (5-WORDS) 
+XPRIO EQU .+46       'PRIORITY' WORD
+XPENT EQU .+47       'PRIMARY ENTRY POINT'
+XSUSP EQU .+48       'POINT OF
+ SUSPENSION'
+XA    EQU .+49       'A REGISTER' AT SUSPENSION 
+XB    EQU .+50       'B REGISTER' 
+XEO   EQU .+51       'E AND OVERFLOW
+* 
+* SYSTEM MODULE COMMUNICATION FLAGS * 
+* 
+OPATN EQU .+52     OPERATOR/KEYBOARD ATTENTION FLAG 
+OPFLG EQU .+53  
+   OPERATOR COMMUNICATION FLAG
+DUMMY EQU .+55     I/O ADDRESS OF DUMMY INT. CARD 
+* 
+* DEFINITION OF MEMORY ALLOCATION BASES * 
+* 
+BPA1  EQU .+58     FWA R/T DISC RES. BP LINK AREA 
+BPA2  EQU .+59     LWA R/T DISC RES. BP LINK AREA 
+LBORG EQU .+61  
+   FWA OF RESIDENT LIBRARY AREA 
+RTORG EQU .+62     FWA OF REAL-TIME AREA
+RTCOM EQU .+63     LENGTH OF REAL TIME COMMON AREA
+RTDRA EQU .+64     FWA OF R/T DISC RESIDENT AREA
+AVMEM EQU .+65     FWA OF SYSTEM AVAILABLE MEMORY 
+BKORG EQU .+66     FWA OF 
+BACKGROUND AREA 
+* 
+* UTILITY PARAMETERS
+* 
+FENCE EQU .+85      MEM PROTECT FENCE ADDRESS 
+BKLWA EQU .+87      LWA MEMORY IN BACKGROUND
+      END CIC 

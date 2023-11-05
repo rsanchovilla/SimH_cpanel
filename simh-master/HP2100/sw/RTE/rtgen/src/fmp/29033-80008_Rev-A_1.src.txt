@@ -1,0 +1,789 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME  CR..(8) 
+        NAM CR..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT CR..
+        EXT .ENTR 
+        EXT .MPY
+        EXT .DIV
+        EXT .DRCT 
+        EXT CREA. 
+        EXT NAM.. 
+        EXT EXEC
+        EXT RWNDF 
+        EXT WRITF 
+        EXT IER.
+        EXT OPEN. 
+        EXT LOCK. 
+        EXT DR.RD 
+        EXT N.OPL 
+        EXT O.BUF 
+        EXT PK.DR 
+        EXT D.
+        EXT .E.R. 
+NAM     BSS 1 
+NAM1    BSS 1 
+NAM2    BSS     2 
+LUC     BSS 1 
+EF      BSS 1 
+SPLC    BSS 1 
+RW      BSS 1 
+SC      BSS     8 
+TY      BSS 1 
+.1      OCT 000002
+DCB4    BSS 1 
+DCB3    BSS 1 
+DCB2    BSS 1 
+DCB     BSS 1 
+DCB15   BSS 1 
+DCB13   BSS 1 
+DCB9    BSS 1 
+DCB8    BSS 1 
+DCB7    BSS 1 
+DCB6    BSS 1 
+DCB5    BSS 1 
+.2      OCT 000004
+LIS21   BSS 1 
+LIS20   BSS 1 
+LIS17   BSS 1 
+LIS16   BSS 1 
+LIS13   BSS 1 
+LIS9    BSS 1 
+LIS5    BSS 1 
+LIS1    BSS 1 
+.3      OCT 000003
+ADD     BSS 1 
+.4      OCT 000200
+BLK     BSS 1 
+SP      BSS 1 
+T       BSS 1 
+.5      OCT 000001
+.9      DEF NAM 
+.10     OCT 000017
+.13     OCT 177761
+.14     OCT 157777
+.15     OCT 177777
+.16     OCT 000000
+.18     OCT 051105
+.19     OCT 100000
+.21     OCT 053522
+.23     OCT 041117
+.24     OCT 100001
+.26     OCT 041123
+.28     OCT 043123
+.31     OCT 042517
+.32     OCT 000100
+.34     OCT 050101
+.35     OCT 001100
+.37     OCT 046105
+.38     OCT 001000
+.40     OCT 177775
+.41     OCT 000037
+.45     OCT 041111
+.46     OCT 040523
+.47     OCT 000077
+AREG    BSS 1 
+.48     OCT 177776
+T1      BSS 1 
+.52     DEF SC
+.53     OCT 001757
+.56     OCT 001760
+PKD8    BSS 1 
+PKD6    BSS 1 
+NTR     BSS 1 
+.58     OCT 001717
+.59     BSS 1 
+.60     OCT 000011
+BREG    BSS 1 
+.62     OCT 000020
+PKD     BSS 1 
+PKD1    BSS 1 
+PKD2    BSS 1 
+.65     DEF NAM2
+PKD15   BSS 1 
+.71     OCT 177764
+.72     OCT 000007
+.73     OCT 000005
+.74     OCT 000024
+.75     OCT 000067
+.76     OCT 000070
+*003  !     THIS  MODULE  OF  THE  RTE  FMP 
+*004  !     ROUTINE F M G R         CREATES EMPTY 
+*005  !     FILES,  IT ALSO         CREATS TYPE 
+*006  !     ZERO    FILES.
+*007  !     COMMANDS   THIS ROUTINE HANDLES 
+*008  !     ARE:
+*009  !     CR,NAMR 
+*010  !         WHERE 
+*011  !         NAMR IS  A  NAME REFERENCE
+*012  !           WHICH INCLUDES
+*013  !          SC     SECURITY    CODE
+*014  !           CR    CARTRIDGE   ID
+*015  !          TY     TYPE
+*016  !           SZ 1  SIZE  (NO. OF BLOCKS) 
+*017  !           SZ 2   RECORD SIZE (ONLY IF TY=2) 
+*018  !     OR
+*019  !     CR,NAMR,LU,RWOP,SPOP,EOFOP,  SUBFUN OP
+*020  !         WHERE : 
+*021  !         NAMR IS AS ABOVE EXCEPT 
+*022  !         TY=0
+*023  !           (IN THIS CASE CR IS FORCED TO-2)
+*024  !         LU    IS THE DEVICE  LOGICAL UNIT 
+*025  !         RWOP  IS  THE  READ  WRITE  OPTION
+*026  !             I.E. "READ", "WRITE", "BOTH"
+*027  !         SPOP  IS THE  SPACING  OPTION 
+*028  !              I.E. " BSPACF", "FSPACE", "BOTH" 
+*029  !         EOF  IS THE END OF FILE OPTION
+*030  !              I.E.  "EOF","LEADER","PAGE", 
+*031  !                  NUMERIC SUB FUNCTION.
+*032  !         SUBFUNOP IS THE READ/WRITE
+*033  !                    SUB FUNCTION 
+*034  !               (I.E. "BINARY","ASCII",NUMERIC
+*035  !                    SUBFUNCTION. 
+*036  !     DEFINE   EXTERNALS
+*037  ! 
+*038        LET CREA.,NAM..,EXEC, \ 
+*            RWNDF,WRITF, IER.,\
+*       OPEN.,\ 
+*            LOCK.,DR.RD        BE SUBROUTINE,EXTERNAL
+*039  ! 
+*040  ! 
+*041        LET N.OPL,O.BUF,PK.DR,D.,.E.R.  BE INTEGER,EXTERNAL 
+*042  ! 
+*043  !      DEFINE   LOCAL   SUBS. 
+*044  ! 
+*045        LET  SETAD, CR..  BE  SUBROUTINE
+*046  ! 
+*047  !     DEFINE  16 WORD  TYPE ZERO NAME BLOCK 
+*048  ! 
+*049        LET  NAM,NAM1,NAM2(2),LUC,\ 
+*            EF,SPLC,RW,SC(8)    BE INTEGER 
+*050  ! 
+*051  !     DEFINE   CONSTANTS
+*052  ! 
+*053        LET  XEQT     BE CONSTANT (1717K) 
+*054        LET  SECT2    BE CONSTANT (1757K) 
+*055        LET  SECT3    BE CONSTANT (1760K) 
+*056        LET  EOF      BE CONSTANT (42517K)
+*057        LET  LE       BE CONSTANT (46105K)
+*058        LET  PA       BE CONSTANT (50101K)
+*059        LET  AS       BE CONSTANT (40523K)
+*060        LET  BI       BE CONSTANT (41111K)
+*061        LET  RE       BE CONSTANT (51105K)
+*062        LET  WR       BE CONSTANT (53522K)
+*063        LET  BO       BE CONSTANT (41117K)
+*064        LET  BS       BE CONSTANT (41123K)
+*065        LET  FS       BE CONSTANT (43123K)
+*066  CR..: SUBROUTINE(NO,LIS, ER) GLOBAL 
+NO      NOP 
+LIS     NOP 
+ER      NOP 
+CR..    NOP 
+        JSB .ENTR 
+        DEF NO
+*067        TY_@N.OPL+2 
+        JSB .DRCT 
+        DEF N.OPL 
+        ADA .1
+        STA TY
+*068  ! 
+*069               DCB4 _[DCB3_[DCB2_[DCB_@O.BUF]+\ 
+*               2]+1]+1 
+        JSB .DRCT 
+        DEF O.BUF 
+        STA DCB 
+        ADA .1
+        STA DCB2
+        INA 
+        STA DCB3
+        INA 
+        STA DCB4
+*070        DCB15_[DCB13_[DCB9_[DCB8_[DCB7_[DCB6_[DCB5 _\ 
+*                   DCB4+1]+1]+1]+1]+1]+ 4]+2 
+        INA 
+        STA DCB5
+        INA 
+        STA DCB6
+        INA 
+        STA DCB7
+        INA 
+        STA DCB8
+        INA 
+        STA DCB9
+        ADA .2
+        STA DCB13 
+        ADA .1
+        STA DCB15 
+*071  ! 
+*072        LIS21_[LIS20_[LIS17_[LIS16_[LIS13_[LIS9_[\
+*              LIS5_[LIS1_@LIS+1]+4]+4]+4]+3]+1]+\
+*                   3]+1
+        LDA LIS 
+        INA 
+        STA LIS1
+        ADA .2
+        STA LIS5
+        ADA .2
+        STA LIS9
+        ADA .2
+        STA LIS13 
+        ADA .3
+        STA LIS16 
+        INA 
+        STA LIS17 
+        ADA .3
+        STA LIS20 
+        INA 
+        STA LIS21 
+*073  ! 
+*074        ADD_128 
+        LDA .4
+        STA ADD 
+*075        BLK,RW,SP,SPLC,EF_0  !INITILIZE FLAGES
+        CLA 
+        STA BLK 
+        STA RW
+        STA SP
+        STA SPLC
+        STA EF
+*076  ! 
+*077        FOR  T_@ NAM TO @ NAM +15 DO $T_0 
+        LDA .9
+        STA T 
+        JMP .7
+.6      LDA T 
+        INA 
+        STA T 
+.7      LDA .9
+        ADA .10 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .8
+        CLA 
+        STA T,I 
+        JMP .6
+*078        IF $TY THEN [CREA.(O.BUF, $LIS1,N.OPL)?[\ 
+*                      ER_-15];RETURN]
+.8      LDA TY,I
+        SZA,RSS 
+        JMP .12 
+        JSB CREA. 
+        DEF *+4 
+        DEF O.BUF 
+        DEF LIS1,I
+        DEF N.OPL 
+        SEZ,RSS 
+        JMP .11 
+        LDA .13 
+        STA ER,I
+.11     JMP CR..,I
+*079        IF $LIS5 >20000K THEN GO TO ILLU
+.12     LDB LIS5,I
+        ADB .14 
+        SSB,RSS 
+        JMP ILLU
+*080        IF $LIS5<1       THEN GO TO ILLU
+        LDB LIS5,I
+        ADB .15 
+        SSB 
+        JMP ILLU
+*081        OPEN. (O.BUF,$LIS5,N.OPL,0)  !SET DEFAULT EOF 
+        JSB OPEN. 
+        DEF *+5 
+        DEF O.BUF 
+        DEF LIS5,I
+        DEF N.OPL 
+        DEF .16 
+*082        IFNOT   $LIS9  THEN  GO TO  MISPM 
+        LDA LIS9,I
+        SZA,RSS 
+        JMP MISPM 
+*083  !     SET   R/W  CODE 
+*084        IF $LIS9 = RE  THEN   RW_100000K
+        LDB LIS9,I
+        CPB .18 
+        RSS 
+        JMP .17 
+        LDA .19 
+        STA RW
+*085        IF $LIS9 = WR THEN RW_1 
+.17     LDB LIS9,I
+        CPB .21 
+        RSS 
+        JMP .20 
+        CLA,INA 
+        STA RW
+*086        IF $LIS9 = BO  THEN RW_100001K
+.20     LDB LIS9,I
+        CPB .23 
+        RSS 
+        JMP .22 
+        LDA .24 
+        STA RW
+*087        IFNOT   RW    THEN  GO TO ILLPM 
+.22     LDA RW
+        SZA,RSS 
+        JMP ILLPM 
+*088  !     SET   SPACING CODE
+*089        IFNOT $LIS13  THEN GO TO  EOFCD 
+        LDA LIS13,I 
+        SZA,RSS 
+        JMP EOFCD 
+*090        IF   $LIS13= BS  THEN   SP_100000K
+        LDB LIS13,I 
+        CPB .26 
+        RSS 
+        JMP .25 
+        LDA .19 
+        STA SP
+*091        IF $LIS13 = FS  THEN  SP_1
+.25     LDB LIS13,I 
+        CPB .28 
+        RSS 
+        JMP .27 
+        CLA,INA 
+        STA SP
+*092        IF  $LIS13=BO THEN SP_100001K 
+.27     LDB LIS13,I 
+        CPB .23 
+        RSS 
+        JMP .29 
+        LDA .24 
+        STA SP
+*093        IFNOT SP THEN GOTO ILLPM !BAD SP COMMAND
+.29     LDA SP
+        SZA,RSS 
+        JMP ILLPM 
+*094  !     SET  EOF  CODE  (DEFAULT -FMGR DEFAULT) 
+*095  ! 
+*096  EOFCD:IF $LIS17=EOF THEN EF_100K
+EOFCD   LDB LIS17,I 
+        CPB .31 
+        RSS 
+        JMP .30 
+        LDA .32 
+        STA EF
+*097        IF   $LIS17=PA   THEN   EF_1100K
+.30     LDB LIS17,I 
+        CPB .34 
+        RSS 
+        JMP .33 
+        LDA .35 
+        STA EF
+*098        IF $LIS17=LE THEN EF_1000K
+.33     LDB LIS17,I 
+        CPB .37 
+        RSS 
+        JMP .36 
+        LDA .38 
+        STA EF
+*099        IF  $LIS16<3  THEN EF_($LIS17 AND 37K)-<6 
+.36     LDB LIS16,I 
+        ADB .40 
+        SSB,RSS 
+        JMP .39 
+        LDA LIS17,I 
+        AND .41 
+        ALF 
+        RAL,RAL 
+        STA EF
+*100        IFNOT  $LIS16  THEN   EF_$DCB4
+.39     LDA LIS16,I 
+        SZA 
+        JMP .42 
+        LDA DCB4,I
+        STA EF
+*101        IFNOT EF THEN GO TO ILLPM 
+.42     LDA EF
+        SZA,RSS 
+        JMP ILLPM 
+*102  ! 
+*103  !     SET   SUB FUNCTION  (DEFAULT 00=ASCII 
+*104  ! 
+*105        IFNOT $LIS20  THEN GO TO SETUP
+        LDA LIS20,I 
+        SZA,RSS 
+        JMP SETUP 
+*106        IF   $LIS20<3 THEN   LUC_($LIS21 AND 37K)-<6
+        LDB LIS20,I 
+        ADB .40 
+        SSB,RSS 
+        JMP .43 
+        LDA LIS21,I 
+        AND .41 
+        ALF 
+        RAL,RAL 
+        STA LUC 
+*107        IF   $LIS21 = BI THEN   LUC_100K
+.43     LDB LIS21,I 
+        CPB .45 
+        RSS 
+        JMP .44 
+        LDA .32 
+        STA LUC 
+*108        IF $LIS21=AS THEN GO TO SETUP 
+.44     LDB LIS21,I 
+        CPB .46 
+        JMP SETUP 
+*109        IFNOT LUC THEN GO TO ILLPM !IF GIVEN AND NOT SET ERROR
+        LDA LUC 
+        SZA,RSS 
+        JMP ILLPM 
+*110  ! 
+*111  SETUP: LUC_  LUC+[T_($ LIS5 AND 77K)] 
+SETUP   LDA LIS5,I
+        AND .47 
+        STA T 
+        ADA LUC 
+        STA LUC 
+*112        EF_EF OR T
+        LDA EF
+        IOR T 
+        STA EF
+*113        NAM.. ($LIS1) 
+        JSB NAM.. 
+        DEF *+2 
+        DEF LIS1,I
+*114        AREG_$0 
+        LDA .16,I 
+        STA AREG
+*115        IF  AREG  THEN GO TO ILNAM
+        SZA 
+        JMP ILNAM 
+*116        LOCK.(-2,3)?[RETURN]  ! LOCK THE DISC 
+        JSB LOCK. 
+        DEF *+3 
+        DEF .48 
+        DEF .3
+        SEZ 
+        JMP CR..,I
+*117        T1_@NAM 
+        LDA .9
+        STA T1
+*118        FOR T_LIS1  TO LIS1+2  DO [$T1_$T;T1_T1+1]
+        LDA LIS1
+        STA T 
+        JMP .50 
+.49     LDA T 
+        INA 
+        STA T 
+.50     LDA LIS1
+        ADA .1
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .51 
+        LDA T,I 
+        STA T1,I
+        LDA T1
+        INA 
+        STA T1
+        JMP .49 
+*119        SC(1)_N.OPL    !SET THE SECURITY CODE 
+.51     LDA N.OPL 
+        STA .52,I 
+*120  ! 
+*121        SETAD 
+        JSB SETAD 
+        DEF *+1 
+*122        $DCB8_$SECT2
+        LDA .53,I 
+        STA DCB8,I
+*123        IF $SECT3 THEN [IF $SECT3<$SECT2 THEN $DCB8_$SECT3] 
+        LDA .56,I 
+        SZA,RSS 
+        JMP .55 
+        LDB .53,I 
+        CMB,INB 
+        ADB .56,I 
+        SSB,RSS 
+        JMP .55 
+        LDA .56,I 
+        STA DCB8,I
+*124        $DCB5_ -$PKD8*$PKD6+2 
+.55     LDB PKD8,I
+        CMB,INB 
+        LDA .B. 
+        JSB .MPY
+        DEF PKD6,I
+        ADA .1
+        STA DCB5,I
+*125        NTR_$DCB5/$DCB8 
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF DCB8,I
+        STA NTR 
+*126        IF  $1  THEN  NTR_NTR+1 
+        LDA .5,I
+        SZA,RSS 
+        JMP .57 
+        LDA NTR 
+        INA 
+        STA NTR 
+*127  ! 
+*128        EXEC (4,NTR,$DCB3,$DCB,$DCB8)  !GET A TRACK 
+.57     JSB EXEC
+        DEF *+6 
+        DEF .2
+        DEF NTR 
+        DEF DCB3,I
+        DEF DCB,I 
+        DEF DCB8,I
+*129  ! 
+*130        EXEC (2,$DCB, NAM,128,$DCB3,0) ! WRITE DIRENT 
+        JSB EXEC
+        DEF *+7 
+        DEF .1
+        DEF DCB,I 
+        DEF NAM 
+        DEF .4
+        DEF DCB3,I
+        DEF .16 
+*131  ! 
+*132  SCHD: EXEC (9,D.,$XEQT,($DCB3 -<6)+$DCB,-2,0,1)!ENTER 
+SCHD    LDA DCB3,I
+        ALF 
+        RAL,RAL 
+        ADA DCB,I 
+        STA .59 
+        JSB EXEC
+        DEF *+8 
+        DEF .60 
+        DEF D.
+        DEF .58,I 
+        DEF .59 
+        DEF .48 
+        DEF .16 
+        DEF .5
+*133        AREG_$0 
+        LDA .16,I 
+        STA AREG
+*134        BREG_$1 
+        LDA .5,I
+        STA BREG
+*135  ! 
+*136        IF AREG THEN GO TO SCHD 
+        LDA AREG
+        SZA 
+        JMP SCHD
+*137  ! 
+*138        IF  $BREG <0 THEN[ER_$BREG; RETURN ]
+        LDB BREG,I
+        SSB,RSS 
+        JMP .61 
+        LDA BREG,I
+        STA ER,I
+        JMP CR..,I
+*139  ! 
+*140        DO[$DCB7_100000K;$DCB4,$DCB15,$DCB13_0;$DCB9_$XEQT] 
+.61     LDA .19 
+        STA DCB7,I
+        CLA 
+        STA DCB4,I
+        STA DCB15,I 
+        STA DCB13,I 
+        LDA .58,I 
+        STA DCB9,I
+*141        $DCB6_16               !COMPLET DCB 
+        LDA .62 
+        STA DCB6,I
+*142        $DCB2_2                !  FAKE  OUT 
+        LDA .1
+        STA DCB2,I
+*143        RWNDF (O.BUF,.E.R.)    ! SET UP TO WRITE
+        JSB RWNDF 
+        DEF *+3 
+        DEF O.BUF 
+        DEF .E.R. 
+*144        IER.                   ! CHECK ERRORS 
+        JSB IER.
+        DEF *+1 
+*145  ! 
+*146        SPLC_SP                 !SET SPACE CODE 
+        LDA SP
+        STA SPLC
+*147        WRITF(O.BUF,.E.R.,$PKD)      ! WRITE DISC 
+        JSB WRITF 
+        DEF *+4 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF PKD,I 
+*148        WRITF (O.BUF,.E.R.,  NAM) ! WRITE FILENM
+        JSB WRITF 
+        DEF *+4 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF NAM 
+*149  SETA: SETAD  ! GET NEXT ENTRY 
+SETA    JSB SETAD 
+        DEF *+1 
+*150        IF  $PKD =  NAM THEN [IF  $ PKD1= NAM1\ 
+*                THEN [IF $PKD2 = NAM2(1)  THEN \ 
+*                     GO TO FILL]]
+        LDB PKD,I 
+        CPB NAM 
+        RSS 
+        JMP .64 
+        LDB PKD1,I
+        CPB NAM1
+        RSS 
+        JMP .64 
+        LDB PKD2,I
+        CPB .65,I 
+        JMP FILL
+*151        WRITF (O.BUF,.E.R., $PKD) 
+.64     JSB WRITF 
+        DEF *+4 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF PKD,I 
+*152        IER.
+        JSB IER.
+        DEF *+1 
+*153        IF $PKD THEN GO TO SETA 
+        LDA PKD,I 
+        SZA 
+        JMP SETA
+*154  FILL: FOR  T_PKD TO PKD15      DO  $T_0 
+FILL    LDA PKD 
+        STA T 
+        JMP .67 
+.66     LDA T 
+        INA 
+        STA T 
+.67     LDB T 
+        CMB,INB 
+        ADB PKD15 
+        SSB 
+        JMP .69 
+        CLA 
+        STA T,I 
+        JMP .66 
+*155        UNTIL  .E.R.= -12 DO[IER.;WRITF (O.BUF,.E.R.,\
+*                                              $PKD)] 
+.69     LDB .E.R. 
+        CPB .71 
+        JMP CR1 
+        JSB IER.
+        DEF *+1 
+        JSB WRITF 
+        DEF *+4 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF PKD,I 
+        JMP .69 
+*156  CR1:  EXEC (9,D.,$XEQT, ($DCB3-<6)+$DCB,-2,$DCB8,7) 
+CR1     LDA DCB3,I
+        ALF 
+        RAL,RAL 
+        ADA DCB,I 
+        STA .59 
+        JSB EXEC
+        DEF *+8 
+        DEF .60 
+        DEF D.
+        DEF .58,I 
+        DEF .59 
+        DEF .48 
+        DEF DCB8,I
+        DEF .72 
+*157        DO[ AREG_$0;   BREG_$1; IF AREG THEN GO TO CR1] 
+        LDA .16,I 
+        STA AREG
+        LDA .5,I
+        STA BREG
+        LDA AREG
+        SZA 
+        JMP CR1 
+*158        DO[  .E.R._$BREG ; IER.]
+        LDA BREG,I
+        STA .E.R. 
+        JSB IER.
+        DEF *+1 
+*159        LOCK.(-2,5) 
+        JSB LOCK. 
+        DEF *+3 
+        DEF .48 
+        DEF .73 
+*160        EXEC (5,-1) 
+        JSB EXEC
+        DEF *+3 
+        DEF .73 
+        DEF .15 
+*161        RETURN
+        JMP CR..,I
+*162  ! 
+*163  ILLU: DO[ ER_ 20 ; RETURN]
+ILLU    LDA .74 
+        STA ER,I
+        JMP CR..,I
+*164  MISPM:DO[ ER_ 55 ; RETURN]
+MISPM   LDA .75 
+        STA ER,I
+        JMP CR..,I
+*165  ILLPM:DO[ ER_ 56 ; RETURN]
+ILLPM   LDA .76 
+        STA ER,I
+        JMP CR..,I
+*166  ILNAM:DO[ ER_-15 ; RETURN]
+ILNAM   LDA .13 
+        STA ER,I
+        JMP CR..,I
+*167  ! 
+*168        END 
+*169  SETAD:SUBROUTINE   ! TO SET PACK ADDRESSES
+SETAD   NOP 
+        JSB .ENTR 
+        DEF SETAD 
+*170  !     IF NEW BLOCK - THEN SET UP. 
+*171        IF ADD=128 THEN[DR.RD(1,-2,BLK);BLK_BLK+1;\ 
+*                                     ADD_0]
+        LDB ADD 
+        CPB .4
+        RSS 
+        JMP .77 
+        JSB DR.RD 
+        DEF *+4 
+        DEF .5
+        DEF .48 
+        DEF BLK 
+        LDA BLK 
+        INA 
+        STA BLK 
+        CLA 
+        STA ADD 
+*172  ! 
+*173        PKD15_[PKD8_[PKD6_[PKD2_[PKD1_[PKD_@PK.DR+ADD]+\
+*                1]+1]+4]+2]+7  ! SET   ADDRESSES 
+.77     JSB .DRCT 
+        DEF PK.DR 
+        ADA ADD 
+        STA PKD 
+        INA 
+        STA PKD1
+        INA 
+        STA PKD2
+        ADA .2
+        STA PKD6
+        ADA .1
+        STA PKD8
+        ADA .72 
+        STA PKD15 
+*174  ! 
+*175        ADD_ADD+16    ! STEP ADDRESS  FOR NEXT TIME 
+        LDA ADD 
+        ADA .62 
+        STA ADD 
+*176        RETURN        ! DONE
+        JMP SETAD,I 
+*177        END 
+*178        END 
+        END 
+*179        END$

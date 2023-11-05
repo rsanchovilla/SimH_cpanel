@@ -1,0 +1,118 @@
+ASMB,R,B,L
+      NAM POINT,7 
+      ENT POINT,PSET
+      EXT EXEC,.ENTR
+* 
+**
+**      THIS SUBROUTINE WILL OUTPUT A NUMBER OF POINTS
+**   ON A STORAGE OSCILLOSCOPE HP 1331C. THE COORDINATES ARE
+**   GIVEN IN TWO ARRAYS, AND MUST BE INTEGER. THE COORDINATES
+**   ARE SIMPLY TRUNCATED TO 8 BITS, AND NO CHECK IS DONE.
+**
+**      CALLING SEQUENCE : CALL POINT(LU,IX,IY,INUM)
+**      WHERE : LU = LOGICAL UNIT NUMBER OF SCOPE.
+**              IX = BUFFER WHICH CONTAINS THE X-COORDINATES
+**              IY = BUFFER WHICH CONTAINS THE Y-COORDINATES
+**              INUM = NUMBER OF POINTS.
+**
+**                       WIM ROELANDTS, HP BRUSSEL
+**
+* 
+      SKP 
+LU    BSS 1 
+IX    BSS 1 
+IY    BSS 1 
+INUM  BSS 1 
+POINT NOP 
+      JSB .ENTR 
+      DEF LU
+* 
+      LDA INUM,I    GET NUMBER TO DO
+      CMA,INA 
+      STA INUM      SAVE AS COUNTER 
+GO    LDA .BUF      SET UP :
+      STA PBUF      BUFFER POINTER
+      LDA MD10
+      STA CNT       BUFFER COUNTER
+      CLA 
+      STA LEN       NUMBER OF POINTS
+GO1   LDA IX,I      GET A 'X' 
+      ISZ IX
+      AND B377      TRUNCATE TO 8 LOWER BITS
+      STA B 
+      LDA IY,I      GET A 'Y' 
+      ISZ IY
+      AND B377
+      ALF,ALF       MOVE UP 
+      IOR B         AND ADD 'X' 
+      STA PBUF,I    STORE IN BUFFER 
+      ISZ PBUF      BUMP POINTER
+      ISZ LEN       BUMP LENGTH 
+      ISZ INUM      ALL DONE ?
+      JMP GO2       NO, THEN CONTINUE 
+      JSB OUT       YES, GET THEM OUT 
+      JMP POINT,I   AND RETURN
+GO2   ISZ CNT       BUFFER FULL ? 
+      JMP GO1       NO, GET ANOTHER POINT 
+      JSB OUT       YES, GET IT OUT 
+      JMP GO        AND CONTINUE
+* 
+** OUTPUT SUBROUTINE
+* 
+OUT   NOP 
+      JSB EXEC
+      DEF *+5 
+      DEF D2
+      DEF LU,I
+.BUF  DEF BUF 
+      DEF LEN 
+      JMP OUT,I 
+      SKP 
+* 
+**
+**      THIS SUBROUTINE WILL OUTPUT A POINT ON A STORAGE 
+**   OSCILLOSCOPE HP 1331C. THE COORDINATES ARE GIVEN IN TWO 
+**   INTEGERS. 
+**
+**      CALLING SEQUENCE : CALL PSET(LU,IX,IY)
+**      WHERE : LU = LOGICAL UNIT NUMBER OF SCOPE.
+**              IX = CONTAINS THE X-COORDINATES
+**              IY = CONTAINS THE Y-COORDINATES
+**
+**                       ROBERTO SANCHO, APR 2017
+**
+* 
+      SKP 
+LU1   BSS 1 
+IX1   BSS 1 
+IY1   BSS 1 
+PSET  NOP 
+      JSB .ENTR 
+      DEF LU1
+* 
+      LDA D1
+      CMA,INA 
+      STA INUM      POINTS COUNTER = 1
+      LDA LU1       COPY POINT PARAMS
+      STA LU
+      LDA IX1
+      STA IX
+      LDA IY1
+      STA IY
+      LDA PSET
+      STA POINT     FIX RETURN ADDRESS
+      JMP GO        GO TO POINT
+* 
+**   ***   D A T A   ***
+* 
+B     EQU 1 
+D1    DEC 1
+D2    DEC 2 
+MD10  DEC -10 
+B377  OCT 377 
+* 
+PBUF  BSS 1 
+CNT   BSS 1 
+LEN   BSS 1 
+BUF   BSS 10
+      END 

@@ -1,0 +1,622 @@
+ASMB,R,L,X
+      NAM CFILE,3 
+      SPC 2 
+      EXT EXEC
+      SPC 2 
+START LDA B,I      GET FIRST :JOB PARAMETER 
+      STA TEMP       AND SAVE 
+      JSB EXEC     CHECK EXISTENCE OF $FILS 
+      DEF *+4 
+      DEF R18 
+      DEF FILA
+      DEF NSECT 
+      LDB NSECT    GET # OF SECTORS 
+      SZB          DOES $FILS EXIST?
+      JMP CON0     YES. CONTINUE
+      LDA =D-15    NO. PRINT ERROR MESSAGE
+      LDB MS0 
+      JSB PRINT 
+      JMP TERM1 
+      SPC 1 
+TERM  LDA DWFLG    MUST DIRECTORY BE WRITTEN? 
+      SZA,RSS 
+      JMP TERM1    NO.
+      JSB EXEC     YES. WRITE IT
+      DEF *+7 
+      DEF MR2 
+      DEF C2
+      DEF DIREC 
+      DEF DLEN
+      DEF DTRAK 
+      DEF DSECT 
+      SPC 1 
+TERM1 JSB EXEC     TERMINATE PROGRAM
+      DEF *+2 
+      DEF R6
+      SPC 1 
+CON0  STA DTRAK    SAVE TRACK/SECTOR OF $FILS 
+      AND =B377    GET SECTOR # 
+      STA DSECT    SAVE 
+      LDA DTRAK    GET TRACK #
+      ALF,ALF 
+      AND =B377 
+      STA DTRAK    SAVE 
+      SPC 1 
+      JSB EXEC     READ IN DIRECTORY
+      DEF *+7 
+      DEF MR1 
+      DEF C2
+      DEF DIREC 
+      DEF DLEN
+      DEF DTRAK 
+      DEF DSECT 
+      SPC 1 
+      LDA DIREC    GET FIRST WORD OF DIRECTORY
+      CPA =A$F     IS IT "$F"?
+      JMP CON2     YES. CONTINUE
+E0    LDA =D-21    NO. PRINT ERROR MESSAGE
+      LDB MS3 
+      JSB PRINT 
+      JMP TERM1    TERMINATE
+      SPC 1 
+CON2  LDA DIREC+3  GET # OF SECTORS FROM DIREC. 
+      CPA NSECT    =# SHOWN BY SYSTEM?
+      RSS          YES. COMTINUE
+      JMP E0       NO. PRINT ERROR MESSAGE
+      SPC 1 
+      LDA TEMP     GET FIRST :JOB PARAM.
+      SZA,RSS      =0?
+      JMP CON24    YES. PRINT FULL INSTRUCTIONS 
+      LDA =D-14    NO. PRINT OPTION REQUEST 
+      RSS 
+CON24 LDA =D-66 
+      LDB MS10
+      JSB PRINT 
+      SPC 1 
+      JSB EXEC     READ OPTION
+      DEF *+5 
+      DEF R1
+      DEF C1
+      DEF FNAME 
+      DEF DM6 
+      LDA FNAME    GET OPTION 
+      CPA =A1      =1?
+      JMP L00      YES. DOS => BASIC
+      CPA =A2      =2?
+      JMP L000     YES. BASIC => DOS
+      SPC 1 
+      LDA =D-14    PRINT ERROR MESSAGE
+      LDB MS11
+      JSB PRINT 
+      JMP CON24 
+      SPC 1 
+L00   CLA          SAVE 
+L000  STA OPFLG      OPTION 
+L0    LDA DTRAK    RESET START OF $FILS POINTERS
+      STA $TRAK 
+      LDA DSECT 
+      STA $SECT 
+      LDA =D-9     PRINT "FILENAME?"
+      LDB MS1 
+      JSB PRINT 
+      SPC 1 
+      LDA =A       CLEAR INPUT BUFFER 
+      STA FNAME 
+      STA FNAME+1 
+      STA FNAME+2 
+      JSB EXEC     INPUT FILENAME OR "/E" 
+      DEF *+5 
+      DEF R1
+      DEF C1
+      DEF FNAME 
+      DEF DM6 
+      LDA FNAME    CHECK FOR "/E" 
+      CPA =A/E     DONE?
+      JMP TERM     YES
+      SPC 1 
+      LDA OPFLG    GET OPTION 
+      SZA,RSS      DOS => BASIC?
+      JMP CON29    YES. 
+      SPC 1 
+      JSB DSRCH    NO. BASIC => DOS. SEARCH DIRECTORY 
+      JMP CON30   NOT FOUND 
+      INB          INCR. DIRECTORY POINTER
+      LDA B,I      GET WORD 4 OF DIREC. 
+      SSA,RSS      DATA FILE OR PROGRAM?
+      JMP CON40    DATA FILE
+      LDA =D-12    PROGRAM. PRINT ERROR 
+      LDB MS12
+      JSB PRINT 
+      JMP TERM
+      SPC 1 
+CON40 STB TEMP     SAVE DIRECTORY POINTER 
+      ADB =D-4     POINT TO NAME
+      LDA =D-3     SET
+      STA TEMP1      COUNTER
+      LDA DBUFA    SET SECTOR BUFFER
+      INA 
+      STA TEMP2      POINTER
+L10   LDA B,I      GET WORD OF FILENAME 
+      STA TEMP2,I  STORE IN FIRST SECTOR ENTRY
+      INB 
+      ISZ TEMP2 
+      ISZ TEMP1    NAME MOVED?
+      JMP L10      NO.
+      AND =B177400 YES. MASK OFF LAST CHARACTER OF NAME 
+      IOR =B40     ADD ON BLANK 
+      STA FNAME+2    AND SAVE 
+      SPC 1 
+      JSB EXEC     CHECK EXISTENCE OD DOS FILE
+      DEF *+4 
+      DEF R18 
+      DEF FNAME 
+      DEF NSEC2 
+      STA TT
+      LDA NSEC2 
+      SZA,RSS 
+      JMP CON42 
+      ADB =D-1
+      LDA B,I 
+      AND =B177 
+      CPA =B13
+      JMP CON46 
+      LDA =D-10 
+      LDB MS21
+      JSB PRINT 
+      JMP CON42 
+CON42 LDA TEMP,I   NO. GET # OF RECORDS IN FILE 
+      RAL          GET # OF SECTRORS IN FILE
+      INA            +1 
+      SPC 1 
+      JSB CONVT    CONVERT TO ASCII AND STORE 
+      LDA =D-33    PRINT MESSAGE
+      LDB MS13
+      JSB PRINT 
+      JMP TERM     TERMINATE
+      SPC 1 
+CON46 LDA TT
+CON45 STA $TRAK    SAVE TRACK/SECTOR OF DOS FILE
+      AND =B377    GET SECTOR 
+      STA $SECT      AND SAVE 
+      LDA $TRAK 
+      ALF,ALF 
+      AND =B377    GET TRACK
+      STA $TRAK      AND SAVE 
+      SPC 1 
+      LDA DBUF+2   GET 2ND WORD OF FILENAME 
+      IOR =B100000 MAKE BIT 15=1
+      STA DBUF+2     AND RESTORE
+      LDA TEMP,I   GET NUMBER OF RECORDS IN BASUC FILE
+      STA DBUF+11    AND STORE
+      RAL          GET # OF SECTORS NEEDED
+      INA            FOR DOS FILE 
+      STA SCNT       AND SAVE 
+      CMA,INA      NEGATE 
+      ADA NSEC2    ADD # OF SECTORS IN DOS FILE 
+      SSA          IS FILE BIG ENOUGH?
+      JMP CON50    NO.
+      ISZ TEMP     YES. BUMP DIREC. POINTER 
+      LDA TEMP,I   GET LOGICAL RECORD LENGTH
+      STA DBUF+4     AND SAVE 
+      LDB DBUFA    CLEAR WORDS 5-10 OF FIRST SECTOR 
+      ADB =D5 
+      LDA =D-6     SET COUNTER
+      STA TEMP1 
+      CLA 
+L15   STA B,I 
+      INB 
+      ISZ TEMP1    DONE 
+      JMP L15      NO.
+      SPC 1 
+L20   LDA =D-19    YES. PRINT "ENTER USER ID" 
+      LDB MS14
+      JSB PRINT 
+      SPC 1 
+      JSB EXEC     GET USER ID
+      DEF *+5 
+      DEF R1
+      DEF C1
+      DEF FNAME 
+      DEF DM6 
+      SPC 1 
+      LDA FNAME    GET FIRST 2 CHARACTERS 
+      ALF,ALF 
+      AND =B377    ISOLATE FIRST CHAR.
+      ADA =B-133   CHECJ FOR LETTER 
+      SSA,RSS 
+      JMP L20      TRY AGAIN
+      ADA =B32
+      SSA,INA 
+      JMP L20      TRY AGAIN
+      AND =B77
+      ALF,ALF       SHIFT LETTER
+      RAL,RAL 
+      STA TEMP1      AND SAVE 
+      LDA =D-3     SET COUNTER
+      STA TEMP2 
+      CLB 
+      STB DIGF
+L25   STB TEMP3 
+      JSB GETDG 
+      ADA =B-72    TEST FOR DIGIT 
+      SSA,RSS 
+      JMP L20 
+      ADA =D10
+      SSA 
+      JMP L20 
+      LDB TEMP3 
+      RBL,RBL 
+      ADB TEMP3 
+      RBL 
+      ADB 0 
+      ISZ TEMP2 
+      JMP L25 
+      ADB TEMP1    ADD IN LETTER
+      STB DBUF      AND STORE IN FIRST SECTOR ENTRY 
+      LDB =B125252
+      STB DBUF+12 
+      LDB TEMP     GET POINTER TO BASIC DIREC.
+      ADB =D-2
+      LDA B,I      GET REL. START SECTOR OF BASIC FILE
+      ADA DSECT    ADD START SECTOR OF $FILS
+      CLB 
+      DIV SECTR 
+      ADA DTRAK 
+      STA TRAK
+      STB SECT
+      LDA SCNT
+      CMA,INA 
+      STA SCNT
+      SPC 1 
+L30   JSB DWRIT    WRITE SECTOR 
+      JSB DREAD    READ SECTOR
+      ISZ SCNT     DONE?
+      JMP L30      NO.
+      SPC 1 
+      JMP L0
+      SPC 2 
+CON50 LDA =D-12 
+      LDB MS20
+      JSB PRINT 
+      JMP CON42 
+      SPC 2 
+DIGF  NOP 
+GETDG NOP 
+      LDA DIGF
+      CPA =D1 
+      JMP GETD1 
+      CPA =D2 
+      JMP GETD2 
+      LDA FNAME 
+GETD0 AND =B377 
+      ISZ DIGF
+      JMP GETDG,I 
+GETD1 LDA FNAME+1 
+      ALF,ALF 
+      JMP GETD0 
+GETD2 LDA FNAME+1 
+      JMP GETD0 
+      SPC 2 
+CONVT NOP          CONVERT # IN A 
+      CLB 
+      DIV =D10000 
+      ADA =B60
+      ALF,ALF 
+      STA NUMBF 
+      LDA B 
+      CLB 
+      DIV =D1000
+      ADA =B60
+      IOR NUMBF 
+      STA NUMBF 
+      LDA B 
+      CLB 
+      DIV =D100 
+      ADA =B60
+      ALF,ALF 
+      STA NUMBF+1 
+      LDA B 
+      CLB 
+      DIV =D10
+      ADA =B60
+      IOR NUMBF+1 
+      STA NUMBF+1 
+      ADB =B60
+      BLF,BLF 
+      STB NUMBF+2 
+      JMP CONVT,I 
+      SPC 2 
+CON29 JSB EXEC     CHECK EXISTENCE OF "FILENAME"
+      DEF *+4 
+      DEF R18 
+      DEF FNAME 
+      DEF NSEC2 
+      LDB NSEC2    GET # OF SECTORS 
+      SZB          DOES "FILENAME" EXIST? 
+      JMP CON1     YES. CONTINUE
+CON30 LDA =D-12    NO. PRINT ERROR MESSAGE
+      LDB MS2 
+      JSB PRINT 
+      JMP TERM     TERMINATE
+      SPC 1 
+CON1  STA TRAK     SAVE TRACK/SECTOR OF "FILENAME"
+      AND =B377    GET SECTOR # 
+      STA SECT     SAVE 
+      LDA TRAK     GET TRACK #
+      ALF,ALF 
+      AND =B377 
+      STA TRAK     SAVE 
+      SPC 1 
+      JSB DREAD    READ FIRST SECTOR FROM "FILENAME"
+      CLA 
+      STA CFLAG    RESET SEMI-COMPILED FLAG 
+      LDA DBUF+1   GET WORD 1 OF PROG. ENTRY
+      AND =B77777  CLEAR "PROTECTED" BIT
+      STA FNAME    SAVE 
+      LDA DBUF+2   GET WORD 2 OF PROG. ENTRY
+      AND =B77777  CLEAR BIT 15 
+      STA FNAME+1  SAVE 
+      LDA DBUF+3   GET WORD 3 OF PROG. ENTRY
+      SSA          SEMI-COMPILED? 
+      ISZ CFLAG    YES. SET FLAG
+      AND =B77777  NO. CLEAR BIT 15 
+      STA FNAME+2  SAVE 
+      JSB DSRCH    SEARCH DIREC. FOR "FILENAME" 
+      JMP CON3     NOT FOUND. CONTINUE
+      LDA =D-18    FOUND. PRINT ERROR MESSAGE 
+      LDB MS4 
+      JSB PRINT 
+      LDA =D-6     PRINT OFFENDING FILENAME 
+      LDB FNA 
+      JSB PRINT 
+      JMP TERM     TERMINATE
+      SPC 1 
+CON3  LDA DIREC+4  GET LAST USED SECTOR OF $FILS
+      STA TEMP0    SAVE 
+      ADA NSEC2    ADD # OF SECTORS IN "FILENAME= 
+      STA TEMP1    SAVE 
+      CMA,INA 
+      ADA DIREC+3  SUBTRACT FROM # OF SECTORS IN $FILS
+      SSA,RSS      ENOUGH ROOM FOR NEW FILE?
+      JMP CON4     YES. CONTINUE
+      LDA =D-14    NO. PRINT ERROR MESSAGE
+      LDB MS5 
+      JSB PRINT 
+      JMP TERM     TERMINATE
+      SPC 1 
+CON4  LDA DIREC+5  GET INDEX OF LAST DIREC. ENTRY 
+      CPA =D32     ANY ROOM IN DIREC.?
+      RSS          NO.
+      JMP CON5     YES. CONTINUE
+      LDA =D-18    PRINT ERROR MESSAGE
+      LDB MS6 
+      JSB PRINT 
+      JMP TERM     TERMINATE
+      SPC 1 
+CON5  INA          INCREMENT LAST ENTRY INDEX 
+      STA DIREC+5  AND SAVE IN DIREC
+      CCA 
+      ADA TEMP1    GET NEW LAST USED SECTOR 
+      STA DIREC+4    AND SAVE 
+      SPC 1 
+      LDA FNAME    GET FIRST WORD OF FILENAMR 
+      STA B,I      STORE IN DIREC 
+      INB 
+      LDA FNAME+1  GET SECOND WORD OF FILENAME
+      STA B,I      STORE IN DIREC.
+      INB 
+      LDA FNAME+2  GET THIRD WORD OF FILENAME 
+      STA B,I      STORE IN DIREC.
+      INB 
+      LDA TEMP0    GET PREVIOUS LAST USED SECTOR
+      INA          MAKE STARTING SECT . OF NEW FILE 
+      STA B,I      STORE IN DIREC 
+      INB 
+      LDA DBUF+11  GET PROG. OR FILE LENGTH 
+      STA B,I      STORE IN DIREC.
+      INB 
+      SSA,RSS      FILE OR PROGRAM? 
+      JMP CON6     FILE 
+      LDA DBUF+4   PROGRAM. GET COMMON POINTER
+      ADA =B-2000 
+      RSS 
+CON6  LDA DBUF+4   GET FILE RECORD LENGTH 
+      STA B,I      STORE IN DIREC.
+      INB 
+      LDA CFLAG    GET SEMI-COMPILED FLAG 
+      RAR 
+      STA B,I      STORE IN DIREC.
+      LDA DWFLG    GET WRITE DIRECT. FLAG 
+      SZA,RSS      SET? 
+      ISZ DWFLG    NO. SET IT 
+      SPC 1 
+      LDA TEMP0    GET START REL. SECTOR OF NEW FILE
+      INA 
+      ADA $SECT    ADD STARTING SECTOR # OF $FILS 
+      CLB 
+      DIV SECTR    DIVIDE BY # OF S/T 
+      ADA $TRAK    A=# TRACKS + START. TRACK
+      STA $TRAK    SAVE START TRACK FOR NEW FILE
+      STB $SECT    B=START SECTOR OF NEW FILE 
+      CCA 
+      ADA NSEC2    GET # OF SECTORS TO COPY 
+      CMA,INA 
+      STA NSEC2    SAVE -# TO COPY
+      SPC 1 
+L1    JSB DREAD    READ SECTOR
+      JSB DWRIT    WRITE SECTOR 
+      ISZ NSEC2    DONE?
+      JMP L1       NO.
+      SPC 1 
+      JMP L0       YES. GET NEXT FILENAME 
+      SPC 2 
+* 
+* PRINT LINE ON TTY 
+* ENTER WITH: A= -# OF CHARS. 
+*             B= BUFFER ADDRESS 
+*  EXIT TO: P+1 
+* 
+PRINT NOP 
+      STA PCNT     SET -# CHARS.
+      STB PBUF     SET BUFFER ADDR. 
+      JSB EXEC
+      DEF *+5 
+      DEF R2
+      DEF R1
+PBUF  NOP 
+      DEF PCNT
+      JMP PRINT,I 
+      SPC 2 
+* 
+* SEARCH DIRECTORY FOR ENTRY
+*  ENTER WITH: FILENAME IN FNAME(0,2) 
+*  EXIT TO: P+1 IF NOT FOUND
+*             B= POINTER TO WORD 3 OF ENTRY 
+*           P+2 IF FOUND
+*             B= POINTER TO LAST WORD USED +1 OF DIRECTORY
+* 
+DSRCH NOP 
+      LDB DIRAD    GET ADDR. OF FIRST DIREC. ENTRY
+      CLA,INA 
+      STA DCNT
+DSR0  CPA DIREC+5 
+      JMP DSRCH,I 
+      ISZ DCNT
+      LDA FNAME 
+      CPA B,I 
+      JMP DSR2
+      ADB =D8 
+DSR1  LDA DCNT
+      JMP DSR0
+DSR2  LDA FNAME+1 
+      INB 
+      CPA B,I 
+      JMP DSR4
+      ADB =D7 
+      JMP DSR1
+DSR4  LDA FNAME+2 
+      INB 
+      CPA B,I 
+      JMP DSR3
+      ADB =D6 
+      JMP DSR1
+DSR3  INB 
+      ISZ DSRCH 
+      JMP DSRCH,I 
+      SPC 2 
+DREAD NOP 
+      JSB EXEC
+      DEF *+7 
+      DEF MR1 
+      DEF C2
+DBUFA DEF DBUF
+      DEF SLEN
+      DEF TRAK
+      DEF SECT
+      ISZ SECT
+      LDA SECT
+      CPA SECTR 
+      RSS 
+      JMP DREAD,I 
+      CLA 
+      STA SECT
+      ISZ TRAK
+      JMP DREAD,I 
+      SPC 2 
+DWRIT NOP 
+      JSB EXEC
+      DEF *+7 
+      DEF MR2 
+      DEF C2
+      DEF DBUF
+      DEF SLEN
+      DEF $TRAK 
+      DEF $SECT 
+      ISZ $SECT 
+      LDA $SECT 
+      CPA SECTR 
+      RSS 
+      JMP DWRIT,I 
+      CLA 
+      STA $SECT 
+      ISZ $TRAK 
+      JMP DWRIT,I 
+      SPC 2 
+A     EQU 0 
+B     EQU 1 
+R18   DEC 18
+FILA  ASC 3,$FILS 
+NSECT NOP 
+MS0   DEF MES0
+MES0  ASC 8,$FILS UNDEFINED 
+DTRAK NOP 
+DSECT NOP 
+DWFLG OCT 0 
+$TRAK NOP 
+$SECT NOP 
+MS1   DEF MES1
+MES1  ASC 5,FILENAME? 
+R1    DEC 1 
+C1    OCT 401 
+MS13  DEF MES13 
+MES13 ASC 6,CREATE FILE:
+      OCT 6412
+      ASC 3,:ST,A,
+FNAME BSS 3 
+      ASC 1,, 
+NUMBF BSS 3 
+DM6   DEC -6
+R6    DEC 6 
+FNA   DEF FNAME 
+NSEC2 NOP 
+MS2   DEF MES2
+MES2  ASC 6,NO SUCH FILE
+TRAK  NOP 
+SECT  NOP 
+MR1   DEC -1
+C2    OCT 103 
+DIREC BSS 256 
+DLEN  DEC 256 
+MS3   DEF MES3
+MES3  ASC 11,$FILS NOT INITIALIZED
+MS4   DEF MES4
+MES4  ASC 9,DUPLICATE FILENAME
+MS5   DEF MES5
+MES5  ASC 7,$FILS OVERFLOW
+MS6   DEF MES6
+MES6  ASC 9,DIRECTORY OVERFLOW
+MS10  DEF MES10 
+MES10 ASC 7,SELECT OPTION:
+      OCT 6412
+      ASC 12,  1 => DOS FILE TO BASIC 
+      OCT 6412
+      ASC 12,  2 => BASIC FILE TO DOS 
+MS11  DEF MES11 
+MES11 ASC 7,INVALID OPTION
+MS12  DEF MES12 
+MES12 ASC 6,PROGRAM FILE
+MS14  DEF MES14 
+MES14 ASC 10,ENTER BASIC USER ID
+MS20  DEF MES20 
+MES20 ASC 6,WRONG LENGTH
+MS21  DEF MES21 
+MES21 ASC 5,WRONG TYPE
+TT    NOP 
+TEMP2 NOP 
+TEMP3 NOP 
+OPFLG NOP 
+TEMP  NOP 
+TEMP1 NOP 
+CFLAG NOP 
+TEMP0 NOP 
+MR2   DEC -2
+R2    DEC 2 
+PCNT  NOP 
+DIRAD DEF DIREC+8 
+DCNT  NOP 
+DBUF  BSS 128 
+SLEN  DEC 128 
+SECTR EQU 116B
+SCNT  NOP 
+      END START 
+

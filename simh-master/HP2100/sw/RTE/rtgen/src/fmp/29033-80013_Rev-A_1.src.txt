@@ -1,0 +1,300 @@
+ASMB,B,X,L  
+*001  SPL, L, M, O  
+*002        NAME MC.. (8) 
+        NAM MC..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT MC..
+        EXT .ENTR 
+        EXT .DRCT 
+        EXT DR.RD 
+        EXT D.RIO 
+        EXT EXEC
+        EXT D.SDR 
+        EXT DS.F1 
+        EXT PK.DR 
+        EXT FID.
+LU      BSS 1 
+LTR     BSS 1 
+#1      OCT 000005
+NLU     BSS 1 
+#3      OCT 000001
+#4      OCT 000000
+#5      OCT 000014
+DSDR    BSS 1 
+DLU     BSS 1 
+#9      OCT 000004
+#10     OCT 000170
+#11     OCT 000015
+MXTR    BSS 1 
+#13     OCT 000002
+#14     OCT 001756
+#16     OCT 000003
+#17     OCT 001755
+EQT5    BSS 1 
+#19     OCT 036000
+#20     OCT 014000
+#21     OCT 000064
+#22     OCT 037400
+#23     OCT 023420
+#26     OCT 000070
+#28     OCT 000067
+T       BSS 1 
+NEW     BSS 1 
+LB      BSS 1 
+#31     OCT 001717
+*003  !     MOUNT CARTRIDGE DIRECTIVE 
+*004  !     ROUTINE FOR RTE FILE
+*005  !     MANAGER (FMGR). 
+*006  ! 
+*007  !     ENTERED ON COMMAND: 
+*008  ! 
+*009  !     MC,LU,LTR 
+*010  ! 
+*011  !     W H E R E:
+*012  ! 
+*013  !     LU     IS THE LOGICAL UNIT OF THE DISC TO BE MOUNTED. 
+*014  ! 
+*015  !     LTR    IS THE LAST TRACK ON THE UNIT TO BE
+*016  !            USED BY THE FILE MANAGER.
+*017  ! 
+*018  MC..: SUBROUTINE(N,LIS,ER) GLOBAL  !ENTRY 
+N       NOP 
+LIS     NOP 
+ER      NOP 
+MC..    NOP 
+        JSB .ENTR 
+        DEF N 
+*019  ! 
+*020  !     DECLARE EXTERNALS 
+*021  ! 
+*022        LET DR.RD,D.RIO,LOCK.,EXEC\ 
+*                        BE SUBROUTINE,EXTERNAL 
+*023  ! 
+*024        LET D.SDR,DS.F1,PK.DR                 \ 
+*                       BE INTEGER,EXTERNAL 
+*025  ! 
+*026        LET       FID.  BE FUNCTION,EXTERNAL
+*027  ! 
+*028  !     DECLARE CONSTANTS 
+*029  ! 
+*030        LET XEQT      BE CONSTANT(1717K)
+*031        LET TATSD     BE CONSTANT(1756K)
+*032        LET TATLG     BE CONSTANT(1755K)
+*033        LET B         BE CONSTANT(    1)
+*034        LET READI     BE CONSTANT(    1)
+*035        LET WRIT      BE CONSTANT(    2)
+*036  ! 
+*037        LU_$(@LIS+1)       !BRING IN THE
+        LDA LIS 
+        INA 
+        LDA .A.,I 
+        STA LU
+*038        LTR_$(@LIS+5)      !PRAMS 
+        LDA LIS 
+        ADA #1
+        LDA .A.,I 
+        STA LTR 
+*039        DS.F1_0         !INSURE A CLEAN READ
+        CLA 
+        STA DS.F1 
+*040        IF LU>0 THEN LU_-LU 
+        LDA LU
+        CMA,INA 
+        SSA,RSS 
+        JMP #2
+        LDA LU
+        CMA,INA 
+        STA LU
+*041        NLU_-LU 
+#2      LDA LU
+        CMA,INA 
+        STA NLU 
+*042        DR.RD(READI,LU,0)?[GO TO OK]
+        JSB DR.RD 
+        DEF *+4 
+        DEF #3
+        DEF LU
+        DEF #4
+        SEZ 
+        JMP OK
+*043  ! 
+*044  MC00: ER_12         !SEND DUPLICATE LU
+MC00    LDA #5
+        STA ER,I
+*045        RETURN        !ERROR
+        JMP MC..,I
+*046  ! 
+*047  OK:   DSDR_@D.SDR 
+OK      JSB .DRCT 
+        DEF D.SDR 
+        STA DSDR
+*048        FOR DLU_DSDR TO DSDR+120 BY 4 DO[\
+*           IFNOT $DLU THEN GO TO MC01] 
+        STA DLU 
+        JMP #7
+#6      LDA DLU 
+        ADA #9
+        STA DLU 
+#7      LDA DSDR
+        ADA #10 
+        CMA,INA 
+        ADA DLU 
+        CMA,INA 
+        SSA 
+        JMP #8
+        LDA DLU,I 
+        SZA,RSS 
+        JMP MC01
+        JMP #6
+*049        ER_13         !MORE THAN 31 DISCS?
+#8      LDA #11 
+        STA ER,I
+*050        RETURN        !RETURN 
+        JMP MC..,I
+*051  ! 
+*052  MC01: MXTR_0
+MC01    CLA 
+        STA MXTR
+*053        IF NLU=2 THEN MXTR,LTR_$TATSD-1 
+        LDA NLU 
+        CPA #13 
+        RSS 
+        JMP #12 
+        CCA 
+        ADA #14,I 
+        STA MXTR
+        STA LTR 
+*054        IF NLU=3 THEN MXTR,LTR_-$TATSD-$TATLG-1 
+#12     LDA NLU 
+        CPA #16 
+        RSS 
+        JMP #15 
+        LDA #14,I 
+        CMA,INA 
+        CMA,INA 
+        ADA #17,I 
+        CMA,INA 
+        CCB 
+        ADB .A. 
+        STB MXTR
+        STB LTR 
+*055        EXEC(13,NLU,EQT5) 
+#15     JSB EXEC
+        DEF *+4 
+        DEF #11 
+        DEF NLU 
+        DEF EQT5
+*056            IF(EQT5 AND 36000K)#14000K THEN[\ 
+*               ER_52; RETURN] !NO DISC-ERR.
+        LDA EQT5
+        AND #19 
+        CPA #20 
+        JMP #18 
+        LDA #21 
+        STA ER,I
+        JMP MC..,I
+*057        IF MXTR THEN GOTO MC02
+#18     LDA MXTR
+        SZA 
+        JMP MC02
+*058        IF (EQT5 AND 37400K)#\
+*            14000K THEN[EXEC(2,NLU,1,1,10000,0);\
+*                 MXTR_$B-1],ELSE GOTO MC02 
+        LDA EQT5
+        AND #22 
+        CPA #20 
+        JMP MC02
+        JSB EXEC
+        DEF *+7 
+        DEF #13 
+        DEF NLU 
+        DEF #3
+        DEF #3
+        DEF #23 
+        DEF #4
+        CCA 
+        ADA #3,I
+        STA MXTR
+*059        IFNOT LTR THEN LTR_MXTR 
+        LDA LTR 
+        SZA 
+        JMP #24 
+        LDA MXTR
+        STA LTR 
+*060        IF LTR>MXTR THEN[ER_56;RETURN]
+#24     LDA LTR 
+        CMA,INA 
+        ADA MXTR
+        SSA,RSS 
+        JMP MC02
+        LDA #26 
+        STA ER,I
+        JMP MC..,I
+*061  ! 
+*062  MC02: IFNOT LTR THEN[ER_55;RETURN]
+MC02    LDA LTR 
+        SZA 
+        JMP #27 
+        LDA #28 
+        STA ER,I
+        JMP MC..,I
+*063  ! 
+*064        $DLU_NLU
+#27     LDA NLU 
+        STA DLU,I 
+*065        DLU_[T_DLU+1]+1 
+        LDA DLU 
+        INA 
+        STA T 
+        INA 
+        STA DLU 
+*066        $T_LTR
+        LDA LTR 
+        STA T,I 
+*067        IFNOT [NEW_FID.(LU)] THEN[\ 
+*          LB_$(@PK.DR+3);   \
+*              DR.RD(READI,LB,0)?[GOTO MC05];\
+*                   GO TO MC00] 
+        JSB FID.
+        DEF *+2 
+        DEF LU
+        STA NEW 
+        SZA 
+        JMP MC05
+        JSB .DRCT 
+        DEF PK.DR 
+        ADA #16 
+        LDA .A.,I 
+        STA LB
+        JSB DR.RD 
+        DEF *+4 
+        DEF #3
+        DEF LB
+        DEF #4
+        SEZ 
+        JMP MC05
+        JMP MC00
+*068  ! 
+*069  MC05: $DLU_LB       !SET LABEL
+MC05    LDA LB
+        STA DLU,I 
+*070  MC04: IF NEW THEN $(DLU+1)_$XEQT !SET LOCK IF NEW 
+MC04    LDA NEW 
+        SZA,RSS 
+        JMP #30 
+        LDA DLU 
+        INA 
+        LDB #31,I 
+        STB .A.,I 
+*071  ! 
+*072        D.RIO(WRIT)     !WRITE NEW DISC DIR.
+#30     JSB D.RIO 
+        DEF *+2 
+        DEF #13 
+*073  ! 
+*074        RETURN        !DONE 
+        JMP MC..,I
+*075        END 
+*076        END 
+        END 

@@ -1,0 +1,759 @@
+****************************************************************
+*                                                              *
+*              -- SETTLING TIME, SQUARES IN 4 CORNERS --       *
+*                                                              *
+****************************************************************
+      SPC 1 
+SETTM NOP           SETTLING TIME ROUTINE 
+      SZB           WAIT? 
+      JSB TIME5       YES 
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      JSB MODE      SET WRITE MODE
+      SPC 1 
+      LDB TESTM     GET AMERICAN SCAN INDICATOR 
+      LDA SA2       GET RIGHT SQUARE POS, NON-AMER
+      SZB           AMERICAN SCAN?
+      LDA SXA2        YES - GET RT SQR FOR AMER 
+      STA S2        SET RIGHT SQUARE STARTING POINT 
+      LDA STADR     GET LEFT SQUARE POS, NON-AMER 
+      SZB           AMERICAN SCAN?
+      LDA SXA3        YES - GET LEFT SQR FOR AMER 
+      STA S3        SET LEFT SQUARE STARTING POINT
+      SPC 1 
+      JSB SQUAR     PUTS 8X8 SQUARE 
+ZERO  OCT 0           IN THE
+CON3  DEC 8             LOWER LEFT
+      DEC 8               CORNER
+      JSB SQUAR     PUTS 8X8 SQUARE 
+S2    OCT 174370      IN THE
+      DEC 8             UPPER RIGHT 
+      DEC 8               CORNER
+      JSB SQUAR     PUTS 8X8 SQUARE 
+S3    OCT 174000      IN THE
+      DEC 8             UPPER LEFT
+      DEC 8               CORNER
+      JSB SQUAR     PUTS 8X8 SQUARE 
+      OCT 370         IN THE
+      DEC 8             LOWER RIGHT 
+      DEC 8               CORNER
+      CCB           DONE! 
+      JMP SETTM,I 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- QUICKLY WRITE & ERASE ALL POINTS --          *
+*                                                              *
+****************************************************************
+      SPC 1 
+QUICK NOP 
+      CPB B1        FLASH BACKGROUND? 
+      RSS             MAYBE 
+      JMP LA          NO
+      LIA 1 
+      IOR TESTC 
+      AND HLT0
+      CPA HLT0        ? 
+      JMP QUICK,I      NO - IGNORE
+      JMP ON           YES
+LA    LIA 1 
+      SSA           REPEAT MODE IN SUPER TEST?
+      JMP LB          YES - SO DO IT
+      ALF,RAL 
+      SSA           FLASH MODE IN SUP TEST? 
+      JMP QUICK,I     YES - IGNORE
+LB    SZB           WAIT
+      JSB TIME5       YES 
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      JSB MAP       GET COLOR & POLARITY INFO 
+ON    CLA           SET WRITE/ERASE 
+      STA W.E         INDICATOR TO WRITE
+OLOOP LDB W.E       PREPARE CARD FOR MODE 
+      LDA MD
+      SLB 
+      LDA B15 
+      IOR POL 
+      JSB SETMD     OUTPUT MODE 
+      LDA W.E 
+      CLB           ESTABLISH ADDRESS 0,0 
+      JMP *+3       START 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- QUICK CONTINUED --                           *
+*                                                              *
+****************************************************************
+      SPC 1 
+LOOP  INB,SZB,RSS   INCREMENT ADDRESS - DONE? 
+      JMP DONE                            YES 
+      SLA           WRITE?
+      CMB             NO - COMP. FOR UPPER SCREEN 
+OTB1  OTB TV        OUTPUT
+STCC4 STC TV,C        POINT 
+      SLA           WRITE?
+      CMB             NO - COMP. BACK FOR INCREMENT 
+      JMP LOOP      CONTINUE
+DONE  LDA TESTA 
+      SZA           WRITE ONLY? 
+      JMP OUT         YES - ALL DONE
+      LDA W.E       CHANGE STATE OF 
+      XOR B1          WRITE/ERASE 
+      STA W.E           INDICATOR 
+      SLA           WRITE?
+      JMP OLOOP       NO - GO ERASE 
+OUT   CCB             YES - DONE! 
+      JMP QUICK,I 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- DISPLAY HP LOGO --                           *
+*                                                              *
+****************************************************************
+      SPC 1 
+LOGO  NOP 
+      CLA,INA       SET INDICATOR FOR 
+      STA TESTB       FLASHING MODE 
+      SZB           WAIT? 
+      JSB TIME5       YES 
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      JSB MODE      SET WRITE MODE
+      LDA CW1       SET 
+      OTA 6B          UP
+      CLC 2B            DMA 
+      LDA BUFAD           TRANSFER
+      OTA 2B                / 
+      STC 2B                / 
+      LDA BUFLN             / 
+      OTA 2B                / 
+      LIB 2B        READ BACK WORD COUNT
+      SZB,RSS       ZERO (NO DMA CARDS)?
+      JMP NODMA       DON'T USE DMA 
+      INB,SZB,RSS   NEG ONE (NO DCPC CARD)? 
+      JMP NODMA       DON'T USE DMA 
+      STC 6B,C      TURN ON DMA 
+      SFS 6B        WAIT FOR
+      JMP *-1         DMA TO COMPLETE 
+      CLC 6B        TURN OF DMA 
+      JMP EXIT      DONE
+      SPC 1 
+NODMA STA CNT4      SET WORD COUNT FOR NON-DMA
+      LDB BUFAD     GET BUFFER ADDRESS
+MORE  LDA B,I       GET A POINT FROM BUFFER 
+      JSB OUTR      OUTPUT THE POINT
+      INB           ADVANCE BUFFER ADDRESS
+      ISZ CNT4      COUNT DOWN - DONE?
+      JMP MORE                   NO - GET NEXT POINT
+EXIT  CCB           DONE! 
+      CLA           CLEAR FLASHING
+      STA TESTB       INDICATOR 
+      JMP LOGO,I
+      SKP 
+****************************************************************
+*                                                              *
+*              -- ERASE SCREEN --                              *
+*                                                              *
+****************************************************************
+      SPC 1 
+BLANK NOP 
+      SZB           WAIT? 
+      JSB TIME5       YES 
+      JSB ERASE     DO THE BULK ERASE 
+      JSB MODE      SET SCREEN POLARITY 
+      CCB 
+      JMP BLANK,I 
+      SPC 3 
+***************************************************************** 
+*                                                               * 
+*              -- BIT 14 HALT PROCESSOR --                      * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+..HLT JSB .HALT     FROM FLASH OR BARS
+      LDA TEST
+      SZA           SUPER TEST? 
+      JMP BRS         NO - BARS 
+      JMP RESTT       YES - RESTART 
+      SPC 1 
+.HALT NOP 
+      JSB DEL       SWITCH DE-BOUNCE
+      LIA 1         CLEAR 
+      AND CLHLT       HALT BIT (14) 
+      OTA 1             IN SWITCH REGISTER
+      HLT 77B       HALT
+      LDA HLT77     RESTART 
+      STA *-2 
+      JMP .HALT,I 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- FLASHING ROUTINE --                          *
+*                                                              *
+****************************************************************
+      SPC 1 
+FLSH  LDA B3
+      JSB SET 
+      STA SWCH      CLEAR SWITCH TO DO 1 TEST 
+FSH   CLB 
+      JSB LOGO      WRITE LOGO WITH BACKGROUND
+      SPC 1 
+FLASH LDA TEST
+      CPA B4        BARS? 
+      JMP CLR?        YES 
+      SZA,RSS       GO-NOGO TEST? 
+      JMP CLR?        NO - SUPER TEST 
+      JSB TIME5     WAIT A SECOND 
+      LDA FTIME     ESTABLISH 
+      LDB MD          NUMBER
+      SZB               OF
+      ARS                 TIMES 
+      STA FCNTR             TO FLASH
+      JMP FLSH0     START FLASHING
+      SPC 1 
+CLR?  LIA 1         FOR SUPER TEST & BARS 
+      ALF,RAL       DO WE 
+      SSA,RSS         WANT TO FLASH?
+      JMP CLEAR         NO
+      SPC 1 
+FLSH0 LDA B2        GET BLACK-ON-WHITE BIT
+      STA TESTC 
+FLSH1 JSB SETMD     SET VIDEO POLARITY
+      STA TEMP      SAVE POLARITY MODE
+      LDA TEST
+      CPA B4        BARS? 
+      JMP TIME        YES 
+      SZA,RSS       GO-NOGO TEST? 
+      JMP TIME        NO
+      JSB TIMEF       YES - WAIT A BIT
+      ISZ FCNTR     COUNT DOWN # OF FLASHES - DONE? 
+      RSS             NO
+      JMP CLEER       YES - GO CLEAR THINGS 
+      JMP FLSH2     CONTINUE FLASHING - NEXT PAGE 
+      SPC 1 
+TIME  JSB TIME5     SUPER TEST OR BARS - WAIT 
+      LIA 1         WANT
+      RAL             TO
+      SSA               HALT? 
+      JMP ..HLT           YES 
+      ALF           WANT TO 
+      SSA,RSS         CONTINUE FLASHING?
+      JMP CLEAR         NO - GO CLEAR THINGS
+      SKP 
+****************************************************************
+*                                                              *
+*              -- FLASHING ROUTINE CONTINUED                   *
+*                                                              *
+****************************************************************
+      SPC 1 
+      LDA TEST
+      CPA B4        BARS? 
+      JMP FLSH2       YES 
+      LIA 1         WANT TO STOP
+      AND TEMP1       FLASHING THIS 
+      SZA,RSS           PATTERN?
+      JMP CLEAR           YES - GO CLEAR THINGS 
+      SPC 1 
+FLSH2 LDA TEMP      CHANGE VIDEO
+      XOR B2          POLARITY MODE 
+      JMP FLSH1         AND GO FLASH
+      SPC 1 
+CLEER CLA           SET WHITE-ON-BLACK
+      JSB SETMD       FOR GO-NOGO TEST
+      LIA 1         WANT TO 
+      SSA,RSS         REPEAT? 
+      JMP FHLT          NO - HALT 
+      RAL 
+      SSA           INCREMENT COLORS? 
+      JSB INC         YES 
+      JMP SWCH
+FHLT  HLT 77B 
+      LDA HLT77     GO REPEAT 
+      STA *-2         THE TEST(S) 
+      SPC 1 
+SWCH  NOP           SWITCH - RSS IF ALL 3 TESTS RUN 
+      JMP FTEST     GO FLASH AGAIN
+      JSB ERASE     ERASE SCREEN
+      JMP BEGIN     GO REDO I/O CHECK,ETC.
+      SPC 1 
+CLEAR LDA TEST
+      CPA B4        BARS? 
+      JMP DUNN        YES 
+      LIA 1 
+      SSA           GO BACK TO REPEAT MODE? 
+      JMP LC          YES 
+      AND CLR       CLEAR SWITCH REGISTER 
+      OTA 1           FOR SUPER TEST
+LC    JSB DEL       WAIT FOR SWITCH DEBOUNCE
+      JMP AGAIN     GET NEXT TEST 
+      SPC 1 
+FTEST LDB MD
+      JSB MAP 
+      CPA B         SAME COLOR? 
+      JMP FLASH       YES - REPEAT IT 
+      JMP FSH         NO - GET NEW ONE
+      SKP 
+****************************************************************
+*                                                              *
+*              -- COLOR OR GRAY BARS ROUTINE --                *
+*                                                              *
+****************************************************************
+      SPC 1 
+BRS   LDA B4
+      JSB SET 
+      LIA 1         SET VIDEO POLARITY
+      RAR,RAR         FROM SWITCH REGISTER BIT 3
+      AND B2            =0  NORMAL
+      STA TEMP          =1  INVERTED
+      JSB SETMD 
+      CLA           INITIALIZE INSTRUCTION
+      STA L0          FOR FIRST PASS
+      JSB ERASE     DO BULK ERASE 
+      SPC 1 
+      CLB           SET FIRST POINT (0,0) 
+      SPC 1 
+LOOPB LDA B         OUTPUT
+      JSB OUTR        POINT 
+      SPC 1 
+      INB,SZB,RSS   INCREMENT POINT AND TEST
+      JMP DUNN        ALL DONE
+      CPB ALL       LOWER WHITE AREA COMPLETE?
+      JMP T0          YES - MODIFY LOOP 
+L0    NOP           UNTIL LOWER AREA DONE, THEN RSS 
+      JMP LOOPB     GO OUTPUT POINT 
+      SPC 1 
+      LDA B         CHECK X COORDINATE
+      AND MASK3       FOR START OF
+      CPA ZERO          BLACK AREA? 
+      JMP T0              SET BLACK 
+      CPA FIRST         BLUE AREA (1/8)?
+      JMP T1              SET BLUE
+      CPA SECND         GREEN AREA (1/4)? 
+      JMP T2              SET GREEN 
+      CPA FS            CYAN AREA (3/8)?
+      JMP T1              SET CYAN
+      CPA MASK8         RED AREA (1/2)? 
+      JMP T3              SET RED 
+      CPA FT            MAGENTA AREA (5/8)? 
+      JMP T1              SET MAGENTA 
+      CPA B300          YELLOW AREA (3/4)?
+      JMP T2              SET YELLOW
+      CPA FST           WHITE AREA (7/8)? 
+      JMP T1              SET WHITE 
+      JMP LOOPB     GO OUTPUT THE POINT 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- BAR GENERATOR, CONTINUED --                  *
+*                                                              *
+****************************************************************
+      SPC 1 
+DUNN  LIA 1 
+      STA TEMP1 
+      SSA,RSS       REPEAT? 
+      JMP *+3         NO
+      JSB TIME5       YES - DELAY LOOP
+      JMP BRS       GO DO AGAIN 
+      LDA TEMP1     CHECK FOR 
+      ALF,RAL         FLASHING CONDITION
+      SSA               (SWITCH 10)?
+      JMP FLASH           YES - GO FLASH
+BHLT  HLT 77B         NO - SO STOP! 
+      LDA HLT77     INSURE HALT COMMAND 
+      STA *-2         FOR 2100
+      JMP BRS       DO IT AGAIN 
+      SPC 2 
+*         COLOR SETTING ROUTINES
+      SPC 1 
+T0    LDA XRSS      \ 
+      STA L0         \ SET
+      LDA B15        /  BLACK 
+      JMP T4        / 
+      SPC 1 
+T1    LDA MD        \ 
+      AND B7         > TURN BLUE ON 
+      JMP T4        / 
+      SPC 1 
+T2    LDA MD        \ 
+      AND B13        \ TURN BLUE OFF
+      IOR B10        /  AND GREEN ON
+      JMP T4        / 
+      SPC 1 
+T3    LDA MD        \ 
+      AND B16        > TURN BLUE & GREEN OFF
+      IOR B14       /    AND RED ON 
+      SPC 1 
+T4    STA MD        \ 
+      IOR TEMP       \ SET REQUESTED MODE & POLARITY, 
+      JSB SETMD      /   THEN RETURN TO LOOP
+      JMP LOOPB     / 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- DRAW SPECIFIED SQUARE --                     *
+*                                                              *
+****************************************************************
+      SPC 1 
+*            ** USED BY GAIN AND SETTM ** 
+      SPC 1 
+SQUAR NOP 
+      LDA SQUAR,I   THIS GETS LLHC
+      STA BUFF
+      LDB SQUAR 
+      INB 
+      LDA 1,I       ADDRESS OF VERT IN B
+      CMA,INA       TAKE TWO'S COMP 
+      INA           ADD ONE 
+      STA VERT1 
+      STA VERT2     STORE IN TWO COUNTERS 
+      INB           ADD TO ADDRESS
+      LDA 1,I       GET HORIZONTAL
+      CMA,INA       TAKE TWO'S COMP 
+      INA           ADD ONE 
+      STA HORZ1 
+      STA HORZ2     STORE IN TWO COUNTERS 
+      INB           PREPARE RETURN ADDRESS
+      STB SQUAR     STORE IN RETURN POINT 
+      LDA BUFF
+      SPC 1 
+UP    ADA CON7      A+1 TO A
+      JSB OUTR      DRAW DOT
+      ISZ VERT1     ADD ONE TO VERT 
+      JMP UP
+      SPC 1 
+RIGHT ADA B1
+      JSB OUTR
+      ISZ HORZ1 
+      JMP RIGHT 
+      SPC 1 
+DOWN  ADA CON1      WHERE CON1=-400B
+      JSB OUTR
+      ISZ VERT2 
+      JMP DOWN
+      SPC 1 
+LEFT  ADA XCONN      WHERE XCONN=-1 
+      JSB OUTR
+      ISZ HORZ2 
+      JMP LEFT
+      SPC 1 
+      JMP SQUAR,I 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- BULK ERASE ROUTINE --                        *
+*                                                              *
+****************************************************************
+      SPC 1 
+ERASE NOP 
+CLF3  CLF TV        CLEAR PRESET
+LIA1  LIA TV        ISSUE BULK ERASE CMND 
+STCC1 STC TV,C
+      STF 0         TURN ON THE INTERRUPT SYSTEM
+      JSB TIMER     TIME ERASE FOR 44 MILLISECONDS
+      HLT 2B        THE ERASE TOOK TOO LONG!
+      LDA HLT2      RESTORE HALT
+      STA *-2         FOR 2100A 
+ENDE  CLF 0         TURN OFF THE INTERRUPT SYSTEM 
+      JMP ERASE,I   RETURN
+      SPC 4 
+****************************************************************
+*                                                              *
+*              -- ERASE DURATION TIMER --                      *
+*                                                              *
+****************************************************************
+      SPC 1 
+*   THIS IS A 44 MILLISECOND TIMER COMPENSATED
+*     FOR COMPUTER MODEL. 
+      SPC 1 
+TIMER NOP 
+      LDB COMP
+      SZB,RSS       2100? 
+      LDA MILC6       YES 
+      CPB B1        2114/2115?
+      LDA MILC5       YES 
+      CPB B2        2116? 
+      LDA MILCT       YES 
+      CPB B3        21MX? 
+      LDA MILCX       YES 
+      CPB B4        21MX-E SERIES?
+      JMP DXE         YES 
+      SPC 1 
+      ISZ A         TIMING
+      JMP *-1         LOOP
+      JMP TIMER,I 
+      SPC 1 
+DXE   LDA LOOPS     21MX-E SEREIS 
+DXE1  LDB MILCE       TIMING
+      OCT 100060        LOOP
+      INA,SZA 
+      JMP DXE1
+      JMP TIMER,I 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- GENERAL PURPOSE TIME DELAY --                *
+*                                                              *
+****************************************************************
+      SPC 1 
+*  THE FOLLOWING IS NOT COMPENSATED FOR CYCLE TIME; 
+*       THE TIME IS SET BY BITS 11-13 (APPROXIMATELY) 
+      SPC 1 
+TIME5 NOP           <1, 1 OR 5 SECOND TIMER 
+      LIA 1         CHECK 
+      LDB TEST
+      SZB 
+      CPB B4
+      RSS 
+      CLA,INA,RSS 
+      ALF,RAR         BITS 13 & 12
+      LDB TCON5     GET 5 SECOND COUNT
+      SLA           1 SECOND? 
+      LDB POSIT       MAYBE 
+      SSA           QUICK?
+      CCB             YES 
+      RAL           EXTREMELY 
+      SSA,RSS         QUICK?
+      JMP *+3           NO
+      LDA TCONF         YES 
+      RSS 
+      LDA TCON1 
+      STA TCON      SAVE PROPER COUNTER 
+      SPC 1 
+      LDA TCON      GET INNER TIMER 
+      ISZ A         INNER TIMER 
+      JMP *-1         COUNT-DOWN LOOP 
+      ISZ B         OUTER TIMER 
+      JMP *-4         COUNT-DOWN LOOP 
+      JMP TIME5,I 
+      SPC 4 
+****************************************************************
+*                                                              *
+*              -- FLASH RATE DELAY FOR GO-NOGO TEST --         *
+*                                                              *
+****************************************************************
+      SPC 1 
+TIMEF NOP 
+      LDA TCONF     ESTABLISH COUNTER 
+      LDB MD
+      SZB           WHITE?
+      LDA TCON1       NO - SO FLASH SLOWER
+      ISZ A         COUNT 
+      JMP *-1         LOOP
+      JMP TIMEF,I 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- OUTPUT A POINT --                            *
+*                                                              *
+****************************************************************
+      SPC 1 
+OUTR  NOP 
+OTA1  OTA TV        \ 
+STCC2 STC TV,C       \ OUTPUT POINT 
+SFS1  SFS TV         /   TO CARD
+      JMP *-1       / 
+      JMP OUTR,I
+      SPC 4 
+****************************************************************
+*                                                              *
+*              -- SW REG CONTACT CHATTER DELAY ROUTINE --      *
+*                                                              *
+****************************************************************
+      SPC 1 
+DEL   NOP 
+      STA ATMP1     SAVE A
+      LDA CNT1
+      STA CNT4      SET COUNTER 
+      LDA ATMP1     RESTORE A 
+      ISZ CNT4      DELAY 
+      JMP *-1         LOOP
+      JMP DEL,I 
+      SPC 4 
+****************************************************************
+*                                                              *
+*              -- SET ERASE MODE --                            *
+*                                                              *
+****************************************************************
+      SPC 1 
+MODE1 NOP           SET ERASE MODE
+      LDA B15 
+      STA MODE2 
+      JSB MODE      GO SET ERASE MODE 
+      CLA           RESTORE 
+      STA MODE2       WRITE MODE BIT
+      JMP MODE1,I 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- SET WRITE MODE --                            *
+*                                                              *
+****************************************************************
+      SPC 1 
+MODE  NOP           SET WRITE MODE
+      JSB SETUP     GET COLOR INFORMATION 
+      IOR MODE2     SET ERASE BIT IF DESIRED
+      JSB SETMD     OUTPUT MODE 
+      JMP MODE,I
+      SPC 4 
+****************************************************************
+*                                                              *
+*              -- SET REQUESTED MODE --                        *
+*                                                              *
+****************************************************************
+      SPC 1 
+SETMD NOP 
+CLC1  CLC TV        GET CARD READY FOR MODE WORD
+OTA2  OTA TV        OUTPUT
+STCC3 STC TV,C        MODE WORD 
+SFS2  SFS TV
+      JMP *-1 
+      JMP SETMD,I 
+      SPC 4 
+****************************************************************
+*                                                              *
+*              -- INITIALIZE TEST PARAMETERS --                *
+*                                                              *
+****************************************************************
+      SPC 1 
+SET   NOP 
+      STA TEST      SAVE TEST INDICATOR 
+      LDA TRAPC     RESTORE ERASE INTERRUPT 
+      STA SC,I        IN TV TRAP CELL 
+      CLA           ESTABLISH HALT CONDITION
+      STA HALT?       FOR AUTO RESTART
+      JMP SET,I 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- POWER FAIL - AUTO RESTART --                 *
+*                                                              *
+****************************************************************
+      SPC 1 
+PFAIL NOP           POWER FAIL - AUTO RESTART 
+      SFC 4B        POWER UP? 
+      JMP ASTRT       YES 
+      CCA           SET RUNNING 
+      STA HALT?       CONDITION 
+      LIA 1         SAVE SWITCH 
+      STA TEMP        REGISTER
+      LDA PFAIL     SAVE RESTART
+      STA TEMP1       ADDRESS FOR CNFGR 
+      CLC 4B        SET RESTART INDICATOR 
+      HLT 4B        SHUTDOWN
+      SPC 1 
+ASTRT STC 4B        ISSUE POPIO AND CRS 
+      JSB DEL       SHORT DELAY 
+      JSB ERASE     BULK ERASE
+      LDB HALT?     GET RUN/HALT CONDITION
+      LDA TEMP      GET SAVED SWITCH REG
+      SZB           HALT? 
+      OTA 1           NO - SO RESTORE SWITCH REG
+      LDA TEST      GET TEST INDICATOR
+      CPA B1        GO-NOGO?
+      JMP BEGIN       YES - DO IT 
+      SZB,RSS       HALT? 
+      JMP STUCK       YES - STUCK HALT
+      SSA           RAM TEST? 
+      JMP RAMS        YES - DO IT 
+      SZA,RSS       "SUPER TEST"? 
+      JMP RESTT       YES - DO IT 
+      CPA B2        PATTERN TEST (GO-NOGO)? 
+      JMP PATRN       YES - DO IT 
+      CPA B3        LOGO FLASHER (GO-NOGO)? 
+      JMP FLSH        YES - DO IT 
+      CPA B7        I/O CHECK (GO-NOGO)?
+      JMP IOCHK       YES - DO IT 
+      CPA B17       CONFIGURING?
+      JMP TEMP1,I     YES - FINISH IT 
+      CPA B4        COLOR BARS? 
+      JMP BRS         YES - DO IT 
+      JMP STUCK     INVALID TEST INDICATOR
+      SKP 
+****************************************************************
+*                                                              *
+*            -- COLOR INFORMATION COLLECTOR --                 *
+*                                                              *
+****************************************************************
+      SPC 1 
+MAP   NOP 
+      STB TEMP2     SAVE B REGISTER 
+      LIA 1         GET COLOR INFORMATION BITS
+      AND B17         AND ISOLATE THEM
+      STA MD            THEN SAVE TEMPORARILY 
+      AND B7        ISOLATE COLOR BITS
+      SZA,RSS       WHITE?
+      CLB             YES 
+      CPA B1        BLACK?
+      LDB B15         YES 
+      CPA B2        RED?
+      LDB B14         YES 
+      CPA B3        GREEN?
+      LDB B11         YES 
+      CPA B4        BLUE? 
+      LDB B5          YES 
+      CPA B5        YELLOW? 
+      LDB B10         YES 
+      CPA B6        MAGENTA?
+      LDB B4          YES 
+      CPA B7        CYAN? 
+      LDB B1          YES 
+      LDA MD        RECOVER BITS
+      RAR,RAR         AND ISOLATE AND 
+      AND B2            POSITION POLARITY 
+      STA POL       SAVE VIDEO POLARITY 
+      IOR B         CONSTRUCT TOTAL MODE
+      STB MD        SAVE COLOR INFORMATION
+      LDB TEMP2     RECOVER B REGISTER
+      JMP MAP,I 
+      SKP 
+****************************************************************
+*                                                              *
+*            -- SET COMP. BKGRND. FOR FLASHING --              *
+*                                                              *
+****************************************************************
+      SPC 1 
+SETUP NOP 
+      LDA TEST
+      CPA B3        FLASHING ONLY (103B)? 
+      JMP L2          YES 
+      CPA B1        PATTERNS ONLY (102B)? 
+      JMP L1          YES 
+      SZA           SUPER TEST? 
+      JMP ONN         NO
+      LIA 1           YES 
+      ALF,RAL 
+      SSA           FLASHING IN SUPER TEST? 
+      JMP L2          YES 
+      JMP ONN         NO
+      SPC 1 
+L1    LDA TESTB     IN LOGO 
+      SZA,RSS         PATTERN?
+      JMP ONN           NO
+L2    JSB MAP       GET 
+      LDA MD          COLOR BITS
+      SZA,RSS       WHITE?
+      JMP ONN         YES - SKIP
+      XOR B15         NO - COMPLEMENT 
+      STA MD
+      CLB,INB 
+      STB TESTA     SET INDICATOR FOR WRITE ONLY
+      JSB QUICK     GENERATE BACKGROUND 
+ONN   JSB MAP       GET REQUESTED COLOR 
+      JMP SETUP,I 
+      SPC 2 
+****************************************************************
+*                                                              *
+*              -- INCREMENT COLORS --                          *
+*                                                              *
+****************************************************************
+      SPC 1 
+INC   NOP 
+      LIA 1         GET AND 
+      AND MASKB       SAVE THE
+      STA B             NON COLOR BITS
+      LIA 1         GET THE CURRENT 
+      INA             COLOR BITS AND INCREMENT
+      AND B7        ISOLATE THE COLOR BITS
+      CPA B1        BLACK?
+      JMP *-3         YES - INCREMENT AGAIN 
+      IOR B         MERGE WITH NON COLOR BITS 
+      OTA 1         SET IN SW REG 
+      JMP INC,I 
+      SKP 

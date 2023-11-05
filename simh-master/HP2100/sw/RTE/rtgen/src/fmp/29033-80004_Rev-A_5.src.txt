@@ -1,0 +1,166 @@
+ASMB,B,R,L,C
+      NAM LOCF,7
+      ENT LOCF
+      EXT P.PAS,.ENTR 
+      SPC 2 
+* 
+* 
+*     LOCF     RETURNS THE CURRENT STATUS OF A
+*              RTE FILE TO THE CALLER.
+* 
+      SPC 1 
+* 
+*     THE FORTRAN CALLING SEQUENCE IS:
+* 
+      SPC 1 
+*     CALL LOCF(IDCB,IERR,IREC,IRS,IOFF,JSEC,JLU,JTY,JREC)
+* 
+      SPC 1 
+* 
+*     W H E R E:
+* 
+      SPC 1 
+*     IDCB     IS THE DATA CONTROL BLOCK FOR THE FILE.
+* 
+*     IERR     IS THE ERROR CODE RETURN.
+*              POSSIBLE CODES ARE:
+*            0  -  NO ERROR 
+*          -11  -  DCB NOT OPEN 
+*          -10  -  NOT ENOUGH PARAMETERS
+* 
+*     IREC     IS THE RECORD NUMBER OF THE NEXT RECORD. 
+* 
+*     IRS      IS THE RELATIVE SECTOR OF THE NEXT RECORD./2 
+* 
+*     IOFF     IS THE OFFSET IN THE SECTOR OF THE NEXT RECORD.
+* 
+*     JSEC     IS THE NO. OF SECTORS IN THE FILE (OR EXTENT). 
+* 
+*     JLU      IS THE FILE'S LOGICAL UNIT.
+* 
+*     JTY      IS THE FILE'S TYPE.
+* 
+*     JREC     IS THE RECORD SIZE.
+* 
+      SPC 1 
+*     ALL PARAMETERS AFTER IREC ARE OPTIONAL. 
+* 
+      SKP 
+DCB   NOP 
+IER   DEF DM
+IREC  DEF DM
+IRS   DEF DM
+IOFF  DEF DM
+JSEC  DEF DM
+JLU   DEF DM
+JTY   DEF DM
+JREC  DEF DM
+LOCF  NOP           ENTRY 
+      JSB .ENTR     GET 
+DFDCB DEF DCB       PARAMETERS ADDRESSES
+      LDA N10       NOT ENOUGH
+      LDB IREC      PRAM
+      CPB DFDM      TEST
+      JMP EXIT      NOT ENOUGH - EXIT 
+      LDA DCB       SET A TO GET DCB
+      CLB,CCE       SET TO GET
+      ERB,CLE       ACTUAL WORDS
+      JSB P.PAS     CALL TO PASS
+N16   DEC -16       DCB 
+LU    NOP            PARAMETERS 
+AD    NOP 
+TYP   NOP 
+TRK   NOP 
+SEC   NOP 
+#SEC  NOP 
+SIZE  NOP 
+COUNT NOP 
+SEC/T NOP 
+OPCLS NOP 
+CTRK  NOP 
+CSEC  NOP 
+BUFPT NOP 
+TMP   NOP 
+REC   NOP 
+EXNO  NOP 
+      LDB OPCLS     IS
+      LDA N11        FILE 
+      CPB XEQT        OPEN? 
+      JMP OK           YES; JUMP
+EXIT  STA IER,I     NO; SET EXIT CODE 
+      LDB N9        SET UP
+      STB COUNT      AND
+      LDB DFDCB       RESTORE 
+      STB AD           DUMMY
+      LDB DFDM          PARAMETER 
+      STB AD,I           ADDRESSES
+      ISZ AD
+      ISZ COUNT           IN
+      JMP *-3              CALL 
+      JMP LOCF,I    EXIT
+      SPC 3 
+OK    LDB REC       GET AND 
+      STB IREC,I    SET RECORD NO.
+      LDB #SEC      SET 
+      STB JSEC,I    THE FILE SIZE IN SECTORS
+      LDA TYP       GET THE TYPE
+      CMA,INA,SZA,RSS    SET NET AND TEST FOR ZERO
+      JMP TYPST     ZERO SO JUMP
+      ADA .2        IF THREE OR GREATER 
+      SSA           THEN
+      JMP NOTRA     JUMP  NOT RANDOM ACCESS 
+      CCA           COMPUTE THE OFFSET
+      ADA B         AND  BLOCK
+      MPY SIZE      FOR 
+      STA TMP       TYPE
+      AND B177      ONE AND 
+      STA IOFF,I    TWO 
+      XOR TMP       FILES 
+      ASR 7         NOW 
+      JMP STRS      GO STORE IT 
+NOTRA LDA DCB       COMPUTE 
+      CMA,INA       CURRENT 
+      ADA BUFPT     BUFFER OFFSET 
+      ADA N16       ADJUST FOR BUFFER ADDRESS 
+      STA IOFF,I    RETURN OFFSET 
+      LDA #SEC      GET AND 
+      MPY EXNO      COMPUTE EXTENT OFFSET 
+      STA TMP         AND SAVE
+      LDA TRK       COMPUTE RELATIVE
+      CMA,INA       SECTOR
+      ADA CTRK      CTRK-TRK
+      MPY SEC/T     (CTRK-TRK)*#SEC/TRACK 
+      LDB SEC 
+      CMB,INB 
+      ADA B         (CTRK-TRK)*#S/TR-SEC
+      ADA CSEC      (CTRK-TRK)*#S/TR-SEC+CSEC 
+      ADA TMP       ADD #SECTORS IN PREVIOUS EXTENTS
+      ARS           DIVIDE BY TWO 
+STRS  STA IRS,I     AND PASS TO CALLER
+TYPST LDB TYP       GET AND SET 
+      STB JTY,I     TYPE
+      LDA LU        GET LU (DISC FILE)
+      SZB,RSS       IS IT A DISC FILE?
+      LDA TRK       NO; USE TYPE 0 LU 
+      AND B77       MASK
+      STA JLU,I     AND SET 
+      LDA SIZE      GET THE RECORD
+      STA JREC,I    SIZE AND SET IT 
+      CLA           NO ERRORS 
+      JMP EXIT      RETURN
+      SPC 4 
+B177  OCT 177 
+.2    DEC 2 
+N10   DEC -10 
+N11   DEC -11 
+N9    DEC -9
+B77   OCT 77
+DFDM  DEF *+1 
+DM    NOP 
+A     EQU 0 
+B     EQU 1 
+XEQT  EQU 1717B 
+      SPC 1 
+END   EQU * 
+      SPC 1 
+      END 

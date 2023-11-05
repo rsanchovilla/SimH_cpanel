@@ -1,0 +1,225 @@
+ASMB,B,R,L,C
+     NAM POSNT,7
+     ENT POSNT
+      EXT EXEC,.ENTR,RFLG$,P.PAS,READF,$KIP 
+* 
+*     POSNT  IS THE  FILE  POSITION ROUTINE  FOR THE
+*            RTE  FILE  MANAGEMENT PACKAGE
+* 
+*     CALLING  SEQUENCE:
+*     CALL POSNT (IDCB,IERR,NP,IR)
+*         WHERE:
+*           IDCB  IS THE FILES DATA CONTROL BLOCK 
+*                 ADDRESS 
+*           IERR  IS THE  ERROR RETURN ADDRESS
+*                 POSNT ERRORS ARE: 
+*              0  NONE
+*             -1  DISC DOWN 
+*             -5  AN ILLEGAL RECORD WASENCOUNTERED
+*                 (LENGTHS AT EACH END DID NOT MATCH
+*             -10 NOT ENOUGH PARAMETERS 
+*             -11 DCB NOT OPEN
+*             -12 EOF OR SOF SENSED 
+*           NP    IF >0  THEN SKIP NP RECORDS 
+*                 IF <0  THEN BACK SPACE NP RECORDS 
+*                 IF =0  THEN  NO  OPERATION
+*           IR  (OPTIONAL) IF NOT CODED OR ZERO 
+*                 NP  IS RELATIVE  OTHERWIZE
+*                 NP IS ABSOLUTE (NP MUST BE>0) 
+      SPC 3 
+*     PRE  STORAGE
+      SPC 1 
+N10   DEC -10 
+N11   DEC -11 
+DFZER DEF ZERO
+ZERO  NOP 
+DCB   NOP 
+ER    NOP 
+NP    DEF ZERO
+IR    DEF ZERO
+      SPC 1 
+POSNT NOP           ENTRY POINT 
+      JSB .ENTR      FETCH
+      DEF DCB         ADDRESSES 
+      LDA N10       ENOUGH
+      LDB NP         PRAMS
+      CPB DFZER       SUPPLIED? 
+      JMP EXIT         NO,EXIT
+      STB RFLG$     FOURCE READS WHILE SPACING
+      CLB,CLE       SET 
+      LDA DCB       UP
+      JSB P.PAS       LOCAL 
+      DEC -15          DCB
+RCOU  NOP               ADDRESSES 
+DUM   NOP 
+TYPE  NOP           TYPE
+LU    NOP           LU FOR TYPE 0 
+EOF   NOP           EOF CODE FOR TYPE 0 
+SPACE NOP           SPACING LEGAL FLAGE TYPE 0
+CONND NOP 
+LN    NOP 
+      NOP 
+OPEN  NOP           OPEN FLAG 
+ABRC  NOP 
+RCLN  NOP 
+BFPT  NOP           BUFFER POINTER TYPE 3AND ABOVE
+RWFLG NOP           READ/WRIE /EOF  FLAG
+RC    NOP           RECORD  COUNT 
+      LDA N11       GET NOT OPEN ERROR.CODE TO A
+      LDB OPEN,I    GET OPEN FLAG TO B
+      CPB XEQT      OPEN
+      CCE,RSS       YES; SKIP;SET E 
+      JMP EXIT      NO;  EXIT OPEN ERROR
+      LDA BFPT      GET BUFFER POINTER ADDRESS
+      RAL,ERA       SET INDIRECT BIT
+      STA BFPT      RESET POINTER 
+      LDA IR,I      GET RELATIVE /ABSOLUTE  FLAG
+      CLB           ASSUME ABSOLUTE 
+      SZA,RSS       RELATIVE? 
+      LDB RC,I      YES; GET CURRENT RECORD NO. 
+      ADB NP,I      ADD THE  REQUESTED  MOVEMENT
+      STB ABRC      SAVE NEW ABSOLUTE ADDRESS 
+      CMB,INB       SET NEGATIVE AND
+      ADB RC,I      COMPUTE RELATIVE RECORD NUMBER
+      CMB,INB,SZB,RSS SET TO RIGHT  SIGN - ZERO?
+      JMP EXOK      YES - GO EXIT 
+      STB RCOU      NO;  SET COUNT
+      SPC 1 
+      LDA TYPE,I    GET TYPE  OF  FILE
+      CMA,INA,SZA,RSS TYPE ZERO?
+      JMP TYP0      YES; GO TO TYPE ZERO ROUTINE
+      INA,SZA       TYPE; 1 
+      INA,SZA,RSS    OR 2 
+      JMP TY1/2     YES; GO TO RANDOM ACESS POSITION
+      SPC 1 
+      CMB,SSB,INB     TYPE 3 OR  ABOVE - FORWARD
+      JMP FSRC          SPACE - YES  GO  DO IT. 
+      SPC 2 
+*     TYPE 3 AND ABOVE BACKSPACE ROUTINE
+      SPC 1 
+BSRC  LDA BFPT,I    GET CURRENT POSITION
+      INA,SZA       IS IT EOF?
+      JMP BSRC3     NO; GO BACKSPACE
+      LDA RWFLG,I   YES; GET THE READ/WRITE 
+      RAR,CLE,RAR   FLAG AND CLEAR THE EOF BIT
+      ELA,RAL       THEN
+      STA RWFLG,I   RESTORE THE FLAG
+      SEZ           WAS IT SET? 
+      JMP BSRC5     YES; COUNT AS A RECORD
+BSRC3 CCB           NO; BACKSPACE 1 
+      LDA DCB       WORD
+      JSB $KIP      WITH THE
+      JMP EXIT      SKIP ROUTINE
+      LDA BFPT,I    GET THE RECORD LENGTH 
+      STA RCLN      SAVE IT 
+      CMA           BACK SPACE TO 
+      STA B         THE 
+      LDA DCB       TWIN
+      JSB $KIP      WITH THE
+      JMP EXIT      SKIP ROUTINE
+      LDA BFPT,I    GET TWIN
+      CPA RCLN      TWINS MATCH?
+BSRC5 CCA,RSS       YES; SKIP 
+      JMP ER5       NO; ERROR -5
+      ADA RC,I      DECREMENT THE 
+      STA RC,I      RECORD  COUNT 
+      ISZ RCOU      STEP BACKSPACE COUNT ; DONE?
+      JMP BSRC3     NO; DO THE NEXT ONE 
+      JMP EXOK
+*     FORWARD SPACE TYPE ZERO AND 3 AND ABOVE FILES 
+* 
+FSRC  STB RCOU      SET COUNT 
+FSRC1 JSB READF     READ
+      DEF REART      A
+      DEF DCB,I       RECORD
+      DEF ER,I         TO 
+      DEF DUM           LOCAL DUMMY 
+      DEF .1             ONE WORD BUFFER
+      DEF LN
+REART SSA           IF ERROR
+      JMP EXIT      EXIT
+      LDB LN
+      SSB 
+      JMP EOFEX 
+      ISZ RCOU
+      JMP FSRC1 
+      JMP EXIT
+      SPC 2 
+N3    DEC -3
+      SPC 2 
+*     TYPE ZERO  SPACE  ROUTINE 
+      SPC 1 
+TYP0  CMB,SSB,INB     IF FORWARD  SPACE 
+      JMP FSRC      GO TO READ ROUTINE
+      SPC 1 
+      LDA N3        PRESET FOR ERROR
+      LDB SPACE,I   BACK SPACE  GET 
+      SSB,RSS       LEGAL CODE
+      JMP EXIT      BACK SPACE NOT LEGAL-EXIT 
+      SPC 1 
+      LDA LU,I      GET AND 
+      AND B77       ISOLALE  LU 
+      ADA B200      ADD BACK SPACE FUNCTION 
+      STA CONND     SET FOR CALL
+      CCA           SET FIRST EOF RECORD FLAG 
+SPC0  STA OPEN      IN OPEN 
+      JSB EXEC      CALL EXEC 
+      DEF EXRTN      TO 
+      DEF .3          BACK
+      DEF CONND         SPACE 
+EXRTN AND B200      MASK  EOF BIT 
+      CCB           DECREMENT 
+      ADB RC,I      THE RECORD COUNT
+      STB RC,I
+      CCB           SET  B  TO FORWARD SPACE 1
+      SZA,RSS       IF  EOF TEST FOR FIRST
+      JMP *+3       ELSE SKIP TO COUNT THE RECORD 
+      ISZ OPEN      SKIP IF EOF ON FIRST RECORD 
+      JMP FSRC      ELSE  GO  FORWARD  SPACE
+      ISZ RCOU      DONE? 
+      JMP SPC0      NO;  DO NEXT ONE
+      JMP EXOK      YES;  GO  EXIT
+      SPC 2 
+N5    DEC -5
+B200  OCT 200 
+B77   OCT 77
+      SPC 2 
+ER5   LDA N5        LENGTH MISMATCH ERROR 
+      JMP EXIT      SEND ERROR CODE 
+      SPC 1 
+*     TYPE  1 AND  TWO  SPACE  ROUTINE
+*           THE   NEW  RECORD  NO. IS SET ONLY
+*             NO EOF CHECK IS DONE
+*               NEGATIVE  OR  ZERO  RECORD
+*                 NUMBERS  ARE  REPLACED
+*                 WITH  1  AND  SOF  ERROR SENT 
+* 
+TY1/2 LDA ABRC      GET THE ABSOLUTE RECORD NO. 
+      CCE,SZA       IF ZERO 
+      SSA            OR NEGATIVE
+      CLA,CLE,INA     SET TO ONE
+      STA RC,I      SET NEW RECORD NO.
+      SEZ           IF FOURCED TO ONE TAKE SOF EXIT 
+      SPC 2 
+EXOK  CLA,RSS       GOOD EXIT 
+EOFEX LDA N12       EOF/SOF EXIT
+      SPC 1 
+EXIT  LDB DFZER     EXIT-RESET
+      STB NP         OPTIONAL 
+      STB IR          ADDRESSES 
+      STA ER,I      SET ERROR AND 
+      JMP POSNT,I   RETURN
+      SPC 2 
+N12   DEC -12 
+*     POST   STORAGE
+      SPC 2 
+.1    DEC 1 
+.3    DEC 3 
+      SPC 2 
+A     EQU 0 
+B     EQU 1 
+XEQT  EQU 1717B 
+      SPC 1 
+END   EQU * 
+      SPC 1 
+      END 

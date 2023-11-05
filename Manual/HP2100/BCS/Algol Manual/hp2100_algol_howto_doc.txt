@@ -1,0 +1,270 @@
+How To Use HP 2100 Algol On SIMH
+by Paulo da Silva
+
+
+
+DISCLAIMER
+==========
+
+THIS DOCUMENT SHOWS HOW TO USE HP ALGOL WITH THE HP2100 SIMH
+SIMULATOR USING TAPES FROM THE INTERNET.  YOU MUST ENSURE THAT
+YOU ARE ALLOWED TO USE THESE TAPES.  THE AUTHOR (PAULO DA SILVA)
+IS NOT RESPONSIBLE FOR ANY UNAUTHORIZED USE OF ANY SOFTWARE HERE
+CITED OR ANY OTHER.  THE AUTHOR (PAULO DE SILVA) IS ALSO NOT
+NOT RESPONSIBLE FOR ANY CONSEQUENCES RESULTING DIRECTLY OR
+INDIRECTLY FROM USING THIS DOCUMENT.
+
+IF YOU DISAGREE, PLEASE DO NOT CONTINUE READING.
+
+Paulo da Silva <psdasilva at yahoo dot com>
+========================================================================
+
+1. After installing SIMH HP2100, you may test it using the included
+basic1.abs as indicated in the simulator documentation.
+
+2. From http://oscar.taurus.com/~jeff/2100/index.html, get the following files:
+
+	algol.abs
+	bcsioc.rel
+	bcslib.rel
+	bcsloadr.rel
+	bcsprep.abs
+	bcsptp.rel
+	bcsptr.rel
+	bcstty.rel
+	sio16k11.abs
+
+BE SURE YOU HAVE PERMISSION TO USE THESE FILES.
+
+3. Prepare a bcs16k.abs tape (linker) using bcsprep.abs and the .rel
+files you got. (See below on how to do this).
+
+4. The downloaded file include a configured sio tape. It is configured
+for 16k words using the following units:
+
+	tty	11
+	ptr	13
+	ptp	20
+
+5. change the default device numbers and load the sio tape, as follows:
+
+	set clk dev=12
+	set ptr dev=13
+	set ptp dev=20
+	load sio16k11.abs
+
+6. Load the Algol compiler:
+
+	load algol.abs
+
+7. Compile your HP Algol program from an ASCII file helloworld.alg:
+
+-----------------------------
+HPAL,B,"PROG"
+
+BEGIN
+WRITE(2,#("Hello world"));
+END$
+-----------------------------
+
+	att ptp helloworld.rel
+	att ptr helloworld.alg
+	run 100
+
+8. Link your .rel file(s) with the bcslib.rel.  You need to reaassign
+   the device numbers to the default values:
+
+	set clk dev=13
+	set ptr dev=10
+	set ptp dev=12
+	load bcs16k.abs
+	att ptp helloworld.abs
+	att ptr helloworld.rel
+
+   Set bits 15 and 14 of the switch register to 1:
+
+	de s 140000
+	run 2
+
+   Repeat the following steps for any other tape you may
+   have (other procedures for example):
+
+	de s 140000
+	att ptr OTHER_FILE.rel
+	run
+
+   Finally, link the library, also setting bit 2 of the
+   switch register:
+
+	de s 140004
+	att ptr bcslib.rel
+	run
+	de s 140004
+	run
+	det ptr
+	det ptp
+
+9. You may now run your standalone program.
+
+	load helloworld.abs
+	de s 000000
+	run 2
+------------------------------------------------------------------------
+
+10. To prepare a BCS tape, duplicate the commands shown in this log:
+
+HP 2100 simulator V3.1-0
+sim> load bcsprep.abs
+sim> i s
+S:      000000  11
+sim> run 2000
+
+
+HS INP?
+10
+HS PUN?
+12
+
+
+FWA MEM?
+200
+LWA MEM?
+37677			; THIS IS FOR 16k. For 32k, use 77677
+
+
+* LOAD
+
+HALT instruction, P: 02041 (JMP 613)
+sim> att ptr bcstty.rel
+sim> run
+
+
+D.00
+ 37126 37677
+
+
+* LOAD
+
+HALT instruction, P: 02041 (JMP 613)
+sim> att ptr bcsptr.rel
+sim> run
+
+
+D.01
+ 36564 37125
+
+
+* LOAD
+
+HALT instruction, P: 02041 (JMP 613)
+sim> att ptr bcsptp.rel
+sim> run
+
+
+D.02
+ 36253 36563
+
+
+* LOAD
+
+HALT instruction, P: 02041 (JMP 613)
+sim> att ptr bcsioc.rel
+sim> run
+
+
+IOC
+ 36026 36252
+
+
+* TABLE ENTRY
+
+EQT?
+
+HALT instruction, P: 04005 (CLA)
+sim> run
+11,D.00
+10,D.01
+12,D.02
+/E
+
+
+SQT?
+-KYBD?
+7
+-TTY?
+7
+-LIB?
+10
+-PUNCH?
+11
+-INPUT?
+10
+-LIST?
+7
+
+
+DMA?
+0
+
+
+* LOAD
+
+HALT instruction, P: 02041 (JMP 613)
+sim> att ptr bcsloadr.rel
+sim> run
+
+
+LOADR
+ 33501 36002
+
+
+ INTERRUPT LINKAGE ?
+
+
+
+HALT instruction, P: 02303 (JSB 2122)
+sim> run
+10,101,I.01
+11,102,I.00
+12,103,I.02
+/E
+
+
+.SQT.  36003
+.EQT.  36011
+D.00   37126
+I.00   37320
+.BUFR  36177
+D.01   36564
+I.01   36704
+D.02   36253
+I.02   36370
+.IOC.  36026
+DMAC1  36247
+DMAC2  36250
+IOERR  36226
+XEQT   36246
+XSQT   36245
+HALT   35770
+.LDR.  35154
+.MEM.  35775
+LST    33532
+
+
+*SYSTEM LINK
+ 00200 00247
+
+
+
+
+*BCS ABSOLUTE OUTPUT
+
+HALT instruction, P: 02746 (LDA 3110)
+sim> det ptr
+sim> att ptp bcs.abs
+PTP: creating new file
+sim> run
+
+HALT instruction, P: 02763 (LIA 1)
+sim> q
+Goodbye

@@ -1,0 +1,157 @@
+ASMB,B,R,L,C
+      NAM $OPEN,7 
+      EXT EXEC
+      EXT RWND$ 
+      ENT $OPEN 
+      SUP 
+* 
+*  $OPEN   IS A ROUTINE OF THE RTE FILE MANAGEMENT PACKAGE. 
+* 
+*  $OPEN   IS CALLLED BY OPEN AND CREAT TO SET UP THE 
+*          DCB.  IT READS THE DIRECTORY INFORMATION 
+*          AND TRANSFERS THE INFORMATION FROM THERE 
+*          TO THE DCB.  IT ALSO INITIALIZES THE REST
+*          OF THE DCB.
+* 
+*   CALLING SEQUENCE: 
+*        (IT IS ASSUMED THAT WORDS 1 & 2 OF THE DCB ARE SET UP.)
+* 
+*     A  =  DCB ADDRESS 
+*     B  =  SECURITY CODE (EXPECTED)
+*     E  =  1 IF TYPE 1 OVERRIDE
+*     O  =  1 IF AN UPDATE OPEN 
+* 
+*     JSB $OPEN 
+*     DEF #SECT     DEF OF WORD CONTAINING #SEC/TRACK 
+*                   IN THE HIGH HALF (PASSED FROM D.RTR)
+*     JMP ERR       ERROR RETURN
+*                   NORMAL RETURN 
+*     ON A NORMAL RETURN: 
+*        A = FILE SECURITY CODE 
+*       B = SECURITY CODE/UPDATE FLAG 
+* 
+*     ON AN ERROR RETURN, EITHER
+*       A = -1  DISC ERROR OR 
+*       A = -9  TYPE ZERO OVERRIDE ERROR
+*         IN EITHER CASE THE DCB IS NOT SET UP. 
+* 
+* 
+$OPEN NOP           ENTRY 
+      STB SC        SAVE THE SECURITY CODE
+      SSB           IF NEGATIVE 
+      CMB,INB       SET POS 
+      STB SC2       AND SAVE
+      STA DCB       AND THE DCB ADDRESS 
+      STA DCB2
+      LDA A,I       GET THE DIRECTORY 
+      AND B77        ADDRESS
+      STA LU          AND SET 
+      XOR DCB,I        TO 
+      ALF,ALF           READ
+      RAL,RAL            THE
+      STA TRACK           DIRECTORY 
+      ISZ DCB              BLOCK
+      LDA DCB,I     GET THE SECTOR
+      AND B377       MASK 
+      STA SECT        AND 
+      XOR DCB,I        SET
+      ALF,ALF           GET THE 
+      LDB DCB            OFFSET 
+      ADB .15             AND 
+      STB BUF              COMPUTE BUFFER ADDRESS 
+      ADB .3                AND 
+      ADB A                  OFFSET 
+      STB PRMA                TO
+      ISZ DCB                  THE PRAMS
+      CLB,SEZ,INB      IF TYPE 1 OVERRIDE 
+      STB DCB,I         SET TYPE
+      SEZ                 AND 
+      CCB                  THE
+      STB TPFLG             OVERRIDE SKIP FLAG
+      JSB EXEC      READ
+      DEF RTN        THE
+      DEF .1          BLOCK 
+      DEF LU          TO
+BUF   NOP               THE 
+      DEF .128           DCB
+      DEF TRACK 
+      DEF SECT
+RTN   CCA           SET A FOR DISC ERROR
+      CPB .128      DISC ERROR? 
+      CLB,RSS       NO SKIP 
+      JMP EREX      EXIT - ERROR
+      ADA BUF       COMPUTE THE EXTENT ADDRESS
+      STB A,I       AND SET THE EXTENT TO ZERO
+      LDA N9
+      LDB PRMA,I    GET FILE TYPE 
+      SZB,RSS       IF ZERO 
+      ISZ TPFLG      AND OVERRIDE FLAG SET
+      RSS 
+      JMP EREX      EXIT - ERROR
+      SPC 1 
+      LDB N5        OF - SET TO MOVE 5
+NXT   LDA PRMA,I     PARAMETERS 
+      ISZ TPFLG     IF OVERRIDE SET SKIP
+      STA DCB,I     SET PARAMETER 
+      ISZ DCB       STEP ADDRESS
+      ISZ PRMA      STEP SOURCE 
+      INB,SZB       AND COUNT - DONE? 
+      JMP NXT       NO; DO NEXT ONE 
+      LDA PRMA,I
+      CLE,SZA 
+      CPA SC
+      CCE           MATCH SO SET E
+      CPA SC2       MATCH WITH POS OF NEG 
+      CCE           YES SO SET E
+      ERB           MATCH - SET FLAG
+      SOC           SET UPDATE
+      INB           FLAG
+      STB DCB,I     SET IN DCB
+      STB SC        SAVE SECURITY CODE
+      ISZ DCB       SET NUMBER OF SECTORS / TRACK ADD 
+      LDB $OPEN,I   GET THE WORD
+      LDB B,I       FROM THE CALL 
+      LSR 8         SET TO LOW B
+      STB DCB,I     PUT IT IN THE DCB 
+      ISZ $OPEN     STEP RETURN ADDRESS 
+      CLA           OPEN EXTENT ZERO
+      LDB DCB2      GET THE DCB ADDRESS 
+      JSB RWND$     SET REST OF DCB 
+      JMP $OPEN,I   ERROR EXIT
+      ADB N2        SET B TO THE RECORD NO ADDRESS
+      CLA,INA       SET THE RECORD NO 
+      STA B,I       TO 1. 
+      ISZ DCB       STEP TO THE OPEN FLAG ADDRESS 
+      LDA XEQT      GET THE CURRENT ID ADDRESS
+      STA DCB,I     SET THE OPEN FLAG 
+      LDA PRMA,I      RESTORE SECURITY CODE 
+      LDB SC        AND MATCH - UPDATE FLAG 
+EREX  ISZ $OPEN     STEP AND
+      JMP $OPEN,I   AND RETURN
+      SPC 3 
+SC2   NOP 
+SC    NOP 
+DCB   NOP 
+DCB2  NOP 
+LU    NOP 
+TRACK NOP 
+B77   OCT 77
+B377  OCT 377 
+SECT  NOP 
+N9    DEC -9
+.15   DEC 15
+.3    DEC 3 
+PRMA  NOP 
+TPFLG NOP 
+.1    DEC 1 
+.128  DEC 128 
+N5    DEC -5
+N2    OCT -2
+      SPC 2 
+XEQT  EQU 1717B 
+A     EQU 0 
+B     EQU 1 
+      SPC 1 
+END   EQU * 
+      SPC 1 
+      END 

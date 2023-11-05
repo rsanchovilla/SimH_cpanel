@@ -1,0 +1,2780 @@
+ASMB,R,L,C        TV INTFC. CARD VERIF. 
+      HED  TV INTFC CARD VERIF.  A-91200-16004-2  12/03/76  REV.C(1648) 
+      NAM TVERF,3 91200-16004 REV 1648 -- 761203
+      ENT TVERF 
+      EXT EXEC,VIDLU,ERASE,POINT,VECTR,VAREA,CHAR,VEND
+      SUP 
+A     EQU 0 
+B     EQU 1 
+      SPC 2 
+* LOAD THIS PROGRAM USING THE RTE LOADER. IT MAY BE USED IN 
+* FOREGROUND OR BACKGROUND. IT IS SUGGESTED THAT IT BE TEMPORARILY
+* LOADED INTO BACKGROUND AND SAVED WITH THE FMGR COMMAND "SP". IT 
+* CAN THEN BE USED WHENEVER NEEDED AND DOES NO WASTE AN ID SEGMENT. 
+* IT WILL NOT SWAP WHILE IN I/O SUSPENSION AS IT DOES NOT 
+* USE COMMON. 
+* 
+* THE PROGRAM IS ACTIVATED BY:
+* 
+*   ON,TVERF[,LU]     OR
+*   RU,TVERF[,LU]     (RTE II OR RTE III) 
+* 
+* THE LU IS THE LOGICAL UNIT # OF THE TERMINAL THAT IS TO BE USED 
+* FOR CONTROLING THE PROGRAM. IF NO LU IS SPECIFIED IT WILL DEFAULT 
+* TO 1 (THE SYSTEM CONSOLE). IN MULTIPLE TERMINAL OPERATION OF
+* RTE II OR RTE III THE SYSTEM WILL PASS THE LU OF THE ACTIVATING 
+* TERMINAL IF NONE IS SUPPLIED BY THE OPERATOR. 
+* 
+* THE PROGRAM WILL PRINT: 
+* 
+*   TV INTERFACE LU = 
+* 
+* THE USER REPLIES WITH THE APPROPRIATE LU. THEN THE PROGRAM PRINTS:
+* 
+*   IS CARD IN AMERICAN SCAN MODE?
+* 
+* THE USER ANSWERS YES OR NO. THEN THE PROGRAM PRINTS:
+* 
+*   IS THIS A 1 CARD SYSTEM?
+* 
+* THE USER ANSWERS YES OR NO. THEN THE PROGRAM PRINTS:
+* 
+*   COMMAND?
+* 
+* THE USER ANSWERS YES OR NO. IF THE ANSWER IS YES THE
+* LIST OF COMMANDS SHOWN ON THE FOLLOWING PAGE IS PRINTED:
+      SKP 
+* COMMANDS ARE ENTERED AS FOLLOWS:
+*     GA  GAIN PATTERN FOR ADJUSTING MONITOR HEIGHT, WIDTH, 
+*           POSITION, AND FOCUS.
+*     CR  CROSSHATCH PATTERN FOR ADJUSTING MONITOR
+*           LINEARITY AND PINCUSHION. 
+*     SE  RECTANGLES IN THE FOUR CORNERS OF THE SCREEN
+*           FOR CHECKING DISPLAY SETTLING TIME EFFECTS. 
+*     PO  WRITES ALL POINTS ON THE SCREEN TO CHECK
+*           FOR ANY MISSING POINTS. 
+*     LO  WRITES HP LOGO ON THE SCREEN. 
+*     DE  DEMONSRATES ALL FEATURES OF DISPLAY LIBRARY.
+*     ER  ERASES THE SCREEN.
+*     IN  INVERT THE VIDEO POLARITY ON THE SCREEN.
+*     FL  FLASH ANY SPECIFIED PATTERN.
+*     BA  COLOR OR GRAY LEVEL BARS. 
+*     LU  TO ENTER A NEW TV LU. 
+*     MO  TO ENTER A DIFFERENT SCAN MODE. 
+*     EX  EXITS THIS PROGRAM. 
+* 
+* 
+* IF IT IS NOT A 1 CARD SYSTEM THE FOLLOWING IS ALSO PRINTED: 
+* 
+* THE COLOR CODES ARE AS FOLLOWS: 
+* 
+* CODE  COLOR    GRAY LEVEL 
+* ----  -----    ---------- 
+*   B   BLUE        1/8 
+*   G   GREEN       1/4 
+*   C   CYAN        3/8 
+*   R   RED         1/2 
+*   M   MAGENTA     5/8 
+*   Y   YELLOW      3/4 
+*   W   WHITE       7/8 
+* 
+* 
+* WHEN FLASHING, A BACKGROUND IS DISPLAYED FIRST AND IS THE 
+* COMPLIMENT OF THE REQUESTED COLOR.
+* THE COMPLIMENTS ARE AS FOLLOWS: 
+*     WHITE - BLACK 
+*     RED   - CYAN
+*     GREEN - MAGENTA (YOU MAY GET SICK!) 
+*     BLUE  - YELLOW
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- START OF MAIN CONTROL --                      * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+TVERF NOP 
+      LDA B,I       GET FIRST PARAMETER PASSED
+      SZA,RSS       IF PARAM IS 0 
+      INA             SET LU TO 1, OTHERWISE
+      STA LU            SET FIRST PARAM INTO LU 
+      IOR X         SET READ WITH 
+      STA RCON        ECHO BIT
+      CLA           SET INDICATOR FOR 
+      STA ICOM        FIRST TIME THRU 
+      STA POL       SET NORMAL VIDEO POLARITY 
+      SPC 1 
+L0    JSB EXEC      REQUEST 
+      DEF L1          TV INTERFACE LU = 
+      DEF B2
+      DEF LU
+      DEF MES1
+      DEF ML1 
+      SPC 1 
+L1    JSB EXEC      INPUT TV LU 
+      DEF L2
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SPC 1 
+L2    LDA BUFF      CHECK LOWER 
+      AND MASK4       CHARACTER FOR 
+      CPA D48           ASCII RANGE 
+      JMP L3              FROM 0 TO 9 
+      CPA D56               INCLUSIVE 
+      JMP *+4 
+      LDA BUFF      IF NOT, IS IT 
+      AND MASK3       A SPACE 
+      CPA D32           CHARACTER 
+      RSS 
+      JMP L0        IF NOT, ASK FOR LU AGAIN
+      LDA BUFF
+      AND MES16 
+      CPA B1
+      JMP L3
+      SZA 
+      JMP L0
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- MAIN CONTROL CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L3    LDA BUFF      CHECK UPPER 
+      ALF,ALF         CHARACTER FOR 
+      AND MASK4         ASCII RANGE 
+      CPA D48             FROM 0 TO 9 
+      JMP L4                INCLUSIVE 
+      CPA D56 
+      RSS           IF NOT, ASK FOR 
+      JMP L0          LU AGAIN
+      LDA BUFF
+      ALF,ALF 
+      AND MES16 
+      CPA B1
+      JMP L4
+      SZA 
+      JMP L0
+      SPC 1 
+L4    LDA BUFF      CONVERT 2 ASCII 
+      AND MASK3       CHARACTERS INTO 
+      STA B             INTEGER VALUE 
+      AND MES17           OF TV LU #
+      STA LUTV              AND SAVE
+      LDA BUFF
+      ALF,ALF 
+      AND MES17 
+      CPB D32 
+      JMP *+3 
+      MPY D10 
+      ADA LUTV
+      STA LUTV
+      SPC 1 
+      JSB VIDLU     ESTABLISH TV LU IN
+      DEF *+3         VIDEO DISPLAY LIBRARY 
+      DEF LUTV
+      DEF POL 
+      SPC 1 
+      JSB ERASE     ERASE SCREEN
+      DEF *+1 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- MAIN CONTROL CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L5    JSB EXEC      ASK IF CARD IS IN 
+      DEF L6          AMERICAN SCAN MODE
+      DEF B2
+      DEF LU
+      DEF MES2
+      DEF D16 
+      SPC 1 
+L6    JSB EXEC      INPUT ANSWER
+      DEF L7
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SPC 1 
+L7    CLB 
+      LDA BUFF
+      CPA NO        IS ANSWER NO? 
+      JMP *+5         IT IS - MTEST = 0 
+      CPA YES       IS ANSWER YES?
+      RSS             IT IS - MTEST = 1 
+      JMP L5        NEITHER, ASK AGAIN
+      INB 
+      STB MTEST 
+      SPC 1 
+L7A   JSB EXEC      ASK IF 1 CARD 
+      DEF L7B         SYSTEM
+      DEF B2
+      DEF LU
+      DEF MES31 
+      DEF D13 
+      SPC 1 
+L7B   JSB EXEC      INPUT ANSWER
+      DEF L7C 
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SPC 1 
+L7C   CLB,INB 
+      LDA BUFF
+      CPA NO
+      JMP *+5 
+      CPA YES 
+      RSS 
+      JMP L7A 
+      CLB 
+      STB CTEST 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- MAIN CONTROL CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+      LDA ICOM      IS THIS THE 
+      SZA             FIRST TIME THRU 
+      JMP L11           NO - SKIP NEXT QUESTION 
+      INA           SET INDICATOR FOR 
+      STA ICOM        NOT 1ST TIME THRU 
+      SPC 1 
+L8    JSB EXEC      ASK IF USER KNOWS 
+      DEF L9          THE COMMANDS
+      DEF B2
+      DEF LU
+      DEF MES3
+      DEF ML3 
+      SPC 1 
+L9    JSB EXEC      INPUT ANSWER
+      DEF L10 
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SPC 1 
+L10   LDA BUFF
+      CPA YES       IS ANSWER YES?
+      JMP L11         IT IS - SKIP COMMAND LIST 
+      CPA NO        IS ANSWER NO? 
+      RSS             IT IS - LIST COMMANDS 
+      JMP L8        NEITHER, ASK AGAIN
+      SPC 1 
+      JSB EXEC      PRINT THE 
+      DEF L10A        LIST OF 
+      DEF B2            COMMANDS
+      DEF LU
+      DEF MES4
+      DEF ML4 
+      SPC 1 
+L10A  LDA CTEST 
+      SZA,RSS       COLOR SYSTEM? 
+      JMP L10B        NO - GO ON
+      JSB EXEC        YES - BA COMMAND LISTED 
+      DEF L10B
+      DEF B2
+      DEF LU
+      DEF MES36 
+      DEF ML36
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- MAIN CONTROL CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L10B  JSB EXEC      PRINT THE 
+      DEF L10C        REST OF THE 
+      DEF B2            LIST OF 
+      DEF LU              COMMANDS
+      DEF MES37 
+      DEF ML37
+      SPC 1 
+L10C  LDA CTEST 
+      SZA,RSS       COLOR SYSTEM? 
+      JMP L11         NO - GO ON
+      JSB EXEC        YES - LIST COLOR CODES
+      DEF L11 
+      DEF B2
+      DEF LU
+      DEF MES35 
+      DEF ML35
+      SPC 1 
+L11   CLA           CLEAR FLASH 
+      STA FLSH?       COMMAND 
+      JSB EXEC      PRINT:
+      DEF L12         COMMAND?
+      DEF B2
+      DEF LU
+      DEF MES5
+      DEF MES13 
+      SPC 1 
+L12   JSB EXEC      INPUT A COMMAND 
+      DEF L13 
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SPC 1 
+L13   LDA BUFF      CHECK THE COMMAND 
+      CPA GA          GA? 
+      JMP GAIN          DO GA PATTERN 
+      CPA CR          CR? 
+      JMP PIN           DO CR PATTERN 
+      CPA SE          SE? 
+      JMP SETTM         DO SE PATTERN 
+      CPA PO          PO? 
+      JMP BURN          WRITE ALL POINTS
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- MAIN CONTROL CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+      CPA LO          LO? 
+      JMP LOGO          WRITE LOGO
+      CPA ER          ER? 
+      JMP ERSE          ERASE SCREEN
+      CPA FL          FL? 
+      JMP FLASH         GO FLASH
+      CPA IN          IN? 
+      JMP INVRT         GO INVERT 
+      CPA BA          BA? 
+      JMP BARS          COLOR BARS
+      CPA XLU         LU? 
+      JMP L0            GET NEW TV LU 
+      CPA MO          MO? 
+      JMP L5            GET NEW SCAN MODE 
+      CPA TE          TE? 
+      JMP TERM          TERMINATE PROGRAM 
+      CPA EX          EX? 
+      JMP TERM          TERMINATE PROGRAM 
+      CPA EN          EN? 
+      JMP TERM          TERMINATE PROGRAM 
+      SPC 1 
+      CPA DE        IS COMMAND DE?
+      RSS             WRITE DEMO PATTERN
+      JMP L8        NO VALID COMMAND, ASK AGAIN 
+      SPC 1 
+      JSB GET       GET COLOR FOR MULTI-CARD SYSTEMS
+      JSB ERASE     ERASE SCREEN
+      DEF *+1 
+      JSB VIDLU     SET WRITE MODE
+      DEF *+3 
+      DEF LUTV
+      DEF POL 
+      SPC 1 
+      LDA MTEST 
+      SZA           AMERICAN SCAN?
+      JMP L18         YES - DIFFERENT PATTERN 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMONSTRATE DISPLAY LIBRARY --                * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+*  WRITE THE FOLLOWING FOUR WAYS (FOR EUROPEAN OR 
+*    NON-STANDARD SCAN MODES):
+* 
+*  "HEWLETT-PACKARD 91200 TV INTERFACE CARD"
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE ACROSS TOP
+      DEF L14 
+      DEF D12 
+      DEF D248
+      DEF MES6
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L14   JSB CHAR      WRITE MESSAGE DOWN
+      DEF L15         RIGHT SIDE
+      DEF D248
+      DEF D244
+      DEF MES6
+      DEF B1
+      DEF B3
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L15   JSB CHAR      WRITE MESSAGE UPSIDE DOWN 
+      DEF L16         ACROSS BOTTOM 
+      DEF D244
+      DEF MES16 
+      DEF MES6
+      DEF B1
+      DEF B2
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L16   JSB CHAR      WRITE MESSAGE UP
+      DEF L17         LEFT SIDE 
+      DEF MES16 
+      DEF D12 
+      DEF MES6
+      DEF B1
+      DEF B1
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L17   JMP L22       SKIP TO MAIN PART OF PATTERN
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 2 
+*  WRITE THE FOLLOWING FOUR WAYS (FOR AMERICAN SCAN MODE):
+* 
+*  "HEWLETT-PACKARD 91200 TV INTRFC CARD" 
+      SPC 1 
+L18   JSB CHAR      WRITE MESSAGE ACROSS TOP
+      DEF L19 
+      DEF D21 
+      DEF D232
+      DEF MES7
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L19   JSB CHAR      WRITE MESSAGE DOWN
+      DEF L20         RIGHT SIDE
+      DEF D248
+      DEF D226
+      DEF MES7
+      DEF B1
+      DEF B3
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L20   JSB CHAR      WRITE MESSAGE UPSIDE DOWN 
+      DEF L21         ACROSS BOTTOM 
+      DEF D234
+      DEF MES16 
+      DEF MES7
+      DEF B1
+      DEF B2
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L21   JSB CHAR      WRITE MESSAGE UP
+      DEF L22         LEFT SIDE 
+      DEF MES16 
+      DEF D13 
+      DEF MES7
+      DEF B1
+      DEF B1
+      DEF ZERO
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L22   LDA D232      SET STARTING Y VALUE FOR
+      LDB MTEST      MESSAGES, Y=232 FOR EUROPEAN 
+      SZB             AND NON-STANDARD SCAN MODES.
+      LDA D216         Y=216 FOR AMERICAN SCAN MODE.
+      STA VERT1 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L23        "ALPHANUMERIC CHARACTER
+      DEF D20           GENERATOR"
+      DEF VERT1 
+      DEF MES8
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L23   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L24        "ABCDEFGHIJKLMNOPQR
+      DEF D20          STUVWXYZ1234567890"
+      DEF VERT1 
+      DEF MES9
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L24   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L25        "!#$%&'*+,-./:;
+      DEF D20           <=>?@[\]^"
+      DEF VERT1 
+      DEF MES10 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*             -- DEMO PATTERN CONTINUED --                      * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L25   JSB VEND      FIND END
+      DEF L26         OF LAST 
+      DEF HORZ2         MESSAGE 
+      DEF VERT2 
+      SPC 1 
+L26   JSB CHAR      WRITE FOUR CHARACTERS 
+      DEF L27         ON END OF PREVIOUS
+      DEF HORZ2         LINE: 
+      DEF VERT2           "()_
+      DEF JBUFR 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L27   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L28        "WRITES IN 
+      DEF D20           FOUR DIRECTIONS"
+      DEF VERT1 
+      DEF MES11 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L28   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L29        "MULTIPLE CHARACTER
+      DEF D20           SIZE" 
+      DEF VERT1 
+      DEF MES12 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L29   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L30        "SIZE 1" 
+      DEF D20 
+      DEF VERT1 
+      DEF MES13 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L30   LDA VERT1     REDUCE Y POSITION 
+      ADA ND16        BY 16 
+      STA VERT1 
+      SPC 1 
+      JSB CHAR      WRITE SIZE 2 MESSAGE
+      DEF L31        "SIZE 2" 
+      DEF D20 
+      DEF VERT1 
+      DEF MES14 
+      DEF B2
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L31   LDA VERT1     REDUCE Y POSITION 
+      ADA ND26        BY 26 
+      STA VERT1 
+      SPC 1 
+      JSB CHAR      WRITE SIZE 3 MESSAGE
+      DEF L32        "ETC." 
+      DEF D20 
+      DEF VERT1 
+      DEF MES15 
+      DEF B3
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L32   LDA D123      SET Y VALUE FOR VECTORS,
+      LDB MTEST      Y=123 FOR EUROPEAN OR
+      SZB             NON-STANDARD SCAN MODES.
+      LDA D107         Y=107 FOR AMERICAN 
+      STA VERT1         SCAN MODE.
+      SPC 1 
+      JSB VECTR     DRAW VERTICAL 
+      DEF L33         VECTOR OUTLINE
+      DEF D110          (LEFT OF WORD 
+      DEF VERT1           "VECTORS")
+      DEF B2
+      DEF D60 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L33   LDA VERT1     INCREASE Y POSITION 
+      ADA D60         BY 60 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW HORIZONTAL 
+      DEF L34         VECTOR OUTLINE
+      DEF D110          (ABOVE WORDS
+      DEF VERT1           "IN 8 DIRECTIONS")
+      DEF ZERO
+      DEF D132
+      DEF B2
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L34   LDA D60       REDUCE Y POSITION 
+      CMA,INA         BY 60 
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW VETICAL
+      DEF L35         VECTOR OUTLINE
+      DEF D130          (RIGHT OF WORD
+      DEF VERT1           "VECTORS")
+      DEF B2
+      DEF MES23 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L35   LDA VERT1     INCREASE Y POSITION 
+      ADA D45         BY 45 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW HORIZONTAL 
+      DEF L36         VECTOR OUTLINE
+      DEF D137          (BELOW WORDS
+      DEF VERT1           "IN 8 DIRECTIONS")
+      DEF ZERO
+      DEF D105
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L36   JSB VECTR      DRAW VERTICAL
+      DEF L37         VECTOR OUTLINE
+      DEF D242          (CLOSE AREA RIGHT 
+      DEF VERT1           OF WORDS
+      DEF B2                "IN 8 DIRECTIONS")
+      DEF MES17 
+      DEF B2
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L37   LDA ND35      REDUCED Y POSITION
+      ADA VERT1       BY 35 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW VECTOR AT
+      DEF L38         45 DEG. ANGLE 
+      DEF D165          FROM LOWER LEFT 
+      DEF VERT1           TO UPPER RIGHT
+      DEF B1
+      DEF MES20 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L38   JSB VECTR     DRAW VERTICAL 
+      DEF L39         VECTOR
+      DEF D180
+      DEF VERT1 
+      DEF B2
+      DEF MES20 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L39   JSB VECTR     DRAW VECTOR AT
+      DEF L40         45 DEG. ANGLE 
+      DEF D195          FROM LOWER RIGHT
+      DEF VERT1           TO UPPER LEFT 
+      DEF B3
+      DEF MES20 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L40   LDA VERT1     INCREASE Y POSITION 
+      ADA MES17       BY 15 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW HORIZONTAL 
+      DEF L41         VECTOR
+      DEF D165
+      DEF VERT1 
+      DEF ZERO
+      DEF MES20 
+      DEF B2
+      DEF COLOR 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- DEMO PATTERN CONTINUED --                    *
+*                                                              *
+****************************************************************
+      SPC 1 
+L41   LDA VERT1     INCREASE Y POSITION 
+      ADA MES17       BY 15 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW VERTICAL PORTION 
+      DEF L42         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE UPPER LEFT
+      DEF MES13 
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L42   JSB VECTR     DRAW HORIZONTAL PORTION 
+      DEF L43         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE UPPER LEFT
+      DEF ZERO
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L43   LDA MES17     REDUCE Y POSITION 
+      CMA,INA         BY 15 
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW UPPER PORTION
+      DEF L44         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE LEFT
+      DEF B1
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L44   JSB VECTR     DRAW LOWER PORTION
+      DEF L45         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE LEFT
+      DEF MES16 
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L45   LDA MES17     REDUCE Y POSITION 
+      CMA,INA         BY 15 
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW VERTICAL PORTION 
+      DEF L46         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE LOWER LEFT
+      DEF B2
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L46   JSB VECTR     DRAW HORIZONTAL PORTION 
+      DEF L47         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE LOWER LEFT
+      DEF ZERO
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L47   LDA VERT1     INCREASE Y POSITION 
+      ADA MES20       BY 30 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW LEFT PORTION 
+      DEF L48         OF ARROWHEAD ON 
+      DEF D180          VECTOR POINTING UP
+      DEF VERT1 
+      DEF B5
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L48   JSB VECTR     DRAW RIGHT PORTION
+      DEF L49         OF ARROWHEAD ON 
+      DEF D180          VECTOR POINTING UP
+      DEF VERT1 
+      DEF MES16 
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L49   LDA MES20     REDUCE Y POSITION 
+      CMA,INA         BY 30 
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW LEFT PORTION 
+      DEF L50         OF ARROWHEAD ON 
+      DEF D180          VECTOR POINTING DOWN
+      DEF VERT1 
+      DEF B3
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L50   JSB VECTR     DRAW RIGHT PORTION
+      DEF L51         OF ARROWHEAD ON 
+      DEF D180          VECTOR POINTING DOWN
+      DEF VERT1 
+      DEF B1
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L51   LDA VERT1     INCREASE Y POSITION 
+      ADA MES20       BY 30 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW HORIZONTAL PORTION 
+      DEF L52         OF ARROWHEAD ON 
+      DEF D195          VECTOR POINTING TO
+      DEF VERT1           THE UPPER RIGHT 
+      DEF JBUFR 
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L52   JSB VECTR     DRAW VERTICAL PORTION 
+      DEF L53         OF ARROWHEAD ON 
+      DEF D195          VECTOR POINING TO 
+      DEF VERT1           THE UPPER RIGHT 
+      DEF MES13 
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L53   LDA MES17     REDUCE Y POSITION 
+      CMA,INA         BY 15 
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW UPPER PORTION
+      DEF L54         OF ARROWHEAD ON 
+      DEF D195          VECTOR POINTING TO
+      DEF VERT1           THE RIGHT 
+      DEF B3
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L54   JSB VECTR     DRAW LOWER PORTION
+      DEF L55         OF ARROWHEAD ON 
+      DEF D195          VECTOR POINTING TO
+      DEF VERT1           THE RIGHT 
+      DEF B5
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L55   LDA MES17     REDUCE Y POSITION 
+      CMA,INA         BY 15 
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW VERTICAL PORTION 
+      DEF L56         OF ARROWHEAD ON 
+      DEF D195          VECTOR POINTING TO
+      DEF VERT1           THE LOWER RIGHT 
+      DEF B2
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+L56   JSB VECTR     DRAW HORIZONTAL PORTION 
+      DEF L57         OF ARROWHEAD ON 
+      DEF D195          VECTOR POINTING TO
+      DEF VERT1           THE LOWER RIGHT 
+      DEF JBUFR 
+      DEF B2
+      DEF B2
+      DEF COLOR 
+      DEF B1        FORCE DUMP OF VECTORS 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L57   CLA           ESTABLISH -4096 AS A
+      LDB MTEST       CORRECTION FOR AMERICAN 
+      SZB             SCAN (0 FOR OTHERS) FOR 
+      LDA M4096       POINT BUFFER TO DRAW
+      STA VERT2       CURVED PORTION ON BORDER
+      LDA BPNT1     SET UP BUFFER 
+      STA PNTR        POINTERS AND
+      LDA BFAD        COUNTERS FOR
+      STA ADDX        ADJUSTING POINTS
+      LDB LOOPS       ON CURVE
+      SPC 1 
+L58   LDA PNTR,I    ADJUST THE
+      ADA VERT2       POINTS ON 
+      STA ADDX,I        THE CURVE 
+      ISZ PNTR
+      ISZ ADDX
+      INB,SZB 
+      JMP L58 
+      SPC 1 
+      JSB POINT     OUTPUT THE POINTS 
+      DEF L59         FOR CURVED PORTION
+      DEF BUFFR       OF BORDER AROUND
+      DEF D8          "VECTORS IN 8 DIRECTIONS" 
+      DEF COLOR 
+      SPC 1 
+L59   LDA B3        REDUCE Y POSITION 
+      CMA,INA         BY 3
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L60         VERTICALLY
+      DEF D126          "VECTORS" 
+      DEF VERT1 
+      DEF MES16 
+      DEF B1
+      DEF B1
+      DEF ZERO
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L60   LDA VERT1     INCREASE Y POSITION 
+      ADA D42         BY 42 
+      STA VERT1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L61         HORIZONTALLY
+      DEF D135          "IN 8 DIRECTIONS" 
+      DEF VERT1 
+      DEF MES17 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L61   LDA VERT1     REDUCE Y POSITION 
+      ADA ND66        BY 66 AND USE 
+      STA VERT1         FOR VERTICAL SIZE 
+      JSB VAREA     DRAW RECTANGULAR
+      DEF L62         AREA ACROSS LOWER 
+      DEF D13           PART OF SCREEN
+      DEF D17 
+      DEF D229
+      DEF VERT1 
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L62   LDA VERT1     INCREASE Y POSITION 
+      ADA MES13       BY 6 TO GET START 
+      STA VERT1         OF FIRST MESSAGE IN AREA
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L63         (ERASE FROM AREA) 
+      DEF D18           "  THE PRESENT SCREEN 
+      DEF VERT1           SHOWS SOFTWARE" 
+      DEF MES18 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L63   JSB IYM10     REDUCE Y POSITION BY 10 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L64         (ERASE FROM AREA) 
+      DEF D18           "CHARACTER AND
+      DEF VERT1           VECTOR CAPABILITY." 
+      DEF MES19 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L64   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L65         (ERASE FROM AREA) 
+      DEF D18           "  ALL OF THE 
+      DEF VERT1           CHARACTERS IN THE"
+      DEF MES20 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L65   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L66         (ERASE FROM AREA) 
+      DEF D18           "SUPPLIED LIBRARY 
+      DEF VERT1           ARE SHOWN"
+      DEF MES21 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L66   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L67         (ERASE FROM AREA) 
+      DEF D18           "  CALLS ARE, ALSO, MADE
+      DEF VERT1           DIRECTLY TO"
+      DEF MES22 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L67   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L68         (ERASE FROM AREA) 
+      DEF D18           "VECTR, VAREA, POINT, 
+      DEF VERT1           ERASE, AND VIDLU."
+      DEF MES23 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L68   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L69         (ERASE FROM AREA) 
+      DEF D18           "  ALL PATTERNS ALLOW 
+      DEF VERT1           FOR SCAN MODES."
+      DEF MES24 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L69   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      LDA MTEST     AMERICAN SCAN 
+      SZA             MODE? 
+      JMP L73           YES - SKIP TO OTHER MSGS. 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L70         (ERASE FROM AREA) 
+      DEF D18           "  THE SCAN MODE YOU
+      DEF VERT1           ARE NOW USING IS" 
+      DEF MES25 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L70   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L71         (ERASE FROM AREA) 
+      DEF D18           "EITHER THE EUROPEAN
+      DEF VERT1           STANDARD SCAN OR" 
+      DEF MES26 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L71   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      OUTPUT MESSAGE
+      DEF L72         (ERASE FROM AREA) 
+      DEF D18           "THE NON-STANDARD 
+      DEF VERT1           SCAN."
+      DEF MES27 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L72   JMP L76       DONE! 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L73   JSB CHAR      OUTPUT MESSAGE
+      DEF L74         (ERASE FROM AREA) 
+      DEF D18           "YOU ARE USING
+      DEF VERT1           AMERICAN
+      DEF MES28             STANDARD SCAN." 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L74   JSB VAREA     DRAW AREA ABOVE 
+      DEF L75         AMERICAN SCAN'S 
+      DEF ZERO          VISIBLE RASTER
+      DEF YAMER           (FROM Y=240 TO
+      DEF MASK3             Y=255 AND 
+      DEF MES17               X=0 TO X=255) 
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+L75   JSB CHAR      OUTPUT MESSAGE
+      DEF L76         (ERASE FROM THE 
+      DEF D9            NEW AREA) 
+      DEF D245            "YOU HAVE SELECTED
+      DEF MES29             THE WRONG SCAN
+      DEF B1                  MODE!!!"
+      DEF ZERO
+      DEF ZERO
+      DEF INCLR 
+      SPC 1 
+L76   LDA FLSH? 
+      SZA,RSS       FLASH?
+      JMP L11         NO - NEXT 
+      JMP F2          YES 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- FLASHING ROUTINE --                           * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+FLASH LDA FLSH? 
+      SZA           ALREADY IN FLASH? 
+      JMP L8          YES - KNOW COMMANDS?
+      CLA,INA 
+      STA FLSH?     SET FLASH INDICATOR 
+      JSB EXEC      ASK FOR PATTERN 
+      DEF F1
+      DEF B2
+      DEF LU
+      DEF MES34 
+      DEF D10 
+      SPC 1 
+F1    JMP L12       GET PATTERN 
+      SPC 2 
+F2    LDA ND72      GET # OF FLASHES (B/W)
+      LDB COLOR 
+      SZB           WHITE?
+      ARS             NO - HALF THE FLASHES 
+      STA PNTR
+      SPC 1 
+F3    LDA TCONF     GET DELAY FOR B/W 
+      LDB COLOR 
+      SZB           WHITE?
+      LDA TCONS       NO - SLOWER FLASHING
+      STA ADDX
+      LDA POL       TOGGLE POLARITY 
+      XOR B1          INDICATOR 
+      STA POL 
+      JSB VIDLU     SET POLARITY
+      DEF F4          (CHANGE IT) 
+      DEF LUTV
+      DEF POL 
+      SPC 1 
+F4    ISZ ADDX      DELAY 
+      JMP *-1         COUNT 
+      ISZ PNTR      ALL FLASHES DONE? 
+      JMP F3          NO - GO AGAIN 
+      JMP L11       DONE, GET NEXT COMMAND
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- COLOR ROUTINE --                              * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+GET   NOP           GET COLOR 
+      LDA CTEST 
+      SZA 
+      JMP LXXX
+      STA COLOR 
+      INA 
+      STA INCLR 
+      JMP GET,I 
+      SPC 1 
+LXXX  JSB EXEC      ASK FOR COLOR 
+      DEF LYYY
+      DEF B2
+      DEF LU
+      DEF MES32 
+      DEF B7
+      SPC 1 
+LYYY  JSB EXEC      INPUT ANSWER
+      DEF LZZZ
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SPC 1 
+LZZZ  LDA BUFF
+      AND MASK9 
+      CLB 
+      CPA RED 
+      LDB B2
+      CPA GREEN 
+      LDB B3
+      CPA BLUE
+      LDB B4
+      CPA YELOW 
+      LDB B5
+      CPA MGNTA 
+      LDB B6
+      CPA CYAN
+      LDB B7
+      STB COLOR 
+      LDA D9
+      CMB,INB 
+      ADA B 
+      STA INCLR 
+      CMB,INB 
+      INB 
+      CPB B1
+      STB INCLR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- COLOR ROUTINE CONTINUED --                    * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+      LDA FLSH? 
+      SZA,RSS       FLASHING? 
+      JMP BK3         NO
+      LDA COLOR       YES 
+      SZA,RSS       WHITE?
+      JMP BK2         YES 
+      JSB ERASE       NO - ERASE
+      DEF *+1 
+      JSB VAREA     WRITE COMPLIMENTARY 
+      DEF BK1         BACKGROUND
+      DEF ZERO
+      DEF ZERO
+      DEF MASK3 
+      DEF MASK3 
+      DEF ZERO
+      DEF INCLR 
+BK1   ISZ GET       ELIMINATE ERASE 
+      ISZ GET         ON RETURN 
+BK2   JMP GET,I 
+      SPC 1 
+BK3   CLB,INB       SET COMPLIMENTARY COLOR TO
+      STB INCLR       BLACK WHEN NOT FLASHING 
+      JMP GET,I 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- MISCELLANEOUS ROUTINES --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+IYM10 NOP           SUBROUTINE TO 
+      LDA VERT1       REDUCE Y POSITION 
+      ADA ND10           BY 10
+      STA VERT1 
+      JMP IYM10,I 
+      SPC 3 
+ERSE  JSB ERASE     PROCESS ER
+      DEF *+1         COMMAND 
+      JMP L11       GET NEXT COMMAND
+      SPC 3 
+INVRT LDA POL       CHANGE THE
+      XOR B1          STATE OF THE
+      STA POL           VIDEO POLARITY INDICATOR
+      JSB VIDLU     REVERSE THE VIDEO 
+      DEF *+3         POLARITY
+      DEF LUTV
+      DEF POL 
+      JMP L11       GET NEXT COMMAND
+      SPC 3 
+TERM  JSB EXEC      PRINT MESSAGE 
+      DEF L80         ON TERMINAL 
+      DEF B2            "TVERF: STOP 0077"
+      DEF LU
+      DEF MES30 
+      DEF D8
+      SPC 1 
+L80   JSB EXEC      TERMINATION 
+      DEF L81         CALL
+      DEF MES13 
+L81   HLT 77B       DUMMY!!!
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- CONSTANTS AND STORAGE --                      * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+B4    OCT 4 
+B5    OCT 5 
+B6    OCT 6 
+B7    OCT 7 
+D9    DEC 9 
+D10   DEC 10
+D13   DEC 13
+D16   DEC 16
+D17   DEC 17
+D18   DEC 18
+D20   DEC 20
+D21   DEC 21
+D32   DEC 32
+D42   DEC 42
+D45   DEC 45
+D48   DEC 48
+D56   DEC 56
+D60   DEC 60
+D105  DEC 105 
+D107  DEC 107 
+D110  DEC 110 
+D123  DEC 123 
+D126  DEC 126 
+D130  DEC 130 
+D132  DEC 132 
+D135  DEC 135 
+D137  DEC 137 
+D165  DEC 165 
+D180  DEC 180 
+D195  DEC 195 
+D216  DEC 216 
+D226  DEC 226 
+D229  DEC 229 
+D232  DEC 232 
+D234  DEC 234 
+D242  DEC 242 
+D244  DEC 244 
+D245  DEC 245 
+D248  DEC 248 
+ML4   DEC 307 
+ND10  DEC -10 
+ND16  DEC -16 
+ML1   DEC -19 
+ND26  DEC -26 
+ML3   DEC -27 
+ND35  DEC -35 
+ND66  DEC -66 
+ND72  DEC -72 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- CONSTANTS AND STORAGE CONTINUED --            * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+M4096 DEC -4096 
+ML35  DEC 131 
+ML36  DEC -33 
+ML37  DEC -99 
+TCONF DEC -10000
+TCONS DEC -20000
+LU    NOP 
+ICOM  NOP 
+LUTV  NOP 
+CTEST NOP 
+COLOR NOP 
+INCLR NOP 
+MTEST NOP 
+RCON  NOP 
+FLSH? NOP 
+POL   NOP 
+NO    ASC 1,NO
+YES   ASC 1,YE
+GA    ASC 1,GA
+CR    ASC 1,CR
+SE    ASC 1,SE
+PO    ASC 1,PO
+LO    ASC 1,LO
+ER    ASC 1,ER
+FL    ASC 1,FL
+IN    ASC 1,IN
+BA    ASC 1,BA
+XLU   ASC 1,LU
+MO    ASC 1,MO
+TE    ASC 1,TE
+EX    ASC 1,EX
+EN    ASC 1,EN
+DE    ASC 1,DE
+RED   OCT 51000 
+GREEN OCT 43400 
+BLUE  OCT 41000 
+YELOW OCT 54400 
+MGNTA OCT 46400 
+CYAN  OCT 41400 
+BPNT1 DEF BUF 
+BUF   OCT 120603,121203,121603,122204 
+      OCT 122605,123206,123607,123610 
+SA0   OCT 77575 
+SA1   OCT 76577 
+YAMER DEC 240 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- TERMINAL MESSAGES --                          * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+MES1  ASC 10,TV INTERFACE LU = _
+MES2  ASC 16,IS CARD IN AMERICAN SCAN MODE? _ 
+MES3  ASC 14,DO YOU KNOW THE COMMANDS? _
+MES4  OCT 6412,6412 
+      ASC 16,COMMANDS ARE ENTERED AS FOLLOWS: 
+      OCT 6412
+      ASC 18,    GA  GAIN PATTERN FOR ADJUSTING M 
+      ASC 10,ONITOR HEIGHT, WIDTH 
+      OCT 26015,5040
+      ASC 14,         POSITION, AND FOCUS 
+      OCT 27015,5040
+      ASC 18,   CR  CROSSHATCH PATTERN FOR ADJUST 
+      ASC 5,ING MONITO
+      OCT 51015,5040
+      ASC 17,         LINEARITY AND PINCUSHION. 
+      OCT 6412
+      ASC 18,    SE  RECTANGLES IN THE FOUR CORNE 
+      ASC 8,RS OF THE SCREEN
+      OCT 6412
+      ASC 18,          FOR CHECKING DISPLAY SETTL 
+      ASC 8,ING TIME EFFECTS
+      OCT 27015,5040
+      ASC 18,   PO  WRITES ALL POINTS ON THE SCRE 
+      ASC 5,EN TO CHEC
+      OCT 45415,5040
+      ASC 14,         FOR MISSING POINTS. 
+      OCT 6412
+      ASC 18,    LO  WRITES HP LOGO ON THE SCREEN 
+      OCT 27015,5040
+      ASC 17,   DE  DEMONSTRATES ALL FEATURES O 
+      ASC 9,F DISPLAY LIBRARY.
+      OCT 6412
+      ASC 13,    ER  ERASES THE SCREEN. 
+      OCT 6412
+      ASC 18,    IN  INVERT THE VIDEO POLARITY ON 
+      ASC 6, THE SCREEN.
+      OCT 6412
+      ASC 18,    FL  FLASH ANY SPECIFIED PATTERN. 
+MES36 ASC 17,    BA  COLOR OR GRAY SCALE BARS.
+MES37 ASC 14,    LU  TO ENTER A NEW TV LU 
+      OCT 27015,5040
+      ASC 19,   MO  TO ENTER A DIFFERENT SCAN MODE. 
+      OCT 6412
+      ASC 14,    EX  EXITS THIS PROGRAM.
+      SKP 
+****************************************************************
+*                                                              *
+*              -- TERMINAL MESSAGES CONTINUED --               *
+*                                                              *
+****************************************************************
+      SPC 1 
+MES5  OCT 6412
+      ASC 5,COMMAND? _
+MES30 ASC 8,TVERF: STOP 0077
+MES31 ASC 13,IS THIS A 1 CARD SYSTEM? _ 
+MES32 ASC 7, WHAT COLOR? _
+MES34 ASC 10, PATTERN TO FLASH? _ 
+MES35 OCT 6412,6412 
+      ASC 16, THE COLOR CODES ARE AS FOLLOWS: 
+      OCT 6412,6412 
+      ASC 13, CODE  COLOR    GRAY LEVEL 
+      OCT 6412
+      ASC 13, ----  -----    ---------- 
+      OCT 6412
+      ASC 11,   B   BLUE        1/8 
+      OCT 6412
+      ASC 11,   G   GREEN       1/4 
+      OCT 6412
+      ASC 11,   C   CYAN        3/8 
+      OCT 6412
+      ASC 11,   R   RED         1/2 
+      OCT 6412
+      ASC 11,   M   MAGENTA     5/8 
+      OCT 6412
+      ASC 11,   Y   YELLOW      3/4 
+      OCT 6412
+      ASC 11,   W   WHITE       7/8 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- TV MESSAGE STRINGS --                         * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+MES6  DEC 39
+      ASC 20,HEWLETT-PACKARD 91200 TV INTERFACE CARD
+MES7  DEC 36
+      ASC 18,HEWLETT-PACKARD 91200 TV INTRFC CARD 
+MES8  DEC 32
+      ASC 16,ALPHANUMERIC CHARACTER GENERATOR 
+MES9  DEC 36
+      ASC 18,ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 
+MES10 DEC 23
+      ASC 12,!#$%&'*+,-./:;<=>?@[\]^
+MES11 DEC 25
+      ASC 13,WRITES IN FOUR DIRECTIONS
+MES12 DEC 23
+      ASC 12,MULTIPLE CHARACTER SIZE
+MES13 DEC 6 
+      ASC 3,SIZE 1
+MES14 DEC 6 
+      ASC 3,SIZE 2
+MES15 DEC 4 
+      ASC 2,ETC.
+MES16 DEC 7 
+      ASC 4,VECTORS 
+MES17 DEC 15
+      ASC 8,IN 8 DIRECTIONS 
+MES18 DEC 35
+      ASC 18,  THE PRESENT SCREEN SHOWS SOFTWARE
+MES19 DEC 32
+      ASC 16,CHARACTER AND VECTOR CAPABILITY. 
+MES20 DEC 30
+      ASC 15,  ALL OF THE CHARACTERS IN THE 
+MES21 DEC 27
+      ASC 14,SUPPLIED LIBRARY ARE SHOWN.
+MES22 DEC 35
+      ASC 18,  CALLS ARE, ALSO, MADE DIRECTLY TO
+MES23 DEC 36
+      ASC 18,VECTR, VAREA, POINT, ERASE, & VIDLU. 
+MES24 DEC 36
+      ASC 18,  ALL PATTERNS ALLOW FOR SCAN MODES. 
+MES25 DEC 36
+      ASC 18,  THE SCAN MODE YOU ARE NOW USING IS 
+MES26 DEC 36
+      ASC 18,EITHER THE EUROPEAN STANDARD SCAN OR 
+MES27 DEC 22
+      ASC 11,THE NON-STANDARD SCAN. 
+MES28 DEC 37
+      ASC 19,YOU ARE USING AMERICAN STANDARD SCAN.
+MES29 DEC 40
+      ASC 20,YOU HAVE SELECTED THE WRONG SCAN MODE!!! 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- CONSTANTS & TABLES FOR ARROW ROUTINE --      *
+*                                                              *
+****************************************************************
+      SPC 1 
+SYM1  OCT 2000,2001,2002,2003,2004,2005,2006,2007 
+      OCT 1005,1406,2406,3005 
+SYM2  OCT 2000,2001,2002,2003,2004,2005,2006,2007 
+      OCT 1002,1401,2401,3002 
+SYM3  OCT 0003,0403,1003,1403,2003,2403,3003,3403 
+      OCT 2401,3002,3004,2405 
+SYM4  OCT 0003,0403,1003,1403,2003,2403,3003,3403 
+      OCT 0402,0404,1001,1005 
+SYM5  OCT 0000,0401,1002,1403,2004,2405,3006,3407 
+      OCT 3406,3405,3007,2407 
+SYM6  OCT 0000,0401,1002,1403,2004,2405,3006,3407 
+      OCT 0001,0002,0400,1000 
+SYM7  OCT 0007,0406,1005,1404,2003,2402,3001,3400 
+      OCT 3401,3402,3000,2400 
+SYM8  OCT 0007,0406,1005,1404,2003,2402,3001,3400 
+      OCT 0006,0005,0407,1007 
+      SPC 2 
+*          ARROW POSITION TABLE 
+      SPC 1 
+SYM1P OCT 076010,076040,076070,076120,076150
+SYM2P OCT 076220,076250,076300,076330,076360
+SYM3P OCT 004175,020175,034175,050175,064175
+SYM4P OCT 110175,124175,140175,154175,170175
+SYM5P OCT 004010,020040,034070,050120,064150
+SYM6P OCT 110220,124250,140300,154330,170360
+SYM7P OCT 004360,020330,034300,050250,064220
+SYM8P OCT 110150,124120,140070,154040,170010
+      SPC 1 
+* DUMMY ADDRESS TO ENABLE PROGRAM TO SEARCH THRU
+* FOR A PARTICULAR SYMBOL (DOT POINTER) 
+      SPC 1 
+ARW1  DEF SYM1
+ARW1S DEF SYM1
+      SPC 1 
+* DUMMY ADDRESS TO ENABLE PROGRAM TO SEARCH THRU THE
+* POSITIONS OCCUPIED BY A PARTICULAR SYMBOL 
+      SPC 1 
+ARW1P DEF SYM1P 
+ARW1T DEF SYM1P 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- GAIN CHECK ROUTINE FOR TV --                 *
+*                                                              *
+****************************************************************
+      SPC 1 
+* THE GAIN SUBROUTINE GENERATES A RECTANGLE 
+* AND ARROWS TO TEST THE HEIGHT AND WIDTH ON THE TV 
+      SPC 1 
+GAIN  JSB GET       GET COLOR FOR MULTI-CARD SYSTEMS
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      DEF *+1 
+      JSB VIDLU     SET WRITE MODE
+      DEF *+3 
+      DEF LUTV
+      DEF POL 
+      SPC 1 
+      LDA ADD       SAVE POSITION REDUCER INST. 
+      STA ADDX
+      LDB MTEST     GET AMERICAN SCAN INDICATOR 
+      LDA X         GET Y = 256 
+      SZB           AMERICAN SCAN?
+      LDA YAMER       YES - GET Y = 240 
+      STA Y         SET VERTICAL DIMENSION
+      LDA SA0       GET RECT 1 Y FOR NON-AMER.
+      SZB           AMERICAN SCAN?
+      ADA STADR       YES - Y = Y - 8 
+      STA S0        SET VERTICAL POSITION 1 
+      LDA SA1       GET RECT 2 Y FOR NON-AMER 
+      SZB           AMERICAN SCAN?
+      ADA STADR       YES - Y = Y - 8 
+      STA S1        SET VERTICAL POSITION 2 
+      CLA           GET NOP FOR ARROW POS. REDUCER
+      SZB           AMERICAN SCAN?
+      LDA ADDX        YES - GET INST. FOR POS. RED. 
+      STA ADD       SET ARROW POSITION REDUCER
+      SPC 1 
+      JSB SQUAR     GO TO SQUAR SBR TO DRAW A RECT. 
+      OCT 0 
+Y     DEC 256        VERT. DIM. OF RECT.
+X     DEC 256        HORIZ. DIM. OF RECT. 
+      SPC 1 
+      LDA SYMBL     GET NUMBER OF DOTS IN SYMBOL
+      STA DOTC      PUT IN DOT COUNTER
+      LDA POSIT     GET NUMBER OF POSITIONS 
+      STA POSC      PUT IN POSITION COUNTER 
+      LDA LOOPS     GET NUMBER OF LOOPS (ARROWS)
+      STA LOOPC     PUT IN LOOP COUNTER 
+      LDA ARW1S     GET START OF SYMBOL 
+      STA ARW1        AND SAVE
+      LDA ARW1T     GET START OF COMMON POSITION
+      STA ARW1P       AND SAVE
+      SKP 
+****************************************************************
+*                                                              *
+*              -- GAIN ROUTINE CONTINUED --                    *
+*                                                              *
+****************************************************************
+      SPC 1 
+HEAD1 LDA BFAD      SET BUFFER
+      STA PNTR        POINTER 
+      STA A1
+HEAD0 LDA ARW1,I    GET DOT 
+      LDB ARW1P,I   GET POSITION
+      ADA B         ADD DOT TO POSITION 
+ADD   ADA STADR     REDUCE Y BY 8 FOR AMER SCAN ONLY
+      STA PNTR,I    STORE POINT 
+      ISZ PNTR        IN OUTPUT BUFFER
+      ISZ DOTC      INCREMENT DOT COUNTER 
+      JMP HEADA     SKIP
+      JSB POINT     OUTPUT THE
+      DEF *+4         POINT BUFFER
+A1    NOP 
+      DEF D12 
+      DEF COLOR 
+      JMP HEAD2     GET NEXT POSITION 
+HEADA ISZ ARW1      INCREMENT DOT POINTER 
+      JMP HEAD0     SET UP NEXT DOT 
+      SPC 1 
+HEAD2 LDA SYMBL     GET -12 
+      STA DOTC      PUT IN DOT COUNTER
+      ISZ POSC      INCREMENT POSITION
+      JMP *+2       ALL 5 NOT DRAWN 
+      JMP HEAD3     RESTORE POSC AND TEST LOOPC 
+      LDA ARW1
+      ADA ND11
+      STA ARW1
+      ISZ ARW1P 
+      JMP HEAD1 
+      SKP 
+*************************************************************** 
+*                                                             * 
+*              -- GAIN ROUTINE CONTINUED --                   * 
+*                                                             * 
+*************************************************************** 
+      SPC 1 
+HEAD3 LDA POSIT     GET -5
+      STA POSC      PUT IN POSITION COUNTER 
+      ISZ LOOPC     ARE ALL SYMBOLS DRAWN 
+      JMP *+2       ALL SYMBOLS NOT DRAWN 
+      JMP HEAD4     ALL SYMBOLS DRAWN 
+      ISZ ARW1      5 SYMBOLS OF ONE TYPE DRAWN 
+      ISZ ARW1P 
+      JMP HEAD1 
+      SPC 1 
+HEAD4 JSB SQUAR     WRITE A 
+S0    OCT 77575       CROSS 
+      DEC 2             IN THE
+      DEC 6               MIDDLE
+      JSB SQUAR             OF THE
+S1    OCT 76577               SCREEN
+      DEC 6                     BY WRITING
+      DEC 2                       TWO RECTANGLES
+      LDA ADDX      RESTORE INSTRUCTION 
+      STA ADD 
+      LDA FLSH? 
+      SZA,RSS       FLASH?
+      JMP L11         NO - NEXT 
+      JMP F2          YES 
+      SPC 1 
+ADDX  NOP 
+DOTC  NOP 
+BFAD  DEF BUFFR 
+PNTR  NOP 
+LOOPC NOP 
+BUFFR BSS 256 
+SYMBL DEC -12 
+POSC  NOP 
+D12   DEC 12
+ND11  DEC -11 
+LOOPS DEC -8
+      SKP 
+****************************************************************
+*                                                              *
+*              -- PIN CUSHION TEST, CROSS HATCH PATTERN --     *
+*                                                              *
+****************************************************************
+      SPC 1 
+PIN   JSB GET       GET COLOR FOR MULTI-CARD SYSTEMS
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      DEF *+1 
+      JSB VIDLU     SET WRITE MODE
+      DEF *+3 
+      DEF LUTV
+      DEF POL 
+      SPC 1 
+      LDB MTEST     GET AMERICAN SCAN INDICATOR 
+      LDA MASK0     GET VERT MIDDLE DONE, NON-AMER
+      SZB           AMERICAN SCAN?
+      LDA MASK6       YES - GET VERT MID DONE FOR AMER
+      STA MSK0      SET VERTICLE MIDDLE DONE TESTER 
+      LDA MASK6     GET VERT MIDDLE, NON-AMER 
+      SZB           AMERICAN SCAN?
+      LDA MASK1       YES - GET VERT MID FOR AMER 
+      STA MSK6      SET VERTICLE MIDDLE TESTER
+      LDA MASK9     GET VERT NXT TO MID, NON-AMER 
+      SZB           AMERICAN SCAN?
+      LDA MASK5       YES - GET NXT TO MID FOR AMER 
+      STA MSK9      SET VERT NEXT TO MIDDLE TESTER
+      SPC 1 
+      CLB           CLEAR X COUNTER 
+PIN1  LDA BFAD      SET UP BUFFER 
+      STA PNTR        POINTER 
+      STA A2
+      CLA           CLEAR Y COUNTER 
+FAX1  IOR B         MERGE X INTO Y
+      STA PNTR,I    PUT POINT INTO
+      ISZ PNTR        OUTPUT BUFFER 
+      AND MASK2     MASK OUT X PORTION
+      CPA MASK2     TEST FOR Y LINE FINSIHED
+      JMP FAX2        Y LINE FINISHED 
+      ADA X         ADD 1 TO Y
+      JMP FAX1
+      SKP 
+*************************************************************** 
+*                                                             * 
+*              -- PIN CUSHION TEST CONTINUED --               * 
+*                                                             * 
+*************************************************************** 
+      SPC 1 
+FAX2  STB POSC      SAVE X COUNTER
+      JSB POINT     OUTPUT COMPLETE 
+      DEF *+4         LINE FROM BUFFER
+A2    NOP 
+      DEF X 
+      DEF COLOR 
+      LDB POSC      RESTORE X COUNTER 
+      CPB MASK3     IS LAST LINE FINISHED?
+      JMP FAX4      LAST FINISHED 
+      CPB MASK4     IS NEXT TO MIDDLE FINISHED? 
+      JMP FAX3        YES 
+      CPB MASK7     IS THIS THE MIDDLE? 
+      JMP FAX3A       YES 
+      CPB MASK8     IS MIDDLE FINISHED? 
+      JMP FAX3        YES 
+      ADB D8        ADD 10B TO X
+      JMP PIN1      DRAW NEXT VERTICLE
+      SPC 1 
+FAX3  ADB MES16     ADD 7B TO X 
+      JMP PIN1
+      SPC 1 
+FAX3A ADB B1        ADD 1 TO X
+      JMP PIN1
+      SPC 1 
+B1    OCT 1 
+MASK0 OCT 100000
+MASK1 OCT 70000 
+MASK4 OCT 170 
+MASK5 OCT 73400 
+MASK6 OCT 74000 
+MASK7 OCT 177 
+MASK8 OCT 200 
+MASK9 OCT 77400 
+      SPC 2 
+FAX4  CLB           CLEAR Y COUNTER 
+FAX5  LDA BFAD      SET BUFFER
+      STA PNTR        POINTER 
+      STA A3
+      CLA           CLEAR X COUNTER 
+FAX6  IOR B         MERGE Y INTO X
+      STA PNTR,I    PUT POINT INTO
+      ISZ PNTR        OUTPUT BUFFER 
+      AND MASK3     MASK OUT Y PORTION
+      CPA MASK3     TEST FOR HORIZONTAL FINISHED
+      JMP FAX7      FINISHED
+      INA           ADD 1 TO X
+      JMP FAX6
+      SKP 
+****************************************************************
+*                                                              *
+*              -- PIN CUSHION TEST CONTINUED --                *
+*                                                              *
+****************************************************************
+      SPC 1 
+FAX7  STB POSC      SAVE Y COUNTER
+      JSB POINT     OUTPUT A COMPLETE 
+      DEF *+4         LINE FROM BUFFER
+A3    NOP 
+      DEF X 
+      DEF COLOR 
+      LDB POSC      RESTORE Y COUNTER 
+      CPB MASK2     IS LAST LINE FINISHED?
+      JMP RESP      LAST FINISHED RETURN TO MAIN
+      CPB MSK6      IS NEXT TO MIDDLE FINISHED? 
+      JMP FAX8        YES 
+      CPB MSK9      IS THIS THE MIDDLE? 
+      JMP FAX8A       YES 
+      CPB MSK0      IS MIDDLE FINISHED? 
+      JMP FAX8        YES 
+      ADB B4000     ADD 10B TO Y
+      JMP FAX5      DRAW NEXT HORIZONTAL
+      SPC 1 
+FAX8  ADB CON2      ADD 7B TO Y 
+      JMP FAX5
+      SPC 1 
+FAX8A ADB X         ADD 1 TO Y
+      JMP FAX5
+      SPC 1 
+RESP  LDA FLSH? 
+      SZA,RSS       FLASH?
+      JMP L11         NO - NEXT 
+      JMP F2          YES 
+      SPC 1 
+MSK0  NOP 
+MSK6  NOP 
+MSK9  NOP 
+B4000 OCT 4000
+CON2  OCT 3400
+STADR OCT 174000
+      SKP 
+****************************************************************
+*                                                              *
+*              -- WRITE ALL POINTS --                          *
+*                                                              *
+****************************************************************
+      SPC 1 
+BURN  JSB GET       GET COLOR FOR MULTI-CARD SYSTEMS
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      DEF *+1 
+      JSB VIDLU     SET WRITE MODE
+      DEF *+3 
+      DEF LUTV
+      DEF POL 
+      SPC 1 
+      JSB VAREA     WRITE AREA
+      DEF OUT         256 POINTS BY 
+      DEF ZERO          256 POINTS
+      DEF ZERO
+      DEF MASK3 
+      DEF MASK3 
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+OUT   LDA FLSH? 
+      SZA,RSS       FLASH?
+      JMP L11         NO - NEXT 
+      JMP F2          YES 
+      SPC 2 
+MASK2 OCT 177400
+MASK3 DEC 255 
+POSIT OCT -5
+SA2   OCT 174370
+SXA2  OCT 164370
+SXA3  OCT 164000
+      SKP 
+****************************************************************
+*                                                              *
+*              -- SETTLING TIME, SQUARES IN 4 CORNERS --       *
+*                                                              *
+****************************************************************
+      SPC 1 
+SETTM JSB GET       GET COLOR FOR MULTI-CARD SYSTEMS
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      DEF *+1 
+      JSB VIDLU     SET WRITE MODE
+      DEF *+3 
+      DEF LUTV
+      DEF POL 
+      SPC 1 
+      LDB MTEST     GET AMERICAN SCAN INDICATOR 
+      LDA SA2       GET RIGHT SQUARE POS, NON-AMER
+      SZB           AMERICAN SCAN?
+      LDA SXA2        YES - GET RT SQR FOR AMER 
+      STA S2        SET RIGHT SQUARE STARTING POINT 
+      LDA STADR     GET LEFT SQUARE POS, NON-AMER 
+      SZB           AMERICAN SCAN?
+      LDA SXA3        YES - GET LEFT SQR FOR AMER 
+      STA S3        SET LEFT SQUARE STARTING POINT
+      SPC 1 
+      JSB SQUAR     PUTS 8X8 SQUARE 
+ZERO  OCT 0           IN THE
+D8    DEC 8             LOWER LEFT
+      DEC 8               CORNER
+      JSB SQUAR     PUTS 8X8 SQUARE 
+S2    OCT 174370      IN THE
+      DEC 8             UPPER RIGHT 
+      DEC 8               CORNER
+      JSB SQUAR     PUTS 8X8 SQUARE 
+S3    OCT 174000      IN THE
+      DEC 8             UPPER LEFT
+      DEC 8               CORNER
+      JSB SQUAR     PUTS 8X8 SQUARE 
+      OCT 370         IN THE
+      DEC 8             LOWER RIGHT 
+      DEC 8               CORNER
+      LDA FLSH? 
+      SZA,RSS       FLASH?
+      JMP L11         NO - NEXT 
+      JMP F2          YES 
+      SPC 2 
+NEG1  OCT -1
+      SKP 
+****************************************************************
+*                                                              *
+*              -- DRAW SPECIFIED SQUARE --                     *
+*                                                              *
+****************************************************************
+      SPC 1 
+*            ** USED BY GAIN AND SETTM ** 
+      SPC 1 
+SQUAR NOP 
+      LDA SQUAR,I   THIS GETS LLHC
+      STA BUFF
+      LDB SQUAR 
+      INB 
+      LDA 1,I       ADDRESS OF VERT IN B
+      ADA NEG1      REDUCE LENGTH BY ONE
+      STA VERT1 
+      INB           ADD TO ADDRESS
+      LDA 1,I       GET HORIZONTAL
+      ADA NEG1      REDUCE LENGTH BY ONE
+      STA HORZ1 
+      INB           PREPARE RETURN ADDRESS
+      STB SQUAR     STORE IN RETURN POINT 
+      LDA BUFF
+      AND MASK2 
+      ALF,ALF 
+      STA VERT2 
+      LDA BUFF
+      AND MASK3 
+      STA HORZ2 
+      SKP 
+*************************************************************** 
+*                                                             * 
+*              -- DRAW SQUARE, CONTINUED --                   * 
+*                                                             * 
+*************************************************************** 
+      SPC 1 
+UP    JSB VECTR 
+      DEF RIGHT 
+      DEF HORZ2 
+      DEF VERT2 
+      DEF B2
+      DEF VERT1 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+RIGHT JSB VECTR 
+      DEF DOWN
+      DEF XCONN 
+      DEF VERT2 
+      DEF ZERO
+      DEF HORZ1 
+      DEF B3
+      DEF COLOR 
+      SPC 1 
+DOWN  JSB VECTR 
+      DEF LEFT
+      DEF XCONN 
+      DEF VERT2 
+      DEF MES13 
+      DEF VERT1 
+      DEF B3
+      DEF COLOR 
+      SPC 1 
+LEFT  JSB VECTR 
+      DEF XCONN 
+      DEF XCONN 
+      DEF VERT2 
+      DEF JBUFR 
+      DEF HORZ1 
+      DEF B3
+      DEF COLOR 
+      DEF B2
+      SPC 1 
+XCONN JMP SQUAR,I 
+      SPC 1 
+BUFF  NOP 
+HORZ1 NOP 
+HORZ2 NOP 
+VERT1 NOP 
+VERT2 NOP 
+B2    OCT 2 
+B3    OCT 3 
+JBUFR DEC 4 
+      OCT 21050,24537 
+TCON1 DEC -30769
+      SKP 
+****************************************************************
+*                                                              *
+*              -- GENERAL PURPOSE TIME DELAY --                *
+*                                                              *
+****************************************************************
+      SPC 1 
+*  THE FOLLOWING IS NOT COMPENSATED FOR CYCLE TIME; 
+      SPC 1 
+TIME5 NOP            1 SECOND TIMER 
+      LDB POSIT     GET 1 SECOND COUNT
+      LDA TCON1 
+      ISZ A         INNER TIMER 
+      JMP *-1         COUNT-DOWN LOOP 
+      ISZ B         OUTER TIMER 
+      JMP *-4         COUNT-DOWN LOOP 
+      JMP TIME5,I 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- DISPLAY HP LOGO --                           *
+*                                                              *
+****************************************************************
+      SPC 1 
+LOGO  JSB GET       GET  COLOR FOR MULTI-CARD SYSTEMS 
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      DEF *+1 
+      JSB VIDLU     SET WRITE MODE
+      DEF *+3 
+      DEF LUTV
+      DEF POL 
+      SPC 1 
+      JSB CHAR      DISPLAY MESSAGE 
+      DEF LOG00       "TV INTERFACE CARD" 
+      DEF D77 
+      DEF D137
+      DEF MES33 
+      DEF B1
+      DEF ZERO
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG00 JSB POINT     MISCELLANEOUS 
+      DEF LOG01       POINTS OF LOGO
+      DEF LOBUF         ARE DISPLAYED 
+      DEF D129            (129 OF THEM) 
+      DEF COLOR 
+      SPC 1 
+LOG01 JSB VECTR     DISPLAY FIRST LINE
+      DEF LOG02       OF LOGO 
+      DEF D113
+      DEF D124
+      DEF ZERO
+      DEF D40 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG02 JSB VECTR     DISPLAY SECOND LINE 
+      DEF LOG03       OF LOGO 
+      DEF D113
+      DEF D122
+      DEF ZERO
+      DEF D39 
+      DEF B2
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- LOGO CONTINUED --                             * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+LOG03 JSB VECTR     DISPLAY THIRD LINE
+      DEF LOG04       OF LOGO 
+      DEF D112
+      DEF D120
+      DEF ZERO
+      DEF D40 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG04 JSB VECTR     DISPLAY FOURTH LINE 
+      DEF LOG05       OF LOGO 
+      DEF D112
+      DEF D118
+      DEF ZERO
+      DEF D39 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG05 JSB VECTR     DISPLAY FIFTH LINE
+      DEF LOG06       OF LOGO 
+      DEF D111
+      DEF D116
+      DEF ZERO
+      DEF D40 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG06 JSB VECTR     DISPLAY SIXTH LINE
+      DEF LOG07       OF LOGO 
+      DEF D111
+      DEF D114
+      DEF ZERO
+      DEF D40 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG07 JSB VECTR     DISPLAY SEVENTH LINE
+      DEF LOG08       OF LOGO 
+      DEF D111
+      DEF D112
+      DEF ZERO
+      DEF D39 
+      DEF B2
+      DEF COLOR 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- LOGO CONTINUED --                            *
+*                                                              *
+****************************************************************
+      SPC 1 
+LOG08 JSB VECTR     DISPLAY EIGTH LINE
+      DEF LOG09       OF LOGO 
+      DEF D110
+      DEF D110
+      DEF ZERO
+      DEF D40 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG09 JSB VECTR     DISPLAY NINTH LINE
+      DEF LOG10       OF LOGO 
+      DEF D110
+      DEF D108
+      DEF ZERO
+      DEF D40 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG10 JSB VECTR     DISPLAY LEFT SIDE OF
+      DEF LOG11       TENTH LINE OF LOGO
+      DEF D109
+      DEF D106
+      DEF ZERO
+      DEF D13 
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG11 JSB VECTR     DISPLAY RIGHT SIDE OF 
+      DEF LOG12       TENTH LINE OF LOGO
+      DEF D133
+      DEF D106
+      DEF ZERO
+      DEF D16 
+      DEF B3
+      DEF COLOR 
+      SPC 1 
+LOG12 JSB VECTR     DISPLAY RIGHT SIDE OF 
+      DEF LOG13       ELEVENTH LINE OF LOGO 
+      DEF D137
+      DEF D104
+      DEF ZERO
+      DEF D12 
+      DEF B2
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- LOGO CONTINUED --                             * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+LOG13 JSB VECTR     DISPLAY RIGHT SIDE OF 
+      DEF LOG14       TWELTH LINE OF LOGO 
+      DEF D139
+      DEF D102
+      DEF ZERO
+      DEF D9
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG14 JSB VAREA     DISPLAY UPPER PORTION OF
+      DEF LOG15       TAIL OF H IN LOGO 
+      DEF D119
+      DEF D102
+      DEF B2
+      DEF B5
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG15 JSB VAREA     DISPLAY LOWER PORTION OF
+      DEF LOG16       TAIL OF H IN LOGO 
+      DEF D120
+      DEF D96 
+      DEF B7
+      DEF B3
+      DEF B1
+      DEF COLOR 
+      SPC 1 
+LOG16 JSB VAREA     DISPLAY UPPER PORTION OF
+      DEF LOG17       LEFT LEG OF H IN LOGO 
+      DEF D116
+      DEF D92 
+      DEF B3
+      DEF B6
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG17 JSB VAREA     DISPLAY MIDDLE PORTION OF 
+      DEF LOG18       LEFT LEG OF H IN LOGO 
+      DEF D118
+      DEF D87 
+      DEF B7
+      DEF B3
+      DEF B1
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- LOGO CONTINUED --                             * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+LOG18 JSB VAREA     DISPLAY HORIZONTAL PORTION OF 
+      DEF LOG19       H IN LOGO 
+      DEF D120
+      DEF D96 
+      DEF B5
+      DEF B3
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG19 JSB VAREA     DISPLAY UPPER PORTION OF
+      DEF LOG20       RIGHT LEG OF H IN LOGO
+      DEF D123
+      DEF D92 
+      DEF B3
+      DEF B6
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG20 JSB VAREA     DISPLAY LOWER PORTION OF
+      DEF LOG21       LEFT LEG OF H IN LOGO 
+      DEF D114
+      DEF D85 
+      DEF B3
+      DEF B3
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG21 JSB VAREA     DISPLAY LOWER PORTION OF
+      DEF LOG22       RIGHT LEG OF H IN LOGO
+      DEF D122
+      DEF D85 
+      DEF B2
+      DEF D8
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG22 JSB VAREA     DISPLAY TOP PORTION OF
+      DEF LOG23      P IN LOGO
+      DEF D130
+      DEF D96 
+      DEF B7
+      DEF B3
+      DEF ZERO
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- LOGO CONTINUED --                             * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+LOG23 JSB VAREA     DISPLAY UPPER PORTION OF
+      DEF LOG24       LEFT BODY OF P IN LOGO
+      DEF D132
+      DEF D91 
+      DEF B6
+      DEF B3
+      DEF B1
+      DEF COLOR 
+      SPC 1 
+LOG24 JSB VAREA     DISPLAY UPPER PORTION OF
+      DEF LOG25       RIGHT BODY OF P IN LOGO 
+      DEF D139
+      DEF D93 
+      DEF B4
+      DEF B3
+      DEF B1
+      DEF COLOR 
+      SPC 1 
+LOG25 JSB VAREA     DISPLAY LOWER PORTION OF
+      DEF LOG26       LEFT BODY OF P IN LOGO
+      DEF D128
+      DEF D85 
+      DEF B3
+      DEF B7
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG26 JSB VAREA     DISPLAY LOWER PORTION OF
+      DEF LOG27       RIGHT BODY OF P IN LOGO 
+      DEF D135
+      DEF D93 
+      DEF B5
+      DEF B3
+      DEF B3
+      DEF COLOR 
+      SPC 1 
+LOG27 JSB VAREA     DISPLAY BOTTOM OF 
+      DEF LOG28       BODY OF P IN LOGO 
+      DEF D132
+      DEF D85 
+      DEF B3
+      DEF B3
+      DEF ZERO
+      DEF COLOR 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- LOGO CONTINUED --                            *
+*                                                              *
+****************************************************************
+      SPC 1 
+LOG28 JSB VAREA     DISPLAY UPPER PORTION OF
+      DEF LOG29       TAIL OF P IN LOGO 
+      DEF D130
+      DEF D87 
+      DEF B3
+      DEF B6
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG29 JSB VAREA     DIAPLAY LOWER PORTION OF
+      DEF LOG30       TAIL OF P IN LOGO 
+      DEF D126
+      DEF D77 
+      DEF B3
+      DEF B5
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG30 JSB VAREA     DISPLAY UPPER LEFT AREA OF
+      DEF LOG31       MAIN BODY OF LOGO 
+      DEF D106
+      DEF D87 
+      DEF B4
+      DEF B4
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG31 JSB VAREA     DISPLAY MIDDLE LEFT AREA OF 
+      DEF LOG32       MAIN BODY OF LOGO 
+      DEF D105
+      DEF D77 
+      DEF B7
+      DEF D9
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG32 JSB VAREA     DISPLAY MIDDLE SMALL AREA OF
+      DEF LOG33       MAIN BODY OF LOGO (UNDER H) 
+      DEF D113
+      DEF D77 
+      DEF B4
+      DEF B3
+      DEF ZERO
+      DEF COLOR 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- LOGO CONTINUED --                             * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+LOG33 JSB VAREA     DISPLAY UPPER RIGHT AREA OF 
+      DEF LOG34       MAIN BODY OF LOGO 
+      DEF D142
+      DEF D92 
+      DEF D8
+      DEF B3
+      DEF B3
+      DEF COLOR 
+      SPC 1 
+LOG34 JSB VAREA     DISPLAY SECOND TO UPPER RIGHT 
+      DEF LOG35       AREA OF MAIN BODY OF LOGO 
+      DEF D139
+      DEF D79 
+      DEF B5
+      DEF B4
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG35 JSB VAREA     DISPLAY THIRD TO UPPER RIGHT
+      DEF LOG36       AREA OF MAIN BODY OF LOGO 
+      DEF D134
+      DEF D79 
+      DEF B5
+      DEF D9
+      DEF B3
+      DEF COLOR 
+      SPC 1 
+LOG36 JSB VAREA     DISPLAY SMALL AREA TO RIGHT OF
+      DEF LOG37       MAIN BODY OF LOGO 
+      DEF D142
+      DEF D77 
+      DEF B1
+      DEF D8
+      DEF B2
+      DEF COLOR 
+      SPC 1 
+LOG37 JSB VAREA     DISPLAY UPPER SMALL AREA TO 
+      DEF LOG38       LEFT OF MAIN BODY OF LOGO 
+      DEF D104
+      DEF D66 
+      DEF B6
+      DEF B2
+      DEF B1
+      DEF COLOR 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- LOGO CONTINUED --                            *
+*                                                              *
+****************************************************************
+      SPC 1 
+LOG38 JSB VAREA     DISPLAY LOWER SMALL AREA TO 
+      DEF LOG39       LEFT OF MAIN BODY OF LOGO 
+      DEF D104
+      DEF D60 
+      DEF B6
+      DEF B3
+      DEF B1
+      DEF COLOR 
+      SPC 1 
+LOG39 JSB VAREA     DISPLAY LARGE CENTRAL AREA OF 
+      DEF LOG40       OF MAIN BODY OF LOGO
+      DEF D104
+      DEF D60 
+      DEF D36 
+      DEF D17 
+      DEF ZERO
+      DEF COLOR 
+      SPC 1 
+LOG40 LDA FLSH? 
+      SZA,RSS       FLASH?
+      JMP L11         NO - NEXT 
+      JMP F2          YES 
+      SKP 
+*****************************	*************************	**********
+*                                                              *
+*              -- LOGO CONSTANTS --                            *
+*                                                              *
+****************************************************************
+      SPC 1 
+D36   DEC 36
+D39   DEC 39
+D40   DEC 40
+D66   DEC 66
+D77   DEC 77
+D79   DEC 79
+D85   DEC 85
+D87   DEC 87
+D91   DEC 91
+D92   DEC 92
+D93   DEC 93
+D96   DEC 96
+D102  DEC 102 
+D104  DEC 104 
+D106  DEC 106 
+D108  DEC 108 
+D109  DEC 109 
+D111  DEC 111 
+D112  DEC 112 
+D113  DEC 113 
+D114  DEC 114 
+D116  DEC 116 
+D118  DEC 118 
+D119  DEC 119 
+D120  DEC 120 
+D122  DEC 122 
+D124  DEC 124 
+D128  DEC 128 
+D129  DEC 129 
+D133  DEC 133 
+D134  DEC 134 
+D139  DEC 139 
+D142  DEC 142 
+      SPC 1 
+MES33 DEC 17
+      ASC 9,TV INTERFACE CARD 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- LOGO BUFFER --                                * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+LOBUF OCT 64155,64156,64157,64160 
+      OCT 64161,64162,64163 
+LOGA  OCT 63154,63155,63156,63157 
+      OCT 63160,63161 
+LOGB  OCT 62154,62155,62156,62157,62160 
+LOGC  OCT 61154,61155,61156,61157 
+LOGD  OCT 60153,60154,60155,60156,60157 
+LOGE  OCT 57153,57154,57155,57156 
+LOGF  OCT 56153,56154,56155,56156 
+LOGG  OCT 54557,54157,53557 
+LOGH  OCT 64566,64166 
+LOGI  OCT 65572 
+LOGJ  OCT 60577,60177,57577 
+LOGK  OCT 53571,53171,52571 
+LOGL  OCT 55575,55175,54575,54175,53575 
+LOGM  OCT 52161,51561,51161,50561 
+LOGN  OCT 51162,50562 
+LOGOO OCT 50563 
+LOGP  OCT 50550,50150,47550,47150 
+LOGQ  OCT 46147,45547,45147,44547 
+LOGR  OCT 36544,36144 
+LOGS  OCT 47204,47205 
+LOGT  OCT 53610,53210 
+LOGU  OCT 53611,53211 
+LOGV  OCT 52614,52214 
+LOGW  OCT 53615,53215,52615,52215 
+LOGX  OCT 62214,62215,62216,62217,62220 
+      OCT 62221,62222,62223,62224 
+LOGY  OCT 61215,61216,61217,61220 
+      OCT 61221,61222,61223 
+LOGZ  OCT 61212 
+LOGAA OCT 60216,60217,60220,60221 
+      OCT 60222,60223 
+LOGBB OCT 57216,57217,57220,57221 
+      OCT 57222,57223 
+LOGCC OCT 56222,55622,55222,54622 
+LOGDD OCT 42215,41615,41215,40615,40215 
+LOGEE OCT 47566,47166 
+LOGFF OCT 47167,47170 
+LOGGG OCT 50210 
+LOGHH OCT 50611,50211 
+LOGII OCT 51212,50612,50212 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- COLOR BARS --                                 * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+BARS  LDA CTEST 
+      SZA,RSS       1 CARD SYSTEM?
+      JMP L8          YES - KNOW COMMANDS?
+      SPC 1 
+      JSB VAREA     LOWER WHITE AREA
+      DEF BARS1 
+      DEF ZERO
+      DEF ZERO
+      DEF D255
+      DEF D63 
+      DEF ZERO
+      DEF ZERO
+      SPC 1 
+BARS1 JSB VAREA     BLACK AREA
+      DEF BARS2 
+      DEF ZERO
+      DEF D64 
+      DEF D31 
+      DEF D191
+      DEF ZERO
+      DEF B1
+      SPC 1 
+BARS2 JSB VAREA     BLUE AREA 
+      DEF BARS3 
+      DEF D32 
+      DEF D64 
+      DEF D31 
+      DEF D191
+      DEF ZERO
+      DEF B4
+      SPC 1 
+BARS3 JSB VAREA     GREEN AREA
+      DEF BARS4 
+      DEF D64 
+      DEF D64 
+      DEF D31 
+      DEF D191
+      DEF ZERO
+      DEF B3
+      SKP 
+******************************	***********************************
+*                                                               * 
+*              -- COLOR BARS CONTINUED --                       * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+BARS4 JSB VAREA     CYAN AREA 
+      DEF BARS5 
+      DEF D96 
+      DEF D64 
+      DEF D31 
+      DEF D191
+      DEF ZERO
+      DEF B7
+      SPC 1 
+BARS5 JSB VAREA     RED AREA
+      DEF BARS6 
+      DEF D128
+      DEF D64 
+      DEF D31 
+      DEF D191
+      DEF ZERO
+      DEF B2
+      SPC 1 
+BARS6 JSB VAREA     MAGENTA AREA
+      DEF BARS7 
+      DEF D160
+      DEF D64 
+      DEF D31 
+      DEF D191
+      DEF ZERO
+      DEF B6
+      SPC 1 
+BARS7 JSB VAREA     YELLOW AREA 
+      DEF BARS8 
+      DEF D192
+      DEF D64 
+      DEF D31 
+      DEF D191
+      DEF ZERO
+      DEF B5
+      SPC 1 
+BARS8 JSB VAREA     WHITE AREA
+      DEF BARS9 
+      DEF D224
+      DEF D64 
+      DEF D31 
+      DEF D191
+      DEF ZERO
+      DEF ZERO
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- COLOR BARS CONTINUED --                       * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+BARS9 CLA,INA       FORCE SLOW
+      STA COLOR       FLASH 
+      LDA FLSH? 
+      SZA,RSS       FLASH?
+      JMP L11         NO - NEXT 
+      JMP F2          YES 
+      SPC 2 
+D31   DEC 31
+D63   DEC 63
+D64   DEC 64
+D160  DEC 160 
+D191  DEC 191 
+D192  DEC 192 
+D224  DEC 224 
+D255  DEC 255 
+      SPC 8 
+*************** 
+*************** 
+**           ** 
+**           ** 
+**  THE END  ** 
+**           ** 
+**           ** 
+*************** 
+*************** 
+      SPC 5 
+      END TVERF 

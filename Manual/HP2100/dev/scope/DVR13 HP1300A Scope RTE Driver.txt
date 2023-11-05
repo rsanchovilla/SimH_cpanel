@@ -1,0 +1,170 @@
+
+           *********************************************** 
+           *                                             * 
+           *    HP-2331A X-Y DISPLAY SUBSYSTEM DRIVER    * 
+           *                                             * 
+           *                  -- BY --                   * 
+           *                                             * 
+           *               STEVEN A. STARK               * 
+           *               HEWLETT-PACKARD               * 
+           *                PARAMUS, N.J.                * 
+           *                                             * 
+           *    MODIFIED BY ROBERTO SANCHO ON APR/2017   * 
+           *    TO BE USED ON RTE-B.                     * 
+           *    BASED ON 22217-80001 Rev-B FOR PAPER     *
+           *    TAPE HP-BASIC. AND 22505-80001 Rev-A     *
+           *    HP-1331C STORAGE SCOPE DRIVER FOR RTE    *
+           *    DVR47                                    *
+           *                                             * 
+           *                                             * 
+           *********************************************** 
+
+    I. IDENTIFICATION - SAS 0044   REV. 4   9/15/71
+                        REV 1 FOR RTE-B    APR/2017
+    -----------------
+ 
+    II. LANGUAGE - ASSEMBLY LANGUAGE
+    ------------ 
+ 
+    III. TYPE - BASIC CALLABLE SUBROUTINE VIA MNEMONICS TABLE 
+    ---------
+ 
+    V. SPECIAL HARDWARE REQUIRED - 
+    ---------------------------- 
+ 
+       A. HP-2331A X-Y DISPLAY SUBSYSTEM CONSISTING OF:
+          1. HP-1300A X-Y DISPLAY
+          2. HP-12555A DUAL D/A CONVERTER INTERFACE CARD 
+ 
+    VI. DESCRIPTION -
+    ---------------
+ 
+    IN ORDER TO UTILIZE THE X-Y DISPLAY SUBSYSTEM DRIVER, IT 
+    MUST FIRST BE CALLED TO SET UP THE PLOT BUFFER, IN WHICH 
+    CASE, IT WILL PROCESS THE D/A CARD SELECT I/O CODE, THE
+    BUFFER ADDRESS AND LENGTH AND SAVE THEM FOR USE BY THE 
+    INTERRUPT SERVICE ROUTINE. THE DRIVER THEN RETURNS TO THE 
+    CALLING PROGRAM.
+ 
+    ONCE THE PLOT BUFFER HAS BEEN SET UP,THE DRIVER MAY THEN 
+    BE CALLED TO ENTER POINTS TO BE DISPLAYED. IN THIS CASE, 
+    IT WILL PROCESS THE X AND Y VALUES, DETERMINING IF THEY
+    ARE IN THE CORRECT RANGE AND MERGING THEM INTO A SINGLE
+    WORD.IT WILL THEN STORE THIS WORD IN THE PLOT BUFFER AND 
+    RETURN TO THE CALLING PROGRAM. IN THE EVENT THAT EITHER
+    THE X OR Y VALUE IS OUTSIDE THE PROPER RANGE, THE DRIVER 
+    RETURNS TO THE CALLING PROGRAM WITHOUT STORING THE POINT 
+    IN THE PLOT BUFFER.
+ 
+    THE DRIVER MAY ALSO BE CALLED TO CLEAR THE PLOT BUFFER,
+    IN WHICH CASE,IT WILL FIRST DETERMINE IF THE PLOT BUFFER 
+    HAS BEEN SET UP. IF IT HAS, THE DRIVER THEN CLEARS IT BY 
+    SETTING EACH LOCATION TO A 0 AND IT WILL THEN RETURN TO
+    THE CALLING PROGRAM.IF THE DRIVER IS CALLED TO CLEAR THE 
+    PLOT BUFFER BEFORE IT HAS BEEN SET UP,IT WILL IGNORE THE 
+    REQUEST AND RETURN IMMEDIATELY TO THE CALLING PROGRAM. 
+ 
+    THE KEY SEGMENT OF THIS DRIVER IS THE INTERRUPT SERVICE
+    SUBROUTINE, WHICH IS EXECUTED EACH TIME THE D/A CONVERTER 
+    INTERRUPTS (ABOUT EVERY TWENTY MILLISECONDS). WHEN THIS
+    INTERRUPT OCCURS, THIS SUBROUTINE WILL DISPLAY THE 
+    CONTENTS OF THE PLOT BUFFER, INITIALIZE THE D/A 
+    CONVERTER AND RETURN TO THE PROGRAM IN PROGRESS. 
+ 
+    VII. ENTRY POINTS - PLOTB, ERASE, DISPT, LINES, CHAR, CHARS
+    -----------------
+ 
+    VIII. CHANGES TO ORIGINAL PROGRAM
+    ---------------------------------
+    - CONVERTED TO RTE STANDARD DRIVER WORKING ON INTERRUPTS
+    - ALLOW PLOTB TO HAVE LU (LOGICAL UNIT) 
+    - REMOVED GRAPH (CALL (3,...)) AXIS DRAWING ROUTINE. 
+    - ADDED LINES TO DRAW LINES WITH THE ABILITY TO DRAW
+      DISCONTIUOS LINES TO REDUCE THE BUFFER USAGE
+    - ADDED CHAR AND CHARS TO DISPLAY CHARACTER STRINGS. 
+      (LINES AND CHARS BORROWED FROM DVR47)
+ 
+    IX. CALLING INFORMATION -
+    -----------------------
+ 
+    TO SET UP THE PLOT BUFFER, AND DISPLAY IT THE DRIVER 
+    IS CALLED FROM BASIC AS:
+ 
+       CALL PLOTB(LU, A[1], N) 
+ 
+          WHERE        LU - LOGICAL UNIT FOR DAC WHERE SCOPE
+                            IS ATTACHED
+ 
+                       A - AN ARRAY USED TO STORE THE
+                           POINTS TO BE DISPLAYED. 
+ 
+                       N - A VARIABLE OR CONSTANT WHICH
+                           SPECIFIES THE NO. OF POINTS 
+                           TO BE DISPLAYED.
+ 
+    TO TURN THE X-Y DISPLAY OFF, THE DRIVER IS CALLED FROM 
+    BASIC AS:
+ 
+       CALL PLOTB(LU, A[1], 0) 
+ 
+    TO SET THE PLOT BUFFER WITHOUT DISPLAYING IT USE 0 AS LU.
+    THIS ALLOWS TO PREPARE THE POINTS TO DISPLAY AFTERWARDS:
+ 
+       CALL PLOTB(0, A[1], N) 
+ 
+    TO STORE A POINT IN THE PLOT BUFFER, THE DRIVER IS 
+    CALLED FROM BASIC AS:
+ 
+       CALL DISPT(X, Y)
+ 
+          WHERE        X - A VARIABLE OR CONSTANT, IN
+                           THE RANGE 1 TO 255, WHICH 
+                           REPRESENTS THE X-COORDINATE 
+                           VALUE.
+ 
+                       Y - A VARIABLE OR CONSTANT, IN
+                           THE RANGE 1 TO 255, WHICH 
+                           REPRESENTS THE Y-COORDINATE 
+                           VALUE.
+ 
+ 
+    TO CLEAR THE PLOT BUFFER, THE DRIVER IS CALLED FROM
+    BASIC AS:
+ 
+       CALL ERASE
+ 
+
+    TO DRAW A LINE IN THE BUFFER, USE:
+ 
+       CALL LINES(IX1, IY1, IX2, IY2, MODE)
+
+       WHERE IX1, IY1 = COORDINATES OF FIRST POINT. 
+
+             IX2, IY2 = COORDINATES OF SECOND POINT.
+
+             MODE = 0 -> DRAW A CONTINUOUS LINE
+                  > 0 -> DRAW A DISCONTINUOUS LINE:
+                      = 1 -> LINE WITH ONE DOT DRAW, ONE SKIPPED
+                      = 2 -> LINE WITH ONE DOT DRAW, THREE SKIPPED
+                      = 3 -> LINE WITH ONE DOT DRAW, SEVEN SKIPPED
+
+
+    TO DISPLAY AN ASCII BUFFER:
+ 
+       CALL CHAR(IX, IY, IASC, NUM)
+
+       WHERE IX, IY = COORDINATES OF UPPER LEFT POINT OF FIRST CHAR
+
+             IASC = ADDRESS OF ASCII BUFFER (PACKED CHARS)
+
+             NUM  = NUMBER OF CHARACTERS
+
+
+    TO DISPLAY AN ASCII STRING (TO BE CALLED FROM BASIC)
+ 
+       CALL CHARS(IX, IY, IASC)
+
+       WHERE IX, IY = COORDINATES OF UPPER LEFT POINT OF FIRST CHAR
+
+             IASC = BASIC LITERAL OR STRING VARIABLE ADDR 
+                    (NUM OF ASCII CHARS IN STRING IS FIRST WORD)

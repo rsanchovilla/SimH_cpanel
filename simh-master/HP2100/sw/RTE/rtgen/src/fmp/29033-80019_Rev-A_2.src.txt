@@ -1,0 +1,254 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME CL..(8)
+        NAM CL..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT CL..
+        EXT .ENTR 
+        EXT .DRCT 
+        EXT OPEN. 
+        EXT IER.
+        EXT WRITF 
+        EXT FSTAT 
+        EXT CONV. 
+        EXT O.BUF 
+        EXT I.BUF 
+        EXT TMP.
+        EXT .E.R. 
+        EXT BUF.
+BLANK   OCT 020040
+        OCT 046125
+        OCT 020040
+        OCT 046101
+        OCT 051524
+        OCT 020124
+        OCT 051101
+        OCT 041513
+        OCT 020040
+        OCT 020103
+        OCT 051040
+        OCT 020040
+        OCT 046117
+        OCT 041513
+T       BSS 1 
+.1      OCT 000003
+.2      OCT 000000
+TB      BSS 1 
+.3      DEF BLANK 
+.4      OCT 000016
+.5      OCT 000001
+PN      BSS 1 
+PCR     BSS 1 
+PTR     BSS 1 
+.6      OCT 000004
+.7      OCT 000005
+.8      OCT 000002
+TL      BSS 1 
+.10     OCT 177777
+.14     BSS 1 
+N       BSS 1 
+.16     OCT 000013
+.17     OCT 000014
+T2      BSS 1 
+T1      BSS 1 
+.18     OCT 177400
+.19     OCT 000040
+.20     OCT 000017
+*003  !     DIBC  DIRECTORY LIST
+*004  ! 
+*005  !     ENTERED BY
+*006  ! 
+*007  !     CL     COMMAND
+*008  ! 
+*009  ! 
+*010  ! 
+*011  !     DEFINE   EXTERNALS
+*012  ! 
+*013  ! 
+*014        LET OPEN.,IER.,WRITF,FSTAT,CONV.\ 
+*                          BE SUBROUTINE,EXTERNAL 
+*015  ! 
+*016        LET O.BUF,I.BUF   BE INTEGER,EXTERNAL 
+*017        LET TMP.,.E.R.,BUF. BE INTEGER,EXTERNAL 
+*018  !     DEFINE CONSTANTS
+*019        LET BLANK(14) BE INTEGER
+*020        INITIALIZE BLANK TO "  LU  LAST TRACK   CR   LOCK"
+*021  ! 
+*022  ! 
+*023  CL..: SUBROUTINE GLOBAL  !NO PRAMETERS NEEDED 
+CL..    NOP 
+        JSB .ENTR 
+        DEF CL..
+*024        T_@TMP.+3 
+        JSB .DRCT 
+        DEF TMP.
+        ADA .1
+        STA T 
+*025        OPEN.(O.BUF,TMP.,$T,0)! OPEN LIST FILE
+        JSB OPEN. 
+        DEF *+5 
+        DEF O.BUF 
+        DEF TMP.
+        DEF T,I 
+        DEF .2
+*026        TB_@BUF.+1
+        JSB .DRCT 
+        DEF BUF.
+        INA 
+        STA TB
+*027        BUF._BLANK(1) 
+        LDA .3,I
+        STA BUF.
+*028        WRITF(O.BUF,.E.R.,BLANK,14) !WRITE THE HEAD 
+        JSB WRITF 
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF BLANK 
+        DEF .4
+*029        IER.
+        JSB IER.
+        DEF *+1 
+*030        WRITF(O.BUF,.E.R.,BUF.,1) !SPACE A LINE 
+        JSB WRITF 
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF BUF.
+        DEF .5
+*031        IER.
+        JSB IER.
+        DEF *+1 
+*032        CALL FSTAT(I.BUF)  !READ THE DIRECTORY OF DISCS 
+        JSB FSTAT 
+        DEF *+2 
+        DEF I.BUF 
+*033        PN_[PCR_[PTR_     TB+   4]+5]+2 
+        LDA TB
+        ADA .6
+        STA PTR 
+        ADA .7
+        STA PCR 
+        ADA .8
+        STA PN
+*034        TL_@I.BUF    !SET ITS ADDRESS 
+        JSB .DRCT 
+        DEF I.BUF 
+        STA TL
+*035  NEXT: IFNOT $TL THEN [WRITF(O.BUF,.E.R.,T,-1);IER.;\
+*                            RETURN]
+NEXT    LDA TL,I
+        SZA 
+        JMP .9
+        JSB WRITF 
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF T 
+        DEF .10 
+        JSB IER.
+        DEF *+1 
+        JMP CL..,I
+*036  ! 
+*037        FOR T_ TB TO PN DO[$T_BLANK(1)] 
+.9      LDA TB
+        STA T 
+        JMP .12 
+.11     LDA T 
+        INA 
+        STA T 
+.12     LDB T 
+        CMB,INB 
+        ADB PN
+        SSB 
+        JMP .13 
+        LDA .3,I
+        STA T,I 
+        JMP .11 
+*038        CONV.($TL,$TB ,2) 
+.13     JSB CONV. 
+        DEF *+4 
+        DEF TL,I
+        DEF TB,I
+        DEF .8
+*039        CONV.($[TL_TL+1],$PTR,4)
+        LDA TL
+        INA 
+        STA TL
+        STA .14 
+        JSB CONV. 
+        DEF *+4 
+        DEF .14,I 
+        DEF PTR,I 
+        DEF .6
+*040        CONV.($[TL_TL+1],$PCR,5)
+        LDA TL
+        INA 
+        STA TL
+        STA .14 
+        JSB CONV. 
+        DEF *+4 
+        DEF .14,I 
+        DEF PCR,I 
+        DEF .7
+*041        IFNOT $[TL_TL+1] THEN [N_11;GO TO WRT]
+        LDA TL
+        INA 
+        STA TL
+        LDA .A.,I 
+        SZA 
+        JMP .15 
+        LDA .16 
+        STA N 
+        JMP WRT 
+*042        T_$TL +12 
+.15     LDA TL,I
+        ADA .17 
+        STA T 
+*043        T2_[T1_PN+1]+1
+        LDA PN
+        INA 
+        STA T1
+        INA 
+        STA T2
+*044        $PN_$T
+        LDA T,I 
+        STA PN,I
+*045        $T1_$(T+1)
+        LDA T 
+        INA 
+        LDA .A.,I 
+        STA T1,I
+*046        $T2_($(T+2) AND 177400K) +40K 
+        LDA T 
+        ADA .8
+        LDA .A.,I 
+        AND .18 
+        ADA .19 
+        STA T2,I
+*047        N_15
+        LDA .20 
+        STA N 
+*048  ! 
+*049  WRT:  WRITF(O.BUF,.E.R.,BUF.,N) 
+WRT     JSB WRITF 
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF BUF.
+        DEF N 
+*050        IER.
+        JSB IER.
+        DEF *+1 
+*051        TL_TL+1 
+        LDA TL
+        INA 
+        STA TL
+*052        GO TO NEXT
+        JMP NEXT
+*053  ! 
+*054        END 
+*055        END 
+        END 
+*056        END$

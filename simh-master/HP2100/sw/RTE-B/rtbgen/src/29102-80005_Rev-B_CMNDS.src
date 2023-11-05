@@ -1,0 +1,311 @@
+ASMB,R,L,C,F
+      HED CMNDS---BASIC COMMAND CONTROL     A-29102-60005-1 REV. B
+      NAM CMNDS,7 29102-60005 REV. B
+* 
+TPRLU EQU 1      SYSTEM CONTROL DEVICE OUTPUT 
+PUNLU EQU 4      PUNCH DEVICE OUTPUT
+RDRLU EQU 5      READER DEVICE INPUT
+LSTLU EQU 6      LIST DEVICE OUTPUT 
+* 
+*************************************************** 
+* 
+*      CMNDS
+* 
+*      LIST:  A-29102-60005-1 
+*      SOURCE:  29102-80005 
+*      RELOC:   29102-60005 REV.B 
+* 
+*************************************************** 
+* 
+* 
+      ENT $DEL,$RUN,$LST,$TIM 
+      ENT $LOAD,$SAVE,$MERG 
+      ENT $WEOF,$SKPF,$REW
+* 
+      EXT CHARN,DELM,LIMCK
+      EXT DIGCK,INTIN,.48,.3
+      EXT ONS,FROMS 
+      EXT SWDEV,XQCMD,PGOLM 
+      EXT ATEMP,LOLIM,HILIM 
+      EXT INIT,INVSC,ABREV,START
+      EXT .10,LSTR,PLSTA
+      EXT .RUN,SCR,DLSTM
+      EXT L.LST,L.PUN,L.RDR 
+      EXT DEVTB,DEVEX 
+      EXT $TIME,FRMTO 
+      EXT EXEC
+      SKP 
+* 
+*      HERE FOR: DEL [<LIMITS>] 
+* 
+$DEL  NOP 
+      JSB ABREV      ALLOW "...ETE" SYNTAX
+       DEF ETE
+       JSB CHARN      FOUND, FETCH NEXT CHAR
+      CPA .10        EOF ?
+      JMP DEL1
+      JSB PGOLM    NO, FETCH LINE #'S 
+       RSS             EOF DETECTED?
+      JMP INVSC        NO, ERROR
+      LDA HILIM        YES, FETCH LIMITS
+      LDB LOLIM           & 
+      JSB DLSTM        DELETE THEM
+      JMP INIT         & GOTO TO "READY"
+* 
+DEL1  JSB SCR      YES, SCRATCH TOTAL PROG
+      JMP INIT      GOTO "RADY" 
+* 
+* 
+ETE   OCT 3 
+      ASC 2,ETE 
+      SKP 
+* 
+*      HERE FOR:  RUN [<LIMITS>] FROM <DEV> 
+* 
+$RUN  NOP 
+      JSB CHARN      FETCH NEXT CHAR
+      JSB DELM       DELIMITER ?
+       JMP *-2        YES, IGNORE 
+      CPA .10        EOF ?
+      JMP .RUN        YES, GO RUN IT
+      JSB LIMCK     LIMITS LEGAL
+      CPA .10        EOF ?
+      JMP INVSC      SORRY, ERROR 
+      JSB FROMS      CHECK "FROM" SYNTAX
+      JSB SWDEV      SWITCH TO APPROPRIATE ROUTINE
+      DEF DEVTB 
+       JMP INVSC      NOT FOUND, ERROR
+      STA ATEMP      FOUND, 
+      STB $DEL
+      JSB SCR         SCRATCH CURRENT PROG
+      LDA ATEMP 
+      LDB $DEL
+      JSB XQCMD      GET NEW PROGRAM
+      DEF DEVEX 
+       NOP            WILL HOLD ACTUAL ENTRY PT.
+      RSS            COMPLETION RETURN, GO RUN IT 
+      JMP $RUN,I     CONTINUATION RETURN
+      JMP .RUN
+* 
+* 
+      SKP 
+* 
+*      HERE FOR:  LIST [<LIMITS>] ON <DEVICE> 
+* 
+$LST  NOP 
+      LDA PLSTA      SWITCH TO ASCII
+      STA LSTR         PROGRAM OUTPUT 
+      JSB CHARN      FETCH NEXT NON-BLANK CHAR
+      JSB PGOLM      GET PROGRAM LIMITS 
+       JMP LIST1      EOF DETECTED, ASSUME DEFAULT
+      JSB ONS        MORE, CHECK FOR "ON" SYNTAX
+      JSB SWDEV      SWITCH TO SELECTED DEVICE
+      DEF DEVTB 
+       JMP INVSC      NOT FOUND, ERROR
+      JSB XQCMD      EXECUTE COMMAND
+      DEF DEVEX 
+       NOP            WILL HOLD ENTRY POINT 
+      JMP INIT       COMPLETION, GOTO "READY" 
+* 
+LIST1 CLB 
+      STB FRMTO     SET UP "ON" FLAG
+      LDB LST        USE LIST DEVICE, LU6 
+      JSB L.LST      EXECUTE COMMAND
+      JMP INIT       GOTO "READY" 
+* 
+* 
+LST   DEF TPRLU 
+* 
+      SKP 
+* 
+*      HERE FOR:  SAVE [<LIMITS>] ON <DEVICE> 
+* 
+$SAVE NOP 
+      LDA PLSTA      SWITCH TO ASCII
+      STA LSTR         PROGRAM OUTPUT 
+      JSB CHARN      FETCH NEXT NON-BLANK CHAR
+      JSB PGOLM      GET PROGRAM LIMITSF
+       JMP SAVE1      EOF DETECTED, ASSUME DEFAULT
+      JSB ONS        MORE, CHECK "ON" SYNTAX
+      JSB SWDEV      SWITCH TO SELECTED DEVICE
+      DEF DEVTB 
+       JMP INVSC      NOT FOUND, ERROR
+      JSB XQCMD      EXECUTE COMMAND
+      DEF DEVEX 
+       BSS 1          WILL HOLD TRUE ENTRY PT.
+      JMP INIT       COMPLETION, GOTO "READY" 
+* 
+SAVE1 CLB 
+      STB FRMTO     SET UP "ON" FLAG
+      LDB PUN        USE PUNCH DEVICE, LU4
+      JSB L.PUN      EXECUTE COMMAND
+      JMP INIT       GOTO "READY" 
+* 
+* 
+PUN   DEF PUNLU 
+* 
+* 
+      SKP 
+* 
+*      HERE FOR:  LOAD [<LIMITS>] FROM <DEVICE> 
+* 
+$LOAD NOP 
+      JSB SCR        SCRATCH CURRENT PROG 
+      JSB CHARN      GET NEXT CHAR
+      JSB LIMCK      FETCH PROG LIMITS
+      CPA .10        EOF ?
+      JMP .LOA1       YES, USE DEFAULT DEVICE 
+      JSB FROMS      CHECK "FROM"SYNTAX 
+      JSB SWDEV      SWITCH TO SELECTED DEVICE
+      DEF DEVTB 
+       JMP INVSC      NOT FOUND, ERROR
+      STA $DEL
+      STB $RUN
+      LDA $DEL
+      LDB $RUN
+      JSB XQCMD       EXECUTE COMMAND 
+      DEF DEVEX 
+       NOP             WILL HOLD REAL ENTRY PT
+      JMP START       COMPLETION, GOTO "READY"
+      JMP $LOAD,I     CONTINUATION RETURN 
+* 
+.LOA1 CLB,INB 
+      STB FRMTO     SET UP "FROM" FLAG
+      LDB RDR         USE READER DEVICE, LU5
+      JSB L.RDR       EXECUTE COMMAND 
+      JMP START       COMPLETION, GOTO "READY"
+      JMP $LOAD,I     CONTINUATION RETURN 
+* 
+* 
+RDR   DEF RDRLU 
+* 
+      SKP 
+* 
+*      HERE FOR:  MERGE [<LIMITS>] FROM <DEVICE>
+* 
+$MERG NOP 
+      JSB CHARN      FETCH NEXT CHAR
+      JSB LIMCK 
+      CPA .10       EOF ? 
+      JMP .APN1      YES, USE DEFAULT 
+      JSB FROMS 
+      JSB SWDEV     SWITCH TO SELECTED DEVICE 
+      DEF DEVTB 
+       JMP INVSC     NOT FOUND, ERROR 
+      JSB XQCMD      EXECUTE COMMAND
+      DEF DEVEX 
+       NOP            WILL HOLD REAL ADDRESS
+      JMP INIT       COMPLETION, GOTO "READY" 
+      JMP $MERG,I    CONTINUATION, GIVE TO BASIC
+* 
+.APN1 CLB,INB 
+      STB FRMTO     SET UP "FROM" FLAG
+      LDB RDR 
+      JSB L.RDR 
+      JMP INIT       COMPLETION, GOTO "READY" 
+      JMP $MERG,I    CONTINUATION RETURN
+* 
+      SKP 
+* 
+*     HERE FOR:  SETIME <TIME OF DAY> 
+* 
+$TIM  NOP 
+      JSB GET       FETCH THE INPUT VALUE FOR TIME
+      DIV .100      COMPUTE HOURS 
+      STB $TIME     A=HRS, B=MINS 
+      MPY .60       HOURS IN MINUTES
+      ADA $TIME     TOTAL TIME IN MINUTES 
+      MPY .6000     TIME IN TENS OF MS. 
+      CLE 
+      ADA RS1       CONVERT TO NEGATIVE 
+      SEZ,CLE 
+      INB 
+      ADB RS2 
+      DST $TIME     SET THE TIME OF DAY 
+      JMP $TIM,I
+* 
+RS1   OCT 25000 
+RS2   OCT 177574
+.60   DEC 60
+.6000 DEC 6000
+.100  DEC 100 
+TEMP1 BSS 1 
+.2360 DEC -2360 
+      SKP 
+* 
+*     HERE FOR:  WEOF <LU>
+* 
+* WRITE OND OF FILE ON MAG TAPE 
+* 
+$WEOF NOP 
+      JSB GET       GET LU NUMBER 
+      IOR CNWD1      BUILD CONTROL WORD 
+      STA TEMP1 
+* 
+      JSB EXEC
+      DEF *+3 
+      DEF .3
+      DEF TEMP1 
+* 
+      JMP START 
+* 
+CNWD1 OCT 100 
+* 
+      SKP 
+* 
+*     SKIPF <LU>
+* 
+* SKIP FILE COMMAND FOR MAG TAPE
+* 
+$SKPF NOP 
+      JSB GET       FETCH LU NUMBER 
+      IOR CNWD2     BUILD CONTROL WORD
+      STA TEMP1 
+* 
+      JSB EXEC
+      DEF *+3 
+      DEF .3
+      DEF TEMP1 
+* 
+      JMP START 
+* 
+CNWD2 OCT 1300
+* 
+      SKP 
+* 
+*     REWIND <LU> 
+* 
+* REWIND MAG TAPE 
+* 
+$REW  NOP 
+      JSB GET       FETCH LU NUMBER 
+      IOR CNWD3    BUILD CONTROL WORD 
+      STA TEMP1 
+* 
+      JSB EXEC
+      DEF *+3 
+      DEF .3
+      DEF TEMP1 
+* 
+      JMP START 
+* 
+CNWD3 OCT 400 
+* 
+      SKP 
+* 
+** UTILITY TO FETCH AN INTEGER FROM COMMAND 
+* 
+GET   NOP 
+      JSB CHARN     FETCH NEXT CHARACTER
+      JSB DELM      DELIMITER?
+      JMP INVSC     NOT VALID CHARACTER 
+      JSB DIGCK     DIGIT?
+       JMP INIT     NO, EXIT
+      ADA .48       MUST CONVERT DIGIT TO ASCII 
+      JSB INTIN     GET THE WHOLE INTEGER 
+       DEF .2360    MAXIMUM ACCEPTABLE VALUE
+      STB 0 
+      STA ATEMP 
+      CLB 
+      JMP GET,I 
+      END 

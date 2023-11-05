@@ -1,7 +1,7 @@
 # SimH_cpanel
 
 
-**NEW!: Ferranti Mark I + R.A.Brooker Autocode + Glennie Autocode
+**NEW!: HP2100 with Plotter, TV and Scope Displays
 
 The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
 
@@ -10,17 +10,22 @@ other devices: tapes, card readers, disk, etc.
 
 IBM360 and i7000 work is based on Richard Cornwell SimH fork, modified to use cpanel modules. 
 swtpc6800 work is based on Bill Beech SimH simulator.
+HP2100 work is based on David Bryan. 
 i650, NORC, i701 and MarkI simulators are my own SimH simulators.
 
 <table>
 <thead>
 <tr>
+<th>HP 2100</th>
 <th>Ferranti Mark I</th>
 <th>IBM 360/370</th>
 </tr>
 </thead>
 <tbody>
 <tr>
+<td>
+<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/HP2100/HP2100_animated.gif" alt="HP2100" title="HP 2100 family" /></p>
+</td>
 <td>
 <p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/MarkI_animated.gif" alt="MarkI" title="Ferranti Mark I" /></p>
 </td>
@@ -44,13 +49,29 @@ i650, NORC, i701 and MarkI simulators are my own SimH simulators.
 <p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701_animated.gif" alt="IBM701" title="IBM 701" /></p>
 </td>
 <td>
-<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650_animate.gif" alt="IBM650" title="IBM 650" /></p>
+<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650_animated.gif" alt="IBM650" title="IBM 650" /></p>
 </td>
 </tr>
 </tbody>
 </table>
 
 Currently supports visuals emulation for:
+
+* HP 2100 Family (NOV/2023)
+  * HP7210A Flatbed plotter 
+  * HP91200B TV Interface Kit 
+  * HP1300 X-Y Display Scope driven by HP12555 DAC Card 
+  * HP1331 X-Y Display Storage Scope driven by HP12555 DAC Card
+  * HP1300 X-Y Display Scope driven by HP1350A or HP1351A Graphics Translator
+  * Computer Front Panel for
+     * HP 2116-A, HP 2116-B, HP 2116-C 
+     * HP 2115-A 
+     * HP 2114-A, HP 2114-B 
+     * HP 2100-A, HP 2100-S
+     * HP 21MX-M, HP 21MX-E 
+     * HP 1000-M, HP 1000-E, HP 1000-F 
+
+  Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Doc/HP%202100%20Panels%20Screen%20Shots.png) to preview control panels.
 
 * Ferranti Mark I Electronic Computer (APR/2023)
   * Creed 7B Teleprinter, Creed 6S Perforator, Creed 7P Perforator
@@ -123,6 +144,70 @@ Hot keys are available when GUI window has the focus:
 
 Press power button to quit the simulator.
 (On i7000 control panels, only ^E, ^Y and ^T available)
+
+
+## HP 2100 Family
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/HP2100/HP2100.zip) to download test run.
+
+Once uncompressed, you will find several ready to run .bat files (among others): 
+
+* Start RTE operating system by executing one of the following batch files:
+   * `run CPanel HP2116C - RTE FH (Fixed Head) (1971).bat` 
+   * `run CPanel HP2116C - RTE MH (Moving Head) (1971).bat`
+   * `run CPanel HP21MX M-Series - RTE-II (1973).bat`
+   * `run CPanel HP1000 M-Series - RTE-III (1976).bat`
+   * `run CPanel HP1000 E-Series - RTE-IVB (1980).bat`
+   * `run CPanel HP1000 F-Series - RTE-6VM (1981).bat`
+   * `run CPanel HP21MX E-Series - RTE-IV (1978).bat`
+   
+* Start DOS operating system by executing one of the following batch files:
+   * `run CPanel HP2115A - DOS (1969).bat` 
+   * `run CPanel HP2100A - DOS-M (1971).bat`
+   * `run CPanel HP2100S - DOS-III (1975).bat`  
+
+* execute `run CPanel HP2114B - MTS (1970).bat` batch file to run MTS Magnetic Tape operating system 
+
+* Start BASIC session by executing one of the following batch files:
+   * `run CPanel HP2116B - PaperTape Basic (1970).bat`
+   * `run CPanel HP2100S - RTE-B (1973).bat`
+   * `run CPanel HP2100S - DOS-III HP 2000F Basic.bat`
+   * `run CPanel HP2100A - DOS-M SuperBasic.bat`
+   * `run CPanel HP1000 M-Series - RTE-III BASIC1000.bat`
+
+* Try out Plotter by executing one of the following batch files:
+`run CPanel HP1000 M-Series - RTE-III BASIC1000 Plotter Demo Shuttle.bat`, 
+`run CPanel HP1000 M-Series - RTE-III BASIC1000 Plotter Demo1.bat`, 
+`run CPanel HP1000 M-Series - RTE-III BASIC1000 Plotter Demo2.bat`, 
+`run CPanel HP2100A - Plotter Diagnostics (1972).bat`, 
+`run CPanel HP2100S - RTE-B Landscape Demo on Plotter.bat`, 
+`run CPanel HP2100S - RTE-B Sample Plotter.bat`, 
+`run CPanel HP2116B - PaperTape Basic Plotter Demo.bat`
+
+* Try out X-Y Scope by executing one of the following batch files:
+`run CPanel HP2100A - Scope Test Pattern Generator (1970).bat`, 
+`run CPanel HP2100A - Storage Scope Test (1971).bat`, 
+`run CPanel HP2100S - RTE-B Landscape Demo on Scope`, 
+`run CPanel HP2116A - BCS Scope Demo.bat`, 
+`run CPanel HP2116B - PaperTape Basic Scope Demo.bat`
+
+* Try out Storage Scope by executing one of the following batch files:
+`run CPanel HP2100A - Storage Scope Test (1971).bat`, 
+`run CPanel HP2100S - RTE-B Landscape Demo on Storage Scope.bat`
+
+* Try out Graphics Translator vector images by executing one of the following batch files:
+`run CPanel HP21MX E-Series - RTE-IV BASIC1000 Graphics Translator Demo.bat`, 
+`run CPanel HP21MX E-Series - RTE-IV FTN4 Graphics Translator Demo.bat`, 
+`run CPanel HP2100S - RTE-B Landscape Demo Graphics Translator.bat`, 
+`run CPanel HP2100S - RTE-B Sample Graphics Translator.bat`
+
+* Try out demo progrmas
+`run CPanel HP21MX E-Series - RTE-IV BASIC1000 Tie Fighter Rotating Demo.bat`, 
+`run CPanel HP2100S - RTE-B Mandelbrot Demo on TV.bat`, 
+`run CPanel HP2100S - RTE-B Landscape Demo.bat`
+
+  ![HP2100 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/HP2100/HP2100.png)
+
 
 ## Ferranti Mark I
 

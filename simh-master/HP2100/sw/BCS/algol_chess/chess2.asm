@@ -1,0 +1,100 @@
+ASMB,R,L,B
+      NAM CHES2,7 
+      ENT SAVE,RETRO
+      EXT .ENTR 
+      SPC 2 
+*     THIS ROUTINE SAVES A BOARD POSITION BY STORING THE
+*     CONTENTS OF THE BOARD ARRAY IN ARRAY POSN.
+      SPC 1 
+*     CALLING SEQUENCE: 
+*     SET UP EXTERNAL REFERENCE AS FOLLOWS
+*       PROCEDURE SAVE(A,B,C,D,E,F);
+*       INTEGER A,B,C,D,E,F; CODE;
+      SPC 1 
+*     THE CALL: 
+*       SAVE(LM[1],B[21],MATERIAL,DEPTH); 
+      SPC 3 
+LM    OCT 0 
+B.1   OCT 0 
+MATL  OCT 0 
+DEPTH OCT 0 
+      SPC 1 
+SAVE  NOP 
+      JSB .ENTR 
+      DEF LM
+      LDA DEPTH,I 
+      MPY =D81
+      ADA P.ADD 
+      STA BUFA
+      DLD LM,I
+      DST BUFA,I
+      ISZ BUFA
+      ISZ BUFA
+      LDA MATL,I
+      STA BUFA,I
+      ISZ BUFA
+      SPC 1 
+      LDA =D-78 
+      STA I 
+NEXTM LDA B.1,I     GET THE CURRENT PIECE 
+      STA BUFA,I
+      ISZ B.1 
+      ISZ BUFA
+      ISZ I 
+      JMP NEXTM 
+      JMP SAVE,I
+      HED PROCEDURE RETRO 
+*     THIS ROUTINE RESTORES THE SITUATION TO THE LAST SAVED 
+*     POSITION BY RETURNING THE ELEMENTS OF POSN TO B.
+      SPC 1 
+*     CALLING SEQUENCE: 
+*     SET UP AN EXTERNAL REFERENCE AS FOLLOWS;
+*       PROCEDURE RETRO(A,B,C,D,E,F,G); 
+*       INTEGER A,B,C,D,E,F,G; CODE;
+      SPC 1 
+*     THE CALL: 
+*       RETRO(LM[1],B[21],F,MATERIAL,DEPTH);
+      SPC 3 
+LM1   OCT 0 
+B1    OCT 0 
+F     OCT 0 
+MTL   OCT 0 
+DPT   OCT 0 
+      SPC 1 
+RETRO NOP 
+      JSB .ENTR 
+      DEF LM1 
+      SPC 1 
+      LDA F,I 
+      CMA,INA 
+      STA F,I 
+      CCA 
+      ADA DPT,I 
+      STA DPT,I 
+      MPY =D81
+      ADA P.ADD 
+      STA BUFA
+      DLD BUFA,I
+      DST LM1,I 
+      ISZ BUFA
+      ISZ BUFA
+      LDA BUFA,I
+      STA MTL,I 
+      ISZ BUFA
+      SPC 1 
+      LDA =D-78 
+      STA I 
+NEXTN LDA BUFA,I
+      STA B1,I
+      ISZ BUFA
+      ISZ B1
+      ISZ I 
+      JMP NEXTN 
+      JMP RETRO,I 
+      SPC 1 
+I     OCT 0 
+BUFA  OCT 0 
+P.ADD DEF *+1 
+BUFF  BSS 405 
+      SPC 1 
+      END 

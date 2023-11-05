@@ -1,0 +1,170 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME MR..(8)
+        NAM MR..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT MR..
+        EXT .ENTR 
+        EXT I.BUF 
+        EXT BUF.
+        EXT N.OPL 
+        EXT .E.R. 
+        EXT CK.SM 
+        EXT READF 
+        EXT OPEN. 
+        EXT MSS.
+        EXT EXEC
+        EXT IER.
+        EXT WRLG. 
+        EXT EFLG. 
+        EXT D.AD
+.2      OCT 000062
+.3      BSS 1 
+.4      OCT 000311
+FLG     BSS 1 
+L       BSS 1 
+.5      OCT 000100
+.6      OCT 177777
+.8      OCT 000001
+.9      OCT 000007
+.10     OCT 160000
+.11     OCT 120000
+.13     OCT 000006
+*003  ! 
+*004  ! 
+*005  ! 
+*006  !     THIS PORTION OF THE FILE MANAGER RESTORES 
+*007  !     A FILE TO THE SYSTEM LOAD AND GO AREA.
+*008  ! 
+*009  ! 
+*010  !     THE COMMAND IS: 
+*011  ! 
+*012  !     LG,NAMR 
+*013  ! 
+*014  ! 
+*015  !     W H E R E:
+*016  ! 
+*017  !     NAMR     IS THE FILE NAME WHICH MAY CONTAIN THE:
+*018  !     CR       IS ITS CARTRIDGE ID (OPTIONAL).
+*019  !     SC       IS ITS SECURITY CODE (OPTIONAL). 
+*020  ! 
+*021  ! 
+*022  !     ARRAY DECLARATIONS: 
+*023  ! 
+*024        LET I.BUF,BUF.,N.OPL   BE INTEGER,EXTERNAL
+*025  ! 
+*026  !     DECLARE THE ERROR WORD LOCATION 
+*027  ! 
+*028        LET .E.R.     BE INTEGER,EXTERNAL 
+*029  ! 
+*030  ! 
+*031  !     EXTERNAL SUBROUTINE DECLARATIONS: 
+*032  ! 
+*033        LET CK.SM,READF,OPEN.,\ 
+*           MSS.,EXEC,        \ 
+*           IER.,WRLG.,EFLG.   BE SUBROUTINE,EXTERNAL 
+*034        LET D.AD               BE FUNCTION,EXTERNAL 
+*035  MR..: SUBROUTINE(NCAM,PLIST,MSNO)GLOBAL 
+NCAM    NOP 
+PLIST   NOP 
+MSNO    NOP 
+MR..    NOP 
+        JSB .ENTR 
+        DEF NCAM
+*036        IFNOT NCAM THEN[MSNO_50;RETURN] 
+        LDA NCAM,I
+        SZA 
+        JMP .1
+        LDA .2
+        STA MSNO,I
+        JMP MR..,I
+*037        OPEN.(I.BUF,$(@PLIST+1),N.OPL,311K) !NON-EXCLUSIVE OPEN 
+.1      LDA PLIST 
+        INA 
+        STA .3
+        JSB OPEN. 
+        DEF *+5 
+        DEF I.BUF 
+        DEF .3,I
+        DEF N.OPL 
+        DEF .4
+*038        FLG_0 
+        CLA 
+        STA FLG 
+*039  LG1:  READF(I.BUF,.E.R.,BUF.,64,L) !READ A RECORD 
+LG1     JSB READF 
+        DEF *+6 
+        DEF I.BUF 
+        DEF .E.R. 
+        DEF BUF.
+        DEF .5
+        DEF L 
+*040        IER.
+        JSB IER.
+        DEF *+1 
+*041        IF L<1 THEN GOTO LG2
+        LDB L 
+        ADB .6
+        SSB 
+        JMP LG2 
+*042        CK.SM(BUF.,1)?[MSNO_7;RETURN] 
+        JSB CK.SM 
+        DEF *+3 
+        DEF BUF.
+        DEF .8
+        SEZ,RSS 
+        JMP .7
+        LDA .9
+        STA MSNO,I
+        JMP MR..,I
+*043        FLG_1 
+.7      CLA,INA 
+        STA FLG 
+*044        WRLG.(BUF.,(BUF.-<8)) 
+        LDA BUF.
+        ALF,ALF 
+        STA .3
+        JSB WRLG. 
+        DEF *+3 
+        DEF BUF.
+        DEF .3
+*045        IFNOT($(D.AD(BUF.)+1) AND 160000K) = 120000K THEN\
+*           GOTO LG1, ELSE[FLG_0;EFLG.(L);GO TO LG1]
+        JSB D.AD
+        DEF *+2 
+        DEF BUF.
+        INA 
+        LDA .A.,I 
+        AND .10 
+        CPA .11 
+        RSS 
+        JMP LG1 
+        CLA 
+        STA FLG 
+        JSB EFLG. 
+        DEF *+2 
+        DEF L 
+        JMP LG1 
+*046  ! 
+*047  LG2:  IF FLG THEN[MSS.(6);EXEC(7);GOTO LG1] 
+LG2     LDA FLG 
+        SZA,RSS 
+        JMP .12 
+        JSB MSS.
+        DEF *+2 
+        DEF .13 
+        JSB EXEC
+        DEF *+2 
+        DEF .9
+        JMP LG1 
+*048        IFNOT L THEN GO TO LG1
+.12     LDA L 
+        SZA,RSS 
+        JMP LG1 
+*049        RETURN
+        JMP MR..,I
+*050        END 
+*051        END 
+        END 
+*052        END$

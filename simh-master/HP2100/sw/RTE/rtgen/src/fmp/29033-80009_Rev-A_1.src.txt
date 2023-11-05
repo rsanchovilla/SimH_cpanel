@@ -1,0 +1,663 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME .PARS (8)
+        NAM .PARS,8 
+.A.     EQU  0
+.B.     EQU  1
+        ENT .PARS 
+        EXT .ENTR 
+        EXT .MPY
+        EXT .DLD
+        EXT .DST
+        EXT .DRCT 
+        EXT TTY.
+        EXT N.OPL 
+        EXT P.RAM 
+        EXT NOCM. 
+        EXT CAD.
+        EXT C.TAB 
+        EXT CUSE. 
+        EXT C.BUF 
+        EXT FM.ER 
+        EXT MSS.
+FIRST   BSS 1 
+CBUFS   BSS 1 
+CBUF    BSS 1 
+.1      DEF IN.ER 
+GCOUN   BSS 1 
+LOW     BSS 1 
+INFL    BSS 1 
+CRONE   BSS 1 
+SUBCO   BSS 1 
+SBSCN   BSS 1 
+T       BSS 1 
+.2      OCT 000001
+LIMIT   BSS 1 
+PRAM    BSS 1 
+.6      OCT 000073
+CHAR    BSS 1 
+.9      OCT 000377
+.12     OCT 000040
+.14     OCT 000072
+POS     BSS 1 
+PO      BSS 1 
+.18     OCT 000054
+VAL     BSS 1 
+ADD     BSS 1 
+ACM     BSS 1 
+PLOC    BSS 1 
+.21     OCT 000002
+CUPAD   BSS 1 
+BASE    BSS 1 
+.23     OCT 000102
+.26     OCT 000010
+.27     OCT 000012
+MAXC    BSS 1 
+SIGN    BSS 1 
+.29     OCT 000060
+T1      BSS 1 
+.32     OCT 177720
+.33     OCT 000055
+.34     OCT 177777
+.35     OCT 000053
+.36     BSS 1 
+.37     OCT 000000
+        OCT 000000
+.38     OCT 177775
+.39     OCT 000003
+.41     OCT 000005
+.42     OCT 000004
+.44     OCT 177776
+.48     OCT 000006
+.50     BSS 1 
+.51     OCT 000000
+.56     OCT 167777
+.57     OCT 017400
+.61     OCT 077400
+.62     OCT 000077
+.63     OCT 037440
+.64     BSS 1 
+*003  ! 
+*004  !     THE PARSE SUBROUTINE AND ITS ROUTINES SCAN AN ASCII 
+*005  !     STRING AND PRODUCES:
+*006  ! 
+*007  !        A.  AN ACTION ROUTINE ADDRESS (CAD.) 
+*008  !        B.  A PARAMETER COUNT  (NOCM.) 
+*009  !        C.  A PARAMETER LIST WITH 4 WORDS FOR EACH PARAMETER: (P.
+*010  ! 
+*011  !               1.  TYPE
+*012  !                   (A.)  0 - NULL
+*013  !                   (B.)  1 - NUMBER
+*014  !                   (C.)  1 - SIGNED OR OCTAL NUMBER
+*015  !                   (D.)  3 - ASC STRING
+*016  ! 
+*017  !               2.  FOR TYPE 1 THE VALUE, 
+*018  !                   ELSE FOR TYPE 3 THE FIRST TWO CHARACTERS. 
+*019  ! 
+*020  !               3.  FOR TYPE 3 CHARACTERS 3 AND 4.
+*021  ! 
+*022  !               4.  FOR TYPE 3 CHARACTERS 5 AND 6.
+*023  ! 
+*024  !        D.  A 10 WORD OPTION LIST AT N.OPL 
+*025  !               OPTIONS MAY APPEAR ON THE FIRST TWO PARAMETERS
+*026  !               OPTIONS ARE SEPERATED FROM EACH OTHER AND FROM
+*027  !               THE PARAMETER ITSELF BY COLONS. 
+*028  !               EACH OPTION IS STORED IN N.OPL STARTING AT
+*029  !               WORD ZERO FOR PRAMETER ONE AND WORD 5 FOR PARAMETE
+*030  !               THERE MAY BE ONLY FIVE PARAMETERS PER PARAMETER 
+*031  !               THE FIRST TWO PARAMETERS MAY BE ASCII,THE REST
+*032  !               MUST BE NUMERIC.
+*033  !     THE INPUT STRING IS TO BE DELIMITED BY COMMAS.
+*034  !     BLANKS ARE IGNORED UNLESS THEY ARE WITHIN ASCII STRINGS.
+*035  !     THE FIRST CHARACTER MUST BE ":" IF INPUT IS NOT FROM A TTY. 
+*036  ! 
+*037  ! 
+*038  ! 
+*039        LET TTY.,N.OPL,P.RAM,NOCM. BE INTEGER,EXTERNAL
+*040        LET CAD.     BE INTEGER,EXTERNAL
+*041        LET C.TAB BE INTEGER,EXTERNAL 
+*042        LET  CUSE.  BE INTEGER,EXTERNAL 
+*043        LET C.BUF BE INTEGER,EXTERNAL 
+*044        LET FM.ER  BE SUBROUTINE ,EXTERNAL
+*045        LET EXEC,READC,MSS.     BE SUBROUTINE,EXTERNAL
+*046        LET IN.ER BE SUBROUTINE 
+*047        LET COLON BE CONSTANT(72K ) 
+*048        LET BLANK BE CONSTANT(40K ) 
+*049        LET COMMA BE CONSTANT (54K )
+*050        LET CHAR0 BE CONSTANT(60K ) 
+*051        LET PSIGN    BE CONSTANT(53K) 
+*052        LET MSIGN    BE CONSTANT(55K) 
+*053        LET QUESH    BE CONSTANT(37440K)
+*054        LET QUESL    BE CONSTANT(   77K)
+*055  .PARS:SUBROUTINE GLOBAL,FEXIT 
+.PARS   NOP 
+        JSB .ENTR 
+        DEF .PARS 
+*056  ! 
+*057  ! 
+*058  !     INITIALIZE SCAN 
+*059  START:DO[FIRST,CAD._@IN.ER;CBUFS,CBUF_@C.BUF] 
+START   LDA .1
+        STA FIRST 
+        STA CAD.
+        JSB .DRCT 
+        DEF C.BUF 
+        STA CBUFS 
+        STA CBUF
+*060        GCOUN,LOW,INFL,CRONE,SUBCO,SBSCN_0
+        CLA 
+        STA GCOUN 
+        STA LOW 
+        STA INFL
+        STA CRONE 
+        STA SUBCO 
+        STA SBSCN 
+*061        FOR T_ @N.OPL TO @NOCM. DO $T_0  !ZERO THE OPTION LIST
+        JSB .DRCT 
+        DEF N.OPL 
+        STA T 
+        JMP .4
+.3      LDA T 
+        INA 
+        STA T 
+.4      JSB .DRCT 
+        DEF NOCM. 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .5
+        CLA 
+        STA T,I 
+        JMP .3
+*062        LIMIT_[PRAM_@P.RAM]+59
+.5      JSB .DRCT 
+        DEF P.RAM 
+        STA PRAM
+        ADA .6
+        STA LIMIT 
+*063        GO TO SCANC !GO START THE SCAN
+        JMP SCANC 
+*064  ! 
+*065  GETCH:CHAR_[IF LOW THEN $CBUF, ELSE($CBUF-<8)] AND 377K!GET CHARAC
+GETCH   LDA LOW 
+        SZA,RSS 
+        JMP .7
+        LDA CBUF,I
+        JMP .8
+.7      LDA CBUF,I
+        ALF,ALF 
+.8      AND .9
+        STA CHAR
+*066        IF CHAR THEN[IF LOW THEN CBUF_CBUF+1;LOW_ NOT LOW]
+        SZA,RSS 
+        JMP .11 
+        LDA LOW 
+        SZA,RSS 
+        JMP .10 
+        LDA CBUF
+        INA 
+        STA CBUF
+.10     LDA LOW 
+        CMA 
+        STA LOW 
+*067  ! 
+*068  ! 
+*069  ! 
+*070        IF INFL THEN GO TO ENDTS          !MID OPERAND-JUMP 
+.11     LDA INFL
+        SZA 
+        JMP ENDTS 
+*071        IFNOT CHAR THEN GO TO EXIT !END OF STAMENT GO CLEAN UP AND E
+        LDA CHAR
+        SZA,RSS 
+        JMP EXIT
+*072        IF CHAR=BLANK THEN GOTO GETCH    !SKIP BLANKS 
+        LDB CHAR
+        CPB .12 
+        JMP GETCH 
+*073        IFNOT (TTY. OR CRONE) THEN\  TEST FOR COLON 
+*         [IF CHAR#COLON THEN GOTO EXITF,ELSE \ 
+*                [CRONE_1;GO TO GETCH]]!IF NOT TTY MUST START WITH :
+        LDA TTY.
+        IOR CRONE 
+        SZA 
+        JMP ENDTS 
+        LDB CHAR
+        CPB .14 
+        RSS 
+        JMP EXITF 
+        CLA,INA 
+        STA CRONE 
+        JMP GETCH 
+*074  ! 
+*075  ! 
+*076  !     A LEGAL CHARACTER OR AN IMBEDDED CHARACTER
+*077  ! 
+*078  ENDTS:IF CHAR THEN[IF CHAR#COMMA THEN[IF CHAR#COLON THEN[\! 
+*        IF[POS,PO_POS+1]>LIMIT THEN GO TO EXITF,\  SET CHARACTER AND FL
+*      ELSE[INFL,CRONE,$POS_CHAR; GO TO GETCH]]]]  !NOW GO GET THE NEXT 
+ENDTS   LDA CHAR
+        SZA,RSS 
+        JMP .17 
+        LDB CHAR
+        CPB .18 
+        JMP .17 
+        LDB CHAR
+        CPB .14 
+        JMP .17 
+        LDA POS 
+        INA 
+        STA POS 
+        STA PO
+        CMA,INA 
+        ADA LIMIT 
+        SSA 
+        JMP EXITF 
+        LDA CHAR
+        STA INFL
+        STA CRONE 
+        STA POS,I 
+        JMP GETCH 
+*079  ! 
+*080  !     A DELIMITER 0 OR COMMA OR COLON  - ENCOUNTERED
+*081  ! 
+*082        DO[VAL,T,INFL_0]            !CLEAR PROCESSING FLAG
+.17     CLA 
+        STA VAL 
+        STA T 
+        STA INFL
+*083        IFNOT FIRST THEN GO TO PRMST! IF THE FIRST PRAM THEN LOOK UP
+        LDA FIRST 
+        SZA,RSS 
+        JMP PRMST 
+*084        FIRST_0!    CLEAR THE FIRST FLAG
+        CLA 
+        STA FIRST 
+*085        DO[ADD_@C.TAB     ;ACM_($PLOC-<8)+$(PLOC+1)]
+        JSB .DRCT 
+        DEF C.TAB 
+        STA ADD 
+        LDA PLOC,I
+        ALF,ALF 
+        LDB PLOC
+        INB 
+        ADA .B.,I 
+        STA ACM 
+*086            ALWAYS DO[IF $ADD=0 THEN GOTO EXITF;\ 
+*            IF $ADD=ACM THEN[  \ 
+*             CAD._$(ADD+1);GO TO RPLOC],\
+*              ELSE ADD_ADD+2]!     FIND THE PROCESSOR IN TABLE 
+.19     LDB ADD,I 
+        SZB,RSS 
+        JMP EXITF 
+        LDB ADD,I 
+        CPB ACM 
+        RSS 
+        JMP .20 
+        LDA ADD 
+        INA 
+        LDA .A.,I 
+        STA CAD.
+        JMP RPLOC 
+.20     LDA ADD 
+        ADA .21 
+        STA ADD 
+        JMP .19 
+*087  ! 
+*088  !     NOT FIRST SO SET UP THE PARAMETER 
+*089  ! 
+*090  PRMST:IF POS=CUPAD THEN GOTO NULLS!NULL SO ZERO IT
+PRMST   LDB POS 
+        CPB CUPAD 
+        JMP NULLS 
+*091  ! 
+*092  ! 
+*093  !     ATTEMPT NUMERIC CONVERSION
+*094  ! 
+*095  BLELM:IF$POS=BLANK THEN[POS_POS-1;GOTO BLELM] 
+BLELM   LDB POS,I 
+        CPB .12 
+        RSS 
+        JMP .22 
+        CCA 
+        ADA POS 
+        STA POS 
+        JMP BLELM 
+*096        BASE_[IF $POS="B"   THEN 8,ELSE 10]! SET UP THE CONVERSION B
+.22     LDB POS,I 
+        CPB .23 
+        RSS 
+        JMP .24 
+        LDA .26 
+        JMP .25 
+.24     LDA .27 
+.25     STA BASE
+*097        IF BASE#10 THEN POS_POS-1 
+        LDB BASE
+        CPB .27 
+        JMP .28 
+        CCA 
+        ADA POS 
+        STA POS 
+*098        IF POS=CUPAD THEN GOTO NOTNO
+.28     LDB POS 
+        CPB CUPAD 
+        JMP NOTNO 
+*099        DO[ADD_CUPAD; MAXC_CHAR0+BASE;SIGN_1] 
+        LDA CUPAD 
+        STA ADD 
+        LDA .29 
+        ADA BASE
+        STA MAXC
+        CLA,INA 
+        STA SIGN
+*100  ! 
+*101  ! 
+*102  !     CONVERSION LOOP 
+*103  ! 
+*104  CLOOP:IF ADD=POS THEN GOTO SETNO, ELSE ADD_ADD+1
+CLOOP   LDB ADD 
+        CPB POS 
+        JMP SETNO 
+        LDA ADD 
+        INA 
+        STA ADD 
+*105        IF $ADD = BLANK THEN GOTO CLOOP 
+        LDB ADD,I 
+        CPB .12 
+        JMP CLOOP 
+*106        IF $ADD => MAXC THEN GOTO NOTNO 
+        LDB MAXC
+        CMB,INB 
+        ADB ADD,I 
+        SSB,RSS 
+        JMP NOTNO 
+*107        IF[T1_$ADD-CHAR0]<0 THEN[IF ADD=PLOC THEN[\ 
+*          IF $ADD=MSIGN THEN [SIGN_ -1;GOTO CLOOP],ELSE[\
+*          IF $ADD=PSIGN THEN GOTO CLOOP]],ELSE \ 
+*                             GO TO NOTNO]
+        LDA ADD,I 
+        ADA .32 
+        STA T1
+        SSA,RSS 
+        JMP .31 
+        LDB ADD 
+        CPB PLOC
+        RSS 
+        JMP NOTNO 
+        LDB ADD,I 
+        CPB .33 
+        RSS 
+        JMP .30 
+        CCA 
+        STA SIGN
+        JMP CLOOP 
+.30     LDB ADD,I 
+        CPB .35 
+        JMP CLOOP 
+*108        T_1   !SET CHARACTER CONVERTED FLAG 
+.31     CLA,INA 
+        STA T 
+*109        DO[VAL_VAL*BASE+T1; GO TO CLOOP]
+        LDA VAL 
+        JSB .MPY
+        DEF BASE
+        ADA T1
+        STA VAL 
+        JMP CLOOP 
+*110  !     SET TYPE AND NO. IN THE LIST
+*111  SETNO:IFNOT [$CUPAD_T] THEN GOTO NOTNO !IF NO DIGITS-NOT A NUMBER 
+SETNO   LDA T 
+        STA CUPAD,I 
+        SZA,RSS 
+        JMP NOTNO 
+*112  NULLS:$PLOC_VAL*SIGN   !SET THE VALUE IN THE LIST 
+NULLS   LDA VAL 
+        JSB .MPY
+        DEF SIGN
+        STA PLOC,I
+*113        $[REAL](PLOC+1)_0.0   !ZERO THE EXTRA WORDS 
+        LDA PLOC
+        INA 
+        STA .36 
+        JSB .DLD
+        DEF .37 
+        JSB .DST
+        DEF .36,I 
+*114  !     SET UP FOR THE NEXT PARAMETER 
+*115  ! 
+*116  NXPRM:IFNOT SBSCN THEN GO TO NOTSU !SKIP IF NOT SUB SCAN
+NXPRM   LDA SBSCN 
+        SZA,RSS 
+        JMP NOTSU 
+*117        IF [SUBCO_SUBCO+1]<3 THEN GOTO STPM !SKIP ASC TEST IF FIRST 
+        LDA SUBCO 
+        INA 
+        STA SUBCO 
+        ADA .38 
+        SSA 
+        JMP STPM
+*118        IF $CUPAD=3 THEN GO TO EXITF  !SUB PRAMETERS ELSE ASC ERROR 
+        LDB CUPAD,I 
+        CPB .39 
+        JMP EXITF 
+*119  STPM: $(SBSCN+SUBCO)_$PLOC  !SET THE SUB PRAMETER IN THE OP LIST
+STPM    LDA SBSCN 
+        ADA SUBCO 
+        LDB PLOC,I
+        STB .A.,I 
+*120  ! 
+*121        IF CHAR=COLON THEN[IF SUBCO=5 THEN GOTO EXITF ,\ TOO M&NY 
+*          ELSE GO TO RPLOC] !GO GET NEXT SUB PRAM
+        LDB CHAR
+        CPB .14 
+        RSS 
+        JMP .40 
+        LDB SUBCO 
+        CPB .41 
+        RSS 
+        JMP RPLOC 
+        JMP EXITF 
+*122  ! 
+*123        SUBCO,SBSCN_0  !ZERO THE SUB SCAN FLAGS 
+.40     CLA 
+        STA SUBCO 
+        STA SBSCN 
+*124  SCANC:PLOC_[CUPAD_PRAM+4*NOCM.]+1 !SET THE CURENT ADDRESSES 
+SCANC   LDA .42 
+        JSB .MPY
+        DEF NOCM. 
+        ADA PRAM
+        STA CUPAD 
+        INA 
+        STA PLOC
+*125        IF PLOC>LIMIT THEN GO TO EXITF !TOO MANY PRAMS? 
+        LDB PLOC
+        CMB,INB 
+        ADB LIMIT 
+        SSB 
+        JMP EXITF 
+*126  ! 
+*127  RPLOC:DO[$[POS_CUPAD]_0;GOTO GETCH] !GO GET THE NEXT CHARACTER
+RPLOC   LDA CUPAD 
+        STA POS 
+        CLB 
+        STB .A.,I 
+        JMP GETCH 
+*128  ! 
+*129  !     PARAMETER END NOT SUB PRAM
+*130  ! 
+*131  NOTSU:IF CHAR=COLON THEN[IF NOCM.>1 THEN GO TO EXITF,\ILLEGAL DELI
+*          ELSE     SBSCN_@TTY. +NOCM.*5] !SET UP SUB SCAN
+NOTSU   LDB CHAR
+        CPB .14 
+        RSS 
+        JMP .43 
+        LDB NOCM. 
+        ADB .44 
+        SSB,RSS 
+        JMP EXITF 
+        JSB .DRCT 
+        DEF TTY.
+        STA .36 
+        LDA NOCM. 
+        JSB .MPY
+        DEF .41 
+        ADA .36 
+        STA SBSCN 
+*132  ! 
+*133        NOCM._NOCM.+1  !STEP COUNT
+.43     LDA NOCM. 
+        INA 
+        STA NOCM. 
+*134        GO TO SCANC  !GO SCAN IT
+        JMP SCANC 
+*135  ! 
+*136  !     NOT A LEGAL NUMBER - TRY FOR A NAME 
+*137  ! 
+*138  NOTNO:$CUPAD_3      !ASSUME NAME AND SET UP 
+NOTNO   LDA .39 
+        STA CUPAD,I 
+*139        FOR T_PO +1 TO CUPAD+6 DO $T_BLANK!PAD THE NAME 
+        LDA PO
+        INA 
+        STA T 
+        JMP .46 
+.45     LDA T 
+        INA 
+        STA T 
+.46     LDA CUPAD 
+        ADA .48 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .47 
+        LDA .12 
+        STA T,I 
+        JMP .45 
+*140        T,ADD_PLOC
+.47     LDA PLOC
+        STA T 
+        STA ADD 
+*141        REPEAT 3 TIMES DO[\ PACK THE NAME 
+*         $T_($ADD-<8)+$(ADD+1);ADD_ADD+2;T_T+1]
+        LDA .39 
+        STA .50 
+.49     CCA 
+        ADA .50 
+        STA .50 
+        LDB .50 
+        SSB 
+        JMP .52 
+        LDA ADD,I 
+        ALF,ALF 
+        LDB ADD 
+        INB 
+        ADA .B.,I 
+        STA T,I 
+        LDA ADD 
+        ADA .21 
+        STA ADD 
+        LDA T 
+        INA 
+        STA T 
+        JMP .49 
+*142        GO TO NXPRM!         ASSUME A NAME  AND CONTINUE
+.52     JMP NXPRM 
+*143  ! 
+*144  !     NORMAL EXIT ROUTINE   CLEAR END OF LIST AND CHECK FOR SEG 
+*145  ! 
+*146  EXIT: FOR T_CUPAD TO LIMIT DO $T_0 !ZAP THE LIST
+EXIT    LDA CUPAD 
+        STA T 
+        JMP .54 
+.53     LDA T 
+        INA 
+        STA T 
+.54     LDB T 
+        CMB,INB 
+        ADB LIMIT 
+        SSB 
+        JMP .55 
+        CLA 
+        STA T,I 
+        JMP .53 
+*147        IF CAD.<0 THEN GO TO EXIT1 !IF LOCAL GO EXIT
+.55     LDB CAD.
+        SSB 
+        JMP EXIT1 
+*148        IF CAD.>10000K THEN GO TO EXIT1 !IF LOCAL GO TO EXIT. 
+        LDB CAD.
+        ADB .56 
+        SSB,RSS 
+        JMP EXIT1 
+*149        T_0   !SET SEGMENT LOAD FLAG
+        CLA 
+        STA T 
+*150        CUSE._(CAD. AND 377K)-<8
+        LDA CAD.
+        AND .9
+        ALF,ALF 
+        STA CUSE. 
+*151  ! 
+*152        CAD._((CAD. AND 17400K)-<8)  !SET ROUTINE NUMBER IN CAD.
+        LDA CAD.
+        AND .57 
+        ALF,ALF 
+        STA CAD.
+*153  EXIT1:$1_ACM !SET ASCII COMMAND IN B FOR MAIN 
+EXIT1   LDA ACM 
+        STA .2,I
+*154        IF T THEN RETURN,ELSE FRETURN 
+        LDA T 
+        SZA,RSS 
+        JMP .58 
+        CLE 
+        JMP .PARS,I 
+.58     CCE 
+        JMP .PARS,I 
+*155  ! 
+*156  EXITF:DO[T,CAD._@IN.ER;GO TO EXIT1] 
+EXITF   LDA .1
+        STA T 
+        STA CAD.
+        JMP EXIT1 
+*157        END 
+*158  ! 
+*159  IN.ER:SUBROUTINE
+IN.ER   NOP 
+        JSB .ENTR 
+        DEF IN.ER 
+*160        MSS.(10)  !FOURCE ECHO AND PRINT ERROR
+        JSB MSS.
+        DEF *+2 
+        DEF .27 
+*161        $CBUF_[IF LOW THEN($CBUF AND 77400K)+QUESL,ELSE QUESH]
+        LDA LOW 
+        SZA,RSS 
+        JMP .59 
+        LDA CBUF,I
+        AND .61 
+        ADA .62 
+        JMP .60 
+.59     LDA .63 
+.60     STA CBUF,I
+*162        FM.ER(1,C.BUF ,CBUF-CBUFS+1)
+        LDA CBUFS 
+        CMA,INA 
+        ADA CBUF
+        INA 
+        STA .64 
+        JSB FM.ER 
+        DEF *+4 
+        DEF .2
+        DEF C.BUF 
+        DEF .64 
+*163        RETURN
+        JMP IN.ER,I 
+*164        END 
+*165        END 
+        END 
+*166        END$

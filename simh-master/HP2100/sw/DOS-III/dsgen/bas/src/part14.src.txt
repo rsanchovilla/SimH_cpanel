@@ -1,0 +1,320 @@
+ASMB,R,B,L,X
+      HED STATENENT SYNTAX PROCESSORS 
+      NAM SYNP3,7 
+      SPC 2 
+      ENT MATS,RSTRS,FILES,REMS,CHANS,USINS,ASNS
+      ENT ENTRS 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN
+      SPC 2 
+      EXT LTR,MATIO,RECRF,BCKSP,TBSRH,EOST,LPCK,RPCK
+      EXT GETPF,TIMEB,PLUSB,PRGIN,CHRST,RSTOP,FSC 
+      EXT ARRID,SBSCK,ACCST,SYMCK,COMMB,SBPUD,GETCR 
+      EXT USTCK,SEMIB,PFSRH,FILRF,STROP,ASSOB,MATFN 
+      EXT VAROP 
+      EXT LETCK,HATCB 
+      SPC 2 
+LETOP OCT 73000 
+PRTOP OCT 65000 
+INPOP OCT 63000 
+B73   OCT 73
+B777  OCT 777 
+D577  OCT -577
+MULOP OCT 22000 
+PDFFL OCT 100017
+* 
+***                        ** 
+**  <MAT STATEMENT> SYNTAX  **
+***                        ** 
+* 
+MATS  JSB LTR       FIRST TWO 
+      JSB SERRS+18,I  CHARACTERS
+      JSB LETCK         LETTERS?
+      JMP MATS3     NO
+      ISZ SBPTR     YES,
+      ALF,ALF         RETRIEVE
+      IOR TEMP+1        FIRST CHARACTER 
+      STA SBPTR,I   LOOK
+      LDA .+5         FOR 
+      STA MAXCR         'INPUT',
+      LDA MATIO           'READ', 
+      LDB .-3               OR
+      JSB TBSRH               'PRINT' 
+      JSB SERRS+18,I  NONE FOUND
+      CPA PRTOP     IS IT 'PRINT'?
+      JMP MATS2     YES 
+      CPA INPOP     NO, 'INPUT' ? 
+      JMP MATS1-2   YES 
+      JSB RECRF     NO, READ FROM FILE? 
+      JMP MATS1-3   NO
+      CPA B73       YES, ';' ?
+      JMP MATS1-2   YES 
+      JSB SERRS+6,I NO
+      JSB BCKSP 
+      CLA,INA       TURN ON 
+      STA DFLAG       'MATRIX SUBSCRIPT' MODE 
+MATS1 JSB ARRID     RECORD AN ARRAY 
+      JSB SBSCK     RECORD SUBSCRIPT
+      NOP             IF PRESENT
+      CPA .+15B     END OF STATEMENT? 
+      JMP ACCST    YES
+      CCB           NO, DEMAND
+      JSB SYMCK       COMMA 
+      DEF COMMB 
+      JSB SERRS+6,I NOT FOUND 
+      JMP MATS1 
+MATS2 JSB SBPUD     ADVANCE SYNTAX BUFFER POINTER 
+      JSB GETCR     FETCH NEXT CHARACTER
+      JSB SERRS+6,I NONE FOUND
+      JSB USTCK     CHECK FOR USING STATEMENT 
+      JMP MAT13     NONE FOUND
+      CPA .+15B     CARRIAGE RETURN ? 
+      JMP ACCST    YES
+      CCB           SEMI- 
+      JSB SYMCK       COLON 
+      DEF SEMIB        FOLLOWS? 
+      JSB SERRS+34,I NO 
+MAT12 JSB SBPUD     ADVANCE SYNTAX BUFFER POINTER 
+      JSB GETCR     FETCH NEXT CHARACTER
+      JSB SERRS+6,I NONE FOUND
+      STA SBPTR,I   SAVE CHARACTER
+      JSB PFSRH     SEARCH FOR PRINT FUNCTION 
+      RSS           FOUND 
+      JSB ARRID     RECORD AN ARRAY 
+      CPA .+15B     CARRIAGE RETURN FOLLOWS?
+      JMP ACCST    YES
+      CCB           NO, 
+      JSB SYMCK       COMMA?
+      DEF COMMB 
+      JSB SERRS+6,I NO, ERROR 
+      JMP MAT12     YES 
+MAT13 JSB RECRF     WRITE ON FILE?
+      JMP MAT11     NO
+      CPA B73       YES, ';' ?
+      CCB,RSS       YES 
+      JSB SERRS+6,I NO
+      STB FILRF     NOTE 'FILE' MODE
+MAT10 JSB ARRID     RECORD AN ARRAY 
+      CPA .+15B     END OF STATEMENT? 
+      JMP ACCST    YES
+      LDB .-2       NO, DEMAND
+      JSB SYMCK       COMMA OR
+      DEF COMMB        SEMICOLON
+      JSB SERRS+6,I NOT FOUND 
+      JSB GETCR     END OF STATEMENT? 
+      JMP *+3       YES 
+MAT11 JSB BCKSP     NO
+      JMP MAT10 
+      JSB SBPUD     UPDATE POINTER
+      ISZ FILRF     'FILE' MODE?
+      JMP ACCST    NO 
+      JSB SERRS+2,I   YES 
+MATS3 LDB SBPTR     SAVE ADDRESS
+      STB ARYAD       OF ARRAY OPERAND
+      LDA TEMP+1    RECORD
+      STA SSTAK,I     AND SAVE
+      LDB .+46          THE ARRAY 
+      JSB STROP           IDENTIFIER
+      LDA TEMP+2    RETRIEVE
+      CCB             NEXT CHARACTER
+      JSB SYMCK         AND TEST FOR
+      DEF ASSOB        ASSIGNMENT OPERATOR
+      JSB SERRS+3,I NOT FOUND 
+      JSB LTR       LETTER NEXT?
+      JMP MATS5     NO
+      JSB LETCK     YES, ANOTHER LETTER?
+      JMP MATS6     NO
+      ISZ SBPTR     YES,
+      ALF,ALF         CONCATENATE 
+      IOR TEMP+1        LETTERS 
+      STA SBPTR,I         AND 
+      LDA MATFN             SEARCH FOR
+      LDB .-5                 AN ARRAY
+      JSB TBSRH                 FUNCTION
+      JSB SERRS+7,I NONE FOUND
+      ALF,ALF       FOUND,
+      ALF,RAR         CONVERT 
+      IOR PDFFL         TO OPERAND
+      CCB           COMBINE 
+      ADB SBPTR       WITH
+      IOR 1,I           OPERATOR
+      STA 1,I             AND RECORD
+      AND B777      'INV' 
+      ADA D577        OR
+      SSA,RSS           'TRN' ? 
+      JMP MATS4     YES 
+      JSB GETCR     NO, END OF STATEMENT? 
+      JMP ACCST    YES
+      CLB,INB       NO, TURN ON 
+      STB DFLAG       'MATRIX SUBSCRIPT' MODE 
+      JSB SBSCK     DEMAND SUBSCRIPT
+      JSB SERRS+5,I NONE FOUND
+      JMP EOST      DEMAND END OF STATEMENT 
+MATS4 SZA,RSS       ALLOW INVERSION 
+      STA SSTAK,I     INTO SELF 
+      JSB GETCR     DEMAND
+      JSB SERRS+22,I  LEFT
+      JSB LPCK          PARENTHESIS 
+      JSB ARRID     DEMAND ARRAY
+      JSB RPCK      DEMAND RIGHT PARENTHESIS
+      LDB TEMP+1    SAME SOURCE AND 
+      CPB SSTAK,I     DESTINATION ARRAYS? 
+      JSB SERRS+19,I  YES 
+      JMP EOST      NO, DEMAND END OF STATMENT
+MATS5 JSB BCKSP     BACK UP AND 
+      JSB GETPF       DEMAND PARENTHESIZED FORMULA
+      CCB           SEEK
+      JSB SYMCK 
+      DEF TIMEB      '*'
+      JSB SERRS+20,I  NOT FOUND 
+      JSB ARRID     DEMAND ARRAY
+      JMP EOST      DEMAND END OF STATEMENT 
+MATS6 LDA TEMP+1    RECORD
+      LDB .+46        ARRAY 
+      JSB STROP         OPERAND 
+      LDA TEMP+2    END OF
+      CPA .+15B       STATEMENT?
+      JMP ACCST    YES
+      LDB .-3       NO, SEEK
+      JSB SYMCK       '+', '-', 
+      DEF PLUSB        OR '*' 
+      JSB SERRS+21,I  NOT FOUND 
+      CLB           SET '*' FLAG TO FALSE 
+      CPA MULOP     '*' ? 
+      JMP MATS9     YES 
+MATS7 STB PFLAG     NO
+      JSB ARRID     DEMAND ARRAY
+      STA TEMP+2    SAVE CHARACTER
+      ISZ PFLAG     '*' ? 
+      JMP MATS8     NO
+      LDA TEMP+1    YES, DOES ARRAY 
+      CPA SSTAK,I     MATCH LEFT-HAND SIDE? 
+      JSB SERRS+19,I  YES 
+MATS8 LDA TEMP+2    NO, RETRIEVE CHARACTER
+      JMP EOST      DEMAND END OF STATEMENT 
+MATS9 CCB           SET '*' FLAG TO TRUE
+      LDA TEMP+1    DOES ARRAY
+      CPA SSTAK,I     MATCH LEFT-HAND SIDE? 
+      JSB SERRS+19,I
+      JMP MATS7     NO
+***                            ** 
+**  <RESTORE STATEMENT> SYNTAX  **
+***                            ** 
+* 
+RSTRS JSB GETCR     END OF STATEMENT? 
+      JMP RSTR1     YES 
+      JSB BCKSP     NO, DEMAND
+      JSB PRGIN       SEQUENCE NUMBER 
+      JMP EOST     DEMAND END OF STATEMENT
+RSTR1 ISZ SBPTR     RECORD DUMMY OPERAND
+      JMP ACCST 
+* 
+***                          ** 
+**  <FILES STATEMENT> SYNTAX  **
+***                          ** 
+* 
+FILES CLA,RSS       SUPPRESS BLANKS 
+* 
+***                        ** 
+**  <REM STATEMENT> SYNTAX  **
+***                        ** 
+* 
+REMS  LDA .+15B     DUMMY STATEMENT TERMINATOR
+      CLB,INB       SET CHARACTER FLAG TO 'LOW HALF'
+      JSB CHRST     RECORD REMAINDER OF STATEMENT 
+      JMP ACCST      AS A STRING
+***                          ** 
+**  <CHAIN STATEMENT> SYNTAX  **
+***                          ** 
+* 
+CHANS JSB RSTOP     REQUEST STRING OPERAND
+      CCB 
+      JSB SYMCK     COMMA FOLLOWS?
+      DEF COMMB      A COMMA? 
+      JMP EOST     NO, DEMAND END OF STRING 
+      CLB           DISALLOW
+      STB SFLAG      STRING VARIABLES 
+      JSB FSC       GET A FORMULA FOR LINE NO.
+      JMP EOST     DEMAND END OF STATEMENT
+* 
+***                          ** 
+**  <ENTER STATEMENT> SYNTAX  **
+***                          ** 
+* 
+ENTRS JSB GETCR     FETCH FIRST CHARACTER 
+      JSB SERRS+35,I NONE FOUND 
+      ISZ SBPTR 
+      CCB 
+      JSB SYMCK     FIRST CHARACTER A '#'?
+      DEF HATCB 
+      JMP ENTR1     NO
+      JSB VAROP     YES, SEEK SIMPLE VARIABLE 
+      JSB SERRS+35,I  NONE FOUND
+      NOP 
+      CPA .+15B     CR FOLLOWS? 
+      JMP ACCST     YES, ACCEPT STATMENT
+      CCB           NO
+      JSB SYMCK     COMMA?
+      DEF COMMB 
+      JSB SERRS+6,I NO
+      JMP  ENTR2
+ENTR1 EQU * 
+      JSB BCKSP     BACKUP ONE CHARACTER
+      CCB           RESTORE 
+      ADB SBPTR       BUFFER
+      STB SBPTR         POINTER 
+ENTR2 EQU * 
+      JSB FSC       DEMAND A FORMULA
+      CCB 
+      JSB SYMCK     COMMA FOLLOWS?
+      DEF COMMB 
+      JSB SERRS+6,I NO
+      JSB VAROP     DEMAND A SIMPLE VARIABLE
+      JSB SERRS+35,I  NONE FOUND
+      NOP 
+      CCB 
+      JSB SYMCK     COMMA FOLLOWS?
+      DEF COMMB 
+      JSB SERRS+6,I NO
+      LDB SBPTR     YES, ENABLE 
+      STB SFLAG    STRING VARIABLE
+      JSB VAROP     SEEK VARIABLE OPERAND 
+      JSB SERRS+35,I  NONE FOUND
+      NOP 
+      JMP EOST     DEMAND END OF STATEMENT
+* 
+***                          ** 
+**  <USING STATEMENT> SYNTAX  **
+***                          ** 
+* 
+USINS JSB  SERRS+33,I  USING ILLEGAL AS FIRST WORD
+* 
+***                           **
+**  <ASSIGN STATEMENT> SYNTAX  ** 
+***                           **
+* 
+ASNS  JSB RSTOP 
+      CCB 
+      JSB SYMCK     RECORD
+      DEF COMMB      A COMMA
+      JSB SERRS+6,I NOT A COMMA 
+      LDB .+2       DISABLE 
+      STB SFLAG    STRING VARIABLE
+      JSB FSC       RECORD FORMULA
+ASNS4 CCB 
+      JSB SYMCK     RECORD
+      DEF COMMB      A COMMA
+      JSB SERRS+6,I NOT A COMMA 
+      JSB VAROP     SEEK A NUMERIC OPERAND
+      JSB SERRS+35,I   NONE FOUND 
+      NOP 
+      CCB 
+      JSB SYMCK     COMMA 
+      DEF COMMB      NEXT?
+      RSS 
+      JSB RSTOP     DEMAND A STRING OPERAND 
+      JMP EOST     DEMAND END OF STATEMENT
+      END 

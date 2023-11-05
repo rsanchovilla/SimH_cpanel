@@ -1,0 +1,541 @@
+ASMB,B,R,L,C
+      NAM READF,7 
+      ENT READF,WRITF 
+      EXT EXEC,R/W$,.ENTR,P.PAS 
+      EXT RW$UB,$KIP
+      EXT RFLG$ 
+      SUP 
+* 
+* 
+*     THIS IS THE RTE FILE MANAGEMENT PACKAGE 
+*     READ/WRITE SUBROUTINE.
+* 
+*     THIS ROUTINE WILL READ OR WRITE ANY TYE FILE. 
+* 
+* 
+*     CALLING SEQUENCE: 
+* 
+*     CALL READF(IDCB,IERR,IBUF,IL,L,N) 
+* 
+*     O R 
+* 
+*     IER = READF(IDCB,IERR,IBUF,IL,L,N)
+* 
+*     TO READ,  O R 
+* 
+*     CALL WRITF(IDCB,IERR,IBUF,IL,N) 
+* 
+*     O R 
+* 
+*     IER = WRITF(IDCB,IERR,IBUF,IL,N)
+* 
+*     TO WRITE. 
+* 
+* 
+*     W H E R E:
+* 
+*     IDCB     IS THE 144 WORD DATA CONTROL BLOCK 
+*              FOR THE REFERENCED FILE. 
+* 
+*     IERR     IS THE ERROR RETURN LOCATION 
+*              ERRORS ARE AS FOLLOWS: 
+* 
+*                   CODE     ERROR CONDITION
+*                   0 OR >0  NO ERROR 
+*                   -1       A REQUIRED DISC OR DEVICE IS DOWN
+*                   -5       ILLEGAL RECORD NUMBER OR 
+*                             ATTEMPT TO READ A RECORD NOT WRITTEN
+*                   -7       INVALID SECURITY CODE FOR
+*                 `           WRITE (FILE IS READ ONLY) 
+*                   -10      A REQUIRED PARAMETER IS MISSING
+*                   -11      THE DCB IS NOT OPEN
+*                   -12      SOF OR EOF SENSED ON READ
+*                   -17      ILLEGAL REQUEST TO A TYPE ZERO FILE
+* 
+*     IER      SEE IERR - RETURNED AS FUNCTION
+* 
+*     IBUF     IS THE BUFFER TO BE USED TO READ OR WRITE. 
+* 
+*     IL       IS THE REQUESTED TRANSFER LENGTH IN WORDS. 
+* 
+*     L        IS THE LENGTH AS READ IN WORDS.
+* 
+*     N        IS THE REQUESTED RECORD NUMBER 
+*              IF N>0 OV IF N<0 THE RELATIVE RECORD 
+*              NUMBER FROM THE CURRENT POSITION.
+*              N IS LEGAL ON TYPE 1 AND 2 FILES ONLY. 
+* 
+* 
+*     O P T I O N S:
+* 
+*     IL       IS OPTIONAL ON TYPE 1 AND 2 FILES. 
+*              ON TYPE 1 FILES, 128 IS USED;
+*              ON TYPE 2 FILES THE RECORD LENGTH IS USED. 
+* 
+*     L        IS OPTIONAL AT ALL TIMES.
+* 
+*     N        IS OPTIONAL AND IS IGNORED ON FILES
+*              OF TYPES OTHER THAN 1 AND 2.  IF NOT 
+*              SUPPLIED, ZERO IS USED.
+*              THE FIRST RECORD IN A FILE IS RECORD #1. 
+* 
+* 
+*     E X T E R N A L S:
+* 
+*     RW$UB         IS USED TO READ OR WRITE WORDS
+*                   FROM OR TO FILES OF TYPE 2 OR 
+*                   ABOVE.  IT HANDLES ALL SECTOR,
+*                   TRACK, AND EXTENT SWITCHING FOR 
+*                   THESE FILES AND ALSO WRITES AND/OR
+*                   READS BLOCKS FROM THE FILE AS 
+*                   REQUIRED.  READS ARE CONDITIONAL
+*                   ON RFLG$.  A GLOBAL FLAG WHICH
+*                   MUST BE NON-ZERO BEFORE A READ
+*                   IS EXECUTED.
+* 
+*     RW$UB CALLING SEQUENCE IS:
+* 
+*     LDB #WORDS
+*     LDA DCB ADDRESS 
+*     CLE/CCE       WRITE/READ
+*     JSB RW$UB CALL
+*     DEF UBUF      ADDRESS OF USER'S BUFFER
+*     JMP ERROR     ERROR RETURN (A = CONDITION)
+*     --            NORMAL RETURN 
+* 
+*     SPC 2 
+* 
+* 
+*     PO$N          IS USED TO CALCULATE THE POSITION 
+*                   OF TYPE 1 AND 2 FILES.
+* 
+*     PO$N CALLING SEQUENCE IS: 
+* 
+*     LDA DCB ADDRESS 
+*     LDB RECORD NUMBER 
+*     JSB PO$N      CALL
+*     NOP           BUFFER OFFSET RETURNED HERE 
+*     JMP ERR       EOF RETURN
+*     --            NORMAL RETURN 
+*                   A = TRACK  B = SECT 
+* 
+* 
+* 
+WRITF DEC -1        WRITE ENTRY POINT 
+      LDA WRITF     TRANSFER RETURN ADDRESS 
+      STA READF     TO READ ENTRY 
+      JMP READF+1   AND GO TO READ ENTRY
+      SPC 3 
+DCB   NOP           DCB POINTER 
+IERR  NOP           ERROR BOX 
+BUF   OCT -17       USER BUFFER ADDRESS 
+IL    DEF DM        REQUEST LENGTH
+L     DEF ZER0      RETURN LENGTH 
+N     DEF ZER0      RECORD NUMBER 
+READF NOP           READ ENTRY POINT
+      JSB .ENTR     TRANSFER THE
+      DEF DCB        PARAMETERS 
+      LDA DCB       SET UP THE
+      CLB,CLE        DCB
+      JSB P.PAS       ADDRESSES 
+N17   DEC -17 
+TMP   NOP           USE FIRST TWO AS
+TMP1  NOP            TEMP STORAGE 
+TYPE  NOP           ADDRESS OF TYPE 
+LU0   NOP            LU (FOR 0 FILE)
+TRACK EQU LU0       ALSO TRACK
+EOF0  NOP             EOF CODE (0 FILE) 
+BSECT EQU EOF0         ALSO SECTOR
+SPAC  NOP              SPACING CODE (0 FILE)
+SIZE  EQU SPAC          ALSO FILE SIZE
+RL    NOP               RECORD LENGTH 
+SCMO  NOP           SECURITY/OPEN MODE
+#SC/T NOP            SECTORS/TRACK
+OCFLG NOP             OPEN FLAG 
+TR    NOP              CURRENT TRACK
+SECT  NOP               CURRENT SECTOR
+BUFPT NOP                CURRENT POSITION 
+RWFLG NOP                 READ/WRITE FLAG 
+RC    NOP                  RECORD COUNT 
+TMP2  NOP 
+BUFD  NOP 
+      SPC 2 
+      LDA N10       PRESET FOR MISSING PRAM ERROR 
+      LDB BUF       BUFFER MUST BE
+      SSB            SUPPLIED 
+      JMP EXIT      ELSE MISSING PRAM 
+      LDB OCFLG,I   IF NOT OPEN 
+      LDA N11 
+      CPB XEQT      THEN
+      RSS 
+      JMP EXIT      EXIT FILE NOT OPEN
+      LDB WRITF     GET READ WRITE FLAG 
+      LDA SCMO,I    AND SECURITY CODE 
+      SSB,RSS       IF WRITE
+      SSA            AND
+      JMP SCOK        BAD SECURITY
+      LDA N7           THEN 
+EXIT  LDB N17           EXIT
+      STB BUF       RESTORE 
+      LDB DMBUF      OPTIONAL 
+      STB IL          PARAMETER 
+      LDB DZER0     ADDRESS 
+      STB L             FOR 
+      STB N              NEXT 
+      CLB                 CALL
+      STB ZER0
+      STB DM
+      CCB 
+      STB WRITF     RESET READ WRITE FLAG AND 
+      STA IERR,I    SET THE ERROR CODE
+      JMP READF,I    RETURN 
+      SPC 2 
+SCOK  RRL 1         SHIFT SIGN TO LOW A 
+      STA RFLG$     USE A READ FLAG 
+      LDB L,I       GET N FOR WRITE 
+      SLA           IF READ 
+      LDB N,I       GET READ N
+      LDA TYPE,I    GET TYPE
+      CPA .2          TWO 
+      JMP LTEST     GO TEST FOR EOF 
+      CPA .1        IF TYPE ONE 
+      CLA,RSS       SKIP
+      JMP EOFTS     ELSE GO TO EOF TEST 
+*                             RANDOM ACCESS FILE
+      SPC 1 
+      STA RWFLG,I   INHIBIT R/W$ WRITE FOR TYPE ONE FILES 
+      LDA .128      FOURCE LENGTH TO 128 FOR TYPE 1 FILES 
+      STA RL,I      FOR THE POSITION ROUTINE
+       SPC 1
+LTEST LDA IL,I      GET THE REQUEST LENGTH
+      SSA           IF EOF REQUEST THEN 
+      JMP EXIOK     GO EXIT  NO ACTION
+      SZB           POSITION OPTION?
+      SSB           YES  IF <0
+      ADB RC,I      ADD CURRENT POSITION
+      STB TMP2      SAVE RESULT 
+      CCA 
+      ADA B         MULTIPLY RECORD LENGTH
+      SSA           IF NEG RECORD NO
+      JMP EOFEX     TAKE ERROR EXIT 
+      MPY RL,I      BY THE DESIRED RECORD 
+      STA TMP       SAVE LOW PART 
+      AND B177      MASK TO 128 OFFSET
+      STA OCFLG     SET THE OFFSET
+      XOR TMP       RESTORE THE HIGH PART 
+      ASR 6         EVEN SECT ADDRESS TO A
+      STA TMP       SAVE
+      CMA           CHECK FOR 
+      ADA SIZE,I     EOF
+      SSA             IF NOT EOF SKIP 
+      JMP EOFEX     TAKE ERROR EXIT 
+      LDA TMP       RESTORE A 
+      ADA BSECT,I    ADD THE BASE SECTOR
+      DIV #SC/T,I    DIVIDE BY NO. SECT/TRACK 
+      ADA TRACK,I   ADD BASE TRACK-A = TRACK
+      DST TMP       SAVE NEW TR/SECTOR ADDRESS
+      CPA TR,I      IF SAME 
+      CCA            AS 
+      CPB SECT,I      CURRENT 
+      LDB 0         POSITION
+      CLE,SSB       THEN
+      JMP RACS           SKIP 
+      LDB DCB       ELSE
+      JSB R/W$       WRITE THE CURRENT BLOCK
+      JMP EXIT        IF NECESSARY
+      DLD TMP       THEN SET
+      DST TR,I       THE NEW
+      SPC 2           ADDRESS 
+RACS  LDA OCFLG     SET THE OFFSET
+      ADA BUFD      ADD BUFFER ADDRESS
+      STA BUFPT,I    AND SET THE POINTER
+      LDA TMP2      SET THE 
+      STA RC,I      NEW RECORD NUMBER 
+      SPC 2 
+EOFTS LDA BUFPT     SET THE INDIRECT
+      ADA MSIGN     BIT ON
+      STA BUFPT     THE BUFFER POINTER
+      LDA TYPE,I    GET FILE TYPE 
+      CMA,INA,SZA,RSS   IF 0
+      JMP TYP00          OR 1 
+      INA,SZA,RSS   GO DO 0/1 THING 
+      JMP .1TYP 
+      INA,SZA,RSS   IF TYPE 2 
+      JMP TWOTY     GO DO READ TEST 
+INTS  LDA RWFLG,I   GET THE IN CORE FLAG
+      CCE,SZA       IF IN CORE
+      JMP TWOSP      GO TEST FOR TWO
+      LDB DCB       ELSE READ 
+      JSB R/W$       THE BLOCK
+      JMP EXIT      ERROR EXIT
+      SPC 2 
+TWOSP LDA TYPE,I    GET THE TYPE AGAIN
+TWORW LDB RL,I      GET THE RECORD LENGTH (TYPE 2)
+      CPA .2        IF TYPE 2 
+      JMP .2RW       GO DO READ WRITE 
+      SPC 2 
+* 
+*     TYPE 3 AND ABOVE READ/WRITE LOOP
+* 
+      LDA WRITF     SET READ WRITE FLAG 
+      ELA            IN E  0=> WRITE  1=>READ 
+      LDB BUFPT,I   GET CURRENT WORD
+      SSB,RSS       IF <0 THEN EOF
+      JMP RDLEN     NO <0 - SKIP
+      CLB,SEZ,RSS     IF EOF AND WRITE
+      JMP SWRI      GO CLEAR THE READ FLAG
+EOF   LDA RWFLG,I    EOF AND READ 
+      RAR,RAR       SET 
+      ELA,RAL        EOF
+      STA RWFLG,I     BIT IN DCB
+EOFT0 CCA           SET RETURN LENGTH 
+      STA L,I        FOR EOF
+      CLA,SEZ       IF FIRST EOF SKIP 
+EOFEX LDA N12       ELSE EOF ERROR
+      SSA,RSS       IF FIRST EOF THEN 
+      ISZ RC,I      STEP THE RECORD COUNT 
+      JMP EXIT      GO EXIT 
+      SPC 1 
+SWRI  STB RFLG$     CLEAR THE READ FLAG 
+RDLEN CCB,SEZ       IF READ 
+      JMP RDLE1     SKIP WRITE CHECKS 
+      LDA IL,I      GET REQUEST LENGTH
+      CMA,SSA,INA,RSS   IF WRITE EOF
+      JMP EOFWR          GO WRITE EOF 
+      ADA BUFPT,I   COMPARE NEW LENGTH TO OLD 
+      LDB RFLG$     GET READ FLAG 
+      CLE,SZA       IF NEW LENGTH = OLD 
+      SZB,RSS        OR IF NOT UPDATE 
+      JMP RDLE2     CONTINUE WRITE
+      SPC 1 
+ERR5  LDA N5        ELSE UPDATE ERROR 
+      JMP EXIT      GO EXIT 
+      SPC 1 
+RDLE1 LDA DMBUF     GET LENGTH RETURN ADDRESS 
+RDLE2 CLB,SEZ,INB,RSS   IF WRITE
+      LDA IL        USE REQUEST LENGTH
+      STA BUA       SET ADDRESS OF BUFFER 
+      LDA DCB       SET THE DCB ADDRESS 
+      JSB RW$UB     GO READ FIRST LENGTH WORD 
+BUA   DEF L,I 
+      JMP EXIT      ERROR EXIT
+      LDB A 
+.2RW  LDA WRITF     GET READ/WRITE FLAG 
+      ELA            TO E 
+      CLA,SEZ,RSS   IF WRITE THEN SKIP
+      JMP WRIT      WRITE SO SKIP 
+      LDA IL        CHECK IF LENGTH SUPPLIED
+      CPA DMBUF     IF COMPARE THEN NO LENGTH 
+      CLA,RSS       NOT SUPPLIED SO FORCE TRANSFER
+      LDA B         SUPPLIED SO CHECK FOR RECORD
+      CMA,INA       TOO LONG FOR
+      ADA IL,I      BUFFER
+      SSA           SKIP IF OK
+      LDB IL,I      TOO LONG SO USE SUPPIED LENGTH
+      STB L,I       SET AS RETURN LENGTH
+WRIT  STA SKIP      SAVE RESIDUE FOR SKIP AFTER READ
+      LDA DCB       DCB TO A
+      JSB RW$UB     READ THE RECORD 
+      DEF BUF,I      TO USER BUFFER 
+      JMP EXIT      ERROR EXIT
+      LDB TYPE,I    GET FILE TYPE 
+      CPB .2        IF 2
+      JMP EXIOK-1   THEN DONE - GO EXIT 
+      LDA DCB       SET UP TO SKIP
+      LDB SKIP      THE RESIDUE 
+      CMB,SSB,INB   SET + NO WORDS  SKIP IF >0
+      JMP NOSKP     <0 SO DON'T SKIP
+      JSB $KIP      GO SKIP THE WORDS 
+      JMP EXIT      ERROR EXIT
+NOSKP LDA WRITF     ELSE
+      ELA           SET TO
+      CLA,SEZ,RSS   READ /WRITE THE 
+      LDA IL        TWIN WORD 
+      STA BUFAA     WORD
+      LDA DCB       TO DUM
+      CLB,INB       OR FROM 
+      JSB RW$UB     USER. 
+BUFAA NOP 
+      JMP EXIT      ERROR - EXIT
+      CPA BUA,I     IF TWIN MISMATCH
+      CCB,RSS 
+      JMP ERR5       THEN BAD RECORD - EXIT 
+      LDA RFLG$     GET READ FLAG 
+      SZA,RSS       IF NOT READING
+      JMP EOFWR     GO SET EOF IN FILE
+EXT0  ISZ RC,I      STEP THE RECORD COUNT 
+EXIOK CLA           DONE - OK SO
+      JMP EXIT       EXIT 
+      SPC 2 
+EOFWR STB BUFPT,I   SET EOF IN DCB
+      STB RWFLG,I   WRITTEN ON AND EOF FLAG IN THE DCB
+      JMP EXIOK-1   GO EXIT 
+      SPC 2 
+TWOTY LDB RFLG$     GET READ WRITE FLAG 
+      SZB           IF READING
+      JMP INTS      GO TEST FOR IN CORE 
+      JMP TWOSP     ELSE GO WRITE.
+      SPC 2 
+* 
+*     TYPE 0 OR 1 FILE -- TRANSFER FROM CORE
+* 
+.1TYP LDA IL        GET LENGTH ADDRESS
+      LDB A,I       GET LENGTH
+      CPA DMBUF     IF NOT SUPPLIED THEN
+      LDB .128      USE 128 
+      STB IL        SAVE LOCALLY
+      ADB B177      ROUND UP
+      LSR 7         GET # OF SECTORS COVERED
+      STB SKIP      SAVE ROUNDED LENGTH 
+      ADB RC,I      = # OF 128 WORD RECORDS 
+      STB TMP       SAVE NEW RECORD # 
+      ADB N1        SUBTRACT 1 (RECORD #'S START AT 1)
+      BLS           CONVERT TO 64 WORD SECTORS
+      CMB,INB       SUBTRACT
+      ADB SPAC,I    FROM FILE SIZE
+      SSB           IF OUT OF FILE
+      JMP EOFEX     TAKE EOF EXIT 
+      SPC 2 
+      LDA SKIP      GET ROUNDED LENGTH
+      LSL 7         SET TO CORRECT POSITION 
+      LDB WRITF     AND 
+      SSB,RSS       RESET IF
+      STA IL        WRITE 
+      SPC 1 
+      LDA DCB,I 
+      AND B77 
+      ADA PRC 
+      STA LUR 
+      SPC 1 
+NEXTR LDA SECT,I    COMPUTE THE 
+      CMA,INA       MAX RECORD FOR THIS 
+      ADA #SC/T,I   ACCESS
+      LSL 6         AND 
+      STA LOCLN     SET FOR XFER
+      CMA,INA       SUBTRACT
+      LDB IL        FROM
+      ADA B         IL
+      SSA           IF TOO MUCH 
+      STB LOCLN     RESET TRANSFER TO JUST IL 
+      STA IL        SET NUMBER LEFT TO DO 
+CALEX LDA WRITF     SET UP
+      STA BUFAA     SET THE WRITE SKIP FLAG 
+      CLB,INB       THE 
+      SSA,RSS       REQUEST 
+      INB           CODE
+      STB RQ        AND 
+      JSB EXEC      CALL
+      DEF RTN       THE 
+      DEF RQ        EXEC
+      DEF LUR       FOR 
+      DEF BUF,I     I/O 
+      DEF LOCLN     TO/ 
+      DEF TR,I      FROM
+      DEF SECT,I    USER
+RTN   ISZ BUFAA     TEST READ/WRITE 
+      RSS           WRITE SO SKIP THE SETTING OF L
+      STB L,I       SET THE RETURN LENGTH 
+      ISZ SKIP      DISC XFER?? 
+      JMP DISC      YES; GO DO DISC ERROR CHECK 
+      ISZ TMP       IF WRITE
+      JMP EXT0      SKIP EOF TESTS
+      SPC 1 
+      RAL,CLE,ELA   PUT THE DOWN BIT IN  E
+      ALF,RAL       SHIFT THE EOF BIT 
+      RAL           TO BIT 15 
+      SSA           IF EOF BIT SET
+      JMP EOF00     GO DO EOF THING 
+      SZB           IF ZERO WORDS READ THEN SKIP
+      JMP EXT0      ELSE GO EXIT GOOD XFER
+      AND B70       MASK THE HIGH ORDER TYPE BIT
+      SEZ,CCE,SZA      IF NOT DOWN OR IF TYPE <10 THEN EOF
+      JMP TYP00     ELSE RETRY THE XFER 
+      SPC 1 
+EOF00 CLE 
+      JMP EOFT0     DO EOF TYPE ZERO EXIT 
+      SPC 2 
+DISC  CCA           PRESET FOR ERROR
+      CPB LOCLN     DISC ERROR? 
+      RSS           NO; SKIP
+      JMP EXIT      YES; EXIT 
+      ADB BUF       UPDATE THE
+      STB BUF       BUFFER ADDRESS
+      CLA           SET UP FOR POSSIBLE TRACK SWITCH
+      STA SECT,I    SET SECTOR
+      ISZ TR,I      STEP THE TRACK ADDRESS
+      LDA IL        GET REMAINING LENGTH
+      CMA,SSA,INA,SZA   SKIP IF NOT GREATER THEN ZERO 
+      JMP NEXTR     MORE SO GO DO THE NEXT BLOCK
+      SPC 1 
+      LDA TMP       DONE  UPDATE
+      STA RC,I      THE RECORD COUNT
+      JMP EXIOK     AND EXIT
+      UNL 
+PRC   OCT 74000 
+      LST 
+      SPC 3 
+EOFW0 JSB EXEC      WRITE TYPE ZERO EOF 
+      DEF EOFRT     RETURN ADDRESS
+      DEF .3
+      DEF EOF0,I
+      DEF N1
+EOFRT JMP EXIOK 
+      SPC 3 
+EX17  LDA N17       SET UP ILLEGAL REQUEST FLAG 
+      JMP EXIT      GO EXIT 
+      SPC 2 
+TYP00 LDB WRITF     IF READ 
+      STB TMP       SET READ WRITE FLAG FOR EOF TEST
+      LDA RL,I      GET THE READ WRITE LEGAL FLAG 
+      SSB,RSS       IF WRITE
+      RAR           SHIFT THE WRITE FLAG TO BIT 15
+      SSA,RSS       TEST THE FLAG 
+      JMP EX17      ILLEGAL REQUEST   GO EXIT 
+      SPC 1 
+      CCA           IF READ 
+      SSB           THEN
+      JMP TYP01     SKIP
+      CPA IL,I      EOF?
+      JMP EOFW0     YES; GO MAKE CONTROL RQ 
+      SPC 1 
+TYP01 STA SKIP      SET TYPE 0 FLAG 
+      LDA LU0,I     GET LOGICAL 
+      STA LUR       UNIT AND SET
+      LDA IL,I      GET REQUEST LENGTH
+      STA LOCLN     AND SET 
+      JMP CALEX     GO CALL EXEC
+* 
+* 
+*     C O N S T A N T S 
+N1    OCT -1
+.1    OCT 1 
+.2    OCT 2 
+.3    OCT 3 
+.128  DEC 128 
+MSIGN DEF 0,I 
+DZER0 DEF ZER0
+ZER0  NOP 
+DMBUF DEF DM
+DM    NOP 
+N11   DEC -11 
+N10   DEC -10 
+N7    OCT -7
+N12   DEC -12 
+N5    OCT -5
+B177  OCT 177 
+B1776 OCT 177600
+B70   OCT 70
+B77   OCT 77
+B240  OCT 240 
+      SPC 5 
+SKIP  NOP 
+RQ    NOP 
+LUR   NOP 
+LOCLN NOP 
+      SPC 3 
+A     EQU 0 
+B     EQU 1 
+XEQT  EQU 1717B 
+      SPC 1 
+PLENG EQU * 
+      END 

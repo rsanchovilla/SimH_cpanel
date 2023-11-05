@@ -1,0 +1,319 @@
+ASMB,R,B,L,X
+      HED SYNTAX PROCESSOR SUBROUTINES
+      NAM SYNP4,7 
+      SPC 2 
+      ENT FSC,FRCUR,FPOP
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      SPC 2 
+      EXT VAROP,LETCK,MCBOP,TBSRH,FN,PDFNS
+      EXT LENCN,GETPF,GETCR,LPCK,LTR
+      EXT STROP,RPCK,SBPUD,NUMCK
+      EXT UNMNC,UNPLC,ANOT,SYMCK,RPARB,PLUSB,ASSOB
+      EXT LWAUS 
+      SPC 2 
+OPMSK OCT 77000 
+PDFFL OCT 100017
+D100  OCT -100
+B133  OCT 133 
+MNEG  OCT 100000
+RPOP  OCT 10000 
+EXPOP OCT 24000 
+FLGBT EQU MNEG
+LPOP  OCT 13000 
+      HED FORMULA SYNTAX CHECKER
+* 
+***                          ** 
+**  <FORMULA> SYNTAX CHECKER  **
+***                          ** 
+* 
+* 
+*  FSC ANALYZES THE INPUT STRING UNDER THE ASSUMPTION 
+*  THAT A LEGITIMATE FORMULA IS THERE.  EXIT TO ERROR ON
+*  UNRECOGNIZABLE OR OBVIOUSLY INCORRECT INPUT.  EXIT TO
+*  (P+1) WHEN CONTINUED INPUT CANNOT BE A PART OF THE 
+*  FORMULA AND THE INPUT SCANNED SO FAR FORMS A COMPLETE
+*  FORMULA IN ITSELF (I.E., ... A+B TO ... EXITS AFTER
+*  THE 'B').  ON EXIT (A) HOLDS THE FIRST CHARACTER NOT 
+*  PARSED INTO THE FORMULA, (B) = 0, AND SBPTR,I = 0
+*  (END-OF-FORMULA OPERATOR).  DURING THE FORMULA PARSE,
+*  SSTAK,I HOLDS THE COUNT OF UNMATCHED LEFT PARENTHESES. 
+*  IF THE FIRST SYMBOL ENCOUNTERED IS A STRING VARIABLE,
+*  EXIT TO ERROR IF IT IS NOT ENABLED ELSE RECORD THE 
+*  VARIABLE AND ANY FOLLOWING SUBSCRIPT AND EXIT TO (P+1) 
+*  WITH THE NEXT CHARACTER IN (A), (B) = -1, AND SFLAG = -1.
+* 
+FSC   NOP 
+#FSC  CLA           SET LEFT PARENTHESIS
+      STA SSTAK,I     COUNT TO ZERO 
+      LDA .+3       SET MULTICHARACTER SEARCH 
+      STA MAXCR       TO MAXIMUM OF 3 CHARACTERS
+FSC1  CCA           ENABLE
+      STA UFLAG       UNARY OPERATORS 
+*                         * 
+**  LOOK FOR AN OPERAND  ** 
+*                         * 
+FSC2  JSB VAROP     SEEK VARIABLE OPERAND 
+      JMP FSC7      FIRST CHARACTER NOT A LETTER
+      JMP FSC13-3   SUBSCRIPTED OR STRING VARIABLE
+      JSB LETCK     SIMPLE VARIABLE.  LETTER NEXT?
+      JMP FSC13     NO
+*                                              *
+**  DOES 'AND', 'OR', 'MAX', OR 'MIN' FOLLOW  **
+**    A SIMPLE VARIABLE?                      **
+*                                              *
+      LDB .-4 
+      STA SBPTR,I   SEARCH FOR
+      LDA MCBOP       'AND', 'OR',
+      JSB TBSRH         'MAX', AND 'MIN'
+      RSS           NONE FOUND
+      JMP FSC6      FOUND 
+*                                         * 
+**  SEE IF OPERAND IS A FUNCTION RATHER  ** 
+**    THAN A SIMPLE VARIABLE.            ** 
+*                                         * 
+      LDA TEMP+2
+      ALF,ALF       WERE
+      IOR TEMP+1      TWO LETTERS 
+      CPA FN            'FN' ?
+      JMP FSC4      YES 
+      STA SBPTR,I   NO, 
+      LDA PDFNS       PREDEFINED
+      LDB .-15
+      JSB TBSRH 
+      JMP FSC11     NO
+      ALF,ALF       YES,
+      ALF,RAR         BUILD 
+      IOR PDFFL         NAME
+FSC3  STA TEMP+1    SAVE FUNCTION 
+      CCB           RETRIEVE
+      ADB SBPTR       PREVIOUS
+      STB SBPTR         OPERATOR- 
+      LDA 1,I             OPERAND 
+      AND OPMSK     REPLACE 
+      IOR TEMP+1      OPERAND 
+      STA SBPTR,I       WITH FUNCTION 
+      LDA TEMP+1
+      CPA LENCN     'LEN' ? 
+      JMP FSC0      YES 
+      LDB .-9       NO, TURN OFF
+      STB MSFLG       'MULTIPLE STORE' MODE 
+      JSB GETPF     DEMAND PARENTHSIZED 
+      JMP FSC13       FORMULA 
+FSC4  JSB GETCR     DOES
+      JSB SERRS+7,I   LETTER
+      JSB LETCK         FOLLOW? 
+      JSB SERRS+7,I NO
+      ADA D100      YES,
+      ALF             BUILD 
+      ADA .+17B         FUNCTION
+      JMP FSC3            NAME
+FSC0  ISZ SBPTR     MOVE TO CORRECT PROGRAM WORD
+      JSB GETCR     RECORD
+      JSB SERRS+22,I  LEFT
+      JSB LPCK          PARENTHESIS 
+      JSB LTR       LETTER NEXT?
+      JSB SERRS+24,I  NO
+      CPA .+44B     YES, FOLLOWED BY '$' ?
+      RSS           YES 
+      JSB SERRS+24,I  NO
+      LDA TEMP+1    RECORD
+      LDB .+53B       STRING
+      JSB STROP         VARIABLE
+      JSB GETCR     RECORD
+      JSB SERRS+23,I  RIGHT 
+      JSB RPCK          PARENTHESIS 
+      JMP FSC8
+*                                *
+**  CHECK FOR LEFT PARENTHESIS  **
+*                                *
+FSC5  LDA LPOP      RECORD
+      STA SBPTR,I     A '(' 
+      ISZ SSTAK,I   COUNT IT
+FSC6  LDB .-9       TURN OFF
+      STB MSFLG       'MULTIPLE STORE'
+      JMP FSC1          MODE
+FSC7  JSB SBPUD     UPDATE POINTER
+      CPA .+40      '(' ? 
+      JMP FSC5      YES 
+      CPA B133      NO, '[' ? 
+      JMP FSC5      YES 
+*                        *
+**  CHECK FOR A NUMBER  **
+*                        *
+      CLB           SET '+' 
+      STB SIGN        AS SIGN 
+      JSB NUMCK     SEEK A NUMBER 
+      JMP FSC9      NOT FOUND 
+      JSB SERRS+14,I  BAD EXPONENT
+      LDB SBPTR     RETRIEVE
+      ADB .-3         PRECEDING 
+      LDA 1,I           OPERATOR
+      IOR FLGBT     SET FLAG TO SAY 
+      STA 1,I         NUMBER FOLLOWS
+      LDA TEMP+1    RETRIEVE CHARACTER
+FSC8  LDB .-9       TURN OFF
+      STB MSFLG       'MULTIPLE STORE'
+      JMP FSC13         MODE
+*                                *
+**  CHECK FOR A UNARY OPERATOR  **
+*                                *
+FSC9  ISZ UFLAG     UNARY OPERATORS PERMITTED?
+      JSB SERRS+25,I  NO
+      LDB UNMNC     YES LOAD UNARY MINUS OPCODE 
+      CPA .+43      '+' ? 
+      JMP *+4       YES 
+      CPA .+45      NO, '-' ? 
+      JMP *+3       YES 
+      JSB SERRS+25,I  NO
+      LDB UNPLC     CONVERT (B) TO UNARY '+' OPCODE 
+      STB SBPTR,I   RECORD UNARY OPERATOR 
+FSC10 LDB .-9       TURN OFF
+      STB MSFLG       'MULTIPLE STORE'
+      JMP FSC2          MODE
+*                                            *
+**  CHECK POSSIBILITY OF 'NOT' RATHER THAN  **
+**    A SIMPLE VARIABLE                     **
+*                                            *
+FSC11 ISZ UFLAG     'NOT' PERMITTED?
+      JMP FSC14-1   NO
+      LDA SBPTR,I   YES 
+      ALF,ALF 
+      STA SBPTR,I 
+      LDA ANOT      SEEK
+      CCB 
+      JSB TBSRH       'NOT' 
+      JMP FSC14-1   'NOT' NOT FOUND 
+      STA SBPTR,I   FOUND 
+      CCB           ERASE 
+      ADB SBPTR 
+      LDA 1,I         SPURIOUS
+      AND OPMSK 
+      STA 1,I           OPERAND 
+      JMP FSC10 
+*                                 * 
+**  CHECK FOR RIGHT PARENTHESIS  ** 
+*                                 * 
+FSC12 LDB .-2       ')' 
+      JSB SYMCK       OR
+      DEF RPARB        ']' ?
+      JMP FSC14     NO
+      LDA RPOP      YES,
+      STA SBPTR,I     RECORD ')'
+      LDA .+41      RETRIEVE ')'
+      CCB           MATCHING
+      ADB SSTAK,I     LEFT
+      SSB               PARENTHESIS?
+      JMP FSC14     NO
+      STB SSTAK,I   YES 
+      JSB SBPUD     UPDATE POINTER
+      JSB GETCR     FETCH NEXT
+      JMP FSC14       CHARACTER 
+      JMP FSC13 
+*                                 * 
+**  CHECK FOR A BINARY OPERATOR  ** 
+*                                 * 
+      CCB           STRING VARIABLE 
+      CPB SFLAG       JUST FOUND? 
+      JMP FSC,I     YES 
+FSC13 CPA .+15B     NO, END OF STATEMENT? 
+      JMP FSC14     YES 
+      STA UFLAG     NO, DISABLE UNARY OPERATORS 
+      STA TEMP+1    SAVE CHARACTER
+      LDB .-7       SEARCH
+      STA SBPTR,I     FOR A 
+      LDA MCBOP         MULTICHARACTER
+      JSB TBSRH           BINARY OPERATOR 
+      RSS           NONE FOUND
+      JMP FSC6      FOUND 
+      LDA TEMP+1    NO, RECOVER A CHARACTER 
+      LDB MSFLG     SINGLE
+      JSB SYMCK       CHARACTER 
+      DEF PLUSB        BINARY OPERATOR? 
+      JMP *+4       NO
+      CPA EXPOP     YES, '^' ?
+      JMP FSC10     YES 
+      JMP FSC6      NO
+      CCB           ASSIGNMENT
+      JSB SYMCK 
+      DEF ASSOB      OPERATOR 
+      JMP FSC12     NO
+      LDA .-2       YES, SET FLAG 
+      STA SFLAG       TO SAY
+      JMP FSC1          STORE OCCURRED
+      SKP 
+*                    *
+**  END OF FORMULA  **
+*                    *
+      LDA TEMP+2    RETRIEVE CHARACTER
+FSC14 CLB           RECORD
+      STB SBPTR,I     END-OF-FORMULA
+      CPB SSTAK,I   ALL LEFT PARENTHESES MATCHED? 
+      JMP FSC,I     YES 
+      JSB SERRS+23,I  NO
+**                                 ** 
+***  SAVE LOCAL VARIABLES OF FSC  *** 
+**                                 ** 
+* 
+*  SAVING MSFLG, UFLAG, VAROP, GETPF, AND FSC MAKES FSC A 
+*  RE-ENTRANT SUBROUTINE.  THEY ARE SAVED ON THE SYNTAX 
+*  STACK BELOW THE ACTIVE SYNTAX BUFFER.  ON ENTRY (B)
+*  CONTAINS THE NUMBER OF WORDS TO BE SAVED.
+* 
+FRCUR NOP 
+#FRCR ISZ SSTAK     SAVE PREVIOUS '(' COUNT 
+      ADB SSTAK     SUFFICIENT
+      CMB             USER
+      ADB LWAUS         SPACE 
+      SSB                 LEFT? 
+      JSB SERRS,I   NO
+      LDB MSFLG     YES, SAVE 
+      STB SSTAK,I     'MULTIPLE STORE'
+      ISZ SSTAK         FLAG
+      LDB UFLAG     SAVE
+      STB SSTAK,I     'UNARY OPERATOR'
+      ISZ SSTAK         FLAG
+      LDB VAROP     SAVE
+      STB SSTAK,I     VAROP 
+      ISZ SSTAK         RETURN ADDRESS
+      LDB GETPF     SAVE
+      STB SSTAK,I     GETPF 
+      ISZ SSTAK         RETURN ADDRESS
+      LDB FSC       SAVE
+      STB SSTAK,I     FSC 
+      ISZ SSTAK         RETURN ADDRESS
+      CCA           DISABLE 
+      ADA SFLAG       SFLAG 
+      STA SFLAG         VALUE 
+      JMP FRCUR,I 
+**                                 ** 
+***  RESTORE FSC LOCAL VARIABLES  *** 
+**                                 ** 
+* 
+*  INVERSE OF FRCUR.  (A) IS SAVED BUT (B) IS NOT.
+* 
+FPOP  NOP 
+#FPOP STA TEMP+1    SAVE (A)
+      LDB SSTAK     RESET 
+      ADB .-6         SYNTAX STACK
+      STB SSTAK         POINTER 
+      INB           RESTORE 
+      LDA 1,I         'MULTIPLE STORE'
+      STA MSFLG         FLAG
+      INB           RESTORE 
+      LDA 1,I         'UNARY OPERATOR'
+      STA UFLAG         FLAG
+      INB           RESTORE 
+      LDA 1,I         VAROP 
+      STA VAROP         RETURN ADDRESS
+      INB 
+      DLD 1,I       RESTORE GETPF 
+      STA GETPF       RETURN ADDRESS AND
+      STB FSC           FSC RETURN ADDRESS
+      ISZ SFLAG     RESTORE SFLAG VALUE 
+      LDA TEMP+1    RESTORE (A) 
+      JMP FPOP,I
+      END 

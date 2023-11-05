@@ -1,0 +1,163 @@
+ASMB,B,R,L,C
+      NAM NAMF,7
+      EXT EXEC,.ENTR,CLOSE,NAM..,OPEN 
+      ENT NAMF
+* 
+*     NAMF IS THE FILE NAME CHANGE MODULE OF THE
+*     RTE FILE MANAGEMENT PACKADGE. 
+* 
+*     CALLING SEQUENCE: 
+* 
+*     CALL NAMF(IDCB,IERR,NAME,NNAME,IS,ILU)
+* 
+*     WHERE:
+*         IDCB  IS A 144 WORD DATA CONTROL BLOCK
+*               THIS AREA IS FREE AFTER THE CALL. 
+* 
+*         IERR  IS THE  ERROR RETURN LOCATION 
+*               ERRORS  ARE RETURNED HERE AND IN
+*               THE A REGISTER. 
+*               DEFINED ERRORS ARE: 
+* 
+* 
+*               0   NO ERROR
+*              -1   DISC DOWN 
+*              -2   DUPLICATE NAME
+*              -6   CARTRIDGE OR FILE NOT FOUND 
+*              -7   INVALID SECURITY CODE 
+*              -8   FILE CURRENTLY OPEN 
+*              -10  NOT ENOUGH PARAMETERS 
+*              -13  THE REQUIRED DISC IS LOCKED 
+*              -15  ILLEGAL NEW NAME
+* 
+*         NNAME THE NEW 6 CHARACTER FILE NAME 
+* 
+*         IS    OPTIONAL - THE FILE SECURITY CODE 
+* 
+*         ILU   OPTIONAL - THE FILES DISC ID. 
+* 
+*     PRECEEDING CONSTANTS
+* 
+N7    DEC -7
+.7    DEC 7 
+N10   DEC -10 
+      SPC 3 
+DCB   DEF ZERO      DEFINE
+IERR  DEF ZERO       PARAMATER
+NAME  DEF ZERO        ADDRESSES 
+NNAME DEF ZERO
+IS    DEF ZERO
+ILU   DEF ZERO
+      SPC 1 
+NAMF  NOP           ENTRY POINT 
+      JSB .ENTR     FETCH PARAM ADDRESSES 
+      DEF DCB        TO LOCAL LIST
+      SPC 1 
+      LDA N10       LOAD FOR NOT ENOUGH PRAM REJECT 
+      LDB NNAME     NEW NAME SUPPLIED?
+      CPB DZERO 
+      JMP EXIT      NO; GO EXIT 
+      SPC 1 
+      JSB NAM..     YES;NEW NAME
+      DEF NAM.R     LEGAL 
+      DEF NNAME,I    FOR A FILE NAME? 
+NAM.R SZA 
+      JMP EXIT      NO; EXIT
+      JSB OPEN      CALL
+      DEF OPRTN      TO 
+      DEF DCB,I       OPEN
+      DEF IERR,I       THE
+      DEF NAME,I        FILE
+      DEF ZERO           EXCLUSIVELY
+      DEF IS,I            WITH
+      DEF ILU,I            USER PRAMS 
+OPRTN SSA           SUCESSFUL  OPEN?
+      JMP EXIT      NO; EXIT
+      LDA DCB       YES; CHECK
+      ADA .7              THE 
+      LDB A,I              SECURITY 
+      LDA N7                CODE
+      SSB,RSS                MATCH? 
+      JMP CLOEX               NO; CLOSE AND EXIT
+      JSB EXEC      GET 
+      DEF EXR1       A
+      DEF .4          SYSTEM
+      DEF .1           TRACK
+      DEF TRACK 
+      DEF LU
+      DEF DCB2
+EXR1  JSB EXEC      WRITE 
+      DEF EXR2       THE
+      DEF .2          NEW 
+      DEF LU           NAME 
+      DEF NNAME,I       ON
+      DEF .128           THE
+      DEF TRACK           TRACK 
+      DEF ZERO             SECTOR ZERO
+EXR2  DLD DCB,I     GET DCB2 TO B 
+      STB DCB2       AND SAVE IT
+      LDA TRACK     FORM TRACK/LU 
+      LSL 6          WORD 
+      ADA LU          FOR 
+      STA NAME         D.RTR CALL 
+SCH   JSB EXEC      CALL
+      DEF EXR3       D.RTR
+      DEF .9          TO
+      DEF D.RTR        CHANGE 
+      DEF XEQT          THE 
+      DEF NAME           FILE 
+      DEF DCB,I           NAME
+      DEF DCB2
+      DEF .2
+EXR3  SZA           SCHEDULE
+      JMP SCH        CONFLICT- THEN TRY AGAIN 
+      LDA B,I       ERROR FLAG TO A 
+      STA NAME      SAVE IT 
+      JSB EXEC      RETURN
+      DEF EXR4       THE
+      DEF .5          SYSTEM
+      DEF .1           TRACK
+      DEF TRACK 
+      DEF LU
+      SPC 1 
+EXR4  RSS           SKIP ERROR ENTRY
+CLOEX STA NAME       SAVE ERROR CODE
+      JSB CLOSE     CLOSE 
+      DEF CLOR1      THE
+      DEF DCB,I       FILE
+CLOR1 LDB NAME      GET ERROR CODE
+      SZB            IF NONE SKIP 
+      LDA B         ELSE USE IT 
+EXIT  STA IERR,I    SET RETURN ERROR
+      LDB DZERO     RESET 
+X     REP 3          THE
+      STB *-X+NNAME   ADDRESSES 
+      JMP NAMF,I    EXIT TO USER
+      SPC 3 
+*     FOLLOWING CONSTANTS 
+      SPC 1 
+DCB2  NOP 
+LU    NOP 
+TRACK NOP 
+ZERO  NOP 
+DZERO DEF ZERO
+      SPC 2 
+*     TEMPS REFERENCED ONLY BY DEFS 
+      SPC 1 
+.1    DEC 1 
+.2    DEC 2 
+.4    DEC 4 
+.5    DEC 5 
+.9    DEC 9 
+.128  DEC 128 
+D.RTR ASC 3,D.RTR 
+      SPC 2 
+*     ASSEMBLY AIDS 
+      SPC 1 
+A     EQU 0 
+B     EQU 1 
+XEQT  EQU 1717B 
+      SPC 1 
+END   EQU *         PROG. LENGTH
+      SPC 1 
+      END 

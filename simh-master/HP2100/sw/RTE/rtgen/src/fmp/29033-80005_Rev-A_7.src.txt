@@ -1,0 +1,73 @@
+ASMB,B,R,L,C
+      NAM R/W$,7
+      EXT EXEC
+      ENT R/W$
+* 
+*  R/W$        WRITES THE CURRENT SECTOR BLOCK IF IT HAS
+*              BEEN WRITTEN ON OR READS UNCONDITIONALLY.
+* 
+*        CALL SEQUENCE: 
+* 
+*                   SET E=0 FOR WRITE  E=1 FOR READ 
+*     LDB DCB       SET B TO DCB ADDRESS
+*     JSB R/W$
+*     JMP DERR      ERROR RETURN (A = -1) 
+*                   NORMAL RETURN 
+* 
+R/W$  NOP 
+      LDA B,I       GET THE LU WORD 
+      AND B77       ISOLATE THE LU AND
+      ADA PRC 
+      STA LU        SAVE IT 
+      ADB .10       INDEX TO THE
+      STB TRACK     TRACK ADDRESS AND SET 
+      INB           SET THE SECTOR ADDRESS
+      STB SECT
+      ADB .2        GET THE WRITTEN 
+      STB WOFLG     ON FLAG ADDRESS AND SAVE
+      LDA B,I       GET THE FLAG
+      SEZ,SLA,RSS   IF NOT WRITTEN ON (SKIP ON READ)
+      JMP EXIT      EXIT
+      ADB .3        INDEX TO THE BUFFER 
+      STB BUF       SET THE BUFFER ADDRESS
+      CLA,SEZ,INA,RSS  SET A=1 IF READ
+      INA           ELSE A=2 SKIP 
+      STA RC        SET THE REQUEST CODE
+      JSB EXEC      WRITE THE 
+      DEF RTN       BLOCK 
+      DEF RC
+      DEF LU        ON LU 
+BUF   NOP           FROM BUFFER 
+      DEF .128
+TRACK NOP           AT TRACK
+SECT  NOP           AND SECTOR
+RTN   CCA           SET A FOR DISC ERROR
+      CPB .128      DISC ERROR? 
+      RSS           NO; SKIP
+      JMP R/W$,I    YES; TAKE ERROR EXIT
+      LDA WOFLG,I   GET THE WRITTEN ON FLAG 
+      SEZ,RSS       IF THIS IS A WRITE CALL 
+EXIT  CLA,CLE       CLEAR THE IN CORE FLAGS 
+      ERA,ALS       CLEAR WRITTEN ON FLAG AND SET IF READ 
+      STA WOFLG,I   RESET 
+      ISZ R/W$      TAKE OK 
+      JMP R/W$,I    EXIT
+RC    NOP 
+      SPC 2 
+.10   DEC 10
+.2    DEC 2 
+.3    DEC 3 
+LU    NOP 
+WOFLG NOP 
+.128  DEC 128 
+B77   OCT 77
+      SPC 2 
+A     EQU 0 
+B     EQU 1 
+      UNL 
+PRC   OCT 74000 
+      LST 
+      SPC 1 
+END   EQU * 
+      SPC 1 
+      END 

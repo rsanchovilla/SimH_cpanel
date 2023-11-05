@@ -1,0 +1,656 @@
+ASMB,R,B,L,X
+      HED EXECUTION SUBROUTINES 
+      NAM XEC6,7
+      SPC 2 
+      ENT SBFIX,#IFIX,RQSTR,FILST,GTTYP,WRBUF,TRSTR 
+      ENT #FAD,#FSB,OUCHK,#FMP,#FDV,#FLUN 
+      ENT TRSTB 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGHT,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,FSCHA,TEMP5 
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM FFLG,TEMP4,EORFL,NCH,TEMP6,STRLN,ATIM,LT5 
+      COM ASTYP,ASBFP,ORDNO,ATMP(2),RETCD 
+      COM DCCNT,NXTDT,VL0,RCRD#,PMASK,ITEMP 
+      COM OPTRQ,EST3,EST2,EST1,TT1,TT2,BINO1
+      COM BINO2,TT3,TT4,CP0,CP1,PS0,MPT,NQT,RT0 
+      COM RT1,TRFCH,TRS0,A1,A2,C1 
+      SPC 2 
+      EXT CHOUF,FDAT4,EXEC
+      SPC 2 
+BIT14 OCT 40000 
+M256  DEC -256
+SMSK  OCT 77600 
+FTEL  EQU 15
+BIT15 OCT 100000
+A     EQU 0 
+B     EQU 1 
+SECTR EQU 116B
+.103  OCT 103 
+EOR   OCT -2
+EOF   OCT -1
+B1000 OCT 1000
+B377  OCT 377 
+RQ2   NOP 
+RQ1   NOP 
+RQ4   NOP 
+RQ5   NOP 
+FILT  NOP 
+DADRR NOP 
+WRLEN NOP 
+      SPC 2 
+**                             ** 
+***  ROUND NUMBER TO INTEGER  *** 
+**                             ** 
+* 
+*  ENTER WITH NUMBER IN (A) AND (B).  EXIT TO (P+2) IF
+*  INTEGER FORM (ROUNDED AS NEEDED) IS POSITIVE AND NOT 
+*  LARGER THAN 15 BITS, ELSE EXIT TO (P+1).  ON EXIT TO 
+*  (P+2), (B) HOLDS THE INTEGER BIASED BY -1. 
+* 
+SBFIX NOP 
+#SBFX JSB #IFIX     TRUNCATE NUMBER 
+      JMP SBFIX,I   NUMBER TOO LARGE
+      SZA           INTEGER OVERFLOW? 
+      JMP SBFIX,I   YES 
+      SEZ,RSS       NO, ROUNDING BIT? 
+      ADB .-1       NO, BIAS INTEGER BY -1
+      SSB,RSS       YES, POSITIVE RESULT? 
+      ISZ SBFIX     YES 
+      JMP SBFIX,I   NO
+      SKP 
+**                         ** 
+***  INTEGERIZE A NUMBER  *** 
+**                         ** 
+* 
+*  ENTER WITH A FLOATING POINT NUMBER IN (A) AND (B). 
+*  IF EXPONENT EXCEEDS 23, NUMBER HAS INTEGER SIGNIFICANCE; 
+*  EXIT TO (P+1).  ALL OTHER CASES EXIT TO (P+2) WITH 32-BIT
+*  INTEGER RIGHT JUSTIFIED IN (A) AND (B).  ON EXIT (O) = 0 
+*  IF NUMBER IS EXACTLY REPRESENTABLE AS A 16-BIT INTEGER.
+*  IF EXPONENT IS NEGATIVE, TRUNCATE TO 0 OR -1 APPROPRIATELY 
+*  AND LET (O) = 1.  OTHERWISE RIGHT JUSTIFY INTEGER AND EXIT 
+*  WITH LAST BIT LOST IN (E). 
+* 
+#IFIX NOP 
+      STA TEMP6     SAVE (A)
+      STO           SET 'NOT ONE-WORD INTEGER' MODE 
+      JSB #FLUN     UNPACK (B)
+      SSA           NEGATIVE EXPONENT?
+      JMP IFIX3     YES 
+      ADA .-16      NO, EXPONENET 
+      SSA             <= 15?
+      CLO           YES 
+      ADA .-8       NO, EXPONENT
+      SSA,RSS         <= 23?
+      JMP #IFIX,I 
+      ADA .-8       YES, MOVE BINARY POINT TO END OF
+      STA EXP         (B) AND SAVE SHIFT COUNT
+      LDA TEMP6     RETRIEVE (A)
+      JMP IFIX2 
+IFIX1 CLE,SLA,ARS   SHIFT (A) RIGHT 
+      CME           SHIFT 
+      SLB,ERB         (B) RIGHT 
+      STO           LOST A 1
+IFIX2 ISZ EXP       ALL SHIFTS DONE?
+      JMP IFIX1     NO
+      ISZ #IFIX     YES 
+      JMP #IFIX,I 
+IFIX3 LDA TEMP6     RETRIEVE (A)
+      CLE,SSA       TRUNCATE
+      CCA,RSS         TO
+      CLA,RSS           -1
+      CCB,RSS            OR 
+      CLB                   0 
+      JMP IFIX3-2 
+      SKP 
+**                      **
+***  REQUEST A RECORD  ***
+**                      **
+* 
+*  UPON ENTRY (A) HOLDS A FILE NUMBER (POSITIVE FOR A READ
+*  REQUEST, NEGATIVE FOR A WRITE REQUEST) AND (B) SPECIFIES 
+*  VALIDATION OF THE FILE'S EXISTENCE ( (B) = -2) OR THE FILE 
+*  RECORD TO BE PUT IN THE FILE BUFFER ( (B) = -1 REQUESTS
+*  THE RECORD WHICH FOLLOWS THE ONE CURRENTLY IN THE BUFFER,
+*  (B) >= 0 REQUESTS RECORD (B)+1 ).  EXIT TO ERROR IF THE
+*  FILE DOES NOT EXIST OR A WRITE REQUEST IS GIVEN FOR A
+*  READ-ONLY FILE.  EXIT TO THE END-OF-FILE CODE IF THE 
+*  REQUESTED RECORD DOES NOT EXIST.  OTHERWI, THE DIRTY 
+*  BIT IS EXAMINED TO DETERMINE IF THE FILE BUFFER SHOULD 
+*  BE WRITTEN BACK TO DISC. 
+*  A READ REQUEST READS THE REQUESTED RECORD INTO THE BUFFER; 
+*  A WRITE REQUEST MERELY INITIALIZES THE BUFFER TO 'EMPTY'.
+*  THE FILE TABLE IS UPDATED TO REFLECT THE CHANGES.
+* 
+RQSTR NOP 
+#RQST STB RQ2       SAVE RECORD REFERENCE 
+      CCB           GET 1'S COMPLEMENT
+      SSA             OF FILE NUMBER AND
+      CLB,RSS           SET RQ1 = -1 FOR A
+      CMA                 READ REQUEST OR 0 
+      STB RQ1               FOR A WRITE REQUEST 
+      ADA FCNTR     DOES REQUESTED
+      CMA,SSA,RSS     FILE EXIST? 
+      JSB RERRS+35,I  NO
+      ADA FCNTR     YES 
+      MPY .+FTEL    SET POINTER 
+      ADA FILTB       TO FILE TABLE 
+      STA FBASE         ENTRY 
+      LDA FBASE,I   LOAD NUMBER OF RECORDS
+      SZA,RSS       DOES FILE EXIST?
+      JSB RERRS+35,I
+      LDB FBASE 
+      ADB .+4 
+      STB FBASE 
+      CCB,CLE 
+      SSA           READ-ONLY FILE? 
+      CPB RQ1       YES, READ REQUEST?
+      ELA,CLE,SLA,ERA    YES, CLEAR BIT 15 AND SKIP 
+      JSB RERRS+36,I  NO
+      LDB RQ2       FILE VALIDATION 
+      CPB .-2         ONLY? 
+      JMP RQST9     YES 
+      ISZ RQ2       NO, RECORD SPECIFIED? 
+      JMP RQST2     YES 
+      LDB FBASE,I   NO, GET HIGH OLD RECORD ADDRESS 
+      CPB BIT15     NULL RECORD?
+      JMP RQST6     YES 
+      ISZ FBASE     NO, COMPUTE 
+      LDB FBASE,I     RECORD'S
+      ISZ FBASE         DISTANCE
+      ISZ FBASE           FROM
+      CMB                   FIRST 
+      ADB FBASE,I             RECORD
+      CMB 
+      STB RQ5 
+      LDA .-3 
+      ADA FBASE 
+      STA B 
+      ADA .+2 
+      LDA A,I 
+      CMA,INA 
+      ADA B,I 
+      MPY SECTR 
+      ADA RQ5 
+      STA B 
+      LDA .-7       GET RECORD
+      ADA FBASE       COUNT BACK
+      LDA A,I           INTO A
+      ELA,CLE,ERA   CLEAR BIT 15
+      BRS           NEW RECORD
+      INB             NUMBER
+      JMP RQST7 
+RQST6 CLB           NO RECORD IN CORE 
+RQST2 ISZ FBASE     ADJUST POINTER
+      ISZ FBASE       TO LOW WORD 
+      ISZ FBASE         OF BASE ADDRESS 
+RQST7 CMA,INA       DOES
+      ADA 1           RECORD
+      SSA               EXIST?
+      JMP *+4       YES 
+      ISZ FBASE     NO, CORRECT FBASE 
+      ISZ FBASE 
+      JMP FDAT4 
+      RBL 
+      ADB FBASE,I 
+      LDA B 
+      CLB 
+      DIV SECTR 
+      STB RQ2 
+      LDB FBASE 
+      ADB .-1 
+      ADA B,I 
+      STA RQ4 
+      LDB .-6       GET 
+      ADB FBASE       NEGATIVE
+      LDB B,I           OF BUFFER 
+      BLR,RBR 
+      STB RQ5       SAVE IT 
+      CMB,INB 
+      ISZ FBASE     SET POINTER 
+      ADB FBASE,I     TO BEGINNING
+      ISZ FBASE 
+      STB FBASE,I       OF RECORD BUFFER
+      STB RQ3       SAVE ADDRESS OF BUFFER
+      STB RQ3BF 
+      LDB FBASE     MOVE TO 
+      ADB .-4 
+      STB FBASE         ADDRESSES 
+      ADB .-1 
+      LDB B,I         RECORD
+      CPB BIT15         IN CORE?
+      JMP RQS15     NO, SKIP COMPARE AND WRITE
+      CPA B 
+      RSS 
+      JMP RQS25 
+RQS20 LDA RQ2 
+      CPA FBASE,I 
+      JMP RQST3     YES 
+RQS25 JSB WRBUF 
+RQS15 EQU * 
+      ISZ RQ1       READ REQUEST? 
+      JMP RQST4     NO
+      JSB EXEC
+      DEF *+7 
+      DEF .-1 
+      DEF .103
+RQ3BF NOP 
+      DEF RQ5 
+      DEF RQ4 
+      DEF RQ2 
+      JMP RQST5 
+RQST3 ISZ RQ1       WRITE REQUEST?
+      RSS           YES 
+      JMP RQS14     NO, GO FINISH UP
+RQST4 LDB EOR       SCRATCH RECORD
+      STB RQ3,I       WITH END-OF-RECORD MARK 
+      JMP RQS14     GO FINISH UP
+RQST5 LDB FBASE     GET 
+      ADB .+9         PROTECT 
+      LDA B,I           MASK
+      SZA,RSS       IS IT ZERO? 
+      JMP RQS14     YES, SKIP MASKING 
+      STA PMASK     NO, SAVE MASK 
+      ADB .-6       ADJUST FBASE TO 
+      STB FBASE       BUFFER LIMIT POINTER
+      LDB RQ3 
+RQS11 CPB FBASE,I   DONE ?
+      JMP RQS13     YES 
+      LDA 1,I       NO
+      CPA EOR        EOR ?
+      JMP RQS13 
+      CPA EOF        EOF ?
+      JMP RQS13 
+      AND M256
+      CPA B1000      STRING ? 
+      JMP *+3 
+      ADB .+2        SKIP TWO WORDS 
+      JMP RQS11 
+      LDA 1,I        YES
+      AND B377
+      ADA .+3 
+      ARS 
+      ADA 1 
+      STA ATMP
+RQS12 INB           MASK
+      CPB ATMP
+      JMP RQS11       STRING
+      LDA 1,I 
+      XOR PMASK 
+      STA 1,I 
+      JMP RQS12 
+RQS13 LDA FBASE     RESTORE 
+      ADA .-3 
+      STA FBASE      FBASE
+RQS14 EQU * 
+      LDA RQ2 
+      STA FBASE,I     NEW RECORD INTO FILE TABLE
+      LDA RQ4 
+      CCB 
+      ADB FBASE 
+      STB FBASE 
+      STA B,I 
+RQST9 LDB FBASE     MOVE POINTER
+      ADB .+5         TO REFERENCE
+      STB FBASE         RECORD POINTER
+      JMP RQSTR,I 
+      SKP 
+**                        **
+*** STORE ITEM IN FILE  *** 
+**                        **
+* 
+*  UPON ENTRY (B) INDICATES WHAT IS TO BE WRITTEN ON THE FILE:
+*  (B) = -1 WRITES AN END-OF-FILE MARK, (B) = -2 WRITES A TWO-
+*  WORD FLOATING POINT NUMBER, (B) = -3 WRITES A STRING.  IF
+*  THE RECORD CANNOT ACCOMMODATE THE QUANTITY, A SERIAL WRITE 
+*  WILL PLACE IT IN THE FOLLOWING RECORD WHILE A RECORD WRITE 
+*  WILL EXIT TO THE END-OF-FILE CODE. 
+* 
+FILST NOP 
+#FILS STB FILT      SAVE REQUEST TYPE 
+      LDB FBASE     GET 
+      ADB .+5         PROTECT 
+      LDB 1,I           MASK
+      STB PMASK 
+      CCB           LOAD
+      ADB FBASE       ACTIVE AND LIMIT
+      DLD 1,I           RECORD POINTERS 
+      CPA 1         RECORD FULL?
+      JMP FILS1     YES 
+      STB DADRR     NO, SAVE ACTIVE POINTER 
+      ISZ FILT      EOF REQUEST?
+      JMP FILS2     NO
+      CCA           YES,OVERLAY PREVIOUS
+      STA 1,I         EOR OR EOF WITH EOF MARK
+FILS7 LDB FBASE     MAKE POINTER TO SECOND WORD OF
+      ADB .-8         FILE TABLE ENTRY. 
+      LDA B,I       SET BUFFER
+      IOR BIT15       DIRTY 
+      STA 1,I           BIT.
+      JMP FILST,I 
+FILS2 ISZ FILT      STRING? 
+      JMP FILS6     YES 
+      ADB .+2       NO
+FILS3 CMA,INA       COMPARE PROSPECTIVE 
+      ADA 1           ACTIVE POINTER WITH 
+      CMA,INA           END-OF-RECORD POINTER 
+      SSA           OVERFLOW? 
+      JMP FILS0     YES 
+      STB FBASE,I   NO, SAVE NEW ACTIVE POINTER 
+      SZA,RSS       RECORD EXACTLY FULL?
+      JMP FILS4     YES 
+      LDA EOR       NO, FOLLOW ENTRY SPACE
+      STA 1,I         WITH EOR MARK 
+FILS4 ISZ FILT      STRING? 
+      JMP FILS5     NO
+      LDA TNULL     YES 
+      CMA           COMPUTE AND 
+      IOR B1000       STORE STRING
+      STA DADRR,I       HEADER WORD 
+      LDA FSCHA     TRANSFER
+      JSB TRSTR       STRING
+      JMP FILS7 
+FILS5 DLD SBPTR,I   TRANSFER
+      XOR PMASK     MASK
+      STA SWPTP 
+      LDA 1 
+      LDB SWPTP 
+      XOR PMASK      DATA 
+      STA SWPTP 
+      LDA 1 
+      LDB SWPTP 
+      DST DADRR,I     NUMBER
+      JMP FILS7 
+FILS6 INB           COMPUTE 
+      RBL 
+      STB TEMP5         ADDRESS 
+      CMB,INB       COMPUTE 
+      ADB TNULL       RECORD
+      CMB,INB           SPACE 
+      CLE,ERB 
+      JMP FILS3 
+FILS0 LDA EOR       INSURE EOR MARK 
+      STA DADRR,I     ENDS PRESENT RECORD 
+      LDA .-2       RESTORE 
+      ADA FILT       REQUEST
+      STA FILT        TYPE
+FILS1 CCB 
+      CPB RCRD#     SERIAL WRITE? 
+      RSS           YES 
+      JMP FDAT4 
+      LDA FILE#     REQUEST 
+      CMA             RECORD
+      JSB RQSTR         TO WRITE
+      JMP #FILS+1 
+**                             ** 
+***  GET NEXT FILE ITEM TYPE  *** 
+**                             ** 
+* 
+*  THE NEXT ITEM IN THE FILE, NUMBER, STRING, END-OF-FILE, OR 
+*  END-OF-RECORD, IS IDENTIFIED AND UPON EXIT (A) =1,2,3, OR 4
+*  RESPECTIVELY.  EORFL = -1 WILL IGNORE END-OF-RECORD'S AND
+*  RETURN WITH THE FIRST OF THE OTHER ITEMS ENCOUNTERED.
+* 
+GTTY1 LDA FILE#     REQUEST 
+      JSB RQSTR       NEXT RECORD 
+      JMP #GTTY 
+GTTYP NOP 
+#GTTY CCB           LOAD ACTIVE 
+      ADB FBASE       AND LIMIT 
+      DLD 1,I           RECORD POINTERS 
+      CPA 1         PHYSICAL END OF RECORD? 
+      JMP GTTY3     YES 
+      LDA 1,I       NO, LOAD WORD 
+      CLB,INB         OF RECORD 
+      CPA EOR       END-OF-RECORD?
+      JMP GTTY3     YES 
+      CPA EOF       NO, END-OF-FILE?
+      JMP GTTY4     YES 
+      AND M256      NO
+      CPA B1000     STRING? 
+      INB           YES, (B) = 2
+GTTY2 LDA 1         SET (A) = (B) 
+      JMP GTTYP,I 
+GTTY3 LDB FBASE     PHYSICAL
+      ADB .-5       NULL RECORD 
+      LDA B,I 
+      CPA BIT15       IN CORE?
+      JMP GTTY6     YES, SKIP COMPARE 
+      ADB .-2       NO. PHYSICAL
+      CPA B,I         END-OF-FILE?
+      RSS           MAYBE. CONTINUE CHECKING
+      JMP GTTY6     NO
+      INB           PHYSICAL
+      LDA B,I         END 
+      ADB .+2           OF
+      CPA B,I             FILE? 
+      JMP GTTY5     YES 
+GTTY6 EQU * 
+      CCB           NO
+      CPB EORFL     EOR'S WANTED? 
+      JMP GTTY1     NO
+      LDB .+2       YES, SET (B) = 4
+GTTY4 ADB .+2       (B) = (B) + 2 
+      JMP GTTY2 
+GTTY5 LDA .+3       (A) = 3 
+      JMP GTTYP,I 
+SWPTP NOP 
+**                          **
+***  WRITE BUFFER TO DISC  ***
+**                          **
+* 
+*  THE BUFFER OF THAT FILE CURRENTLY REFERENCED BY FBASE IS 
+*  WRITTEN TO ITS PLACE ON THE DISC, UNLESS NOTHING HAS BEEN
+*  WRITTEN INTO THE BUFFER. 
+* 
+WRBUF NOP 
+#WRBU LDB FBASE     LOAD SECOND 
+      ADB .-4         WORD FROM 
+      LDA B,I           FILE TABLE
+      ELA                 ENTRY (RECORD LENGTH) 
+      SEZ,CLE,RSS   HAS BIT 15 BEEN SET?
+      JMP WRBUF,I   NO
+      ERA           YES, CLEAR IT 
+      STA B,I       STORE IT BACK 
+      ADB .+3       GET HIGH CURRENT
+      LDA B,I         RECORD ADDRESS
+      CPA BIT15     NULL RECORD?
+      JMP WRBUF,I   YES, DON'T WRITE RECORD OUT 
+      ADB .+10      GET 
+      LDA B,I         PROTECT MASK
+      SZA,RSS       IS IT ZERO? 
+      JMP WRBU7     YES, SKIP STRING MASKING
+      STA PMASK     NO, SAVE MASK 
+      ADB .-6       ADJUST FBASE TO 
+      STB FBASE       BUFFER LIMIT POINTER
+      LDB RQ3 
+WRBU4 CPB FBASE,I    DONE ? 
+      JMP WRBU6 
+      LDA 1,I       NO
+      CPA EOR        EOR ?
+      JMP WRBU6 
+      CPA EOF        EOF ?
+      JMP WRBU6 
+      AND M256
+      CPA B1000      STRING ? 
+      JMP *+3 
+      ADB .+2        SKIP TWO WORDS 
+      JMP WRBU4 
+      LDA 1,I        YES
+      AND B377
+      ADA .+3 
+      ARS 
+      ADA 1 
+      STA ATMP
+WRBU5 INB 
+      CPB ATMP
+      JMP WRBU4 
+      LDA 1,I 
+      XOR PMASK 
+      STA 1,I 
+      JMP WRBU5 
+WRBU6 LDB FBASE 
+      ADB .-3 
+      STB FBASE 
+      ADB .+9       => PMASK WORD 
+WRBU7 ADB .-13      => WORDS/RECORD WORD
+      LDA B,I 
+      IOR BIT14     SET FILE
+      STA B,I         DIRTY BIT 
+      ALR,RAR       CLEAR DIRTY BITS AND
+      STA WRLEN 
+      LDA RQ3 
+      STA RQ3B
+      ADB .+3 
+      STB WRTRK 
+      INB 
+      STB WRSEC 
+      JSB EXEC
+      DEF *+7 
+      DEF .-2 
+      DEF .103
+RQ3B  NOP 
+      DEF WRLEN 
+WRTRK NOP 
+WRSEC NOP 
+      JMP WRBUF,I 
+**                       ** 
+***  TRANSFER A STRING  *** 
+**                       ** 
+* 
+*  THE NUMBER OF CHARACTERS SPECIFIED BY TNULL (IN 1'S
+*  COMPLEMENT) IS TRANSFERRED FROM THE SOURCE STRING TO 
+*  A DESTINATION STRING BEGINNING WITH THE CHARACTER
+*  ADDRESSED BY TEMP5.
+* 
+TRSTR NOP 
+#TRST STA TRFCH     SAVE SUBROUTINE CALL
+      ISZ TNULL     MORE TRANSFER STRING? 
+      RSS           YES 
+TRSTB JMP TRSTR,I 
+      JSB TRFCH,I   FETCH A SOURCE CHARACTER
+      LDA .+40B     NONE LEFT, LOAD A BLANK 
+      STA TRS0      SAVE IT 
+      LDB TEMP5     LOAD
+      CLE,ERB         DESTINATION 
+      LDA 1,I           WORD
+      SEZ,RSS       SAVE
+      ALF,ALF         OTHER 
+      AND M256          CHARACTER 
+      IOR TRS0      COMBINE WITH
+      SEZ,RSS         NEW CHARACTER 
+      ALF,ALF           AND STORE 
+      STA 1,I             WORD
+      ISZ TEMP5     INCREMENT DESTINATION ADDRESS 
+      JMP #TRST+1 
+      HED ARITHMETIC SUBROUTINES
+**
+***   ADD TWO FLOATING POINT NUMBERS
+**
+#FAD  NOP 
+      STA A1        SET POINTER TO 2ND ARGUMENT 
+      LDA #FAD,I
+      STA A2
+      LDA A1
+      FAD A2,I
+      ISZ #FAD      SET RETURN ADDRESS
+      SOC 
+      JSB OUCHK      OVERFLOW OR UNDERFLOW! 
+      JMP #FAD,I    RETURN
+**
+***   SUBTRACT TWO FLOATING POINT NUMBERS 
+**
+#FSB  NOP 
+      STA A1        SET POINTER TO 2ND ARGUMENT 
+      LDA #FSB,I
+      STA A2
+      LDA A1
+      FSB A2,I
+      ISZ #FSB      SET RETURN ADDRESS
+      SOC 
+      JSB OUCHK      OVERFLOW OR UNDERFLOW! 
+      JMP #FSB,I    RETURN
+**
+***   DETERMINES IF OVERFLOW OR UNDERFLOW 
+***   MESSAGE HAS TO BE GIVEN.
+**
+OUCHK NOP 
+#OUCK STA A1         SAVE REGISTERS.
+      STB A2
+      SZA            OVER- OR UNDERFLOW?
+      JMP OUCK2 
+      JSB CHOUF      UNDERFLOW! CHECK STATUS. 
+      JSB WERRS+6,I 
+OUCK1 EQU * 
+      LDA A1         RE-INSTATE REGISTERS.
+      LDB A2
+      JMP OUCHK,I    RETURN.
+OUCK2 EQU * 
+      JSB CHOUF      OVERFLOW! CHECK STATUS.
+      JSB WERRS+5,I 
+      JMP OUCK1 
+**
+**                                         ** 
+***  MULTIPLY TWO FLOATING POINT NUMBERS  *** 
+**                                         ** 
+#FMP  NOP 
+      STA A1        SET POINTER TO 2ND ARGUMENT 
+      LDA #FMP,I
+      STA A2
+      LDA A1
+      FMP A2,I
+      ISZ #FMP      SET RETURN ADDRESS
+      SOC 
+      JSB OUCHK      OVERFLOW OR UNDERFLOW! 
+      JMP #FMP,I    RETURN
+**
+***   DIVIDE TWO FLOATING POINT NUMBERS 
+**
+#FDV  NOP 
+      STA A1        SET POINTER TO 2ND ARGUMENT 
+      LDA #FDV,I
+      STA A2
+      LDA A1
+      FDV A2,I
+      ISZ #FDV      SET RETURN ADDRESS
+      SOC 
+      JSB OUCHK      OVERFLOW OR UNDERFLOW! 
+      JMP #FDV,I    RETUNR
+**
+***  UNPACK LOW WORD OF NUMBER  *** 
+**
+* 
+*  ENTER WITH LOW WORD OF FLOATING POINT NUMBER IN (B). 
+*  EXIT WITH EXPONENT IN (A) AND MANTISSA IN (B). 
+* 
+#FLUN NOP 
+      STB SWPTP 
+      LDA 1 
+      ALF,ALF 
+      AND B377
+      STA 1 
+      LDA SWPTP 
+      AND B377
+      BLF,BLF             MANTISSA IN (B) 
+      SLA,RAR       NEGATIVE EXPONENT?
+      IOR SMSK      YES, FILL IN LEADING BITS 
+      JMP #FLUN,I   NO
+      END 
+                                                                                                                                                                                    

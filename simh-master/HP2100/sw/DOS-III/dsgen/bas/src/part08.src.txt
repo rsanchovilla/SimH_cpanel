@@ -1,0 +1,1156 @@
+ASMB,R,B,L,X
+      HED EXECUTION SUBROUTINES 
+      NAM XEC5,7
+      SPC 2 
+      ENT PSTR,STSTR,FSCH,OPCHK,FINCA,FENCA,FCUCA 
+      ENT FORMX,FOR10 
+      ENT FSCHB 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGHT,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,FSCHA,TEMP5 
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM FFLG,TEMP4,EORFL,NCH,TEMP6,STRLN,ATIM,LT5 
+      COM ASTYP,ASBFP,ORDNO,ATMP(2),RETCD 
+      COM DCCNT,NXTDT,VL0,RCRD#,PMASK,ITEMP 
+      COM OPTRQ,EST3,EST2,EST1,TT1,TT2,DMY1 
+      COM DMY2,TT3,TT4,CP0,CP1,PS0,MPT,NQT,RT0
+      COM RT1 
+      COM ZZ(79),TEMP3
+      SPC 2 
+      EXT INF,#FSB,GETCR
+      EXT TRSTB,CUSP,LWAUS
+      EXT TRSTB,FOPBS,PDFBS,ARINV,SBFIX,CUSP,TRSTR,#FAD 
+      EXT #FMP,#FDV,#IFIX,.LOG,.EXP 
+      SPC 2 
+FSCHB DEF FSCH
+OPDMK OCT 100777
+LBOP  OCT 12000 
+D66   OCT -66 
+HALF  DEC 0.5 
+OPMSK OCT 77000 
+BINO1 NOP 
+BINO2 NOP 
+      JMP BINOP,I 
+B377  OCT 377 
+.73   DEC 73
+M256  DEC -256
+M96   DEC -96 
+M32   DEC -32 
+.140  OCT 140 
+MNEG  OCT 100000
+A     EQU 0 
+B     EQU 1 
+BIT15 EQU MNEG
+***  INSURE VALID POWERING  *** 
+**                           ** 
+* 
+*  INSURES THAT A^B HAS ACCEPTABLE ARGUMENTS.  A=B=0 IS A NON-
+*  RECOVERABLE ERROR.  A=0 AND B<0 PRINTS A WARNING MESSAGE AND 
+*  RETURNS THE MAXIMUM POSITIVE NUMBER AS THE RESULT. 
+* 
+PCHK  NOP 
+#PCHK STB BINO1     LOAD HIGH PART
+      LDB BINO2,I     OF POWER
+      SZA           BASE ZERO?
+      JMP PCHK1     NO
+      SZB,RSS       YES, POWER ZERO?
+      JSB RERRS+29,I  YES 
+      SSB,RSS       NO, POWER POSITIVE? 
+      JMP FALSE     YES 
+      JSB WERRS+2,I NO
+      LDA INF       USE POSITIVE
+      LDB .-2         INFINITY
+      JMP FOR14         FOR RESULT
+PCHK1 SZB,RSS       POWER ZERO? 
+      JMP TRUE      YES, TAKE RESULT AS 1.0 
+      JMP PCHK,I    NO
+      SKP 
+**                                   ** 
+***  COMPARE TOP OPERANDS OF STACK  *** 
+**                                   ** 
+* 
+*  ON EXIT (A) IS NEGATIVE IF THE TOP OPERAND OF THE
+*  STACK IS GREATER THAN THE NEXT-TO-TOP OPERAND, 
+*  POSITIVE IF IT IS LESS, AND ZERO IF THEY ARE EQUAL.
+* 
+COMPR NOP 
+#CMPR LDA OPDST,I   STRING
+      SSA             ARGUMENTS?
+      JMP COMP1     YES 
+      JSB BINOP     NO, COMPARE 
+      JSB #FSB        NUMERICAL 
+      JMP COMPR,I       OPERANDS
+COMP1 LDA .-2       PREPARE 
+      JSB PSTR        COMPARISON
+      STA TEMP4         STRING
+      STB TPRME 
+      LDA TNULL     SAVE SPECIFIED
+      STA CP0         LENGTH
+      LDA .-2       PREPARE 
+      JSB PSTR        TEST STRING 
+      STB CP1       SAVE ACTUAL LENGTH
+      ISZ TMPST     RESERVE SPACE 
+      ISZ TMPST       FOR RESULT
+COMP2 ISZ CP0       MORE SPECIFIED STRING?
+      JMP COMP3     YES 
+      CLB           NO, LOAD A
+      JMP COMP4       NULL CHARACTER
+COMP3 JSB FSCH      LOAD NEXT 
+      LDA .+40B       COMPARISON
+      LDB 0             CHARACTER 
+COMP4 ISZ TNULL     MORE SPECIFIED TEST STRING? 
+      JMP COMP6     YES 
+      CLA           NO, LOAD NULL CHARACTER 
+COMP5 CMB,INB       COMPARE 
+      ADA 1           CHARACTERS
+      SZA,RSS       EXIT ON NOT EQUAL 
+      SZB,RSS         OR BOTH NULL
+      JMP COMPR,I       CHARACTERS
+      JMP COMP2 
+COMP6 LDA CP1       MORE ACTUAL 
+      INA,SZA         TEST STRING?
+      JMP COMP7     YES 
+      LDA .+40B     NO, LOAD A BLANK
+      JMP COMP5 
+COMP7 STA CP1 
+      LDA TEMP5     EXTRACT 
+      CLE,ERA 
+      LDA 0,I         NEXT
+      SEZ,RSS 
+      ALF,ALF           TEST
+      AND B377
+      ISZ TEMP5           CHARACTER 
+      JMP COMP5 
+      SKP 
+**                           ** 
+***  PREPARE STRING OPERAND  ** 
+**                           ** 
+* 
+*  THE STRING ADDRESS ON TOP OF THE OPERAND STACK IS COMBINED 
+*  WITH THE SUBSCRIPTS IN A PSUEDO-ENTRY ON THE TEMPORARY STACK 
+*  TO FORM A STRING OPERAND.  (A) = -2 UPON ENTRY FOR A SOURCE
+*  STRING; (A) = -1 FOR A DESTINATION STRING.  THE ADDRESS OF 
+*  THE FIRST CHARACTER OF THE STRING OPERAND IS LEFT IN TEMP5;
+*  FOR SOURCE STRINGS (A) = TEMP5 UPON EXIT.  THE REQUESTED 
+*  STRING LENGTH (IN CHARACTERS) IS LEFT IN TNULL; FOR SOURCE 
+*  STRINGS THE ACTUAL STRING LENGTH (WHICH MAY BE LESS THAN THE 
+*  REQUESTED LENGTH) IS IN (B) UPON EXIT.  THE FOLLOWING
+*  CONDITIONS EXIT TO ERROR:  NEGATIVE STRING LENGTH, REQUESTED 
+*  DESTINATION STRING WOULD EXCEED PHYSICAL STRING BOUNDARY, OR 
+*  REQUESTED DESTINATION STRING WOULD PRODUCE A STRING QUANTITY 
+*  WITH TWO UNCONNECTED PARTS.  THE LOGICAL LENGTH OF A 
+*  DESTINATION STRING IS ADJUSTED AS NEEDED.
+* 
+PSTR  NOP 
+#PSTR STA PS0       SAVE MODE FLAG
+      JSB OPCHK     UNSTACK OPERAND 
+      STB PS1       SET FLAG POSITIVE 
+      RBL       SAVE ADDRESS OF FIRST 
+      STB TEMP5       CHARACTER OF STRING 
+      RBR       SAVE
+      ADB .-1         POINTER TO
+      STB TEMP6         STRING LENGTH 
+      LDB TMPST     LOAD
+      ADB .+2         START-OF-STRING 
+      LDA 1,I           DESIGNATOR
+      STA MPT       SAVE IT 
+      ADA TEMP5     RECORD CHARACTER ADDRESS
+      STA TEMP5       OF START-OF-STRING
+      STA SBPTR     SAVE ADDRESS
+      INB           LOAD
+      LDA 1,I         END-OF-STRING DESIGNATOR
+      INA,SZA       SPECIFIED?
+      JMP PSTR2     YES 
+      CCA           NO
+      CPA PS0       'SOURCE' MODE?
+      JMP PSTR1     NO
+      LDA TEMP6,I   YES, LOAD STRING'S
+      AND B377        LOGICAL LENGTH
+      JMP PSTR2 
+PSTR1 STA PS1       SET FLAG TO -1
+      LDA TPRME     COMPUTE 
+      CMA             END-OF-STRING 
+      ADA MPT           DESIGNATOR
+PSTR2 STA NQT       SAVE IT 
+      CMA           IS LENGTH 
+      ADA MPT         OF SPECIFIED STRING 
+      SSA,RSS           NEGATIVE? 
+      JSB RERRS+18,I  YES 
+      STA TNULL 
+      ADA .73      >72? 
+      SSA 
+      JSB RERRS+20,I
+      LDA TEMP6,I   DOES
+      AND B377        START-OF-STRING 
+      CMA               CHARACTER 
+      ISZ PS0             RELATE TO 
+      INA                   PREVIOUS
+      ADA MPT                 VALUE 
+      SSA,RSS                   OF STRING?
+      JMP PSTR3     NO
+      LDA TEMP6,I   YES, EXTRACT
+      ISZ PS0         END-OF- 
+      ALF,ALF           PERMITTED-STRING
+      AND B377            DESIGNATOR
+      CMA           COMPUTE DIFFERENCE FROM 
+      ADA NQT         END OF SPECIFIED STRING -1
+      CLB,INB       'SOURCE'
+      CPB PS0         MODE? 
+      JMP PSTR5     NO
+      LDB TNULL     YES, SPECIFIED SOURCE STRING
+      INA             CONTAINED WITHIN
+      SSA,RSS           DEFINED SOURCE STRING?
+      ADB 0         NO, CORRECT LENGTH
+      JMP PSTR4       OF ACTUAL SOURCE STRING 
+PSTR3 ISZ PS0       'SOURCE' MODE?
+      JSB RERRS+19,I  NO
+      CCB           YES, SET ACTUAL LENGTH TO 0 
+PSTR4 LDA TEMP5     LOAD START-OF-STRING
+      JMP PSTR,I      CHARACTER ADDRESS 
+PSTR5 SSA,RSS       PHYSICAL STORAGE OVERFLOW?
+      JSB RERRS+20,I  YES 
+      ISZ PS1       END-OF-STRING SPECIFIED?
+      JMP PSTR7     YES 
+PSTR6 LDA TEMP6,I   NO, 
+      AND M256        RESET 
+      IOR NQT           LOGICAL LENGTH
+      STA TEMP6,I         OF STRING 
+      JMP PSTR,I
+PSTR7 LDA TEMP6,I   IS NEW
+      AND B377        DESTINATION 
+      CMA               STRING
+      ADA NQT             LONGER
+      SSA,RSS               THAN OLD? 
+      JMP PSTR6     YES 
+      JMP PSTR,I    NO
+**                           ** 
+***  STACK STRING CONSTANT  *** 
+**                           ** 
+* 
+*  SEE NOTE AT FOR13 OF ROUTINE FORMX 
+* 
+STSTR NOP 
+#STST ISZ OPDST     STACK 
+      ISZ OPDST       NEGATIVE
+      LDA TEMP1         OF
+      CMA                 STRING
+      STA OPDST,I           ADDRESS 
+      LDA TEMP1,I   COMPUTE 
+      AND B377        STRING
+      CCB               LENGTH
+      ADB 0               -1
+      ADA .+3       UPDATE
+      ARS             INTRA-STATEMENT 
+      ADA TEMP1          POINTER
+      STA TEMP1           PAST STRING 
+      JSB RSCHK     CREATE TEMPORARY
+      CLA           RECORD
+      DST TMPST,I     (0,(B) )
+      JMP STSTR,I 
+**                            **
+***  FETCH SOURCE CHARACTER  ***
+**                            **
+* 
+*  CHARACTER ADDRESS IN TEMP4, SOURCE CHARACTER COUNT 
+*  IN TPRME (IN 1'S COMPLEMENT).  EXIT TO (P+1) ON NO 
+*  MORE CHARACTERS (TPRME = -1) ELSE EXIT TO (P+2) WITH 
+*  NEXT CHARACTER IN (A). 
+* 
+FSCH  NOP 
+#FSCH LDA TPRME     MORE
+      INA,SZA,RSS     CHARACTERS? 
+      JMP FSCH,I    NO
+      STA TPRME     YES, UPDATE CHARACTER COUNT 
+      LDA TEMP4     LOAD CHARACTER
+      CLE,ERA         ADDRESS 
+      LDA 0,I       EXTRACT 
+      SEZ,RSS         NEXT
+      ALF,ALF           CHARACTER 
+      AND B377
+      ISZ TEMP4     UPDATE CHARACTER ADDRESS
+      ISZ FSCH
+      JMP FSCH,I
+**                                         ** 
+***  FETCH SOURCE CHARACTER (UPPER CASE)  *** 
+**                                         ** 
+* 
+*  SAME AS FSCH, EXCEPT LOWER CASE CHARACTERS ARE CONVERTED TO
+*  UPPER CASE.  USED BY CHAIN AND ASSIGN STATEMENTS.
+* 
+FCUCA DEF FCUC
+FCUC  NOP 
+#FCUC LDA TPRME     MORE
+      INA,SZA,RSS     CHARACTERS? 
+      JMP FCUC,I    NO
+      STA TPRME     YES, UPDATE CHARACTER COUNT 
+      LDA TEMP4     LOAD CHARACTER
+      CLE,ERA         ADDRESS 
+      LDA A,I       EXTRACT 
+      SEZ,RSS         NEXT
+      ALF,ALF           CHARACTER 
+      AND B377
+      ADA M96 
+      SSA,RSS       LOWER CASE
+      ADA M32       NO
+      ADA .140      YES 
+      ISZ TEMP4     UPDATE CHARACTER ADDRESS
+      ISZ FCUC
+      JMP FCUC,I
+**                           ** 
+***  FETCH INPUT CHARACTER  *** 
+**                           ** 
+* 
+*  EXITS NORMALLY TO (P+2) WITH NEXT INPUT CHARACTER IN (A).
+*  IF THE CHARACTER IS A " OR THE INPUT RECORD IS EMPTY,
+*  EXIT TO TRSTR,I (THE ONLY CALLER WHO CAN ENCOUNTER THIS
+*  CONDITION).
+* 
+FINCA DEF FINCH 
+FINCH NOP 
+#FINC ISZ FINCH 
+      JSB GETCR     FETCH NEXT CHARACTER
+      JMP TRSTB 
+      LDA B         ALLOW LOWER CASE
+      CPA .+42B     " ? 
+      JMP TRSTB 
+      JMP FINCH,I   NO
+      SKP 
+**                           ** 
+***  FETCH ENTER CHARACTER  *** 
+**                           ** 
+* 
+*  SAME AS FINCH EXCEPT IT DOES NOT CHECH FOR A QUOTE 
+* 
+FENCA DEF FENCH 
+FENCH NOP 
+#FENC ISZ FENCH 
+      JSB GETCR     FETCH NEXT CHARACTER
+      JMP TRSTB 
+      LDA B         ALLOW LOWER CASE
+      JMP FENCH,I   CHARACTER FOUND 
+**                        **
+***  FETCH TOP OF STACK  ***
+**                        **
+* 
+*  EXIT WITH TOP OPERAND IN (A) AND (B) AFTER UNSTACKING
+*  IT.  CREATE EMPTY SPACE ON TEMPORARY STACK FOR FUTURE
+*  INTERMEDIATE RESULT. 
+* 
+STTOP NOP 
+#STTP JSB OPCHK     UNSTACK OPERAND 
+      JSB RSCHK     CREATE SPACE FOR TEMPORARY
+      DLD 1,I       LOAD TOP OPERAND
+      JMP STTOP,I 
+**                               ** 
+***  EXECUTE A BINARY OPERATOR  *** 
+**                               ** 
+* 
+*  ON ENTRY (P+1) CONTAINS A SUBROUTINE CALL FOR A BINARY 
+*  OPERATION.  THE TOP TWO OPERANDS ON THE STACK ARE
+*  UNSTACKED AND VERIFIED AS NOT BEING 'UNDEFINED.'  THE
+*  APPROPRIATE SUBROUTINE IS CALLED WITH THE TOP ARGUMENT'S 
+*  ADDRESS IN BINO2 AND THE NEXT-TO-TOP ARGUMENT'S VALUE IN 
+*  (A) AND (B).  EXIT IS TO (P+2) WITH THE RESULT IN (A)
+*  AND (B). 
+BINOP NOP 
+#BNOP LDA BINOP,I   SAVE
+      STA BINO1       SUBROUTINE
+      ISZ BINOP         CALL
+      JSB OPCHK     SAVE ADDRESS OF 
+      STB BINO2       TOP OPERAND 
+      JSB STTOP     FETCH NEXT OPERAND
+      JMP BINO1     EXECUTE SUBROUTINE
+**                                  **
+***  VERIFY LEGITIMACY OF OPERAND  ***
+**                                  **
+* 
+*  THE VALUE REFERENCED BY THE TOP OF THE OPERAND STACK 
+*  IS CHECKED.  EXIT TO ERROR IF VALUE IS 'UNDEFINED.'
+*  ELSE REMOVE OPERAND ADDRESS FROM STACK AND REMOVE VALUE
+*  FROM TOP OF TEMPORARY STACK, IF IT IS THERE.  EXIT 
+*  WITH OPERAND ADDRESS IN (B). 
+* 
+OPCHK NOP 
+#OPCK LDB OPDST,I   STRING
+      SSB             OPERAND?
+      JMP OPCH3-1   YES 
+      LDA 1,I       NO, HIGH PART OF
+      RAL,RAL       IS
+      INA             OPERAND 
+      RAR,SLA           NORMALIZED? 
+      JMP OPCH1     YES 
+      CPA BIT15     WAS FIRST WORD ZERO 
+      INB,RSS       YES 
+      JSB RERRS+23,I NO--ERROR
+      LDA 1,I       SECOND
+      SZA             WORD ZERO?
+      JSB RERRS+23,I NO--ERROR
+      ADB .-1       YES--RESTORE OPERAND ADDRESS
+OPCH1 CPB TMPST     TEMPORARY?
+      JMP OPCH3     YES 
+OPCH2 LDA OPDST     NO, 
+      ADA .-2         UNSTACK 
+      STA OPDST         OPERAND 
+      JMP OPCHK,I         ADDRESS 
+      CMB,INB       SET ADDRESS TRUE
+OPCH3 LDA TMPST     UNSTACK 
+      ADA .-2         TEMPORARY 
+      STA TMPST         OPERAND 
+      JMP OPCH2 
+**                                              **
+***  ALLOCATE AN ENTRY ON THE TEMPORARY STACK  ***
+**                                              **
+* 
+*  (B) IS UNCHANGED UPON EXIT.  ON STACK OVERFLOW,
+*  THE OPERATOR AND OPERAND STACKS ARE MOVED TO HIGHER
+*  CORE TO MAKE ROOM FOR FIVE MORE TEMPORARY ENTRIES. 
+* 
+RSCHK NOP 
+#RSCK LDA TMPST     ADVANCE 
+      ADA .+2         POINTER TO
+      STA TMPST         NEXT ENTRY
+      INA           STACK 
+      CPA OPTRQ       OVERFLOW? 
+      RSS           YES 
+      JMP RSCHK,I   NO
+      STB RT0       SAVE (B)
+      LDB PBPTR     LOAD SOURCE ADDRESS 
+      LDA .+10      ALLOCATE SPACE FOR
+      JSB CUSP        FIVE MORE 
+      STA PBPTR         TEMPORARIES 
+      STA RT1       SAVE DESTINATION ADDRESS
+RSCH1 LDA 1,I       TRANSFER
+      STA RT1,I       A WORD
+      CPB TMPST     DONE? 
+      JMP RSCH2     YES 
+      CCA           NO, DECREMENT 
+      ADA RT1         DESTINATION 
+      STA RT1           AND SOURCE
+      ADB .-1             ADDRESSES 
+      JMP RSCH1 
+RSCH2 LDA OPDST     CORRECT 
+      ADA .+10
+      STA OPDST       STACK 
+      LDA OPTRQ 
+      ADA .+10          POINTERS
+      STA OPTRQ 
+      LDB RT0       RESTORE (B) 
+      JMP RSCHK,I 
+**                              **
+***  PUSH DOWN OPERATOR STACK  ***
+**                              **
+* 
+*  ALLOCATE AN ENTRY ON THE OPERATOR STACK.  (A) IS 
+*  NOT CHANGED. 
+* 
+PSHST NOP 
+#PSHS LDB PBPTR     ADVANCE 
+      ADB .+2       STACK POINTER 
+      CMB           USER
+      ADB LWAUS       SPACE 
+      SSB               OVERFLOW? 
+      JSB RERRS+10,I  YES 
+      ISZ PBPTR     NO, ALLOCATE
+      ISZ PBPTR       STORAGE 
+      JMP PSHST,I 
+**                        **
+***  EVALUATE A FORMULA  ***
+**                        **
+* 
+*  ENTER WITH TEMP1 POINTING TO THE FIRST OPERAND OF THE
+*  FORMULA.  OPERATORS AND THE ADDRESSES OF OPERANDS ARE
+*  STACKED SEPARATELY.  OPERAND ADDRESSES ARE STACKED AS
+*  SOON AS THE OPERAND IS SCANNED.  AN OPERATOR IS NOT
+*  STACKED WHILE THE OPERATOR ON TOP OF THE STACK HAS EQUAL 
+*  OR HIGHER PRECEDENCE, INSTEAD THE LATTER IS UNSTACKED
+*  AND EXECUTED; THUS AN OPERATOR FORCES EXECUTION OF THOSE 
+*  PREVIOUSLY STACKED, DOWN TO THE LATEST ONE STACKED WHICH 
+*  HAS A LOWER PRECEDENCE.  THE OPERATOR STACK IS INITIALIZED 
+*  WITH AN END-OF-FORMULA (LOWEST PRECEDENCE) OPERATOR.  THE
+*  ACTION OF OPERATORS IS IN GENERAL TO COMBINE THE TOP TWO 
+*  OPERANDS STACKED .  THE ADDRESS OF THE PARTIAL RESULT THUS 
+*  OBTAINED REPLACES THE ADDRESSES OF ITS CONSTITUENT OPERANDS
+*  ON THE STACK (VALUES OF PARTIAL RESULTS ARE KEPT ON THE
+*  TEMPORARY STACK).  UPON EXIT TEMP1 POINTS TO THE FIRST PROGRAM 
+*  WORD WHOSE OPERATOR DOES NOT MANIPULATE THE STACK (THIS
+*  MAY BE AN END-OF-FORMULA, 'THEN', 'OF', ETC.). 
+* 
+FORMX NOP 
+#FORM JSB PSHST     STACK 
+      CLB             BEGINNING-OF-FORMULA
+      STB PBPTR,I       OPERATOR
+*                          *
+**  PROCESS NEXT OPERAND  **
+*                          *
+FORM1 LDA TEMP1,I   EXTRACT 
+      ISZ TEMP1       NEXT
+      AND OPDMK         OPERAND 
+      SZA,RSS       NULL OPERAND? 
+      JMP FORM2     YES 
+      ISZ OPDST     NO, BUMP POINTER
+      ISZ OPDST       TO OPERAND STACK
+      SSA           VARIABLE OPERAND? 
+      JMP FORM6     NO
+*                                                 * 
+**  STACK NON-FUNCTION VARIABLE OPERAND ADDRESS  ** 
+*                                                 * 
+* 
+*  THE ADDRESSES STACKED ARE AS FOLLOWS:  FOR SIMPLE VARIABLES, 
+*  A POINTER TO THE VALUE; FOR ARRAYS, THE BASE ADDRESS; FOR
+*  STRING VARIABLES, THE NEGATION OF THE BASE ADDRESS.
+* 
+      ADA .-1       COMPUTE 
+      ALS             POINTERS
+      ADA SYMTB         TO SYMBOL 
+      LDB 0               TABLE 
+      INB                   ENTRY 
+      LDA 0,I       PROGRAMMER- 
+      AND .+17B       DEFINED 
+      CPA .+17B         FUNCTION? 
+      JMP FORM8     YES 
+      LDB 1,I       NO, LOAD VALUE POINTER
+      SZA           STRING VARIABLE?
+      JMP FORM2-1   NO
+      LDA TEMP1     YES, END
+      CPA PRGCT       OF FORMULA? 
+      JMP FORM0     YES 
+      LDA TEMP1,I   NO, 
+      AND OPMSK       FOLLOWED BY 
+      CPA LBOP          SUBSCRIPT?
+      JMP FORM2-2   YES 
+FORM0 STB TEMP4     NO
+      JSB RSCHK     CREATE TEMPORARY
+      CLA           RECORD
+      CCB 
+      DST TMPST,I     (0,-1)
+      LDB TEMP4     RETRIEVE AND
+      CMB,INB         NEGATE STRING ADDRESS 
+      STB OPDST,I   STACK ADDRESS 
+*                           * 
+**  PROCESS NEXT OPERATOR  ** 
+*                           * 
+FORM2 LDA TEMP1     FORMULA 
+      CPA PRGCT       EXHAUSTED?
+      JMP FORM3     YES 
+      LDA TEMP1,I   NO, 
+      AND OPMSK       EXTRACT 
+      ALF,ALF           NEXT
+      LDB 0               OPERATOR
+      CPA .+2       STRING CONSTANT?
+      JMP FOR13     YES 
+      ADA .-20B     NO, NON-FORMULA 
+      SSA             OPERATOR? 
+      CLB           YES 
+      ADA D66       NO, NON-FORMULA 
+      SSA,RSS         OPERATOR? 
+FORM3 CLB           YES 
+      CLA           NO
+      SZB,RSS       END-OF-FORMULA? 
+      JMP *+4       YES 
+      ADB FOPBS     NO, LOAD OPERATOR 
+      LDA 1,I         INFORMATION WORD
+      AND B377      SAVE
+      STA TEMP2       PRIORITY
+      XOR 1,I       SAVE
+      ARS             INTERNAL
+      STA TEMP3         NAME
+*                                                *
+**  STACK PRESENT OR EXECUTE PREVIOUS OPERATOR  **
+*                                                *
+FORM4 LDA PBPTR,I   DOES OPERATOR 
+      AND B377        ON TOP
+      CMA               OF STACK
+      ADA TEMP2           HAVE HIGHER 
+      SSA                   PRIORITY? 
+      JMP FORM5     YES 
+      LDA TEMP2     NO
+      CPA .+13B     CORRECT 
+      CLA,INA         STACK PRIORITY
+      IOR TEMP3     ADD NAME
+      JSB PSHST     STACK 
+      STA PBPTR,I     OPERATOR
+      JMP FORM1 
+FORM5 LDA PBPTR,I   POP 
+      LDB .-2         OPERATOR
+      ADB PBPTR         FROM TOP
+      STB PBPTR           OF STACK
+      ALF,ALF       BRANCH
+      AND B377        TO
+      ADA ARBAS         APPROPRIATE 
+      JMP 0,I             ROUTINE 
+*                                         * 
+**  STACK CONSTANT OR PARAMETER ADDRESS  ** 
+*                                         * 
+* 
+*  FOR NUMERICAL CONSTANTS STACK A POINTER TO THE VALUE 
+*  EMBEDDED IN THE PROGRAM, FOR PARAMETERS STACK THE
+*  PARAMETER ADDRESS. 
+* 
+FORM6 ELA,CLE,ERA   ERASE FLAG BIT
+      SZA           CONSTANT? 
+      JMP FORM7     NO
+      LDB TEMP1     YES,
+      ISZ TEMP1       STACK 
+      ISZ TEMP1         ADDRESS 
+      JMP FORM2-1 
+FORM7 STA TEMP2     PRE-
+      AND .+17B       DEFINED 
+      CPA .+17B         FUNCTION? 
+      JMP *+3       YES 
+      LDB OPTRQ,I   NO, STACK 
+      JMP FORM2-1     PARAMETER ADDRESS 
+* 
+*  FOR FUNCTIONS RECURSION ON FORMX EVALUATES THE PARAMETER 
+*  AND, FOR PROGRAMMER DEFINED FUNCTIONS, THE VALUE.
+*  FUNCTION VALUES ARE LEFT ON THE TEMPORARY STACK AND A
+*  POINTER THERETO IS PLACED ON THE OPERAND STACK.
+*  'LEN' IS HANDLED IN A SPECIAL WAY. 
+* 
+*                                   * 
+**  EVALUATE PRE-DEFINED FUNCTION  ** 
+*                                   * 
+      XOR TEMP2     IDENTIFY
+      ALF,ALF 
+      ALF             FUNCTION
+      CPA .+15B     'LEN' ? 
+      JMP FOR12     YES 
+      ADA PDFBS     NO, STACK 
+      JSB PSHST       POINTER TO
+      STA PBPTR,I       ENTRY POINT 
+      LDA FORMX     SAVE FORMX
+      STA OPDST,I     RETURN ADDRESS
+      JSB FORMX     EVALUATE ARGUMENT 
+      JSB STTOP     BRANCH TO 
+      STA TEMPZ       SUBROUTINE
+      LDA PBPTR,I 
+      STA TEMPY 
+      LDA TEMPZ 
+      JMP TEMPY,I 
+TEMPZ NOP 
+TEMPY NOP 
+      SKP 
+*                                          *
+**  EVALUATE PROGRAMMER-DEFINED FUNCTION  **
+*                                          *
+FORM8 LDA 1,I       LOAD ADDRESS OF FORMULA 
+      JSB PSHST     SAVE VALUE OF 
+      LDB TMPST       CURRENT POINTER TO
+      STB PBPTR,I       TEMPORARY STACK 
+      JSB PSHST     SAVE ADDRESS OF 
+      STA PBPTR,I     DEFINING FORMULA
+      LDA FORMX     SAVE FORMX
+      STA OPDST,I     RETURN ADDRESS
+      JSB FORMX     EVALUATE ARGUMENT 
+      LDA OPDST,I   SWAP
+      LDB OPTRQ,I     OLD AND NEW 
+      STB OPDST,I       ARGUMENT
+      STA OPTRQ,I         ADDRESSES 
+      CPA TMPST     PROTECT PARAMETER 
+      JSB RSCHK       ON TEMPORARY STACK
+      LDA TEMP1     SWAP ADDRESSES
+      LDB PBPTR,I     OF CURRENT
+      STB TEMP1         AND FUNCTION
+      STA PBPTR,I         FORMULAS
+      JSB FORMX     EVALUATE FUNCTION 
+      LDB OPDST,I   POP 
+      LDA .-2         OPERAND 
+      ADA OPDST         STACK,
+      STA OPDST           SAVING
+      LDA OPDST,I           RESULT ADDRESS
+      STA OPTRQ,I             AND ADDRESS OF
+      STB OPDST,I               OLD PARAMETER 
+      LDA PBPTR,I   RESTORE 
+      STA TEMP1       FORMULA POINTER 
+      LDA PBPTR     POP 
+      ADA .-2         OPERATOR
+      STA PBPTR         STACK 
+      LDA PBPTR,I   RESTORE ORIGINAL
+      STA TMPST       TEMPORARY STACK POINTER 
+      JSB STTOP     LOAD FUNCTION RESULT
+*                               * 
+**  RECORD RESULT OF FUNCTION  ** 
+*                               * 
+* 
+*  PRE-DEFINED FUNCTIONS RETURN TO THIS POINT WITH THEIR
+*  RESULT IN (A) AND (B). 
+* 
+FOR10 DST TMPST,I   SAVE RESULT 
+      LDA OPDST,I   RESTORE FORMX 
+      STA FORMX       RETURN ADDRESS
+      LDA TMPST     RECORD LOCATION 
+      STA OPDST,I     OF RESULT 
+      LDB PBPTR     POP 
+      ADB .-2         FUNCTION
+      STB PBPTR         ADDRESS 
+      ISZ TEMP1       OF RESULT 
+      ISZ TEMP1         ON TOP OF 
+      JMP FORM2           OPERAND STACK 
+*                    *
+**  EVALUATE 'LEN'  **
+*                    *
+FOR12 JSB RSCHK     CREATE SPACE ON TEMPORARY STACK 
+      LDA TEMP1,I   FIND
+      AND OPDMK       STRING'S
+      ADA .-1           SYMBOL
+      ALS                 TABLE 
+      ADA SYMTB             ENTRY 
+      INA           LOAD ADDRESS
+      LDA 0,I         OF STRING 
+      ADA .-1       EXTRACT 
+      LDA 0,I         STRING
+      AND B377          LENGTH
+      EXT FLOAT 
+      JSB FLOAT     STACK 
+      DST TMPST,I     STRING LENGTH 
+      LDA TMPST     STACK ADDRESS 
+      STA OPDST,I     OF RESULT 
+      JMP FOR12-3 
+*                             * 
+**  PROCESS STRING CONSTANT  ** 
+*                             * 
+* 
+*  WHEN STRING CONSTANTS ARE STACKED, AN APPROPRIATE
+*  ENTRY IS PLACED ON THE TEMPORARY STACK SO THAT ALL 
+*  STRING OPERANDS HAVE THE SAME FORM:  A NEGATED BASE
+*  ADDRESS ON THE OPERAND STACK AND A TWO WORD ENTRY ON 
+*  THE TEMPORARY STACK CONTAINING THE START-OF-STRING 
+*  AND END-OF-STRING DESIGNATORS BIASED BY -1 (DEFAULT
+*  START-OF-STRING DESIGNATORS HAVE A STACK VALUE OF 0, 
+*  DEFAULT END-OF-STRING DESIGNATORS HAVE A STACK VALUE 
+*  OF -1).  IN THE CASE OF SUBSCRIPTED STRING VARIABLES,
+*  THE TEMPORARY IS CREATED WHEN THE ']' IS SCANNED; THE
+*  ENTRY FOR NON-SUBSCRIPTED STRING OPERANDS IS CREATED 
+*  WHEN THEY ARE SCANNED. 
+* 
+FOR13 CLA,INA       PRINT STATEMENT 
+      CPA EOL         STRING CONSTANT?
+      JSB STSTR     NO, STACK STRING CONSTANT 
+      JMP FORM3     EXECUTE END-OF-FORMULA
+      SKP 
+*                                *
+**  RECORD RESULT OF OPERATION  **
+*                                *
+* 
+*  OPERATORS CREATING INTERMEDIATE RESULTS RETURN TO HERE.
+* 
+FOR14 ISZ OPDST     STACK 
+      ISZ OPDST       TEMPORARY 
+      DST TMPST,I       RESULT
+      LDA TMPST     SAVE
+      STA OPDST,I     ADDRESS ON
+      JMP FORM4         OPERAND STACK 
+*                            *
+**  EXIT FORMULA EVALUATOR  **
+*                            *
+* 
+*  THIS WORD IS ACTUALLY PART OF THE FORMULA OPERATOR JUMP
+*  TABLE.  THE WORDS BETWEEN IT AND FOJT CORRESPOND TO
+*  OPERATORS WHICH ARE NOT EXECUTED, SO CODE IS INSERTED HERE 
+*  TO UTILIZE THIS SPACE. 
+* 
+      DEF FORMX,I 
+**                        **
+***  SET LOGICAL VALUES  ***
+**                        **
+FALSE CLA           LOAD
+      CLB             ZERO
+      JMP FOR14 
+TRUE  LDA HALF      LOAD
+      LDB .+2         1.0 
+      JMP FOR14 
+**                     ** 
+***  EXECUTE UNARY -  *** 
+**                     ** 
+EUMIN JSB STTOP     UNSTACK AND LOAD TOP OF STACK 
+      JSB ARINV     NEGATE IT 
+      JMP FOR14     STORE IT
+**                                 ** 
+***  FORMULA OPERATOR JUMP TABLE  *** 
+**                                 ** 
+FOJT  DEF ELBRC     [ 
+      DEF FORM1     ( 
+      DEF FORM4     UNARY + 
+      DEF EUMIN     UNARY - 
+      DEF ESCMA     SUBSCRIPT COMMA 
+      DEF ESTR      ASSIGNMENT OPERATOR 
+      DEF EFAD      + 
+      DEF EFSB      - 
+      DEF EFMP      * 
+      DEF EFDV      / 
+      DEF EPWR      ^ 
+      DEF EGTRT     > 
+      DEF ELST      < 
+      DEF ENEQL     # 
+      DEF EEQL      = 
+      NOP           UNUSED
+      DEF EAND      AND 
+      DEF EIOR      OR
+      DEF EMIN      MIN 
+      DEF EMAX      MAX 
+      DEF ENEQL     <>
+      DEF EGORE     >=
+      DEF ELORE     <=
+      DEF ENOT      NOT 
+ARBAS DEF FOJT-12B,I
+**                          **
+***  EXECUTE LEFT BRACKET  ***
+**                          **
+* 
+*  LOAD A DEFAULT SECOND SUBSCRIPT AND ENTER THE CODE FOR 
+*  A SUBSCRIPT COMMA. 
+* 
+ELBRC LDA OPDST     LOAD
+      ADA .-2         -1
+      LDA 0,I           FOR A 
+      CCB                 STRING, 
+      SSA,RSS               0 
+      CLB                     FOR 
+      JMP ESCM1                 AN ARRAY
+**                             ** 
+***  EXECUTE SUBSCRIPT COMMA  *** 
+**                             ** 
+* 
+*  BOTH SUBSCRIPTS ARE ROUNDED TO INTEGERS AND TESTED TO BE 
+*  POSITIVE.  FOR STRINGS, THE TWO INTEGERS ARE SAVED ON THE
+*  TEMPORARY STACK AS A PSUEDO-ENTRY LATER USED BY PSTR.  FOR 
+*  ARRAYS, THE SUBSCRIPTS ARE CHECKED AND IF WITHIN THE CURRENT 
+*  BOUNDS THEY ARE COMBINED WITH THE BASE ADDRESS OF THE ARRAY. 
+*  THE ARRAY ELEMENT ADDRESS THEN REPLACES THE BASE ADDRESS ON
+*  THE OPERAND STACK.  UNSUITABLE SUBSCRIPTS EXIT TO THE ERROR
+*  ROUTINE. 
+* 
+ESCMA JSB OPCHK     UNSTACK 
+      DLD 1,I         SECOND SUBSCRIPT
+      JSB SBFIX     ROUND TO INTEGER
+      JSB RERRS+17,I  UNSUITABLE RESULT 
+      LDA PBPTR     UNSTACK 
+      ADA .-2         THE 
+      STA PBPTR         '[' 
+ESCM1 STB TEMP4     SAVE RESULT 
+      JSB STTOP     POP FIRST SUBSCRIPT 
+      JSB SBFIX     ROUND TO INTEGER
+      JSB RERRS+17,I  UNSUITABLE RESULT 
+      STB TMPST,I   STORE IN TEMPORARY STACK
+      LDA OPDST,I   STRING
+      SSA,RSS         VARIABLE? 
+      JMP ESCM2     NO, ARRAY VARIABLE
+      LDA TMPST     YES,
+      INA             SAVE
+      LDB TEMP4         SECOND SUBSCRIPT IN 
+      STB 0,I             TEMPORARY STACK 
+      JMP FORM1 
+ESCM2 ADA .-2       LOAD COLUMN 
+      DLD 0,I         AND ROW BOUNDS
+      CMA,INA       IS SPECIFIED
+      ADA TMPST,I     ROW 
+      SSA,RSS           LEGAL?
+      JSB RERRS+17,I  NO
+      STB TEMP5     YES 
+      CMB,INB       IS SPECIFIED
+      ADB TEMP4       COLUMN
+      SSB,RSS           LEGAL?
+      JSB RERRS+17,I  NO
+      LDA TMPST,I   YES, COMPUTE ROW
+      MPY TEMP5       DISPLACEMENT
+      ADA TEMP4     ADD COLUMN DISPLACEMENT 
+      ALS           DOUBLE FOR CORE WORDS 
+      ADA OPDST,I   STORE ACTUAL
+      STA OPDST,I     ELEMENT ADDRESS 
+      LDA TMPST     POP UNUSED
+      ADA .-2         TEMPORARY 
+      STA TMPST         STACK 
+      JMP FORM1           ENTRY 
+**                   ** 
+***  EXECUTE STORE  *** 
+**                   ** 
+* 
+*  IN ORDER TO ALLOW MULTIPLE ASSIGNMENT STATEMENTS, NO 
+*  ASSIGNMENT CAN TAKE PLACE UNTIL THE RIGHT-HAND FORMULA 
+*  IS EVALUATED; I.E. ONLY AN END-OF-FORMULA OPERATOR CAN 
+*  FORCE AN ASSIGNMENT OPERATOR OFF OF THE STACK.  ASSIGNMENTS
+*  MAY BE NUMERICAL TO NUMERICAL TYPE OPERAND, IN WHICH CASE
+*  THE ASSIGNED QUANTITY IS SAVED FOR POSSIBLE ADDITIONAL 
+*  ASSIGNMENTS; OR STRING TO STRING OPERAND.  IN THE LATTER 
+*  CASE AN INTERMEDIATE STRING IS NECESSARY IF THE HEAD OF
+*  THE DESTINATION STRING LIES IN THE TAIL OF THE ACTUAL
+*  SOURCE STRING. 
+* 
+ESTR  LDB TEMP2     NEXT OPERATOR AN
+      SZB             END-OF-FORMULA? 
+      JMP ESTR5     NO
+      CPB TEMP3     YES, FIRST STORE OF FORMULA?
+      JMP ESTR2     YES 
+ESTR1 LDA OPDST,I   NO, SET 
+      STA TEMP6       DESTINATION ADDRESS 
+      DLD TEMP3,I   TRANSFER
+      DST TEMP6,I     THE NUMBER
+      LDA OPDST     UNSTACK 
+      ADA .-2         DESTINATION 
+      STA OPDST         OPERAND 
+      JMP FORM4 
+ESTR2 LDA OPDST,I   STRING
+      SSA             OPERANDS? 
+      JMP ESTR3     YES 
+      JSB OPCHK     NO, UNSTACK SOURCE
+      STB TEMP3       AND SAVE VALUE ADDRESS
+      JMP ESTR1 
+ESTR3 LDA .-2       PREPARE 
+      JSB PSTR        SOURCE
+      STA TEMP4         STRING
+      STB TPRME 
+      CCA           PREPARE 
+      JSB PSTR        DESTINATION STRING
+      LDB PBPTR     SAVE CORE 
+      STB EST1        POINTER 
+      LDA TEMP4     TRANSFER
+      CMA             TO
+      ADA TEMP5         HIGHER
+      SSA                 CORE? 
+      JMP ESTR4     NO
+      ADA TPRME     YES,
+      ADA .+2         OVERLAPPING 
+      SSA,RSS           TRANSFER? 
+      JMP ESTR4     NO
+      LDA TEMP5     YES, SAVE 
+      STA EST2        DESTINATION ADDRESS 
+      INB           SET DESTINATION 
+      RBL          ADDR. TO START 
+      STB TEMP5         OF FREE CORE
+      LDA TNULL     SAVE TRANSFER 
+      STA EST3        LENGTH
+      CMA,INA       ALLOCATE
+      ARS             SPACE FOR 
+      JSB CUSP          INTERMEDIATE
+      STA PBPTR           STRING
+      LDA FSCHA 
+      JSB TRSTR     TRANSFER STRING TO FREE CORE
+      LDA EST3      RESTORE TRANSFER
+      STA TNULL       LENGTH
+      STA TPRME     RESET ACTUAL SOURCE LENGTH
+      LDA EST1      SET SOURCE
+      INA             ADDRESS TO
+      RAL             INTERMEDIATE
+      STA TEMP4           STRING
+      LDA EST2      RESTORE ORIGINAL
+      STA TEMP5       DESTINATION STRING
+ESTR4 LDA FSCHA 
+      JSB TRSTR     COMPLETE TRANSFER 
+      LDA EST1      RESTORE FREE
+      STA PBPTR       CORE POINTER
+      JMP FORM5     EXECUTE END-OF-FORMULA
+ESTR5 ISZ PBPTR     DEFER 
+      ISZ PBPTR       EXECUTION 
+      LDA BASSO 
+      STA PBPTR,I 
+      JMP FORM4+6 
+* 
+BASSO OCT 7402
+**               ** 
+***  EXECUTE +  *** 
+**               ** 
+EFAD  JSB BINOP 
+      JSB #FAD
+      JMP FOR14 
+**               ** 
+***  EXECUTE -  *** 
+**               ** 
+EFSB  JSB BINOP 
+      JSB #FSB
+      JMP FOR14 
+**               ** 
+***  EXECUTE *  *** 
+**               ** 
+EFMP  JSB BINOP 
+      JSB #FMP
+      JMP FOR14 
+**               ** 
+***  EXECUTE /  *** 
+**               ** 
+EFDV  JSB BINOP 
+      JSB #FDV
+      JMP FOR14 
+**               ** 
+***  EXECUTE ^  *** 
+**               ** 
+*                *
+**  REAL POWER  **
+*                *
+* 
+*  EXIT TO ERROR IF BASE IS NEGATIVE.  ELSE COMPUTE 
+*  RESULT AS E^(POWER*LN(BASE)).
+* 
+EPWR  LDB OPDST,I   LOAD
+      DLD 1,I         POWER 
+      JSB #IFIX     INTEGER?
+      JMP *+3       NO
+      SOS           YES, 16-BIT?
+      JMP IPWR      YES 
+      JSB BINOP     NO, UNSTACK 
+      RSS             ARGUMENTS 
+      JSB PCHK      CHECK ARGUMENTS 
+      SSA           NEGATIVE BASE?
+      JSB RERRS+30,I  YES 
+      LDB BINO1     NO, LOAD BASE ADDRESS 
+      JSB .LOG      TAKE NATUAL LOG 
+      JSB #FMP      MULTIPLY
+      DEF BINO2,I     BY POWER
+      JSB .EXP      EXPONENTIATE
+      JMP FOR14 
+*                   * 
+**  INTEGER POWER  ** 
+*                   * 
+* 
+*  MULTIPLY BASE REPEATEDLY, USING POWERS-OF-TWO METHOD 
+*  TO SPEED PROCESS.  IF POWER IS NEGATIVE, TAKE RECIPROCAL 
+*  FOR FINAL RESULT.
+* 
+IPWR  STB TT1       SAVE SIGN 
+      SSB           FORM ABSOLUTE 
+      CMB,INB         VALUE OF POWER
+      STB TT2       SAVE IT 
+      JSB BINOP     UNSTACK 
+      RSS             ARGUMENTS 
+      JSB PCHK      CHECK ARGUMENTS 
+      LDB BINO1     STORE 
+      STA BINO1 
+      STB BINO2       BASE
+      LDA HALF      INITIALIZE
+      STA TT3         RESULT
+      LDA .+2           TO
+      STA TT4             1.0 
+IPWR1 LDB TT2       DIVIDE POWER
+      SLB,BRS         BY 2
+      JMP IPWR4     ODD POWER 
+      STB TT2       EVEN POWER
+IPWR2 SZB           ZERO? 
+      JMP IPWR5     NO
+      LDA TT1       YES 
+      SSA           POSITIVE POWER? 
+      JMP IPWR3     NO
+      LDA TT3       YES, RETURN 
+      LDB TT4         WITH
+      JMP FOR14         RESULT
+IPWR3 LDA HALF      TAKE
+      LDB .+2         RECIPROCAL
+      JSB #FDV          FOR 
+      DEF TT3             FINAL 
+      JMP FOR14             RESULT
+IPWR4 STB TT2       SAVE POWER
+      LDA BINO1     LOAD
+      LDB BINO2       BASE
+      JSB #FMP      MULTIPLY BY 
+      DEF TT3         RESULT SO FAR 
+      STA TT3       SAVE NEW
+      STB TT4         PARTIAL 
+      LDB TT2           RESULT
+      JMP IPWR2 
+IPWR5 LDA BINO1     SQUARE
+      LDB BINO2 
+      JSB #FMP        BASE
+      DEF BINO1 
+      STA BINO1     RECORD
+      STB BINO2       NEW 
+      JMP IPWR1         BASE
+      SKP 
+**               ** 
+***  EXECUTE >  *** 
+**               ** 
+EGTRT JSB COMPR     COMPARE OPERANDS
+      SSA           < ? 
+      JMP FALSE     YES 
+      JMP ENEQL+1   NO
+**               ** 
+***  EXECUTE <  *** 
+**               ** 
+ELST  JSB COMPR     COMPARE OPERANDS
+      CMA,RSS       REVERSE COMPARISON SENSE
+**                **
+***  EXECUTE >=  ***
+**                **
+EGORE JSB COMPR     COMPARE OPERANDS
+      SSA           < ? 
+      JMP FALSE     YES 
+      JMP TRUE      NO
+**               ** 
+***  EXECUTE =  *** 
+**               ** 
+EEQL  JSB COMPR     COMPARE OPERANDS
+      SZA           = ? 
+      JMP FALSE     NO
+      JMP TRUE      YES 
+**                **
+***  EXECUTE <=  ***
+**                **
+ELORE JSB COMPR     COMPARE OPERANDS
+      SSA           >= ?
+      JMP TRUE      NO
+      JMP EEQL+1    YES 
+**                     ** 
+***  EXECUTE # OR <>  *** 
+**                     ** 
+ENEQL JSB COMPR     COMPARE OPERANDS
+      SZA           # ? 
+      JMP TRUE      NO
+      JMP FALSE     YES 
+**                   ** 
+***  EXECUTE 'MAX'  *** 
+**                   ** 
+EMAX  JSB BINOP     SUBTRACT THE
+      JSB #FSB        TOP TWO OPERANDS
+      SSA,RSS       TOP OPERAND LARGER? 
+      JMP ARG1      NO
+ARG2  DLD BINO2,I   YES, RETRIEVE 
+      JMP FOR14       ITS VALUE 
+**                   ** 
+***  EXECUTE 'MIN'  *** 
+**                   ** 
+EMIN  JSB BINOP     SUBTRACT THE
+      JSB #FSB        TOP TWO OPERANDS
+      SSA,RSS       TOP OPERAND LARGER? 
+      JMP ARG2      NO
+ARG1  ISZ OPDST     YES,
+      ISZ OPDST       RETRIEVE
+      LDB OPDST,I       VALUE OF
+      DLD 1,I             NEXT-TO-TOP 
+      JMP FOR14+2           OPERAND 
+**                   ** 
+***  EXECUTE 'AND'  *** 
+**                   ** 
+EAND  JSB BINOP     UNSTACK 
+      RSS             OPERANDS
+      SZA,RSS       TOP OPERAND ZERO? 
+      JMP FALSE     YES 
+      LDA BINO2,I   NO, CHECK 
+      JMP ENEQL+1     NEXT-TO-TOP OPERAND 
+**                  **
+***  EXECUTE 'OR'  ***
+**                  **
+EIOR  JSB BINOP     UNSTACK 
+      RSS             OPERANDS
+      SZA           TOP OPERAND NON-ZERO? 
+      JMP TRUE      YES 
+      LDA BINO2,I   NO, CHECK 
+      JMP ENEQL+1     NEXT-TO-TOP OPERAND 
+**                   ** 
+***  EXECUTE 'NOT'  *** 
+**                   ** 
+ENOT  JSB STTOP     LOAD TOP OPERAND
+      JMP EEQL+1    GO TO CHECK 
+**                           ** 
+      END 

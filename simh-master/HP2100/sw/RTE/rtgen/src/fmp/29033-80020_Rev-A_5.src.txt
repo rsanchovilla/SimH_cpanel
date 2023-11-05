@@ -1,0 +1,104 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME CK.SM(7) 
+        NAM CK.SM,7 
+.A.     EQU  0
+.B.     EQU  1
+        ENT CK.SM 
+        EXT .ENTR 
+TT      BSS 1 
+.1      OCT 177400
+CSS     BSS 1 
+CS      BSS 1 
+.2      OCT 000002
+BFBP    BSS 1 
+.5      OCT 177777
+CLN     BSS 1 
+BFPT    BSS 1 
+.7      OCT 000001
+.11     OCT 000003
+*003  ! 
+*004  CK.SM:SUBROUTINE(BF,TYP)GLOBAL,FEXIT  !CHECKSUM ROUTINE 
+BF      NOP 
+TYP     NOP 
+CK.SM   NOP 
+        JSB .ENTR 
+        DEF BF
+*005  ! 
+*006  !     A CHECKSUM IS DONE ON BUFFER BF FOR 
+*007  !     RECORD TYPE  TYP(1=RELOCATABLES, 0=>ABS)
+*008  !     FEXIT IF BAD CHECKSUM 
+*009  ! 
+*010        IF [TT_BF-<8]>377K THEN GO TO RTNF
+        LDA BF,I
+        ALF,ALF 
+        STA TT
+        ADA .1
+        SSA,RSS 
+        JMP RTNF
+*011        DO[CSS_$(@BF+2);CS_$(@BF+1)] !INITIALIZE CHECKSUM 
+        LDA BF
+        ADA .2
+        LDA .A.,I 
+        STA CSS 
+        LDA BF
+        INA 
+        LDA .A.,I 
+        STA CS
+*012        IF TYP THEN BFBP_ -1,ELSE[\ !SET OFFSET AND IF ABS
+*                   BFBP_1;CS_CSS+CS] !ADD WD THREE TO CS 
+        LDA TYP,I 
+        SZA,RSS 
+        JMP .3
+        CCA 
+        STA BFBP
+        JMP .4
+.3      CLA,INA 
+        STA BFBP
+        LDA CSS 
+        ADA CS
+        STA CS
+*013        CLN_TT     +@BF+BFBP !SET LAST WORD ADDRESS AND 
+.4      LDA BF
+        ADA TT
+        ADA BFBP
+        STA CLN 
+*014        IFNOT TYP THEN CSS_$(CLN+1) !IF ABS. SET CHECKSUM 
+        LDA TYP,I 
+        SZA 
+        JMP .6
+        LDA CLN 
+        INA 
+        LDA .A.,I 
+        STA CSS 
+*015        FOR BFPT_@BF+3 TO CLN DO[CS_CS+$BFPT] !SUM
+.6      LDA BF
+        ADA .11 
+        STA BFPT
+        JMP .9
+.8      LDA BFPT
+        INA 
+        STA BFPT
+.9      LDB BFPT
+        CMB,INB 
+        ADB CLN 
+        SSB 
+        JMP .10 
+        LDA CS
+        ADA BFPT,I
+        STA CS
+        JMP .8
+*016        IF CS=CSS THEN RETURN               !CHECK & RETURN 
+.10     LDB CS
+        CPB CSS 
+        RSS 
+        JMP RTNF
+        CLE 
+        JMP CK.SM,I 
+*017  RTNF:  FRETURN
+RTNF    CCE 
+        JMP CK.SM,I 
+*018        END 
+*019        END 
+        END 
+*020        END$

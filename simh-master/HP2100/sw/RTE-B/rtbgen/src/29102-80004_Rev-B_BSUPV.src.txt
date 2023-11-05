@@ -1,0 +1,1752 @@
+ASMB,R,L,C,F
+      HED BSUPV---BASIC SUPERVISOR          A-29102-60004-1 REV. B
+      NAM BSUPV,7 29102-60004 REV. B
+******************************************************
+* 
+*      BSUPV
+* 
+*      LIST:   A-29102-60004-1
+*      SOURCE:   29102-80004 REV.B
+*      RELOC:    29102-60004
+* 
+******************************************************
+* 
+* 
+      ENT INIT,GTLYN
+      ENT SWLST,LYNCK,LYNC1,LSTIT 
+      ENT CHAR,CHARN,DELM,CRLF,ATEMP
+      ENT PGOLM,LIMCK,LOLIM,HILIM,CKLLN,INTIN 
+      ENT SWDEV,XQCMD 
+      ENT ONS,FROMS,ABREV,XSYNF 
+      ENT SCR,FRMTO 
+      ENT LSTR,PLSTA,LOKCK,CRLF1
+* 
+      EXT PROGF,PROGL 
+      EXT INBAD,INCNT,BLANK,TYPE,GTCHR
+      EXT LISTA,LISTR,LINE,MFASE,SBUFA
+      EXT .BUFA 
+      EXT TFLAG,LIST
+      EXT INDCK 
+      EXT PRNIN,TSTIT 
+      EXT TBSRH,TBLPT,LNGTH 
+      EXT DIGCK,INTCK 
+      EXT FNDPS 
+      EXT DRQST 
+      EXT SYE25,CALER,INVSC 
+      EXT MAXSN 
+      EXT .1,.2,.3,.7,.10,.32,.48 
+      EXT M1,M2,M3,M8 
+      EXT DEVCT,SETLP 
+* 
+******************************************************* 
+* 
+** LOKCK ** DUMMY VERSION, TYPE M, ONE EACH 
+* 
+LOKCK NOP 
+      JMP LOKCK,I 
+* 
+******************************************************* 
+      SKP 
+* 
+**************************************************
+* 
+*      START APPROPRIATE PHASE OF BASIC 
+* 
+**************************************************
+* 
+**
+INIT  JSB RTINT    SET UP FWAM,LWAM FOR RTE TYPE SYSTEMS
+      LDA KEYIA      INITIALIZE INPUT DEVICE
+      STA READR      TO KEYIN DEVICE
+      LDA BUFA
+      STA .BUFA     INIT TTY BUFFER POINTER 
+      LDA LWAM
+      JSB INDCK 
+      STA LWAM
+      ADA M110
+      STA SBUFA     INIT SYNTAX BUFFER POINTER
+      JSB PRNIN     INITIALIZE OUTPUT BUFFER POINTER
+PATCH JMP SETUP     BECOMES "STF 0" 
+      JSB EFASE     EXECUTION PHASE?
+       RSS          NO
+      JMP MFASE     YES 
+      LDA M8
+      STA TFLAG     LOKCK THROW OUT OPERATOR INPUT
+      LDB RDYA
+      JSB DSPLY     DISPLAY "READY" 
+      JSB CRLF
+GTLYN LDA .32       INITIALIZE
+      STA BLANK       DELETE CHARACTER FOR GETCR
+      JSB LINE      ACCEPT A BASIC LINE 
+      JMP GTLYN 
+* 
+      SKP 
+* 
+* ONCE ONLY CODE FOLLOWS - AREA THEN USED FOR I/O BUFFER
+* 
+SETUP LDA FWAM
+      JSB INDCK 
+      STA FWAM
+      LDB PROGF 
+      CPB PROGL     START ADDR=END ADDR?
+      JMP SCRCH     YES, SET BOTH TO FWAM, INFORM USER
+      CMA,INA 
+      ADA PROGF 
+      SSA           PROGF < FWAM? 
+      JMP SCRCH     YES 
+      LDA PROGL 
+      CMA,INA 
+      ADA LWAM
+      SSA           PROGL >= LWAM?
+      JMP SCRCH     YES 
+ITSOK SSB           ADDRESS NEGATIVE? 
+      JMP SCRCH     YES, GO TXPE "SCR"
+      CPB PROGL     HAS LAST LINE BEEN DONE?
+      JMP GOMAN     YES, GO TYPE "READY"
+      LDA 1         INCREMENT LINE'S ADDRESS
+      INA           BY LENGTH OF LINE 
+      ADB 0,I           TO GET NEXT LINE ADDRESS
+      LDA 0,I       CHECK LINE LENGTH 
+      ADA M3
+      SSA           WAS INCREMENT POSITIVE? 
+      JMP SCRCH     NO
+      ADA M110
+      SSA           WAS INCREMENT REASONABLE? 
+      JMP ITSOK     YES 
+SCRCH JSB SCR 
+GOMAN LDA PAT 
+      STA PATCH     FROM SETUP ON IS ONCE-ONLY CODE 
+      LDA SETLP 
+      STA LPCNT     SET UP NBR OF LINE PRTR COLUMNS 
+      JMP PATCH 
+* 
+PAT   NOP 
+      BSS SETUP+37-*   37TH WD OF I/O BUFFER HERE 
+* 
+*      END OF ONCE ONLY CODE
+* 
+      SKP 
+* 
+*************************************************** 
+* 
+*      SETUP FOR I/O, SWITCH TO REQUESTED ROUTINE 
+* 
+*      CALL SEQ:  JSB SWLST 
+*                 DEF (ROUTINE ADDR)
+*      RETURN:    P+2: NORMAL EXIT
+* 
+****************************************************
+* 
+SWLST NOP 
+      LDA LISTA     SOURCE POINTER
+      LDB LISTR     DEST POINTER
+      JSB MOVE      SAVE PREVIOUS LIST DEVICE STATUS
+      LDA SWLST,I   SOURCE POINTER
+      JSB INDCK 
+      LDB LISTA     DEST POINTER
+      JSB MOVE      POST NEW LIST DEVICE STATUS 
+      LDA SPTR,I    GET OUTPUT FUNCTION CODE
+      STA CRLF1     INITIALIZE FUNCTION WORD PARAMS 
+      STA LYNC1 
+      ISZ SPTR      POINT AT SUBROUTINE ENTRY 
+      LDA SPTR
+      STA LISTR     PUT LIST SUBRTN PTR IN LISTR
+      ISZ SWLST     SKIP OVER PARAM 
+      JMP SWLST,I 
+* 
+MOVE  NOP 
+      ADA M3
+      ADB M3
+      STA SPTR
+      STB DPTR
+      LDB M2
+      LDA SPTR,I
+      STA DPTR,I
+      ISZ SPTR
+      ISZ DPTR
+      INB,SZB 
+      JMP *-5 
+      JMP MOVE,I
+* 
+      SKP 
+* 
+****************************************************
+* 
+*      CHECK LINE POSITION & DO ASCII OUTPUT
+* 
+*      CALL SEQ: JSB LYNCK
+*      RETURN:   P+1: COMPLETION
+* 
+*************************************************** 
+* 
+LYNCK NOP 
+      STA TEMPA 
+      STB TEMPB 
+      LDA LYNCK     ASSUMES JSB LYNCK FOLLOWS ENTRY 
+      ADA M2        TO OUTPUT ROUTINE 
+      STA *+2       PASS DEVICE STATUS TO SWLST 
+      JSB SWLST 
+       BSS 1
+UPDAT LDA TEMPA 
+      CMA,INA 
+      ADA TYPE
+      STA TYPE      UPDATE CARRIAGE POSITION
+      CLA 
+      JSB TSTIT 
+      SZA,RSS       DID TSTIT DO CR-LF? 
+      JMP UPDAT     YES 
+      LDA TEMPA 
+      LDB TEMPB 
+      JSB DOIO
+LYNC1  BSS 1        SET UP BY SWLST 
+      JMP LYNCK,I 
+* 
+*************************************************** 
+* 
+*      LSTIT IS AN ASC OUTPUT ROUTINE SWITCH
+*      PLIST WILL START IC TO ASC CONV IN BASIC 
+* 
+**************************************************
+* 
+LSTIT NOP 
+      JSB LSTR,I      DO LISTING TASK 
+      JMP LSTIT,I      & RETURN 
+* 
+PLIST NOP 
+      LDA PLIST      SET UP RETURN
+      STA LIST
+      LDA LSTAD 
+      JSB INDCK 
+      ADA .2
+      STA PLIST 
+      LDA HILIM      PASS LIMITS
+      LDB LOLIM 
+      JMP PLIST,I    GOTO LIST+2
+* 
+* 
+      SKP 
+***************************************************** 
+* 
+*      CHAR WILL FETCH THE NEXT INPUT CHAR
+*      CHARN WILL FETCH THE NEXT NON-BLANK CHAR 
+* 
+***************************************************** 
+* 
+CHAR  NOP 
+      LDA .10        SET UP FOR 
+      STA BLANK      FIXED FORMAT SCAN
+      JSB CHRIN      GET INPUT
+      JMP CHAR,I
+* 
+CHARN NOP 
+      LDA .32        SET UP FOR 
+      STA BLANK      FREE FORMAT SCAN 
+      JSB CHRIN      GET INPUT
+      JMP CHARN,I 
+* 
+CHRIN NOP 
+CHRN1 JSB GTCHR      FETCH NEXT CHAR
+      STA ATEMP 
+      CPA .10        EOF? 
+      JMP CHRN2 
+      JSB DELM       NO, DELIMITER? 
+       JMP CHRIN,I       YES, IGNORE
+      CLB                NO, CLEAR
+      STB CONT.           CONT. FLAG
+      JMP CHRIN,I         & RETURN
+CHRN2 LDB CONT.      YES, IS CONT.
+      SZB,RSS         ENABLED ??
+      JMP CHRIN,I        NO, RETURN 
+      LDA M2             YES, GIVE 2
+      LDB BLNKA           BLANKS
+      JSB DSPLY             & 
+      JSB DRQST          GET MORE INPUT 
+      JMP CHRN1 
+* 
+      SKP 
+* 
+****************************************************
+* 
+*      DELM WILL TEST FOR A DELIMITER 
+* 
+****************************************************
+* 
+DELM  NOP 
+      CPA .32      BLANK ?
+      JMP DELM,I      YES, P+1 RETURN 
+      CPA O54        COMMA ?
+      JMP DELM1       YES 
+      ISZ DELM       NEITHER, TAKE
+      JMP DELM,I      P+2 RETURN
+DELM1 ISZ CONT.      INSURE CONT. FLAG IS ON
+      JMP DELM,I     (FOR INPUT OUTSIDE OF CHRIN) 
+* 
+************************************************
+* 
+*      DO CARRIAGE RETURN, LINE FEED OUTPUT 
+* 
+************************************************
+* 
+CRLF  NOP           USED AS FLAG BY "LIST" IN BASIC 
+      LDA M2
+      LDB RDYA
+      CPA CRLF1     KLUDGE TO ALLOW BLOCKING UP 
+      JMP LYNC1,I   OUTPUT, THIS DOES FLUSH 
+      JSB DOIO      DO CARRIAGE RETURN, LINE FEED 
+CRLF1  BSS 1        SET UP BY SWLST 
+      CLA 
+      STA TYPE      DENOTE NEW LINE 
+      JMP CRLF,I
+* 
+      SKP 
+* 
+******************************************************
+* 
+*      FIND REQUESTED PROGRAM CORE LIMITS 
+* 
+*      CALL SEQ:  (A)=NEXT CHAR 
+*                 JSB PGOLM 
+*      RETURN:    P+1: EOF DETECTED 
+*                 P+2: MORE INPUT TO COME 
+*                 (A)=NEXT CHAR 
+*                 LOLIM=LOW CORE LIMIT
+*                 HILIM=HI CORE LIMIT 
+* 
+***************************************************** 
+* 
+PGOLM NOP 
+      JSB LIMCK      FETCH PROGRAM LIMITS 
+      STA ATEMP      SAVE NEXT CHAR 
+      LDA LOLIM 
+      JSB FNDPS      FIND POSITION
+       NOP            OF 1ST STATEMENT
+       NOP
+      STB LOLIM       SAVE IT 
+      LDA HILIM 
+      INA 
+      JSB FNDPS      FIND POSITION
+       NOP            OF LAST STATEMENT 
+       NOP
+      STB HILIM       SAVE IT 
+      LDA ATEMP      RETRIEVE NEXT CHAR 
+      CPA .10        EOF ?? 
+      JMP PGOLM,I    YES, TAKE P+1 RETURN 
+      ISZ PGOLM 
+      JMP PGOLM,I    NO, TAKE P+2 EXIT
+* 
+* 
+      SKP 
+* 
+********************************************************
+* 
+*      FETCH PROGRAM LIMITS FROM INPUT BUFFER 
+*      ACCORDING TO THE FOLLOWING SYNTAX: 
+*          ...<NULL>... 
+*          ...<LIM1>... 
+*          ...<LIM1><DELIMITER><LIM2>...
+* 
+*      CALL SEQ:  (A)=NEXT CHAR 
+*                 JSB LIMCK 
+*      RETURN:    (A)=NEXT CHAR 
+*                 LOLIM=LO LIMIT
+*                 HILIM=HI LIMIT
+* 
+********************************************************
+* 
+LIMCK NOP 
+      CLB,INB        SET UP 
+      STB LOLIM       DEFAULT LIMITS
+      LDB .9999       1-9999
+      STB HILIM 
+      LDB M2
+      STB CNT1
+      LDB .10        SET UP FOR 
+      STB BLANK       FIXED FORMAT SCAN 
+      RSS 
+      JSB CHAR       FETCH NEXT CHAR
+LIM1  JSB DELM       DELIMITER ?
+       JMP *-2        YES, IGNORE 
+      JSB DIGCK      DIGIT ?
+       JMP LIMCK,I    NO,EXIT 
+      ADA .48        YES, 
+      JSB INTIN      FETCH #
+       DEF MAXSN       &
+      STB HILIM      SAVE IT
+      ISZ CNT1       DONE ? 
+      RSS 
+      JMP LIM2
+      STB LOLIM      NO, CONTINUE 
+      JMP LIM1
+LIM2  INB            INSURE 
+      CMB,INB         LOLIM<=HILIM
+      ADB LOLIM 
+      SSB,RSS 
+      JMP SYE25      IT'S NOT, ERROR
+      LDB .32        OK, SET UP FOR 
+      STB BLANK       FREE FORMAT INPUT 
+      RSS             FETCH NEXT
+      JSB CHARN        NON-DELIMITER
+      JSB DELM         CHARACTER
+       JMP *-2       (A)=NEXT CHAR
+      JMP LIMCK,I     & RETURN
+* 
+      SKP 
+* 
+****************************************************
+* 
+*      CHECK LEGAL LINE # LIMITS OF INPUT 
+* 
+*      CALL SEQ: (A)=CHAR COUNT 
+*                (B)=BUFFER ADDRESS 
+*                JSB CKLLN
+*      RETURN:   P+1: OUTSIDE OF LIMITS 
+*                P+2: WITHIN LIMITS 
+* 
+*************************************************** 
+* 
+CKLLN NOP 
+      CMA            SET UP FOR 
+      STA INCNT       GETCR 
+      RBL             ROUTINE 
+      STB INBAD 
+      LDB LOLIM      INPUT LIMITS 
+      CPB .1          OTHER THAN
+      RSS             1-9999 ???
+      JMP CKLL1 
+      LDB HILIM 
+      CPB .9999 
+      JMP CKLL2      NO, TAKE P+2 EXIT
+CKLL1 JSB GETCR      YES, FETCH NEXT CHAR 
+       JMP CKLLN,I    NULL RECORD, TAKE FAIL EXIT 
+      CPA .32        IGNORE PRECEEDING
+      JMP CKLL1       BLANKS
+      JSB INTIN      GET CURRENT LINE # 
+       DEF MAXSN
+      LDA LOLIM 
+      CMA,INA 
+      ADA 1 
+      SSA            #>=LOLIM ? 
+      JMP CKLLN,I    NO, P+1
+      CMB,INB 
+      ADB HILIM 
+      SSB            #<=HILIM ? 
+      JMP CKLLN,I    NO, P+1
+CKLL2 ISZ CKLLN 
+      JMP CKLLN,I    YES, P+2 
+* 
+* 
+      SKP 
+* 
+***************************************************** 
+* 
+*      INTIN WILL BUILD AN INTEGER FROM INPUT 
+* 
+*      CALL SEQ: (A)=CURRENT CHAR 
+*                JSB INTIN
+*                DEF (MAX #)
+*     RETURN:    (B)=INTEGER
+* 
+***************************************************** 
+* 
+INTIN NOP 
+      STA ATEMP      SAVE CUR. CHAR.
+      LDA INTIN,I    FETCH
+      JSB INDCK       MAXIMUM 
+      STA INTI1        ALLOWABLE
+      ISZ INTIN         LIMIT 
+      LDA SBPTR      SAVE 
+      STA TEMP1       SBPTR 
+      LDA TEMAD        STATUS 
+      STA SBPTR 
+      LDA ATEMP      RECOVER CUR.CHAR.
+      JSB INTCK      FETCH INTEGER
+INTI1  BSS 1
+      STA ATEMP 
+      LDA TEMP1      RESTORE
+      STA SBPTR       SBPTR STATUS
+      LDA ATEMP 
+      JMP INTIN,I 
+* 
+      SKP 
+*************************************************** 
+* 
+*      SEARCH COMMAND DEVICE TABLE FOR VALID SYNTAX 
+* 
+*      CALL SEQ:  (A)=CURRENT CHAR
+*                 (B)=-TAB LENGTH 
+*                 JSB SWDEV 
+*                 DEF (TABLE START ADDRESS) 
+*      RETURN:    P+2: FAIL RETURN
+*                      (A)=CURRENT CHAR 
+*                 P+3: SUCCES RETURN
+*                      (A)=CURRENT CHAR 
+*                      (B)=TABLE POSITION 
+*                      TBLPT=ENTRY ADDRESS
+* 
+**************************************************
+* 
+SWDEV NOP 
+      STA ATEMP      SAVE CURRENT CHAR
+      LDA SWDEV,I    FIND TABLE START 
+      JSB INDCK 
+      STA SWDV1 
+      ISZ SWDEV 
+SWDV0 LDA ATEMP      RETRIEVE CURRENT CHAR
+      SZB,RSS        ANY ENTRIES ?
+      JMP SWDEV,I     NO, TAKE FAIL EXIT
+      JSB TBSRH       YES, SEARCH DEVICE
+SWDV1 NOP               TABLE 
+       JMP SWDV3      NOT FOUND 
+* 
+      JSB CHARN       FOUND,FETCH NEXT CAHR 
+      JSB DELM      IGNORE DELIMITERS 
+       JMP *-2
+      STA ATEMP      SAVE A 
+      LDA COUNT      FIND 
+      JSB INDCK       CURRENT 
+      ADA M2           COUNT
+      LDB 0,I 
+SWDV2 CMB                   & 
+      ADB LNGTH          COMPUTE
+      CMB,INB         TABLE POSITION
+      LDA ATEMP 
+      ISZ SWDEV       MOVE TO SUCCES RETURN 
+      JMP SWDEV,I      & EXIT 
+* 
+SWDV3 LDB LNGTH 
+SWDV4 LDA SWDV1,I    ALLOW 0 LENGTH SYMBOL
+      AND .7           AS VALID TABLE ENTRY 
+      SZA,RSS         0 LENGTH ?
+      JMP SWDV5 
+      ADA .3          NO, MOVE TO NEXT ENTRY
+      ARS 
+      ADA SWDV1 
+      STA SWDV1 
+      INB,SZB         END OF TABLE ?
+      JMP SWDV4       NO, CONTINUE
+      JMP SWDV0       YES, NO MATCH 
+* 
+SWDV5 LDA SWDV1      0 LNGTH SYMBOL FOUND 
+      STA TBLPT      SAVE ENTRY ADDRESS 
+      JMP SWDV2 
+* 
+     SKP
+******************************************************* 
+* 
+*      EXECUTE SPECIFIED COMMAND
+* 
+*      CALL SEQ:  (A)=NEXT CHARACTER
+*                 (B)=EXECUTION TABLE POSITION
+*                 JSB XQCMD 
+*                 DEF (EXECUTION TABLE START) 
+*                 NOP (USED FOR STORAGE BY XQCMD) 
+*      RETURN:    P+3: COMPLETION RETURN
+*                 P+4: CONTINUATION RETURN (WHEN REQUIRED)
+* 
+********************************************************* 
+* 
+XQCMD NOP 
+      STA ATEMP      SAVE CURRENT CHAR
+      ADB M1         FIND EXECUTION 
+      RBL,SLB         TABLE ADDRESS 
+      JSB CALER 
+      LDA XQCMD,I 
+      JSB INDCK 
+      ADB 0          (B)=EXECUTION TABLE ENTRY
+      ISZ XQCMD 
+      STB XQCMD,I   SAVE IT IN USER SUPPLIED STORAGE
+      INB 
+      LDA 1,I       GET ADDRESS OF I/O ROUTINE
+      JSB INDCK      FROM BRTBL 
+      ISZ XQCMD 
+      LDB XQCMD     SAVE IT IN CALLER 
+      STB 0,I         SUPPLIED STORAGE
+      INA 
+      STA TEMPX 
+      LDB TBLPT     GET ADDRESS OF MNEM ENTRY AND 
+      LDB 1,I        EXTRACT THE LOGICAL UNIT NO. 
+      LSR 9           AND RIGHT JUSTIFY 
+      LDA ATEMP      RECOVER CURRENT CHAR 
+      JMP TEMPX,I     TRANSFER TO REQUESTED ROUTINE 
+* 
+      SKP 
+****************************************************
+* 
+*      CHECK OCCURANCE OF "ON" OR "FROM" SYNTAX 
+*      IF XSYNF=1 ON/FROM/TO MUST OCCUR IN COMMAND SYNTAX 
+*      IF XSYNF=1 ON/FROM MUST OCCUR IN COMMAND SYNTAX
+*      IF XSYNF=0 ON/FROM MAY BE OMITTED FROM COMMAND 
+* 
+*      CALL SEQ:  JSB ONS 
+*      RETURN:    P+1: FOUND, (A)=NEXT CHAR 
+* 
+*      CALL SEQ:  JSB FROMS 
+*      RETURN:    P+1: FOUND, (A)=NEXT CHAR 
+* 
+* 
+***************************************************** 
+* 
+ONS   NOP            CHECK "ON" SYNTAX
+      LDB ONA 
+      JSB SYNCH 
+      CLB           SET ON/FROM FLAG TO ZERO
+      STB FRMTO     FRMTO FLAG=0 FOR "ON" 
+      LDB DEVCT     GET -# OF DEVICE MNEM.
+      JMP ONS,I      OK, RETURN 
+* 
+FROMS NOP            CHECK "FROM" SYNTAX
+      LDB FROMA 
+      JSB SYNCH 
+      CLB,INB       FRMTO FLAG=1 FOR "FROM" 
+      STB FRMTO 
+      LDB DEVCT     GET -# OF DEVICE MNEM.
+      JMP FROMS,I    OK, RETURN 
+* 
+SYNCH NOP 
+      STB SYNC1 
+      CCB 
+      JSB TBSRH      SEARCH INPUT BUFFER
+SYNC1  NOP
+       JMP SYNC2     NOT FOUND
+      JSB CHARN      FETCH NEXT NON-BLANK CHAR
+      JSB DELM       DELIMITER ?
+       JMP *-2        YES, IGNORE 
+      CPA .10        EOF ?? 
+      JMP INVSC      YES, INPUT ERROR 
+      JMP SYNCH,I    NO, OK EXIT
+SYNC2 LDB XSYNF      IS SYNTAX REQUIRED 
+      SZB             ??? 
+      JMP INVSC      YES, ERROR 
+      JMP SYNCH,I    NO, OK EXIT
+      SKP 
+* 
+*************************************************** 
+* 
+*      ALLOW SYNTAX ABREVIATION 
+* 
+*      CALL SEQ:  JSB ABREV 
+*                 DEF (ABREVIATED SYNTAX) 
+*      RETURN:    P+1: FOUND
+*                 P+2: NOT FOUND, (A)= NEXT CHAR
+* 
+**************************************************
+* 
+ABREV NOP 
+      LDA ABREV,I 
+      STA ABRE1 
+      ISZ ABREV 
+      JSB CHARN 
+      CCB 
+      JSB TBSRH 
+ABRE1  BSS 1
+      ISZ ABREV 
+      JMP ABREV,I 
+* 
+      SKP 
+****************************************************
+* 
+*      SCRATCH SUBROUTINE 
+* 
+*      CALL SEQ:  JSB SCR 
+*      RETURN:    P+1: NORMAL 
+* 
+*************************************************** 
+* 
+SCR   NOP 
+      LDA FWAM
+      STA PROGF 
+      STA PROGL 
+      JMP SCR,I 
+* 
+      SKP 
+* 
+*      STORAGE & CONSTANTS & OTHER THINGS OF INTEREST 
+* 
+      SUP 
+BUFA  DEF SETUP      I/O BUFFER ADDRESS 
+LSTAD DEF LIST       INDEX TO LIST ROUTINE IN BASIC 
+COUNT DEF LNGTH      INDEX TO TABLE POSITION IN TBSRH 
+LSTR  DEF PLIST      INIT TO PLIST
+PLSTA DEF PLIST      ADDRESS OF PLIST ROUTINE 
+* 
+CONT. NOP            KBD INPUT CONTINUATION FLAG
+ATEMP NOP            CURRENT CHARACTER
+XSYNF OCT 1          ON.FROM SYNTAX SWITCH, INIT. TO YES
+LOLIM NOP            LOW LIMIT
+HILIM NOP            HIGH LIMIT 
+* 
+O54   OCT 54
+.9999 DEC 9999
+M110  DEC -110
+* 
+RDYA  DEF *+1        BASIC'S "READY" MESSAGE
+      OCT 6412
+      ASC 3,READY 
+* 
+BLNKA DEF *+1        INPUT CONTINUATION PROMPT
+      ASC 1,
+* 
+ONA   DEF *+1        "ON" SYNTAX
+      OCT 2 
+      ASC 1,ON
+* 
+FROMA DEF *+1        "FROM" SYNTAX
+      OCT 4 
+      ASC 2,FROM
+* 
+* 
+TEMAD DEF TMP 
+TMP   BSS 1 
+TEMP1 BSS 1 
+TEMPA BSS 1 
+TEMPB BSS 1 
+TEMPX BSS 1 
+CNT1  BSS 1 
+SPTR  BSS 1 
+DPTR  BSS 1 
+FRMTO BSS 1 
+      HED ****** DOIO ******                A-29102-60004-1 REV. B
+* 
+********************************************* 
+*      DOIO 
+* 
+* 
+********************************************
+* 
+* 
+      ENT DOIO
+* 
+      EXT EXEC
+      EXT B2000,B777,.63,M1,.1,.2 
+* 
+DOIO  NOP 
+      STA LENTH 
+      STB BUFAD         STORE ADDRESS OF BUFFER 
+      LDB DOIO,I        GET CONTROL WORD
+      ISZ DOIO
+      LDA 1 
+      AND FMASK         EXTRACT FUNCTION CODE 
+      ALF 
+      STA ICODE         AND STORE IT AWAY 
+      LDA 1 
+      AND CMASK         EXTRACT CONTROL INFO
+     STA ICNWD          AND STORE IT AWAY 
+      AND DMASK         EXTRACT LOGICAL UNIT NBR
+      CPA .2
+      RSS 
+      JMP SETX
+      LDA M1
+      ADA ICNWD 
+      STA ICNWD         LU 2 CHANGE TO LU 1 
+SETX  LDA ICODE         SET X BIT FOR HONESTY MODE ON 
+      CPA .1            INPUT 
+      JMP DOIT
+      LDA ICNWD 
+      IOR BIT10 
+      STA ICNWD 
+DOIT  JSB EXEC          MAKE EXEC CALL
+      DEF *+5 
+      DEF ICODE 
+      DEF ICNWD 
+BUFAD DEF BUFAD 
+      DEF LENTH 
+      AND .32       BIT 5 SET MEANS EOF 
+      SZA           MAKE SURE EOF SHOWS 
+      CLB           ZERO LENGTH RECORD
+      STB 0            SET CHAR COUNT IN AREG 
+      JMP DOIO,I
+LENTH NOP 
+ICODE NOP 
+ICNWD NOP 
+BIT10 EQU B2000 
+FMASK OCT 170000
+CMASK EQU B777
+DMASK EQU .63 
+      HED * BASIC I-O ROUTINES FOR RTE-B *  A-29102-60004-1 REV. B
+* 
+************************************************
+* 
+*      READR
+* 
+* 
+************************************************
+* 
+* 
+FCINP EQU 10400B    FUNCTION CODE FOR INPUT 
+FCOUT EQU 24000B    FUNCTION CODE FOR OUTPUT
+* 
+****************************************************
+* 
+* ENTRY POINTS: 
+* 
+* 
+      ENT LOAD,LOADA,L.RDR
+      ENT EREED,RDNBR,REDNO 
+      ENT L.PUN,LEADR,ERCRD,RCRD
+      ENT LIST.,L.LST,ELIST 
+      ENT DSPLY,DSPLA,EDSPL 
+      ENT KEYIA,KEYIN,EINP,ETTYS
+      ENT LPPOS 
+* 
+* 
+* EXTERNAL REFERENCES:
+* 
+      EXT .10,INVSC,MO100,READR 
+      EXT EINPT 
+      EXT TFLAG,ZERO,EFASE,EFIO,READS 
+      EXT EREAD 
+      EXT GETCR,BCKSP,SBPTR,M1
+      EXT FSC,M2,SYMCK,COMM1,ERROR,.STOP
+      EXT TEMPS 
+      EXT MO133 
+      EXT PRINS,EPRIN 
+      EXT .1
+      EXT SEQNO 
+      EXT M6,.7,.23 
+* 
+* 
+******************************************************* 
+* 
+      SKP 
+      SKP 
+***** 
+*      GET INPUT PROGRAM (FROM COMMAND) 
+***** 
+L.RDR NOP 
+      CPA .10        EOF ?
+      RSS 
+      JMP INVSC       NO, ERROR 
+      LDA FRMTO 
+      SZA,RSS       L.RDR AND "ON" INCOMPATIBLE 
+      JMP INVSC 
+      LDA STFCI      SET UP I/O 
+      IOR 1           CODE
+      STA FNCTW 
+      LDA PLODA      SWITCH BASIC TO GET
+      STA READR      NEXT RECORD FROM PLOAD ROUTINE 
+      LDA L.RDR 
+      INA            SET RETURN FOR CONTINUATION
+      JMP 0,I        LET BASIC PROCESS INPUT
+* 
+PLOAD NOP 
+      JSB LOAD       GET A RECORD 
+      LDB TMPB2      FETCH BUF ADDR 
+      JSB CKLLN      LINE LIMITS SATISFIED ?
+       JMP LOAD1      NO, IGNORE IT 
+      LDA TFLAG       YES,GIVE IT TO BASIC
+      JMP PLOAD,I      FOR PROCESSING 
+* 
+* OTHER NAMES FOR L.RDR 
+* 
+PHOT1 EQU L.RDR 
+PHOT2 EQU L.RDR 
+* 
+CARD1 EQU L.RDR 
+CARD2 EQU L.RDR 
+* 
+** MAKE THEM ENTRY POINTS ALSO
+* 
+      ENT PHOT1,PHOT2,CARD1,CARD2 
+* 
+      SKP 
+***** 
+*      PROVIDE PUNCHED PROGRAM OUTPUT 
+***** 
+L.PUN NOP 
+      JSB SETOT     SET UP FOR OUTPUT DEVICE
+      LDA MO133      GIVE LEADER
+      JSB LEADR 
+      JSB LSTIT      GIVE PROGRAM 
+      LDA MO133 
+      JSB LEADR      GIVE TRAILER 
+      JMP L.PUN,I    RETURN 
+***** 
+*      PROVIDE PROGRAM LISTING
+***** 
+L.LST NOP 
+      JSB SETOT     SET UP FOR OUTPUT DEVICE
+      JSB LSTIT      LIST PROGRAM 
+      JSB LSKIP       GIVE FORM FEED
+      JMP L.LST,I    & RETURN 
+***** 
+*     SET UP FOR OUTPUT DEVICE
+***** 
+* 
+SETOT NOP 
+      CPA .10       EOF?
+      RSS 
+      JMP INVSC     NO,ERROR
+      LDA FRMTO 
+      SZA           OUTPUT AND "FROM" ARE INCOMPATIBLE
+      JMP INVSC 
+      LDA STFCO 
+      IOR 1 
+      STA WORD
+      JSB SWLST 
+       DEF CTTYS
+      JMP SETOT,I 
+* 
+** OTHER NAMES FOR OUTPUT 
+* 
+PNCH1 EQU L.PUN 
+PNCH2 EQU L.PUN 
+* 
+LP1   EQU L.LST 
+LP2   EQU L.LST 
+* 
+CRT1  EQU L.LST 
+CRT2  EQU L.LST 
+CRT3  EQU L.LST 
+CRT4  EQU L.LST 
+* 
+TTY1  EQU L.LST 
+TTY2  EQU L.LST 
+TTY3  EQU L.LST 
+TTY4  EQU L.LST 
+* 
+** MAKE THEM ENTRIES TOO
+* 
+      ENT PNCH1,PNCH2,LP1,LP2 
+      ENT CRT1,CRT2,CRT3,CRT4 
+      ENT TTY1,TTY2,TTY3,TTY4 
+      SKP 
+***** 
+* 
+** COME HERE UPON RECOGNIZING THE STRING "READ" AT
+*  SYNTAX TIME, OR WHEN EXECUTING A READ STATEMENT
+* 
+***** 
+EREED NOP 
+      JSB EFIO     EXECUTION PHASE? 
+       JMP CKRED    NO, GO CHECK SYNTAX 
+      JMP EREAD    YES, CODE IS IN BASIC INTERPRETER
+***** 
+** HERE AT SYNTAX TIME
+***** 
+CKRED JSB GETCR    GET NEXT CHAR
+       JMP CKTT1   (END OF INPUT LINE)
+      CPA NUMSN    IS THAT CHAR A "#"?
+      JMP CKTT2    YES, SET UP FOR READ#
+CKTT1 JSB BCKSP    NO, BACKUP OVER THAT CHAR
+      JMP READS     AND PROCESS NORMAL READ STATEMENT 
+CKTT2 LDB SBPTR    GET ADDRESS OF CALL
+      ADB M1        IN SYNTAX BUFFER
+      LDA 1,I        AND INCREMENT BRANCH TABLE 
+      INA             OFFSET BY ONE 
+      STA 1,I           THEN PUT IT BACK
+      JSB FSC      GET FORMULA FOR LU#
+      CPA .10      END OF STATEMENT?
+      JMP READS    YES, PROCESS NORMALLY FROM HERE
+      LDB M2       NO, IS THE DELIMITER 
+      JSB SYMCK     A COMMA 
+       DEF COMM1     OR SEMICOLON?
+       RSS
+      JMP READS    YES, PROCESS NORMALLY FROM HERE
+      JSB ERROR    NO, ERROR 21 
+      DEF *+3 
+      DEF .21 
+      DEF ZERO
+      JSB .STOP 
+***** 
+* 
+** HERE TO EXECUTE READ# STATEMENT
+* 
+***** 
+RDNBR NOP 
+      JSB SEQNO    GET NEW LU NUMBER
+      STA TMPA2     SAVE LU NUMBER
+      ISZ TEMPS    MOVE INTERP CODE PTR BY END FORMULA
+      ADA STFCI    MAKE NEW FUNCT CONTROL WORD
+      STA FNCTW     AND PUT IT IN THE CALL TO DOIO
+      LDA TMPA2     RECALL LU NUMBER
+      JSB GETOF     GET TABLE OFFSET FOR DEVICE 
+      ADA INTBL     ADD TABLE ADDRESS 
+      LDA 0,I        THEN GET ADDRESS OF ROUTINE
+      STA READR       AND SET UP FOR INPUT
+      JMP EINPT    FROM HERE TREAT AS INPUT STMT
+***** 
+*      HERE FOR PRINT STATEMENT 
+***** 
+ELIST NOP 
+      JSB EFIO      EXECUTION PHASE ? 
+       JMP CKTTY    SYNTX PHASE CK FOR PRINT# 
+      JSB SWLST      YES, SWITCH TO LST DEVICE
+DSPLA  DEF DSPLY
+      JMP EPRIN     GO EXECUTE STATEMENT
+* 
+CKTTY JSB GETCR     GET NEXT CHAR 
+       JMP NOLUK    (END OF INPUT LINE) 
+      CPA NUMSN     IS THAT CHAR "#"
+      JMP UBET      YES, SETUP FOR PRINT# 
+NOLUK JSB BCKSP     NO,BACKUP OVER THAT CHAR
+      JMP PRINS      AND PROCESS NORMALLY 
+UBET  LDA SBPTR     GET ADDRESS OF
+      ADA M1         CALL IN SYNTX BUFFER 
+      LDB 0,I         AND INCREMENT BRANCH TBL
+      ADB .1           OFFSET BY ONE
+      STB 0,I           THEN PUT IT BACK
+      JMP PRINS     FROM THERE PROCESS NORMALLY 
+***** 
+*      HERE FOR INPUT STATEMENT 
+***** 
+EINP  NOP 
+      JSB EFIO       EXECUTION PHASE ?
+       JMP READS      NO, GO CHECK SYNTAX 
+      LDA KEYIA      YES, SET UP FOR
+      STA READR       KBD INPUT 
+      JMP EINPT      GO EXECUTE INPUT STATEMENT 
+***** 
+* HERE TO EXECUTE PRINT#
+***** 
+ETTYS NOP 
+      JSB SEQNO      GET NEW LU # 
+      STA TMPA2 
+      ADA STFCO      MAKE NEW FUNCT CONTROL WORD
+      STA WORD       AND STORE IT AWAY
+      LDA TMPA2     GET LU NUMBER 
+      JSB GETOF 
+      ADA OUTBL     GET ADDRESS OF TABLE ENTRY
+      LDA 0,I        THEN GET ADDRESS OF OUTPUT RTN 
+      STA ETT1        AND SET UP OUTPUT 
+      JSB SWLST      SET UP FOR APPROPIATE DEVICE 
+ETT1  DEF CTTYS 
+      JMP EPRIN      THEN PROCESS NORMALLY
+      HED ****** INPUT ROUTINES ******      A-29102-60004-1 REV. B
+***** 
+*      READ A RECORD FROM READR 
+***** 
+LOAD  NOP 
+      STA TMPA2       SAVE MAX COUNT (-CHARS, BCS CONV.)
+      STB TMPB2      SAVE BUFFER ADDRESS
+LOAD1 LDA TMPA2 
+      LDB TMPB2 
+      JSB REDNO      GET A RECORD 
+      CPA ZERO       ANY DATA ? 
+      JMP EOT        NO, JUST LEADER/TRAILER
+      STA TFLAG      YES, NEXT TIME WILL BE TRAILER 
+      JMP LOAD,I
+* 
+EOT   LDB TFLAG 
+      SSB 
+      JMP LOAD1      LEADER; GO READ MORE 
+      STA TFLAG      ASSUME LEADER FOR NEW TAPE NEXT
+      JMP L.RDR,I    EXIT TO COMPLETION RETURN
+***** 
+** HERE TO GET INPUT LINE 
+***** 
+REDNO NOP 
+      CMA,INA      MAKE CHAR COUNT NEGATIVE 
+      JSB DOIO     DO THE INPUT 
+FNCTW NOP          THIS WORD SET UP BY RDNBR
+      JMP REDNO,I 
+***** 
+*     HERE FOR INPUT FROM LU# 1 
+***** 
+KEYIN NOP 
+      CMA,INA        SET CHAR COUNT NEG.
+      STA TMPA2      SAVE A 
+      STB TMPB2      SAVE B 
+      JSB EFASE      EXECUTION PHASE ?? 
+       JMP SKPIT      NO
+      CCA 
+      LDB QMRKA      OUTPUT QUESTION MARK 
+      JSB DSPLY 
+SKPIT LDA TMPA2      RECOVER CHAR COUNT 
+      LDB TMPB2 
+      JSB DOIO       GET INPUT
+       ABS FCINP+1    INPUT WITH ECHO FROM LU# 1
+      JMP KEYIN,I 
+* 
+      HED * SMALL ROUTINES FOR EACH OUTPUT  A-29102-60004-1 REV. B
+* 
+***** 
+*     FOR LU# 4 
+***** 
+      NOP            STORAGE FOR CARRIAGE POSITION
+      DEC -73        72 CHARS/LINE
+      ABS FCOUT+4 
+RCRD  NOP 
+      JSB LYNCK      DO ASCII OUTPUT
+      JMP RCRD,I
+***** 
+*     FOR LU# 6 
+***** 
+LPPOS NOP            STORAGE FOR CARRIAGE POSITION
+LPCNT DEC -81 
+      ABS FCOUT+6 
+LIST. NOP 
+      JSB LYNCK     ASCII OUTPUT
+      JMP LIST.,I 
+***** 
+*     FOR LU# 1 
+* 
+      NOP 
+      DEC -73 
+      ABS FCOUT+1 
+DSPLY NOP 
+      JSB LYNCK 
+      JMP DSPLY,I 
+***** 
+*     FOR MULTI-DEVICE OUTPUT 
+* 
+***** 
+      NOP 
+      DEC -73        THIS CODE
+WORD  NOP             SETS UP 
+CTTYS NOP              A NEW
+      JSB LYNCK         "DEVICE"
+      JMP CTTYS,I        FOR OUTPUT 
+      HED ****** UTILITY ROUTINES ******    A-29102-60004-1 REV. B
+* 
+***** 
+*     OUTPUT LEADER/TRAILER 
+***** 
+LEADR NOP 
+      STA ERCRD      SAVE COUNT 
+      LDA LYNC1      GET OUTPUT FUNCTION CODE 
+      STA LEAD1 
+LEAD  CCA             ONE FRAME 
+      LDB ZEROA 
+      JSB DOIO       ASSUME DEVICE ALREADY SWITCHED 
+LEAD1 BSS 1 
+      ISZ ERCRD      DONE?? 
+      JMP LEAD       NO 
+      JMP LEADR,I 
+***** 
+*     DO A PAGE EJECT 
+***** 
+LSKIP NOP 
+      LDA WORD      GET FUNC CONTROL WORD 
+      AND .63       ISOLATE LU #
+      CPA .1        IF LU #1
+      JMP LSKIP,I   RETURN IMMEDIATELY
+      CCA            1 CHAR 
+      LDB SKPCD 
+      JSB CTTYS      OUTPUT SKIP CODE 
+      JSB CRLF       KEEP IN SYNC WITH LP 
+      JMP LSKIP,I 
+***** 
+* 
+** GETOF ** CONVERT LU # TO OFFSET IN TABLE 
+* 
+*     LDA LOGICAL UNIT NUMBER 
+*     JSB GETOF 
+*     RETURN  .A.=OFFSET
+* 
+* NOTE:  AN ERROR RESULTS IF LU IS 0 OR NEGATIVE
+*        ANY LU > 6 RETURNS AN OFFSET OF 7
+* 
+***** 
+* 
+GETOF NOP 
+      ADA M1        IF LU IS
+      SSA            0 OR NEGATIVE, 
+      JMP LUERR       ISSUE ERROR 
+      ADA M6        IF LU IS
+      SSA,RSS        7 OF GREATER 
+      JMP USE7        THEN RETURN OFFSET OF 7 
+      ADA .7
+      RSS 
+USE7  LDA .7
+      JMP GETOF,I 
+* 
+LUERR JSB ERROR 
+      DEF *+3 
+      DEF .23 
+      DEF ZERO
+      JSB .STOP 
+      HED **** CONSTANTS AND STORAGE ****   A-29102-60004-1 REV. B
+********************************************************* 
+* 
+** CONSTANTS AND STORAGE
+* 
+*************************************************** 
+* 
+.21   DEC 21
+NUMSN OCT 43
+ERCRD NOP 
+ZEROA  DEF ZERO 
+EDSPL EQU ELIST 
+SKPCD DEF *+1 
+      OCT 6000    FORM FEED 
+KEYIA DEF KEYIN 
+QMRKA DEF *+1 
+      ASC 1,? 
+TMPA2 BSS 1 
+TMPB2 BSS 1 
+LOADA DEF LOAD
+PLODA DEF PLOAD 
+STFCI ABS FCINP 
+STFCO ABS FCOUT 
+************************************************* 
+* 
+* TABLES TO SET UP PRINT# AND READ# LU'S
+* 
+**********************************************************
+OUTBL DEF * 
+      DEF DSPLY 
+      DEF CTTYS 
+      DEF CTTYS 
+      DEF RCRD
+      DEF CTTYS 
+      DEF LIST. 
+      DEF CTTYS 
+* 
+INTBL DEF * 
+      DEF KEYIN 
+      DEF REDNO 
+      DEF REDNO 
+      DEF REDNO 
+      DEF REDNO 
+      DEF REDNO 
+      DEF REDNO 
+* 
+*********************************************************** 
+      HED RTE-B BASIC CONTROL               A-29102-60004-1 REV. B
+****************************************
+*     RTE-B BASIC CONTROL 
+****************************************
+* 
+      SPC 5 
+      ENT START 
+* 
+      EXT .STOP 
+* 
+START JMP INIT
+      JSB .STOP 
+      SPC 5 
+* 
+      ENT RUNIT,.RUN
+* 
+      EXT XH,XL,EENDA,PEXMA 
+* 
+RUNIT NOP           RUN THE PROGRAM 
+.RUN  CLA 
+      STA XH
+      INA 
+      STA XL
+      LDA EENDA 
+      STA PEXMA 
+      JMP INIT
+      SKP 
+      ENT ELINK 
+* 
+      EXT PXMKA,PEXMA 
+* 
+ELINK LDB PXMKA 
+      STB PEXMA 
+      JMP INIT
+      SPC 5 
+      ENT EPAUS 
+* 
+      EXT M10 
+* 
+FCNRD EQU 10401B    READ CONTROL WORD 
+* 
+EPAUS NOP           EXECUTE "PAUSE" 
+      LDA M10       LOAD -# OF CHARACTERS 
+      LDB PAZA
+      JSB DSPLY    OUTPUT "PAUSE" 
+EP1   CLA,INA      READ ONE WORD
+      LDB CTRLA 
+      JSB DOIO     READ 
+      ABS FCNRD 
+      LDB CTRL     GET OPERATOR MESSAGE 
+      CPB GO       IS IT CONTINUE 
+      JMP EPAUS,I  YES! 
+      CPB AB       IS IT ABORT? 
+      JSB .STOP    YES
+      JMP EP1 
+* 
+PAZA  DEF PAZ 
+PAZ   OCT 6412
+      ASC 3,PAUSE 
+      OCT 6412     CRLF 
+* 
+CTRLA DEF *+1 
+CTRL  BSS 1 
+GO    ASC 1,GO
+AB    ASC 1,AB
+* 
+      ENT TRACE 
+* 
+      EXT TRAP
+* 
+TRACE NOP 
+      JSB TRAP
+      JMP TRACE,I 
+      SKP 
+* 
+* BRANCH AND MNEMONIC TABLE ADDRESS POINTERS
+* 
+* 
+      ENT SRULA,ADRED,CMDAD,ASBTB,SBTBE,FCNTB,XNFOA,STDCA 
+      ENT FWAM,LWAM 
+* 
+      EXT SRULE,MNEM,CMDS,SBTBL,LSBTB,FCNEX,XNFO,STDCL
+* 
+SRULA DEF SRULE     START OF SPECIAL CALL MNEMONICS 
+ADRED DEF MNEM      START OF CALL MNEMONICS 
+CMDAD DEF CMDS      START OF COMMAND MNEMONICS
+SBTBE DEF LSBTB     END OF FUNCTION TABLE 
+ASBTB DEF SBTBL     START OF BRANCH TABLE 
+FCNTB DEF FCNEX     START OF FUNCTION TABLE 
+XNFOA DEF XNFO      START OF PARAMETER TYPE TABLE 
+STDCA DEF STDCL     END OF SUBROUTINE CALL
+FWAM  NOP           FIRST WORD AVAILABLE MEMORY 
+LWAM  NOP           LAST WORD AVAILABLE MEMEORY 
+      HED RTE-B CATCH-ALL MODULE            A-29102-60004-1 REV. B
+      SUP PRESS     ASCII LISTING 
+****************************************
+* RTE-B CATCH-ALL MODULE
+****************************************
+* 
+* 
+      ENT RTINT,NORML,OVDVR,.IENT 
+      ENT EINT,.FLUN
+      ENT .LOGA,.EXPA 
+* 
+      EXT ERROR,.STOP 
+      EXT B377,M8,M16,.PACK 
+      EXT .15,.23,M1
+      EXT INDCK,.PEXP,MANT1,MANT2 
+      EXT STRT5,PROGF,PROGL,FCORE,SYMTF,SYMTA 
+      EXT M4,ERROR,INDCK,ZERO 
+      EXT .1,.2,.4
+      EXT ALOG,EXP
+**
+AVMEM EQU 1751B    FWA SYSTEM BUFFER
+BKGRG EQU 1752B    FWA BACKGROUND 
+BKLWA EQU 1777B    LWA BACKGROUND 
+XEQT  EQU 1717B    ADDRESS OF BASICS ID SEGMENT 
+**
+**   INITIALIZE FWAM,LWAM FOR RTE TYPE SYSTEMS   ** 
+* 
+RTINT NOP 
+      CLA 
+      STA START   SETUP SO RE-ENTRY POINT IS BSTOP
+      LDA XEQT     GET THE ADDRESS OF BASICS ID SEG 
+      ADA .23      GET ADDRESS OF MEMORY BOUNDS 
+      LDA 0,I      GET LAST WORD OF BASIC 
+      INA 
+      STA FWAM
+      LDA BKLWA    CHECK FOR AVAILABLE BACKGROUND 
+      CMA,INA       IF NONE THERE THEN
+      ADA BKGRG      ASSUME RTE-C OR RTE-B AND
+      SZA             THEN RUN IN FOREGROUND
+      JMP RT1      THERE IS BACKGROUND! 
+      LDA AVMEM    THERE ISNT!
+      ADA M1
+RT2   STA LWAM     SET UP LWAM FOR BASIC USER AREA
+      JMP RTINT,I    RETURN 
+* 
+RT1   LDA BKLWA 
+      JMP RT2 
+* 
+.LOGA OCT 100100
+      DEF ALOG
+* 
+.EXPA OCT 100100
+      DEF EXP 
+* 
+* 
+      SKP 
+* 
+* 
+*     RTE-B DUMMY OVERLAY DRIVER
+* 
+* 
+* 
+OVDVR NOP           *** ENTER *** 
+      STA TMPA3     SAVE AREG 
+      STB TMPB3     SAVE BREG 
+      LDA OVDVR,I   GET CALL TABLE ENTRY ADDRESS
+      JSB INDCK     MAKE INTO DIRECT ADDRESS
+      LDB 0,I      GET FUNC. CTRL. WRD. 
+      INA           POINT AT ENTRY POINT OF DRIVER
+      LDA 0,I       GET ENTRY ADDRESS 
+      JSB INDCK     MAKE INTO DIRECT ADDRESS
+      STA TEMP
+      ISZ OVDVR 
+      SSB          HAS FUNC. GOT JSB ERR0 ON IT 
+      JMP OV1      YES! 
+      LDA OVDVR 
+      STA TEMP,I    FAKE JSB TO ENTRY FROM POSITION 
+      ISZ TEMP        OF DEF FOLLOWING "JSB OVDVR"
+      LDA TMPA3     RESTORE AREG
+      LDB TMPB3 
+      JMP TEMP,I    CALL THE DRIVER 
+* 
+OV1   LDA TMPA3    RESTORE REGS 
+      LDB TMPB3 
+      JSB TEMP,I   EXECUTE FUNCTION 
+      RSS          IS THERE AN ERROR RETURN 
+      JMP OVDVR,I  NO!
+      AND .15      MAKE INTO DECIMAL
+      ADA .60       AND ADD IN ERROR # OFFSET 
+      STA TT2      SAVE FUNCTION NUMBER 
+      JSB ERROR    PRINT ERROR MESSAGE
+      DEF *+3 
+      DEF TT2       OF THE FORM 
+      DEF ZERO      "ERROR NN IN LINE XX" 
+      JSB .STOP     RETURN TO READY IN BASIC
+* 
+* 
+* 
+* 
+*   NORMALIZE (A), (B), AND EXPONENT
+* 
+* 
+* 
+* 
+NORML NOP                  SET
+      STA TT2              LEFT SHIFT-COUNTER 
+      CLA                  TO ZERO
+      STA TT1 
+      LDA TT2 
+      SZA,RSS              ON 
+      SZB                  ZERO 
+      JMP NORM3            CLEAR
+      STA .PEXP            EVERYTHING 
+      STA MANT1            STORE
+NORM1 STB MANT2            MANTISSA 
+      JMP NORML,I          AND RETURN 
+* 
+NORM2 ISZ TT1              COUNT LEFT SHIFTS
+NORM3 CLE,ELB              ROTATE (A) AND 
+      ELA                  (B) LETF INTO (E)
+      SEZ,SSA,RSS          TWO HIGHEST BITS 0?
+      JMP NORM2            YES, + UNNORMALIZED
+      SEZ,SSA              NO, TWO HIGHEST BITS 1?
+      JMP NORM2 
+      ERA                  SHIFT TO 
+      ERB,CLE              NORMALIZED MANTISSA
+      STA MANT1            NO,
+      LDA TT1              COMPUTE
+      CMA,INA              CORRECTED
+      ADA .PEXP            EXPONENT 
+      STA .PEXP            VALU 
+      LDA MANT1 
+      JMP NORM1 
+* 
+* THE FOLLOWING THREE ITEMS MUST REMAIN IN THE EXACT ORDER
+.60   DEC 60
+TT1   BSS 1 
+TT2   BSS 1 
+TMPA3 EQU TT1 
+TMPB3 EQU TT2 
+TEMP  BSS 1 
+* 
+* 
+* 
+* 
+      SKP 
+***  UNPACK LOW WORD OF NUMBER  **
+* 
+.FLUN NOP 
+      LDA 1         (A) = (B) 
+      AND B377      GET EXPONENT
+      CMB           SUBTRACT OFF
+      ADB 0           EXPONENT FROM 
+      CMB               MANTISSA IN (B) 
+      SLA,RAR       NEGATIVE EXPONENT?
+      IOR MSK4      (77600) YES, PROPAGATE SIGN 
+      JMP .FLUN,I   EXIT
+* 
+***  INTEGERIZE FLOATING POINT NUMBER  ** 
+* 
+IFIX  NOP 
+      STF 1         SET OVERFLOW FLAG 
+      STA NORML     SAVE (A)
+      JSB .FLUN 
+      SSA           EXPONENT NON-NEGATIVE?
+      JMP IFIX3     NO. RETURN 0 OR -1. 
+      ADA M16 
+      SSA           EXPONENT LESS THAN 16?
+      CLF 1         YES. CLEAR OVERFLOW.
+      ADA M8
+      SSA,RSS       EXPONENT LESS THAN 24?
+      JMP IFIX,I    NO. ERROR EXIT, NO FRACTION.
+      ADA M8        BINARY POINT TO RT END OF B 
+      STA .FLUN     SAVE SHIFT COUNT
+      LDA NORML     RETRIEVE HIGH MANTISSA
+      JMP IFIX2 
+* 
+IFIX1 CLE,SLA,ARS   LONG RIGHT SHIFT
+      CME 
+      SLB,ERB 
+      STF 1         SET OVERFLOW IF 1 LOST
+IFIX2 ISZ .FLUN     DONE? 
+      JMP IFIX1     NO, SHIFT MORE
+      ISZ IFIX      DONE, SKIP RETURN 
+      JMP IFIX,I
+* 
+IFIX3 LDA NORML     NEGATIVE EXPONENT; RETRIEVE (A) 
+      CLE,SSA 
+      CCA,RSS       TRUNCATE TO -1 OR 0 
+      CLA,RSS 
+      CCB,RSS 
+      CLB 
+      JMP IFIX2+2   SKIP RETURN 
+* 
+      SKP 
+* 
+*         SUBROUTINE TO COMPUTE THE ENTIER OF A 
+*     NUMBER WHOSE EXPONENT IS LESS THAN 15 
+*     THIS ROUTINE HAS SPECIAL PROPERTIES FOR BASIC:
+*     OVERFLOW IS SET (ON NORMAL RETURN) IF ANY BIT LOST
+*     E IS SET IF HIGH FRACTION BIT LOST
+* 
+.IENT NOP 
+      JSB IFIX
+       JMP .IENT,I  OVERFLOW
+      XOR 1         (A) SHOULD BE FULL OF SIGN BITS 
+      SSA           (B) SHOULD HAVE A SIGN TOO
+      JMP .IENT,I   IT DOESN'T, ERROR EXIT. 
+      CPA 1         IF (A) WAS ZERO,
+      JMP *+3       ALL WAS OK. 
+      CMA           IF (A) WAS -1,
+      CPA 1 
+      ISZ .IENT     ALSO OK; SKIP RETURN. 
+      JMP .IENT,I   LEAVE WITH RESULT IN A, B.
+* 
+      SKP 
+* 
+EINT  NOP 
+      STB TEMP      SAVE (B)
+      JSB IFIX
+       JMP EINT1    NOT FIXABLE 
+      JSB .PACK     BUILD FLTG RESULT 
+       DEC 31 
+      JMP EINT,I
+* 
+EINT1 LDB TEMP      RETURN ORIGINAL NUMBER
+      LDA NORML 
+      JMP EINT,I
+* 
+      SKP 
+********************************************************
+* 
+*       BASIC DOUBLE STORE AND TEST ROUTINE 
+* 
+******************************************************* 
+* 
+      ENT .DST
+* 
+* 
+.DST  NOP 
+      STA XTEMP     SAVE INFO 
+      STB XTMP1     TO BE STORED
+      LDA TBLAD     POINT AT
+      STA PTR        RESTRICTED AREA TABLE
+      LDA M4        4 RESTRICTED AREAS
+      STA CTR 
+      LDA .DST,I
+      JSB INDCK     REMOVE INDIRECT CHAIN 
+      STA ADR       PROPOSED STORE ADDRESS
+      ISZ .DST      SET UP FOR EXIT 
+      JSB CHECK     CHECK FOR ADR IN RESTRICTED AREA
+      ISZ CTR       MORE AREAS? 
+      JMP *-2       YES 
+CHKOK LDA XTEMP     ALL CLEAR, DO THE STORE 
+      STA ADR,I 
+      ISZ ADR 
+      LDB XTMP1 
+      STB ADR,I 
+      JMP .DST,I
+* 
+CHECK NOP 
+      LDA PTR,I     GET LOWER LIMIT 
+      ISZ PTR 
+      LDB PTR,I     GET UPPER LIMIT 
+      ISZ PTR       SET UP FOR NEXT TIME
+      CMA,INA 
+      ADA ADR 
+      INA 
+      SSA           (ADR)+1 < LOWER LIMIT?
+      JMP CHKXT     YES, OUTSIDE LIMITS THEN
+      CMB,INB 
+      ADB ADR 
+      SSB,RSS       (ADR) >= UPPER LIMIT? 
+CHKXT JMP CHECK,I   YES, OUTSIDE LIMITS 
+      ISZ CTR       INSIDE LIMITS, SIMPLE VARIABLE? 
+      JMP ERR       NO, ERROR 
+      LDB SYMTF     START AT BEGINNING OF SYMBOL TABLE
+NEXT  CPB SYMTA     ANY MORE ENTRIES? 
+      JMP ERR       NO, ADR DIDN'T MATCH ANY SMPLE VAR
+      LDA 1,I       FETCH VARIABLE NAME 
+      AND .15       ISOLATE TYPE FIELD
+      CPA .15       FUNCTION? 
+      JMP FN        YES, TWO WORD ENTRY 
+      CPA .1        1 DIMENSIONAL ARRAY?
+      JMP ARAY      YES, SKIP THE ENTRY 
+      CPA .2        2 DIMENSIONAL ARRAY?
+      JMP ARAY      YES, SKIP THE ENTRY 
+      INB           POINT AT SIMPLE VAR ADDRESS 
+      CPB ADR       DO WE WANT TO STORE HERE? 
+      JMP CHKOK     YES, THEN ALL IS WELL 
+FN    ADB .2        SMPL VARS HAVE 3 WORDS PER ENTRY
+      JMP NEXT      CHECK NEXT ENTRY
+* 
+ARAY  ADB .4        ARRAYS HAVE 4 WORDS PER ENTRY 
+      JMP NEXT      CHECK NEXT ENTRY
+* 
+ERR   JSB ERROR 
+       DEF *+3
+       DEF .1 
+       DEF DST
+      JSB .STOP     DOOM. 
+* 
+TBLAD DEF TABLE,I 
+* 
+TABLE DEF ZERO      BASIC INTERPRETER 
+      DEF STR5A 
+* 
+      DEF PROGF     INTERP. CODE
+      DEF PROGL 
+* 
+      DEF FCORE     STACK AREA
+      DEF SYMTF 
+* 
+      DEF SYMTF     SIMPLE VARIABLE AREA
+      DEF SYMTA 
+* 
+STR5A DEF STRT5 
+DST   DEC 3 
+      ASC 2,DST 
+XTEMP EQU TT1 
+XTMP1 EQU TT2 
+PTR   BSS 1 
+CTR   BSS 1 
+ADR   BSS 1 
+MSK4  OCT 77600 
+* 
+      HED RTE-B CALL STATEMENT EXECUTION    A-29102-60004-1 REV. B
+****************************************
+*     RTE-B BASIC CALL STATEMENT EXECUTION
+* 
+****************************************
+* 
+      ENT ECALL,CLXIT 
+      ENT XITPT,PTBLA,DSTA,FLOTA,CLXTA
+* 
+      EXT TEMPS,B777,HSTPT,SETSX,PRADD
+      EXT OPMSK,B4000,FORMX,FNDSB,FCORE,TSTPT 
+      EXT ERRCD,XEC4,FLOAT,FRTFX,FRTF2
+      EXT B1000,BHSTP,B177,SCALL
+      EXT .STOP 
+      SUP 
+* 
+***              ***
+**  EXECUTE CALL  **
+***              ***
+* 
+ECALL CLA              CLEAR PARAMETER AREA 
+      STA PTBL
+      STA PTBL+1
+      STA PTBL+2
+      STA PTBL+3
+      STA PTBL+4
+      STA PTBL+5
+      STA PTBL+6
+      STA ARGCT 
+      STA ERRCD 
+      LDA TEMPS 
+      LDA 0,I 
+      AND B777      ISOLATE INTERNAL CALL NUMBER
+      STA SCALL     SAVE TEMPORARILY
+      LDA HSTPT     SAVE HIGH CORE
+      STA MWDNO       STACK POINTER 
+      LDA PTBLA 
+      STA EFMT      INITIALIZE PARAMETER POINTER
+ECAL1 ISZ TEMPS 
+      LDA TEMPS 
+      LDA 0,I 
+      AND OPMSK     ISOLATE OPERATOR
+      CPA B4000     RT PAREN (END OF PARAMS)? 
+      JMP ECAL2     YES.
+      LDB TEMPS 
+      INB 
+      LDA 1,I 
+      AND OPMSK 
+      CPA B1000     QUOTE STRING BEING PASSED?
+      JMP ECAL6     YES 
+      JSB FORMX     EVALUATE PARAMETER. 
+ECAL3 LDA HSTPT 
+      LDA 0,I 
+      STA EFMT,I    SET UP DEF TABLE FOR .ENTR
+      STA RTRN      SAVE ADDRESS OF LAST PARAM
+      ISZ ARGCT 
+      ISZ EFMT
+      JMP ECAL1 
+* 
+ECAL2 LDB ARGPA 
+      ADB ARGCT   INITIALIZE DEF *+N
+      STB ARGP
+      LDB CLXTA 
+      STB XITPT 
+      LDB SCALL     GET CALL TBL ENTRY NUMBER 
+      JSB FNDSB     FIND
+      STB ARGCT      SAVE B IN ARGCT TEMPORARILY
+      INB 
+      LDB 1,I            GET CALL TABLE POINTER 
+      STB TMPX2     SAVE CALL TBL ENTRY ADDRESS 
+      LDB ARGCT      RESTORE B FROM ARGCT 
+      CMB 
+      ADB STDCA 
+      LDA SCALL 
+      SSB,RSS       STANDARD CALL?
+      JSB FRTFX     NO, GO DO FORTRAN FIX 
+      CCA           LOAD ADDRESS OF 
+      ADA MWDNO       PARAMETER ADDRESSES 
+      JSB TMPX2,I         CALL EXTERNAL SUBROUTINE OR FUNCTION
+ARGP  DEF *+0 
+PTBL   OCT 0,0,0,0,0,0,0
+      JMP *+1,I 
+XITPT DEF CLXIT       FRTFX MAY CHANGE THIS 
+FLTIT JSB FLOAT     FOR FORT. FCNS. RETURNING INTEGER 
+DSTL  JSB .DST      FOR FORTRAN FUNCTIONS, RETURN RESULT
+RTRN   BSS 1        ADDRESS OF LAST PARAM 
+CLXIT LDA FCORE 
+      STA TSTPT     RESTORE 
+      LDA MWDNO 
+      STA HSTPT       POINTERS
+      LDB ARGCT 
+      CMB 
+      ADB STDCA 
+      SSB,RSS       STANDARD CALL?
+      JSB FRTF2     NO, FIX RETURNED PARAMS 
+      LDB ERRCD 
+      SZB,RSS       ANY ERROR?
+      JMP XEC4      NO. EXECUTE NEXT STATEMENT. 
+      ISZ TEMPS 
+      LDB PRADD 
+      CPB TEMPS     ANY FAIL STATEMENT? 
+      JSB .STOP     NO. ABORT EXECUTION.
+      ISZ TEMPS 
+      JMP SETSX     GO PROCESS STATEMENT
+* 
+ECAL6 LDA 1         SAVE POINTER
+      JSB BHSTP     ALLOCATE PLACE FOR POINTER
+      STA 1,I       PUT " STRING POINTER ON STACK 
+      LDA 0,I 
+      AND B177      ISOLATE STRING CHARACTER COUNT
+      INA 
+      ARS 
+      ADA 1,I       COMPUTE ADDRESS OF END OF STRING
+      STA TEMPS     TO FIND NEXT CALL PARAMETER 
+      JMP ECAL3 
+* 
+* 
+PTBLA DEF PTBL
+DSTA  DEF DSTL
+FLOTA DEF FLTIT 
+CLXTA DEF CLXIT 
+ARGPA DEF ARGP+1    ADDRESS OF LAST ARG +1
+ARGCT BSS 1         NUMBER OF PARAMETERS
+MWDNO BSS 1 
+TMPX2 BSS 1               CONTAINS THE ADDRESS OF EXTERNAL SUBROUTINE 
+* 
+EFMT  EQU TMPX2 
+* 
+      END START 

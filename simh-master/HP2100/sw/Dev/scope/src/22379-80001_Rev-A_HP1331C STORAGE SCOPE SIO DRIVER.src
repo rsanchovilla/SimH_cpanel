@@ -1,0 +1,423 @@
+ASMB,A,L,T,Z,C
+* 
+* 
+********************************************************************
+* 
+* 
+*                   SYSTEM SCOPE DRIVER 
+* 
+*     THIS DRIVER WILL PROVIDE LIST OUTPUT FUNCTIONS ON A STORAGE 
+*      SCOPE OR TTY WHEN ENTERED FROM SOFTWARE USING THE STANDARD 
+*      SIO FORMAT.
+* 
+* 
+* 
+*   1. PROGRAM TYPE: ABSOLUTE ASSEMBLY LANGUAGE 
+* 
+*   2. CALLING SEQUENCE:
+* 
+*               JSB 102,I 
+* 
+* 
+*        ENTER WITH:
+* 
+*              (A)= LENGTH OF DATA BUFFER  IN ASCII CHARACTERS
+* 
+*                A>0  NUMBER OF ASCII CHARACTERS
+*                A=0  OUTPUT "RETURN LINE FEED" 
+*                A=-1  ERASE  GO TO TOP OF PAGE ON NEXT OUTPUT
+*                A<-1  IGNORED
+* 
+* 
+*              (B)= STARTING ADDRESS OF DATA BUFFER 
+* 
+* 
+*        SET SWITCH REGISTER OPTIONS: 
+* 
+*               8 UP (1) SCOPE LIST OUTPUT
+*               8 DOWN (0) TTY LIST OUTPUT
+* 
+*               7 UP (1) OUTPUT 1 PAGE, AND HOLD
+*               7 DOWN (0) OUTPUT 1 PAGE, WAIT 1 SEC., ERASE,REPEAT 
+* 
+*          * NOTE: SWITCH 7 MUST BE 0 TO RETURN TO TTY LIST FROM
+*                  SCOPE LIST.
+* 
+*   3. REQUIREMENTS:
+* 
+*            1)  A TTY SIO DRIVER MUST BE LOADED IF SWITCH
+*                NO. 8 IS EVER IN THE DOWN (0) POSITION.
+*            2)  THE FOLLOWING SOFTWARE IS OPTIONAL:
+* 
+*                SIO DRIVERS--LINEPRINTER 
+*                             PHOTOREADER 
+*                             PUNCH 
+*                             SIO DUMP
+* 
+*                PROGRAMS--ASSEMBLER
+*                          ALGOL
+*                          FORTRAN
+*                          EDITOR 
+*                          CROSS REFERENCE GENERATOR
+*                          ETC. 
+* 
+*            3)  8K OR 16K CORE 
+* 
+*   4. INITIALIZATION 
+* 
+*           1)  LOAD ADDRESS 2B 
+*           2)  SET SWITCH REGISTER= SCOPE I/O SLOT 
+*           3)  PRESS PRESET, RUN 
+*           4)  CHECK FOR HLT 77B AND SCOPE I/O SELECT CODE IN B-REG. 
+* 
+* 
+*       INITILIZATION REMOVES THE LIST ENTRY POINT FROM LOCATION
+*          102B, STORES IT IN "TTLST" AND REPLACES IT WITH
+*          THE ADDRESS OF "SCOPE".
+* 
+* 
+* 
+*   5. NOTES: 
+* 
+* 
+*           1) THIS DRIVER IS LOADED UNDER THE PUNCH SIO DRIVER 
+*              AND THEREFORE MUST NOT BE USED WITH MAG. TAPE, DOS, AND D
+*              SYSTEMS OR OTHER SYSTEMS WHICH USE THIS AREA.
+*            2) ASSEMBLE AS FOLLOWS:
+* 
+*               8K CORE  ASMB,A,B,L,T,N 
+*               16K CORE ASMB,A,B,L,T,Z 
+* 
+* 
+* 
+*   6. REV A  9-20-71    JIM MILLER  HP MED 
+* 
+* 
+******************************************************************* 
+      ORG 2B
+      JMP 3,I       CONFIGURATION LINKAGE 
+      DEF .SCOP 
+      ORG 106B
+      DEF LWAM      SET UP LAST WORD AVAILABLE MEMORY 
+      IFN 
+CORE  EQU 10000B
+      XIF 
+      IFZ 
+CORE  EQU 30000B
+      XIF 
+      ORG CORE+6306B
+.SCOP LIA 1         GET SCOPE I/O SLOT NUMBER 
+      AND M77       MASK IT 
+      ADA I.2      CONFIGURE CLF INSTRUCTION
+      STA I.2       STORE IT
+      ADA .3500     MAKE OTB INSTRUCTION
+      STA I.1       STORE IT
+      LDB 102B      GET LIST ENTRY POINT
+      STB TTLST     SAVE IT 
+      LDB .SCO      GET SCOPE ENTRY POINT 
+      STB 102B      PUT IT IN LIST DRIVER ENTRY POINT 
+      LIB 1 
+      CCA 
+      HLT 77B       END OF CONFIGURATION SECTION
+      JMP *-1 
+.SCO  DEF SCOPE 
+LWAM  EQU *-1 
+      SPC 2 
+SCOPE NOP           SCOPE LIST ENTRY POINT
+      STB BUFR      SAVE DATA BUFFER ADDRESS
+      LIB 1B        LOAD SWITCH REG.
+      BLF,RBL 
+      RBL,RBL 
+      SSB           CHECK SWITCH NO. 8
+      JMP *+4       SWITCH 8 UP (1) 
+      LDB BUFR      GET BUFFER ADDRESS BACK 
+      JSB TTLST,I   JUMP TO TTY DRIVER
+      JMP SCOPE,I   RETURN TO CALLING PROGRAM 
+      SSA,RSS       SKIP ON A<0 
+      JMP *+7 
+      INA 
+      SSA 
+      JMP SCOPE,I   A<-1  RETURN TO CALLING PROGRAM 
+      CLA 
+      STA .INTL 
+      JMP SCOPE,I 
+      CMA,INA        LENGTH IS STORED WITH (-) SIGN 
+      STA BUFL      STORE LENGTH
+      JSB INITL     ERASE SCOPE IF THIS IS FIRST OUTPUT 
+      CCA 
+      STA CCNT
+NEXT  LDA BUFL      GET BUFFER LENGTH 
+      SZA             ZERO BUFFER ? 
+      JMP CONT1       NO
+      JSB CR      YES SO SEND CR AND LF 
+      JSB LF
+      JMP SCOPE,I       RETURN TO CALLING PROGRAM 
+CONT1 LDA BUFR,I
+      LDB CCNT        GET CHAR. FLAG
+      INB 
+      STB CCNT
+      SLB             ODD OR EVEN 
+      JMP *+3         ODD 
+      ALF,ALF         EVEN, ROTATE TO LOWER 8 BITS
+      RSS 
+      ISZ BUFR
+      AND .177
+      ISZ BUFL      END OF BUFFER?
+      JMP CP1        NO 
+      CPA BKAR       YES, IS IT A _ ? 
+      JMP SCOPE,I       YES SO NO CR, LF
+CP1   CPA CRT       CARRIAGE RETURN?
+      RSS 
+      JMP *+3     NO
+      JSB CR       YES
+      JMP NEXT
+      CPA LFD         LINE FEED ? 
+      RSS 
+      JMP *+3    NO 
+      JSB LF     YES
+      JMP NEXT
+      STA CHRCD     SAVE CHARACTER IN CHRCD 
+      ADA ..140     CHARACTER <140? 
+      SSA,RSS 
+      JMP UNON         NO 
+      ADA .100      YES  NOW IS CHARACTER 
+      SSA,RSS       > 37? 
+      JMP CONT2  YES
+UNON  LDA .37       NO CHARACTER UNKNOWN
+      STA CHRCD     WILL OUTPUT A BLOTCH
+CONT2 LDA CHRCD      GET CHARACTER CODE 
+      ADA ..37      ADD -37 
+      STA CHRCD              EFFECTIVE
+      ALS                             TABLE 
+      ADA CHRCD                            ENTRY
+      ADA TABLE     TABLE ENTRY= 3X CHRCD+ TABLE
+      LDB A 
+      ADB .3
+      STB CHRND      SET TEST FOR END OF CHARACTER
+      STA CHRCD     STORE EFFECTIVE ENTRY 
+      LDA CHRCD,I   GET FIRST CHARACTER CELL
+      LDB DOT,I      GET LOCATION OF DOT
+NXOUT SSA           A-15 =0?
+I.1   OTB 0              OUTPUT DOT 
+      RAL           YES- ROTATE A LEFT 1 BIT
+      ISZ CNT16     DO WE NEED NEXT PART OF CHARACTER YET?
+      RSS           NO
+      JMP NXTAB     YES 
+      ISZ CNT8      FIRST HALF OF CHRCD DONE
+      RSS           NO
+      JMP XINC      YES 
+      ADB .1774     DECREMENT Y  (B=B+177400) 
+      JMP NXOUT     OUTPUT NEXT DOT 
+XINC  ADB .3401     INCREMENT X  (B=B+3401) 
+      JMP NXOUT     OUTPUT NEXT DOT 
+NXTAB ISZ CHRCD     GET NEXT PART OF CHARACTER
+      LDA M8       M8=-8
+      STA CNT8
+      LDA M16    M16=-16
+      STA CNT16 
+      LDA CHRCD     GET TABLE ENTRY AND CHECK FOR 
+      CPA CHRND      END OF CHARACTER ? 
+      JMP SPA        YES
+      LDA CHRCD,I   NO-GET NEXT PART OF CHARACTER 
+      ADB .3401     INCREMENT X  (B=B+3401) 
+      JMP NXOUT     OUTPUT NEXT DOT 
+SPA   LDA B       GET CHARACTER POSITION
+      AND XMSK    ISOLATE X AXIS (XMSK=177400)
+      CPA .375      AT RIGHT MARGIN?  (B=375) 
+      JMP RM           YES
+      ADB .3403     NO-ADD SPACE  (B=B+3403)
+      STB DOT,I     SAVE DOT
+      JMP NEXT
+RM    LDA BUFL
+      SZA          ZERO BUFFER ?
+      JMP *+4       NO
+      ADB .3400     YES-RESET DOT  (B=B+3400) 
+      STB DOT,I     SAVE IT 
+      JMP NEXT
+      JSB CR        RETURN
+      JSB LF                LINE FEED 
+      JMP NEXT
+      SPC 2 
+************************************************************************
+*     SUBROUTINE FOR CARRIAGE RETURN. REGISTERS DESTROYED 
+************************************************************************
+      SPC 2 
+CR    NOP                 CARRIAGE RETURN SUBROUTINE
+      LDA DOT,I      GET CURRENT DOT LOCATION 
+      AND YMSK     ISOLATE Y AXIS (YMSK=177400B)
+      STA DOT,I     SAVE IT IN DOT
+      JMP CR,I      RETURN
+      SPC 2 
+*********************************************************************** 
+*     SUBROUTINE FOR LINE FEED. REGISTERS DESTROYED 
+*********************************************************************** 
+      SPC 2 
+LF    NOP           LINE FEED ROUTINE 
+      LDA DOT,I     GET CURRENT DOT LOCATION
+      AND YMSK      ISOLATE Y AXIS (YMSK=177400B) 
+      CPA .1200     PAGE OVERFLOW?
+      RSS                 YES 
+      JMP LF1             NO
+      JSB CONTL     AT BOTTOM OF PAGE?
+      LDA .1740     RETURN DOT TO UPPER LEFT
+      STA DOT,I     SAVE LOCATION 
+      JMP LF,I      RETURN
+LF1   LDA DOT,I 
+      ADA .1720     DECREMENT Y BY 12  (A=A+172000) 
+      STA DOT,I     SAVE LOCATION 
+      JMP LF,I    RETURN
+CONTL NOP 
+      JSB WAIT      WAIT ONE SEC. 
+      LIA 1B        LOAD SWITCH REGISTER
+      ALF,ALF       CHECK IF BIT NO. 7 IS UP (1)
+      SSA           ? 
+      JMP CONTL+1   YES CONTINUE WAITING
+      JSB ERASE     NO ERASE SCREEN 
+      JMP CONTL,I   RETURN
+WAIT  NOP           1 SEC. TIME DELAY SUBROUTINE
+      CLB 
+      NOP 
+      NOP 
+      LDA DOT,I 
+      ISZ B 
+      JMP *-4 
+      JMP WAIT,I    RETURN
+      SKP 
+      SPC 2 
+      SPC 2 
+*********************************************************************** 
+*     SUBROUTINE TO ERASE THE STORAGE SCOPE.  THE CLF INSTRUCTION 
+*     STARTS THE ERASE CYCLE.  A DUMMY LOOP IS USED TO TIME THE 
+*     LENGTH OF THE ERASE CYCLE.
+**********************************************************************
+      SPC 2 
+ERASE NOP 
+      LDA .1740     SET DOT LOCATION TO TOP OF PAGE 
+      STA DOT,I     SAVE LOCATIONS
+I.2   CLF 0      START ERASE
+      JSB WAIT       WAIT ABOUT 1 SEC. FOR ERASE
+      JMP ERASE,I     RETURN
+INITL NOP           ERASE SCOPE IF THIS IS THE FIRST OUTPUT 
+      LDA .INTL 
+      SZA 
+      JMP INITL,I   NOT FIRST OUTPUT=>RETURN
+      ISZ .INTL     FIRST OUTPUT
+      JSB ERASE     ERASE 
+      JMP INITL,I   RETURN
+      SKP 
+      SPC 2 
+******************************************************************* 
+* 
+*CONSTANTS
+* 
+******************************************************************* 
+.INTL OCT 0 
+TTLST OCT 0         ADDRESS OF TTY LIST DRIVER ENTRY POINT
+.100  OCT 100 
+.3500 OCT 3500
+.177  OCT 177 
+..140 OCT -140
+.37   OCT 37
+..37  OCT -37 
+.3    OCT 3 
+.1774 OCT 177400
+.3401 OCT 3401
+.375  OCT 375 
+.3403 OCT 3403
+.3400 OCT 3400
+.1200 OCT 12000 
+.1740 OCT 174000
+.1720 OCT 172000
+CNT16 DEC -16 
+CNT8  DEC -8
+CCNT  DEC -1
+CRT   OCT 15      ASCII CODE FOR CARRIAGE RETURN
+LFD   OCT 12      ASCII CODE FOR LINE FEED
+BKAR  OCT 137     ASCII CODE FOR A     EQU 0     A REGISTER 
+A     EQU 0      A REGISTER 
+B     EQU 1      B REGISTER 
+M77   OCT 77
+M8    DEC -8
+M16   DEC -16 
+XMSK  OCT 377    MASK FOR X AXIS
+YMSK  OCT 177400  MASK FOR Y AXIS 
+BUFR  NOP           DATA BUFFER STARTING ADDRESS
+BUFL  NOP           DATA BUFFER LENGTH
+DOT   DEF .DOT
+.DOT  NOP           DOT LOCATION STORAGE
+CHRCD NOP CHARACTER CODE STORAGE
+CHRND NOP           END OF CHARACTER TEST CELL
+TABLE DEF *+1     ENTRY POINT FOR CHARACTER LIBRARY 
+      SPC 3 
+************************************************************************
+*     THIS IS THE CHARACTER LIBRARY.  THE FIRST CHARACTER IS
+*     THE SYMBOL FOR AN UNKNOWN CHARACTER.  THE REST OF THE LIBRARY 
+*     IS IN ASCII ORDER.
+************************************************************************
+      SPC 2 
+      OCT 177777,177777,177777
+      OCT 0,0,0 
+EXCL  OCT 1,174401,0
+QUOTE OCT 360,0,170000
+POUND OCT 22377,22044,177444
+DOLR  OCT 61221,177621,47000
+PRCNT OCT 41244,44022,22502 
+AMP   OCT 7161,110632,63011 
+APOST OCT 20,160100,0 
+OPRN  OCT 74,41201,100400 
+CPRN  OCT 201,100502,36000
+AST   OCT 44452,16034,25111 
+PLUS  OCT 10,4076,4010
+COMMA OCT 1,416,2000
+MINUS OCT 10,4010,4010
+PER   OCT 2,3402,0
+DIV   OCT 1004,4020,20100 
+ZERO  OCT 36102,100601,41074
+ONEE  OCT 501,177401,400
+TWOE  OCT 40603,102611,110541 
+      OCT 41201,100621,124506 
+      OCT 6024,22104,177404 
+FIVE  OCT 170621,110621,110616
+SIX   OCT 17045,44611,4406
+SEVEN OCT 100200,107620,120300
+EIGHT OCT 67221,110621,110556 
+NINE  OCT 60221,110621,111174 
+COLON OCT 0,41347,41000 
+SEMI  OCT 1,147304,0
+AROW1 OCT 20,24104,101000 
+EQUAL OCT 44,22044,22044
+AROW2 OCT 202,42050,10000 
+QUES  OCT 40201,105621,110140 
+AT    OCT 77201,114645,114570 
+AEE   OCT 37510,104210,44077
+BEE   OCT 177621,110621,110556
+C     OCT 77201,100601,100546 
+D     OCT 100777,100601,100576
+E     OCT 177621,110621,110601
+F     OCT 177620,110220,100200
+G     OCT 77201,100611,104516 
+H     OCT 177420,10020,10377
+I     OCT 100601,177601,100400
+J     OCT 3001,401,776
+K     OCT 177410,14044,41201
+L     OCT 177401,401,401
+M     OCT 177500,34070,40377
+N     OCT 177440,10010,2377 
+O     OCT 77201,100601,100576 
+P     OCT 177610,104210,104160
+Q     OCT 77201,104606,103175 
+R     OCT 177610,104214,105161
+S     OCT 61221,110621,104506 
+T     OCT 100200,177600,100000
+U     OCT 177001,401,776
+V     OCT 160034,1403,16340 
+W     OCT 177402,16034,1377 
+X     OCT 141444,14030,22303
+Y     OCT 140040,17437,20300
+Z     OCT 101605,104621,120701
+OBRAK OCT 377,100601,100400 
+SLANT OCT 40040,10010,2002
+BRAK2 OCT 201,100601,177400 
+UPARO OCT 40,40377,40040
+BKARO OCT 10070,52020,10020 
+      END 

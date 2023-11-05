@@ -1,0 +1,382 @@
+                                PREPARE CONTROL SYSTEM
+
+
+DESCRIPTION 
+
+The Prepare Control System (PCS) program processes relocatable modules of the
+Basic Control System and produces an absolute version designed to work on a spe-
+cific hardware configuration. It creates operating units from the relocatable object
+tapes of the Input/Output Control subroutine, .IOC., the equipment driver sub-
+routines, and the Relocating Loader. It also establishes the contents of certain
+locations used in interrupt handling.
+
+The Prepare Control System is an absolute program which is loaded by the Basic
+Binary Loader. It operates on a minimum configuration of 4K memory and a 2752A
+Teleprinter. However, if a 2737A Punched Tape Reader and a 2753A Tape Punch
+are available, the Prepare Control System will utilize these devices; PCS requests
+their assignment during the Initialization phase.
+
+After the Initialization phase is completed, each module of BCS is loaded and proc-
+essed by PCS. The order in which the modules are processed is not significant ex-
+cept that the BCS Loader must be the last module loaded. Two modules, the Input/
+Output Control subroutine and the Loader, require that parameters be entered via
+the Keyboard Input unit after being loaded.
+
+Options are available to define the equipment driver modules and other BCS system
+subroutines as relocatable programs to be loaded with the user's object program.
+
+OPERATING PROCEDURES 
+
+The following procedures indicate the sequence of steps for loading and execution of
+the Prepare Control System:
+
+A. Set Teleprinter to LINE and check that all equipment to be used is operable.
+
+B. Load the Prepare Control System tape using the Basic Binary Loader.
+
+C. Set Switch Register to 002000, press LOAD ADDRESS.
+
+D. Set Switches 5-0 to the value of the channel number for the printer/punch unit
+   (the lower numbered of the two assigned channels) of the Teleprinter.
+
+E. Press RUN.
+
+The Initialization Phase is executed. During this phase, the following messages
+may occur:
+
+Teleprinter
+Message               Explanation                   Action
+
+HS INP?               Request for Punched        Type channel number.
+                      Tape Reader channel        If Punched Tape Reader
+                      assignment                 not available, type 0.t
+
+HS PUN?               Request for Tape Punch     Type channel number.
+                      channel assignment.        If Tape Punch not avail-
+                                                 able, type 0.
+
+--------------------
+t All replies from the keyboard must be terminated by an end-of-statement mark
+  which consists of a carriage return, (CR) , and a line feed, (LF). If an error
+  is made in typing a reply, type (RUBOUT) (CR) (LF) and repeat the reply.
+
+13-1
+Teleprinter
+Message          Explanation                   Action
+
+FWA MEM?         Request for first word        Type address of word in
+                 of available memory.          Base Page following the
+                                               locations required for
+                                               interrupt processing.
+
+LWA MEM?         Request for last word         Type address of word
+                 of available memory.          preceding protected
+                                               area.
+
+*ERROR           A non-numeric or illegal      Type the correct value.
+                 character has been en-
+                 tered as a reply.
+
+Following the completion of the Initialization Phase the relocatable object tapes of
+the Basic Control System are to be loaded. Only those modules which are to be in-
+cluded in the absolute tape are loaded; modules which are to be loaded with the
+user's object program are not submitted. The modules may be loaded in any order
+provided that the Relocating Loader is last. During this phase, the following halts
+may occur:
+
+Teleprinter
+Message          Explanation                   Action
+
+*LOAD            PCS is requesting the         Place BCS tape in
+                 first or the next BCS         Punched Tape Reader if
+                 module.                       available, or Tele-
+                                               printer reader. Press
+                                               RUN.
+
+*L01             Checksum error.               To re-read record, re-
+                                               position tape to begin-
+                                               ning of record and press
+                                               RUN.
+
+*L02             Illegal record: the last      To re-read record, re-
+                 record read was not rec-      position tape to begin-
+                 ognized as a valid re-        ning of record and press
+                 locatable record type.        RUN.
+
+*L03             Memory overflow: the          Irrecoverable error.
+                 length of BCS exceeds 
+                 available memory.
+
+*L04             System linkage area           Irrecoverable error.
+                 overflow in Base Page.
+
+*L05             Symbol table for BCS          Irrecoverable error.
+                 symbols exceeds avail-
+                 able memory.
+
+*L06             PCS interprets the pro-       Irrecoverable error.
+                 gram length of BCS to
+                 be zero.
+
+*L07             Duplicate entry points        A tape loaded twice or
+                 within BCS.                   irrecoverable error.
+
+
+13-2
+
+Teleprinter
+Message          Explanation                    Action
+
+*EOT             End-of-tape.                   Place next tape in read
+                                                unit and press RUN to
+                                                continue loading.
+
+When the .IOC. module is loaded, PCS requests the EQT and SQT parameters. PCS
+halts after typing the messages "*TABLE ENTRY? EQT?" If the Teleprinter serves
+both as the reader and keyboard unit, turn reader off, press RUN. Begin typing
+response to message. (Turn reader on after all replies have been typed.)
+
+Teleprinter
+Message                Explanation              Action
+
+*TABLE ENTRY? EQT? t   Request for EQT entry    For each I/O device,
+                       information.             type:
+                                                 nn, D.ee, [,D] [,Uu]
+                                                nn - channel number
+                                                D.ee - driver name:
+                                                ee = 00 Teleprinter
+                                                     (Use lower channel)
+                                                   = 01 Punched Tape
+                                                        Reader
+                                                   = 02 Tape Punch
+                                                   = 20 Kennedy Incre-
+                                                        mental Tape
+                                                        Transport
+                                                   = 21 HP2020 Magnetic
+                                                        Tape Unit
+                                                     (Use lower channel)
+                                                   = 40 Data Source
+                                                        Interface
+                                                   = 41 Integrating Dig-
+                                                        ital Voltmeter
+                                                   = 42 Guarded Cross-
+                                                        bar Scanner
+                                                   = 43 Time Base
+                                                        Generator
+                                                   = 77 HP 2401C/HP-
+                                                        2911 Scanning
+                                                        Driver (HP 2018
+                                                        System)
+                                                D - device uses DMA
+                                                    channel
+                                                Uu - physical unit num-
+                                                ber (0-7) if attached to
+                                                multi-unit controller.
+
+                                                Each entry is terminated
+                                                with (CR)(LF). The
+                                                order in which the en-
+                                                tries are given deter-
+                                                mines the unit reference
+                                                number for the device
+                                                (e.g., first entry be-
+                                                comes unit-reference
+                                                number 7; the second 10).
+
+                                                To terminate EQT input,
+                                                type /E (CR)(LF).
+--------------------
+t See Appendix G.
+
+13-3
+Teleprinter
+Message        Explanation                  Action
+
+*ERROR         A non-numeric value          Retype the entire cor-
+               has been typed for nn,       rect entry.
+               ee, or u.
+
+SQT? t         Request for EQT unit-        Type number.
+-KYBD?         reference number of unit
+               serving as Keyboard In-
+               put.
+
+-TTY?          Request for EQT unit-        Type number.
+               reference number of unit
+               serving as Teleprinter
+               Output.
+
+-LIB?          Request for EQT unit-        Type number.
+               reference number of unit
+               serving as Program Li-
+               brary.
+
+-PUNCH?        Request for EQT unit-        Type number.
+               reference number of unit
+               serving as Punch Output.
+
+-INPUT?        Request for EQT unit-        Type number.
+               reference number of unit
+               serving as Input.
+
+-LIST?         Request for EQT unit-        Type number.
+               reference number of unit
+               serving as List Output.
+
+DMA?           Request for DMA chan-        If one DMA channel,
+               nel numbers.                 type 6. If two DMA chan-
+                                            nels, type 6, 7.  If no
+                                            DMA channels, type 0.
+
+*ERROR         A non-numeric param-         Re-type correct param-
+               eter or a parameter not      eter.
+               equal to 6 or 7 has been
+               entered.
+
+After the Relocating Loader is loaded, PCS, requests the information needed to set
+the interrupt linkage for input/output processing. PCS halts after typing the mes-
+sage "INTERRUPT LINKAGE?" If the Teleprinter is serving both as the reader and
+the keyboard unit, turn reader off and press RUN. Begin typing response to message.
+
+Teleprinter 
+Message        Explanation                  Action
+
+INTERRUPT      Request for interrupt        For each I/O device,
+LINKAGE?       information.                 type: a1,a2,I.ee
+                                            a1 - interrupt location
+                                                 address
+                                            a2 - location containing
+                                                 absolute address of
+                                                 Interrupt Proces-
+                                                 sor entry point.
+
+--------------------
+t See Appendix G.
+
+13-4
+Teleprinter 
+Message        Explanation                  Action
+
+                                            I.ee entry point name:
+                                            ee = 00 Teleprinter
+                                               = 01 Punched Tape Reader
+                                               = 02 Tape Punch
+                                               = 20 Kennedy Incremental Tape
+                                               =    Transport
+                                               = 21 HP 2020 Magnetic Tape Unit
+                                               =    data chennel t
+                                               = 43 Time Base Generator
+
+                                            If a constant is to be set into the in-
+                                            terrupt location, type: a,c
+
+                                            a = interrupt location address
+
+                                            c = 1 to 6 octal constant to be
+                                                stored at a.
+
+                                            Constants should be entered for the
+                                            following instrument devices:
+
+                                            Data Source Interface(D.40):1067sc
+                                            (CLC sc,H)
+
+                                            Integrating Digital Voltmeter(D.41)
+                                            0(NOP)
+
+                                            Guarded Crossbar Scanner(D.42)
+                                            0(NOP)
+
+                                            Each entry is terminated with (CR)
+                                            (LF).
+
+*ERROR         A non-numeric value          Retype the entire correct entry
+               has been typed for a1,       
+               a2, a or c.
+
+*UN NAME       The name I.ee is not de-     a) If the driver name was typed in-
+               fined as an entry point         correctly, retype the enter cor-
+               in any I/O driver pre-          rect entry.
+               viosly loaded.
+                                            b) If related driver is to be loaded
+                                               with user's program at object
+                                               program load time, type an ex-
+                                               planation mark (!). $  The name
+                                               is added to the Loader's LST.
+
+                                            c) If the driver should have been
+                                               loaded, rerun PCS.
+
+--------------------
+t A second entry point must be defined for the command channel for the HP 2020A
+  driver: C.21.
+
+$ The Scanning Driver (D.77) appears in the HP 2018 Library; "!" is the proper
+  reply.
+
+13-5
+When the Interrupt Linkage parameters have been supplied, PCS performs the fol-
+lowing functions:
+
+1.  Prints the message "*UNDEFINED SYMBOL" followed by the entry point names
+    of all system subroutines which have been referenced as externals but not loaded.
+    At this point, PCS may be rerun and the missing subroutines loaded or, the
+    symbols may be added to the Relocating Loader's Symbol Table. Undefined sym-
+    bols are assigned a value of 77777 for an absolute address.
+
+2.  Completes the construction of the Loader Symbol Table.
+
+3.  Sets the Memory Table (symbol location .MEM.) in the Relocating Loader to
+    reflect the final bounds of available memory.
+
+Following this, PCS prints a list of all Basic Control System entry points and the
+bounds of the System Linkage area in the Base Page. As a final step PCS produces
+the absolute BCS tape which can be loaded by the Basic Binary Loader. During final
+processing, the following messages may occur:
+
+Teleprinter 
+Message        Explanation                  Action
+
+*UNDEFINED     An entry point in a BCS      1) To enter the symbol
+SYMBOL         module can not be               in the Loader Symbol
+(symbol)       located                         Table, press RUN.
+
+                                            2) If the subroutine
+                                               should have been
+                                               loaded, rerun PCS.
+
+I/O DRIVER?    A driver has been named      1) If the driver is to be
+D.ee           in the EQT parameter            loaded with user's
+               entry, but has not been         program at object
+               loaded                          program load time,
+                                               type an exclamation
+                                               mark(!). The name
+                                               is added to the Load-
+                                               er's LST.
+
+                                            2) If the driver should
+                                               have been loaded (or
+                                               if a character other
+                                               than ! is typed), re-
+                                               run PCS.
+
+*BCS            PCS is ready to punch       Turn on punch unit and
+ABSOULUTE       absolute output tape.       press RUN.
+OUTPUT
+
+*END            PCS run is complete.
+
+When the binary tape is punch the following halts may occur:
+
+T-Register
+Contents        Explanation                 Action
+
+102077          BCS tape is punched.        To produce additional
+                                            copies, set Switch 15 to 
+                                            1 and press RUN.
+
+102066          Tape supply low on the      Place a new reel of tape
+                2753A Tape Punch.           in Tape Punch and press
+                                            RUN to continue.
+
+13-6

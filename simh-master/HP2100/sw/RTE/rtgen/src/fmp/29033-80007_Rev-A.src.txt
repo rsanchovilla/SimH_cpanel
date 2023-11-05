@@ -1,0 +1,1076 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME PK..(8)
+        NAM PK..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT PK..
+        EXT .ENTR 
+        EXT .MPY
+        EXT .DIV
+        EXT .DRCT 
+        EXT D.RIO 
+        EXT DR.RD 
+        EXT LOCK. 
+        EXT MSS.
+        EXT IER.
+        EXT FM.ER 
+        EXT EXEC
+        EXT READF 
+        EXT WRITF 
+        EXT RWNDF 
+        EXT D.AD
+        EXT ID.A
+        EXT D.SDR 
+        EXT PK.DR 
+        EXT DS.LU 
+        EXT O.BUF 
+        EXT .E.R. 
+        EXT D.
+        EXT I.BUF 
+        EXT CUSE. 
+BTL     BSS     6 
+PACK    BSS 1 
+LUPT    BSS 1 
+PAKAD   BSS 1 
+.1      OCT 000001
+DIS     BSS 1 
+.5      OCT 000003
+.7      OCT 000000
+.8      OCT 000066
+FILCO   BSS 1 
+LU      BSS 1 
+DCB5    BSS 1 
+NXSEC   BSS 1 
+NXTR    BSS 1 
+DCB2    BSS 1 
+DCB     BSS 1 
+.9      OCT 000002
+DCB21   BSS 1 
+DCB20   BSS 1 
+DCB19   BSS 1 
+OBUF    BSS 1 
+DCB9    BSS 1 
+DCB8    BSS 1 
+DCB7    BSS 1 
+DCB6    BSS 1 
+.10     OCT 000007
+T       BSS 1 
+TBUF    BSS 1 
+.14     OCT 000040
+.15     OCT 000200
+.16     OCT 100000
+PKD6    BSS 1 
+.17     OCT 001717
+T1      BSS 1 
+.21     OCT 000020
+.23     OCT 177774
+.24     OCT 000016
+IDAD    BSS 1 
+.25     OCT 177776
+.26     BSS 1 
+LN      BSS 1 
+BUFAD   BSS 1 
+.27     OCT 001777
+.28     OCT 000027
+.29     OCT 077600
+.30     OCT 177377
+.31     OCT 000400
+SECSZ   BSS 1 
+PKD4    BSS 1 
+PKD9    BSS 1 
+.35     DEF BTL 
+.36     OCT 000005
+BLK     BSS 1 
+PKD     BSS 1 
+PKD3    BSS 1 
+PKD5    BSS 1 
+WRFL    BSS 1 
+.38     OCT 000377
+.39     OCT 177777
+BT      BSS 1 
+CO      BSS 1 
+XFER    BSS 1 
+.44     OCT 177400
+NTR     BSS 1 
+NSEC    BSS 1 
+.46     OCT 001757
+.49     OCT 001756
+PKD8    BSS 1 
+.51     OCT 000004
+.57     OCT 000017
+.61     OCT 000011
+AREG    BSS 1 
+BREG    BSS 1 
+LU3     BSS 1 
+.74     OCT 001657
+DMAN    BSS 1 
+NAM3    BSS 1 
+NAM2    BSS 1 
+NAM1    BSS 1 
+.75     OCT 000014
+T2      BSS 1 
+.77     OCT 000013
+.78     OCT 077400
+*003  !     PK..  IS THE PACKING ROUTINE FOR THE
+*004  !           RTE FMGR PROGRAM. 
+*005  ! 
+*006  !     IT PACKS RTE FILES AS FOLLOWS:
+*007  ! 
+*008  !     1.  IF DISC IS LU2 OR 3 A  CHECK IS 
+*009  !         MADE TO INSURE NO CURRENT ID SEGMENTS 
+*010  !         POINT TO FILE TRACKS. 
+*011  ! 
+*012  !     2.  EACH FILE IS MOVED DOWN (IF NECESSARY). 
+*013  !         AFTER EACH FILE IS MOVED ITS DIRECTORY
+*014  !         ENTRY IS UPDATED. 
+*015  !     (THUS NO MORE THAN ONE FILE IS
+*016  !         LOST BY A CRASH.) 
+*017  ! 
+*018  !     3.  AFTER ALL FILES ARE MOVED  A NEW DIRECTORY
+*019  !         IS CREATED PACKING OUT ALL THE PURGED 
+*020  !         ENTRIES AND THIS IS WRITTEN ON THE DISC VIA D.RTR.
+*021  ! 
+*022  !     THIS ROUTINE IS ENTERED BY THE COMMAND: 
+*023  ! 
+*024  !     PK,CR 
+*025  ! 
+*026  !         WHERE CR IS OPTIONAL AND RESTRICTS
+*027  !         THE PACK TO DISC CR.
+*028  ! 
+*029  !     DECLARE EXTERNALS 
+*030  ! 
+*031        LET D.RIO,DR.RD,LOCK.,MSS.,\
+*           IER.,FM.ER,EXEC,READF, \
+*           WRITF,RWNDF            \
+*                            BE SUBROUTINE,EXTERNAL 
+*032  ! 
+*033        LET D.AD,ID.A        BE FUNCTION,EXTERNAL 
+*034  ! 
+*035        LET D.SDR,PK.DR,DS.LU,O.BUF,\ 
+*           .E.R.,D.,I.BUF,CUSE.   BE INTEGER,EXTERNAL
+*036  ! 
+*037  !     DECLARE INTERNAL SUBROUTINES
+*038  ! 
+*039        LET TRAK.,SETAD,BADTR\
+*                         BE SUBROUTINE 
+*040  ! 
+*041  !     DECLARE ARRAYS
+*042  ! 
+*043        LET BTL(6)        BE INTEGER
+*044  ! 
+*045  !     DECLARE CONSTANTS 
+*046  ! 
+*047        LET READI     BE CONSTANT(    1)
+*048        LET WRIT      BE CONSTANT(    2)
+*049        LET BKLWA     BE CONSTANT(1777K)
+*050        LET XEQT      BE CONSTANT(1717K)
+*051        LET KEYWD     BE CONSTANT(1657K)
+*052        LET SECT2     BE CONSTANT(1757K)
+*053        LET SECT3     BE CONSTANT(1756K)
+*054        LET A         BE CONSTANT(   3 )
+*055        LET B         BE CONSTANT(   1 )
+*056  ! 
+*057  ! 
+*058  PK..: SUBROUTINE(N,LIS,ER) GLOBAL  !ENTRY POINT 
+N       NOP 
+LIS     NOP 
+ER      NOP 
+PK..    NOP 
+        JSB .ENTR 
+        DEF N 
+*059        PACK_$(@LIS+1)   !GET THE PACK
+        LDA LIS 
+        INA 
+        LDA .A.,I 
+        STA PACK
+*060        LUPT_D.AD(D.SDR)
+        JSB D.AD
+        DEF *+2 
+        DEF D.SDR 
+        STA LUPT
+*061        PAKAD_D.AD(PK.DR)  !SET DIRECTORY ADD.
+        JSB D.AD
+        DEF *+2 
+        DEF PK.DR 
+        STA PAKAD 
+*062  PK1:  D.RIO(READI)
+PK1     JSB D.RIO 
+        DEF *+2 
+        DEF .1
+*063  ! 
+*064  AGAIN:DIS_[IF PACK THEN PACK,ELSE -$LUPT] 
+AGAIN   LDA PACK
+        SZA,RSS 
+        JMP .2
+        LDA PACK
+        JMP .3
+.2      LDB LUPT,I
+        CMB,INB 
+        LDA .B. 
+.3      STA DIS 
+*065        IFNOT DIS THEN  GOTO EXIT !END OF DISC DIRECTORY
+        SZA,RSS 
+        JMP EXIT
+*066        LOCK.(DIS,3)?[MSS.(DIS);GO TO NXDIS]
+        JSB LOCK. 
+        DEF *+3 
+        DEF DIS 
+        DEF .5
+        SEZ,RSS 
+        JMP .4
+        JSB MSS.
+        DEF *+2 
+        DEF DIS 
+        JMP NXDIS 
+*067  ! 
+*068        DR.RD(READI,DIS,0)?[ER_54;RETURN] 
+.4      JSB DR.RD 
+        DEF *+4 
+        DEF .1
+        DEF DIS 
+        DEF .7
+        SEZ,RSS 
+        JMP .6
+        LDA .8
+        STA ER,I
+        JMP PK..,I
+*069  ! 
+*070        FILCO_0 
+.6      CLA 
+        STA FILCO 
+*071        SETAD 
+        JSB SETAD 
+        DEF *+1 
+*072        LU_$$@DS.LU 
+        JSB .DRCT 
+        DEF DS.LU 
+        LDA .A.,I 
+        LDA .A.,I 
+        STA LU
+*073  ! 
+*074  !     SET UP DCBS FOR PACKING 
+*075  ! 
+*076                  DCB5_[NXSEC_[NXTR_[DCB2_[\
+*                       DCB_D.AD(O.BUF)]+2]+1]+1]+1 
+        JSB D.AD
+        DEF *+2 
+        DEF O.BUF 
+        STA DCB 
+        ADA .9
+        STA DCB2
+        INA 
+        STA NXTR
+        INA 
+        STA NXSEC 
+        INA 
+        STA DCB5
+*077        DCB21_[DCB20_[DCB19_[OBUF_[DCB9_[DCB8_[DCB7_[DCB6_ \
+*                       DCB5+1]+1]+1]+1]+7]+3]+1]+1 
+        INA 
+        STA DCB6
+        INA 
+        STA DCB7
+        INA 
+        STA DCB8
+        INA 
+        STA DCB9
+        ADA .10 
+        STA OBUF
+        ADA .5
+        STA DCB19 
+        INA 
+        STA DCB20 
+        INA 
+        STA DCB21 
+*078        FOR T_DCB TO [TBUF_DCB+32] DO $T_0 !CLEAR THE DCB 
+        LDA DCB 
+        STA T 
+        JMP .12 
+.11     LDA T 
+        INA 
+        STA T 
+.12     LDA DCB 
+        ADA .14 
+        STA TBUF
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .13 
+        CLA 
+        STA T,I 
+        JMP .11 
+*079        $DCB_LU 
+.13     LDA LU
+        STA DCB,I 
+*080        $DCB2_1 
+        CLA,INA 
+        STA DCB2,I
+*081        $DCB6_128     !SET RECORD SIZE
+        LDA .15 
+        STA DCB6,I
+*082        $DCB7_100000K    !SECURITY FLAG 
+        LDA .16 
+        STA DCB7,I
+*083        $DCB8_$PKD6 
+        LDA PKD6,I
+        STA DCB8,I
+*084        $DCB9_$XEQT   !AND OPEN FLAG
+        LDA .17,I 
+        STA DCB9,I
+*085        FOR T_DCB TO DCB9 DO[T1_T+16;$T1_$T]
+        LDA DCB 
+        STA T 
+        JMP .19 
+.18     LDA T 
+        INA 
+        STA T 
+.19     LDB T 
+        CMB,INB 
+        ADB DCB9
+        SSB 
+        JMP .20 
+        LDA T 
+        ADA .21 
+        STA T1
+        LDA T,I 
+        STA T1,I
+        JMP .18 
+*086        IF LU<4 THEN TRAK.(LU)?[GO TO NXDIS]
+.20     LDB LU
+        ADB .23 
+        SSB,RSS 
+        JMP .22 
+        JSB TRAK. 
+        DEF *+2 
+        DEF LU
+        SEZ 
+        JMP NXDIS 
+*087  ! 
+*088  !     THE DISC IS LOCKED AND WE MAY START 
+*089  !     PACKING - WE MUST HAVE A BUFFER 
+*090  !     AND ITS SIZE.  IF WE ARE IN THE 
+*091  !     BACKGROUND USE ALL THE REST OF
+*092  !     CORE; ELSE USE 0.BUF+32 (256 WDS) 
+*093  ! 
+*094        IF ($($XEQT+14)AND 7)#3 THEN GOTO PK3 
+.22     LDA .17,I 
+        ADA .24 
+        LDA .A.,I 
+        AND .10 
+        CPA .5
+        RSS 
+        JMP PK3 
+*095        IDAD_$XEQT    !SET ID ADDRESS OF MAIN 
+        LDA .17,I 
+        STA IDAD
+*096        IDAD_ID.A($(@CUSE.-2))?[GO TO PK2]!IF SEGMENT 0 THEN USE IT 
+        JSB .DRCT 
+        DEF CUSE. 
+        ADA .25 
+        STA .26 
+        JSB ID.A
+        DEF *+2 
+        DEF .26,I 
+        SEZ 
+        JMP PK2 
+        STA IDAD
+*097  PK2:  IF[LN_($BKLWA-[BUFAD_$(IDAD +23)+1]+1)\ 
+*            AND 77600K]>256 THEN GO TO PK5 
+PK2     LDA IDAD
+        ADA .28 
+        LDA .A.,I 
+        INA 
+        STA BUFAD 
+        CMA,INA 
+        ADA .27,I 
+        INA 
+        AND .29 
+        STA LN
+        ADA .30 
+        SSA,RSS 
+        JMP PK5 
+*098  ! 
+*099  PK3:  DO[LN_256;BUFAD_TBUF] 
+PK3     LDA .31 
+        STA LN
+        LDA TBUF
+        STA BUFAD 
+*100  PK5:  SECSZ_LN-<10  !SET SECTOR COUNT.
+PK5     LDA LN
+        ALF,ALF 
+        RAL,RAL 
+        STA SECSZ 
+*101  ! 
+*102  !     BUFFER AND LENGTH ARE SET NOW 
+*103  !     START TO PACK 
+*104  ! 
+*105  ! 
+*106         DO[$NXTR_$PKD4; FOR\ 
+*                     T_@BTL TO @BTL+5 DO[\ 
+*                      PKD9_PKD9+1; $T_$PKD9]]
+        LDA PKD4,I
+        STA NXTR,I
+        LDA .35 
+        STA T 
+        JMP .33 
+.32     LDA T 
+        INA 
+        STA T 
+.33     LDA .35 
+        ADA .36 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .34 
+        LDA PKD9
+        INA 
+        STA PKD9
+        LDA PKD9,I
+        STA T,I 
+        JMP .32 
+*107        $NXSEC,BLK_0
+.34     CLA 
+        STA NXSEC,I 
+        STA BLK 
+*108  NXBLK:DR.RD(READI,DIS,BLK)?[GO TO CLEAN]
+NXBLK   JSB DR.RD 
+        DEF *+4 
+        DEF .1
+        DEF DIS 
+        DEF BLK 
+        SEZ 
+        JMP CLEAN 
+*109  ! 
+*110        FILCO_0 
+        CLA 
+        STA FILCO 
+*111  ! 
+*112  NXFIL:SETAD?[GO TO WRBLK] 
+NXFIL   JSB SETAD 
+        DEF *+1 
+        SEZ 
+        JMP WRBLK 
+*113  ! 
+*114  ! 
+*115        IFNOT $PKD THEN GOTO CLEAN  !END
+        LDA PKD,I 
+        SZA,RSS 
+        JMP CLEAN 
+*116  ! 
+*117        IF $PKD<0 THEN GOTO NXFIL  !PURGED
+        LDB PKD,I 
+        SSB 
+        JMP NXFIL 
+*118        IFNOT $PKD3  THEN GOTO NXFIL !TYPE0 
+        LDA PKD3,I
+        SZA,RSS 
+        JMP NXFIL 
+*119  ! 
+*120  !     IF THE FILE CONTAINS A BAD TRACK
+*121  !     PURGE IT AND CONTINUE 
+*122  ! 
+*123        BADTR($PKD4,[$DCB20_$PKD5 AND 377K],$PKD6)?[WRFL,$PKD_ -1;\ 
+*                     GO TO WRBLK]
+        LDA PKD5,I
+        AND .38 
+        STA DCB20,I 
+        STA .26 
+        JSB BADTR 
+        DEF *+4 
+        DEF PKD4,I
+        DEF .26 
+        DEF PKD6,I
+        SEZ,RSS 
+        JMP NEWLO 
+        CCA 
+        STA WRFL
+        STA PKD,I 
+        JMP WRBLK 
+*124  ! 
+*125  ! 
+*126  !     COMPUTE NEW LOCATION
+*127  ! 
+*128  NEWLO:BADTR($NXTR,$NXSEC,$PKD6)?[\
+*             $NXTR_$BT+1;$NXSEC_0;GO TO NEWLO] 
+NEWLO   JSB BADTR 
+        DEF *+4 
+        DEF NXTR,I
+        DEF NXSEC,I 
+        DEF PKD6,I
+        SEZ,RSS 
+        JMP .40 
+        LDA BT,I
+        INA 
+        STA NXTR,I
+        CLA 
+        STA NXSEC,I 
+        JMP NEWLO 
+*129  ! 
+*130  !     IF NEW LOCATION SAME AS OLD THEN
+*131  !     GO TO NEXT FILE 
+*132  ! 
+*133        IF $NXTR=$PKD4 THEN [IF $NXSEC=$PKD5 THEN\
+*                      GO TO PK11]
+.40     LDB NXTR,I
+        CPB PKD4,I
+        RSS 
+        JMP .41 
+        LDB NXSEC,I 
+        CPB PKD5,I
+        JMP PK11
+*134  ! 
+*135  !     FAKE OPEN THE FILES 
+*136  ! 
+*137        WRFL,CO,$DCB5,$DCB21_$PKD6    !# OF SECTORS 
+.41     LDA PKD6,I
+        STA WRFL
+        STA CO
+        STA DCB5,I
+        STA DCB21,I 
+*138        $DCB19_$PKD4  !START TRACK
+        LDA PKD4,I
+        STA DCB19,I 
+*139        RWNDF(O.BUF,.E.R.) !SET REST OF DCB 
+        JSB RWNDF 
+        DEF *+3 
+        DEF O.BUF 
+        DEF .E.R. 
+*140        IER.
+        JSB IER.
+        DEF *+1 
+*141        RWNDF($OBUF,.E.R.) !FOR IN AND OUT
+        JSB RWNDF 
+        DEF *+3 
+        DEF OBUF,I
+        DEF .E.R. 
+*142        IER.
+        JSB IER.
+        DEF *+1 
+*143  PK10: XFER_[IF CO>SECSZ THEN LN,ELSE CO-<6] 
+PK10    LDB CO
+        CMB,INB 
+        ADB SECSZ 
+        SSB,RSS 
+        JMP .42 
+        LDA LN
+        JMP .43 
+.42     LDA CO
+        ALF 
+        RAL,RAL 
+.43     STA XFER
+*144        READF($OBUF,.E.R.,$BUFAD,XFER)
+        JSB READF 
+        DEF *+5 
+        DEF OBUF,I
+        DEF .E.R. 
+        DEF BUFAD,I 
+        DEF XFER
+*145        IER.
+        JSB IER.
+        DEF *+1 
+*146        WRITF(O.BUF,.E.R.,$BUFAD,XFER)
+        JSB WRITF 
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF BUFAD,I 
+        DEF XFER
+*147        IER.
+        JSB IER.
+        DEF *+1 
+*148        IF [CO_CO-(XFER-<10)] THEN GOTO PK10
+        LDA XFER
+        ALF,ALF 
+        RAL,RAL 
+        CMA,INA 
+        ADA CO
+        STA CO
+        SZA 
+        JMP PK10
+*149        DO[$PKD4_$NXTR;$PKD5_$NXSEC+($PKD5 AND 177400K)]
+        LDA NXTR,I
+        STA PKD4,I
+        LDA PKD5,I
+        AND .44 
+        ADA NXSEC,I 
+        STA PKD5,I
+*150  PK11: DO[$NXTR_NTR;$NXSEC_NSEC]!UPDATE FOR NEXT FILE
+PK11    LDA NTR 
+        STA NXTR,I
+        LDA NSEC
+        STA NXSEC,I 
+*151  ! 
+*152  ! PONTERS ARE UPDATED 
+*153  ! 
+*154  !     FILE IS MOVED - UPDATE DIRECTORY
+*155  !     THEN GO DO NEXT FILE. 
+*156  ! 
+*157  WRBLK:IF WRFL THEN[DR.RD(WRIT,DIS,BLK);WRFL_0]
+WRBLK   LDA WRFL
+        SZA,RSS 
+        JMP .45 
+        JSB DR.RD 
+        DEF *+4 
+        DEF .9
+        DEF DIS 
+        DEF BLK 
+        CLA 
+        STA WRFL
+*158        IF FILCO=128 THEN[BLK_BLK+1;GOTO NXBLK],ELSE\ 
+*            GO TO NXFIL
+.45     LDB FILCO 
+        CPB .15 
+        RSS 
+        JMP NXFIL 
+        LDA BLK 
+        INA 
+        STA BLK 
+        JMP NXBLK 
+*159  CLEAN:BLK,CO_0
+CLEAN   CLA 
+        STA BLK 
+        STA CO
+*160  PK12: DR.RD(READI,DIS,BLK)?[GO TO PK25] 
+PK12    JSB DR.RD 
+        DEF *+4 
+        DEF .1
+        DEF DIS 
+        DEF BLK 
+        SEZ 
+        JMP PK25
+*161        DO[FILCO_0;SETAD] 
+        CLA 
+        STA FILCO 
+        JSB SETAD 
+        DEF *+1 
+*162        IF BLK THEN GO TO PK16
+        LDA BLK 
+        SZA 
+        JMP PK16
+*163        DO[$PKD5_$NXSEC;$PKD9_$NXTR;$NXSEC_0] 
+        LDA NXSEC,I 
+        STA PKD5,I
+        LDA NXTR,I
+        STA PKD9,I
+        CLA 
+        STA NXSEC,I 
+*164        NSEC_$SECT2 
+        LDA .46,I 
+        STA NSEC
+*165        IF $SECT3 THEN [IF $SECT3<$SECT2 THEN NSEC_$SECT3]
+        LDA .49,I 
+        SZA,RSS 
+        JMP .48 
+        LDB .46,I 
+        CMB,INB 
+        ADB .49,I 
+        SSB,RSS 
+        JMP .48 
+        LDA .49,I 
+        STA NSEC
+*166        $DCB5_-$PKD8*$PKD6+2
+.48     LDB PKD8,I
+        CMB,INB 
+        LDA .B. 
+        JSB .MPY
+        DEF PKD6,I
+        ADA .9
+        STA DCB5,I
+*167        NTR_$DCB5/NSEC
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF NSEC
+        STA NTR 
+*168        IF $B THEN NTR_NTR+1
+        LDA .1,I
+        SZA,RSS 
+        JMP .50 
+        LDA NTR 
+        INA 
+        STA NTR 
+*169        EXEC(4,NTR,$NXTR,$DCB,$DCB8)
+.50     JSB EXEC
+        DEF *+6 
+        DEF .51 
+        DEF NTR 
+        DEF NXTR,I
+        DEF DCB,I 
+        DEF DCB8,I
+*170        $DCB6_16
+        LDA .21 
+        STA DCB6,I
+*171        $DCB2_2 
+        LDA .9
+        STA DCB2,I
+*172        RWNDF(O.BUF,.E.R.)
+        JSB RWNDF 
+        DEF *+3 
+        DEF O.BUF 
+        DEF .E.R. 
+*173        IER.
+        JSB IER.
+        DEF *+1 
+*174  PK16: IFNOT $PKD THEN GOTO PK25 
+PK16    LDA PKD,I 
+        SZA,RSS 
+        JMP PK25
+*175        IF $PKD+1   THEN[WRITF(O.BUF,.E.R.,$PKD);\
+*                     IER.;CO_CO+1] 
+        LDA PKD,I 
+        INA 
+        SZA,RSS 
+        JMP .52 
+        JSB WRITF 
+        DEF *+4 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF PKD,I 
+        JSB IER.
+        DEF *+1 
+        LDA CO
+        INA 
+        STA CO
+*176        SETAD?[BLK_BLK+1;GOTO PK12] 
+.52     JSB SETAD 
+        DEF *+1 
+        SEZ,RSS 
+        JMP .53 
+        LDA BLK 
+        INA 
+        STA BLK 
+        JMP PK12
+*177        GOTO PK16 
+.53     JMP PK16
+*178  ! 
+*179  PK25: FOR T_PKD TO PKD+15 DO $T_0 
+PK25    LDA PKD 
+        STA T 
+        JMP .55 
+.54     LDA T 
+        INA 
+        STA T 
+.55     LDA PKD 
+        ADA .57 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .56 
+        CLA 
+        STA T,I 
+        JMP .54 
+*180        FOR T_CO TO($DCB5-2)*4 DO[\ 
+*                 WRITF(O.BUF,.E.R.,$PKD);IER.] 
+.56     LDA CO
+        STA T 
+        JMP .59 
+.58     LDA T 
+        INA 
+        STA T 
+.59     LDA DCB5,I
+        ADA .25 
+        JSB .MPY
+        DEF .51 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP PK15
+        JSB WRITF 
+        DEF *+4 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF PKD,I 
+        JSB IER.
+        DEF *+1 
+        JMP .58 
+*181  ! 
+*182  PK15: EXEC(9,D.,$XEQT,($NXTR-<6)+$DCB,DIS,$DCB8,7)
+PK15    LDA NXTR,I
+        ALF 
+        RAL,RAL 
+        ADA DCB,I 
+        STA .26 
+        JSB EXEC
+        DEF *+8 
+        DEF .61 
+        DEF D.
+        DEF .17,I 
+        DEF .26 
+        DEF DIS 
+        DEF DCB8,I
+        DEF .10 
+*183        DO[AREG_$0;BREG_$1;IF AREG THEN GOTO PK15]
+        LDA .7,I
+        STA AREG
+        LDA .1,I
+        STA BREG
+        LDA AREG
+        SZA 
+        JMP PK15
+*184        DO[.E.R._$BREG;IER.] !CHECK ERRORS
+        LDA BREG,I
+        STA .E.R. 
+        JSB IER.
+        DEF *+1 
+*185        LOCK.(DIS,5)         !UNLOCK DISC 
+        JSB LOCK. 
+        DEF *+3 
+        DEF DIS 
+        DEF .36 
+*186        EXEC(5,-1)           !RETURN TRACKS 
+        JSB EXEC
+        DEF *+3 
+        DEF .36 
+        DEF .39 
+*187  NXDIS:IFNOT PACK THEN [LUPT_LUPT+4;GOTO AGAIN]
+NXDIS   LDA PACK
+        SZA 
+        JMP EXIT
+        LDA LUPT
+        ADA .51 
+        STA LUPT
+        JMP AGAIN 
+*188  EXIT: DO[I.BUF_0;RETURN]
+EXIT    CLA 
+        STA I.BUF 
+        JMP PK..,I
+*189        END 
+*190  ! 
+*191  !     SETAD SETS THE ADDRESSES FOR THE NEXT FILES ENTRY 
+*192  !     IN PK.DR - IF NONE THEN AN FRETURN IS MADE. 
+*193  ! 
+*194  SETAD:SUBROUTINE FEXIT
+SETAD   NOP 
+        JSB .ENTR 
+        DEF SETAD 
+*195  ! 
+*196        IF FILCO=128 THEN FRETURN 
+        LDB FILCO 
+        CPB .15 
+        RSS 
+        JMP .63 
+        CCE 
+        JMP SETAD,I 
+*197        PKD9_[PKD8_[PKD6_[PKD5_[PKD4_[PKD3_[PKD_\ 
+*                           PAKAD+FILCO]+3]+1]+1]+1]\ 
+*                             +2]+1 
+.63     LDA PAKAD 
+        ADA FILCO 
+        STA PKD 
+        ADA .5
+        STA PKD3
+        INA 
+        STA PKD4
+        INA 
+        STA PKD5
+        INA 
+        STA PKD6
+        ADA .9
+        STA PKD8
+        INA 
+        STA PKD9
+*198        FILCO_FILCO+16
+        LDA FILCO 
+        ADA .21 
+        STA FILCO 
+*199        RETURN
+        CLE 
+        JMP SETAD,I 
+*200        END 
+*201  ! 
+*202  !     BADTR RETURNS FALSE IF THE CURRENT FILE 
+*203  !     AREA CONTAINS A BAD TRACK.
+*204  ! 
+*205  BADTR:SUBROUTINE(TRAK,SECT,NOSEC)FEXIT
+TRAK    NOP 
+SECT    NOP 
+NOSEC   NOP 
+BADTR   NOP 
+        JSB .ENTR 
+        DEF TRAK
+*206        NTR_(SECT+NOSEC)/$DCB8+TRAK  !COMPUTE 
+        LDA SECT,I
+        ADA NOSEC,I 
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF DCB8,I
+        ADA TRAK,I
+        STA NTR 
+*207        NSEC_$B       !NEXT TRACK $ SECTOR
+        LDA .1,I
+        STA NSEC
+*208  !     CHECK EACH TRACK AGAINST THE BAD LIST.
+*209        FOR T_TRAK TO[IF NSEC THEN 0,ELSE -1]\
+*                               + NTR DO[\
+*            FOR BT_@BTL TO @BTL+5 DO[  \ 
+*          IF $BT THEN[IF  T=$BT THEN FRETURN]]]
+        LDA TRAK,I
+        STA T 
+        JMP .67 
+.66     LDA T 
+        INA 
+        STA T 
+.67     LDA NSEC
+        SZA,RSS 
+        JMP .64 
+        LDA .7
+        JMP .65 
+.64     LDA .39 
+.65     ADA NTR 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .68 
+        LDA .35 
+        STA BT
+        JMP .70 
+.69     LDA BT
+        INA 
+        STA BT
+.70     LDA .35 
+        ADA .36 
+        CMA,INA 
+        ADA BT
+        CMA,INA 
+        SSA 
+        JMP .71 
+        LDA BT,I
+        SZA,RSS 
+        JMP .73 
+        LDB T 
+        CPB BT,I
+        RSS 
+        JMP .73 
+        CCE 
+        JMP BADTR,I 
+.73     JMP .69 
+.71     JMP .66 
+*210        RETURN
+.68     CLE 
+        JMP BADTR,I 
+*211        END 
+*212  ! 
+*213  !     TRAK.  CHECKS FOR ID SEGMENTS THAT REFERENCE
+*214  !     FILE MANAGEMENT TRACKS.  IF ANY ARE FOUND, THE
+*215  !     NAME OF THE PROGRAM IS PRINTED, 
+*216  !     AND AN FEXIT IS TAKEN.
+*217  ! 
+*218  TRAK.:SUBROUTINE(LOGUN) FEXIT 
+LOGUN   NOP 
+TRAK.   NOP 
+        JSB .ENTR 
+        DEF LOGUN 
+*219        LU3_LOGUN AND 1 
+        LDA LOGUN,I 
+        AND .1
+        STA LU3 
+*220        DO[NSEC,FILCO_0;NTR_($PKD4-<7)] 
+        CLA 
+        STA NSEC
+        STA FILCO 
+        LDA PKD4,I
+        ALF 
+        ALF,RAR 
+        STA NTR 
+*221        SETAD 
+        JSB SETAD 
+        DEF *+1 
+*222        T_$KEYWD
+        LDA .74,I 
+        STA T 
+*223  NEXT: DMAN_[NAM3_[NAM2_[NAM1_$T+12]+1]+1]+12
+NEXT    LDA T,I 
+        ADA .75 
+        STA NAM1
+        INA 
+        STA NAM2
+        INA 
+        STA NAM3
+        ADA .75 
+        STA DMAN
+*224        IF [T2_$NAM3 AND 7]=1 THEN GOTO OK
+        LDA NAM3,I
+        AND .10 
+        STA T2
+        CPA .1
+        JMP OK
+*225        IF T2=4 THEN GOTO OK
+        LDB T2
+        CPB .51 
+        JMP OK
+*226        IF (($DMAN-<1)AND 1)#LU3 THEN GOTO OK 
+        LDA DMAN,I
+        RAL 
+        AND .1
+        CPA LU3 
+        RSS 
+        JMP OK
+*227        IF ($DMAN AND 77600K)<NTR THEN GOTO OK
+        LDA DMAN,I
+        AND .29 
+        CMA,INA 
+        ADA NTR 
+        CMA,INA 
+        SSA 
+        JMP OK
+*228        IFNOT NSEC THEN MSS.(11)
+        LDA NSEC
+        SZA 
+        JMP .76 
+        JSB MSS.
+        DEF *+2 
+        DEF .77 
+*229        NSEC_1
+.76     CLA,INA 
+        STA NSEC
+*230        $@BTL_$NAM1 
+        LDA NAM1,I
+        STA .35,I 
+*231        $([BT_@BTL+1]+1)_($NAM3 AND 77400K)+40K 
+        LDA NAM3,I
+        AND .78 
+        ADA .14 
+        LDB .35 
+        INB 
+        STB BT
+        INB 
+        STA .B.,I 
+*232        $BT_$NAM2 
+        LDA NAM2,I
+        STA BT,I
+*233        FM.ER(2,BTL,3)
+        JSB FM.ER 
+        DEF *+4 
+        DEF .9
+        DEF BTL 
+        DEF .5
+*234  OK:   T_T+1 
+OK      LDA T 
+        INA 
+        STA T 
+*235        IF $T THEN GOTO NEXT
+        LDA T,I 
+        SZA 
+        JMP NEXT
+*236        IF NSEC THEN FRETURN
+        LDA NSEC
+        SZA,RSS 
+        JMP .79 
+        CCE 
+        JMP TRAK.,I 
+*237        RETURN
+.79     CLE 
+        JMP TRAK.,I 
+*238        END 
+*239        END 
+        END 
+*240        END$

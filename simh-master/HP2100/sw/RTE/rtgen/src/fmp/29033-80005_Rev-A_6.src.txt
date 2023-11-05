@@ -1,0 +1,100 @@
+ASMB,B,R,L,C
+      NAM RWND$,7 
+      ENT RWND$ 
+      EXT EXEC,RFLG$
+* 
+*     RWND$         IS A MODULE OF THE REAL TIME FILE 
+*                   MANAGEMENT PACKAGE.  IT IS INVOKED
+*                   TO SET OR RESET WORDS 11 THROUGH 16 
+*                   OF THE DCB.  THE RECORD COUNT IS RESET IF EXTENT 0. 
+* 
+*     CALLING SEQUENCE: 
+* 
+*     LDA EXTENT#   SET A TO DESIRED EXTENT 
+*     LDB DCB       SET B TO DCB ADDRESS
+*     JSB RWND$     CALL
+*     JMP ERR       ERROR EXIT (A=CODE) 
+*     ---           NORMAL RETURN 
+* 
+      SPC 3 
+TMP   NOP 
+TMP2  NOP 
+RWND$ NOP           ENTRY POINT 
+      STB DCB       SAVE THE DCB
+      INB           ADDRESS 
+      STB OF/SC     FOR THE D.RTR CALL
+      ADB .2        SAVE THE
+      STB TMP       TRACK ADDRESS 
+      STA TMP2      AND THE EXTENT
+      ADB .12       INDEX TO THE EXTENT#
+      CPA B,I       IF SAME - CONTINUE
+      JMP SETUP     WITH SETUP
+      LDA RFLG$     GET READ WRITE FLAG 
+      LDB .6        GET READ EXTENT OPEN REQUEST CODE 
+      SZA,RSS       IF WRITE
+      ADB .2        ADD TWO TO GET WRITE EXTENT OPEN REQUEST
+      STB SET       SET IT FOR CALL TO D.RTR
+AGAIN JSB EXEC      ELSE
+      DEF STEST     CALL
+      DEF .9        D.RTR 
+      DEF D.RTR     TO
+      DEF XEQT      OPEN
+      DEF TMP2      THE 
+DCB   NOP           EXTENT. 
+OF/SC NOP 
+      DEF SET 
+STEST SZA           SCHEDULE OK?
+      JMP AGAIN     NO; TRY AGAIN 
+      SPC 1 
+      LDA B,I       YES; ANY ERRORS?
+      SSA           FROM D.RTR? 
+      JMP RWND$,I   YES; RETURN 
+      SPC 1 
+      ADB .3        NO; STEP TO TRACK 
+      LDA B,I       GET TRACK 
+      STA TMP,I     SET IN DCB
+      INB           STEP TO SECTOR
+      LDA B,I       GET AND 
+      AND B377      MASK
+      LDB TMP       GET DCB ADDRESS 
+      INB           SET 
+      STA B,I       SECTOR IN DCB 
+SETUP LDB TMP       SET THE DCB FROM THE
+      ADB .7        TRACK & SECTOR WORDS
+      LDA TMP,I     SET 
+      JSB SET       TRACK 
+      ISZ TMP       AND 
+      LDA TMP,I     SECTOR
+      JSB SET       WORDS.
+      LDA B         SET THE 
+      ADA .4        BUFFER
+      JSB SET       ADDRESS.
+      CLA           CLEAR THE READ/ 
+      JSB SET       WRITE FLAGS 
+      LDA TMP2      GET EXTENT# 
+      INB           SKIP
+      JSB SET       SET THE EXTENT #
+      ISZ RWND$     STEP
+      JMP RWND$,I   AND RETURN
+      SPC 3 
+SET   NOP 
+      STA B,I       SET THE WORD IN THE DCB 
+      INB           STEP DCB ADDRESS
+      JMP SET,I     RETURN
+      SPC 3 
+.2    OCT 2 
+.3    OCT 3 
+.4    OCT 4 
+.7    OCT 7 
+.6    DEC 6 
+.12   DEC 12
+.9    DEC 9 
+B377  OCT 377 
+D.RTR ASC 3,D.RTR 
+XEQT  EQU 1717B 
+A     EQU 0 
+B     EQU 1 
+      SPC 1 
+END   EQU * 
+      SPC 1 
+      END 

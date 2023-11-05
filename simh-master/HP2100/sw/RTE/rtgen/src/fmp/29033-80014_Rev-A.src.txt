@@ -1,0 +1,995 @@
+ASMB,B,X,L  
+*001  SPL, L, M, O  
+*002        NAME LI..(8)
+        NAM LI..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT LI..
+        EXT .ENTR 
+        EXT .DIV
+        EXT .DRCT 
+        EXT D.AD
+        EXT .TTY
+        EXT O.BUF 
+        EXT I.BUF 
+        EXT D.LB
+        EXT BUF.
+        EXT .E.R. 
+        EXT TMP.
+        EXT N.OPL 
+        EXT OPEN. 
+        EXT LOCF
+        EXT WRITF 
+        EXT READF 
+        EXT EXEC
+        EXT DR.RD 
+        EXT CONV. 
+        EXT IER.
+LSTBF   BSS     2 
+LNNO    BSS 1 
+BLWD    BSS 1 
+LBF     BSS   128 
+OPFL    BSS 1 
+#1      OCT 000411
+NUL     BSS 1 
+TYPF    BSS 1 
+LIS1    BSS 1 
+#2      OCT 000004
+#3      OCT 177400
+#4      OCT 000040
+#5      OCT 040440
+#7      OCT 042040
+#9      OCT 041040
+#10     OCT 000311
+#12     OCT 051440
+#13     OCT 000070
+OPLS    BSS 1 
+#14     OCT 000003
+#15     OCT 000000
+LP      BSS 1 
+NSEC    BSS 1 
+FLU     BSS 1 
+FTYP    BSS 1 
+RECS    BSS 1 
+LLU     BSS 1 
+EQT5    BSS 1 
+#16     OCT 000015
+P36     BSS 1 
+P3      BSS 1 
+#17     OCT 000041
+#19     OCT 037400
+#20     OCT 173000
+TTY     BSS 1 
+T       BSS 1 
+#21     OCT 000001
+#25     OCT 020040
+P       BSS 1 
+#26     OCT 020124
+#27     OCT 036440
+#28     OCT 000002
+#29     OCT 000005
+#30     OCT 020111
+#31     OCT 047516
+N       BSS 1 
+#34     OCT 020103
+#35     OCT 051040
+#36     BSS 1 
+#37     OCT 020114
+#38     OCT 052440
+#40     OCT 020125
+#41     OCT 051511
+#42     OCT 047107
+#43     OCT 020102
+#44     OCT 046113
+#45     OCT 051075
+#46     OCT 000033
+TB      BSS 1 
+BF      BSS 1 
+#49     DEF LSTBF 
+#54     OCT 025052
+#56     OCT 000006
+RC      BSS 1 
+#57     OCT 051105
+#58     OCT 041443
+L       BSS 1 
+#59     OCT 000200
+#60     OCT 177764
+F       BSS 1 
+#62     DEF LBF 
+ST      BSS 1 
+WP      BSS 1 
+#65     BSS 1 
+#67     OCT 000044
+UP      BSS 1 
+#68     OCT 177777
+#70     BSS 1 
+#72     OCT 000010
+T2      BSS 1 
+#73     OCT 077400
+#74     OCT 120377
+#75     OCT 160000
+#76     OCT 000177
+#77     OCT 020000
+#79     OCT 177640
+#80     OCT 177740
+#81     OCT 077577
+#84     OCT 000007
+#85     OCT 030060
+#86     OCT 020060
+#88     BSS 1 
+#90     OCT 030040
+#91     OCT 000012
+#94     OCT 177733
+#95     BSS 1 
+#96     BSS 1 
+*003  ! 
+*004  !     LI.. IS THE RTE FMGR FILE LIST MODULE 
+*005  !          IT IS ENTERED ON COMMAND 
+*006  ! 
+*007  !     LI,NAMR,TY
+*008  ! 
+*009  !        WHERE: 
+*010  ! 
+*011  ! 
+*012  !         NAMR    IS THE NAME REFERENCE INCLUDING 
+*013  !                 SECURITY CODE AND DISC ID 
+*014  ! 
+*015  !         TY     IS THE LISTING TYPE AND IS ASCII:
+*016  ! 
+*017  !             S OR A OR NULL SOURCE WITH LINE NUMBERS 
+*018  !             B              BINARY DUMP
+*019  !             D              DIRECTORY HEAD ONLY
+*020  ! 
+*021  ! 
+*022  !     EACH LISTING WILL BE PROCEEDED BY THE HEAD: 
+*023  ! 
+*024  !      NAMEL T=XXXXX IS ON PK XXXXX USING XXXX BLKS R=XXXX
+*025  ! 
+*026  ! 
+*027  ! 
+*028  ! 
+*029  ! 
+*030  !     S FORMAT IS A BLANK FOLLOWED BY 4 DIGIT 
+*031  !        LINE NUMBER FOLLOWED BY TWO BLANKS FOLLOWED
+*032  !       BY THE RECORD.
+*033  ! 
+*034  !     B FORMAT IS : 
+*035  !       A)THE RECORD HEAD: REC# XXXXX 
+*036  !       B)N LINES FORMATED AS FOLLOWS 
+*037  !         8 5-DIGIT OCTAL NUMBERS SEPERATED BY BLANKS 
+*038  !           AND FOLLOWED BY A "*" FOLLOWED BY THE 
+*039  !           16 ASCII CHARACTERS THE DIGITS REP. 
+*040  !            NON-PRINTING CHARACTERS WILL BE FILLED 
+*041  !            WITH BLANKS
+*042  ! 
+*043  !     D FORMAT IS THE HEAD ONLY 
+*044  ! 
+*045  ! 
+*046  ! 
+*047  !     DEFINE EXTERNALS
+*048  ! 
+*049        LET D.AD,.TTY BE FUNCTION,EXTERNAL
+*050  ! 
+*051        LET O.BUF,I.BUF,D.LB,BUF.,.E.R.,\ 
+*           TMP.,N.OPL        BE INTEGER,EXTERNAL 
+*052        LET OPEN.,LOCF,WRITF,READF,EXEC,\ 
+*          DR.RD   ,\ 
+*                 CONV.,IER. \
+*                             BE SUBROUTINE,EXTERNAL
+*053  ! 
+*054  !     DEFINE INTERNAL ROUTINES
+*055  ! 
+*056        LET SETA,WRIT,SPACE    BE SUBROUTINE
+*057  ! 
+*058  !     DEFINE  CONSTANTS 
+*059  !                                        HL 
+*060        LET BL.T      BE CONSTANT (20124K)! T 
+*061        LET EQ.BL     BE CONSTANT (36440K)!=
+*062        LET BL.I      BE CONSTANT (20111K)! I 
+*063        LET S.BL      BE CONSTANT (51440K)!S
+*064        LET O.N       BE CONSTANT (47516K)!ON 
+*065        LET BL.C      BE CONSTANT (20103K)! C 
+*066        LET R.BL      BE CONSTANT (51040K)!R
+*067        LET BL.L      BE CONSTANT (20114K)! L 
+*068        LET U.BL      BE CONSTANT (52440K)!U
+*069        LET BL.U      BE CONSTANT (20125K)! U 
+*070        LET S.I       BE CONSTANT (51511K)!SI 
+*071        LET N.G       BE CONSTANT (47107K)!NG 
+*072        LET BL.B      BE CONSTANT (20102K)! B 
+*073        LET L.K       BE CONSTANT (46113K)!LK 
+*074        LET R.EQ      BE CONSTANT (51075K)!R= 
+*075        LET A.BL      BE CONSTANT (40440K)!A
+*076        LET B.BL      BE CONSTANT (41040K)!B
+*077        LET D.BL      BE CONSTANT (42040K)!D
+*078        LET R.E       BE CONSTANT (51105K)!RE 
+*079        LET C.NO      BE CONSTANT (41443K)!C# 
+*080        LET DST       BE CONSTANT (25052K)!** 
+*081  ! 
+*082  !     DEFINE BUFFER SET UP
+*083  ! 
+*084        LET LSTBF(2),LNNO,BLWD,LBF(128) BE INTEGER
+*085  LI..: SUBROUTINE(NOC,LIS ,ER) GLOBAL
+NOC     NOP 
+LIS     NOP 
+ER      NOP 
+LI..    NOP 
+        JSB .ENTR 
+        DEF NOC 
+*086  ! 
+*087        OPFL_411K   !SET DEFAULT OPEN  OPTION 
+        LDA #1
+        STA OPFL
+*088        NUL_0    !PRESET  NULL PRAM FLAG
+        CLA 
+        STA NUL 
+*089        TYPF_($([LIS1_@LIS +1]+4) AND 177400K)+40K
+        LDA LIS 
+        INA 
+        STA LIS1
+        ADA #2
+        LDA .A.,I 
+        AND #3
+        ADA #4
+        STA TYPF
+*090        IF TYPF=A.BL THEN GO TO STYP    !CHECK FOR
+        CPA #5
+        JMP STYP
+*091        IF TYPF=40K THEN[NUL_1;GO TO STYP]!LEGAL
+        LDA TYPF
+        CPA #4
+        RSS 
+        JMP #6
+        CLA,INA 
+        STA NUL 
+        JMP STYP
+*092        IF TYPF=D.BL THEN GO TO TYPOK   !OPTIONS
+#6      LDA TYPF
+        CPA #7
+        JMP TYPOK 
+*093        IF TYPF=B.BL THEN[OPFL_311K;GO TO TYPOK]!NULL,A,S,B,D 
+        LDA TYPF
+        CPA #9
+        RSS 
+        JMP #8
+        LDA #10 
+        STA OPFL
+        JMP TYPOK 
+*094        IF TYPF#S.BL THEN [ER_56;RETURN]!NO; RETURN 56
+#8      LDA TYPF
+        CPA #12 
+        JMP STYP
+        LDA #13 
+        STA ER,I
+        JMP LI..,I
+*095  ! 
+*096  STYP: TYPF_S.BL                       !FOURCE NULL,ATOS 
+STYP    LDA #12 
+        STA TYPF
+*097  ! 
+*098  TYPOK:OPLS_ D.AD(TMP.) +3        !GET LIST UNIT OP LIST 
+TYPOK   JSB D.AD
+        DEF *+2 
+        DEF TMP.
+        ADA #14 
+        STA OPLS
+*099  ! 
+*100        OPEN.(O.BUF,TMP.,$OPLS, 0) !OPEN LIST FILE
+        JSB OPEN. 
+        DEF *+5 
+        DEF O.BUF 
+        DEF TMP.
+        DEF OPLS,I
+        DEF #15 
+*101  ! 
+*102        OPEN.(I.BUF,$LIS1,N.OPL,OPFL) !OPEN FILE TO BE LISTED 
+        JSB OPEN. 
+        DEF *+5 
+        DEF I.BUF 
+        DEF LIS1,I
+        DEF N.OPL 
+        DEF OPFL
+*103  ! 
+*104        LOCF(I.BUF,.E.R.,LP,LP,LP,NSEC,FLU,FTYP,RECS) 
+        JSB LOCF
+        DEF *+10
+        DEF I.BUF 
+        DEF .E.R. 
+        DEF LP
+        DEF LP
+        DEF LP
+        DEF NSEC
+        DEF FLU 
+        DEF FTYP
+        DEF RECS
+*105        IFNOT NUL THEN GO TO OK !IF NULL THEN CHOSE THE RIGHT OPTION
+        LDA NUL 
+        SZA,RSS 
+        JMP OK
+*106        IFNOT FTYP THEN GO TO OK  !TYPE ZERO DEFAULT IS ASC 
+        LDA FTYP
+        SZA,RSS 
+        JMP OK
+*107        IF FTYP=3 THEN GO TO OK  !SAME FOR TYPE 3 
+        LDA FTYP
+        CPA #14 
+        JMP OK
+*108        IF FTYP=4 THEN GO TO OK  !SAME FOR TYPE 4 
+        LDA FTYP
+        CPA #2
+        JMP OK
+*109  CTYP: TYPF_B.BL      !OTHERWISE USE BINARY FORMAT 
+CTYP    LDA #9
+        STA TYPF
+*110  ! 
+*111  OK:   LOCF(O.BUF,.E.R.,LP,LP,LP,LP,LLU) !GET LIST LU
+OK      JSB LOCF
+        DEF *+8 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF LP
+        DEF LP
+        DEF LP
+        DEF LP
+        DEF LLU 
+*112  ! 
+*113        EXEC(13,LLU,EQT5)  !GET LIST LU TYPE CODED
+        JSB EXEC
+        DEF *+4 
+        DEF #16 
+        DEF LLU 
+        DEF EQT5
+*114  ! 
+*115        P36_[P3_@LIS +4]+33  !SET UP LIST ADDRESSES 
+        LDA LIS 
+        ADA #2
+        STA P3
+        ADA #17 
+        STA P36 
+*116        LP_1          !SET LINE PRINTER FLAG
+        CLA,INA 
+        STA LP
+*117        IF (EQT5 AND 37400K)<5000K THEN LP_0
+        LDA EQT5
+        AND #19 
+        ADA #20 
+        SSA,RSS 
+        JMP #18 
+        CLA 
+        STA LP
+*118        TTY_.TTY(LLU) 
+#18     JSB .TTY
+        DEF *+2 
+        DEF LLU 
+        STA TTY 
+*119        FOR T_ P3 TO P36 DO[$T_20040K] ! BLANK THE BUFFER 
+        LDA P3
+        STA T 
+        JMP #23 
+#22     LDA T 
+        INA 
+        STA T 
+#23     LDA T 
+        CMA,INA 
+        ADA P36 
+        SSA 
+        JMP #24 
+        LDA #25 
+        STA T,I 
+        JMP #22 
+*120        P_P3-1
+#24     CCA 
+        ADA P3
+        STA P 
+*121        SETA(BL.T)     !SET BLANK T 
+        JSB SETA
+        DEF *+2 
+        DEF #26 
+*122        SETA(EQ.BL)    !SET = BLANK 
+        JSB SETA
+        DEF *+2 
+        DEF #27 
+*123        P_P+2 
+        LDA P 
+        ADA #28 
+        STA P 
+*124        CONV.(FTYP,$P,5) !SET TYPE
+        JSB CONV. 
+        DEF *+4 
+        DEF FTYP
+        DEF P,I 
+        DEF #29 
+*125        SETA(BL.I)     !SET BLANK I 
+        JSB SETA
+        DEF *+2 
+        DEF #30 
+*126        SETA(S.BL)     !SET S BLANK 
+        JSB SETA
+        DEF *+2 
+        DEF #12 
+*127        SETA (O.N)     !SET ON
+        JSB SETA
+        DEF *+2 
+        DEF #31 
+*128        IF FTYP THEN[SETA(BL.C);SETA(R.BL);DR.RD(1,-FLU,\ 
+*                     0);T_$$@D.LB;N_5],\ 
+*               ELSE[SETA(BL.L);SETA(U.BL);T_FLU;N_2] 
+        LDA FTYP
+        SZA,RSS 
+        JMP #32 
+        JSB SETA
+        DEF *+2 
+        DEF #34 
+        JSB SETA
+        DEF *+2 
+        DEF #35 
+        LDA FLU 
+        CMA,INA 
+        STA #36 
+        JSB DR.RD 
+        DEF *+4 
+        DEF #21 
+        DEF #36 
+        DEF #15 
+        JSB .DRCT 
+        DEF D.LB
+        LDA .A.,I 
+        LDA .A.,I 
+        STA T 
+        LDA #29 
+        STA N 
+        JMP #33 
+#32     JSB SETA
+        DEF *+2 
+        DEF #37 
+        JSB SETA
+        DEF *+2 
+        DEF #38 
+        LDA FLU 
+        STA T 
+        LDA #28 
+        STA N 
+*129        P_P + N/2 
+#33     LDA N 
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF #28 
+        ADA P 
+        STA P 
+*130        CONV.(T,$P,N) 
+        JSB CONV. 
+        DEF *+4 
+        DEF T 
+        DEF P,I 
+        DEF N 
+*131        IFNOT FTYP THEN[N_13;GO TO WRHD]
+        LDA FTYP
+        SZA 
+        JMP #39 
+        LDA #16 
+        STA N 
+        JMP WRHD
+*132        SETA(BL.U)     !SET   USING 
+#39     JSB SETA
+        DEF *+2 
+        DEF #40 
+*133        SETA(S.I )
+        JSB SETA
+        DEF *+2 
+        DEF #41 
+*134        SETA(N.G )
+        JSB SETA
+        DEF *+2 
+        DEF #42 
+*135        P_P+3 
+        LDA P 
+        ADA #14 
+        STA P 
+*136  ! 
+*137        CONV.(NSEC/2,$P,5)
+        LDA NSEC
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF #28 
+        STA #36 
+        JSB CONV. 
+        DEF *+4 
+        DEF #36 
+        DEF P,I 
+        DEF #29 
+*138  ! 
+*139  ! 
+*140        SETA(BL.B)     !SET BLKS R= 
+        JSB SETA
+        DEF *+2 
+        DEF #43 
+*141        SETA(L.K) 
+        JSB SETA
+        DEF *+2 
+        DEF #44 
+*142        SETA(S.BL)
+        JSB SETA
+        DEF *+2 
+        DEF #12 
+*143        SETA(R.EQ)
+        JSB SETA
+        DEF *+2 
+        DEF #45 
+*144  ! 
+*145        P_P+2 
+        LDA P 
+        ADA #28 
+        STA P 
+*146  ! 
+*147        CONV.(RECS,$P,4)
+        JSB CONV. 
+        DEF *+4 
+        DEF RECS
+        DEF P,I 
+        DEF #2
+*148  ! 
+*149        N_27
+        LDA #46 
+        STA N 
+*150  ! 
+*151  WRHD: TB_[BF_[IF TYPF=S.BL THEN @LSTBF,ELSE D.AD (BUF.)]]+1 
+WRHD    LDA TYPF
+        CPA #12 
+        RSS 
+        JMP #47 
+        LDA #49 
+        JMP #48 
+#47     JSB D.AD
+        DEF *+2 
+        DEF BUF.
+#48     STA BF
+        INA 
+        STA TB
+*152        $BF_20040K                         !BLANK FIRST WD
+        LDA #25 
+        STA BF,I
+*153        P_LIS1
+        LDA LIS1
+        STA P 
+*154        FOR T_TB TO TB+N DO [$T_$P;P_P+1] !MOVE LINE
+        LDA TB
+        STA T 
+        JMP #51 
+#50     LDA T 
+        INA 
+        STA T 
+#51     LDA TB
+        ADA N 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP #52 
+        LDA P,I 
+        STA T,I 
+        LDA P 
+        INA 
+        STA P 
+        JMP #50 
+*155        IF LIS #3 THEN[$([P_TB+1]+1)_DST;\IF FACK FILE REPLACE NAME 
+*                         $P_DST;$TB_DST]! WITH "******"
+#52     LDA LIS,I 
+        CPA #14 
+        JMP #53 
+        LDA TB
+        INA 
+        STA P 
+        INA 
+        LDB #54 
+        STB .A.,I 
+        LDA #54 
+        STA P,I 
+        LDA #54 
+        STA TB,I
+*156        WRIT   !   WRITE THE HEAD 
+#53     JSB WRIT
+        DEF *+1 
+*157  ! 
+*158        IF TYPF=D.BL THEN GOTO EOF  !DONE IF HEAD ONLY
+        LDA TYPF
+        CPA #7
+        JMP EOF 
+*159        SPACE  !SPACE A LINE
+        JSB SPACE 
+        DEF *+1 
+*160        IF FTYP=6 THEN $(D.AD(I.BUF)+2)_1 !FOURCE TYPE 6 TO ONE 
+        LDA FTYP
+        CPA #56 
+        RSS 
+        JMP #55 
+        JSB D.AD
+        DEF *+2 
+        DEF I.BUF 
+        ADA #28 
+        CLB,INB 
+        STB .A.,I 
+*161        RC_1
+#55     CLA,INA 
+        STA RC
+*162  NEXT: P_BF          !INITILIZE BUFFER POINTER 
+NEXT    LDA BF
+        STA P 
+*163        SETA(R.E)      ! SET UP 
+        JSB SETA
+        DEF *+2 
+        DEF #57 
+*164        SETA(C.NO)     !   REC# XXXXX 
+        JSB SETA
+        DEF *+2 
+        DEF #58 
+*165        SETA(20040K)
+        JSB SETA
+        DEF *+2 
+        DEF #25 
+*166        P_P+2 
+        LDA P 
+        ADA #28 
+        STA P 
+*167        CONV.(RC,$P,5)! SET NUMBER
+        JSB CONV. 
+        DEF *+4 
+        DEF RC
+        DEF P,I 
+        DEF #29 
+*168        READF(I.BUF,.E.R.,LBF,128,L) ! READ RECORD
+        JSB READF 
+        DEF *+6 
+        DEF I.BUF 
+        DEF .E.R. 
+        DEF LBF 
+        DEF #59 
+        DEF L 
+*169        IF .E.R.= -12  THEN GO TO EOF !IF EOF-GO EXIT 
+        LDA .E.R. 
+        CPA #60 
+        JMP EOF 
+*170        IER.                         !CHECK FOR ERRORS
+        JSB IER.
+        DEF *+1 
+*171        IF L <0 THEN GO TO EOF       !SOFT EOF? 
+        LDA L 
+        SSA 
+        JMP EOF 
+*172        N_L+3 
+        LDA L 
+        ADA #14 
+        STA N 
+*173        IF TYPF=S.BL THEN[CONV.(RC,LNNO,4);BLWD_20040K;\
+*                    L_0;GO TO WRTIT]!JUST LISTING - GO WRIT
+        LDA TYPF
+        CPA #12 
+        RSS 
+        JMP #61 
+        JSB CONV. 
+        DEF *+4 
+        DEF RC
+        DEF LNNO
+        DEF #2
+        LDA #25 
+        STA BLWD
+        CLA 
+        STA L 
+        JMP WRTIT 
+*174  ! 
+*175        SPACE         !SPACE A LINE 
+#61     JSB SPACE 
+        DEF *+1 
+*176        N_5           !WRITE THE RECORD NUMBER
+        LDA #29 
+        STA N 
+*177        WRIT          ! 
+        JSB WRIT
+        DEF *+1 
+*178        SPACE         !SPACE A LINE 
+        JSB SPACE 
+        DEF *+1 
+*179  ! 
+*180        F_@LBF        !SET BUFFER POINTER 
+        LDA #62 
+        STA F 
+*181  NEXTL:IFNOT L THEN [RC_RC+1;GO TO NEXT] !IF NO DATA GET NEXT
+NEXTL   LDA L 
+        SZA 
+        JMP #63 
+        LDA RC
+        INA 
+        STA RC
+        JMP NEXT
+*182        P_[ST_[WP,T_TB]+27]+1   !INITILIZE POINTERS 
+#63     LDA TB
+        STA WP
+        STA T 
+        ADA #46 
+        STA ST
+        INA 
+        STA P 
+*183        REPEAT 36 TIMES DO[ $T_20040K; T_T+1] 
+        LDA #67 
+        STA #65 
+#64     CCA 
+        ADA #65 
+        STA #65 
+        SSA 
+        JMP #66 
+        LDA #25 
+        STA T,I 
+        LDA T 
+        INA 
+        STA T 
+        JMP #64 
+*184        UP_ -1        !SET UPPER FLAG TRUE
+#66     CCA 
+        STA UP
+*185        REPEAT 8 TIMES DO THRU PTSTP
+        LDA #72 
+        STA #70 
+#69     CCA 
+        ADA #70 
+        STA #70 
+        SSA 
+        JMP PREPR 
+*186        IF[T2_ [T_$F]AND 77400K]>57400K THEN GOTO BLANK 
+        LDA F,I 
+        STA T 
+        AND #73 
+        STA T2
+        ADA #74 
+        SSA,RSS 
+        JMP BLANK 
+*187        IF T2>17777K THEN GOTO OKUP 
+        LDA T2
+        ADA #75 
+        SSA,RSS 
+        JMP OKUP
+*188  ! 
+*189  BLANK:T_ (T AND 177K)+20000K
+BLANK   LDA T 
+        AND #76 
+        ADA #77 
+        STA T 
+*190  ! 
+*191  OKUP: IF [T2_($F AND 177K)]<140K THEN[IF  T2> 37K THEN\ 
+*          GO TO OKLOW] 
+OKUP    LDA F,I 
+        AND #76 
+        STA T2
+        ADA #79 
+        SSA,RSS 
+        JMP #78 
+        LDA T2
+        ADA #80 
+        SSA,RSS 
+        JMP OKLOW 
+*192  ! 
+*193        T_ (T AND  77400K) +40K 
+#78     LDA T 
+        AND #73 
+        ADA #4
+        STA T 
+*194  ! 
+*195  OKLOW:DO[ $P_T AND 77577K;P_P+1]
+OKLOW   LDA T 
+        AND #81 
+        STA P,I 
+        LDA P 
+        INA 
+        STA P 
+*196  ! 
+*197        T2_   [T_$F-<1] AND 1 
+        LDA F,I 
+        RAL 
+        STA T 
+        AND #21 
+        STA T2
+*198  ! 
+*199        $WP_[IF UP THEN (T2-<8)+([T_T-<3] AND 7)+30060K,\ 
+*                 ELSE T2 + 20060K] 
+        LDA UP
+        SZA,RSS 
+        JMP #82 
+        LDA T2
+        ALF,ALF 
+        LDB T 
+        BLF,RBR 
+        STB T 
+        STA #36 
+        LDA .B. 
+        AND #84 
+        ADA #36 
+        ADA #85 
+        JMP #83 
+#82     LDA T2
+        ADA #86 
+#83     STA WP,I
+*200  ! 
+*201        REPEAT 2 TIMES DO[ \
+*       $[WP_WP+1]_(([T_T-<3] AND 7)-<8)+\
+*                   ([T_T-<3] AND 7)+ 30060K] 
+        LDA #28 
+        STA #88 
+#87     CCA 
+        ADA #88 
+        STA #88 
+        SSA 
+        JMP #89 
+        LDA T 
+        ALF,RAR 
+        STA T 
+        AND #84 
+        ALF,ALF 
+        LDB T 
+        BLF,RBR 
+        STB T 
+        STA #36 
+        LDA .B. 
+        AND #84 
+        ADA #36 
+        ADA #85 
+        LDB WP
+        INB 
+        STB WP
+        STA .B.,I 
+        JMP #87 
+*202  ! 
+*203        IF UP THEN GOTO PTSTP 
+#89     LDA UP
+        SZA 
+        JMP PTSTP 
+*204  ! 
+*205        $[WP_WP+1]_(((T-<3) AND 7)-<8)+30040K 
+        LDA T 
+        ALF,RAR 
+        AND #84 
+        ALF,ALF 
+        ADA #90 
+        LDB WP
+        INB 
+        STB WP
+        STA .B.,I 
+*206  ! 
+*207  PTSTP:DO[WP_WP+1;UP_NOT UP;F_F+1;IFNOT [L_L-1] THEN\
+*           GO TO PREPR]
+PTSTP   LDA WP
+        INA 
+        STA WP
+        LDA UP
+        CMA 
+        STA UP
+        LDA F 
+        INA 
+        STA F 
+        CCA 
+        ADA L 
+        STA L 
+        SZA,RSS 
+        JMP PREPR 
+        JMP #69 
+*208  ! 
+*209  ! 
+*210  PREPR:IF $[P_P-1]=20040K THEN GO TO PREPR  !FIND LAST 
+PREPR   CCA 
+        ADA P 
+        STA P 
+        LDA .A.,I 
+        CPA #25 
+        JMP PREPR 
+*211                                             !NON BLANK 
+*212        N_  P-TB+1      !PRINT LENGTH 
+        LDA TB
+        CMA,INA 
+        ADA P 
+        INA 
+        STA N 
+*213  ! 
+*214        $ST_  $ST +12K  !SET THE STAR SEPERATOR 
+        LDA ST,I
+        ADA #91 
+        STA ST,I
+*215  ! 
+*216  WRTIT:WRIT            !TRANSMIT THE LINE
+WRTIT   JSB WRIT
+        DEF *+1 
+*217  ! 
+*218        GOTO NEXTL      !GO DO NEXT LINE
+        JMP NEXTL 
+*219  ! 
+*220  EOF:  WRITF(O.BUF,.E.R.,$BF,-1) !WRITE EOF
+EOF     JSB WRITF 
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF BF,I
+        DEF #68 
+*221        IER.
+        JSB IER.
+        DEF *+1 
+*222        RETURN
+        JMP LI..,I
+*223        END 
+*224  ! 
+*225  ! 
+*226  SETA:  SUBROUTINE(PRA) !STEP P AND SET PRA IN P INDIRECT
+PRA     NOP 
+SETA    NOP 
+        JSB .ENTR 
+        DEF PRA 
+*227        $[P_P+1]_PRA
+        LDA P 
+        INA 
+        STA P 
+        LDB PRA,I 
+        STB .A.,I 
+*228        RETURN
+        JMP SETA,I
+*229        END 
+*230  ! 
+*231  ! 
+*232  WRIT: SUBROUTINE !WRITE ON O.BUF BUFFER AT BF IF LP 
+WRIT    NOP 
+        JSB .ENTR 
+        DEF WRIT
+*233                   !OR TB IF NOT LP WITH LENGTH N+LP
+*234                   !IF TTY -LIMIT LENGTH TO 72. 
+*235        IF TTY THEN[IF N>36 THEN N_36]
+        LDA TTY 
+        SZA,RSS 
+        JMP #93 
+        LDA N 
+        ADA #94 
+        SSA 
+        JMP #93 
+        LDA #67 
+        STA N 
+*236        WRITF(O.BUF,.E.R.,$(TB-LP),N+LP)
+#93     LDA LP
+        CMA,INA 
+        ADA TB
+        LDB N 
+        ADB LP
+        STA #95 
+        STB #96 
+        JSB WRITF 
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF #95,I 
+        DEF #96 
+*237        IER.
+        JSB IER.
+        DEF *+1 
+*238        RETURN
+        JMP WRIT,I
+*239        END 
+*240  ! 
+*241  ! 
+*242  SPACE:SUBROUTINE    !SPACE THE LIST DEVICE
+SPACE   NOP 
+        JSB .ENTR 
+        DEF SPACE 
+*243        N_1           !SET LENGTH TO ONE WORD 
+        CLA,INA 
+        STA N 
+*244        DO[T_$TB;$TB_ 20040K]!SET BLANK IN BUFFER 
+        LDA TB,I
+        STA T 
+        LDA #25 
+        STA TB,I
+*245        WRIT          !WRIT BLANK LINE
+        JSB WRIT
+        DEF *+1 
+*246        $TB_T         !RESTORE OLD CONTENTS 
+        LDA T 
+        STA TB,I
+*247        RETURN        !RETURN 
+        JMP SPACE,I 
+*248        END 
+*249        END 
+        END 

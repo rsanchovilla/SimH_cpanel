@@ -1,0 +1,1113 @@
+ASMB,L,C
+ HED RTE BASIC 'CHAR' INTERFACE                    A-91200-16002-2
+* 
+*     NAME:   RTE BASIC 'CHAR' INTERFACE
+*     SOURCE: 91200-18002 (FILE 1)
+*     BINARY: 91200-16002 (MODULE 1)
+*     PGMR:   L.W.S. ADDED TO LIBRARY BY DENTON ANDERSON. 
+*                REV.B(1603) IS FOR COLOR OPERATION.
+*                REV.C(1648) IS FOR POWER FAIL - AUTO RESTART.
+* 
+* 
+      NAM CHARS,7 91200-16002 REV 1648 -- 761124
+      ENT CHARS 
+      EXT .ENTR,CH#R
+      SPC 2 
+*   THIS ROUTINE SERVES AS AN INTERFACE BETWEEN THE TV LIBRARY
+*   ROUTINE 'CHAR' AND A BASIC CALLING PROGRAM.  IT ACCEPTS THE 
+*   ADDRESS OF A STRING VARIABLE (AS WELL AS A STRING IN QUOTES), 
+*   PUTS THE STRING LENGTH TEMPORAIRLY IN WORD 1 OF THE STRING
+*   ARRAY, AND THEN CALLS THE CHAR LIBRARY ROUTINE TO DISPLAY 
+*   THE CHARACTER STRING.  ALL OTHER PARAMETERS ARE PASSED DIRECTLY 
+*   TO CHAR AS RECEIVED.  THE BASIC USER MUST CALL IT AS FOLLOWS: 
+* 
+*     10 CALL CHARS(X,Y,A$,S,D,N,M,P) 
+* 
+*        X,Y --> X,Y COORDINATES OF LOWER-LEFT HAND POINT WHERE 
+*                CHARACTER STRING IS TO BE DISPLAYED. 
+* 
+*        A$  --> STRING VARIABLE CONTAINING STRING TO BE DISPLAYED. 
+* 
+*        S   --> CHARACTER SIZE.
+* 
+*        D   --> DIRECTION. 
+* 
+*        N   --> ARRAY STRUCTURE (FORCED TO 0). 
+* 
+*        M   --> DISPLAY MODE.
+* 
+*        P   --> POWER FAIL INDICATOR.
+      SKP 
+*   TYPICAL BASIC PROGRAM 
+*   --------------------- 
+* 
+*     10 DIM A$(72) 
+*     20 PRINT "ENTER TV LU #, DISPLAY SENSE: ";
+*     30 INPUT L,S
+*     40 CALL VIDLU(L,S)
+*     50 CALL ERASE 
+*     60 PRINT "ENTER ANY CHARACTER STRING OR /E" 
+*     70 INPUT A$ 
+*     80 IF A$(1,2)="/E" THEN 160 
+*     90 PRINT "ENTER X,Y,SIZE,DIREC,MODE: "; 
+*     100 INPUT X,Y,S,D,M 
+*     110 CALL CHARS(X,Y,A$,S,D,0,M,P)
+*     120 IF P#0 THEN 140 
+*     130 GO TO 50
+*     140 PRINT"POWER FAIL, START OVER" 
+*     150 GO TO 20
+*     160 PRINT"DONE" 
+*     170 END 
+* 
+* 
+*   BRANCH & MNEMONIC TABLE CONSIDERATIONS
+*   --------------------------------------
+* 
+*   THE FOLLOWING TYPE OF ENTRY MUST BE MADE: 
+* 
+*  FOR RTE-B: 
+*     CHARS(I,I,R,I,I,I,I,V)
+* 
+*  FOR REAL TIME BASIC: 
+*     CHARS(I,I,RA,I,I,I,I,IV)
+* 
+*   THE ENTRY POINT MUST BE 'CHARS' WITH EIGHT PARAMETERS EXACTLY 
+*   AS SHOWN.  PARAMETER NUMBER 3 MUST BE SPECIFIED AS REAL SO THAT 
+*   THE STRING ARRAY (A$) CAN BE RETRIEVED DURING RUN TIME.  PARAMETER
+*   NUMBER 6 CAN BE SPECIFIED AS ANYTHING SINCE IT IS ALWAYS PASSED 
+*   AS ZERO TO THE TV LIBRARY ROUTINE.
+      SKP 
+X     NOP           STARTING X & Y COORDINATES OF THE 
+Y     NOP            THE LOWER-LEFT CORNER. 
+BUFR  NOP           ADRS OF CHAR. STRING OR LITERAL.
+SIZE  DEF .0        CHARACTER SIZE. 
+DIREC DEF .0        STRING DIRECTION. 
+NUMBR NOP           ARRAY STRUCTURE.
+MODE  DEF .0        DISPLAY MODE. 
+PFL   NOP           POWER FAIL INDICATOR. 
+      SPC 1 
+CHARS NOP   << ENTRY POINT >> 
+      JSB .ENTR    GET PARAMETER ADDRESSES. 
+      DEF X 
+      SPC 1 
+      LDA BUFR,I   SAVE STATEMENT COMPILE CODE. 
+      STA TEMP     SAVE FOR LATER RESTORE.
+      AND .377     ISOLATE STRING LENGTH. 
+      STA BUFR,I   TEMPORARILY PUT BACK IN STRING.
+      LDA PFL       TRANSFER POWER FAIL INDICATOR 
+      STA PFAIL       ADDRESS FOR NEXT CALL.
+      SPC 1 
+*... CALL CHAR LIBRARY ROUTINE ...
+      SPC 1 
+      JSB CH#R     CALL 
+      DEF *+9       THE 
+      DEF X,I        ACTUAL 
+      DEF Y,I         TV
+      DEF BUFR,I       LIBRARY
+      DEF SIZE,I        ROUTINE.
+      DEF DIREC,I 
+      DEF .0
+      DEF MODE,I
+PFAIL NOP 
+      SPC 1 
+      LDA TEMP     RESTORE ACTUAL FIRST WORD IN 
+      STA BUFR,I    BASIC SYMBOL TABLE. 
+      LDA DEF0      RE-ESTABLISH DEFAULTS 
+      STA SIZE        / 
+      STA DIREC       / 
+      STA MODE        / 
+      CLA             / 
+      STA PFL         / 
+      JMP CHARS,I     RETURN TO BASIC.
+      SPC 1 
+TEMP  NOP          HOLDS ORIGINAL FIRST WORD OF S.T.
+.0    OCT 0        BUFFER STRUCTURE PARAMETER.
+.377  OCT 377      STRING COUNT MASK VALUE. 
+DEF0  DEF .0
+      SPC 1 
+      END 
+ASMB,L,C
+ HED RTE BASIC 'POINT' INTERFACE                   A-91200-16002-2
+* 
+*     NAME:   RTE BASIC 'POINT' INTERFACE 
+*     SOURCE: 91200-18002 (FILE 2)
+*     BINARY: 91200-16002 (MODULE 2)
+*     PGMR:   L.W.S. ADDED TO LIBRARY BY DENTON ANDERSON
+*               REV.B(1603) IS FOR COLOR OPERATION. 
+*               REV.C(1648) IS FOR POWER FAIL - AUTO RESTART. 
+* 
+P     NAM PNTS,7 91200-16002 REV 1648 -- 761124 
+      ENT PNTS
+      EXT .ENTR,POINT,IFIX
+      SUP PRESS EXTRANEOUS LISTING
+      SPC 1 
+*   THIS ROUTINE SERVES AS AN INTERFACE BETWEEN THE TV LIBRARY
+*   ROUTINE 'POINT' AND A BASIC CALLING PROGRAM.  IT ACCEPTS A
+*   CONTIGUOUS ARRAY OF FLOATING-POINT X & Y SCREEN COORDINATES,
+*   CONVERTS EACH TO INTEGER, AND SENDS UP TO 64 PAIRS OF COORD-
+*   INATES TO THE ROUTINE 'POINT' AT A TIME.  THE BASIC USER MUST 
+*   SET UP THE ARRAY OF X & Y COORDINATES AS FOLLOWS: 
+* 
+*              A(1)   =  FIRST X COORDINATE 
+*              A(2)   =  FIRST Y COORDINATE 
+*              A(3)   = SECOND X COORDINATE 
+*              A(4)   = SECOND Y COORDINATE 
+*                .         .
+*                .         .
+*                .         .
+*              A(N-1) = LAST X COORDINATE 
+*              A(N)   = LAST Y COORDINATE 
+* 
+*  THE BASIC USER THEN CALLS IT AS FOLLOWS: 
+* 
+*    10 CALL PNTS(A(1),N,M,P) 
+* 
+* 
+*       A(1) --> FIRST WORD OF ARRAY OF POINTS
+* 
+*       N    --> NUMBER OF POINTS (X,Y PAIRS) 
+* 
+*       M    --> DISPLAY MODE 
+* 
+*       P    --> POWER FAIL INDICATOR 
+      SKP 
+*  TYPICAL BASIC PROGRAM
+*  ---------------------
+* 
+*   10 DIM A(400) 
+*   15 VIDLU(12,0)
+*   20 FOR I=1 TO 400 STEP 2
+*   30 A(I)=((I+1)/2)-1 
+*   40 A(I+1)=((I+1)/2)-1 
+*   50 NEXT I 
+*   60 CALL PNTS(A(1),200,3,P)
+*   70 IF P#0 THEN 15 
+*   80 END
+* 
+*   THE ABOVE EXAMPLE CALLS THE POINT LIBRARY ROUTINE WITH 200 PAIRS
+*   OF X & Y COORDINATES.  IMPORTANT:  WHEN SUPPLYING THE ARRAY 
+*   NAME, IT MUST BE SPECIFIED AS AN ARRAY. 
+* 
+*  BRANCH & MNEMONIC TABLE CONSIDERATIONS 
+*  -------------------------------------- 
+* 
+*  THE FOLLOWING TYPE OF ENTRY MUST BE MADE:
+* 
+*  FOR RTE-B:  PNTS(R,I,I,V)
+* 
+*  FOR REAL TIME BASIC:  PNTS(RA,I,I,IV)
+* 
+*  THE ENTRY POINT MUST BE 'PNTS' WITH FOUR PARAMETERS EXACTLY
+*  AS SHOWN.
+      SKP 
+BUFER NOP           REAL ARRAY ADRS FOR POINTS. 
+NUMBR DEF B1        NUMBER OF (X,Y) POINTS. 
+MODE  DEF ZERO      SCREEN DISPLAY MODE.
+PFL   NOP           POWER FAIL INDICATOR. 
+      SPC 1 
+PNTS  NOP  << ENTRY >>
+      JSB .ENTR   GET PARAMETER ADDRESSES.
+      DEF BUFER 
+      SPC 1 
+      LDA NUMBR,I  SET USERS POINT COUNT. 
+      SZA,RSS      IF =0, RETURN. 
+      JMP PNTS,I
+      CMA,INA      SET NEGATIVE.
+      STA NUMBR 
+      LDA PFL       TRANSFER POWER FAIL INDICATOR 
+      STA PFAIL       ADDRESS FOR NEXT CALL.
+      SPC 1 
+NEXTB LDA BUFAD    INITIALIZE INTERNAL POINT BUFFER ADDRESS.
+      STA BUF 
+      LDA M64      SET-UP LOOP
+      STA COUNT    CONTROL FOR 64 POINTS. 
+      CLA          INITIALIZE ACTUAL BUFFER COUNT.
+      STA NPT 
+      SPC 1 
+NEXTP JSB GETP     GET A REAL X-COORDINATE & FIX. 
+      STA XY       SAVE FOR LATER MERGE WITH Y-COORDINATE.
+      JSB GETP     GET A REAL Y-COORDINATE & FIX. 
+      ALF,ALF      POSITION Y IN HIGH 8 BITS. 
+      IOR XY       MERGE TO FORM (Y,X)
+      STA BUF,I    PUT AWAY IN INTERNAL BUFFER. 
+      ISZ NUMBR    LAST USER POINT ?
+      RSS          NO.
+      JMP DUMP     YES, DUMP TO TV.?
+      ISZ COUNT    64 PAIRS ? 
+      RSS 
+      JMP DUMP     DUMP TO TV.
+      ISZ BUF      BUMP INTERNAL BUFFER ADDRESS.
+      ISZ NPT      UPDATE NUMBER OF POINTS. 
+      JMP NEXTP    GET NEXT POINT.
+      SPC 1 
+DUMP  ISZ NPT      UPDATE ACTUAL NUMBER OF POINTS.
+      JSB POINT    SEND 
+      DEF *+5        64 (OR LESS) 
+      DEF BUFFR       PAIRS 
+      DEF NPT             OF
+      DEF MODE,I            POINTS. 
+PFAIL NOP 
+      SPC 1 
+      LDA NUMBR     TIME TO 
+      SZA,RSS         GET OUT?
+      JMP DONE          YES!
+      JMP NEXTB         NO, START NEXT BUFFER.
+      SKP 
+DONE  LDA DEFB1     RE-ESTABLISH DEFAULTS 
+      STA NUMBR       / 
+      LDA DEF0        / 
+      STA MODE        / 
+      CLA             / 
+      STA PFL         / 
+      JMP PNTS,I    ALL FINISHED!!
+      SPC 2 
+GETP  NOP         < GET NEXT REAL POINT & FIX > 
+      DLD BUFER,I  GET THE FLOATING-POINT VALUE.
+      JSB IFIX     CONVERT TO INTEGER 
+      LDB BUFER     UPDATE USER'S BUFFER ADDRESS. 
+      ADB .2
+      STB BUFER 
+      JMP GETP,I   RETURN.
+      SPC 2 
+DEFB1 DEF B1
+B1    OCT 1 
+.2    DEC 2 
+XY    NOP         HOLDS FORMED (Y,X) POINT
+M64   DEC -64     MAXIMUM POINT CONTROL VALUE 
+NPT   NOP         ACTUAL NUMBER OF POINTS IN BUFFER 
+COUNT NOP         BUFFER LOOP CONTROL VALUE 
+DEF0  DEF ZERO
+ZERO  OCT 0 
+BUF   NOP         USERS BUFFER ADDRESSR ADDRESS 
+BUFAD DEF *+1      INTERNAL POINT BUFFER
+BUFFR BSS 64       POINT BUFFER AREA. 
+      SPC 1 
+      END 
+ASMB,L,C
+      HED VIDEO CHARACTER GENERATOR SUBROUTINE     A-91200-16002-2
+* 
+*     NAME:   CHARACTER GENERATOR OF VIDEO DISPLAY LIBRARY
+*     SOURCE: 91200-18002 (FILE 3)
+*     BINARY: 91200-16002 (MODULE 3)
+*     PGMR:   R.M.C. REV.C(1648) MADE BY DENTON ANDERSON
+*               REV.B(1603) IS FOR COLOR OPERATION. 
+*               REV.C(1648) IS FOR POWER FAIL - AUTO RESTART. 
+* 
+      NAM CHAR,7 91200-16002 REV 1648 -- 761124 
+      ENT CHAR,CH#R 
+      EXT .ENTR,DI[T,[TAB,VECTR 
+      SUP PRESS EXTRANEOUS LISTING
+      SPC 1 
+XCHAR NOP           "X" COORDINATE, LOWER LEFT POINT. 
+YCHAR NOP           "Y" COORDINATE, LOWER LEFT POINT. 
+BUFAD NOP           BEGINNING OF CHARACTER STRING.
+SIZE  DEF ZERO      CHARACTER SIZE (>0).
+ROT   DEF ZERO      90 DEGREE ROTATION (0:3). 
+LEN   DEF ZERO      STRING LENGTH PARAMETER.
+MODE  DEF ZERO      0 TO WRITE, NON-0 TO ERASE. 
+PFL   NOP           POWER FAIL INDICATOR. 
+      SPC 1 
+CHAR  NOP           ENTRY POINT.
+      JSB .ENTR     TRANSFER THE PARAMETER ADDRESSES. 
+       DEF XCHAR
+      LDA ROT,I 
+      AND B3        MOD 4 
+      STA ROT 
+      LDA PFL       TRANSFER POWER FAIL INDICATOR 
+      STA PFAIL       ADDRESS FOR NEXT CALL.
+      LDA YCHAR,I   RETRIEVE INITIAL Y AND
+      STA YV        X CO-ORDINATES FOR TRANSFER 
+      LDA XCHAR,I   TO 'VECTR' SUBROUTINE.
+      STA XV
+      LDA SIZE,I    LOAD THE CHARACTER SIZE.
+      SSA           IS THE CHARACTER SIZE NEGATIVE? 
+      JMP EXIT      ERROR, RETURN; "CALL" REJECTED. 
+      SZA,RSS       IF SIZE 0 OR DEFAULTED, 
+      CLA,INA       SET TO SIZE 1 
+      AND B77       LIMIT TO A REASONABLE VALUE.
+      STA SIZE
+      CCA 
+      STA PCT       PRESET THE PARENS COUNT,
+      STA CHCTR     AND CHARACTER COUNT.
+      LDA LEN,I 
+      SSA           STRING DELIMITED BY PARENS
+      JMP BYTAD     WHEN LEN IS NEGATIVE..
+      SZA,RSS       STRING LENGTH IN FIRST WORD 
+      LDA BUFAD,I   WHEN LEN=0. 
+      AND B77       REMOVE POSS HIGH CHAR.
+      STA PCT       PROTECT AGAINST ALL ('S.
+      CMA           USUAL INA SUPPRESSED TO ALLOW 
+      STA CHCTR     LATER TEST WITH ISZ.
+      SKP 
+      LDA LEN,I 
+      SZA,RSS       TEST AGAIN FOR 0 PARAMETER
+      ISZ BUFAD     & BUMP TO PASS OVER.
+      SPC 1 
+BYTAD LDA BUFAD 
+      CLE,ELA       FORM BYTE ADDRESS.
+      STA BUFAD 
+      ISZ CHCTR     SKIPS IF PARENS MODE
+      RSS           CHCTR IS SAFE, & INITIALLY, 
+NCH   ISZ BUFAD     INCREMENT FOR THE NEXT CHARACTER. 
+      LDA BUFAD     LOAD THE ADDRESS WORD.
+      CLE,ERA       SAVE BIT 0 IN "E"; SHIFT ADDRESS. 
+      LDA A,I       GET THE CHARACTER WORD. 
+      SEZ,RSS       IS THE CHARACTER IN BITS 15-8?
+      ALF,ALF       YES, SO SHIFT IT INTO BITS 7-0. 
+      LDB DI[T      DICTIONARY PARAMETERS ADDRESS 
+      AND B,I       MASK TO LOWER BYTE (7 OR 8
+      INB            BITS AS DEFINED IN DICTIONARY).
+      ADA B,I       SUBTRACT BASE CODE OF TABLE.
+      SSA           IF THE CHAR CODE IS < THE BASE, 
+      JMP NCH       IGNORE THIS CHARACTER.
+      INB           POINT TO TABLE LENGTH.
+      ADA B,I       IF THE CHARACTER IS STILL NOT 
+      SSA,RSS        IN THE TABLE,THEN  TRY TO
+      ADA M40         FORCE LOWER CASE TO UPPER CASE. 
+      SSA,RSS       IF STILL NOT IN THE TABLE,
+      JMP NCH        IGNORE THE CHARACTER.
+      CMA,INA       RESTORE DICTIONARY OFFSET IN
+      ADA B,I       A ROUND-ABOUT WAY 
+      CMA,INA 
+      CPA LPARC     IS THIS CHARACTER A "("?
+      JMP LPARN     YES.
+      CPA RPARC     IS THIS CHARACTER A ")"?
+      ISZ PCT       YES.  IS IT THE FINAL ONE?
+      JMP D         NO, CONTINUE. 
+      JMP EXIT      YES, FINAL ")" SO RETURN. 
+      SPC 1 
+B3    OCT 3 
+B7    OCT 7 
+B17   OCT 17
+B77   OCT 77
+B777  OCT 777 
+M1    OCT -1
+M40   OCT -40 
+LPARC ABS 50B-40B   ( 
+P     NOP 
+PCT   NOP           PARENTHESIS COUNTER.
+RPARC ABS 51B-40B   ) 
+      SKP 
+LPARN LDA PCT       LOAD THE PARENTHESIS COUNTER. 
+      ADA M1        DECREMENT BY ONE(1).
+      STA PCT       STORE IT IN "PCT".
+      LDA LPARC     GET LPAREN CODE AGAIN 
+D     INB           START OF DICTIONARY 
+      ADA B 
+      LDB A         TEMP SAVE OF DICTIONARY ADDRESS.
+      LDA B,I       DICTIONARY CHARACTER CODE WORD. 
+      ALF           NUMBER OF CONTROL WORDS TO 4 LSB. 
+      AND B17       MASK OFF BITS 3-0.
+      CMA,INA       NEGATE FOR COUNTING.
+      CLE,ELA       FORM THE BYTE COUNT.
+      STA CCT       PRESET TO -(# OF VECTORS).
+      LDA B,I       GET THE DICTIONARY WORD AGAIN.
+      AND B777      MASK OFF THE RELATIVE ADDRESS.
+      LDB [TAB      ADD BEGINNING OF TABLE ADDRESS. 
+      ADA B 
+      CLE,ELA       FORM THE BYTE ADDRESS 
+      STA P         SAVE "A" AT "P".
+NCW   LDB P         CHARACTER ADDRESS OF COMMAND. 
+      ISZ P         INCREMENT "P" FOR THE NEXT CODE.
+      CLE,ERB       FORM MEMORY ADDRESS OF COMMAND. 
+      LDB B,I       LOAD THE WORD CONTAINING COMMAND. 
+      SEZ           TEST THE COMMAND LOCATION.
+      BLF,BLF       SHIFT COMMAND TO BITS 15-8. 
+      RBL,RBL 
+      STB A 
+      AND B3        ORIGINAL CODE BITS 6,7
+      STA TYPE
+      BLF,RBR 
+      STB A 
+      AND B7        ORIGINAL CODE BITS 3,4,5
+      ADA ROT       CORRECT FOR STRING'S ROTATION 
+      ADA ROT 
+      AND B7        MAKE MOD 8
+      STA THETA 
+      BLF,RBR 
+      STB A 
+      AND B7        ORIGINAL CODE BITS 0,1,2
+      MPY SIZE
+      STA VLEN
+      JSB VOUT
+      CCA           SET XV NEGATIVE SO THAT NEXT
+      STA XV        VECTOR WILL BE APPENDED.
+      ISZ CCT       MORE COMMAND WORDS? 
+      JMP NCW       GET EM. 
+      ISZ CHCTR     MORE CHARACTERS?
+      JMP NCH       GET EM. 
+      SKP 
+EXIT  LDA B100K     DO A COMPLETION CALL TO 
+      STA VLEN      VECTOR. 
+      JSB VOUT
+      LDA DZERO     RESTORE DEFAULT PARAMETERS
+      STA SIZE      FOR NEXT ENTRY
+      STA ROT 
+      STA VLEN
+      STA MODE
+      CLA 
+      STA PFL 
+      JMP CHAR,I
+      SPC 1 
+VOUT  NOP 
+      JSB VECTR 
+       DEF CHK
+       DEF XV 
+       DEF YV 
+       DEF THETA
+       DEF VLEN 
+       DEF TYPE 
+       DEF MODE,I 
+       DEF ZERO 
+PFAIL  NOP
+CHK   JMP VOUT,I
+      SPC 3 
+CCT   NOP           CODE COUNTER. 
+ZERO  OCT 0 
+B100K OCT 100000
+DZERO DEF ZERO
+      SPC 1 
+CHCTR NOP           CHARACTER COUNT 
+THETA NOP           VECTOR ROTATION 0:7 
+TYPE  NOP           VECTOR CONTROL 'WORD' 
+*                                    0 NON-WRITING
+*                                    1 SUPPRESS FIRST POINT 
+*                                    2 WRITE ALL POINTS 
+*                                    3 SUPPRESS FIRST & LAST POINTS.
+      SPC 1 
+A     EQU 0 
+B     EQU 1 
+CH#R  EQU CHAR
+XV    EQU XCHAR 
+YV    EQU YCHAR 
+VLEN  EQU LEN 
+      SPC 2 
+      END 
+ASMB,L,C
+      HED VIDEO SUBROUTINE [TABL (ASCII CODE TABLE)A-91200-16002-2
+* 
+*     NAME:   DICTIONARY/CODE TABLE OF VIDEO DISPLAY LIBRARY. 
+*     SOURCE: 91200-18002 (FILE 4)
+*     BINARY: 91200-16002 (MODULE 4)
+*     PGMR:   R.M.C. REV.B(1603) MADE BY DENTON ANDERSON
+*               REV.B(1603) IS FOR COLOR OPERATION.  IT 
+*                 DID NOT CHANGE THIS MODULE. 
+*               THERE IS NO CHANGE TO THIS MODULE FOR REV.C(1648).
+* 
+* 
+      NAM [TABL,7 91200-16002 REV 1603 -- 751222
+      SPC 1 
+      ENT DI[T,[TAB 
+      SPC 2 
+*         DIRECTORY FORMAT: .XXX-.+NN0000B
+      SPC 1 
+*         WHERE, ".XXX" IS THE NAME OF THE FIRST
+*                VECTOR CODE WORD;
+      SPC 1 
+*                "NN" IS THE NUMBER OF VECTOR CODE
+*                WORDS FOR ".XXX".  (4 BITS). 
+      SPC 3 
+*************  DO NOT REARRANGE THE ORDERING OF THIS TABLE!  *******
+DI[T  DEF MASK      ADDRESS DEFINITION FOR CHAR.   *
+MASK  OCT 177       ALLOW DEFINITION OF CODE LEVEL *
+BASE  OCT -40       NEG OF FIRST ALLOWED CODE      *
+LENTH ABS STBL-ETBL -(# OF ENTRIES IN DICTIONARY)  *
+*                                                                  *
+DICT  ABS .SPC-.+010000B SPACE                     *
+STBL  EQU DICT                                     *
+      ABS .EXP-.+030000B !                         *
+      ABS .QTE-.+040000B "                         *
+      ABS .NUM-.+050000B #                         *
+      ABS .S-.+110000B $                           *
+      ABS .PCT-.+100000B %                         *
+      ABS .AND-.+060000B &                         *
+      ABS .PRM-.+030000B '      APPOSTROPHE        *
+      ABS .LP-.+030000B (                          *
+      ABS .RP-.+030000B )                          *
+      ABS .STR-.+040000B *                         *
+      ABS .PLS-.+030000B +                         *
+      ABS .CMA-.+040000B ,      COMMA              *
+      ABS .MIN-.+020000B -                         *
+      ABS .PER-.+030000B .                         *
+      ABS .SLH-.+020000B /                         *
+      ABS .0-.+100000B 0                           *
+      ABS .1-.+030000B 1                           *
+      ABS .2-.+060000B 2                           *
+      ABS .3-.+070000B 3                           *
+      ABS .4-.+030000B 4                           *
+      ABS .5-.+060000B 5                           *
+      ABS .6-.+060000B 6                           *
+      ABS .7-.+030000B 7                           *
+      ABS .8-.+110000B 8                           *
+      ABS .9-.+060000B 9                           *
+      ABS .CLN-.+060000B :                         *
+      ABS .SCN-.+100000B ;                         *
+      ABS .LTN-.+030000B <                         *
+      ABS .EQU-.+030000B =                         *
+      ABS .GTN-.+020000B >                         *
+      ABS .QM-.+050000B ?                          *
+      ABS .ATS-.+070000B @                         *
+      ABS .A-.+040000B A                           *
+      ABS .B-.+070000B B                           *
+      ABS .C-.+060000B C                           *
+      ABS .D-.+040000B D                           *
+      ABS .E-.+040000B E                           *
+      ABS .F-.+030000B F                           *
+      ABS .G-.+110000B G                           *
+      ABS .H-.+030000B H                           *
+      ABS .I-.+040000B I                           *
+      ABS .J-.+050000B J                           *
+      ABS .K-.+030000B K                           *
+      ABS .L-.+020000B L                           *
+      ABS .M-.+030000B M                           *
+      ABS .N-.+030000B N                           *
+      ABS .O-.+050000B O                           *
+      ABS .P-.+040000B P                           *
+      ABS .Q-.+060000B Q                           *
+      ABS .R-.+060000B R                           *
+      ABS .S-.+070000B S                           *
+      ABS .T-.+030000B T                           *
+      ABS .U-.+040000B U                           *
+      ABS .V-.+040000B V                           *
+      ABS .W-.+060000B W                           *
+      ABS .X-.+040000B X                           *
+      ABS .Y-.+050000B Y                           *
+      ABS .Z-.+040000B Z                           *
+      ABS .LBK-.+030000B [                         *
+      ABS .RSL-.+020000B \                         *
+      ABS .RBK-.+030000B ]                         *
+      ABS .UAW-.+030000B ^                         *
+      ABS .LAW-.+040000B _                         *
+ETBL  EQU *                                        *
+*************  DO NOT REARRANGE THE CONTENTS OF THIS TABLE!  *******
+*         END OF "ASCII CODE DIRECTORY".
+      SKP 
+*         VECTOR BYTE CODES ARE PACKED TWO(2) PER 
+*         VECTOR CODE WORD. 
+      SPC 1 
+*         FORM: CCDDDLLL,CCDDDLLL 
+      SPC 1 
+*         WHERE, C/CODE: 0 = NON-WRITING, 
+*                        1 = FIRST AND LAST POINTS
+*                            ARE SUPPRESSED (IT IS
+*                            USED TO DRAW A VECTOR
+*                            BETWEEN TWO(2) OTHER 
+*                            VECTORS),
+*                        2 = FULL VECTOR (ALL POINTS
+*                            ARE DISPLAYED),
+*                        3 = FIRST POINT IS 
+*                            SUPPRESSED (IT IS USED 
+*                            TO CONTINUE FROM THE 
+*                            END OF AN EXISTING 
+*                            VECTOR); 
+      SPC 1 
+*                D/DIRECTION CODES: STARTING WITH 
+*                        ZERO(0) DEGREES ON THE UNIT
+*                        CIRCLE, THERE ARE EIGHT (8)
+*                        POSSIBLE DIRECTIONS AT : 0,45,90,135,180,
+*                        225,270,AND 315 DEGREES RESPECTIVELY.
+*                        RANGE = 0:7
+      SPC 1 
+*                L/LENGTH: MAY BE 0 TO 7 UNITS LONG.
+      SPC 3 
+*     WATCH OUT FOR COMBINED CODES FOR THE FOLLOWING GROUPS:- 
+      SPC 1 
+*     [B P R]  [C G]  [E F]  [% / 0 O]  [, ;]  [. :]  [$ S] 
+      SPC 2 
+[TAB  DEF .         DEFINES THE CODE TABLE BASE ADDR&.
+.SPC  OCT 3000    (SPACE).
+.     EQU .SPC
+.EXP  OCT 1200,11224,36062 !
+.QTE  OCT 4423,111002,131073,30400 "
+.NUM  OCT 11204,11244,4664,1224,35462 # 
+.AND  OCT 2234,150711,174761,165361,174701,145072 & 
+.PRM  OCT 5022,111074,31000 ' 
+.LP   OCT 5423,124764,174403 (
+.RP   OCT 12411,134764,164405 ) 
+.STR  OCT 10614,21264,1234,36401   *
+.PLS  OCT 11604,15264,34403 + 
+.SCN  OCT 5022,110741,170501,31052  ;  (USES COMMA) 
+.CMA  OCT 34611,151341,170501,34403   , 
+.MIN  OCT 11011,101073 -
+.PER  OCT 601,150741,70405 .
+      OCT 16241,170701,50474    2ND DOT FOR : 
+.PCT  OCT 12221,140761,60473,110701,170541,21461  % 
+.SLH  OCT 10614,31472 / 
+.0    EQU .SLH
+      OCT 46    0   (USES / & O)
+OX    OCT 631,152311,141371,172351,61005   O
+.1    OCT 602,20726,164475 1
+.2    OCT 12611,141371,170751,161351,171304,1000 2
+.3    OCT 12611,141371,170751,160452,134702,144721 3
+      OCT 54473    3
+.4    OCT 1626,165761,142072 4
+.5    OCT 10671,141311,151331,161722,142072,64 5
+.6    OCT 631,151712,140453,141771,170751,61005 6 
+.7    OCT 13204,170753,171005 7 
+.8    OCT 5611,150731,161351,170771,141371,170751 8 
+      OCT 161331,150711,1073 8
+.9    OCT 101312,151731,161351,170771,41472,61    9 
+.CLN  EQU .PER     :
+.LTN  OCT 5422,125372,34402 < 
+.EQU  OCT 5642,30602,35001 =
+.GTN  OCT 4612,155075 > 
+.QM   OCT 12611,140771,170751,170462,100004 ? 
+      SKP 
+.ATS  OCT 12611,141371,172351,161331,150711,140563 @
+      OCT 1002    @ 
+.A    OCT 112312,175364,15042,42072 A 
+*               .B    LOCATED BEFORE .P 
+.C    OCT 10624,144702,174454,174702,144471,400 C 
+GX    OCT 20433,101162,34401     G
+.D    OCT 113303,174764,164543,3000 D 
+.E    OCT 142044   E
+.F    OCT 113304,25441,141473 F 
+.G    EQU .C
+.H    OCT 113063,42023,133002 H 
+.I    OCT 602,20526,20602,35463 I 
+.J    OCT 10671,140711,52441,101072,64 J
+.K    OCT 113064,146053,175402 K
+.L    OCT 13266,142002 L
+.M    OCT 113372,145366,1000 M
+.N    OCT 113061,76025,133002 N 
+.O    EQU OX
+      SKP 
+.B    OCT 141711,150531,25400     B  (USES P) 
+.P    OCT 113303,174761,164543,35403 P
+RX    OCT 15442,175402   R
+.Q    OCT 1241,154724,144702,174763,65022,135002   Q
+.R    EQU .P
+.S    OCT 10671,141311,150731,161331,150711,141371
+      OCT 35063    S
+      OCT 22126,36062     $ 
+.T    OCT 13204,21366,2000 T
+.U    OCT 13265,174702,144725,35064 U 
+.V    OCT 13264,175312,152072,32000 V 
+.W    OCT 13265,174711,151062,174711,152472,32000 W 
+.X    OCT 110714,150444,130774,170402 X 
+.Y    OCT 13261,175312,150452,30763,2000 Y
+.Z    OCT 13204,170754,170704,1000 Z9 
+      SKP 
+.LBK  OCT 11413,121366,141002 [ 
+.RSL  OCT 12674,34401 \ 
+.RBK  OCT 12411,101366,161004 ] 
+.UAW  OCT 12212,175032,173004 ^ 
+.LAW  OCT 11612,25372,15304,35061   _  *
+      SPC 1 
+      END 
+ASMB,L,C
+      HED VIDEO SUBROUTINES VECTR, AREA, VEND     A-91200-16002-2 
+* 
+*     NAME:   VECTOR GENERATOR, ETC. OF VIDEO DISPLAY LIBRARY.
+*     SOURCE: 91200-18002 (FILE 5)
+*     BINARY: 91200-16002 (MODULE 5)
+*     PGMR:   R.M.C. REV.C(1648) MADE BY DENTON ANDERSON
+*               REV.B(1603) IS FOR COLOR OPERATION. 
+*               REV.C(1648) IS FOR POWER FAIL - AUTO RESTART. 
+* 
+* 
+      NAM VECTR,7 91200-16002 REV 1648 -- 761124
+      SPC 1 
+      ENT VECTR,VEND,VAREA
+      EXT .ENTR,POINT 
+      SPC 1 
+XV    NOP           X ORIGIN OF VECTOR. 
+YV    NOP           Y ORIGIN OF VECTOR. 
+ROT   NOP           ROTATION 0:7. 
+LEN   NOP           VECTOR LENGTH (POINTS-1). 
+TYPE  DEF B2        VECTOR CONTROL WORD:
+*                                    0 NON-WRITING. 
+*                                    1 SUPPRESS FIRST POINT.
+*                                    2 WRITE ALL POINTS.
+*                                    3 SUPPRESS FIRST & LAST POINTS.
+VMODE DEF ZERO      DEFAULTS TO WHITE (0).
+DU\LO DEF ZERO      0/NON 0 =LOAD/LOAD & DUMP PBUFR.
+PF    NOP           POWER FAIL INDICATOR. 
+      SPC 1 
+VECTR NOP           ENTRY POINT.
+      JSB .ENTR     TRANSFER THE PARAMETER ADDRESSES. 
+       DEF XV 
+      LDA VMODE,I   TRANSFER MODE ADDRESS AND 
+      STA NMODE      POWER FAIL 
+      LDA PF          INDICATOR 
+      STA PFAIL        FOR POINT CALL 
+      LDB LEN,I     CHECK FIRST FOR LEN=100000B,
+      CLE,ELB        AND IF SO, DUMP WITHOUT
+      SEZ,RSS         VECTOR GENERATION.
+      JMP *+3 
+      SZB,RSS 
+      JMP EXIT1 
+      SKP 
+      LDA XV,I      IF X IS -VE, IGNORE X AND Y 
+      SSA            AND APPEND VECTOR. 
+      JMP ADDTO 
+      ALF,ALF       "X" COORDINATE TO BITS 15-8.
+      XOR YV,I      "Y" COORDINATE INTO BITS 7-0. 
+      ALF,ALF 
+      STA LOC       SAVE THE NEXT DISPLAY LOCATION. 
+ADDTO LDB TYPE,I
+      RBR           MOVE TYPE INTO BITS 15
+      STB TYPE       AND 0 FOR EASY TESTING 
+      LDA ROT,I 
+      LDB LEN,I 
+      SZB,RSS       IF LENGTH IS ZERO,
+      JMP NOL        GO CHECK SINGLE POINT CASE.
+      CCE,SSB,RSS 
+      CMB,CLE,INB   NEGATE FOR COUNTING.
+      STB LEN 
+      SEZ           IF LEN WAS -VE, REVERSE VECTOR
+      ADA B4         DIRECTION. 
+      AND B7        MOD 8 
+      ADA DBASE     ADDRESS OF DISPLACEMENT CONSTANT. 
+      LDA A,I       LOAD THE DISPLACEMENT CONSTANT. 
+      STA DISP      SAVE FOR MODIFICATION WITH "LOC". 
+      LDA LOC       LOAD THE CURRENT "GUN" LOCATION.
+      LDB TYPE
+      SSB,RSS       NON-WRITE OR WRITE 1ST POINT? 
+      JMP TRAW      YES 
+      ADA DISP      SKIP THE FIRST POINT. 
+      STA LOC       STORE "GUN" LOCATION IN "LOC".
+NPT   ISZ LEN       IS THIS THE LAST POINT? 
+      JMP EMIT      NO, EMIT THE POINT AND CONTINUE.
+      LDB TYPE
+      SLB           SUPPRESS LAST POINT?
+      JSB .PPNT     NO, SO DISPLAY THE POINT. 
+      JMP EXIT
+      SPC 2 
+DISP  NOP 
+LOC   NOP           LOCATION OF NEXT DISPLAY POINT. 
+B4    OCT 4 
+B7    OCT 7 
+      SKP 
+EMIT  JSB .PPNT     DISPLAY POINT AT "LOC". 
+      LDA LOC       LOAD THE CURRENT "GUN" LOCATION.
+      ADA DISP      ADD IN THE DISPLACEMENT.
+      STA LOC       STORE "LOC" TO SAVE IT FOR LATER. 
+      JMP NPT       GO SEE IF THIS IS THE LAST POINT. 
+      SPC 1 
+TRAW  SLB           IS THIS A WRITE?
+      JMP EMIT      YES, GO DISPLAY THE FIRST POINT.
+LOOP2 ADA DISP      NON-WRITE, "LOC" IS IN "A". 
+      ISZ LEN       ARE THERE MORE DISPLACEMENTS? 
+      JMP LOOP2     YES, REPEAT THE ADD.
+      STA LOC 
+      JMP EXIT
+      SPC 1 
+NOL   LDA LOC       LOAD THE CURRENT "GUN" LOCATION.
+      LDB TYPE      CHECK FOR TYPE 2. 
+      SLB 
+      JSB .PPNT     DISPLAY THE FIRST POINT.
+      SPC 1 
+EXIT  LDA DU\LO,I   IF OUTPUT IS NOT FORCED 
+      SZA,RSS        BY THE CALLER, 
+      JMP EXIT2       DON'T DUMP THE BUFFER.
+EXIT1 LDA PLEN      WHEN OUTPUT IS FORCED,
+      SZA            DUMP ONLY IF BUFFER
+      JSB DUMP        HAS SOME POINTS.
+EXIT2 LDA DZERO     RESTORE DEFAULT PARAMETERS
+      STA DU\LO      FOR NEXT ENTRY BY
+      STA VMODE       CALLER. 
+      LDA DEFB2 
+      STA TYPE
+      CLA 
+      STA PF
+      JMP VECTR,I 
+      SPC 2 
+PBLEN ABS -BLEN 
+.POUT DEF PBUFR     CURRENT POINTER 
+.PBUF DEF PBUFR     FIXED POINTER TO START
+PLEN  OCT 0         ACCUMULATOR 
+PCTR  ABS -BLEN     OVERFILL PREVENTER
+      SKP 
+.PPNT NOP 
+      STA ALOC      SAVE POINT
+      LDB NMODE     IS THE NEW MODE 
+      CPB MODE        THE SAME AS OLD MODE? 
+      JMP .VPNT         YES - GO ON 
+      LDB PLEN
+      SZB           IS THE BUFFER EMPTY?
+      JSB DUMP        NO - SO DUMP WITH OLD MODE
+      LDB NMODE     ESTABLISH 
+      STB MODE        NEW MODE
+.VPNT STA .POUT,I 
+      ISZ .POUT 
+      ISZ PLEN
+      ISZ PCTR
+      JMP .PPNT,I 
+      JSB DUMP      PBUFR IS FULL 
+      JMP .PPNT,I 
+      SPC 1 
+DUMP NOP
+      JSB POINT 
+       DEF RSTR 
+       DEF PBUFR
+       DEF PLEN 
+       DEF MODE 
+PFAIL  NOP
+RSTR  LDB .PBUF 
+      STB .POUT 
+      LDB PBLEN 
+      STB PCTR
+      CLB 
+      STB PLEN
+      LDA ALOC      RESTORE POINT 
+      JMP DUMP,I
+      SPC 2 
+MODE  NOP 
+NMODE NOP 
+      SKP 
+*     CURRENT LOCATION ROUTINE. 
+      SPC 1 
+IX    NOP           ADDRESS FOR THE "X" COORDINATE. 
+IY    NOP           ADDRESS FOR THE "Y" COORDINATE. 
+VEND  NOP           ENTRY POINT.
+      JSB .ENTR     CALL WITH TWO(2) PARAMETERS.
+       DEF IX 
+      LDA LOC       LOAD THE LAST POINT ADDRESS.
+      AND B377      EXTRACT THE X COORDINATE
+       STA IX,I       & STORE IT IN THE PARAMETER.
+      LDA LOC       LOAD THE LAST POINT ADDRESS.
+      ALF,ALF       SHIFT THE "Y" COORDINATE. 
+      AND B377      EXTRACT THE Y COORDINATE
+       STA IY,I       & STORE IT IN THE PARAMETER.
+      JMP VEND,I
+      SPC 2 
+A     EQU 0 
+BLEN  EQU 350       LENGTH OF PBUFR 
+      SPC 1 
+VLEN  NOP           STORE AREA VECTOR LENGTH
+ZERO  OCT 0 
+B2    OCT 2 
+B3    OCT 3 
+      SPC 1 
+DZERO DEF ZERO
+DEFB1 DEF B1
+DEFB2 DEF B2
+      SPC 2 
+*         ROTATION OFF-SET VALUES (45 DEGREE).
+      SPC 1 
+DBASE DEF *+1 
+B1    OCT 1,401,400 
+B377  OCT 377,-1,177377    ROTATIONS 3,4,5
+M400  OCT 177400,177401    ROTATIONS 6,7
+      SKP 
+*     AREA ERASE OR WRITE SUBROUTINE. 
+* 
+*     THE AREA DEFINED IN THE CALL IS 'WRITTEN' FROM THE TOP LEFT 
+*     CORNER, COLUMN BY COLUMN. 
+* 
+* 
+*     CALCULATION OF INTERNAL PARAMETERS FOR AREA:
+      SPC 1 
+**************************************************************
+*                             VALUE OF AROT (0:3)            *
+*                *   00     *   01     *   10     *   11     *
+**************************************************************
+* X ORIGIN       * XA       * XA-DELTY * XA-DELTX * XA       *
+* Y ORIGIN       * YA+DELTY * YA+DELTX * YA       * YA       *
+* LENGTH         * DELTY    * DELTX    * DELTY    * DELTX    *
+* # OF VECTORS   * DELTX+1  * DELTY+1  * DELTX+1  * DELTY+1  *
+**************************************************************
+      SPC 1 
+XA    NOP 
+YA    NOP 
+DELTX NOP           INTERNAL USE AS VECTOR COUNTER. 
+DELTY NOP           INTERNAL USE AS LENGTH COUNTER. 
+AROT  DEF ZERO      DEFAULT L-TO-R FROM LOWER LHC.
+AMODE DEF B1        DEFAULT BLACK (1).
+PFL   NOP           POWER FAIL INDICATOR. 
+      SPC 1 
+VAREA NOP           ENTRY POINT 
+      JSB .ENTR 
+       DEF XA 
+      LDA AMODE,I   TRANSFER MODE ADDRESS AND 
+      STA NMODE      POWER FAIL 
+      LDA PFL         INDICATOR 
+      STA PFAIL        FOR POINT CALL.
+      LDA AROT,I
+      AND B3        MOD 4 
+      STA AROT
+      LDB DELTY,I 
+      SLA,RAR 
+      LDB DELTX,I 
+      SSB           NEG. LENGTH?
+      JMP EAREA       YES -- DON'T DO IT! 
+      CMB           SAVE AS PRESET FOR
+      STB VLEN       LENGTH COUNTER.
+      CMB           RESTORE FOR YA CALCULATION. 
+      SLA 
+      CLB 
+      ADB YA,I
+      STB YA
+      SKP 
+      LDA AROT
+      LDB DELTX,I 
+      SLA 
+      LDB DELTY,I 
+      SSB           NEG. LENGTH?
+      JMP EAREA       YES -- DON'T DO IT! 
+      CMB 
+      STB DELTX     -(# OF VECTORS) 
+      INB           ADJUST FOR X-ORIGIN USE.
+      INA           ADD 1 SO THAT ROTS 0,3 CAN BE 
+      RAR            SEPARATED FROM ROTS 1,2
+      SLA,RSS 
+      CLB 
+      ADB XA,I
+      STB XA
+COLUM LDB VLEN
+      STB DELTY 
+      LDA YA
+      ALF,ALF 
+      XOR XA
+DOTS  JSB .PPNT 
+      ADA M400
+      ISZ DELTY 
+      JMP DOTS
+      ISZ XA
+      ISZ DELTX 
+      JMP COLUM 
+      JSB DUMP      OUTPUT PARTIAL BUFFER.
+EAREA LDA DZERO     RESTORE DEFAULT PARAMETERS
+      STA AROT
+      STA DU\LO 
+      LDA DEFB1      FOR NEXT CALL. 
+      STA AMODE 
+      CLA 
+      STA PFL 
+      JMP VAREA,I 
+      SPC 2 
+ALOC  NOP           CURRENT COORDINATES FOR AREA. 
+PBUFR BSS BLEN
+THEND EQU * 
+      SPC 2 
+      END 
+ASMB,L,C
+      HED VIDEO SUBROUTINES POINT,VIDLU,ERASE      A-91200-16002-2
+* 
+*     NAME:   EXEC INTERFACE OF VIDEO DISPLAY LIBRARY 
+*     SOURCE: 91200-18002 (FILE 6)
+*     BINARY: 91200-16002 (MODULE 6)
+*     PGMR:   R.M.C. REV.C(1648) MADE BY DENTON ANDERSON
+*               REV.B(1603) IS FOR COLOR OPERATION. 
+*               REV.C(1648) IS FOR POWER FAIL - AUTO RESTART. 
+* 
+* 
+      NAM POINT,7 91200-16002 REV 1648 -- 761124
+      SPC 1 
+      ENT POINT,VIDLU,ERASE 
+      EXT .ENTR,EXEC,RSFLG
+      SPC 1 
+BUFFR NOP 
+NUM   DEF B1
+MODE  DEF ZERO
+PFAIL NOP           POWER FIAL INDICATOR. 
+      SPC 1 
+POINT NOP           ENTRY POINT 
+      JSB .ENTR 
+       DEF BUFFR
+      LDA NUM,I 
+      SZA,RSS       IF 0,RETURN WITH NO 
+      JMP PRTN       ACTION.
+      STA NUM 
+      LDA CPRAM 
+      AND B200      KEEP BIT 7 OF CPRAM FOR CONTROL 
+      STA B          REQUEST TO DRIVER
+      LDA MODE,I    GET COLOR CODE
+      AND B7
+      CLE,ERA       POSITION
+      RAL,RAL         COLOR BITS
+      ELA,ALF           FOR CONTROL 
+      RAL,RAL             CALL
+      IOR B         FORM MODE BITS FOR CONTROL WORD 
+      IOR LU        COMPLETE CONTROL WORD 
+      STA CPRAM       AND SAVE
+      SPC 1 
+      LDA PFAIL     IS POWER FAIL 
+      SZA,RSS         TO BE CHECKED?
+      JMP SMODE         NO - GO ON
+      SPC 1 
+      JSB EXEC      STATUS CALL FOR POWER FAIL
+      DEF SRTN
+      DEF D13 
+      DEF LU
+      DEF PSTAT 
+      SPC 1 
+SRTN  LDA PSTAT 
+      AND B1
+      STA PFAIL,I 
+      SKP 
+SMODE JSB EXEC      SEND LAST SENSE AND CURRENT 
+       DEF P1        MODE TO DRIVER IN
+       DEF B3         CONTROL REQUEST.
+       DEF CPRAM    SENSE & MODE PARAMETERS & LU. 
+      SPC 1 
+P1    JSB EXEC      SEND COORDINATES OF EACH
+       DEF  PRTN      POINT IN USER'S BUFFER
+       DEF B2 
+       DEF LU 
+       DEF BUFFR,I
+       DEF NUM
+      SPC 1 
+PRTN  LDA DEFB1     RESTORE DEFAULT 
+      STA NUM        PARAMETERS FOR NEXT CALL.
+      LDA DZERO 
+      STA MODE
+      CLA 
+      STA PFAIL 
+      JMP POINT,I 
+      SPC 2 
+B     EQU 1 
+B1    OCT 1 
+B2    OCT 2 
+B3    OCT 3 
+B7    OCT 7 
+B77   OCT 77
+B200  OCT 200 
+B400  OCT 400 
+D13   DEC 13
+ZERO  OCT 0 
+DEFB1 DEF B1
+DZERO DEF ZERO
+CPRAM NOP 
+PSTAT NOP 
+      SKP 
+LU    NOP 
+SENSE DEF ZERO
+      SPC 1 
+VIDLU NOP           ENTRY POINT 
+      JSB .ENTR 
+       DEF LU 
+      LDA LU,I
+      AND B77 
+      STA LU
+      LDB SENSE,I   IF SENSE PARAMETER IS 0,
+      SZB            CLEAR BIT 7 OF CPRAM 
+      LDB B200        ELSE SET BIT 7 OF CPRAM.
+      IOR B 
+      STA CPRAM 
+      JSB EXEC      SEND CURRENT SENSE TO DRIVER
+       DEF VRTN      TO SET I/O CARD FOR EITHER 
+       DEF B3         WHITE-ON-BLACK OR 
+       DEF CPRAM       BLACK-ON-WHITE.
+VRTN  LDA DZERO 
+      STA SENSE 
+      JSB RSFLG     SET SAVE RESOURCES TERMINATION
+      DEF *+1         FOR MULTI-USER BASIC
+      JMP VIDLU,I 
+      SPC 4 
+ERASE NOP 
+      JSB .ENTR 
+       DEF ERASE    PROTECT AGAINST PARAMETERS
+      LDA LU
+      IOR B400
+      STA EWRD
+      JSB EXEC      SEND CONTROL REQUEST TO 
+       DEF ERTN      DRIVER WITH BIT 8 OF CONTROL 
+       DEF B3         WORD SET TO EFFECT A BULK 
+       DEF EWRD        ERASE TO THE SENSE PREVIOUSLY
+ERTN  JMP ERASE,I       SET BY CALL TO VIDLU. 
+      SPC 1 
+EWRD  NOP 
+      SPC 2 
+      END 

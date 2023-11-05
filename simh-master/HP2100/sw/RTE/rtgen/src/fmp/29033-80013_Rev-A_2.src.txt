@@ -1,0 +1,189 @@
+ASMB,B,X,L  
+*001  SPL, L, M, O  
+*002        NAME RC..(8)
+        NAM RC..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT RC..
+        EXT .ENTR 
+        EXT .DRCT 
+        EXT DR.RD 
+        EXT D.RIO 
+        EXT FM.ER 
+        EXT LOCK. 
+        EXT CONV. 
+        EXT MC..
+        EXT FID.
+        EXT D.AD
+        EXT D.LT
+        EXT DS.LU 
+        EXT D.SDR 
+        EXT DS.DF 
+MSS     OCT 046101
+        OCT 051524
+        OCT 020124
+        OCT 051101
+        OCT 041513
+        OCT 020040
+        OCT 020040
+MS      BSS 1 
+DIS     BSS 1 
+#2      OCT 000067
+#4      OCT 000001
+#5      OCT 000000
+#6      OCT 000066
+#8      OCT 000003
+#9      BSS 1 
+#10     OCT 000004
+I       BSS 1 
+T       BSS 1 
+#14     OCT 000170
+#15     OCT 177776
+#16     OCT 177775
+#17     OCT 000002
+#18     OCT 000010
+*003  !     THIS IS THE REMOVE CARTRIDGE ROUTINE OF THE 
+*004  !     RTE FILE MANAGER PROGRAM FMGR.
+*005  !     IT IS ENTERED AS A RESULT OF A
+*006  ! 
+*007  !     RC,CR 
+*008  !     WHERE CR IS THE CARTRIDGE ID
+*009  ! 
+*010  !     THE CARTRIDGE IS LOCKED IF IT HAS BEEN
+*011  !     INITILIZED. 
+*012  ! 
+*013  !     THEN IT IS REMOVED FROM THE DIRECTORY OF DISCS. 
+*014  ! 
+*015  ! 
+*016  !     DECLARE EXTERNALS 
+*017  ! 
+*018        LET DR.RD, D.RIO, FM.ER,\ 
+*            LOCK., CONV.           BE SUBROUTINE, EXTERNAL 
+*019        LET MC..    BE SUBROUTINE,EXTERNAL
+*020  ! 
+*021        LET FID., D.AD              BE FUNCTION, EXTERNAL 
+*022  ! 
+*023        LET D.LT, DS.LU, D.SDR,DS.DF BE INTEGER, EXTERNAL 
+*024  ! 
+*025  !     DECLARE CONSTANTS 
+*026        LET MSS(7),MS BE INTEGER
+*027        INITIALIZE MSS TO "LAST TRACK    "
+*028  ! 
+*029        LET WRIT      BE CONSTANT (   2)
+*030        LET READI     BE CONSTANT (    1) 
+*031        LET B        BE CONSTANT (    1 ) 
+*032  RC..: SUBROUTINE (N,LIS,ER) GLOBAL
+N       NOP 
+LIS     NOP 
+ER      NOP 
+RC..    NOP 
+        JSB .ENTR 
+        DEF N 
+*033        DIS_@LIS+1  !SET DISC SPEC ADDRESS
+        LDA LIS 
+        INA 
+        STA DIS 
+*034        IFNOT $DIS THEN [ER_55;RETURN] !NOT SPECIFIED ERROR 
+        LDA DIS,I 
+        SZA 
+        JMP #1
+        LDA #2
+        STA ER,I
+        JMP RC..,I
+*035        DR.RD(READI,$DIS,0)?[ER_54; RETURN] !NOT MOUNTED
+#1      JSB DR.RD 
+        DEF *+4 
+        DEF #4
+        DEF DIS,I 
+        DEF #5
+        SEZ,RSS 
+        JMP #3
+        LDA #6
+        STA ER,I
+        JMP RC..,I
+*036        IFNOT  FID.($DIS)  THEN LOCK.($DIS, 3)?[RETURN] ! LOCK
+#3      JSB FID.
+        DEF *+2 
+        DEF DIS,I 
+        SZA 
+        JMP #7
+        JSB LOCK. 
+        DEF *+3 
+        DEF DIS,I 
+        DEF #8
+        SEZ 
+        JMP RC..,I
+*037        CONV. ($$@D.LT,MS,4) !SET LAST TRACK IN MESSAGE 
+#7      JSB .DRCT 
+        DEF D.LT
+        LDA .A.,I 
+        STA #9
+        JSB CONV. 
+        DEF *+4 
+        DEF #9,I
+        DEF MS
+        DEF #10 
+*038        DS.DF,$DIS_ - $$@DS.LU !SET LU FOR MOUNT CALL 
+        JSB .DRCT 
+        DEF DS.LU 
+        LDA .A.,I 
+        LDA .A.,I 
+        CMA,INA 
+        STA DS.DF 
+        STA DIS,I 
+*039        FOR I_DS.LU  TO D.AD(D.SDR)+120 DO[\
+*                $I_$[T_I+4]; $T_0]  ! REMOVE FROM DIRECTORY
+        LDA DS.LU 
+        STA I 
+        JMP #12 
+#11     LDA I 
+        INA 
+        STA I 
+#12     JSB D.AD
+        DEF *+2 
+        DEF D.SDR 
+        ADA #14 
+        CMA,INA 
+        ADA I 
+        CMA,INA 
+        SSA 
+        JMP #13 
+        LDA I 
+        ADA #10 
+        STA T 
+        LDA .A.,I 
+        STA I,I 
+        CLA 
+        STA T,I 
+        JMP #11 
+*040        IF $DIS = -2 THEN GO TO MOUNT 
+#13     LDA DIS,I 
+        CPA #15 
+        JMP MOUNT 
+*041        IF $DIS = -3 THEN GO TO MOUNT  !IF SYS OR AUX THEN GO REMOUNT 
+        LDA DIS,I 
+        CPA #16 
+        JMP MOUNT 
+*042        D.RIO(WRIT)     ! RE WRITE THE DIRECTORY OF DISCS.
+        JSB D.RIO 
+        DEF *+2 
+        DEF #17 
+*043        FM.ER (0, MSS,8)  ! SEND LAST TRACK TO LOG
+        JSB FM.ER 
+        DEF *+4 
+        DEF #5
+        DEF MSS 
+        DEF #18 
+*044        RETURN
+        JMP RC..,I
+*045  MOUNT:MC..(N,LIS,ER)
+MOUNT   JSB MC..
+        DEF *+4 
+        DEF N,I 
+        DEF LIS,I 
+        DEF ER,I
+*046        RETURN
+        JMP RC..,I
+*047        END 
+*048        END 
+        END 

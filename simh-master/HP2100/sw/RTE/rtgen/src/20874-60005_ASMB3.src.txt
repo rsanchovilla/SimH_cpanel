@@ -1,0 +1,257 @@
+ASMB,L,B,C     DOS/RT ASSEMBLER FEBRUARY 1970 
+      HED *** DOS/RTE ASMB3  FALL 1971 ***
+      NAM ASMB3,5,99
+      ENT ASMB3 
+      EXT ?X,?MOVE,?LOUT,?LIST,?CHPI,?OPER,?BFLG
+      EXT ?PNCH,?ICSA,?ASCI,?ASII,?PNLE,?ENDS,?ASMB 
+      EXT ?PLIN,?PCOM,?LINS,EXEC,?LGFL
+      EXT ?WRIF 
+*             ****************************
+*             * TEMPORARY AND FLAG REGION*
+*             ****************************
+TEMP  BSS 321B
+#     EQU TEMP     SAME AS DATA ORIGIN
+...1  EQU TEMP+7
+.1    EQU ...1
+.12   EQU .1+7
+..M1 EQU #+24B
+BLNS  EQU #+55B 
+SUMP  EQU #+100B
+CNTB  EQU #+106B
+INST  EQU #+113B   OPCODE FORMAT
+PLCN  EQU #+117B   PROGRAM LOCATION COUNTER 
+PLEN  EQU #+120B LIT LENGTH PASS 1/LIT ORG PASS 2 
+RCNT  EQU #+122B
+SAVB  EQU #+123B
+SCN1  EQU #+125B   STATE LNG/OPCODE/OPERAND/LABEL(4)
+SVST  EQU #+131B
+PBUF  EQU #+225B    60 WORD PUNCH BUFFER
+WCNT  EQU PBUF  WORD(BLK) CNT FOR BIN.RECRD.
+BFLAG EQU ?BFLG 
+*          ******************************************************** 
+*          * THE BSS 32B BELOW OFFSETS BREC BY THE LENGTH OF THE  * 
+*          *   SKP AND SPC ROUTNES IN ASMB2                       * 
+*          ******************************************************** 
+      BSS 32B       *** THIS IS THE SPECIAL OFFSET *
+*        *************************
+*        * BINARY OUTPUT ROUTINE *
+*        *************************
+.M54  DEC -54 
+      OCT 60100     RIC=5, CURRENT PAGE 
+BREC NOP
+      STA SAVB+1 SAVE RELOC'N BYTE
+      LDA BFLAG     GET PUNCH REQUEST FLAG
+      ADA ?LGFL     LOAD/GO FLAG
+      SZA,RSS       WAS PUNCH REQUESTED?
+     JMP BREC,I  NO.
+     LDA WCNT 
+     SZB RECORD OUT?
+     JMP HI66    NO.
+     SZA,RSS WCNT=0?
+     JMP BREC,I YES.
+* 
+*             * OUTPUT A RECORD 
+* 
+HI60 LDA WCNT 
+      ALF,ALF  ROTATE 8 
+      STA WCNT   STORE WCNT IN UPPER PBUF 
+      LDA SVST,I    POSITION REMAIN RELOCATION BYTES
+     ALF,RAR
+     ISZ RCNT 
+     JMP *-2
+     RAL
+     STA SVST,I  STORE RELOC.BYTES
+* 
+*             * SET REC.ID CODE (WORD 2) *
+      LDB BREC-1    GET RIC/PAGE INDICATOR
+      ADB PBUF+1 SET REMAINDER
+      STB PBUF+1
+      JSB ?PNCH     GO TO 'PUNCH' 
+     JMP BREC,I  AND EXIT 
+* 
+*  PROCESS A BINARY OUTPUT WORD 
+* 
+      DEF PBUF+4
+HI66 LDA WCNT 
+     SZA    FIRST WORD OF RECORD? 
+      JMP HI70      -NO-
+     LDB PLCN  PLCN TO BREG 
+     STB PBUF+3  SET DBL ADDR.
+      STA PBUF+1  SET PBUF+1=0
+      LDB ...1+3  (4) 
+     STB WCNT  SET WCNT = 4 
+      LDB HI66-1
+     STB STOR  SET STOR=L(PBUF+4) 
+      LDB ..M1+4  (-5)
+     STB RCNT  SET RCNT=-5
+      LDB .M54      -54 
+     STB CNTB  SET CNTB FOR WORD COUNT
+HI70  LDB RCNT
+      CPB ..M1+4  RCNT= -5? 
+     JMP HI74  -YES-SET UP ADDRESSES
+* 
+*              * STORE RELOC.BYTE / UPDATE
+* 
+HI71  ISZ PBUF+1          UPDATE # OF DATA WRDS 
+     LDA SVST,I 
+     ALF,RAR
+      IOR SAVB+1 RELOC BYTE 
+     STA SVST,I 
+     ISZ RCNT  BYTE WORD FULL?
+     JMP HI76  -NO- 
+      LDB ..M1+4 -YES-(-5)
+     STB RCNT  RESET RCNT TO -5 
+     RAL
+     STA SVST,I 
+     LDA CNTB 
+     CPA ..M1 
+     RSS
+     ISZ CNTB 
+HI76 LDB INST 
+     STB STOR,I 
+     ISZ STOR 
+     ISZ WCNT 
+      LDA SAVB+1 RELOC BYTE 
+      CPA ...1+4 (5) 2 WORD INSERT? 
+     RSS
+      JMP HI78 TO EXIT TEST 
+     ISZ WCNT  BUM.WORD COUNT 
+     LDA SUMP 
+     STA STOR,I 
+     ISZ STOR 
+      AND BRMSK     CLEAR UPPER 6 BITS OF 'SUMP'
+     BRS,BRS    CLEAR LOWER 2 BITS OF INST
+     BLS,BLS
+     IOR 1     'OR' B TO A
+     STA INST 
+     ISZ CNTB   BUMP CNTB 
+      JMP HI78
+     JMP HI60 
+HI78 ISZ CNTB    IS THIS THE LAST WORD? 
+     JMP BREC,I  NO- EXIT 
+      JMP HI60    YES- GO TO PUNCH
+HI74 LDB STOR 
+     STB SVST 
+      CLA 
+      STA SVST,I   CLEAR RELOC BYTE WORD
+     ISZ STOR 
+     ISZ WCNT 
+      JMP HI71
+STOR  BSS 1 
+BRMSK OCT 1777
+****   END OF BREC   ***
+*             ******************************
+*             *    PASS 2 END PROCESSOR    *
+*             ******************************
+      OCT 120000    FOR RIC = 5 
+ASMB3 CLA 
+      STA PBUF
+      STA PBUF+1
+      STA PBUF+2
+      STA PBUF+3
+      LDA PLEN      IF PLEN=0 THERE ARE NO LITERALS 
+      SZA,RSS    LITERALS PRESENT ? 
+      JMP HC56
+      STA PLCN  SET PLCN=FWA AFTER PROGRAM
+      LDA ?X
+NL01  STA ENTV   ADDR OF SYMBOL TABLE 
+      LDA ENTV,I  1ST WRD OF ENTRY
+      SZA,RSS    END OF TABLE?
+      JMP NL99   YES
+      ALF 
+      STA 1 
+      AND ...1+6  GET ENTRY LENGTH
+      STA ENTC
+      LDA 1 
+      ALF 
+      AND .12+3  GET ENTRY TYPE 
+      CPA ...1+6  LITERAL?
+      JMP NL20     YES
+NL10  LDA ENTV    UPDATE TO NEXT ENTRY ADDRESS
+      ADA ENTC
+      JMP NL01    GO TO PROCESS NEXT ENTRY
+*          * PROCESS A LITERAL FOR OUTPUT * 
+NL20  LDA ENTV
+      CMA,INA   SET UP ADDR OF LITRL CONSTANT 
+      LDB ?ICSA     GET LOC'N OF ASCI BUFFER
+      STA *+3 
+      LDA ...1+3  4 TO A
+      JSB ?MOVE     LIT CONST TO ASCI/ASCI+1
+      NOP 
+      LDA ?ASII 
+      STA NLST   SAVE 2ND WRD 
+      LDA ?ASCI     PROCESS 1ST WORD
+      STA INST
+      JSB LOUT      PUNCH 
+      LDA ...1+3
+      JSB LIST
+      LDA ENTC
+      CPA ...1+2  IS IT 2 WORD CONSTANT?
+      JMP NL30    NO
+      LDA NLST    YES 
+      STA INST    PROCESS 2ND WORD
+      ISZ PLCN    BUMP LOCN COUNTER 
+      JSB LOUT     PUNCH
+      LDA ...1+3
+      JSB LIST
+NL30  ISZ PLCN    BUMP LOCN CNTR
+      JMP NL10
+*           * EXIT HERE 
+NL99  CLB 
+      JSB BREC
+* 
+*             * PUNCH 'END' RECORD *
+HC56  LDA .2000     FOR WCNT = 4
+     STA WCNT  SET WORD COUNT 
+      LDA SCN1+2  POINTS TO OPERAND (IF ANY)
+      STA PBUF+3   CLEARED IF NO EXECUTION ADDRESS
+      SZA      EXEC.ADDR.PRSNT? 
+* 
+*              * PROCESS EXEC.ADDR. * 
+      JSB ?CHPI     GO EVALUATE OPERAND 
+      JMP HC54      ERROR, OR NO EXECUTION ADDRESS
+      CPA .1        RELOCATABLE?
+      JMP HC55      YES 
+      JSB ?OPER     ERROR - NOT RELOCATABLE 
+HC54 CLA
+     CLB
+HC55  STB PBUF+3    STORE THE EXECUTION ADDRESS.
+      ADA ASMB3-1   SET RIC = 5 
+      STA PBUF+1
+      LDA ?BFLG     GET PUNCH FLAG
+      ADA ?LGFL     LOAD/GO FLAG
+      SZA,RSS       PUNCHING REQUESTED? 
+      JMP HC57      NO - END OF PROGRAM 
+      JSB ?PNCH 
+      LDA ?LGFL 
+      SZA 
+      JSB ?WRIF     CLOSE OUT LOAD/GO AREA
+      LDA ?BFLG     PUNCH FLAG
+      SZA,RSS       WAS A TAPE BEING PUNCHED? 
+      JMP HC57      NO,  SKIP TRAILER OUTPUT
+      SKP 
+*              ****************** 
+*              * OUTPUT TRAILER * 
+*              ****************** 
+      JSB EXEC      GO TO EXEC
+      DEF *+3 
+      DEF .1+2
+      DEF ?PNLE     LEADER/TRAILER CW 
+HC57  CLA,INA       SET A=1 FOR LIST PARAMETER
+      LDB BLNS  BLANKS FOR RELOC,INDIC. 
+      JSB LIST
+      JSB ?ENDS     * PRINT ERROR COUNT * 
+      LDB ?PLIN 
+      CPB ?PCOM     TTY OUTPUT ?
+      JMP ASMBX     YES, GO TO END OF ASSEMBLER 
+      CCA           NO, SET FOR TOP OF FORM 
+      JSB ?LINS     GO TO LINE SKIP ROUTINE 
+      JMP ASMBX     EXIT FROM ASSEMBLER 
+NLST  NOP        TEMP 
+ENTC  NOP           TEMPORARY 
+ENTV  NOP    ENTBL COUNTER
+.2000 OCT 2000
+ASMBX EQU ?ASMB 
+LIST  EQU ?LIST 
+LOUT  EQU ?LOUT 
+      END ASMB3 

@@ -1,0 +1,447 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME  CO..(8) 
+        NAM CO..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT CO..
+        EXT .ENTR 
+        EXT .DIV
+        EXT .DRCT 
+        EXT DR.RD 
+        EXT DU..
+        EXT MSS.
+        EXT FM.ER 
+        EXT CREAT 
+        EXT PK.DR 
+        EXT N.OPL 
+        EXT DS.LU 
+        EXT O.BUF 
+        EXT D.AD
+STLIS   BSS 1 
+FNAM    BSS     3 
+LTY     BSS 1 
+TNAM    BSS     3 
+OPLS    BSS 1 
+SACD    BSS 1 
+DM      BSS    14 
+T       BSS 1 
+.1      OCT 000001
+.5      DEF STLIS 
+.6      OCT 000027
+.7      OCT 000003
+.8      OCT 051501
+LIS5    BSS 1 
+LIS1    BSS 1 
+.9      OCT 000004
+OPS2    BSS 1 
+OPS1    BSS 1 
+OPT2    BSS 1 
+OPCR2   BSS 1 
+OPL     BSS 1 
+OPT1    BSS 1 
+OPCR1   BSS 1 
+BLK     BSS 1 
+ADD     BSS 1 
+.13     OCT 000200
+DRBF    BSS 1 
+LU      BSS 1 
+.15     OCT 000000
+.16     OCT 000025
+PKD     BSS 1 
+PKD3    BSS 1 
+PKD5    BSS 1 
+.17     OCT 177400
+.E.R.   BSS 1 
+PKD8    BSS 1 
+.19     OCT 174060
+.20     BSS 1 
+ERR     BSS 1 
+.21     OCT 177776
+.23     OCT 000026
+PKD7    BSS 1 
+PKD6    BSS 1 
+PKD2    BSS 1 
+.26     OCT 000002
+.27     OCT 000020
+T1      BSS 1 
+.29     DEF FNAM
+T2      BSS 1 
+.30     DEF TNAM
+*003  !     CO.. IS A MODULE  OF THE RTE
+*004  !     FMP  PROGRAM  FMGR. 
+*005  !     CO  COPIES  ALL  DISC  FILES  ON
+*006  !     ONE  DISC   TO   SOME   OTHER DISC. 
+*007  !     THE   COMMAND  IS:
+*008  !     CO, CR, CR2 
+*009  !     WHERE:
+*010  !         CR IS THE FROM DISC ID
+*011  !         CR2  IS THE TO DISC ID
+*012  ! 
+*013  ! 
+*014  !     DEFINE  EXTERNALS 
+*015  ! 
+*016        LET  DR.RD, DU..,MSS.,FM.ER,CREAT,CLOS.\
+*                          BE SUBROUTINE,EXTERNAL 
+*017  ! 
+*018        LET PK.DR,N.OPL, DS.LU BE INTEGER,EXTERNAL
+*019        LET O.BUF     BE INTEGER ,EXTERNAL
+*020  ! 
+*021        LET  D.AD     BE  FUNCTION,EXTERNAL 
+*022  !     DEFINE   LOCALS 
+*023  ! 
+*024        LET SETAD   BE SUBROUTINE 
+*025  ! 
+*026        LET STLIS,FNAM(3),LTY,TNAM(3),\ 
+*             OPLS, SACD, DM(14)  BE INTEGER
+*027  CO..: SUBROUTINE (N, LIS,ER) GLOBAL 
+N       NOP 
+LIS     NOP 
+ER      NOP 
+CO..    NOP 
+        JSB .ENTR 
+        DEF N 
+*028                      !SET UP DU.. CALL ARRAY 
+*029        FOR  T _ @ STLIS TO @ STLIS+23 DO  $T _0
+        LDA .5
+        STA T 
+        JMP .3
+.2      LDA T 
+        INA 
+        STA T 
+.3      LDA .5
+        ADA .6
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .4
+        CLA 
+        STA T,I 
+        JMP .2
+*030        LTY,STLIS,OPLS_3 !SET TYPE FLAGS
+.4      LDA .7
+        STA LTY 
+        STA STLIS 
+        STA OPLS
+*031  ! 
+*032        SACD _ 51501K   ! SAVE  EOF  MARKS
+        LDA .8
+        STA SACD
+*033  ! 
+*034        LIS5 _ [LIS1 _ @ LIS+1]+4 
+        LDA LIS 
+        INA 
+        STA LIS1
+        ADA .9
+        STA LIS5
+*035  ! 
+*036  !     SET UP THE OPTION   LIST ADDRESSES
+*037  ! 
+*038        OPS2_ [OPS1_[OPT2 _ [OPCR2_ [OPL_ [OPT1_ [\ 
+*                   OPCR1_ D.AD(N.OPL)+1]+1]+3] \ 
+*                     + 1]+1]+1]+1
+        JSB D.AD
+        DEF *+2 
+        DEF N.OPL 
+        INA 
+        STA OPCR1 
+        INA 
+        STA OPT1
+        ADA .7
+        STA OPL 
+        INA 
+        STA OPCR2 
+        INA 
+        STA OPT2
+        INA 
+        STA OPS1
+        INA 
+        STA OPS2
+*039  ! 
+*040        BLK_0 
+        CLA 
+        STA BLK 
+*041        FOR T _  OPCR1  TO  OPS2  DO  $T _ 0
+        LDA OPCR1 
+        STA T 
+        JMP .11 
+.10     LDA T 
+        INA 
+        STA T 
+.11     LDB T 
+        CMB,INB 
+        ADB OPS2
+        SSB 
+        JMP .12 
+        CLA 
+        STA T,I 
+        JMP .10 
+*042  ! 
+*043        $ OPCR1 _ $ LIS1
+.12     LDA LIS1,I
+        STA OPCR1,I 
+*044        $ OPCR2 _ $ LIS5
+        LDA LIS5,I
+        STA OPCR2,I 
+*045        ADD_128  !SET UP ADDRESS INCREMENT
+        LDA .13 
+        STA ADD 
+*046  ! 
+*047        DRBF _ D.AD (PK.DR) ! SET PACK BUFADD.
+        JSB D.AD
+        DEF *+2 
+        DEF PK.DR 
+        STA DRBF
+*048  ! 
+*049  !     CHECK FOR LEGAL DISCS.
+*050  ! 
+*051        IF $ LIS5 THEN    [DR.RD(1,$LIS5,0)?[ \ 
+*                          GO TO NODES] ; LU_$$@DS.LU\
+*                          ;GO TO INCK] 
+        LDA LIS5,I
+        SZA,RSS 
+        JMP NODES 
+        JSB DR.RD 
+        DEF *+4 
+        DEF .1
+        DEF LIS5,I
+        DEF .15 
+        SEZ 
+        JMP NODES 
+        JSB .DRCT 
+        DEF DS.LU 
+        LDA .A.,I 
+        LDA .A.,I 
+        STA LU
+        JMP INCK
+*052  ! 
+*053  NODES:DO[ER_21;RETURN]! NO DIS C EXIT 
+NODES   LDA .16 
+        STA ER,I
+        JMP CO..,I
+*054  ! 
+*055  INCK: IFNOT $LIS1  THEN GO TO NODES 
+INCK    LDA LIS1,I
+        SZA,RSS 
+        JMP NODES 
+*056  ! 
+*057        SETAD ? [GO TO NODES] 
+        JSB SETAD 
+        DEF *+1 
+        SEZ 
+        JMP NODES 
+*058        IF LU = $$@ DS.LU THEN GO TO NODES
+        JSB .DRCT 
+        DEF DS.LU 
+        LDA .A.,I 
+        LDA .A.,I 
+        CPA LU
+        JMP NODES 
+*059  ! 
+*060  !     BOTH DISCS ARE DEFINED AND
+*061  !     SEPERATE
+*062  ! 
+*063  !     START TRANSFER
+*064  ! 
+*065  XFER: SETAD? [RETURN   ]
+XFER    JSB SETAD 
+        DEF *+1 
+        SEZ 
+        JMP CO..,I
+*066        IF  $PKD<0  THEN GO TO XFER 
+        LDB PKD,I 
+        SSB 
+        JMP XFER
+*067  ! 
+*068        IFNOT  $PKD3  THEN GO TO XFER 
+        LDA PKD3,I
+        SZA,RSS 
+        JMP XFER
+*069        IF $PKD5 AND 177400K THEN GOTO XFER !SKIP EXTENTS 
+        LDA PKD5,I
+        AND .17 
+        SZA 
+        JMP XFER
+*070        FM.ER (1, FNAM,3) ! SEND CURRENT NAME TO LOG
+        JSB FM.ER 
+        DEF *+4 
+        DEF .1
+        DEF FNAM
+        DEF .7
+*071        CREAT(O.BUF,.E.R.,$PKD,$OPS1,$PKD3,$PKD8,$LIS5)! CREAT THE F
+        JSB CREAT 
+        DEF *+8 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF PKD,I 
+        DEF OPS1,I
+        DEF PKD3,I
+        DEF PKD8,I
+        DEF LIS5,I
+*072        IF .E.R.<0 THEN [MSS.(.E.R.-2000);GO TO XFER] 
+        LDB .E.R. 
+        SSB,RSS 
+        JMP .18 
+        LDA .E.R. 
+        ADA .19 
+        STA .20 
+        JSB MSS.
+        DEF *+2 
+        DEF .20 
+        JMP XFER
+*073        ERR_-2  !SET COPY CALL FLAG FOR DU ROUTINE
+.18     LDA .21 
+        STA ERR 
+*074        DU..(4, STLIS,ERR) !CALL STORE TO TRANSFER
+        JSB DU..
+        DEF *+4 
+        DEF .9
+        DEF STLIS 
+        DEF ERR 
+*075  ! 
+*076        IFNOT ERR THEN GO TO XFER 
+        LDA ERR 
+        SZA,RSS 
+        JMP XFER
+*077  ! 
+*078        ER _ ERR- 2000
+        LDA ERR 
+        ADA .19 
+        STA ER,I
+*079  ! 
+*080  BAD:  MSS. (ER)          !PRINT MESSAGE 
+BAD     JSB MSS.
+        DEF *+2 
+        DEF ER,I
+*081  ! 
+*082        IF ER < 2000 THEN [ER_0; GO TO XFER]
+        LDB ER,I
+        ADB .19 
+        SSB,RSS 
+        JMP .22 
+        CLA 
+        STA ER,I
+        JMP XFER
+*083  ! 
+*084        ER _ 22 
+.22     LDA .23 
+        STA ER,I
+*085        RETURN
+        JMP CO..,I
+*086        END 
+*087  ! 
+*088  ! 
+*089  SETAD:SUBROUTINE  FEXIT   ! READ DIRECTORY
+SETAD   NOP 
+        JSB .ENTR 
+        DEF SETAD 
+*090                            ! AND SET UP ST CALL
+*091  ! 
+*092        IF ADD = 128 THEN [ \ 
+*             DR.RD (1,$LIS1,BLK)?[FRETURN];\ 
+*                 ADD_ 0; BLK_ BLK+1] 
+        LDB ADD 
+        CPB .13 
+        RSS 
+        JMP .25 
+        JSB DR.RD 
+        DEF *+4 
+        DEF .1
+        DEF LIS1,I
+        DEF BLK 
+        SEZ,RSS 
+        JMP .24 
+        CCE 
+        JMP SETAD,I 
+.24     CLA 
+        STA ADD 
+        LDA BLK 
+        INA 
+        STA BLK 
+*093  ! 
+*094        PKD8_[PKD7_[PKD6_[PKD5_[PKD3_[PKD2_[PKD_ \
+*              DRBF+ADD]+2]+1]+2]+1]+1]+1 
+.25     LDA DRBF
+        ADA ADD 
+        STA PKD 
+        ADA .26 
+        STA PKD2
+        INA 
+        STA PKD3
+        ADA .26 
+        STA PKD5
+        INA 
+        STA PKD6
+        INA 
+        STA PKD7
+        INA 
+        STA PKD8
+*095  ! 
+*096        ADD_ ADD+16   !SET ADD FOR NEXT TIME
+        LDA ADD 
+        ADA .27 
+        STA ADD 
+*097        IFNOT   $PKD THEN FRETURN !END OF DIR.
+        LDA PKD,I 
+        SZA 
+        JMP .28 
+        CCE 
+        JMP SETAD,I 
+*098        T1_@FNAM     !SET  TO MOVE
+.28     LDA .29 
+        STA T1
+*099        T2_@ TNAM     !NAME  TO  CALL 
+        LDA .30 
+        STA T2
+*100        FOR  T _ PKD TO PKD2 DO[$T1,$T2_ $T;\ 
+*                                 T1_T1 +1; T2_T2+1]
+        LDA PKD 
+        STA T 
+        JMP .32 
+.31     LDA T 
+        INA 
+        STA T 
+.32     LDB T 
+        CMB,INB 
+        ADB PKD2
+        SSB 
+        JMP .33 
+        LDA T,I 
+        STA T1,I
+        STA T2,I
+        LDA T1
+        INA 
+        STA T1
+        LDA T2
+        INA 
+        STA T2
+        JMP .31 
+*101  ! 
+*102        N.OPL,$OPL_$PKD8  ! SET SECURITY CODES
+.33     LDA PKD8,I
+        STA N.OPL 
+        STA OPL,I 
+*103  ! 
+*104        $OPT1,$OPT2_$PKD3 ! SET TYPES 
+        LDA PKD3,I
+        STA OPT1,I
+        STA OPT2,I
+*105        $OPS1_$PKD6/2  ! SET DEST SIZE
+        LDA PKD6,I
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF .26 
+        STA OPS1,I
+*106        $OPS2_$PKD7      ! SET DEST REC. SIZE 
+        LDA PKD7,I
+        STA OPS2,I
+*107        RETURN              ! DONE - RETURN 
+        CLE 
+        JMP SETAD,I 
+*108        END 
+*109        END 
+        END 
+*110        END$

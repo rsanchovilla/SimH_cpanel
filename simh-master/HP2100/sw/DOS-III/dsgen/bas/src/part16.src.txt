@@ -1,0 +1,167 @@
+ASMB,R,B,L,X
+      HED SYNTAX PROCESSOR SUBROUTINES
+      NAM SYNP8,7 
+      SPC 2 
+      ENT DIGCK,LETCK,SYMCK,PFSRH,SBPUD,LPCK,STLCK
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGTH,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      SPC 2 
+      EXT ATAB,TBSRH,GETPF,BCKSP,LBRAB
+      EXT FRMAT 
+      SPC 2 
+D72   OCT -72 
+D133  OCT -133
+B177  OCT 177 
+OPMSK OCT 77000 
+PDFFL OCT 100017
+LPOP  OCT 13000 
+M103  DEC -103
+B     EQU 1 
+**                       ** 
+***  CHECK FOR A DIGIT  *** 
+**                       ** 
+* 
+*  ENTER WITH CHARACTER IN (A).  IF NOT A DIGIT, EXIT 
+*  TO (P+1) WITH CHARACTER IN (A); ELSE EXIT TO (P+2) 
+*  WITH DIGIT (BINARY) IN (A) AND (B).
+* 
+DIGCK NOP 
+#DGCK LDB 0         ASCII 
+      ADB D72         72B OR
+      SSB,RSS           GREATER?
+      JMP DIGCK,I   YES 
+      ADB .+12B     NO, ASCII 57B 
+      SSB             OR LESS?
+      JMP DIGCK,I   YES 
+      LDA 1         NO, LOAD
+      ISZ DIGCK       DIGIT 
+      JMP DIGCK,I       INTO (A)
+**                        **
+***  CHECK FOR A LETTER  ***
+**                        **
+* 
+*  ENTER WITH CHARACTER IN (A).  EXIT TO (P+2) IF A 
+*  LETTER, ELSE EXIT TO (P+1).  (A) IS NOT CHANGED. 
+* 
+LETCK NOP 
+#LTCK LDB 0         ASCII 
+      ADB D133        133B OR 
+      SSB,RSS           GREATER?
+      JMP LETCK,I   YES 
+      ADB .+32B     NO, ASCII 101B
+      SSB,RSS         OR GREATER? 
+      ISZ LETCK     YES 
+      JMP LETCK,I   NO
+**                                          **
+***  CHECK FOR SINGLE-CHARACTER OPERATORS  ***
+**                                          **
+* 
+*  ENTER WITH CHARACTER IN (A) AND NUMBER OF ACCEPTABLE 
+*  OPERATORS IN (B) IN 2'S COMPLEMENT.  (P+1)+2 POINTS
+*  TO THE LIST OF ACCEPTABLE OPERATORS.  ON A MATCH 
+*  EXIT TO (P+3) AFTER RECORDING THE OPERATOR CODE, 
+*  WHICH REMAINS IN (A).  ON NO MATCH EXIT TO (P+2) 
+*  WITH THE CHARACTER IN (A). 
+* 
+SYMCK NOP 
+#SYCK STB COUNT     SAVE COUNT OF POSSIBLE MATCHES
+      ALF,ALF       POSITION
+      IOR .+32        CHARACTER 
+      LDB SYMCK,I   LOAD
+      CLE,ELB      * EXT   *
+      RBR          * LINK  *
+      LDB B,I      * KLUGE *
+      ISZ SYMCK       STARTING
+SYMC1 ADB .+2           TABLE ENTRY 
+      CPA 1,I       MATCH?
+      JMP SYMC2     YES 
+      ISZ COUNT     NO, POSSIBILITIES LEFT? 
+      JMP SYMC1     YES 
+      ALF,ALF       NO, 
+      AND B177        RESTORE 
+      JMP SYMCK,I       CHARACTER 
+SYMC2 ADB .-1       FETCH 
+      LDA 1,I         AND 
+      AND OPMSK         STORE 
+      STA SBPTR,I         OPERATOR
+      ISZ SYMCK             CODE
+      JMP SYMCK,I 
+      SKP 
+**                                **
+***  SEARCH FOR PRINT FUNCTIONS  ***
+**                                **
+* 
+*  SEARCH THE INPUT STRING FOR A 'TAB', 'LIN' OR 'SPA' FUNCTION.
+*  IF FOUND, RECORD IT AND EXIT TO (P+1). OTHERWISE RESTORE THE 
+*  INPUT STRING AND SYNTAX BUFFER POINTER AND EXIT TO (P+2).
+* 
+PFSRH NOP 
+#PFSH LDB .-3       3 POSSIBLE FUNCTIONS
+      LDA ATAB      SEARCH
+      JSB TBSRH       FOR THEM
+      JMP PFSH1     NONE FOUND
+      CCB           BACKUP
+      ADB SBPTR       BUFFER
+      STB SBPTR         POINTER 
+      ALF,ALF       CONSTRUCT 
+      ALF,RAR 
+      IOR B,I         FUNCTION
+      IOR PDFFL 
+      STA B,I           OPERAND 
+      JSB GETPF     FETCH PARENTHESIZED FORMULA 
+      JMP PFSRH,I 
+PFSH1 JSB BCKSP     BACKUP
+      CCB             TO POINT
+      ADB SBPTR         FOLLOWING 
+      STB SBPTR           LAST OPERATOR 
+      ISZ PFSRH     EXIT TO 
+      JMP PFSRH,I     (P+2) 
+**                                   ** 
+***  ADVANCE SYNTAX BUFFER POINTER  *** 
+**                                   ** 
+* 
+*  (A) AND (B) REMAIN AS UPON ENTRY 
+* 
+SBPUD NOP 
+#SBPU STA SBT0      SAVE (A)
+      ISZ SBPTR     ADVANCE POINTER 
+      LDA SBPTR     BUFFER
+      CPA SYNTQ       OVERFLOW? 
+      JSB SERRS+31,I  YES 
+      LDA SBT0      NO, RETRIEVE (A)
+      JMP SBPUD,I 
+**                               ** 
+***  DEMAND A LEFT PARENTHESIS  *** 
+**                               ** 
+* 
+*  INSIST CHARACTER IN (A) BE '(' OR '['.  RECORD IT
+*  AS A '('.
+* 
+LPCK  NOP 
+#LPCK LDB .-2       '(' 
+      JSB SYMCK       OR
+      DEF LBRAB        '[' ?
+      JSB SERRS+22,I  NO
+      LDA LPOP      YES, RECORD 
+      STA SBPTR,I     A '(' 
+      JMP LPCK,I
+**                              **
+***  STATEMENT LENGTH CHECKER  ***
+**                              **
+* 
+*  CHECK THAT (A) (THE STATEMENT LENGTH) IS BETWEEN 3 AND 105.
+*  IF NOT, EXIT TO ERROR. 
+STLCK NOP 
+#SLCK ADA .-3 
+      SSA 
+      JSB RERRS+49,I  TOO SMALL 
+      ADA M103
+      SSA 
+      JMP STLCK,I   OK
+      JSB RERRS+49,I  TOO BIG 
+      END 

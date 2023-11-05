@@ -1,0 +1,114 @@
+ASMB,R,B,L
+      HED <1331C STORAGE SCOPE DRIVER FOR DOS - WR> 
+      NAM DVR47,4 
+      ENT I.47,C.47 
+* 
+**
+**     THIS DRIVER FOR A 1331C STORAGE OSCILLOSCOPE DOES NOT
+**   WORK UNDER INTERRUPT. IN ORDER NOT TO BLOCK HIGHER PRIORITY
+**   DEVICES, KEEP THE BUFFER LENGTH SMALL !
+**
+**   WRITE :
+**      JSB EXEC
+**      DEF *+5 
+**      DEF RECOD    -> = DEC 2 
+**      DEF IFUN     -> = LOGICAL UNIT NUMBER 
+**      DEF BUF      -> = BUFFER WHICH CONTAINS PACKED DATA (X&Y) 
+**      DEF LEN      -> = LENGTH (POS = WORDS, NEG = CHARS) 
+**       <- NORMAL RETURN 
+**
+**   ERASE :
+**      JSB EXEC
+**      DEF *+3 
+**      DEF RECOD    -> = DEC 3 (CONTROL REQUEST) 
+**      DEF IFUN    -> = OCT 20XX  (XX = LU#) 
+**       <- NORMAL RETURN 
+**   THE PROGRAM MUST WAIT 1 SECOND BEFORE USING THE DRIVER 
+**   AGAIN, TO GIVE TIME TO DO THE ERASE. 
+**
+**                                WIM ROELANDTS, HP BRUSSELS
+**
+* 
+I.47  NOP 
+* 
+** CONFIGURE THE DRIVER 
+* 
+      IOR COTA      MAKE OTA
+      STA OTA1
+      ADA B300      MAKE CLF
+      STA CLF1
+* 
+      LDA EQT9,I    GET REQUEST CODE
+      AND B77 
+      CPA D2        WRITE ? 
+      JMP WRIT      YES, GO DO IT 
+      CPA D3        CONTROL (ERASE)?
+      JMP CONTR 
+      CLA,INA       NONE OF THESE, REJECT 
+      JMP I.47,I
+* 
+** DO OUTPUT
+* 
+WRIT  LDA EQT10,I   GET BUFFER ADDRESS
+      STA POIN      SAVE IN POINTER 
+      LDA EQT11,I   GET LENGTH
+      SZA,RSS       ZERO ?
+      JMP FIN       YES, TERMINATE
+      SSA,RSS       WORDS OR CHARS ?
+      CMA,INA,RSS   WORDS, MAKE NEGATIF 
+      ARS           CHARS, DIVIDE BY 2
+      STA LEN       SAVE AS COUNTER 
+* 
+GO    LDA POIN,I    GET A DATA
+      ISZ POIN      BUMP POINTER
+OTA1  OTA 0         GET IT OUT
+      ISZ LEN       ALL DONE ?
+      JMP GO        NO, CONTINUE
+FIN   LDA EQT11,I   YES, TERMINATE
+      SSB,RSS       MAKE LOG
+      JMP *+3 
+      BRS 
+      CMB,INB 
+RET4  LDA D4        DO IMMEDIATE COMPLETION 
+      JMP I.47,I
+      SKP 
+* 
+** DO ERASE 
+* 
+CONTR LDA EQT9,I    GET REQUEST CODE
+      AND B177H     ISOLATE FUNCTION
+      CPA B2000     FOR THIS ONE ?
+      JMP CLF1      YES, GO DO IT 
+      LDA D2        NO, REJECT
+      JMP I.47,I
+* 
+CLF1  CLF 0 
+      CLB 
+      JMP RET4
+      SPC 2 
+* 
+** DUMMY CONTINUATOR
+* 
+C.47  NOP 
+      CLA,INA 
+      JMP C.47,I
+      SKP 
+* 
+**     ***   D A T A   ***
+* 
+B300  OCT 300 
+B177H OCT 17700 
+B2000 OCT 2000
+COTA  OTA 0 
+POIN  NOP 
+LEN   NOP 
+* 
+D2    EQU 55B 
+D3    EQU 56B 
+D4    EQU 57B 
+B77   EQU 72B 
+* 
+EQT9  EQU 213B
+EQT10 EQU 214B
+EQT11 EQU 215B
+      END 

@@ -1,0 +1,409 @@
+ASMB,R,B,L,X
+      HED SYNTAX/RUN SUBROUTINE 
+      NAM SPRP0,7 
+      SPC 2 
+      ENT NUMCK,MBY10,DBY10,NORML,ARINV 
+      ENT CHOUF,#PACK 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGTH,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,FSCHA,TEMP5 
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM FFLG,TEMP4,EORFL,NCH,TEMP6,STRLN,ATIM,LT5 
+      COM ASTYP,ASBFP,ORDNO,ATMP(2),RETCD 
+      COM DCCNT,NXTDT,VL0,RCRD#,PMASK,ITEMP 
+      COM OPTRQ,EST3,EST2,EST1,TT1,TT2,BINO1
+      COM BINO2,TT3,TT4,CP0,CP1,PS0,MPT,NQT,RT0 
+      COM RT1,TRFCH,TRS0,A1,A2,C1 
+      SPC 2 
+      EXT DIGCK,GETCR,SBPUD,INF 
+      SPC 2 
+E     OCT 105 
+B177  OCT 177 
+B200  OCT 200 
+M256  DEC -256
+B377  OCT 377 
+BN377 OCT 177400
+MNEG  OCT 100000
+      OCT 376 
+TENTH OCT 63146 
+BB776 OCT 776 
+?STAT EQU 14B 
+?ID   EQU 4 
+TAPEF EQU .+8 
+      SPC 5 
+ARINV NOP 
+#ARIN DST C1
+      CLA 
+      CLB 
+      FSB C1
+      JMP ARINV,I 
+      HED ASCII TO BINARY NUMBER CONVERSION 
+**                     ** 
+***  HANDLE OVERFLOW  *** 
+**                     ** 
+* 
+*  (A) CONTAINS THE HIGH MANTISSA UPON ENTRY.  (A) AND
+*  (B) CONTAIN THE LARGEST REPRESENTABLE NUMBER OF
+*  APPROPRIATE SIGN, PACKED, UPON EXIT. 
+* 
+OVFLW NOP 
+#OVFL LDB .-2 
+      SSA 
+      LDB BB776 
+      IOR INF 
+      SSA 
+      LDA MNEG
+      JMP OVFLW,I 
+**                           ** 
+***  CHECK OVER/UNDERFLOWS  *** 
+**                           ** 
+* 
+*  EXIT TO (P+1) IF STATUS IS NOT SYNTAX.  ELSE EXIT TO (P+2),
+*  SETTING SYMTB = 4 IF IN KEYBOARD MODE.  THESE ERRORS ARE NOT 
+*  REPORTED IF IN TAPE MODE.
+* 
+CHOUF NOP 
+#CHOU LDA LNAME     COMPUTE 
+      ADA .+?STAT-?ID 
+      LDB 0,I         STATUS
+      CPB .+4       SYNTAX? 
+      RSS           YES 
+      JMP CHOU1     NO
+      LDA TAPEF     TAPE
+      AND MAIN,I
+      SZA,RSS         MODE? 
+      STB SYMTB     NO
+      ISZ CHOUF 
+      JMP CHOUF,I 
+CHOU1 ISZ ENOUF     ARE WE EXECUTING ENTER STATE? 
+      RSS           NO
+      ISZ CHOUF     YES--SUPPRESS ERROR 
+      JMP CHOUF,I 
+**                       ** 
+***  LOOK FOR A NUMBER  *** 
+**                       ** 
+* 
+*  NUMCK LOOKS FOR AN UNSIGNED NUMBER, SIGN MUST BE SET 
+*  BY THE CALLER (SIGN = -1 FOR NEGATIVE, ELSE POSITIVE). 
+*  (A) CONTAINS A CHARACTER UPON ENTRY; IF IT IS NEITHER
+*  A DIGIT NOR A DECIMAL POINT, EXIT IS TO (P+1) WITH 
+*  (A) UNCHANGED AND (B) = 0.  EXIT IS TO ERROR ON FINDING
+*  AN EXPONENT PART OF INCORRECT FORMAT.  ZERO REPLACES AN
+*  UNDERFLOW; THE LARGEST REPRESENTABLE NUMBER OF THE 
+*  APPROPRIATE SIGN REPLACES AN OVERFLOW.  AFTER STORING A
+*  FLOATING POINT NUMBER IN M AND M+1 (WHERE SBPTR,I = M) 
+*  EXIT IS TO (P+2) WITH THE NEXT INPUT STRING CHARACTER
+*  IN (A) AND TEMP+1. 
+* 
+NUMCK NOP 
+#NMCK CLB           ZERO
+      STB EXP         ALL 
+      STB MANT1         COMPONENTS
+      STB MANT2           OF THE
+      STB EXPON             NUMBER
+      STB TEMP+1    SET 'NUMBER FLAG' FALSE 
+      CCB           SET 'DECIMAL POINT' 
+      STB DPFLG            FLAG FALSE 
+NUMC1 CPA .+56B     DECIMAL POINT?
+      ISZ DPFLG     YES 
+      JMP NUMC2     NO
+      CLA           ZERO POST-DECIMAL 
+      STA EXPON       DIGIT 
+      JMP NUMC4+1       COUNTER 
+NUMC2 JSB DIGCK     DIGIT?
+      JMP NUMC7     NO
+      ISZ EXPON     YES, COUNT DIGIT
+      AND .+37B 
+      ALF,ALF 
+      ALF,RAR 
+      STA TEMP+2      AND SAVE IT 
+      JSB MBY10     MULTIPLY PREVIOUS NUMBER BY 10
+      LDB EXP       ZERO
+      SZB,RSS         EXPONENT? 
+      JMP NUMC6     YES 
+      ADB .-4       NO, 
+      CMB             SAVE
+      LDA TEMP+2        SHIFT 
+      STB TEMP+2          COUNT 
+      CLB           CLEAR LOWER MANTISSA
+NUMC3 ISZ TEMP+2    ALL SHIFTS DONE?
+      JMP NUMC5     NO
+      CLE           YES, ADD IN 
+      ADB MANT2       LOW PART
+      CLO               OF NUMBER 
+      SEZ           OVERFLOW FROM (B)?
+      INA           YES 
+      ADA MANT1     ADD IN HIGH PART OF MANTISSA
+      SOS           OVERFLOW? 
+      JMP NUMC4     NO
+      CLE,ERA       YES, CORRECT
+      ERB             MANTISSA
+      ISZ EXP           AND BUMP
+      NOP                 EXPONENT
+NUMC4 JSB NORML     NORMALIZE THE NUMBER
+      ISZ TEMP+1    SET 'NUMBER FLAG' TRUE
+      JSB GETCR     FETCH CHARACTER 
+      JMP NUM12-1   NONE FOUND
+      JMP NUMC1 
+NUMC5 CLE,ERA       SHIFT 
+      ERB             DIGIT 
+      JMP NUMC3         RIGHT 
+NUMC6 LDA .+4       SET 
+      STA EXP         EXPONENT
+      LDA TEMP+2    LOAD
+      CLB             NUMBER
+      JMP NUMC4 
+NUMC7 CLB           SET EXPONENT
+      STB TEMP+2      SIGN TO '+' 
+      CPB TEMP+1    DIGIT OR DECIMAL POINT FOUND? 
+      JMP NUMCK,I   NO
+      CPA E         'E' ? 
+      RSS           YES 
+      JMP NUM12     NO
+      JSB GETCR     FETCH CHARACTER 
+      JMP NUM16     NONE FOUND
+      CPA .+53B     '+' ? 
+      JMP NUMC8     YES 
+      CPA .+55B     NO, '-' ? 
+      CCA,RSS       YES 
+      JMP NUMC9     NO
+      STA TEMP+2    SET EXPONENT SIGN TO '-'
+NUMC8 JSB GETCR     FETCH CHARACTER 
+      JMP NUM16     NONE FOUND
+NUMC9 JSB DIGCK     DIGIT?
+      JMP NUM16     NO
+      STA TEMP+1    YES, SAVE IT
+      JSB GETCR 
+      JMP NUM11 
+      JSB DIGCK     DIGIT?
+      JMP NUM11     NO
+      LDA TEMP+1    YES, MULTIPLY 
+      STB TEMP+1      PREVIOUS DIGIT
+      MPY .+10          BY 10 
+      ADA TEMP+1    ADD IN NEW DIGIT
+      STA TEMP+1    SAVE EXPONENT 
+      JSB GETCR 
+      JMP NUM11 
+      JSB DIGCK     THIRD DIGIT?
+      RSS           NO
+      JMP NUM16     YES 
+NUM11 LDB TEMP+1    LOAD EXPONENT 
+      ISZ TEMP+2    POSITIVE? 
+      CMB,INB       YES, COMPLEMENT IT
+      RSS           NO
+      CLB 
+NUM12 STA TEMP+1    SAVE CHARACTER
+      ISZ DPFLG     DECIMAL POINT FOUND?
+      ADB EXPON     YES, CORRECT EXPONENT 
+      SZB,RSS       NO, ZERO EXPONENT?
+      JMP NUM14     YES 
+      SSB           NO, POSITIVE EXPONENT?
+      JMP NUM13     YES 
+      CMB,INB       NO, SET 
+      STB EXPON       COUNTER 
+      JSB DBY10     DIVIDE NUMBER BY 10 
+      ISZ EXPON     DONE? 
+      JMP *-2       NO
+      JMP NUM14     YES 
+NUM13 STB EXPON     SET COUNTER 
+      JSB MBY10     MULTIPLY NUMBER BY 10 
+      ISZ EXPON     DONE? 
+      JMP *-2       NO
+NUM14 LDA MANT1     LOAD
+      LDB MANT2       MANTISSA
+      ISZ SIGN      POSITIVE? 
+      JMP NUM15     YES 
+      CMA           NO, COMPLEMENT
+      CMB,INB,SZB,RSS  THE
+      INA                NUMBER 
+NUM15 JSB #PACK     NORMALIZE AND PACK
+      STA SBPTR,I   STORE 
+      JSB SBPUD       NUMBER IN 
+      STB SBPTR,I       DESTINATION 
+      JSB SBPUD           ADDRESS 
+      LDA TEMP+1    RETRIEVE CHARACTER
+      ISZ NUMCK 
+NUM16 ISZ NUMCK 
+      JMP NUMCK,I 
+**                                    **
+***  MULTIPLY UNPACKED NUMBER BY 10  ***
+**                                    **
+* 
+*  THE FLOATING POINT NUMBER IN MANT1, MANT2, AND EXP 
+*  IS MULTIPLIED BY 10. 
+* 
+MBY10 NOP 
+#MB10 LDA MANT1     LOAD HIGH MANTISSA
+      SZA,RSS       ZERO NUMBER?
+      JMP MBY10,I   YES 
+      LDB EXP       NO, 
+      ADB .+3         MULTIPLY
+      STB EXP           BY 8
+      LDB MANT2     LOAD LOW MANTISSA 
+      CLE,ERA       DIVIDE
+      ERB             BY
+      CLE,ERA           4 
+      ERB,CLE 
+      ADB MANT2     ADD INTO
+      SEZ             BOTH REGISTERS
+      INA               PRODUCING 
+      ADA MANT1           1.25 * MANTISSA 
+      SSA,RSS       CORRECT 
+      JMP MBY01 
+      CLE,ERA         ON
+      ERB 
+      ISZ EXP           OVERFLOW
+      NOP 
+MBY01 STA MANT1     STORE 
+      STB MANT2       MANTISSA
+      JMP MBY10,I 
+      SKP 
+**                               ** 
+***  NORMALIZE UNPACKED NUMBER  *** 
+**                               ** 
+* 
+*  ENTER WITH NUMBER IN (A), (B), AND EXP.  EXIT WITH 
+*  NORMALIZED NUMBER IN MANT1, MANT2, AND EXP (MANTISSA 
+*  IS LEFT IN (A) AND (B) AS WELL). 
+* 
+NORML NOP 
+#NRML STA NT0       SET 
+      CLA             LEFT-SHIFT
+      STA TEMP+2        COUNTER 
+      LDA NT0             TO ZERO 
+      SZA,RSS       IF NUMBER 
+      SZB             IS ZERO,
+      JMP NORM2+1       CLEAR 
+      STA EXP             EVERYTHING
+      STA MANT1     STORE 
+NORM1 STB MANT2       MANTISSA
+      JMP NORML,I 
+NORM2 ISZ TEMP+2    COUNT A LEFT SHIFT
+      CLE,ELB       ROTATE (A)
+      ELA             AND (B) LEFT
+      SEZ,SSA,RSS   TWO HIGHEST BITS 0? 
+      JMP NORM2     YES, POSITIVE UNNORMALIZED
+      SEZ,SSA       NO, TWO HIGHEST BITS 1? 
+      JMP NORM2     YES, NEGATIVE UNNORMALIZED
+      ERA           NO, NORMALIZE 
+      ERB,CLE         MANTISSA
+      STA MANT1     COMPUTE 
+      LDA TEMP+2
+      CMA,INA         CORRECTED 
+      ADA EXP 
+      STA EXP           EXPONENT
+      LDA MANT1 
+      JMP NORM1 
+**                               ** 
+***  NORMALIZE AND PACK NUMBER  *** 
+**                               ** 
+* 
+*  NUMBER IN (A), (B), AND EXP ON ENTRY.  ON EXIT (A) 
+*  AND (B) CONTAIN THE NORMALIZED, ROUNDED, AND PACKED
+*  NUMBER.  UNDERFLOW BECOMES A ZERO, OVERFLOW BECOMES
+*  THE LARGEST REPRESNTABLE NUMBER OF APPROPRIATE SIGN. 
+* 
+#PACK NOP 
+      JSB NORML     NORMALIZE NUMBER
+      CLE,SZA,RSS   ZERO? 
+      JMP #PACK,I   YES 
+      ADB B177      NO, ROUND 
+      SSA,RSS       POSITIVE? 
+      INB           YES, FINISH ROUND 
+      CLO 
+      SEZ           ON OVERFLOW FROM (B)
+      CLE,INA         CORRECT (A) 
+      SOS           OVERFLOW? ( (A)=100000, (B)=0 ) 
+      RAL           TWO HIGH BITS 
+      SSA,SLA,RSS     BOTH 1? ( IF (A) WAS 140000 ) 
+      JMP PACK1     NO
+      CCE           YES 
+      ARS,SLA,ALS   SET (A) = 100000 AND SKIP 
+PACK1 RAR           UNDOES RAL ABOVE
+      STA TEMP+2    SAVE (A)
+      LDA 1 
+      AND BN377 
+      STA 1 
+      LDA EXP       DECREMENT 
+      SEZ             EXPONENT
+      ADA .-1           ON (E) # 0
+      SOC           INCREMENT 
+      INA             EXPONENT ON OVERFLOW
+      ADA B200      EXPONENT
+      SSA             UNDERFLOW?
+      JMP PACK3     YES 
+      ADA M256      NO, EXPONENT
+      SSA,RSS         OVERFLOW? 
+      JMP PACK4     YES 
+      ADA B200      NO, RESTORE EXPONENT
+      RAL           POSITION
+      AND B377        EXPONENT AND
+      ADB 0             ADD LOW MANTISSA
+      LDA TEMP+2    RETRIEVE HIGH MANTISSA
+      CPA MNEG
+      RSS           NEGATIVE
+      JMP #PACK,I 
+      CPB MNEG+1      OVERFLOW? 
+      JMP PACK4     YES 
+      JMP #PACK,I   NO
+PACK3 JSB CHOUF     CHECK STATUS
+      JSB WERRS+6,I 
+      CLA           ZERO RESULT 
+      CLB             ON UNDERFLOW
+      JMP #PACK,I 
+PACK4 JSB CHOUF     CHECK STATUS
+      JSB WERRS+5,I 
+      LDA TEMP+2    RETRIEVE HIGH MANTISSA
+      JSB OVFLW 
+      JMP #PACK,I 
+**                                  **
+***  DIVIDE UNPACKED NUMBER BY 10  ***
+**                                  **
+* 
+*  INVERSE OF MBY10 
+* 
+DBY10 NOP 
+#DB10 LDA MANT1     RETURN
+      SZA,RSS         ON
+      JMP DBY10,I       ZERO
+      LDB .-2       ADD EXPONENT
+      ADB EXP         OF 1/10 TO
+      STB EXP           THAT OF NUMBER
+      LDA MANT2     JUSTIFY 
+      CLE,ERA         LOWER MANTISSA
+      MPY TENTH         MULTIPLY BY 1/10
+      CLE,ELA       SHIFT 
+      ELB,CLE         BACK
+      ADA 1         ADD IN EQUIVALENT OF
+      SEZ             LOWER MANTISSA* 
+      CLE,INB           TENTH*2^(-16) 
+      STB MANT2           AND ROUND TO 16 BITS
+      LDA MANT1     DO
+      MPY TENTH       SAME TO 
+      ADA 1             HIGH MANTISSA 
+      ADA MANT2     PERFORM EFFECTIVE 
+      SEZ             SUM OF DOUBLE-LENGTH
+      INB               PRODUCTS
+      STA SWPTP 
+      LDA 1 
+      LDB SWPTP 
+      JSB NORML     NORMALIZE 
+      JMP DBY10,I     RESULT
+SWPTP NOP 
+      END 

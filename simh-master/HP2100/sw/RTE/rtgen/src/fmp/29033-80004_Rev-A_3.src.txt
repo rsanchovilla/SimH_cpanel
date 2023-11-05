@@ -1,0 +1,134 @@
+ASMB,B,R,L,C
+      NAM APOSN,7 
+      ENT APOSN 
+      EXT $KIP,NX$EC,RFLG$,.ENTR,LOCF 
+      SPC 1 
+*     THE APOSN ROUTINE DOES ABSOLUTE FILE POSITIONING
+*     OF  RTE FILES 
+* 
+*     CALLING  SEQUENCE:
+* 
+*     CALL APOSN(IDCB,IERR,IREC,IRS,IOFF) 
+      SPC 1 
+*     WHERE:
+* 
+*         IDCB  IS THE FILES DATA CONTROL BLOCK 
+* 
+*         IERR  IS AN ERROR RETURN FLAG. POSSIBLE ERRORS, 
+*           0   NO ERROR
+*          -1   DISC DOWN 
+*          -5   SPACING BEYOND END OF DEFINED EXTENT
+*          -9   ATTEMPT TO POSITION TYPE ZERO FILE
+*          -10  NOT ENOUGH PARAMETERS 
+*          -11  DCB NOT OPEN
+*          -12  SOF  IE IREC <1 
+* 
+*         IREC  THE RECORD NUMBER TO BE READ NEXT 
+* 
+*         IRS   (REQUIRED FOR 3 & ABOVE ONLY) THE 
+*               RELATIVE BLOCK OF THE NEXT RECORD 
+* 
+* 
+*         IOFF   THE BLOCK OFFSET OF THE NEXT 
+*                RECORD (REQUIRED FOR TYPE 3 AND
+*                   ABOVE ONLY) 
+* 
+      SPC 5 
+*     PRE  CONSTANT STORAGE 
+      SPC 2 
+TYPE  NOP 
+.2    DEC 2 
+.7    DEC 7 
+N11   DEC -11 
+N3    DEC -3
+RC    EQU TYPE
+      SPC 5 
+DCB   NOP 
+ER    NOP 
+IRC   NOP 
+IRS   NOP 
+IOFF  NOP 
+      SPC 1 
+APOSN NOP           ENTRY POINT 
+      JSB .ENTR      FETCH PRAM 
+      DEF DCB         ADDRESSES 
+      SPC 1 
+      CLB,INB       SET THE READ
+      STB RFLG$     FLAG
+      LDB DCB       COMPUTE 
+      ADB .2        TYPE
+      STB TYPE      AND 
+      ADB .7         OPEN FLAG ADDRESSES
+      LDA N11       IS
+      LDB B,I        DCB
+      CPB XEQT        OPEN? 
+      INA,RSS       YES; SKIP 
+      JMP EXIT      NO; EXIT
+      INA           SET A= 9
+      LDB TYPE,I    IS FILE TYPE
+      SZB,RSS        ZERO?
+      JMP EXIT      YES; EXIT 
+      ADB N3        IF TYPE 1 OR 2
+      LDA IRC       TEST FOR RECORD PRAM
+      SSB,RSS       ELSE TEST 
+      LDA IOFF      FOR FULL PRAM 
+      SZA,RSS        LIST 
+      JMP ER10      NOT ENOUGH PRAMS - EXIT 
+      SSB           IF 1 OR 2 
+      JMP RCSET     GO SET RECORD NO. 
+      SPC 1 
+      JSB LOCF      USE LOCF TO 
+      DEF LOCRT      GET
+      DEF DCB,I       CURRENT 
+      DEF ER,I         RELATIVE 
+      DEF RC            SECTOR
+      DEF CIRS           ADDRESS
+LOCRT CLB           CALL
+      LDA DCB       SKIP
+      JSB $KIP       TO 
+      JMP EXIT         SET UP NX$EC 
+      LDB CIRS      GET CURRENT BLOCK 
+      CMB,INB        SUBTRACT FROM
+      ADB IRS,I     DESIRED BLOCK 
+      SZB,RSS       IF ALREADY THERE
+      JMP RCSET     SKIP POSITION CALL
+      JSB NX$EC     POSITION WITH NX$EC 
+      JMP EXIT      ERROR - EXIT
+RCSET LDB DCB       GET DCB 
+      ADB .12       COMPUTE BUFFER POINTER ADDRESS
+      STB A         SAVE
+      ADB IOFF,I    COMPUTE DESIREDED 
+      ADB .4        CONTENTS
+      STB A,I       AND SET 
+      ADA .2        STEP TO THE RECORD ADDRESS
+      LDB IRC,I     SET RECORD NUMBER 
+      SZB            ZERO 
+      SSB             OR NEG
+      JMP ER12         EXIT ERROR 
+      STB A,I       SET RECORD NUMBER 
+      CLA,RSS       OK - EXIT 
+ER10  LDA N10 
+EXIT  CLB           CLEAR 
+      STB IRC        PRAM 
+      STB IOFF        ADDRESSES FOR NEXT TIME 
+      STA ER,I      SET ERROR CODE
+      JMP APOSN,I   RETURN. 
+      SPC 2 
+ER12  LDA N12       SEND EOF ERROR
+      JMP EXIT
+      SPC 2 
+*     POST  CONSTANTS 
+      SPC 1 
+N12   DEC -12 
+.4    DEC 4 
+.12   DEC 12
+N10   DEC -10 
+CIRS  NOP 
+      SPC 2 
+A     EQU 0 
+B     EQU 1 
+XEQT  EQU 1717B 
+      SPC 1 
+END   EQU * 
+      SPC 1 
+      END 

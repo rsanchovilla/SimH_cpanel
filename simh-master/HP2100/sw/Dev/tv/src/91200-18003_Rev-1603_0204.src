@@ -1,0 +1,644 @@
+****************************************************************
+*                                                              *
+*              -- CONSTANTS & TABLES FOR ARROW ROUTINE --      *
+*                                                              *
+****************************************************************
+      SPC 1 
+SYM1  OCT 2000,2001,2002,2003,2004,2005,2006,2007 
+      OCT 1005,1406,2406,3005 
+SYM2  OCT 2000,2001,2002,2003,2004,2005,2006,2007 
+      OCT 1002,1401,2401,3002 
+SYM3  OCT 0003,0403,1003,1403,2003,2403,3003,3403 
+      OCT 2401,3002,3004,2405 
+SYM4  OCT 0003,0403,1003,1403,2003,2403,3003,3403 
+      OCT 0402,0404,1001,1005 
+SYM5  OCT 0000,0401,1002,1403,2004,2405,3006,3407 
+      OCT 3406,3405,3007,2407 
+SYM6  OCT 0000,0401,1002,1403,2004,2405,3006,3407 
+      OCT 0001,0002,0400,1000 
+SYM7  OCT 0007,0406,1005,1404,2003,2402,3001,3400 
+      OCT 3401,3402,3000,2400 
+SYM8  OCT 0007,0406,1005,1404,2003,2402,3001,3400 
+      OCT 0006,0005,0407,1007 
+      SPC 2 
+*          ARROW POSITION TABLE 
+      SPC 1 
+SYM1P OCT 076010,076040,076070,076120,076150
+SYM2P OCT 076220,076250,076300,076330,076360
+SYM3P OCT 004175,020175,034175,050175,064175
+SYM4P OCT 110175,124175,140175,154175,170175
+SYM5P OCT 004010,020040,034070,050120,064150
+SYM6P OCT 110220,124250,140300,154330,170360
+SYM7P OCT 004360,020330,034300,050250,064220
+SYM8P OCT 110150,124120,140070,154040,170010
+      SPC 1 
+* DUMMY ADDRESS TO ENABLE PROGRAM TO SEARCH THRU
+* FOR A PARTICULAR SYMBOL (DOT POINTER) 
+      SPC 1 
+ARW1  DEF SYM1
+ARW1S DEF SYM1
+      SPC 1 
+* DUMMY ADDRESS TO ENABLE PROGRAM TO SEARCH THRU THE
+* POSITIONS OCCUPIED BY A PARTICULAR SYMBOL 
+      SPC 1 
+ARW1P DEF SYM1P 
+ARW1T DEF SYM1P 
+      SKP 
+      ORG 2000B 
+      SPC 2 
+****************************************************************
+*                                                              *
+*              -- RAM TEST --                                  *
+*                                                              *
+****************************************************************
+      SPC 1 
+RAMS  CCA 
+      JSB SET 
+      STA W.E       SET WRITE/ERASE TO WRITE
+      JSB ERASE     BULK ERASE
+      JSB MODE      INSURE WHITE-ON-BLACK 
+RAMS0 JSB MAP       GET COLOR INFORMATION 
+      LIA 1         GET 
+      ALF             RAM 
+      AND B17           NUMBER
+      STA TEMP            AND SAVE
+      SPC 1 
+RAMS1 LDA MD        SET 
+      LDB W.E         WRITE 
+      SLB               OR
+      LDA B15             ERASE 
+      JSB SETMD             MODE
+      LDA TEMP      GET RAM NUMBER
+      SLB           WRITE?
+      CMA             NO - CHANGE TO UPPER SCREEN 
+      AND B17       SET 
+      ADA FIN         FINISH
+      STA DUN           INDICATOR 
+      AND B17       RECOVER RAM NUMBER
+      RSS 
+      SPC 1 
+RAMS2 ADA B20       ADVANCE ADDRESS WITHIN RAM
+      SLB           WRITE?
+      CMA             NO - CHANGE TO COUNT DOWN 
+      JSB OUTR      OUTPUT POINT
+      SLB           WRITE?
+      CMA             NO - CHENGE BACK FOR ADDITION 
+      CPA DUN       DONE? 
+      RSS             YES 
+      JMP RAMS2       NO - GET NEXT POINT 
+      SPC 1 
+      LDA TEMP      GET RAM 
+      AND B17         NUMBER
+      IOR HLT0          AND SET IT
+      STA *+1             INTO HALT 
+      HLT 77B       FINISHED
+      LDA W.E       CHANGE STATE
+      XOR B1          OF WRITE/ERASE
+      STA W.E           INDICATOR 
+      SLA           WRITE?
+      JMP RAMS1       NO - GO ERASE 
+      JMP RAMS0       YES - GO GET NEXT RAM # 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- CONFIGURING ROUTINE --                       *
+*                                                              *
+****************************************************************
+      SPC 1 
+CNFGR LDA B17 
+      JSB SET 
+      LIA 1 
+      AND MASKA     MASK OUT BITS 0-5 
+      CPA SC        ANY CHANGE? 
+      JMP CNFG1       NO
+      STA B           YES 
+      LDA HLT0      GET HALT CODE 
+      IOR SC        MERGE IN OLD SC 
+      STA SC,I      PLACE HALT IN OLD TRAP CELL 
+      ISZ SC          AND IN
+      INA               NEXT TRAP 
+      STA SC,I            CELL ABOVE
+      LDA TRAPC     GET ERASE INTERRUPT INST. 
+      STA B,I         AND PLACE IN NEW TRAP CELL
+      LDA TRAP1     GET TVX INTERRUPT INST. 
+      STB SC          AND PLACE IN
+      INB               NEW TRAP CELL 
+      STA B,I             PLUS ONE
+      SPC 1 
+      LDA SC
+      IOR LIA0      FORM LIA XX INSTRUCTION 
+      STA LIA1        AND STORE IT
+      XOR B600      FORM SFS XX INSTRUCTION 
+      STA SFS1        AND 
+      STA SFS2          STORE 
+      STA SFS3            IT
+      STA SFS4             /
+      STA SFS5             /
+      STA SFS6             /
+      STA SFS7             /
+      STA SFS8             /
+      XOR B500      FORM OTA XX INSTRUCTION 
+      STA OTA1        AND 
+      STA OTA2          STORE IT
+      IOR B4000     FORM OTB XX INSTRUCTION 
+      STA OTB1        AND STORE IT
+      XOR B4100     FORM STC XX INSTRUCTION 
+      STA STC1        AND STORE IT
+      XOR B1000     FORM STC XX,C INSTRUCTION 
+      STA STCC1       AND 
+      STA STCC2         STORE 
+      STA STCC3           IT
+      STA STCC4            /
+      STA STCC5            /
+      SKP 
+****************************************************************
+*                                                              *
+*              -- CONFIGURING ROUTINE CONTINUED --             *
+*                                                              *
+****************************************************************
+      SPC 1 
+      XOR B5000     FORM CLC XX INSTRUCTION 
+      STA CLC1        AND 
+      STA CLC2          STORE IT
+      XOR B5600     FORM CLF XX INSTRUCION
+      STA CLF1        AND 
+      STA CLF2          STORE 
+      STA CLF3            IT
+      XOR B1300     FORM SFC XX INSTRUCION
+      STA SFC1        AND 
+      STA SFC2          STORE IT
+      XOR B300      FORM STF XX INSTRUCION
+      STA STF1        AND 
+      STA STF2          STORE 
+      STA STF3            IT
+      INA           FORM STF XX INSTRUCION FOR
+      STA STFX        NEXT SC AND STORE IT
+      IOR B600      FORM STC XX INSTRUCTION FOR 
+      STA STCX        NEXT SC AND STORE IT
+      IOR B4000     FORM CLC XX INSTRUCTION FOR 
+      STA CLCX        NEXT SC AND STORE IT
+      XOR B5600     FORM CLF XX INSTRUCTION FOR 
+      STA CLFX        NEXT SC AND STORE IT
+      ADA B7        FORM CLF XX INSTRUCTION FOR 
+      STA CLFY        SC PLUS 20B AND STORE IT
+      LDA SC        RECOVER SELECT CODE 
+      IOR MASK0     MAKE DMA CONTROL WORD 1 
+      STA CW1 
+      SPC 1 
+CNFG1 HLT 0B
+      LDA HLT0      RESTORE HALT
+      STA *-2         FOR 2100A 
+      SPC 1 
+      LIA 1         GET & SAVE COMPUTER 
+      STA COMP        MODEL NUMBER CODE 
+      SPC 1 
+      HLT 1B
+      LDA HLT1      RESTORE HALT
+      STA *-2         FOR 2100A 
+      SPC 1 
+      LIA 1         GET & SAVE TV 
+      STA TESTM       SCAN MODE CODE
+      SPC 1 
+STUCK HLT 77B 
+      LDA HLT77     RESTORE HALT
+      STA *-2         FOR 2100A 
+      JMP STUCK     STUCK!!!
+      SKP 
+****************************************************************
+*                                                              *
+*              -- START OF GO-NOGO TEST --                     *
+*                                                              *
+****************************************************************
+      SPC 1 
+BEGIN CLA,INA 
+      JSB SET 
+      LDA XRSS      SET SWITCHES
+      STA SWTCH       TO DO 
+      STA SWICH         ALL THREE 
+      STA SWCH            TESTS 
+      JMP CHECK 
+      SPC 2 
+****************************************************************
+*                                                              *
+*              -- I/O CHECK ROUTINE --                         *
+*                                                              *
+****************************************************************
+      SPC 1 
+IOCHK LDA B7
+      JSB SET 
+      STA SWTCH     CLEAR SWITCH TO DO 1 TEST 
+CHECK CLC 0,C       INITIALIZE
+      CLA 
+      CLB 
+STF1  STF TV        SET FLAG
+SFS3  SFS TV        CHECK WITH SFS
+      JMP ER0         SHOULD HAVE SKIPPED 
+SFC1  SFC TV        CHECK WITH SFC
+      RSS             GOOD
+      JMP ER1         SHOULD NOT HAVE SKIPPED 
+CLF1  CLF TV        CLEAR FLAG
+      JSB DEL       WAIT FOR MODE TO CLEAR
+SFS4  SFS TV        CHECK WITH SFS (SHOULD BE SET)
+      JMP ER2         SHOULD HAVE SKIPPED 
+CLF2  CLF TV        CLEAR FLAG (SHOULD STAY CLEAR)
+SFS5  SFS TV        CHECK WITH SFS
+      RSS             GOOD
+      JMP ER3         SHOULD NOT HAVE SKIPPED 
+SFC2  SFC TV        CHECK WITH SFC
+      JMP ER4         SHOULD HAVE SKIPPED 
+STF2  STF TV        SET FLAG
+CLFX  CLF TVX       CLEAR FLAG ON SC + 1
+SFS6  SFS TV        CHECK (SHOULD STILL BE SET) 
+      JMP ER5         SHOULD HAVE SKIPPED 
+CLFY  CLF TVY       CLEAR FLAG ON SC + 10B
+SFS7  SFS TV        CHECK (SHOULD STILL BE SET) 
+      JMP ER6         SHOULD HAVE SKIPPED 
+STCC5 STC TV,C      ISSUE WRITE REQUEST 
+      JSB DEL       WAIT FOR WRITE REQUEST RESPONSE 
+SFS8  SFS TV        CHECK (SHOULD BE SET) 
+      JMP ER11        SHOULD HAVE SKIPPED 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- I/O CHECK ROUTINE CONTINUED --               *
+*                                                              *
+****************************************************************
+      SPC 1 
+CLC2  CLC TV        TURN OFF TV CARD
+      STF 0         TURN ON INTERRUPT SYSTEM
+STFX  STF TVX       SET SC + 1 FOR
+STCX  STC TVX         AN INTERRUPT
+      JSB DEL       WAIT FOR INTERRUPT
+      JMP ER7       SHOULD HAVE INTERRUPTED TO INTX 
+INTX  LDA TRAP2     SET TV CARD FOR 
+      STA SC,I        INTERRUPT TO SWTCH
+CLCX  CLC TVX       TURN OFF CARD IN SC + 1 
+STF3  STF TV        SET TV CARD FOR 
+STC1  STC TV          AN INTERRUPT
+      JSB DEL       WAIT FOR INTERRUPT
+      JMP ER10      SHOULD HAVE INTERRUPTED TO INT
+INT   LDA TRAPC     RESTORE ERASE INTERRUPT 
+      STA SC,I        TO TRAP CELL FOR TV CARD
+      CLF 0         TURN OFF INTERRUPT SYSTEM 
+      SPC 1 
+SWTCH NOP           SWITCH - RSS IF ALL 3 TESTS RUN 
+      JMP TST       GO TEST FOR REPEAT
+      JSB TIME5     WAIT A SECOND 
+      JMP RSTT      GO ON TO PATTERNS 
+ER11  INB           NO WRITE RESPONSE 
+ER10  INB           NO INTERRUPT
+ER7   INB           PRIORITY BEING HELD OFF 
+ER6   INB           SELECT CODE DECODING BAD (MSB)
+ER5   INB           SELECT CODE DECODING BAD (LSB)
+ER4   INB           SFC BAD 
+ER3   INB           FLAG OR MODE NOT CLEARING 
+ER2   INB           MODE PROB, FLAG NOT SETTING 
+ER1   INB           SFC BAD 
+ER0   LDA B         FLAG NOT SET OR BAD SFS 
+      HLT 5B
+      LDA HLT5
+      STA *-2 
+      JMP IOCHK 
+      SPC 1 
+TST   LIA 1         CHECK SWITCH
+      SSA,RSS         REGISTER 15 
+      HLT 77B       HALT
+      LDA HLT77     RESTART OR
+      STA *-2         REPEAT
+      JMP IOCHK 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- START OF PATTERN SECTION OF GO-NOGO TEST --  *
+*                                                              *
+****************************************************************
+      SPC 1 
+PATRN LDA B2
+      JSB SET 
+      STA SWICH     CLEAR SWITCH TO DO 1 TEST 
+RSTT  JSB SETMD     SET PROPER MODE 
+      CLB 
+RPET  JSB MAP       GET COLOR INFORMATION 
+      CLA 
+      STA TESTA 
+      STA TESTB 
+      JSB GAIN      WRITE GAIN PATTERN
+      JSB PIN       WRITE CROSS HATCH 
+      JSB SETTM     WRITE SQUARES IN CORNERS
+      JSB QUICK     WRITE ALL POINTS
+      JSB LOGO      WRITE LOGO
+SWICH NOP           SWITCH - RSS IF ALL 3 TESTS RUN 
+      RSS           GO CHECK FOR REPEAT 
+      JMP FLASH     GO ON TO FLASH
+      SPC 1 
+      LIA 1         CHECK SWITCH
+      SSA,RSS         REGISTER 15 
+      JMP HHLT          NOT SET SO GO HALT
+      RAL           CHECK SWITCH 14 
+      SSA             FOR COLOR INCREMENT 
+      JSB INC       GO INCREMENT COLOR
+      JMP RPET
+HHLT  HLT 77B       HALT
+      LDA HLT77     RESTART OR
+      STA *-2         REPEAT
+      JMP RPET
+      SKP 
+****************************************************************
+*                                                              *
+*              -- START OF "SUPER TEST" --                     *
+*                                                              *
+****************************************************************
+      SPC 1 
+RESTT CLA           ESTABLISH INITIAL MODE
+      JSB SETMD       & CLEAR MODE REQUEST
+      JSB SET 
+      CLB           NO PREVIOUS TEST
+NUTST JSB SWRG      CHECK SWITCH REGISTER 
+      SPC 1 
+REPET CLA 
+      STA TESTB 
+      INA 
+      STA TESTA 
+      LDA BIT4
+      SLA           CALL GAIN TEST? 
+      JSB GAIN        YES 
+      LDA BIT5
+      SLA           CALL PINCUSION TEST?
+      JSB PIN         YES 
+      LDA BIT6
+      SLA           CALL BURN IN TEST?
+      JSB QUICK       YES 
+      LDA BIT7
+      SLA           CALL CORNER SQUARES TEST? 
+      JSB SETTM       YES 
+      LDA BIT8
+      SLA           CALL HP LOGO TEST?
+      JSB LOGO        YES 
+      LDA BIT9
+      SLA           CALL FOR BLANK SCREEN?
+      JSB BLANK       YES 
+      SPC 1 
+      LIA 1 
+      RAL 
+      SSA           HALT AT RESTART?
+      JMP STRT        YES 
+      SLA,RSS       LOOP TESTS? 
+      JMP NUTST       NO
+      RAR             YES 
+      STA TESTC 
+      JSB SAVE      ADD OR ELIM. TESTS FROM LOOP
+      JMP REPET 
+      SPC 1 
+STRT  JSB .HALT     GO CLEAR BIT 14 & HALT
+      JMP RESTT 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- SWITCH REGISTER CHECK --                     *
+*                                                              *
+****************************************************************
+      SPC 1 
+SWRG  NOP 
+AGAIN LIA 1         GET BITS 4,5,6,7,8, & 14
+      AND B774X       FROM SWITCH REGISTER
+      RAL 
+      SSA           HALT AT RESTART?
+      JMP STRT        YES 
+      RAR             NO
+      SZA           ANY TEST? 
+      JMP NEW         YES 
+      CLB             NO
+      JSB DEL       DEBOUNCE DELAY
+      JMP AGAIN     GO LOOK AGAIN 
+      SPC 1 
+NEW   SZB           TEST JUST COMPLETED?
+      JMP FLASH       YES - GO CHECK FOR FLASHING 
+      STA TEMP1       NO - SET TEST BITS
+      JSB SAVE
+      JMP SWRG,I
+      SPC 4 
+****************************************************************
+*                                                              *
+*              -- SAVE SWITCH REGISTER BITS FOR TEST --        *
+*                                                              *
+****************************************************************
+      SPC 1 
+SAVE  NOP 
+      RAR,RAR       \ 
+      RAR,RAR        \
+      STA BIT4        \ 
+      RAR              \
+      STA BIT5          \ 
+      RAR                \
+      STA BIT6            > SET TEST
+      RAR                /    BIT STORAGE 
+      STA BIT7          / 
+      RAR              /
+      STA BIT8        / 
+      RAR            /
+      STA BIT9      / 
+      JMP SAVE,I
+      SKP 
+****************************************************************
+*                                                              *
+*              -- GAIN CHECK ROUTINE FOR TV --                 *
+*                                                              *
+****************************************************************
+      SPC 1 
+* THE GAIN SUBROUTINE GENERATES A RECTANGLE 
+* AND ARROWS TO TEST THE HEIGHT AND WIDTH ON THE TV 
+      SPC 1 
+GAIN  NOP 
+      SZB           WAIT? 
+      JSB TIME5       YES 
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      JSB MODE      SET WRITE MODE
+      SPC 1 
+      LDB TESTM     GET AMERICAN SCAN INDICATOR 
+      LDA X         GET Y = 256 
+      SZB           AMERICAN SCAN?
+      LDA YAMER       YES - GET Y = 240 
+      STA Y         SET VERTICAL DIMENSION
+      LDA SA0       GET RECT 1 Y FOR NON-AMER.
+      SZB           AMERICAN SCAN?
+      ADA STADR       YES - Y = Y - 8 
+      STA S0        SET VERTICAL POSITION 1 
+      LDA SA1       GET RECT 2 Y FOR NON-AMER 
+      SZB           AMERICAN SCAN?
+      ADA STADR       YES - Y = Y - 8 
+      STA S1        SET VERTICAL POSITION 2 
+      CLA           GET NOP FOR ARROW POS. REDUCER
+      SZB           AMERICAN SCAN?
+      LDA ADDX        YES - GET INST. FOR POS. RED. 
+      STA ADD       SET ARROW POSITION REDUCER
+      SPC 1 
+      JSB SQUAR     GO TO SQUAR SBR TO DRAW A RECT. 
+      OCT 0 
+Y     DEC 256        VERT. DIM. OF RECT.
+X     DEC 256        HORIZ. DIM. OF RECT. 
+      SPC 1 
+      LDA SYMBL     GET NUMBER OF DOTS IN SYMBOL
+      STA DOTC      PUT IN DOT COUNTER
+      LDA POSIT     GET NUMBER OF POSITIONS 
+      STA POSC      PUT IN POSITION COUNTER 
+      LDA LOOPS     GET NUMBER OF LOOPS (ARROWS)
+      STA LOOPC     PUT IN LOOP COUNTER 
+      LDA ARW1S     GET START OF SYMBOL 
+      STA ARW1        AND SAVE
+      LDA ARW1T     GET START OF COMMON POSITION
+      STA ARW1P       AND SAVE
+      SKP 
+****************************************************************
+*                                                              *
+*              -- GAIN ROUTINE CONTINUED --                    *
+*                                                              *
+****************************************************************
+      SPC 1 
+HEAD1 LDA ARW1,I    GET DOT 
+      LDB ARW1P,I   GET POSITION
+      ADA B         ADD DOT TO POSITION 
+ADD   ADA STADR     REDUCE Y BY 8 FOR AMER SCAN ONLY
+      JSB OUTR      SEND DOT TO SCOPE 
+      ISZ DOTC      INCREMENT DOT COUNTER 
+      JMP *+2       SKIP
+      JMP HEAD2     GET NEXT POSITION 
+      ISZ ARW1      INCREMENT DOT POINTER 
+      JMP HEAD1     SET UP NEXT DOT 
+      SPC 1 
+HEAD2 LDA SYMBL     GET -12 
+      STA DOTC      PUT IN DOT COUNTER
+      ISZ POSC      INCREMENT POSITION
+      JMP *+2       ALL 5 NOT DRAWN 
+      JMP HEAD3     RESTORE POSC AND TEST LOOPC 
+      LDA ARW1
+      ADA D11 
+      STA ARW1
+      ISZ ARW1P 
+      JMP HEAD1 
+      SPC 1 
+HEAD3 LDA POSIT     GET -5
+      STA POSC      PUT IN POSITION COUNTER 
+      ISZ LOOPC     ARE ALL SYMBOLS DRAWN 
+      JMP *+2       ALL SYMBOLS NOT DRAWN 
+      JMP HEAD4     ALL SYMBOLS DRAWN 
+      ISZ ARW1      5 SYMBOLS OF ONE TYPE DRAWN 
+      ISZ ARW1P 
+      JMP HEAD1 
+      SPC 1 
+HEAD4 JSB SQUAR     WRITE A 
+S0    OCT 77575       CROSS 
+      DEC 2             IN THE
+      DEC 6               MIDDLE
+      JSB SQUAR             OF THE
+S1    OCT 76577               SCREEN
+      DEC 6                     BY WRITING
+      DEC 2                       TWO RECTANGLES
+      CCB           DONE! 
+      JMP GAIN,I
+      SPC 2 
+ADDX  ADA STADR     Y POSITION REDUCING INSTRUCTION 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- PIN CUSHION TEST, CROSS HATCH PATTERN --     *
+*                                                              *
+****************************************************************
+      SPC 1 
+PIN   NOP            PIN CUSHION TEST 
+      SZB           WAIT? 
+      JSB TIME5       YES 
+      JSB ERASE     ERASE ENTIRE SCREEN 
+      JSB MODE      SET WRITE MODE
+      CLA           SET WRITE 
+      STA TOGG        INDICATOR 
+      SPC 1 
+      LDB TESTM     GET AMERICAN SCAN INDICATOR 
+      LDA MASK0     GET VERT MIDDLE DONE, NON-AMER
+      SZB           AMERICAN SCAN?
+      LDA MASK6       YES - GET VERT MID DONE FOR AMER
+      STA MSK0      SET VERTICLE MIDDLE DONE TESTER 
+      LDA MASK6     GET VERT MIDDLE, NON-AMER 
+      SZB           AMERICAN SCAN?
+      LDA MASK1       YES - GET VERT MID FOR AMER 
+      STA MSK6      SET VERTICLE MIDDLE TESTER
+      LDA MASK9     GET VERT NXT TO MID, NON-AMER 
+      SZB           AMERICAN SCAN?
+      LDA MASK5       YES - GET NXT TO MID FOR AMER 
+      STA MSK9      SET VERT NEXT TO MIDDLE TESTER
+      SPC 1 
+UNPIN CLB           CLEAR X COUNTER 
+PIN1  CLA           CLEAR Y COUNTER 
+FAX1  IOR B         MERGE X INTO Y
+      JSB OUTR      DRAW DOT
+      AND MASK2     MASK OUT X PORTION
+      CPA MASK2     TEST FOR Y LINE FINSIHED
+      JMP FAX2        Y LINE FINISHED 
+      ADA CON7      ADD 1 TO Y
+      JMP FAX1
+      SPC 1 
+FAX2  CPB MASK3     IS LAST LINE FINISHED?
+      JMP FAX4      LAST FINISHED 
+      CPB MASK4     IS NEXT TO MIDDLE FINISHED? 
+      JMP FAX3        YES 
+      CPB MASK7     IS THIS THE MIDDLE? 
+      JMP FAX3A       YES 
+      CPB MASK8     IS MIDDLE FINISHED? 
+      JMP FAX3        YES 
+      ADB CON3      ADD 10B TO X
+      JMP PIN1      DRAW NEXT VERTICLE
+      SPC 1 
+FAX3  ADB B7        ADD 7B TO X 
+      JMP PIN1
+      SPC 1 
+FAX3A ADB B1        ADD 1 TO X
+      JMP PIN1
+      SKP 
+****************************************************************
+*                                                              *
+*              -- PIN CUSHION TEST CONTINUED --                *
+*                                                              *
+****************************************************************
+      SPC 1 
+FAX4  CLB           CLEAR Y COUNTER 
+FAX5  CLA           CLEAR X COUNTER 
+FAX6  IOR B         MERGE Y INTO X
+      JSB OUTR      DRAW DOT
+      AND MASK3     MASK OUT Y PORTION
+      CPA MASK3     TEST FOR HORIZONTAL FINISHED
+      JMP FAX7      FINISHED
+      INA           ADD 1 TO X
+      JMP FAX6
+      SPC 1 
+FAX7  CPB MASK2     IS LAST LINE FINISHED?
+      JMP PIN2      LAST FINISHED RETURN TO MAIN
+      CPB MSK6      IS NEXT TO MIDDLE FINISHED? 
+      JMP FAX8        YES 
+      CPB MSK9      IS THIS THE MIDDLE? 
+      JMP FAX8A       YES 
+      CPB MSK0      IS MIDDLE FINISHED? 
+      JMP FAX8        YES 
+      ADB B4000     ADD 10B TO Y
+      JMP FAX5      DRAW NEXT HORIZONTAL
+      SPC 1 
+FAX8  ADB CON2      ADD 7B TO Y 
+      JMP FAX5
+      SPC 1 
+FAX8A ADB CON7      ADD 1 TO Y
+      JMP FAX5
+      SPC 2 
+PIN2  LDA TOGG      CHANGE STATE
+      INA             OF WRITE
+      STA TOGG          INDICATOR 
+      SLA,RSS       TIME TO ERASE?
+      JMP RESP        NO - DONE 
+      LDB TEST        YES 
+      SZB,RSS       IS THIS FROM GO-NOGO? 
+      JMP RESP        NO - DONE 
+      SPC 1 
+      JSB TIME5     WAIT
+      JSB MODE1     SET ERASE MODE
+      JMP UNPIN     GO ERASE
+      SPC 1 
+RESP  CCB           DONE! 
+      JMP PIN,I 
+      SKP 

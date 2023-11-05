@@ -1,0 +1,629 @@
+ASMB,R,L,C        TV INTFC. CARD VERIF. 
+      HED  TV INTFC CARD VERIF.  A-91200-16004-2   5/12/75    REV. A
+      NAM TVERF,3 91200-16004 REV.A 750512
+      ENT TVERF 
+      EXT EXEC,VIDLU,ERASE,POINT,VECTR,AREA,CHAR,VEND 
+      SUP 
+A     EQU 0 
+B     EQU 1 
+      SPC 2 
+* LOAD THIS PROGRAM USING THE RTE LOADER. IT MAY BE USED IN 
+* FOREGROUND OR BACKGROUND. IT IS SUGGESTED THAT IT BE TEMPORARILY
+* LOADED INTO BACKGROUND AND SAVED WITH THE FMGR COMMAND "SP". IT 
+* CAN THEN BE USED WHENEVER NEEDED AND DOES NO WASTE AN ID SEGMENT. 
+* 
+* THE PROGRAM IS ACTIVATED BY:
+* 
+*   ON,TVERF[,LU]     OR
+*   RU,TVERF[,LU]     (RTE II OR RTE III) 
+* 
+* THE LU IS THE LOGICAL UNIT # OF THE TERMINAL THAT IS TO BE USED 
+* FOR CONTROLING THE PROGRAM. IF NO LU IS SPECIFIED IT WILL DEFAULT 
+* TO 1 (THE SYSTEM CONSOLE). IN MULTIPLE TERMINAL OPERATION OF
+* RTE II OR RTE III THE SYSTEM WILL PASS THE LU OF THE ACTIVATING 
+* TERMINAL IF NONE IS SUPPLIED BY THE OPERATOR. 
+* 
+* THE PROGRAM WILL PRINT: 
+* 
+*   TV INTERFACE LU = 
+* 
+* THE USER REPLIES WITH THE APPROPRIATE LU. THEN THE PROGRAM PRINTS:
+* 
+*   IS CARD IN AMERICAN SCAN MODE?
+* 
+* THE USER ANSWERS YES OR NO. IF THE ANSWER IS YES THE FOLLOWING
+* LIST OF COMMANDS IS PRINTED:
+* 
+* COMMANDS ARE ENTERED AS FOLLOWS:
+*     GA  GAIN PATTERN FOR ADJUSTING MONITOR HEIGHT, WIDTH, 
+*           POSITION, AND FOCUS.
+*     CR  CROSSHATCH PATTERN FOR ADJUSTING MONITOR
+*           LINEARITY AND PINCUSHION. 
+*     SE  RECTANGLES IN THE FOUR CORNERS OF THE SCREEN
+*           FOR CHECKING DISPLAY SETTLING TIME EFFECTS. 
+*     PO  WRITES ALL POINTS ON THE SCREEN TO CHECK
+*           FOR ANY MISSING POINTS. 
+*     LO  WRITES HP LOGO ON THE SCREEN. 
+*     DE  DEMONSRATES ALL FEATURES OF DISPLAY LIBRARY.
+*     ER  ERASES THE SCREEN.
+*     LU  TO ENTER A NEW TV LU. 
+*     MO  TO ENTER A DIFFERENT SCAN MODE. 
+*     TE  TERMINATES THIS PROGRAM.
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- START OF MAIN CONTROL --                      * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+TVERF NOP 
+      LDA B,I       GET FIRST PARAMETER PASSED
+      SZA,RSS       IF PARAM IS 0 
+      INA             SET LU TO 1, OTHERWISE
+      STA LU            SET FIRST PARAM INTO LU 
+      IOR X         SET READ WITH 
+      STA RCON        ECHO BIT
+      CLA           SET INDICATOR FOR 
+      STA ICOM        FIRST TIME THRU 
+      SPC 1 
+L0    JSB EXEC      REQUEST 
+      DEF L1          TV INTERFACE LU = 
+      DEF B2
+      DEF LU
+      DEF MES1
+      DEF ML1 
+      SPC 1 
+L1    JSB EXEC      INPUT TV LU 
+      DEF L2
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SPC 1 
+L2    LDA BUFF      CHECK LOWER 
+      AND MASK4       CHARACTER FOR 
+      CPA D48           ASCII RANGE 
+      JMP L3              FROM 0 TO 9 
+      CPA D56               INCLUSIVE 
+      JMP *+4 
+      LDA BUFF      IF NOT, IS IT 
+      AND MASK3       A SPACE 
+      CPA D32           CHARACTER 
+      RSS 
+      JMP L0        IF NOT, ASK FOR LU AGAIN
+      LDA BUFF
+      AND MES16 
+      CPA B1
+      JMP L3
+      SZA 
+      JMP L0
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- MAIN CONTROL CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L3    LDA BUFF      CHECK UPPER 
+      ALF,ALF         CHARACTER FOR 
+      AND MASK4         ASCII RANGE 
+      CPA D48             FROM 0 TO 9 
+      JMP L4                INCLUSIVE 
+      CPA D56 
+      RSS           IF NOT, ASK FOR 
+      JMP L0          LU AGAIN
+      LDA BUFF
+      ALF,ALF 
+      AND MES16 
+      CPA B1
+      JMP L4
+      SZA 
+      JMP L0
+      SPC 1 
+L4    LDA BUFF      CONVERT 2 ASCII 
+      AND MASK3       CHARACTERS INTO 
+      STA B             INTEGER VALUE 
+      AND MES17           OF TV LU #
+      STA LUTV              AND SAVE
+      LDA BUFF
+      ALF,ALF 
+      AND MES17 
+      CPB D32 
+      JMP *+3 
+      MPY D10 
+      ADA LUTV
+      STA LUTV
+      SPC 1 
+      JSB VIDLU     ESTABLISH TV LU IN
+      DEF *+2         VIDEO DISPLAY LIBRARY 
+      DEF LUTV          WITH W-ON-B MODE
+      SPC 1 
+      JSB ERASE     ERASE SCREEN
+      DEF *+1 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- MAIN CONTROL CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L5    JSB EXEC      ASK IF CARD IS IN 
+      DEF L6          AMERICAN SCAN MODE
+      DEF B2
+      DEF LU
+      DEF MES2
+      DEF D16 
+      SPC 1 
+L6    JSB EXEC      INPUT ANSWER
+      DEF L7
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SPC 1 
+L7    CLB 
+      LDA BUFF
+      CPA NO        IS ANSWER NO? 
+      JMP *+5         IT IS - MTEST = 0 
+      CPA YES       IS ANSWER YES?
+      RSS             IT IS - MTEST = 1 
+      JMP L5        NEITHER, ASK AGAIN
+      INB 
+      STB MTEST 
+      SPC 1 
+      LDA ICOM      IS THIS THE 
+      SZA             FIRST TIME THRU 
+      JMP L11           NO - SKIP NEXT QUESTION 
+      INA           SET INDICATOR FOR 
+      STA ICOM        NOT 1ST TIME THRU 
+      SPC 1 
+L8    JSB EXEC      ASK IF USER KNOWS 
+      DEF L9          THE COMMANDS
+      DEF B2
+      DEF LU
+      DEF MES3
+      DEF ML3 
+      SPC 1 
+L9    JSB EXEC      INPUT ANSWER
+      DEF L10 
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- MAIN CONTROL CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L10   LDA BUFF
+      CPA YES       IS ANSWER YES?
+      JMP L11         IT IS - SKIP COMMAND LIST 
+      CPA NO        IS ANSWER NO? 
+      RSS             IT IT - LIST COMMANDS 
+      JMP L8        NEITHER, ASK AGAIN
+      SPC 1 
+      JSB EXEC      PRINT THE 
+      DEF L11         LIST OF 
+      DEF B2            COMMANDS
+      DEF LU
+      DEF MES4
+      DEF ML4 
+      SPC 1 
+L11   JSB EXEC      PRINT:
+      DEF L12         COMMAND?
+      DEF B2
+      DEF LU
+      DEF MES5
+      DEF MES13 
+      SPC 1 
+L12   JSB EXEC      INPUT A COMMAND 
+      DEF L13 
+      DEF B1
+      DEF RCON
+      DEF BUFF
+      DEF B1
+      SPC 1 
+L13   LDA BUFF      CHECK THE COMMAND 
+      CPA GA          GA? 
+      JMP GAIN          DO GA PATTERN 
+      CPA CR          CR? 
+      JMP PIN           DO CR PATTERN 
+      CPA SE          SE? 
+      JMP SETTM         DO SE PATTERN 
+      CPA PO          PO? 
+      JMP BURN          WRITE ALL POINTS
+      CPA LO          LO? 
+      JMP LOGO          WRITE LOGO
+      CPA ER          ER? 
+      JMP ERSE          ERASE SCREEN
+      CPA XLU         LU? 
+      JMP L0            GET NEW TV LU 
+      CPA MO          MO? 
+      JMP L5            GET NEW SCAN MODE 
+      CPA TE          TE? 
+      JMP L79           TERMINATE PROGRAM 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMONSTRATE DISPLAY LIBRARY --                * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+      CPA DE        IS COMMAND DE?
+      RSS             WRITE DEMO PATTERN
+      JMP L8        NO VALID COMMAND, ASK AGAIN 
+      SPC 1 
+      JSB ERASE     ERASE SCREEN
+      DEF *+1 
+      LDA MTEST 
+      SZA           AMERICAN SCAN?
+      JMP L18         YES - DIFFERENT PATTERN 
+      SPC 2 
+*  WRITE THE FOLLOWING FOUR WAYS (FOR EUROPEAN OR 
+*    NON-STANDARD SCAN MODES):
+* 
+*  "HEWLETT-PACKARD 91200 TV INTERFACE CARD"
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE ACROSS TOP
+      DEF L14 
+      DEF D12 
+      DEF D248
+      DEF MES6
+      DEF B1
+      DEF ZERO
+      SPC 1 
+L14   JSB CHAR      WRITE MESSAGE DOWN
+      DEF L15         RIGHT SIDE
+      DEF D248
+      DEF D244
+      DEF MES6
+      DEF B1
+      DEF B3
+      SPC 1 
+L15   JSB CHAR      WRITE MESSAGE UPSIDE DOWN 
+      DEF L16         ACROSS BOTTOM 
+      DEF D244
+      DEF MES16 
+      DEF MES6
+      DEF B1
+      DEF B2
+      SPC 1 
+L16   JSB CHAR      WRITE MESSAGE UP
+      DEF L17         LEFT SIDE 
+      DEF MES16 
+      DEF D12 
+      DEF MES6
+      DEF B1
+      DEF B1
+      SPC 1 
+L17   JMP L22       SKIP TO MAIN PART OF PATTERN
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 2 
+*  WRITE THE FOLLOWING FOUR WAYS (FOR AMERICAN SCAN MODE):
+* 
+*  "HEWLETT-PACKARD 91200A TV INTFC CARD" 
+      SPC 1 
+L18   JSB CHAR      WRITE MESSAGE ACROSS TOP
+      DEF L19 
+      DEF D21 
+      DEF D232
+      DEF MES7
+      DEF B1
+      DEF ZERO
+      SPC 1 
+L19   JSB CHAR      WRITE MESSAGE DOWN
+      DEF L20         RIGHT SIDE
+      DEF D248
+      DEF D226
+      DEF MES7
+      DEF B1
+      DEF B3
+      SPC 1 
+L20   JSB CHAR      WRITE MESSAGE UPSIDE DOWN 
+      DEF L21         ACROSS BOTTOM 
+      DEF D234
+      DEF MES16 
+      DEF MES7
+      DEF B1
+      DEF B2
+      SPC 1 
+L21   JSB CHAR      WRITE MESSAGE UP
+      DEF L22         LEFT SIDE 
+      DEF MES16 
+      DEF D13 
+      DEF MES7
+      DEF B1
+      DEF B1
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L22   LDA D232      SET STARTING Y VALUE FOR
+      LDB MTEST      MESSAGES, Y=232 FOR EUROPEAN 
+      SZB             AND NON-STANDARD SCAN MODES.
+      LDA D216         Y=216 FOR AMERICAN SCAN MODE.
+      STA VERT1 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L23        "ALPHANUMERIC CHARACTER
+      DEF D20           GENERATOR"
+      DEF VERT1 
+      DEF MES8
+      SPC 1 
+L23   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L24        "ABCDEFGHIJKLMNOPQR
+      DEF D20          STUVWXYZ1234567890"
+      DEF VERT1 
+      DEF MES9
+      SPC 1 
+L24   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L25        "!#$%&'*+,-./:;
+      DEF D20           <=>?@[\]^"
+      DEF VERT1 
+      DEF MES10 
+      SPC 1 
+L25   JSB VEND      FIND END
+      DEF L26         OF LAST 
+      DEF HORZ2         MESSAGE 
+      DEF VERT2 
+      SPC 1 
+L26   JSB CHAR      WRITE FOUR CHARACTERS 
+      DEF L27         ON END OF PREVIOUS
+      DEF HORZ2         LINE: 
+      DEF VERT2           "()_
+      DEF JBUFR 
+      SPC 1 
+L27   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L28        "WRITES IN 
+      DEF D20           FOUR DIRECTIONS"
+      DEF VERT1 
+      DEF MES11 
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L28   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L29        "MULTIPLE CHARACTER
+      DEF D20           SIZE" 
+      DEF VERT1 
+      DEF MES12 
+      SPC 1 
+L29   JSB IYM10     REDUCE Y POSITION BY 10 
+      SPC 1 
+      JSB CHAR      WRITE MESSAGE 
+      DEF L30        "SIZE 1" 
+      DEF D20 
+      DEF VERT1 
+      DEF MES13 
+      SPC 1 
+L30   LDA VERT1     REDUCE Y POSITION 
+      ADA ND16        BY 16 
+      STA VERT1 
+      SPC 1 
+      JSB CHAR      WRITE SIZE 2 MESSAGE
+      DEF L31        "SIZE 2" 
+      DEF D20 
+      DEF VERT1 
+      DEF MES14 
+      DEF B2
+      SPC 1 
+L31   LDA VERT1     REDUCE Y POSITION 
+      ADA ND26        BY 26 
+      STA VERT1 
+      SPC 1 
+      JSB CHAR      WRITE SIZE 3 MESSAGE
+      DEF L32        "ETC." 
+      DEF D20 
+      DEF VERT1 
+      DEF MES15 
+      DEF B3
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L32   LDA D123      SET Y VALUE FOR VECTORS,
+      LDB MTEST      Y=123 FOR EUROPEAN OR
+      SZB             NON-STANDARD SCAN MODES.
+      LDA D107         Y=107 FOR AMERICAN 
+      STA VERT1         SCAN MODE.
+      SPC 1 
+      JSB VECTR     DRAW VERTICAL 
+      DEF L33         VECTOR OUTLINE
+      DEF D110          (LEFT OF WORD 
+      DEF VERT1           "VECTORS")
+      DEF B2
+      DEF D60 
+      SPC 1 
+L33   LDA VERT1     INCREASE Y POSITION 
+      ADA D60         BY 60 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW HORIZONTAL 
+      DEF L34         VECTOR OUTLINE
+      DEF D110          (ABOVE WORDS
+      DEF VERT1           "IN 8 DIRECTIONS")
+      DEF ZERO
+      DEF D132
+      SPC 1 
+L34   LDA D60       REDUCE Y POSITION 
+      CMA,INA         BY 60 
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW VETICAL
+      DEF L35         VECTOR OUTLINE
+      DEF D130          (RIGHT OF WORD
+      DEF VERT1           "VECTORS")
+      DEF B2
+      DEF MES23 
+      SPC 1 
+L35   LDA VERT1     INCREASE Y POSITION 
+      ADA D45         BY 45 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW HORIZONTAL 
+      DEF L36         VECTOR OUTLINE
+      DEF D137          (BELOW WORDS
+      DEF VERT1           "IN 8 DIRECTIONS")
+      DEF ZERO
+      DEF D105
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L36   JSB VECTR      DRAW VERTICAL
+      DEF L37         VECTOR OUTLINE
+      DEF D242          (CLOSE AREA RIGHT 
+      DEF VERT1           OF WORDS
+      DEF B2                "IN 8 DIRECTIONS")
+      DEF MES17 
+      SPC 1 
+L37   LDA ND35      REDUCED Y POSITION
+      ADA VERT1       BY 35 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW VECTOR AT
+      DEF L38         45 DEG. ANGLE 
+      DEF D165          FROM LOWER LEFT 
+      DEF VERT1           TO UPPER RIGHT
+      DEF B1
+      DEF MES20 
+      SPC 1 
+L38   JSB VECTR     DRAW VERTICAL 
+      DEF L39         VECTOR
+      DEF D180
+      DEF VERT1 
+      DEF B2
+      DEF MES20 
+      SPC 1 
+L39   JSB VECTR     DRAW VECTOR AT
+      DEF L40         45 DEG. ANGLE 
+      DEF D195          FROM LOWER RIGHT
+      DEF VERT1           TO UPPER LEFT 
+      DEF B3
+      DEF MES20 
+      SPC 1 
+L40   LDA VERT1     INCREASE Y POSITION 
+      ADA MES17       BY 15 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW HORIZONTAL 
+      DEF L41         VECTOR
+      DEF D165
+      DEF VERT1 
+      DEF ZERO
+      DEF MES20 
+      SKP 
+****************************************************************
+*                                                              *
+*              -- DEMO PATTERN CONTINUED --                    *
+*                                                              *
+****************************************************************
+      SPC 1 
+L41   LDA VERT1     INCREASE Y POSITION 
+      ADA MES17       BY 15 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW VERTICAL PORTION 
+      DEF L42         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE UPPER LEFT
+      DEF MES13 
+      DEF B2
+      SPC 1 
+L42   JSB VECTR     DRAW HORIZONTAL PORTION 
+      DEF L43         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE UPPER LEFT
+      DEF ZERO
+      DEF B2
+      SPC 1 
+L43   LDA MES17     REDUCE Y POSITION 
+      CMA,INA         BY 15 
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW UPPER PORTION
+      DEF L44         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE LEFT
+      DEF B1
+      DEF B2
+      SPC 1 
+L44   JSB VECTR     DRAW LOWER PORTION
+      DEF L45         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE LEFT
+      DEF MES16 
+      DEF B2
+      SKP 
+***************************************************************** 
+*                                                               * 
+*              -- DEMO PATTERN CONTINUED --                     * 
+*                                                               * 
+***************************************************************** 
+      SPC 1 
+L45   LDA MES17     REDUCE Y POSITION 
+      CMA,INA         BY 15 
+      ADA VERT1 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW VERTICAL PORTION 
+      DEF L46         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE LOWER LEFT
+      DEF B2
+      DEF B2
+      SPC 1 
+L46   JSB VECTR     DRAW HORIZONTAL PORTION 
+      DEF L47         OF ARROWHEAD ON 
+      DEF D165          VECTOR POINTING TO
+      DEF VERT1           THE LOWER LEFT
+      DEF ZERO
+      DEF B2
+      SPC 1 
+L47   LDA VERT1     INCREASE Y POSITION 
+      ADA MES20       BY 30 
+      STA VERT1 
+      SPC 1 
+      JSB VECTR     DRAW LEFT PORTION 
+      DEF L48         OF ARROWHEAD ON 
+      DEF D180          VECTOR POINTING UP
+      DEF VERT1 
+      DEF B5
+      DEF B2
+      SPC 1 
+L48   JSB VECTR     DRAW RIGHT PORTION
+      DEF L49         OF ARROWHEAD ON 
+      DEF D180          VECTOR POINTING UP
+      DEF VERT1 
+      DEF MES16 
+      DEF B2
+      SKP 

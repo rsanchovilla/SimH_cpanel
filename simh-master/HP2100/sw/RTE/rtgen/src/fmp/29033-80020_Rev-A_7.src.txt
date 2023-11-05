@@ -1,0 +1,469 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME FM.UT(8) 
+        NAM FM.UT,8 
+.A.     EQU  0
+.B.     EQU  1
+        ENT D.RIO 
+        ENT DR.RD 
+        ENT D.SDR 
+        ENT PK.DR 
+        ENT DS.LU 
+        ENT D.LT
+        ENT D.LB
+        ENT DS.DF 
+        ENT DS.F1 
+        EXT .ENTR 
+        EXT .MPY
+        EXT .DIV
+        EXT EXEC
+        EXT MSS.
+        EXT FM.AB 
+        EXT IFLG. 
+        EXT D.
+D.SDR   BSS   128 
+PK.DR   BSS   128 
+DS.LU   BSS 1 
+D.LT    BSS 1 
+D.LB    BSS 1 
+DS.DF   OCT 000000
+DS.F1   OCT 000000
+.2      OCT 000001
+TRAK    BSS 1 
+T       BSS 1 
+.3      OCT 001756
+.6      OCT 000002
+.7      OCT 177677
+.8      OCT 100000
+.9      OCT 000007
+.10     OCT 074002
+.11     OCT 000200
+.12     OCT 000000
+BREG    BSS 1 
+.14     OCT 001751
+DLU     BSS 1 
+I       BSS 1 
+.22     OCT 000004
+.23     OCT 177603
+.24     DEF D.SDR 
+TX      BSS 1 
+.27     OCT 000016
+.29     OCT 074000
+.30     BSS 1 
+DISBL   BSS 1 
+DISNT   BSS 1 
+.32     DEF PK.DR 
+.33     OCT 000010
+DS.SC   BSS 1 
+.34     OCT 000006
+TR      BSS 1 
+.35     OCT 177777
+.38     OCT 000011
+LU      BSS 1 
+FLG     BSS 1 
+.41     OCT 001717
+.42     BSS 1 
+AREG    BSS 1 
+.43     OCT 000005
+DT      BSS 1 
+.45     OCT 001721
+*003  ! 
+*004        LET EXEC,MSS.      BE SUBROUTINE,EXTERNAL 
+*005        LET D.RIO,DR.RD,DR.SU   BE SUBROUTINE 
+*006        LET D.AD   BE FUNCTION,EXTERNAL 
+*007        LET FM.AB     BE LABEL,EXTERNAL 
+*008          LET MSC.     BE FUNCTION
+*009        LET IFLG.              BE INTEGER,EXTERNAL
+*010        LET D.SDR,PK.DR        BE INTEGER(128),GLOBAL 
+*011        LET DS.LU,D.LT,D.LB    BE INTEGER,GLOBAL
+*012        LET D.       BE INTEGER,EXTERNAL
+*013        LET DS.DF,DS.F1     BE INTEGER,GLOBAL 
+*014        INITIALIZE DS.DF,DS.F1  TO 0,0
+*015        LET READI              BE CONSTANT(1     )
+*016        LET XEQT     BE CONSTANT(1717K) 
+*017        LET TEMP     BE CONSTANT(1721K) 
+*018        LET PRC          BE CONSTANT(74000K)
+*019        LET TATSD    BE CONSTANT(1756K) 
+*020        LET WRIT      BE CONSTANT(2  )
+*021        LET A         BE CONSTANT (0) 
+*022        LET B         BE CONSTANT (1) 
+*023  ! 
+*024  ! 
+*025  D.RIO:SUBROUTINE(RCODE) GLOBAL  !READ DISC DIRECTORY
+RCODE   NOP 
+D.RIO   NOP 
+        JSB .ENTR 
+        DEF RCODE 
+*026         IF DS.DF THEN[IF RCODE=READI THEN RETURN]!IF IN
+        LDA DS.DF 
+        SZA,RSS 
+        JMP .1
+        LDB RCODE,I 
+        CPB .2
+        JMP D.RIO,I 
+*027        DO[TRAK_$TATSD-1;T_0]!PRESET FOR DIRECT ACCESS
+.1      CCA 
+        ADA .3,I
+        STA TRAK
+        CLA 
+        STA T 
+*028        IFNOT IFLG. THEN[IF RCODE=WRIT THEN \!CAN NOT USE DIRECT CAL
+*              [DR.SU(D.SDR,-65,100000K,7);GOTO DIR02]]!USE D.RTR 
+        LDA IFLG. 
+        SZA 
+        JMP DIR0
+        LDB RCODE,I 
+        CPB .6
+        RSS 
+        JMP DIR0
+        JSB DR.SU 
+        DEF *+5 
+        DEF D.SDR 
+        DEF .7
+        DEF .8
+        DEF .9
+        JMP DIR02 
+*029  DIR0: EXEC(RCODE,74002K,D.SDR,128,TRAK,0)!WRIT/READ THE BLOCK 
+DIR0    JSB EXEC
+        DEF *+7 
+        DEF RCODE,I 
+        DEF .10 
+        DEF D.SDR 
+        DEF .11 
+        DEF TRAK
+        DEF .12 
+*030        BREG_$B          !IF TLOG#128 THEN ERR
+        LDA .2,I
+        STA BREG
+*031        IF BREG#128 THEN [MSS.(1001,2);GOTO FM.AB]
+        LDB BREG
+        CPB .11 
+        JMP DIR02 
+        JSB MSS.
+        DEF *+3 
+        DEF .14 
+        DEF .6
+        JMP FM.AB 
+*032  DIR02:DS.DF_1                !SET IN CORE FLAG AND
+DIR02   CLA,INA 
+        STA DS.DF 
+*033        RETURN           !RETURN
+        JMP D.RIO,I 
+*034        END 
+*035  ! 
+*036  ! 
+*037  DR.RD:SUBROUTINE(RCOD,DISID,BLK)FEXIT,GLOBAL
+RCOD    NOP 
+DISID   NOP 
+BLK     NOP 
+DR.RD   NOP 
+        JSB .ENTR 
+        DEF RCOD
+*038  ! 
+*039  !     THIS SUBROUTINE READS/WRITES THE DIRECTORY BLOCK
+*040  !     SPECIFIED BY BLK FROM THE DISC IDENTIFIED 
+*041  !     BY DISID.  FEXIT IS TAKEN IF THE
+*042  !     DISC CANNOT BE FOUND OR IF THE END
+*043  !     OF THE DIRECTORY IS REACHED.
+*044  ! 
+*045        IF DISID=DS.F1 THEN[IF RCOD=WRIT THEN[IFNOT BLK THEN\ 
+*              GOTO DIRR2];GOTO DRRD1]
+        LDB DISID,I 
+        CPB DS.F1 
+        RSS 
+        JMP .16 
+        LDB RCOD,I
+        CPB .6
+        RSS 
+        JMP .15 
+        LDA BLK,I 
+        SZA,RSS 
+        JMP DIRR2 
+.15     JMP DRRD1 
+*046         D.RIO(READI) 
+.16     JSB D.RIO 
+        DEF *+2 
+        DEF .2
+*047        IF DISID<0 THEN[DLU_-DISID;T_0], \
+*          ELSE[DLU_DISID;T_2]
+        LDB DISID,I 
+        SSB,RSS 
+        JMP .17 
+        LDB DISID,I 
+        CMB,INB 
+        STB DLU 
+        CLA 
+        STA T 
+        JMP .18 
+.17     LDA DISID,I 
+        STA DLU 
+        LDA .6
+        STA T 
+*048         FOR I_0 TO 124 BY 4 DO[IF$(@D.SDR+I+T)=DLU\
+*            THEN GOTO DIRR0] 
+.18     CLA 
+        STA I 
+        JMP .20 
+.19     LDA I 
+        ADA .22 
+        STA I 
+.20     LDB I 
+        ADB .23 
+        SSB,RSS 
+        JMP EXITF 
+        LDA .24 
+        ADA I 
+        ADA T 
+        LDA .A.,I 
+        CPA DLU 
+        JMP DIRR0 
+        JMP .19 
+*049  EXITF:FRETURN 
+EXITF   CCE 
+        JMP DR.RD,I 
+*050  ! 
+*051  !     THE DISID HAS BEEN FOUND SO READ IN BLK0
+*052  DIRR0:D.LB_[D.LT_[DS.LU_@D.SDR+I]+1]+1  ! SET POINTERS
+DIRR0   LDA .24 
+        ADA I 
+        STA DS.LU 
+        INA 
+        STA D.LT
+        INA 
+        STA D.LB
+*053  DIRR6:TX_[IF $DS.LU=2 THEN 14 ,ELSE 0]
+DIRR6   LDB DS.LU,I 
+        CPB .6
+        RSS 
+        JMP .25 
+        LDA .27 
+        JMP .26 
+.25     LDA .12 
+.26     STA TX
+*054        IF RCOD=WRIT THEN[IFNOT BLK THEN GO TO DIRR2] 
+        LDB RCOD,I
+        CPB .6
+        RSS 
+        JMP .28 
+        LDA BLK,I 
+        SZA,RSS 
+        JMP DIRR2 
+*055        EXEC(READI,PRC+$DS.LU ,PK.DR,128,$D.LT,TX)
+.28     LDA .29 
+        ADA DS.LU,I 
+        STA .30 
+        JSB EXEC
+        DEF *+7 
+        DEF .2
+        DEF .30 
+        DEF PK.DR 
+        DEF .11 
+        DEF D.LT,I
+        DEF TX
+*056        DO[BREG_$B;IF BREG#128 THEN[MSS.(1001,$DS.LU);GOTO FM.AB]]
+        LDA .2,I
+        STA BREG
+        LDB BREG
+        CPB .11 
+        JMP DIRR2 
+        JSB MSS.
+        DEF *+3 
+        DEF .14 
+        DEF DS.LU,I 
+        JMP FM.AB 
+*057  DIRR2:DS.F1_DISID            !SET UP DISC ID
+DIRR2   LDA DISID,I 
+        STA DS.F1 
+*058        DISBL_0             !ALSO THE CURRENT BLOCK 
+        CLA 
+        STA DISBL 
+*059        DISNT_$(@PK.DR+8)  !AND # OF DIRECTORY TRACKS 
+        LDA .32 
+        ADA .33 
+        LDA .A.,I 
+        STA DISNT 
+*060        DS.SC_$(@PK.DR+6)      !SET NO. OF SECTORS
+        LDA .32 
+        ADA .34 
+        LDA .A.,I 
+        STA DS.SC 
+*061  ! 
+*062        IF (BLK=0) AND (RCOD=READI) THEN GO TO EXIT 
+        LDB BLK,I 
+        LDA RCOD,I
+        CPA .2
+        CCA,RSS 
+        CLA 
+        SZB 
+        CLB,RSS 
+        CCB 
+        AND .B. 
+        SZA 
+        JMP EXIT
+*063  !     CALCULATE THE SECTOR ADDRESS
+*064  DRRD1:TR_(BLK*14+TX)/DS.SC  !COMPUTE THE SECTOR ADDRESS 
+DRRD1   LDA BLK,I 
+        JSB .MPY
+        DEF .27 
+        ADA TX
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF DS.SC 
+        STA TR
+*065        T_$1    !SET IN T 
+        LDA .2,I
+        STA T 
+*066        TR_TR/7   !RELATIVE TRACK TO TR 
+        LDA TR
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF .9
+        STA TR
+*067        IF (TR+DISNT)> -1 THEN GO TO EXITF
+        ADA DISNT 
+        ADA .12 
+        SSA,RSS 
+        JMP EXITF 
+*068        TR_$D.LT-TR   !SET THE TRACK ADDRESS IN TR
+        LDA TR
+        CMA,INA 
+        ADA D.LT,I
+        STA TR
+*069  ! 
+*070  !     READ/WRITE
+*071        IFNOT IFLG. THEN[IF RCOD =WRIT THEN[\ 
+*              DR.SU(PK.DR,DISID,BLK,9);GOTO EXIT ]]!USE D.RTR IF NEEDED
+        LDA IFLG. 
+        SZA 
+        JMP DRRD4 
+        LDB RCOD,I
+        CPB .6
+        RSS 
+        JMP DRRD4 
+        JSB DR.SU 
+        DEF *+5 
+        DEF PK.DR 
+        DEF DISID,I 
+        DEF BLK,I 
+        DEF .38 
+        JMP EXIT
+*072  ! 
+*073  DRRD4:EXEC(RCOD,PRC+$DS.LU,PK.DR,128,TR,T)
+DRRD4   LDA .29 
+        ADA DS.LU,I 
+        STA .30 
+        JSB EXEC
+        DEF *+7 
+        DEF RCOD,I
+        DEF .30 
+        DEF PK.DR 
+        DEF .11 
+        DEF TR
+        DEF T 
+*074        BREG_$B       !TEST FOR ERRORS
+        LDA .2,I
+        STA BREG
+*075        IF BREG#128 THEN[MSS.(1001,$DS.LU); GOTO FM.AB] 
+        LDB BREG
+        CPB .11 
+        JMP EXIT
+        JSB MSS.
+        DEF *+3 
+        DEF .14 
+        DEF DS.LU,I 
+        JMP FM.AB 
+*076  EXIT: RETURN        !RETURN 
+EXIT    CLE 
+        JMP DR.RD,I 
+*077        END 
+*078  ! 
+*079  DR.SU:SUBROUTINE(BUF,ID,RS,CD)
+BUF     NOP 
+ID      NOP 
+RS      NOP 
+CD      NOP 
+DR.SU   NOP 
+        JSB .ENTR 
+        DEF BUF 
+*080  !     THIS ROUTINE WRITES ON A DIRECTORY SECTOR BY: 
+*081  !     CALLING THE SYSTEM FOR ONE TRACK
+*082  !     WRITING THE SECTOR THERE
+*083  !     PASSING THE TRACK TO D.RTR
+*084  !     RETURNING THE TRACK 
+*085  ! 
+*086        EXEC(4,1,TR,LU,FLG)!GET TRACK 
+        JSB EXEC
+        DEF *+6 
+        DEF .22 
+        DEF .2
+        DEF TR
+        DEF LU
+        DEF FLG 
+*087  DRSU0:EXEC(2,LU,BUF,128,TR,0)!WRITE THE SECTOR
+DRSU0   JSB EXEC
+        DEF *+7 
+        DEF .6
+        DEF LU
+        DEF BUF,I 
+        DEF .11 
+        DEF TR
+        DEF .12 
+*088        DO[BREG_$B; IF BREG#128 THEN[MSS.(1001,LU);GO TO FM.AB]]!ERR
+        LDA .2,I
+        STA BREG
+        LDB BREG
+        CPB .11 
+        JMP DRSU2 
+        JSB MSS.
+        DEF *+3 
+        DEF .14 
+        DEF LU
+        JMP FM.AB 
+*089  ! 
+*090  DRSU2:EXEC(9,D.,$XEQT,(TR-<6)+LU,ID,RS,CD)!CALL D.RTR TO WRITE THE
+DRSU2   LDA TR
+        ALF 
+        RAL,RAL 
+        ADA LU
+        STA .42 
+        JSB EXEC
+        DEF *+8 
+        DEF .38 
+        DEF D.
+        DEF .41,I 
+        DEF .42 
+        DEF ID,I
+        DEF RS,I
+        DEF CD,I
+*091        DO[AREG_$A;IF AREG THEN GO TO DRSU2]!IF NOT SCHEDULED TRY AG
+        LDA .12,I 
+        STA AREG
+        SZA 
+        JMP DRSU2 
+*092        EXEC(5,1,TR,LU)!RETURN THE TRACK
+        JSB EXEC
+        DEF *+5 
+        DEF .43 
+        DEF .2
+        DEF TR
+        DEF LU
+*093        IF[DT_$$TEMP]THEN [MSS.(DT);GO TO FM.AB]!IF ERROR ABORT 
+        LDA .45,I 
+        LDA .A.,I 
+        STA DT
+        SZA,RSS 
+        JMP .44 
+        JSB MSS.
+        DEF *+2 
+        DEF DT
+        JMP FM.AB 
+*094        RETURN
+.44     JMP DR.SU,I 
+*095        END 
+*096        END 
+        END 
+*097        END$

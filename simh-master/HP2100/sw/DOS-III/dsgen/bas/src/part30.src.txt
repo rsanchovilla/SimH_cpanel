@@ -1,0 +1,437 @@
+ASMB,R,B,L,X
+      HED EXECUTION PROCESSORS
+      NAM XEC1,7
+      SPC 2 
+      ENT ELET,EIF,EGOTO,EGOSB,EFOR,ENEXT,ERTRN 
+      ENT EINPT,EREAD,EIN12 
+      ENT EINPZ,EINP1 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGHT,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,FSCHA,TEMP5 
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM ZZ(4),TEMP6 
+      SPC 2 
+      EXT FORMX,VLFIL,FETCH,SBFIX,MOVER,SETPT,#FAD,#FSB 
+      EXT INCAL,GETCR,NUMCK,BLANK,OUTIN,OUTCR,BCKSP 
+      EXT FINCA,TRSTR,FDATA,PSTR,MIO7 
+      EXT XEC1,XECB,SERR
+      SPC 2 
+ENDOP OCT 60000 
+OPDMK OCT 100777
+INTFL OCT 100003
+B777  OCT 777 
+OPMSK OCT 77000 
+NXTOP OCT 55000 
+HALF  DEC 0.5 
+B377  OCT 377 
+      HED STATEMENT EXECUTION PROCESSORS
+* 
+***                         **
+**  EXECUTE <LET STATEMENT>  ** 
+***                         **
+* 
+ELET  CLA,INA       ALLOW STRING CONSTANT 
+      STA EOL         IN FORMULA
+      JSB FORMX     EVALUATE
+      JMP XEC1        FORMULA 
+* 
+***                        ** 
+**  EXECUTE <IF STATEMENT>  **
+***                        ** 
+* 
+EIF1  ISZ TEMP1     EVALUATE
+      JSB VLFIL       FILE REQUEST
+      ISZ FBASE     TRANSFER
+      ISZ TEMP1       EOF LABEL 
+      LDB TEMP1,I       TO
+      STB FBASE,I         FILE TABLE
+      JMP XEC1
+EIF   DLD TEMP1,I   EOF 
+      CPB ENDOP 
+      SSA             OPERATOR? 
+      CLA,INA,RSS   NO
+      JMP EIF1      YES 
+      STA EOL       ALLOW STRING CONSTANT 
+      JSB FETCH     EVALUATE DECISION FORMULA 
+      SZA,RSS       RESULTANT 'TRUE' ?
+      JMP XEC1      NO
+* 
+***                           **
+**  EXECUTE <GO TO STATEMENT>  ** 
+***                           **
+* 
+EGOTO CLB,RSS       SET FLAG TO 'GOTO' MODE 
+* 
+***                           **
+**  EXECUTE <GOSUB STATEMENT>  ** 
+***                           **
+* 
+EGOSB CCB           SET FLAG TO 
+      STB GTMP        'GOSUB' MODE
+      LDB TEMP1     COMPUTE SIMPLE BRANCH 
+      INB             'ADDRESS' ADDRESS 
+      LDA TEMP1,I   SIMPLE
+      AND OPDMK       BRANCH
+      CPA INTFL         STATEMENT?
+      JMP EGOS1     YES 
+      JSB FETCH     NO, COMPUTE 
+      JSB SBFIX       BRANCH INDEX
+      JMP XEC1      UNSUITABLE RESULT 
+      ADB TEMP1     COMPUTE 
+      INB             'ADDRESS' 
+      LDA 1             ADDRESS 
+      CMA           WITHIN
+      ADA PRGCT       STATEMENT 
+      SSA               RANGE?
+      JMP XEC1      NO
+EGOS1 LDB 1,I       YES, LOAD BRANCH ADDRESS
+      ISZ GTMP      <GOTO STATEMENT> ?
+      JMP XECB     YES
+      LDA PRGCT     NO, STACK 
+      ISZ RTNST       RETURN
+      STA RTNST,I       ADDRESS 
+      LDA RTNST     NESTING 
+      ADA .-10        10
+      CPA RTRNQ         DEEP? 
+      JSB RERRS+15,I  YES 
+      JMP XECB     NO 
+* 
+***                         **
+**  EXECUTE <FOR STATEMENT>  ** 
+***                         **
+* 
+EFOR0 CPB FORST     TOP ENTRY?
+      JMP EFOR5+1   YES 
+      STA EFN0      NO, SAVE (A)
+      STB DEST      SET DESTINATION ADDRESS 
+      LDB FORST     COMPUTE MOVE
+      ADB .+6         TERMINATION ADDRESS 
+      LDA DEST      COMPUTE 
+      ADA .+6         SOURCE ADDRESS
+      JSB MOVER     DELETE FOR-TABLE ENTRY
+      LDA EFN0      RETRIEVE (A)
+      JMP EFOR5 
+EFOR  LDA TEMP1,I   EXTRACT 
+      AND B777        AND SAVE THE
+      STA FVT           FOR-VARIABLE
+      ALS           COMPUTE 
+      ADA SYMTB       ADDRESS 
+      ADA .-1           OF ITS
+      LDA 0,I             VALUE 
+      LDB FORST     LOAD POINTER TO FOR-STACK 
+EFOR1 CPB FORQ      AT BOTTOM OF FOR-STACK? 
+      JMP EFOR2     YES 
+      CPA 1,I       NO, ENTRY FOR THIS FOR-VARIABLE?
+      JMP EFOR0     YES 
+      ADB .-6       NO, CHECK 
+      JMP EFOR1       LOWER ENTRY 
+EFOR2 LDB FORST     MOVE TO SPACE 
+      ADB .+6         FOR ENTRY 
+      JSB SETPT     RESET EXECUTION POINTERS
+EFOR5 STA FORST,I   SAVE ADDRESS OF VALUE IN ENTRY
+      JSB FORMX     INITIALIZE FOR-VARIABLE 
+      LDA FORST     SAVE POINTERS TO
+      INA             ENTRY FOR 
+      STA EFN0          LIMIT VALUE 
+      ADA .+2             AND 
+      STA EFN1              STEP SIZE 
+      ADA .+2       SAVE ADDRESS OF 
+      LDB PRGCT       FOLLOWING STATEMENT 
+      STB 0,I           IN ENTRY
+      JSB FETCH     COMPUTE AND SAVE
+      DST EFN0,I      LIMIT VALUE 
+      LDA TEMP1     IMPLICIT
+      CPA PRGCT       STEP SIZE?
+      JMP EFOR6     YES 
+      JSB FETCH     NO, COMPUTE STEP SIZE 
+EFOR3 DST EFN1,I      AND SAVE VALUE
+      CLB           SET SIGN FLAG 
+      SSA             TO -1 FOR 
+      CCB               NEGATIVE STEP SIZE, 
+      STB EFN2            0 FOR POSITIVE STEP SIZE
+      ISZ PRGCT     LOAD
+      LDB PRGCT       TYPE WORD OF
+EFOR4 INB               STATEMENT FOLLOWING 
+      LDA 1,I             THE <FOR STATEMENT> 
+      STA EFN3      SAVE IT 
+      ADB .-1       COMPUTE POINTER 
+      ADB 1,I         TO ITS SUCCESSOR
+      AND OPMSK     <NEXT 
+      CPA NXTOP       STATEMENT> ?
+      RSS           YES 
+      JMP EFOR4     NO
+      XOR EFN3      SAME
+      CPA FVT         FOR-VARIABLE? 
+      RSS           YES 
+      JMP EFOR4     NO
+      ADB .-1       SET PROGRAM COUNTER 
+      STB PRGCT       PAST <NEXT STATEMENT> 
+      LDB FORST,I   LOAD
+      DLD 1,I         INITIAL VALUE OF
+      JMP ENEX3         FOR-VARIABLE
+EFOR6 LDA HALF      LOAD
+      LDB .+2         DEFAULT 
+      JMP EFOR3         OF 1.0
+* 
+***                          ** 
+**  EXECUTE <NEXT STATEMENT>  **
+***                          ** 
+* 
+ENEXT LDA TEMP1,I   EXTRACT 
+      AND B777        FOR-VARIABLE
+      ALS           COMPUTE 
+      ADA SYMTB       ADDRESS 
+      ADA .-1           OF ITS
+      LDA 0,I             VALUE 
+      LDB FORST     LOAD POINTER TO FOR-STACK 
+ENEX1 CPB FORQ      BOTTOM OF STACK?
+      JMP XEC1      YES, IGNORE STATEMENT 
+      CPA 1,I       NO, MATCHING ENTRY? 
+      JMP ENEX2     YES 
+      ADB .-6       NO,CHECK
+      JMP ENEX1       LOWER ENTRY 
+ENEX2 STA EFN1      SAVE FOR-VARIABLE VALUE ADDRESS 
+      CPB FORST     TOP ENTRY OF FOR-STACK? 
+      JMP *+3       YES 
+      JSB SETPT     NO, RESET 
+      LDB FORST       EXECUTION POINTERS
+      INB           SAVE ADDRESS
+      STB EFN0        OF LIMIT VALUE
+      ADB .+2 
+      LDA .-2       SET SIGN FLAG TO SAY
+      STA EFN2        POSITIVE STEP SIZE
+      DLD 1,I       LOAD STEP SIZE
+      SSA           POSITIVE? 
+      ISZ EFN2      NO, RESET SIGN FLAG 
+      JSB #FAD      ADD STEP SIZE 
+      DEF EFN1,I      TO VALUE OF FOR-VARIABLE
+      DST EFN1,I    SAVE NEW VALUE
+ENEX3 JSB #FSB      SUBTRACT
+      DEF EFN0,I      LIMIT VALUE 
+      ISZ EFN2      IF STEP SIZE POSITIVE,
+      ELA             INVERT SIGN OF RESULT 
+      SSA           LIMIT VALUE EXCEEDED? 
+      JMP ENEX4     YES 
+      LDA FORST     NO, LOAD ADDRESS
+      ADA .+5         OF STATEMENT
+      LDB 0,I           FOLLOWING THE 
+      JMP XECB
+ENEX4 LDB FORST     REMOVE
+      ADB .-6         ENTRY FROM
+      JSB SETPT         FOR-STACK 
+      JMP XEC1      SKIP PAST <NEXT STATEMENT>
+* 
+***                            ** 
+**  EXECUTE <RETURN STATEMENT>  **
+***                            ** 
+* 
+ERTRN LDA RTNST     RETURN STACK
+      CPA RTRNQ       EMPTY?
+      JSB RERRS+16,I  YES 
+      LDB 0,I       NO, POP 
+      ADA .-1         RETURN ADDRESS
+      STA RTNST         FROM STACK
+      JMP XECB
+* 
+***                           **
+**  EXECUTE <INPUT STATEMENT>  ** 
+***                           **
+* 
+EINPT CLA           TURN OFF
+      STA MCNT        MATRIX INPUT COUNTER
+EINP1 STA INITF     SAVE ADDRESS FLAG 
+      CLA           REQUEST 
+      STA SYNTQ       FIRST 
+      JSB INCAL         INPUT RECORD
+EINP2 ISZ IFCNT     COUNT INPUT QUANTITY
+      CCA           MATRIX
+      CPA INITF       INPUT?
+      JMP EINP3     YES 
+      JSB FORMX     NO, EVALUATE NEXT ADDRESS 
+      LDB OPDST,I   IS IT A 
+      SSB             STRING VARIABLE?
+      JMP EIN13     YES 
+      LDA OPDST     NO, 
+      ADA .-2         UNSTACK 
+      STA OPDST         ADDRESS 
+      STB SBPTR     SAVE DESTINATION ADDRESS
+EINP3 CLA           SET SIGN
+      STA SIGN        TO POSITIVE 
+      STA INTMP     FLAG REQUEST FOR NUMBER 
+      JMP EINP4 
+      STB SIGN      RESET SIGN TO POSITIVE
+      JSB INCAL 
+      ISZ IFCNT     FETCH 
+EINP4 JSB GETCR       FIRST 
+      JMP *-3           CHARACTER 
+      CCB           TURN OFF
+      STB SERR        OVER/UNDERFLOW FLAG 
+      CPA .+45      '-' ? 
+      JMP EIN11     YES 
+      CLB,INB       NO
+      CPA .+43      '+' ? 
+      JMP EIN11     YES 
+EINP5 JSB NUMCK     NO, NUMBER? 
+      JMP EINP7     NO
+      JMP EINP8     BAD EXPONENT
+EINP6 LDB .+40B     TURN ON 
+      STB BLANK       BLANK SUPPRESSION 
+      ISZ MCNT      MATRIX COMPLETED? 
+      RSS           NO
+      JMP MIO7
+EINP0 LDB TEMP1     <INPUT STATEMENT> 
+EINPZ EQU EINP0+3 
+      CPB PRGCT       SATISFIED?
+      JMP EIN12     YES 
+      ISZ SERR      DID OVER/UNDERFLOW OCCUR? 
+      JMP EINP9     YES 
+      CPA .+15B     NO, END OF INPUT RECORD?
+      JMP EINP2-1   YES 
+      CPA .+54B     NO, COMMA NEXT? 
+      JMP EIN10     YES 
+EINP9 JSB WERRS,I   NO
+      LDB IFCNT     OUTPUT NEXT 
+      INB             ITEM
+      JSB OUTIN         NUMBER
+      LDA .+15B     OUTPUT
+      JSB OUTCR       CARRIAGE RETURN 
+      JMP EINP2-1 
+EIN10 JSB GETCR     END OF INPUT RECORD?
+      JMP EINP9     YES 
+      JSB BCKSP     NO
+      JMP EINP2 
+EINP7 CPA .+42B     " ? 
+      JMP EINP8     YES 
+      CPB SIGN      NO, SIGN FOUND? 
+      JMP EINP4     NO, IGNORE CHARACTER
+EINP8 JSB WERRS,I   YES 
+      LDB IFCNT     OUTPUT
+      JSB OUTIN       ITEM NUMBER 
+      LDA .+15B     OUTPUT
+      JSB OUTCR       CARRIAGE RETURN 
+      CLB           NUMBER
+      CPB INTMP       REQUESTED?
+      JMP EINP4-3   YES 
+      JMP EIN14     NO
+EIN11 STB SIGN      SAVE SIGN 
+      JSB GETCR 
+      JMP EINP8     OUT-OF-DATA ERROR 
+      JMP EINP5 
+EIN12 CPA .+15B     END OF RECORD?
+      CLA,RSS       YES 
+      JSB WERRS+7,I NO
+      STA CHRCT     ZERO CHARACTER COUNT
+      LDA .+12B     OUTPUT A
+      JSB OUTCR       LINE FEED 
+      JMP XEC1
+EIN13 CMB           EXTRACT 
+      LDA 1,I         PHYSICAL
+      ALF,ALF           LENGTH OF 
+      AND B377            DESTINATION STRING
+      CMA           SET IT AS END 
+      ADA TMPST,I     OF UNSPECIFIED
+      STA TPRME         DESTINATION STRING
+      CCA               PREPARE 
+      JSB PSTR        DESTINATION STRING
+      LDB TNULL     SAVE LENGTH 
+     STB INTMP       ALLOWANCE  
+      JMP *+3 
+EIN14 JSB INCAL 
+      ISZ IFCNT     FETCH 
+      JSB GETCR       FIRST 
+      JMP *-3           CHARACTER 
+      CCB           TURN OFF
+      STB SERR        OVER/UNDERFLOW FLAG 
+      CPA .+42B     " ? 
+      RSS           YES 
+      JSB BCKSP     NO, STRING BEGINS HERE
+EIN17 CLB           TURN OFF
+      STB BLANK       BLANK SUPPRESSION 
+      LDA FINCA     POINT TO INPUT BUFFER 
+      JSB TRSTR     TRANSFER STRING 
+      CLB           ALL REQUESTED 
+      CPB TNULL       CHARACTERS TRANSFERRED? 
+      JMP EIN21     YES 
+      CPB PS1       NO, TRANSFER LENGTH SPECIFIED?
+      JMP EIN20     NO
+      STA INTMP     YES, SAVE (A) 
+      CCA           FINISH
+      STA TPRME 
+      ADA TNULL       TRANSFER
+      STA TNULL 
+      LDA FSCHA         WITH BLANKS 
+      JSB TRSTR 
+      LDA INTMP     RESTORE (A) 
+EIN18 CPA .+15B     TRANSFER ENDED BY END-OF-INPUT? 
+      JMP EINP6     YES 
+EIN19 JSB GETCR     NO, WAS A " 
+      NOP           EXIT WITH 
+      JMP EINP6       NEXT CHARACTER
+EIN20 LDB TEMP6,I   SET LOGICAL 
+      ADB TNULL       TO ACTUAL 
+      STB TEMP6,I       STRING LENGTH 
+      JMP EIN18 
+EIN21 CPB PS1       LENGTH OF TRANSFER SPECIFIED? 
+      JMP EIN15     NO
+EIN16 JSB GETCR     YES 
+      JMP EINP6     IMPLIED CLOSING QUOTE 
+      CPA .+42B     " ? 
+      JMP EIN19     YES 
+      JMP EIN16     NO, LOOK FOR " OR END-OF-INPUT
+EIN15 JSB GETCR     END-OF-INPUT NEXT?
+      JMP EINP6     YES 
+      CPA .+42B     NO, CLOSING " ? 
+      JMP EIN19     YES 
+      LDA INTMP     NO, DESTINATION STRING EXCEEDED 
+      STA TNULL     RESTORE 
+      LDA SBPTR       DESTINATION STRING
+      STA TEMP5         PARAMETERS
+      LDA .+40B     SET TO
+      STA BLANK       SKIP BLANKS 
+      JMP EINP8 
+* 
+***                          ** 
+**  EXECUTE <READ STATEMENT>  **
+***                          ** 
+* 
+EREAD JSB VLFIL     LOOK FOR FILE REQUEST 
+      JMP EREA1     FILE REQUEST FOUND
+      JSB FORMX     EVALUATE DESTINATION ADDRESS
+      LDA OPDST,I   STRING
+      SSA             VARIABLE? 
+      JMP EREA2     YES 
+      STA SBPTR     NO, SAVE AND
+      LDA OPDST       UNSTACK 
+      ADA .-2           DESTINATION 
+      STA OPDST           ADDRESS 
+      CLB,INB       FETCH 
+      JSB FDATA       NUMBER
+      DST SBPTR,I   STORE NUMBER
+EREA1 LDA TEMP1     END OF
+      CPA PRGCT       STATEMENT?
+      JMP XEC1      YES 
+      JMP EREAD+2   NO
+EREA2 LDB .+2       PREPARE 
+      JSB FDATA       SOURCE STRING 
+      CCA           PREPARE 
+      JSB PSTR        DESTINATION STRING
+      LDA FSCHA 
+      JSB TRSTR     TRANSFER STRING 
+      JMP EREA1 
+      END 

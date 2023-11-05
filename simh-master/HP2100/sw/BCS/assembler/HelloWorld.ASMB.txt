@@ -1,0 +1,54 @@
+ASMB,R,L,B
+      NAM HELLO
+      ENT START
+
+* set TTY to I/O number
+TTY   EQU 11B
+
+START NOP
+      CLB          Clear B
+      CLA          Clear A
+      LDA TXT      OUTPUT MESSAGE 
+      JSB PRT
+      HLT 0
+*
+PRT   NOP          PRINT ASCIIZ STRING AT ADDR IN REGA
+      STA BUFF
+      LDB UL52     (B) = UPPER/LOWER INDICATOR
+PLOOP LDA BUFF,I   GET WORD CONTAINING CHARACTER
+      SZA,RSS      IF CHAR IS ZERO
+      JMP PRT,I     THEN RETURN FROM PRT ROUTINE
+      SSB,RSS      IF UPPER/LOWER FLAG SAYS UPPER,
+      ALF,ALF       SIGN = 0, ROTATE TO LOWER.
+      AND M377     ISOLATE CHARACTER. 
+      JSB PRTA     OUTPUT CHARACTER.
+      SSB          IF CHAR. OUTPUT WAS LOWER CHAR., 
+      ISZ BUFF      ADD 1 TO BUFFER ADDRESS.
+      RBL          SET UPPER/LOWER FLAG TO NEXT CHAR
+      JMP PLOOP     MORE TO PROCESS.
+*      
+PRTA  NOP          Print char in Reg A
+      STB SVB
+      CLC 0        Turn off all devices
+      LDB TTYO     Get tty output command
+      OTB TTY      Send Command code
+      OTA TTY      Write character 
+      STC TTY,C    Set I/O control bit
+WAITW SFS TTY      Skip if control bit is set
+      JMP WAITW    Wait till we write it
+      LDB SVB
+      JMP PRTA,I   RETURN
+*      
+TTYT  OCT 110000   TTY punch (tape)
+TTYO  OCT 120000   TTY print (output)
+TTYTO OCT 130000   TTY print and punch
+BUFF  OCT 0
+SVB   OCT 0        SAVE B
+M377  OCT 377      MASK FOR 8-BIT CHARACTER 
+UL52  OCT 52525    POSITION INDICATOR:0=UPPER,1=LOWR
+*
+TXT   DEF *+1
+      ASC 8,HOLA FROM ASMB 
+      OCT 6412     CR/LF
+      DEC 0        END OF STRING
+      END 

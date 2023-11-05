@@ -1,0 +1,247 @@
+ASMB,B,R,L,C
+      NAM CREAT,7 
+      ENT CREAT 
+      EXT CLOSE,$OPEN,.ENTR 
+      EXT NAM..,RMPAR 
+      EXT EXEC
+      SUP 
+* 
+* 
+*  CREAT     IS THE FILE CREATION MODULE OF THE REAL TIME 
+*            FILE MANAGEMENT PACKAGE. 
+* 
+*            THE FORTRAN CALLING SEQUENCE IS: 
+* 
+*     CALL CREAT(IDCB,IERR,NAME,ISIZE,ITYPE,IS,ILU) 
+*        O R
+*     IER = CREAT(IDCB,IERR,NAME,ISIZE,ITYPE,IS,ILU)
+* 
+*        W H E R E: 
+* 
+*     IDCB     IS THE ADDRESS OF A 144-WORD ARRAY WHICH 
+*              CREAT WILL USE AS A SCRATCH AREA.  IF
+*              ISIZE<0 THEN THE CREATED FILE IS ALSO
+*              OPENED TO THIS DATA CONTROL BLOCK. 
+* 
+*     IERR     IS THE ADDRESS TO WHICH THE ERROR CODE 
+*              IS RETURNED.  THIS INFORMATION IS ALSO 
+*              RETURNED IN THE A REGISTER.
+* 
+*              ERROR CODES ARE: 
+* 
+*     >0   THE CREAT WAS SUCCESSFUL - THE #SECTORS IS RETURNED
+*     -1   THE DISC IS DOWN 
+*     -2   DUPLICATE NAME 
+*     -4   FILE TOO LONG
+*     -6   CARTRIDGE NOT FOUND
+*     -10  NOT ENOUGH PARAMETERS IN THE CALL
+*     -13  DISC LOCKED
+*     -14  DIRECTORY FULL 
+*     -15  ILLEGAL NAME 
+*     -16  ILLEGAL TYPE OR SIZE 
+* 
+* 
+* 
+*  NAME        IS A 3-WORD ARRAY CONTAINING THE NEW FILE'S NAME.
+*              THE NAME MUST CONTAIN ONLY LEGAL ASCII 
+*              CHARACTERS INCLUDING EMBEDDED BLANKS. COMMAS,
+*              + SIGN, - SIGN ARE NOT ALLOWED.
+*              IN ADDITION THE FIRST
+*              CHARACTER MUST BE NON-NUMERIC AND NON-BLANK. 
+* 
+*  ISIZE       A TWO-WORD ARRAY.  WORD 1 IS THE SIZE IN 
+*              124-WORD DOUBLE SECTORS.  WORD 2 IS USED 
+*              ONLY FOR TYPE 2 FILES AND IS THE RECORD LENGTH.
+* 
+*  ITYPE       IS THE FILE TYPE--MUST BE >0.
+* 
+*  IS          (OPTIONAL); IS THE FILE'S SECURITY CODE. 
+*              IF IS>0 THE FILE IS WRITE PROTECTED. 
+*              IF IS<0 THE FILE IS OPEN PROTECTED.
+*              IF IS=0 OR IS NOT CODED THE FILE IS PUBLIC.
+* 
+*  ILU         (OPTIONAL); DIRECTS THE CREAT TO:
+*               IF ILU<0 THEN THE DISC AT LOGICAL UNIT (-ILU).
+*               IF ILU>0 THEN THE DISC WITH LABEL ILU.
+*               IF ILU=0 OR NOT CODED, THE FIRST AVAILABLE
+*                 DISC WITH ENOUGH ROOM IS USED.
+* 
+      SKP 
+DCB   NOP 
+IERR  NOP 
+NAME  NOP 
+SIZE  NOP 
+TYPE  DEF ZERO
+SC    DEF ZERO
+LU    DEF ZERO
+      SPC 1 
+CREAT NOP           ENTRY POINT 
+      JSB .ENTR     TRANSFER THE PARAMETERS 
+      DEF DCB 
+      LDA TYPE      MAKE SURE THERE ARE 
+      CPA DZERO     ENOUGH
+      JMP ER10      NO - ERROR EXIT 
+      JSB CLOSE     GO CLOSE THE DCR (IF OPEN)
+      DEF *+2 
+      DEF DCB,I 
+      SZA           NO ERROR
+      CPA N11       AND NOT OPEN ERROR - OK 
+      RSS           SO SKIP IF THIS IS THE CASE 
+      JMP EXIT      ELSE EXIT  SOME CLOSE ERROR 
+      JSB NAM..     GO CHECK THE NAME 
+      DEF *+2 
+      DEF NAME,I
+      SZA           IF OK SKIP
+      JMP EXIT      ELSE EXIT ERROR 
+      SPC 2 
+      LDA NAME,I    GOOD NAME SO
+      STA BUF        SET
+      ISZ NAME        UP
+      DLD NAME,I       SKELETON DIRECTORY 
+      DST BUF+1         ENTRY IN BUF
+      LDA TYPE,I
+      SZA           TYPE MUST BE
+      SSA           >0
+      JMP ER16      NOT >0 ; ERR
+      STA BUF+3 
+      LDB SIZE,I    GET THE SIZE
+      BLS           DOUBLE TO GET 64-WORD SECTORS 
+      SSB           MUST BE >0 OR 
+      CCB           SET TO -1 
+      SZB,RSS       IF ZERO 
+      JMP ER16      ERROR 
+      STB BUF+6     SET 
+      ISZ SIZE      STEP TO RECORD SIZE 
+      CPA .2        IF NOT TYPE TWO 
+      CLA,RSS       THEN
+      JMP CREA4     SKIP SIZE TEST
+      CLO 
+      LSR 10        SHIFT TO A FOR DIVIDE 
+      DIV SIZE,I    IF OVER FLOW THE RECORD SIZE TO SMALL 
+      SOC           IF OK SKIP
+      JMP ER4       ELSE ERROR FILE TOO LARGE 
+CREA4 LDA SIZE,I
+      LDB BUF+3     GET TYPE
+      CPB .1        IF TYPE=1 
+      LDA .128       SET SIZE TO 128
+      CPB .2        IF TYPE TWO SIZE MUST BE GIVEN
+      SSA,RSS       SIZE GIVEN? 
+      RSS           YES; OR NOT TYPE TWO  SKIP
+      JMP ER4       ELSE ERROR
+CREA3 STA BUF+7     SET RECORD SIZE 
+      LDA SC,I      SET 
+      STA BUF+8      SECURITY CODE
+      SPC 2 
+      JSB EXEC      GET 
+      DEF TRRQ       ONE
+      DEF .4          TRACK 
+      DEF .1           FROM 
+      DEF TRACK         THE 
+      DEF DLU            SYSTEM 
+      DEF TMP 
+TRRQ  JSB EXEC      WRITE 
+      DEF WRRTN      THE
+      DEF .2          DIRECTORY 
+      DEF DLU          ENTRY
+      DEF BUF           ON
+      DEF .128           THE
+      DEF TRACK           TRACK 
+DZERO DEF ZERO             AT SECTOR ZERO 
+WRRTN CCA           SET TO DISC ERROR CODE
+      CPB .128      DISC ERROR
+      RSS           NO; SKIP
+      JMP EXIT      YES; EXIT 
+      LDA TRACK     COMBINE 
+      LSL 6          TRACK
+      ADA DLU         AND LU
+      STA TMP          FOR D.RTR
+SCHLP JSB EXEC      SCHEDULE
+      DEF SCHRT      D.RTR
+      DEF .9          TO
+      DEF D.RTR        CREAT
+      DEF XEQT          THE 
+      DEF TMP            FILE 
+      DEF LU,I            PASSING 
+      DEF TMP              THE
+      DEF .1                TRACK 
+SCHRT SZA           SCHEDULE OK 
+      JMP SCHLP      NO; TRY AGAIN
+      SPC 2 
+      JSB RMPAR     YES;
+      DEF *+2        CALL RMPAR 
+      DEF BUF+4       TO GET RETURN CODES 
+      JSB EXEC      RELEASE 
+      DEF RTRTN      THE
+      DEF .5          SYSTEM
+      DEF .1           TRACK
+      DEF TRACK 
+      DEF DLU 
+RTRTN LDA BUF+4     GET D.RTR COMPLETION
+      SSA            CODE - OK
+      JMP EXIT      NO; TAKE EXIT 
+      LDA BUF+5      YES; SET UP
+      STA DCB,I     TO CALL 
+      LDB DCB        $OPEN
+      CLE,INB         TO
+      LDA BUF+6        OPEN 
+      STA B,I           THE 
+      LDA DCB            FILE 
+      LDB SC,I
+      CLO 
+      JSB $OPEN     SET UP REST OF DCB
+      DEF BUF+8     ADDRESS OF NO OF SECTORS/TRACK
+      JMP EXIT      DISC ERROR - EXIT 
+      LDA TYPE,I    GET TYPE
+      ADA N3        IF 3 OR MORE
+      SSA           SKIP TO WRITE EOF 
+      JMP EXIT0     NOT RANDOM ACCESS FILE
+      CCA           SET WRITTEN ON AND EOF FLAG IN DCB
+      LDB DCB       GET WRITE FLAG
+      ADB .13       ADDRESS 
+      STA B,I       SET WRITTEN ON FLAG 
+      ADB .3        STEP TO THE BUFFER  AND SET EOF 
+      STA B,I       IN FIRST WORD OF BUFFER 
+EXIT0 LDA BUF+4     NO; USE D.RTR RETURN FOR ERROR
+EXIT  LDB DZERO      CODE 
+      STB SC        RESTORE 
+      STB LU         CALL WORDS 
+      STB TYPE        FOR NEXT CALL 
+      STA IERR,I    SET ERROR CODE
+      JMP CREAT,I   AND EXIT
+      SPC 3 
+ER4   LDA N4        SET ERROR 
+      JMP EXIT       CODE 
+ER10  LDA N10         AND 
+      JMP EXIT         EXIT 
+      SPC 3 
+ER16  LDA N16       GET THE ERROR CODE
+      JMP EXIT      TAKE EXIT 
+      SPC 3 
+TMP   NOP 
+N16   DEC -16 
+N10   DEC -10 
+N11   DEC -11 
+N3    OCT -3
+N4    OCT -4
+.1    OCT 1 
+.2    DEC 2 
+.3    OCT 3 
+.4    DEC 4 
+.9    DEC 9 
+.5    DEC 5 
+.13   DEC 13
+.128  DEC 128 
+DLU   NOP 
+TRACK NOP 
+ZERO  NOP 
+COUNT EQU * 
+BUF   BSS 9 
+D.RTR ASC 3,D.RTR 
+      SPC 3 
+A     EQU 0 
+B     EQU 1 
+XEQT  EQU 1717B 
+      SPC 1 
+END   EQU * 
+      SPC 1 
+      END 

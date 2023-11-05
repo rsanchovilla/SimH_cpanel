@@ -1,0 +1,121 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME ID.A(8)
+        NAM ID.A,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT ID.A
+        EXT .ENTR 
+ID.AV   BSS 1 
+EQT5    BSS 1 
+LU      BSS 1 
+.1      OCT 177400
+KSUM    BSS 1 
+TX      BSS 1 
+.2      OCT 001657
+T       BSS 1 
+ADD     BSS 1 
+LOC2    BSS 1 
+LOC     BSS 1 
+.3      OCT 000014
+*003  ! 
+*004  !     ROUTINE TO FIND A NAME IN THE SYSTEM ID SEGMENTS
+*005  !     OR IF NAME IS NULL TO FIND A BLANK ID SEGMENT 
+*006  ! 
+*007  ID.A: FUNCTION(NAM)GLOBAL,FEXIT  !NAME SEARCH FUNCTION
+NAM     NOP 
+ID.A    NOP 
+        JSB .ENTR 
+        DEF NAM 
+*008        LET KEYWD             BE CONSTANT (1657K) 
+*009  ! 
+*010  !     SEARCH FOR THE GIVEN PROGRAM IN THE SYSTEN ID TABELS
+*011  ! 
+*012  !     IF THE GIVEN NAME IS ZERO THE AN ATTEMPT IS MAKE TO 
+*013  !     RETURN A BLANK ID SEGMENT THAT HAS NO TRACKS ASSIGNED TO IT 
+*014  ! 
+*015  !     AN F EXIT IS TAKEN IF THE ID CAN NOT BE FOUND 
+*016  ! 
+*017        EQT5_$([LU_@NAM+1]+1)AND 177400K  !SET NAME ADDRESSES 
+        LDA NAM 
+        INA 
+        STA LU
+        INA 
+        LDA .A.,I 
+        AND .1
+        STA EQT5
+*018        KSUM_0    !INITILIZE THE NOT FOUND FLAG 
+        CLA 
+        STA KSUM
+*019        TX_$KEYWD  !SET UP THE INITIAL ADDRESS
+        LDA .2,I
+        STA TX
+*020  NEXID:T_[ADD_[LOC2_[LOC_[ID.AV_$TX]+12]+1]+1]+12!SET ID SEG ADDRES
+NEXID   LDA TX,I
+        STA ID.AV 
+        ADA .3
+        STA LOC 
+        INA 
+        STA LOC2
+        INA 
+        STA ADD 
+        ADA .3
+        STA T 
+*021        IF $LOC=NAM THEN[\
+*          IF $LOC2=$LU THEN[\
+*               IF($ADD AND 177400K)=EQT5 THEN[\
+*                    IF NAM THEN RETURN ,ELSE[\ 
+*                         KSUM_ID.AV;IFNOT $T THEN RETURN]]]] 
+        LDB LOC,I 
+        CPB NAM,I 
+        RSS 
+        JMP .8
+        LDB LOC2,I
+        CPB LU,I
+        RSS 
+        JMP .8
+        LDA ADD,I 
+        AND .1
+        CPA EQT5
+        RSS 
+        JMP .8
+        LDA NAM,I 
+        SZA,RSS 
+        JMP .5
+        LDA ID.AV 
+        CLE 
+        JMP ID.A,I
+.5      LDA ID.AV 
+        STA KSUM
+        LDA T,I 
+        SZA 
+        JMP .8
+        LDA ID.AV 
+        CLE 
+        JMP ID.A,I
+*022  ! 
+*023        TX_TX+1        !STEP TO NEXT ID SEGMENT 
+.8      LDA TX
+        INA 
+        STA TX
+*024        IF $TX    THEN GO TO NEXID  !IF ONE GO TEST IT
+        LDA TX,I
+        SZA 
+        JMP NEXID 
+*025        IFNOT [ID.AV_KSUM] THEN FRETURN !IF NOT FOUND THE F RETURN
+        LDA KSUM
+        STA ID.AV 
+        SZA 
+        JMP .9
+        LDA ID.AV 
+        CCE 
+        JMP ID.A,I
+*026        RETURN    !   ELSE RETURN THE LAST NULL ID SEGMENT
+.9      LDA ID.AV 
+        CLE 
+        JMP ID.A,I
+*027        END 
+*028  ! 
+*029        END 
+        END 
+*030        END$

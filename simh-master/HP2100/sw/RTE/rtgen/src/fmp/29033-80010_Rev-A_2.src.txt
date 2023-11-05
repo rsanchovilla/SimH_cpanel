@@ -1,0 +1,678 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME SA..(8)
+        NAM SA..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT SA..
+        EXT .ENTR 
+        EXT .MPY
+        EXT .DIV
+        EXT .E.R. 
+        EXT N.OPL 
+        EXT O.BUF 
+        EXT I.BUF 
+        EXT BUF.
+        EXT CUSE. 
+        EXT CREA. 
+        EXT OPEN. 
+        EXT IER.
+        EXT WRITF 
+        EXT LOCF
+        EXT CLOSE 
+        EXT READ. 
+        EXT READF 
+        EXT RWNDF 
+        EXT MSS.
+        EXT CK.SM 
+        EXT D.AD
+LIS5    BSS 1 
+LIS1    BSS 1 
+.1      OCT 000004
+SZ      BSS 1 
+RS      BSS 1 
+SC      BSS 1 
+.2      OCT 000005
+.3      OCT 000002
+.5      OCT 177776
+.6      OCT 000062
+.7      OCT 046107
+.9      OCT 046123
+.10     OCT 000070
+OPFL    BSS 1 
+.11     OCT 101010
+T1      BSS 1 
+SIZE    BSS 1 
+RD      BSS 1 
+.12     OCT 001757
+.13     DEF LSRD
+TYPE    BSS 1 
+FIRST   BSS 1 
+L       BSS 1 
+IL      BSS 1 
+.19     OCT 177777
+.21     OCT 177772
+T       BSS 1 
+.22     BSS 1 
+TY      BSS 1 
+.23     OCT 101110
+.25     OCT 000072
+.26     OCT 000003
+.27     DEF LGRD
+.28     OCT 000106
+BUF1    BSS 1 
+BUF     BSS 1 
+IBUF4   BSS 1 
+IBUF3   BSS 1 
+IBUF2   BSS 1 
+IBUF    BSS 1 
+IBU15   BSS 1 
+IBUF9   BSS 1 
+IBUF8   BSS 1 
+IBUF7   BSS 1 
+IBUF6   BSS 1 
+IBUF5   BSS 1 
+.29     OCT 000006
+.32     OCT 001765
+.33     OCT 077600
+MXRC    BSS 1 
+.34     OCT 000100
+.37     OCT 001760
+.38     OCT 001717
+RC      BSS 1 
+ENFLG   BSS 1 
+.40     OCT 000001
+ADD     BSS 1 
+.42     BSS 1 
+.44     OCT 160000
+.45     OCT 120000
+.46     OCT 000007
+.47     OCT 000017
+ED      BSS 1 
+I       BSS 1 
+ENADD   BSS 1 
+LG.SV   BSS 1 
+.54     OCT 001766
+.55     BSS 1 
+.56     BSS 1 
+.57     BSS 1 
+.58     OCT 000177
+*003  !     THIS ROUTINE IS TO SAVE LS/LG ROUTINE FOR THE 
+*004  !     RTE FMGR PROGRAM.  IT IS ENTERED BY ENTERING
+*005  !     A COMMAND OF THE FORM:
+*006  ! 
+*007  !     SA,LS/LG,NAMR 
+*008  !PRAM LOC 1     5 
+*009  ! 
+*010  !     W H E R E:
+*011  ! 
+*012  !     SA       IS THE COMMAND NAME. 
+*013  ! 
+*014  !     LS/LG    IS LS TO SAVE THE LS FILE, 
+*015  !              OR LG TO SAVE THE LOAD & GO FILE.
+*016  ! 
+*017  !     NAMR     IS TO BE THE NEW FILE'S NAME REFERENCE.
+*018  ! 
+*019  ! 
+*020  !     THE FOLLOWING NAMR PARAMETERS ARE OPTIONAL: 
+*021  ! 
+*022  !     CR       IS THE CARTRIDGE TO BE USED TO SAVE
+*023  !              (ZERO IF NOT GIVEN). 
+*024  ! 
+*025  !     SC       IS THE FILE'S SECURITY CODE
+*026  !              (ZERO IF NOT GIVEN). 
+*027  ! 
+*028  !     TY       IS THE FILE'S TYPE (4 FOR LS OR
+*029  !              5 FOR LG IF NOT GIVEN).
+*030  ! 
+*031  !     SZ1      IS THE FILES SIZE ESTIMATE USED FOR LS FILES ONLY
+*032  !              IF NOT GIVEN THE THE FILE IS ESTIMATED TO FILL 
+*033  !              LESS THAN HALF A TRACK. EXCESS  THEN GENERATES AN E
+*034  !              IF LESS THAN THE ESTIMATED SIZE IS USED THE
+*035  !              EXCESS IS RETURNED TO THE SYSTEM 
+*036  ! 
+*037  !     CONSTANT DECLARATIONS 
+*038  ! 
+*039        LET A         BE CONSTANT(0    )
+*040        LET B         BE CONSTANT (1    ) 
+*041        LET XEQT      BE CONSTANT (1717K) 
+*042        LET SECT2     BE CONSTANT (1757K) 
+*043        LET SECT3     BE CONSTANT (1760K) 
+*044        LET LGOTK     BE CONSTANT (1765K) 
+*045        LET LGOC      BE CONSTANT (1766K) 
+*046        LET LG        BE CONSTANT (46107K)
+*047        LET LS        BE CONSTANT (46123K)
+*048  ! 
+*049  !     DECLARE THE ERROR WORD LOCATION 
+*050  ! 
+*051        LET .E.R.,N.OPL BE INTEGER,EXTERNAL 
+*052  ! 
+*053  !     ARRAY DECLARATIONS
+*054  ! 
+*055        LET O.BUF,I.BUF,BUF.,CUSE. BE INTEGER,EXTERNAL
+*056  ! 
+*057  ! 
+*058  !     SUBROUTINE DECLARATIONS 
+*059  ! 
+*060        LET CREA.,OPEN.,IER.,\
+*           WRITF,LOCF,CLOSE,\
+*           READ.,READF,RWNDF,\ 
+*           MSS.,EXEC,CK.SM    BE SUBROUTINE,EXTERNAL 
+*061  ! 
+*062        LET LSRD,LGRD,READR,\ 
+*           GET                BE SUBROUTINE
+*063  ! 
+*064        LET D.AD               BE FUNCTION,EXTERNAL 
+*065        LET LG.S               BE FUNCTION
+*066  SA..: SUBROUTINE(NCAM,PLIST,MSNO)GLOBAL 
+NCAM    NOP 
+PLIST   NOP 
+MSNO    NOP 
+SA..    NOP 
+        JSB .ENTR 
+        DEF NCAM
+*067        LET NCAM,PLIST,MSNO BE INTEGER
+*068        LIS5_[LIS1_@PLIST+1]+4  !SET LIST ADDRESSES 
+        LDA PLIST 
+        INA 
+        STA LIS1
+        ADA .1
+        STA LIS5
+*069        SZ_[RS _[SC_D.AD(N.OPL)+5]+2]+1  !SET OPTION LIST ADDRESSES 
+        JSB D.AD
+        DEF *+2 
+        DEF N.OPL 
+        ADA .2
+        STA SC
+        ADA .3
+        STA RS
+        INA 
+        STA SZ
+*070  ! 
+*071        IF NCAM<2 THEN[MSNO_50;RETURN]
+        LDB NCAM,I
+        ADB .5
+        SSB,RSS 
+        JMP .4
+        LDA .6
+        STA MSNO,I
+        JMP SA..,I
+*072        IF $LIS1=LG THEN GO TO SALG 
+.4      LDB LIS1,I
+        CPB .7
+        JMP SALG
+*073        IF $LIS1#LS THEN [MSNO_56; RETURN]  !NOT LS OR LG SO ABORT
+        LDB LIS1,I
+        CPB .9
+        JMP .8
+        LDA .10 
+        STA MSNO,I
+        JMP SA..,I
+*074        CUSE._0       !SHOW SEGMENT NOT IN CORE FOR NEXT TIME 
+.8      CLA 
+        STA CUSE. 
+*075        OPFL_101010K  !SET PUNCH OPTION FLAG
+        LDA .11 
+        STA OPFL
+*076        DO[T1_4;SIZE_$SECT2/4;RD_@LSRD]!SET UP DEFAULT SIZE 
+        LDA .1
+        STA T1
+        LDA .12,I 
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF .1
+        STA SIZE
+        LDA .13 
+        STA RD
+*077  SA02: IFNOT $SZ THEN $SZ_SIZE    !SET DEFAULT SIZE IF NOT SUPPLIED
+SA02    LDA SZ,I
+        SZA 
+        JMP .14 
+        LDA SIZE
+        STA SZ,I
+*078        IFNOT $RS  THEN $RS _T1   !SET DEFAULT TYPE 
+.14     LDA RS,I
+        SZA 
+        JMP .15 
+        LDA T1
+        STA RS,I
+*079        TYPE_$RS   !SET TYPE FOR LATER
+.15     LDA RS,I
+        STA TYPE
+*080        CREA.(O.BUF,$LIS5,$SC)?[TYPE_0;\!CREAT THE FILE 
+*       OPEN.(O.BUF,$LIS5,$SC,OPFL)]!OPEN IF NOT A FILE NAME
+        JSB CREA. 
+        DEF *+4 
+        DEF O.BUF 
+        DEF LIS5,I
+        DEF SC,I
+        SEZ,RSS 
+        JMP .16 
+        CLA 
+        STA TYPE
+        JSB OPEN. 
+        DEF *+5 
+        DEF O.BUF 
+        DEF LIS5,I
+        DEF SC,I
+        DEF OPFL
+*081        FIRST_1 
+.16     CLA,INA 
+        STA FIRST 
+*082  LOOP: CALL $RD      !READ A RECORD
+LOOP    JSB RD,I
+        DEF *+1 
+*083        L_IL
+        LDA IL
+        STA L 
+*084        IFNOT IL THEN[IFNOT TYPE THEN L_-1] 
+        LDA IL
+        SZA 
+        JMP .18 
+        LDA TYPE
+        SZA 
+        JMP .18 
+        CCA 
+        STA L 
+*085        WRITF(O.BUF,.E.R.,BUF.,L)   !WRITE IT 
+.18     JSB WRITF 
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF BUF.
+        DEF L 
+*086        IF .E.R.= -6 THEN[MSS.(.E.R.);GOTO ABOR]!PURGE FILE 
+        LDB .E.R. 
+        CPB .21 
+        RSS 
+        JMP .20 
+        JSB MSS.
+        DEF *+2 
+        DEF .E.R. 
+        JMP ABOR
+*087        IER.          ! ANY ERRORS? 
+.20     JSB IER.
+        DEF *+1 
+*088        IF IL=>0 THEN GO TO LOOP  ! IF NOT EOF CONTINUE 
+        LDB IL
+        SSB,RSS 
+        JMP LOOP
+*089  ! 
+*090        IFNOT TYPE THEN RETURN
+        LDA TYPE
+        SZA,RSS 
+        JMP SA..,I
+*091        LOCF(O.BUF,.E.R.,T,RS)      !GET CURRENT POSITION 
+        JSB LOCF
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF T 
+        DEF RS
+*092        IER.
+        JSB IER.
+        DEF *+1 
+*093  TRUN: CLOSE(O.BUF,.E.R.,$SZ  -RS-1)!CLOSE & TRUNCATE
+TRUN    LDA RS
+        CMA,INA 
+        ADA SZ,I
+        CCB 
+        ADB .A. 
+        STB .22 
+        JSB CLOSE 
+        DEF *+4 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF .22 
+*094        IER.
+        JSB IER.
+        DEF *+1 
+*095  EXIT: RETURN                   !DONE RETURN 
+EXIT    JMP SA..,I
+*096  SALG: TY_0  !SET LOAD & GO FLAG 
+SALG    CLA 
+        STA TY
+*097        T1_5  !SET DEFAULT TYPE 
+        LDA .2
+        STA T1
+*098        OPFL_101110K  !SET THE OPTION FLAG
+        LDA .23 
+        STA OPFL
+*099        SIZE  _(([T_LG.S() ?[MSNO_58;RETURN]]+3)>-1)+T/5 !SIZE ESTIM
+        JSB LG.S
+        DEF *+1 
+        SEZ,RSS 
+        JMP .24 
+        LDA .25 
+        STA MSNO,I
+        JMP SA..,I
+.24     STA T 
+        ADA .26 
+        ARS 
+        STA .22 
+        LDA T 
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF .2
+        ADA .22 
+        STA SIZE
+*100        RD_@LGRD  !SET THE READ ROUTINE ADDRESS 
+        LDA .27 
+        STA RD
+*101        GO TO SA02  !GO DO IT 
+        JMP SA02
+*102        END 
+*103  LSRD: SUBROUTINE
+LSRD    NOP 
+        JSB .ENTR 
+        DEF LSRD
+*104        READ.(2,BUF.,70,IL) 
+        JSB READ. 
+        DEF *+5 
+        DEF .3
+        DEF BUF.
+        DEF .28 
+        DEF IL
+*105        RETURN
+        JMP LSRD,I
+*106        END 
+*107  ! 
+*108  LGRD: SUBROUTINE
+LGRD    NOP 
+        JSB .ENTR 
+        DEF LGRD
+*109        BUF1_[BUF_D.AD(BUF.)]+1 
+        JSB D.AD
+        DEF *+2 
+        DEF BUF.
+        STA BUF 
+        INA 
+        STA BUF1
+*110        IFNOT FIRST THEN GOTO XFER
+        LDA FIRST 
+        SZA,RSS 
+        JMP XFER
+*111           IBUF4_[IBUF3_[IBUF2_[IBUF_D.AD(I.BUF)]+2]+1]+1 
+        JSB D.AD
+        DEF *+2 
+        DEF I.BUF 
+        STA IBUF
+        ADA .3
+        STA IBUF2 
+        INA 
+        STA IBUF3 
+        INA 
+        STA IBUF4 
+*112        IBU15 _[IBUF9_[IBUF8_[IBUF7_[IBUF6_[IBUF5_ \ SET UP BUFFER A
+*       IBUF4+1    ]+1]+1]+1]+1]+6
+        INA 
+        STA IBUF5 
+        INA 
+        STA IBUF6 
+        INA 
+        STA IBUF7 
+        INA 
+        STA IBUF8 
+        INA 
+        STA IBUF9 
+        ADA .29 
+        STA IBU15 
+*113        $IBUF_[IF $LGOTK<0 THEN 3,ELSE 2] 
+        LDB .32,I 
+        SSB,RSS 
+        JMP .30 
+        LDA .26 
+        JMP .31 
+.30     LDA .3
+.31     STA IBUF,I
+*114        $(IBUF2 )_2 
+        LDA .3
+        STA IBUF2,I 
+*115        $(IBUF3 )_($LGOTK AND 77600K)-<9
+        LDA .32,I 
+        AND .33 
+        ALF,ALF 
+        RAL 
+        STA IBUF3,I 
+*116        $IBUF4,$IBUF7,$IBU15_0
+        CLA 
+        STA IBUF4,I 
+        STA IBUF7,I 
+        STA IBU15,I 
+*117        $(IBUF5)_([MXRC_LG.S()]+3)
+        JSB LG.S
+        DEF *+1 
+        STA MXRC
+        ADA .26 
+        STA IBUF5,I 
+*118        $IBUF6_64 
+        LDA .34 
+        STA IBUF6,I 
+*119        $(IBUF8 )_[IF IBUF=3 THEN $SECT3,ELSE $SECT2] 
+        LDB IBUF
+        CPB .26 
+        RSS 
+        JMP .35 
+        LDA .37,I 
+        JMP .36 
+.35     LDA .12,I 
+.36     STA IBUF8,I 
+*120        $(IBUF9 )_$XEQT 
+        LDA .38,I 
+        STA IBUF9,I 
+*121        RWNDF(I.BUF,.E.R.)
+        JSB RWNDF 
+        DEF *+3 
+        DEF I.BUF 
+        DEF .E.R. 
+*122        IER.
+        JSB IER.
+        DEF *+1 
+*123        DO[RC,FIRST,ENFLG_0;READR]
+        CLA 
+        STA RC
+        STA FIRST 
+        STA ENFLG 
+        JSB READR 
+        DEF *+1 
+*124  XFER: IFNOT ENFLG THEN GOTO LGRD2 
+XFER    LDA ENFLG 
+        SZA,RSS 
+        JMP LGRD2 
+*125        IF ENFLG=1 THEN[ENFLG_2;IL_0;RETURN]
+        LDB ENFLG 
+        CPB .40 
+        RSS 
+        JMP LGRD1 
+        LDA .3
+        STA ENFLG 
+        CLA 
+        STA IL
+        JMP LGRD,I
+*126  LGRD1:DO[ENFLG_0;IF ADD#@PLIST THEN READR;IL_-1;\ 
+*                  IF RC>MXRC THEN RETURN]
+LGRD1   CLA 
+        STA ENFLG 
+        LDA PLIST 
+        CPA ADD 
+        JMP .41 
+        JSB READR 
+        DEF *+1 
+.41     CCA 
+        STA IL
+        LDB RC
+        CMB,INB 
+        ADB MXRC
+        SSB 
+        JMP LGRD,I
+*127  LGRD2:GET(BUF.,1) 
+LGRD2   JSB GET 
+        DEF *+3 
+        DEF BUF.
+        DEF .40 
+*128        IFNOT $BUF THEN GO TO LGRD1 
+        LDA BUF,I 
+        SZA,RSS 
+        JMP LGRD1 
+*129        GET ( $BUF1  ,[IL_$BUF-<8]-1) 
+        LDA BUF,I 
+        ALF,ALF 
+        STA IL
+        CCB 
+        ADB .A. 
+        STB .42 
+        JSB GET 
+        DEF *+3 
+        DEF BUF1,I
+        DEF .42 
+*130        CK.SM(BUF.,1)?[GOTO ABORT]
+        JSB CK.SM 
+        DEF *+3 
+        DEF BUF.
+        DEF .40 
+        SEZ 
+        JMP ABORT 
+*131        IF ( $BUF1   AND 160000K)=120000K THEN ENFLG_1
+        LDA BUF1,I
+        AND .44 
+        CPA .45 
+        RSS 
+        JMP .43 
+        CLA,INA 
+        STA ENFLG 
+*132        RETURN
+.43     JMP LGRD,I
+*133  ABORT:MSS.(7) 
+ABORT   JSB MSS.
+        DEF *+2 
+        DEF .46 
+*134  ABOR: IFNOT TYPE THEN GO TO EXIT  ! IF TYPE ZERO THE EXIT 
+ABOR    LDA TYPE
+        SZA,RSS 
+        JMP EXIT
+*135        DO[$(O.BUF+15)_0;RS_-1;GO TO TRUN]
+        LDA O.BUF 
+        ADA .47 
+        CLB 
+        STB .A.,I 
+        CCA 
+        STA RS
+        JMP TRUN
+*136        END 
+*137  ! 
+*138  ! 
+*139  GET:  SUBROUTINE(DS,NO) 
+DS      NOP 
+NO      NOP 
+GET     NOP 
+        JSB .ENTR 
+        DEF DS
+*140        ED_@DS+NO-1 
+        LDA DS
+        ADA NO,I
+        CCB 
+        ADB .A. 
+        STB ED
+*141        FOR I_@DS TO ED DO THRU GET0
+        LDA DS
+        STA I 
+        JMP .49 
+.48     LDA I 
+        INA 
+        STA I 
+.49     LDB I 
+        CMB,INB 
+        ADB ED
+        SSB 
+        JMP .50 
+*142        $I_$ADD 
+        LDA ADD,I 
+        STA I,I 
+*143        ADD_ADD+1 
+        LDA ADD 
+        INA 
+        STA ADD 
+*144  GET0: IF ADD=ENADD THEN READR 
+GET0    LDB ADD 
+        CPB ENADD 
+        RSS 
+        JMP .51 
+        JSB READR 
+        DEF *+1 
+.51     JMP .48 
+*145        RETURN
+.50     JMP GET,I 
+*146        END 
+*147  ! 
+*148  READR:SUBROUTINE
+READR   NOP 
+        JSB .ENTR 
+        DEF READR 
+*149        DO[READF(I.BUF,.E.R.,PLIST);IER.] 
+        JSB READF 
+        DEF *+4 
+        DEF I.BUF 
+        DEF .E.R. 
+        DEF PLIST,I 
+        JSB IER.
+        DEF *+1 
+*150        ENADD_[ADD_@PLIST]+64 
+        LDA PLIST 
+        STA ADD 
+        ADA .34 
+        STA ENADD 
+*151        RC_RC+1 
+        LDA RC
+        INA 
+        STA RC
+*152        RETURN
+        JMP READR,I 
+*153        END 
+*154  ! 
+*155  LG.S: FUNCTION FEXIT
+LG.S    NOP 
+        JSB .ENTR 
+        DEF LG.S
+*156        LG.SV_((($LGOC AND 77600K)-($LGOTK AND 77600K))\
+*             -<9)*[IF $LGOTK<0 THEN $SECT3,ELSE $SECT2]\ 
+*                 +($LGOC AND 177K) 
+        LDA .54,I 
+        AND .33 
+        STA .55 
+        LDA .32,I 
+        AND .33 
+        CMA,INA 
+        ADA .55 
+        ALF,ALF 
+        RAL 
+        STA .56 
+        LDB .32,I 
+        SSB,RSS 
+        JMP .52 
+        LDA .37,I 
+        JMP .53 
+.52     LDA .12,I 
+.53     JSB .MPY
+        DEF .56 
+        STA .57 
+        LDA .54,I 
+        AND .58 
+        ADA .57 
+        STA LG.SV 
+*157        IF LG.SV THEN RETURN,ELSE FRETURN 
+        SZA,RSS 
+        JMP .59 
+        LDA LG.SV 
+        CLE 
+        JMP LG.S,I
+.59     LDA LG.SV 
+        CCE 
+        JMP LG.S,I
+*158        END 
+*159        END 
+        END 
+*160        END$

@@ -1,0 +1,500 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME SP..(8)
+        NAM SP..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT SP..
+        EXT .ENTR 
+        EXT .DIV
+        EXT .DRCT 
+        EXT CREA. 
+        EXT D.RIO 
+        EXT WRITF 
+        EXT READF 
+        EXT RWNDF 
+        EXT IER.
+        EXT ID.A
+        EXT D.SDR 
+        EXT O.BUF 
+        EXT I.BUF 
+        EXT N.OPL 
+.2      OCT 000001
+.3      OCT 000062
+PAD     BSS 1 
+ID27    BSS 1 
+ID      BSS 1 
+.5      OCT 000016
+.6      OCT 000032
+BF      BSS 1 
+T1      BSS 1 
+T       BSS 1 
+.10     OCT 000177
+.14     OCT 000031
+.15     OCT 000013
+.16     BSS 1 
+ID15    BSS 1 
+.17     OCT 000007
+.19     OCT 177776
+.20     OCT 000004
+.21     OCT 000070
+ID16    BSS 1 
+ID17    BSS 1 
+.22     OCT 000010
+ID18    BSS 1 
+.23     OCT 167777
+SZR     BSS 1 
+SZ      BSS 1 
+TY      BSS 1 
+CR      BSS 1 
+.24     OCT 000200
+.25     OCT 000006
+XF      BSS 1 
+ID23    BSS 1 
+ID25    BSS 1 
+.27     OCT 000003
+.28     OCT 000002
+.30     OCT 177761
+ID30    BSS 1 
+.31     OCT 000175
+.32     OCT 177777
+ID28    BSS 1 
+ID29    BSS 1 
+.E.R.   BSS 1 
+IBUF    BSS 1 
+.36     OCT 000020
+ID12    BSS 1 
+ID13    BSS 1 
+.39     OCT 077600
+ID14    BSS 1 
+.42     OCT 001760
+.43     OCT 001757
+.44     OCT 001717
+ID26    BSS 1 
+.45     OCT 000400
+MFV     BSS 1 
+.48     OCT 000077
+ID24    BSS 1 
+.49     OCT 000005
+*003  ! 
+*004  !     THE SP ROUTINE SAVES A PROGRAM
+*005  !     IN A FILE.  THE FIRST TWO SECTORS 
+*006  !     ARE SET UP TO ALLOW THE PROGRAM 
+*007  !     TO BE RESTORED TO THE SYSTEM
+*008  ! 
+*009  !     THIS PROGRAM IS INVOLKED BY : 
+*010  !     SP, NAME
+*011  !       WHERE:
+*012  !           NAME IS THE NAME OF THE 
+*013  !             PROGRAM TO BE SAVED.
+*014  ! 
+*015  !     DEFINE THE EXTERNALS
+*016  ! 
+*017        LET CREA., D.RIO,\
+*            WRITF,READF,RWNDF,\
+*           IER.,OPEN.         BE SUBROUTINE,EXTERNAL 
+*018  ! 
+*019        LET  ID.A         BE FUNCTION,EXTERNAL
+*020  ! 
+*021        LET D.SDR,O.BUF,I.BUF,N.OPL BE INTEGER,EXTERNAL 
+*022  ! 
+*023  !     DEFINE INTERNAL ROUTINES
+*024  ! 
+*025        LET ADS, SP.. BE SUBROUTINE 
+*026  ! 
+*027        LET MF            BE FUNCTION 
+*028  ! 
+*029  !     DEFINE CONSTANTS
+*030  ! 
+*031        LET  XEQT    BE CONSTANT    (1717K) 
+*032        LET  SECT2    BE CONSTANT  (1757K)
+*033        LET  SECT3    BE CONSTANT  (1760K)
+*034  SP..: SUBROUTINE (N,LIS,ER)  GLOBAL 
+N       NOP 
+LIS     NOP 
+ER      NOP 
+SP..    NOP 
+        JSB .ENTR 
+        DEF N 
+*035        IF N#1 THEN [ER_50; RETURN] 
+        LDB N,I 
+        CPB .2
+        JMP .1
+        LDA .3
+        STA ER,I
+        JMP SP..,I
+*036        PAD_@ LIS +1
+.1      LDA LIS 
+        INA 
+        STA PAD 
+*037         ID27_[ID_ ID.A($PAD)?[ER_14 ; RETURN]]+26
+        JSB ID.A
+        DEF *+2 
+        DEF PAD,I 
+        SEZ,RSS 
+        JMP .4
+        LDA .5
+        STA ER,I
+        JMP SP..,I
+.4      STA ID
+        ADA .6
+        STA ID27
+*038  ! 
+*039        BF,T1_@I.BUF
+        JSB .DRCT 
+        DEF I.BUF 
+        STA BF
+        STA T1
+*040        FOR T_BF TO BF +127 DO $T_0 
+        LDA BF
+        STA T 
+        JMP .8
+.7      LDA T 
+        INA 
+        STA T 
+.8      LDA BF
+        ADA .10 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .9
+        CLA 
+        STA T,I 
+        JMP .7
+*041        FOR T_ID TO ID+25 DO [$T1_ $T;T1_T1+1]
+.9      LDA ID
+        STA T 
+        JMP .12 
+.11     LDA T 
+        INA 
+        STA T 
+.12     LDA ID
+        ADA .14 
+        CMA,INA 
+        ADA T 
+        CMA,INA 
+        SSA 
+        JMP .13 
+        LDA T,I 
+        STA T1,I
+        LDA T1
+        INA 
+        STA T1
+        JMP .11 
+*042        ADS (BF+11) 
+.13     LDA BF
+        ADA .15 
+        STA .16 
+        JSB ADS 
+        DEF *+2 
+        DEF .16 
+*043        T_$ID15 AND 7    !GET TYPE OF PGM 
+        LDA ID15,I
+        AND .17 
+        STA T 
+*044        IF T>1 THEN [IF T#4 THEN GO TO SP2] !LEGAL CONTINUE 
+        LDB T 
+        ADB .19 
+        SSB 
+        JMP .18 
+        LDB T 
+        CPB .20 
+        RSS 
+        JMP SP2 
+*045        ER_56   !ILLEGAL PROGRAM TYPE 
+.18     LDA .21 
+        STA ER,I
+*046        RETURN
+        JMP SP..,I
+*047  ! 
+*048  SP2:  $ID16,$ID17,$(BF+8)_0 
+SP2     CLA 
+        STA ID16,I
+        STA ID17,I
+        LDB BF
+        ADB .22 
+        STA .B.,I 
+*049        $ID18_($ID18 AND 167777K) 
+        LDA ID18,I
+        AND .23 
+        STA ID18,I
+*050        SZR_[SZ_[TY_[CR_ @N.OPL+1]+1]+1]+1
+        JSB .DRCT 
+        DEF N.OPL 
+        INA 
+        STA CR
+        INA 
+        STA TY
+        INA 
+        STA SZ
+        INA 
+        STA SZR 
+*051        $SZR_128
+        LDA .24 
+        STA SZR,I 
+*052        $TY_6 
+        LDA .25 
+        STA TY,I
+*053  ! 
+*054        IFNOT  $CR THEN $CR_-2
+        LDA CR,I
+        SZA 
+        JMP .26 
+        LDA .19 
+        STA CR,I
+*055  ! 
+*056       XF_[$SZ_(MF( ID23)+ MF( ID25)+3)/2]-1
+.26     JSB MF
+        DEF *+2 
+        DEF ID23
+        STA .16 
+        JSB MF
+        DEF *+2 
+        DEF ID25
+        ADA .16 
+        ADA .27 
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF .28 
+        STA SZ,I
+        CCB 
+        ADB .A. 
+        STB XF
+*057  ! 
+*058        CREA. (O.BUF,$PAD,N.OPL)?[ER_-15;RETURN]
+        JSB CREA. 
+        DEF *+4 
+        DEF O.BUF 
+        DEF PAD,I 
+        DEF N.OPL 
+        SEZ,RSS 
+        JMP .29 
+        LDA .30 
+        STA ER,I
+        JMP SP..,I
+*059  ! 
+*060        $(@O.BUF+2)_1  !FOURCE TO TYPE 1
+.29     JSB .DRCT 
+        DEF O.BUF 
+        ADA .28 
+        CLB,INB 
+        STB .A.,I 
+*061        D.RIO (1)    ! READ THE SET UP WORD 
+        JSB D.RIO 
+        DEF *+2 
+        DEF .2
+*062  ! 
+*063        $ID30_$(125+@D.SDR)!MOVE TO ID BLOCK
+        JSB .DRCT 
+        DEF D.SDR 
+        ADA .31 
+        LDA .A.,I 
+        STA ID30,I
+*064        I.BUF_ -1  !SET EOF FOR THOSE WHO DON'T KNOW BETTER 
+        CCA 
+        STA I.BUF 
+*065  ! 
+*066        FOR T_BF TO ID28 DO[$ID29_$ID29+$T] 
+        LDA BF
+        STA T 
+        JMP .34 
+.33     LDA T 
+        INA 
+        STA T 
+.34     LDB T 
+        CMB,INB 
+        ADB ID28
+        SSB 
+        JMP .35 
+        LDA ID29,I
+        ADA T,I 
+        STA ID29,I
+        JMP .33 
+*067  ! 
+*068        WRITF(O.BUF,.E.R.,I.BUF) ! WRITE ID 
+.35     JSB WRITF 
+        DEF *+4 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF I.BUF 
+*069        IER.
+        JSB IER.
+        DEF *+1 
+*070  ! 
+*071        ADS (     [IBUF_@O.BUF+16]+2) 
+        JSB .DRCT 
+        DEF O.BUF 
+        ADA .36 
+        STA IBUF
+        ADA .28 
+        STA .16 
+        JSB ADS 
+        DEF *+2 
+        DEF .16 
+*072  ! 
+*073        $IBUF_[IF[T_$ID27]<0 THEN 3,ELSE 2]            ! SET DISC LU
+        LDA ID27,I
+        STA T 
+        SSA,RSS 
+        JMP .37 
+        LDA .27 
+        JMP .38 
+.37     LDA .28 
+.38     STA IBUF,I
+*074  ! 
+*075        $ID12,$ID17_1 
+        CLA,INA 
+        STA ID12,I
+        STA ID17,I
+*076        $ID13_(T AND 77600K)-<9 
+        LDA T 
+        AND .39 
+        ALF,ALF 
+        RAL 
+        STA ID13,I
+*077        $ID14_( T AND 177K) 
+        LDA T 
+        AND .10 
+        STA ID14,I
+*078        $ID15_$SZ-<1
+        LDA SZ,I
+        RAL 
+        STA ID15,I
+*079        $ID16_128 
+        LDA .24 
+        STA ID16,I
+*080        $ID18_ [IF T<0 THEN $ SECT3,ELSE $SECT2]
+        LDB T 
+        SSB,RSS 
+        JMP .40 
+        LDA .42,I 
+        JMP .41 
+.40     LDA .43,I 
+.41     STA ID18,I
+*081        $(ID18+1)_$XEQT 
+        LDA ID18
+        INA 
+        LDB .44,I 
+        STB .A.,I 
+*082        RWNDF($IBUF,.E.R.)
+        JSB RWNDF 
+        DEF *+3 
+        DEF IBUF,I
+        DEF .E.R. 
+*083        IER.
+        JSB IER.
+        DEF *+1 
+*084  ! 
+*085  RDP:  READF ($IBUF,.E.R.,$ID26,256) 
+RDP     JSB READF 
+        DEF *+5 
+        DEF IBUF,I
+        DEF .E.R. 
+        DEF ID26,I
+        DEF .45 
+*086  ! 
+*087        IER.
+        JSB IER.
+        DEF *+1 
+*088  ! 
+*089        WRITF(O.BUF,.E.R.,$ID26,[IF[XF_XF-2]<0 \
+*                     THEN 128, ELSE 256])
+        LDA XF
+        ADA .19 
+        STA XF
+        SSA,RSS 
+        JMP .46 
+        LDA .24 
+        JMP .47 
+.46     LDA .45 
+.47     STA .16 
+        JSB WRITF 
+        DEF *+5 
+        DEF O.BUF 
+        DEF .E.R. 
+        DEF ID26,I
+        DEF .16 
+*090  ! 
+*091        IER.
+        JSB IER.
+        DEF *+1 
+*092  ! 
+*093        IF XF>0 THEN GO TO RDP
+        LDB XF
+        CMB,INB 
+        SSB 
+        JMP RDP 
+*094  ! 
+*095        RETURN
+        JMP SP..,I
+*096  ! 
+*097        END 
+*098  ! 
+*099  MF:   FUNCTION(MAD) 
+MAD     NOP 
+MF      NOP 
+        JSB .ENTR 
+        DEF MAD 
+*100        MFV_($(  MAD+1)-$MAD +77K) >-6
+        LDA MAD,I 
+        INA 
+        LDB MAD,I 
+        LDA .A.,I 
+        CMA,INA 
+        ADA .B.,I 
+        CMA,INA 
+        ADA .48 
+        ARS,ARS 
+        ARS,ARS 
+        ARS,ARS 
+        STA MFV 
+*101        RETURN
+        JMP MF,I
+*102        END 
+*103  ! 
+*104  ADS:  SUBROUTINE (BASE) 
+BASE    NOP 
+ADS     NOP 
+        JSB .ENTR 
+        DEF BASE
+*105        ID18_[ID17_[ID16_[ID15_[ID14_[ID13_[ID12\ 
+*               _ BASE]+1]+1]+1]+1]+1]+1
+        LDA BASE,I
+        STA ID12
+        INA 
+        STA ID13
+        INA 
+        STA ID14
+        INA 
+        STA ID15
+        INA 
+        STA ID16
+        INA 
+        STA ID17
+        INA 
+        STA ID18
+*106        ID30_[ID29_[ID28_[ID26_[ID25_[ID24_[ID23\ 
+*              _ID18+5]+1]+1]+1]+2]+1]+1
+        ADA .49 
+        STA ID23
+        INA 
+        STA ID24
+        INA 
+        STA ID25
+        INA 
+        STA ID26
+        ADA .28 
+        STA ID28
+        INA 
+        STA ID29
+        INA 
+        STA ID30
+*107        RETURN
+        JMP ADS,I 
+*108        END 
+*109        END 
+        END 
+*110        END$

@@ -1,0 +1,121 @@
+ASMB,B,R,L,C
+      NAM PURGE,7 
+      ENT PURGE 
+      EXT OPEN,EXEC 
+      EXT .ENTR,CLOSE 
+* 
+* 
+      SUP 
+* 
+*  PURGE  IS THE FILE DELETION ROUTINE FOR THE RTE
+*         FILE MANAGEMENT PACKAGE 
+* 
+*       THE FORTRAN CALLING SEQUENCE IS:
+* 
+*     CALL PURGE(IDCB,IERR,NAME,IS,ILU) 
+* 
+*  W H E R E: 
+* 
+*     IDCB          IS A 144-WORD DATA CONTROL BLOCK
+*                   WHICH IS USED BY PURGE AS A 
+*                   WORKING BUFFER.  IDCB IS FREE 
+*                   FOR OTHER USE AFTER A PURGE.
+* 
+*     IERR          IS THE ERROR RETURN LOCATION. 
+* 
+*     NAME          IS THE NAME OF THE FILE TO BE PURGED. 
+* 
+*     IS            IS THE FILE'S SECURITY CODE.
+* 
+*     ILU           IS THE DISC THAT THE FILE IS ON.
+*                     IF ILU >0 THEN ON DISC LABELED ILU
+*                     IF ILU <0 THEN ON DISC AT LOGICAL UNIT (-ILU) 
+* 
+*       ERRORS RETURNED BY PURGE ARE: 
+* 
+*     CODE    REASON
+*     0       NO ERRORS 
+*     -1      DISC READ/WRITE ERROR 
+*     -6      FILE (OR DISC) NOT FOUND
+*     -7      ILLEGAL SECURITY CODE 
+*     -8      FILE IS OPEN TO SOME OTHER PROGRAM
+*     -10     NOT ENOUGH PARAMETERS 
+*     -13     DISC LOCKED 
+*     -16     ATTEMPT TO PURGE A TYPE 0 FILE
+* 
+* 
+      SKP 
+DCB   NOP 
+IERR  NOP 
+NAME  DEF ZERO
+SC    DEF ZERO
+LU    DEF ZERO
+      SPC 1 
+PURGE NOP           ENTRY POINT 
+      JSB .ENTR     DO ENTRY ROUTINE
+      DEF DCB 
+      LDA N10       NOT ENOUGH PRAM 
+      LDB NAME      ERROR 
+      CPB DZERO     ? 
+      JMP EXIT      YES-EXIT
+      CLA           CLEAR THE TRUNCATE WORD 
+      STA LNG       AND 
+      SPC 1 
+      JSB OPEN      NO; GO
+      DEF OPRTN      OPEN 
+      DEF DCB,I       EXCLUSIVELY 
+      DEF IERR,I       TO 
+      DEF NAME,I        CALLER
+DZERO DEF ZERO
+      DEF SC,I      PASS THE SECURITY CODE
+      DEF LU,I       AND THE DISC ID
+OPRTN SSA           OPEN ERROR? 
+      JMP EXIT       YES; EXIT
+      SZA,RSS         NO; TYPE ZERO 
+      JMP EX16         YES - ILLEGAL PURGE
+      SPC 1 
+      LDA DCB       GET ADDRESS 
+      ADA .7         OF 
+      LDB A,I         SECURITY
+      SSB,RSS           IF MISMATCH 
+      JMP EX7            GO SET ERROR EXIT
+      SPC 1 
+      ADA N2        ADDRESS OF FILE LENGTH
+      LDA A,I       GET FILE LENGTH 
+      ARS           SET TO BLOCK LENGTH 
+      STA LNG       SET FOR TRUNCATE CODE 
+      SPC 1 
+CLOS  JSB CLOSE     CLOSE THE FILE AND TRUNCATE TO ZERO 
+      DEF *+4        (I.E. PURGE IT)
+      DEF DCB,I       FILE
+      DEF LU           DUMMY ERROR RETURN 
+      DEF LNG           TRUNCATE WORD ADDRESS 
+      LDB IERR,I    GET CURRENT ERROR CODE
+      SSB           IF NONE SKIP
+      LDA B         ELSE USE IT 
+EXIT  STA IERR,I    SET THE ERROR CODE
+      LDB DZERO        RESET
+X     REP 3             THE 
+      STB NAME+*-X       ENTRY
+      JMP PURGE,I         AND EXIT
+      SPC 2 
+EX7   LDA .7        SET ERROR 
+      CMA,INA,RSS    CODE AND SKIP
+EX16  LDA N16 
+      STA IERR,I    SET CODE IN USER AREA 
+      JMP CLOS      GO CLOSE THE FILE 
+      SPC 3 
+N2    DEC -2
+N10   DEC -10 
+.7    DEC 7 
+N16   DEC -16 
+LNG   NOP 
+ZERO  NOP 
+D.RTR ASC 3,D.RTR 
+      SPC 2 
+XEQT  EQU 1717B 
+A     EQU 0 
+B     EQU 1 
+      SPC 2 
+END   EQU * 
+      END 

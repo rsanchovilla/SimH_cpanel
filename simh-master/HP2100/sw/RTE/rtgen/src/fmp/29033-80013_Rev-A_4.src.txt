@@ -1,0 +1,118 @@
+ASMB,B,X,L  
+*001  SPL, L, M, O  
+*002        NAME FID.(8)
+        NAM FID.,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT FID.
+        EXT .ENTR 
+        EXT .DRCT 
+        EXT DR.RD 
+        EXT PK.DR 
+        EXT D.LT
+        EXT NAM.. 
+FID.V   BSS 1 
+#1      OCT 000001
+#2      OCT 000000
+PDIR8   BSS 1 
+PDIR7   BSS 1 
+PDIR6   BSS 1 
+PDIR5   BSS 1 
+PDIR3   BSS 1 
+PDIR    BSS 1 
+#3      OCT 000003
+#4      OCT 000002
+TX      BSS 1 
+#5      OCT 077777
+AREG    BSS 1 
+*003        LET DR.RD    BE SUBROUTINE,EXTERNAL 
+*004        LET READI    BE CONSTANT(1) 
+*005        LET PK.DR,D.LT    BE INTEGER,EXTERNAL 
+*006  ! 
+*007  FID.: FUNCTION (DS)GLOBAL              !RETURNS FALSE IF A FILE SYSTEM
+DS      NOP 
+FID.    NOP 
+        JSB .ENTR 
+        DEF DS
+*008                                         !EXIST ON DISC WITH ID 
+*009                                         !DS
+*010        LET NAM..              BE SUBROUTINE,EXTERNAL 
+*011        DR.RD(READI,DS,0)?[GO TO RETF]   !READ THE DIRECTORY
+        JSB DR.RD 
+        DEF *+4 
+        DEF #1
+        DEF DS,I
+        DEF #2
+        SEZ 
+        JMP RETF
+*012  ! 
+*013        PDIR8_[PDIR7_[PDIR6_[PDIR5_[PDIR3_[PDIR_@PK.DR]\
+*          +3]+2]+1]+1]+1 
+        JSB .DRCT 
+        DEF PK.DR 
+        STA PDIR
+        ADA #3
+        STA PDIR3 
+        ADA #4
+        STA PDIR5 
+        INA 
+        STA PDIR6 
+        INA 
+        STA PDIR7 
+        INA 
+        STA PDIR8 
+*014        DO[TX_$PDIR;$PDIR_TX AND 77777K]
+        LDA PDIR,I
+        STA TX
+        AND #5
+        STA PDIR,I
+*015        DO[NAM..(PK.DR);AREG_$0;$PDIR_TX]!CHECK ASC LABEL 
+        JSB NAM.. 
+        DEF *+2 
+        DEF PK.DR 
+        LDA #2,I
+        STA AREG
+        LDA TX
+        STA PDIR,I
+*016          IF AREG THEN GOTO RETF         !IF ILLEGAL OR FLAG
+        LDA AREG
+        SZA 
+        JMP RETF
+*017        IF TX>0 THEN GOTO RETF           !NOT SET THEN NO FILE
+        LDA TX
+        CMA,INA 
+        SSA 
+        JMP RETF
+*018          IF $(PDIR3 )<0 THEN GOTO RETF  !IF LABEL WORD LESS THAN ZERO
+        LDA PDIR3,I 
+        SSA 
+        JMP RETF
+*019          IF $(PDIR7 )-$(PDIR8 )-1 #$D.LT THEN GOTO RETF !LTR MAKE
+        LDA PDIR8,I 
+        CMA,INA 
+        ADA PDIR7,I 
+        CCB 
+        ADB .A. 
+        LDA D.LT
+        LDA .A.,I 
+        CPB .A. 
+        RSS 
+        JMP RETF
+*020          IF $(PDIR6 )<$(PDIR5 ) THEN GO TO RETF
+        LDA PDIR5,I 
+        CMA,INA 
+        ADA PDIR6,I 
+        SSA 
+        JMP RETF
+*021        DO[FID.V_0; RETURN] 
+        CLA 
+        STA FID.V 
+        JMP FID.,I
+*022  RETF: DO[FID.V_1;RETURN]
+RETF    CLA,INA 
+        STA FID.V 
+        JMP FID.,I
+*023        END 
+*024  ! 
+*025        END 
+        END 

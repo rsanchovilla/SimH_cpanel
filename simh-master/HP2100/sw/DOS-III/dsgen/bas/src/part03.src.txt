@@ -1,0 +1,717 @@
+ASMB,R,B,L,X
+      HED SYNTAX PROCESSOR COMMON ROUTINE 
+      NAM SYNP0,7 
+      SPC 2 
+      ENT SYNTX,ACCST 
+      ENT EOST,DCOM0
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3) 
+      COM CDFLG,ARYAD,GFLAG 
+      COM SIGN
+      SPC 2 
+      EXT PBUFF,TAPER,SINIT,DCMPL,SERR7,GETCR 
+      EXT BCKSP,BLDIN,FNDPS,DELPR,LW200,TBSRH,STTYP 
+      EXT ASNS,USINS,REMS,LWAUS,RSTRS,MATS,FILES
+      EXT CHANS,ENTRS 
+      EXT OUTCR,SCHEQ,S14SC,FSC,SYMCK,ASSOB 
+      EXT RSTOP,VAROP,COMMB,LTR,FN,STROP
+      EXT LPCK,RPCK,SBPUD,CHRST,PRGIN,OF
+      EXT AEND,FILRF,MCREL,RELOB,ATHEN,TO,ASTEP 
+      EXT NUMCK,GETST,RECRF,USTCK,SEMIB,PFSRH 
+      EXT #LDFG 
+      SPC 2 
+.105  OCT 105 
+ALI   OCT 160014
+CFLAG EQU .+2 
+TERR  EQU .+1 
+STBAS DEF SYNTB-42B,I 
+TAPEF EQU .+8 
+TOOP  OCT 76000 
+MNEG  OCT 100000
+B73   OCT 73
+FLGBT EQU MNEG
+*                              *
+**  CLEAN UP FOR NEW PROGRAM  **
+*                              *
+CLNUP LDA CFLAG    SET
+      CMA             PROGRAM 
+      AND MAIN,I        MODE TO 
+      STA MAIN,I          'UNCOMPILED'
+      LDB PBUFF     INSURE CORRECT
+      STB SPROG       START-OF--PROGRAM SETTING 
+      CLB           INITIALIZE
+      STB SYMTB       ERROR FLAG
+      JMP SYNT1 
+**                                **
+***  DELETE A PROGRAM STATEMENT  ***
+**                                **
+* 
+*  THE STATEMENT REFERENCED BY THE SEQUENCE NUMBER IN 
+*  (B) IS DELETED.  EXIT TO EXECUTIVE.
+* 
+DELST LDA PBPTR     LOAD SEARCH TERMINATION POINTER 
+      JSB FNDPS     SEARCH FOR STATEMENT
+      JMP ACCS5    NOT
+      JMP ACCS5      FOUND
+      CLA 
+      INB           (B),I = STATEMENT LENGTH
+      LDB 1,I       LOAD LENGTH OF OLD STATEMENT
+      JSB DELPR     DELETE
+      JMP ACCS5      STATEMENT
+* 
+* ******************************* 
+****                           ***
+***  CHECK SYNTAX OF STATEMENT  *** 
+****                           ***
+* ******************************* 
+* 
+*  PBPTR POINTS TO THE LAST WORD +1 OF THE PREVIOUS PROGRAM AND 
+*  THUS ALSO POINTS TO THE FIRST WORD OF AVAILABLE USER SPACE,
+*  WHERE THE NEW STATEMENT WILL BE TRANSLATED.  WHEN AN ERROR 
+*  OCCURS UNDER 'TAPE' MODE, THE USER'S TERR BIT IN THE FIRST WORD
+*  OF HIS TTY TABLE IS SET AND HIS COPY OF ERRCT IS BUMPED. IF AN 
+*  OUT-OF-STORAGE ERROR OCCURS IN 'TAPE' MODE, SYMTB IS SET TO 1
+*  AND ALL SUBSEQUENT PROGRAM MATERIAL IS REJECTED.  IF UPON ENTRY
+*  THE PRIOR PROGRAM IS NULL, ALL FLAGS ARE SET TO NULL; IF THE 
+*  PRIOR PROGRAM IS NOT NULL, IT IS PLACED IN 'SOURCE' MODE. SYNTAX 
+*  WILL REJECT ADDITIONAL STATEMENTS IF FEWER THAN 200 WORDS OF 
+*  USER SPACE ARE AVAILABLE BUT WILL ACCEPT STATEMENT DELETIONS IF
+*  IN 'KEY' MODE. 
+* 
+SYNTX LDB PBPTR     NULL
+      CPB PBUFF       PROGRAM?
+      JMP CLNUP     YES 
+      LDA TERR      NO, ERROR 
+      AND MAIN,I      FLAG
+      SZA,RSS           SET?
+      JMP SYNT1     NO
+      CLA           YES, ERRORS 
+      CPA ERRCT       IMBEDDED IN CODE? 
+      JMP TAPER    NO. *****
+SYNT1 JSB SINIT     YES, PREPARE PROGRAM
+      JSB DCMPL       FOR SYNTAX
+      CLB           SET LINE NUMBER 
+      STB PBPTR,I     TO ZERO 
+      LDA PBPTR     SET SYNTAX POINTER TO FIRST 
+      STA SBPTR       AVAILABLE WORD OF USER SPACE
+      STA SBUFA     SAVE POINTER TO SYNTAX BUFFER 
+      ADA .105        AND TO
+      STA SSTAK         SYNTAX STACK
+      STA SYNTQ 
+      INB           DOES 'OUT OF STORAGE' 
+      CPB SYMTB       ERROR EXIST?
+      JMP SERR7    YES
+      JSB GETCR     NO, EMPTY RECORD? 
+      JMP ACCS5    YES
+      JSB BCKSP     NO
+*                               * 
+**  DETERMINE SEQUENCE NUMBER  ** 
+*                               * 
+* 
+*  A RECORD CONSISTING ONLY OF A SEQUENCE NUMBER WILL CAUSE THE 
+*  DELETION OF A PREVIOUSLY ACCEPTED STATEMENT REFERENCED BY THAT 
+*  SEQUENCE NUMBER. 
+* 
+      JSB BLDIN     RECORD
+      STB SBPTR,I     SEQUENCE
+      ISZ SBPTR         NUMBER
+      CPA .+15B     NULL STATEMENT? 
+      JMP DELST     YES 
+      ISZ SBPTR     NO, SKIP STATEMENT LENGTH WORD
+      STA SBPTR,I   SAVE FIRST CHARACTER
+      LDA PBPTR     ACCEPTABLE AMOUNT 
+      ADA LW200       OF USER SPACE 
+      SSA,RSS           REMAINING?
+      JSB SERRS,I   NO
+*                              *
+**  DETERMINE STATEMENT TYPE  **
+*                              *
+      LDA .+7       SET MAXIMUM 
+      STA MAXCR       SYMBOL LENGTH 
+      LDA STTYP     STATEMENT-TYPE NAMES
+      LDB .-25      -(NUMBER OF STATEMENT TYPES)
+      JSB TBSRH     FIND STATEMENT TYPE 
+      LDA LETOP     NO, ASSUME 'IMPLIED' LET
+      LDB .-9       DISALLOW
+      STB MSFLG       MULTIPLE STORE
+      LDB .+3       SET MAXCR TO MOST 
+      STB MAXCR       COMMON VALUE
+      CLB           TURN OFF
+      STB PFLAG       'PARAMETER' MODE
+      ALF,ALF 
+      RAR 
+      AND B177
+      STA SFLAG     TURN OFF STRING AND STORE MODES 
+      STA DFLAG     TURN ON 'SUBSCRIPT' MODE
+      ADA STBAS     BRANCH TO 
+      JMP 0,I         SYNTAX ROUTINE
+      SKP 
+**                                   ** 
+***  STATEMENT SYNTAX ENTRY POINTS  *** 
+**                                   ** 
+SYNTB DEF ASNS      ASSIGN
+      DEF USINS     USING 
+      DEF IMAGS     IMAGE 
+      DEF COMS      COM 
+      DEF LETS      LET 
+      DEF DIMS      DIM 
+      DEF DEFS      DEF 
+      DEF REMS      REM 
+      DEF GOTOS     GOTO
+      DEF IFS       IF
+      DEF FORS      FOR 
+      DEF NEXTS     NEXT
+      DEF GOTOS     GOSUB 
+      DEF ENDS      RETURN
+      DEF ENDS      END 
+      DEF ENDS      STOP
+      DEF DATAS     DATA
+      DEF INPTS     INPUT 
+      DEF READS     READ
+      DEF PRINS     PRINT 
+      DEF RSTRS     RESTORE 
+      DEF MATS      MAT 
+      DEF FILES     FILES 
+      DEF CHANS     CHAIN 
+      DEF ENTRS     ENTER 
+      DEF LET0      'IMPLIED' LET 
+**                        **
+***  ACCEPT A STATEMENT  ***
+**                        **
+* 
+*  A CORRECT STATEMENT IS ADDED TO THE PROGRAM BUFFER.
+*  IF ITS SEQUENCE NUMBER IS THE HIGHEST SO FAR, ONLY 
+*  THE END-OF-PROGRAM POINTER REQUIRES CHANGE, SINCE THE
+*  STATEMENT IS TRANSLATED IMMEDIATELY BELOW THE PREVIOUS 
+*  PROGRAM.  OTHERWISE THE NEW STATEMENT IS INSERTED INTO 
+*  THE PROGRAM IN PROPER SEQUENTIAL POSITION.  IF ITS 
+*  SEQUENCE NUMBER COINCIDES WITH THAT OF A PREVIOUS
+*  PROGRAM STATEMENT, IT REPLACES IT, WITH SPACE MADE OR
+*  DELETED IN THE PROGRAM AS NECESSARY.  EXIT TO EXEC.
+*  IF STATEMENT LENGTH = 0 THE STATEMENT WAS REJECTED DUE TO
+*  A STORAGE OVERFLOW IN TAPE MODE.  IF IN KEYBOARD MODE AND
+*  SYMTB = 4 AT LEAST ONE OVER/UNDERFLOW OCCURRED WHILE ANALYZING 
+*  THE STATEMENT SO EMIT THE ERROR; OTHERWISE ECHO A LINE FEED. 
+*  IF IN TAPE MODE MOVE THE START-OF-RECORD POINTER TO THE START
+*  OF THE NEXT BUFFER AND IF IT IS COMPLETED SYNTAX IT NOW, ELSE
+*  EXIT TO EXEC.
+* 
+ACCST LDB SBUFA 
+      INB 
+      LDA SBUFA     COMPUTE 
+      CMA,INA         STATEMENT 
+      ADA SBPTR         LENGTH
+      SZA,RSS       UNPROCESSED STATEMENT?
+      JMP ACCS6     YES 
+      STA 1,I       NO, STORE LENGTH IN STATEMENT 
+      STA TEMP+2    SAVE IT 
+      LDA PBPTR     FIND STATEMENT'S
+      LDB SBUFA,I     SEQUENTIAL
+      JSB FNDPS         POSITION
+      JMP ACCS4     APPEND STATEMENT TO PROGRAM 
+      JMP ACCS2     INSERT STATEMENT INTO PROGRAM 
+      INB           REPLACE PRIOR STATEMENT 
+      LDA 1,I       COMPARE LENGTH
+      CMA,INA         OF NEW STATEMENT
+      ADA TEMP+2        WITH THAT OF OLD
+      SZA,RSS       EQUAL?
+      JMP ACCS1     YES 
+      SSA,RSS       NO, LONGER? 
+      JMP ACCS2+1   YES 
+      LDA TEMP+2    NO, SHORTER 
+      LDB 1,I       LOAD LENGTH OF OLD STATEMENT
+      JSB DELPR     DELETE EXTRA LENGTH 
+ACCS1 LDB SBUFA     LOAD FIRST SOURCE ADDRESS 
+      LDA 1,I       TRANSFER
+      STA TEMP+1,I    A WORD
+      ISZ TEMP+1    ADVANCE DESTINATION 
+      INB             AND SOURCE ADDRESSES
+      CPB SBPTR     DONE? 
+      JMP ACCS5     YES 
+      JMP ACCS1+1   NO
+ACCS2 LDA TEMP+2    LOAD SPACE REQUIREMENT
+      ADA SBUFA     UPDATE POINTER
+      STA SBUFA       TO NEW STATEMENT
+      ADA TEMP+2    RESET 
+      LDB SBPTR       END OF STATEMENT
+      STA SBPTR         POINTER 
+      STA TEMP+2    INITIALIZE DESTINATION ADDRESS
+      CMA           USER
+      ADA LWAUS       SPACE 
+      SSA               OVERFLOW? 
+      JSB SERRS,I   YES 
+      LDA SBUFA     NO, UPDATE POINTER
+      STA PBPTR       TO END-OF-PROGRAM 
+ACCS3 CPB TEMP+1    EVERYTHING MOVED? 
+      JMP ACCS1     YES 
+      CCA           NO, BACK UP 
+      ADA TEMP+2      SOURCE AND
+      STA TEMP+2        DESTINATION 
+      ADB .-1             ADDRESSES 
+      LDA 1,I       TRANSFER
+      STA TEMP+2,I    A WORD
+      JMP ACCS3 
+ACCS4 LDA SBPTR     RESET POINTER TO
+      STA PBPTR       LAST WORD+1 OF PROGRAM
+ACCS5 LDA TAPEF     TAPE
+      AND MAIN,I
+      SZA            MODE?
+      JMP ACCS6     YES 
+      LDB SYMTB     NO
+      STA SYMTB     RESET UNDER/OVERFLOW FLAG 
+      CPB .+4       UNDER/OVERFLOW ERROR(S)?
+      JSB RERRS+32,I  YES 
+      LDA #LDFG     GET LOAD FLAG 
+      SZA           LOAD? 
+      JMP SCHEQ     YES 
+      LDA .+12B     NO, 
+      JSB OUTCR       OUTPUT A
+      JMP SCHEQ        LINE FEED
+ACCS6 LDB MAIN      ALLOW 
+      INB 
+      LDA 1,I         MORE
+      IOR ALI 
+      JSB S14SC        INPUT
+      JMP SCHEQ 
+      SPC 2 
+LETOP OCT 73000 
+.58   DEC 58
+B177  OCT 177 
+B777  OCT 777 
+M73   DEC -73 
+SBP   OCT 120000
+OPMSK OCT 77000 
+RBP   OCT 140000
+OFOP  OCT 174003
+FBP   EQU SBP 
+DCOM0 DEF COMS0 
+* 
+***                        ** 
+**  <LET STATEMENT> SYNTAX  **
+***                        ** 
+* 
+LET0  LDA LETOP     FAKE
+      STA SBPTR,I     A 
+      JSB BCKSP         'LET' 
+LETS  LDB SBPTR     ENABLE A
+      STB SFLAG       STRING VARIABLE 
+      ISZ MSFLG     TURN ON 'MULTIPLE STORE' MODE 
+      JSB FSC       ANALYZE FORMULA 
+      ISZ SFLAG     STRING VARIABLE FOUND?
+      JMP LET1      NO
+      JSB SYMCK     YES, (B) IS LEFT AT -1
+      DEF ASSOB    DEMAND ASSIGNMENT OPERATOR 
+      JSB SERRS+3,I NOT FOUND 
+      JSB RSTOP     RECORD A STRING OPERAND 
+      JMP EOST      DEMAND END OF STATEMENT 
+LET1  ISZ SFLAG     DID A STORE OCCUR?
+      JSB SERRS+3,I NO
+**                                **
+***  CHECK FOR END OF STATEMENT  ***
+**                                **
+EOST  CPA .+15B     END OF STATEMENT? 
+      JMP ACCST    YES
+      JSB SERRS+4,I NO
+* 
+***                        ** 
+**  <DIM STATEMENT> SYNTAX  **
+***                        ** 
+* 
+DIMS  CLA           FLAG AS DIM STATEMENT 
+* 
+***                        ** 
+**  <COM STATEMENT> SYNTAX  **
+***                        ** 
+* 
+COMS  STA CDFLG     FLAG AS COM STATEMENT 
+      STB DFLAG     TURN ON 'DIM' MODE ( (B)=0 )
+      LDA SBPTR     ENABLE STRING 
+      STA SFLAG       VARIABLE
+      JSB VAROP     SEEK VARIABLE OPERAND 
+      JSB SERRS+5,I IMPROPER SUBSCRIPT
+COMS0 JMP COMS1     ARRAY OR STRING FOUND 
+      CLB           SIMPLE VARIABLE 
+      CPB CDFLG     'DIM'?
+      JSB SERRS+5,I  YES--ERROR 
+COMS1 CPA .+15B     NO, CARRIAGE RETURN FOLLOWS?
+      JMP ACCST    YES
+      CCB           NO
+      JSB SYMCK     COMMA?
+      DEF COMMB 
+      JSB SERRS+6,I NO
+      JMP COMS+2    YES 
+* 
+***                        ** 
+**  <DEF STATEMENT> SYNTAX  **
+***                        ** 
+* 
+DEFS  JSB LTR       FIRST TWO 
+      JSB SERRS+7,I 
+      ALF,ALF         CHARACTERS
+      IOR TEMP+1
+      CPA FN            'FN' ?
+      RSS           YES 
+      JSB SERRS+7,I NO
+      JSB LTR       FOLLOWED BY A LETTER? 
+      JSB SERRS+7,I NO
+      LDA TEMP+1    YES,
+      LDB .58         RECORD
+      JSB STROP         FUNCTION
+      LDA TEMP+2    RETRIEVE FOLLOWING CHARACTER
+      JSB LPCK      DEMAND LEFT PARENTHESIS 
+      IOR FLGBT     SET FLAG FOR
+      STA SBPTR,I     FORMAL PARAMETER
+      JSB VAROP     DEMAND A SIMPLE VARIABLE
+      NOP           NONE
+      JSB SERRS+8,I   FOUND 
+      JSB RPCK      DEMAND A RIGHT PARENTHESIS
+      CCB           ASSIGNMENT
+      JSB SYMCK       OPERATOR
+      DEF ASSOB        NEXT?
+      JSB SERRS+3,I NO
+      LDA .-2       YES,
+      ADA SBPTR       ISOLATE 
+      LDA 0,I           AND SAVE
+      AND B777            FORMAL
+      STA PFLAG             PARAMETER 
+      JSB FSC       FETCH DEFINING FORMULA
+      JSB SBPUD     RECORD END-OF-FORMULA OPERATOR
+      JMP EOST      DEMAND END OF STATEMENT 
+* 
+***                          ** 
+**  <IMAGE STATEMENT> SYNTAX  **
+***                          ** 
+* 
+IMAGS LDB SBPTR     SAVE CURRENT
+      STB ARYAD       BUFFER POINTER
+      CLB 
+      LDA .+15B     SET DELIMETER 
+      JSB CHRST     RECORD STRING CONSTANT
+      NOP 
+      LDA TEMP+1    LENGTH
+      ADA M73 
+      SSA,RSS            >72? 
+      JSB SERRS+31,I  YES 
+      LDA ARYAD,I   NO, 
+      ADA TEMP+1      RECORD
+      STA ARYAD,I       LENGTH
+      JMP ACCST 
+* 
+***                                             **
+**  <GOTO STATEMENT> & <GOSUB STATEMENT> SYNTAX  ** 
+***                                             **
+* 
+GOTOS LDA SBP       SAVE
+      LDB MAIN
+      INB             BUFFER
+      IOR 1,I 
+      JSB S14SC        POINTER
+      CCA           SET INTCK MODE TO 
+      STA GFLAG       'EXIT ON ERROR' 
+      JSB PRGIN     SEEK SEQUENCE NUMBER
+      JMP GOTO3     FOUND 
+      CCB           NOT FOUND 
+GOTO1 ADB SBPTR     BACK UP 
+      STB SBPTR       SYNTAX POINTER
+      LDA SBPTR,I   ERASE 
+      AND OPMSK       'INTEGER FOLLOWS' 
+      STA SBPTR,I       FLAG
+      LDA RBP       RESTORE 
+      LDB MAIN
+      INB             BUFFER
+      IOR 1,I 
+      JSB S14SC        POINTER
+      JSB FSC       SEEK FORMULA
+      CPA .+15B     END-OF-RECORD?
+      JSB SERRS+9,I YES 
+      ALF,ALF       NO, DO
+      STA TEMP+1      NEXT
+      JSB GETCR         TWO 
+      JSB SERRS+9,I       CHARACTERS
+      IOR TEMP+1            FORM
+      CPA OF                  'OF' ?
+      RSS           YES 
+      JSB SERRS+9,I NO
+      LDA OFOP      RECORD
+      STA SBPTR,I     'OF' AND
+      JSB SBPUD         ADVANCE POINTER 
+GOTO2 JSB BLDIN     DEMAND A SEQUENCE NUMBER
+      STB SBPTR,I   RECORD IT 
+      JSB SBPUD 
+      CPA .+44      COMMA NEXT? 
+      JMP GOTO2     YES 
+      JMP EOST      NO, DEMAND END OF STATEMENT 
+GOTO3 CPA .+15B     END OF STATEMENT? 
+      JMP GOTO4     YES 
+      STA GFLAG     NO, RE-ENABLE BAD INTEGER ERROR 
+      LDB .-2 
+      JMP GOTO1 
+GOTO4 LDA FBP       FREE
+      LDB MAIN
+      INB             SAVED 
+      IOR 1,I 
+      JSB S14SC        BUFFER SPACE 
+      JMP ACCST    ACCEPT STATEMENT 
+* 
+***                       **
+**  <IF STATEMENT> SYNTAX  ** 
+***                       **
+* 
+IFS   ISZ SBPTR     FETCH NEXT
+      JSB GETCR       CHARACTER 
+      JSB SERRS+31,I  NONE FOUND
+      STA SBPTR,I   FOUND, SAVE IT
+      LDA AEND      LOOK
+      CCB             FOR 
+      JSB TBSRH         'END' 
+      JMP IF0       NOT FOUND 
+      JSB FILRF     FOUND, GET FILE REFERENCE 
+      JSB SERRS+32,I  NONE FOUND
+      JMP IF1+1     FOUND 
+IF0   JSB BCKSP     RESTORE 
+      CCB             TO
+      ADB SBPTR         ENTRY 
+      STB SBPTR           STATUS
+      STB SFLAG     ENABLE STRING VARIABLE
+      JSB FSC       SEEK DECISION FORMULA 
+      ISZ SFLAG     STRING VARIABLE FOUND?
+      JMP IF1+1     NO
+      STA TEMP+1    YES, SAVE NEXT CHARACTER
+      LDB .-3       MAXCR = 3 FROM FSC
+      STA SBPTR,I   MULTICHARACTER
+      LDA MCREL       RELATIONAL
+      JSB TBSRH         OPERATOR? 
+      RSS           NO
+      JMP IF1       YES 
+      LDA TEMP+1    RETRIEVE CHARACTER
+      LDB .-4       SINGLE CHARACTER
+      JSB SYMCK       RELATIONAL
+      DEF RELOB        OPERATOR?
+      JSB SERRS+16,I  NO
+IF1   JSB RSTOP     YES, RECORD A STRING OPERAND
+      STA SBPTR,I   SAVE NEXT CHARACTER 
+      ISZ MAXCR     BUMP LIMIT TO FOUR CHARACTERS 
+      LDA ATHEN     LOOK
+      CCB             FOR 
+      JSB TBSRH         'THEN'
+      JSB SERRS+10,I  NOT FOUND 
+      JSB PRGIN     DEMAND A SEQUENCE NUMBER
+      JMP EOST      DEMAND END OF STATEMENT 
+* 
+***                        ** 
+**  <FOR STATEMENT> SYNTAX  **
+***                        ** 
+* 
+FORS  JSB VAROP     SEEK A SIMPLE VARIABLE
+      NOP           NONE
+      JSB SERRS+8,I   FOUND 
+      CCB           DEMAND AN 
+      JSB SYMCK       ASSIGNMENT
+      DEF ASSOB        OPERATOR?
+      JSB SERRS+3,I NOT FOUND 
+      JSB FSC       RECORD INITIALIZATION FORMULA 
+      ALF,ALF       DO
+      STA TEMP+1      NEXT
+      JSB GETCR         TWO 
+      JSB SERRS+11,I      CHARACTERS
+      IOR TEMP+1            FORM
+      CPA TO                  'TO' ?
+      RSS           YES 
+      JSB SERRS+11,I  NO
+      LDA TOOP      RECORD
+      STA SBPTR,I     'TO'
+      JSB FSC       RECORD LIMIT FORMULA
+      CPA .+15B     END OF STATEMENT? 
+      JMP ACCST    YES
+      STA SBPTR,I   NO, IS NEXT 
+      ISZ MAXCR 
+      LDA ASTEP       SYMBOL
+      CCB 
+      JSB TBSRH         'STEP' ?
+      JSB SERRS+12,I  NO
+      JSB FSC       YES, RECORD STEP SIZE 
+      JMP EOST      DEMAND END OF STATEMENT 
+* 
+***                         **
+**  <NEXT STATEMENT> SYNTAX  ** 
+***                         **
+* 
+NEXTS JSB VAROP     SEEK SIMPLE VARIABLE
+      NOP           NOT 
+      JSB SERRS+8,I   FOUND 
+      JMP EOST      DEMAND END OF STATEMENT 
+* 
+***                                      ** 
+**  <RETURN STATEMENT>, <END STATEMENT>,  **
+**    AND <STOP STATEMENT> SYNTAX         **
+***                                      ** 
+* 
+ENDS  ISZ SBPTR     RECORD NULL OPERAND 
+      JSB GETCR     END OF STATEMENT? 
+      JMP ACCST    YES
+      JSB SERRS+4,I NO
+* 
+***                         **
+**  <DATA STATEMENT> SYNTAX  ** 
+***                         **
+* 
+DATAS JSB SBPUD 
+      CLA           INITIALIZE
+      STA SIGN        SIGN
+      JSB GETCR     REQUEST A CHARACTER 
+      JSB SERRS+13,I  END-OF-INPUT CONDITION
+      CLB,INB 
+      CPA .+43      '+' ? 
+      JMP DATA4     YES 
+      CCB           NO
+      CPA .+45      '-' ? 
+      JMP DATA4     YES 
+DATA1 JSB NUMCK     NO, NUMBER? 
+      JMP DATA3     NO
+      JSB SERRS+14,I  BAD EXPONENT
+      LDB .-3       NUMBER, 
+      ADB SBPTR       MARK
+      LDA 1,I           PREVIOUS
+      IOR FLGBT           OPERATOR AS 
+      STA 1,I               'NUMBER FOLLOWS'
+      LDA TEMP+1    RETRIEVE FOLLOWING CHARACTER
+DATA2 CCB           COMMA 
+      JSB SYMCK 
+      DEF COMMB      NEXT?
+      JMP EOST      NO, DEMAND END OF STATEMENT 
+      JMP DATAS     YES 
+DATA3 CPB SIGN      SIGN FOUND? ( (B) = 0 ) 
+      RSS           NO
+      JSB SERRS+15,I  YES 
+      JSB GETST     DEMAND A STRING CONSTANT
+      JMP DATA2 
+DATA4 STB SIGN      RECORD SIGN 
+      JSB GETCR 
+      JSB SERRS+15,I  END-OF-INPUT CONDITION
+      JMP DATA1 
+* 
+***                         **
+**  <READ STATEMENT> SYNTAX  ** 
+***                         **
+* 
+READS JSB RECRF     READ FROM FILE? 
+      JMP READ1     NO
+      CPA .+15B     YES, PSUEDO-RESTORE?
+      JMP ACCST    YES
+      CPA B73       NO, ';' ? 
+      JMP INPTS     YES 
+      JSB SERRS+6,I NO
+READ1 JSB BCKSP 
+      SKP 
+* 
+***                          ** 
+**  <INPUT STATEMENT> SYNTAX  **
+***                          ** 
+* 
+INPTS LDB SBPTR     ENABLE STRING 
+      STB SFLAG       VARIABLE
+      JSB VAROP     SEEK VARIABLE OPERAND 
+      JSB SERRS+17,I  NONE FOUND
+      NOP 
+      CCB 
+      JSB SYMCK     COMMA?
+      DEF COMMB 
+      JMP EOST      NO, DEMAND END OF STATEMENT 
+      JMP INPTS     YES 
+* 
+***                          ** 
+**  <PRINT STATEMENT> SYNTAX  **
+***                          ** 
+* 
+PRINS JSB SBPUD     ADVANCE SYNTAX BUFFER POINTER 
+      JSB GETCR     FETCH NEXT CHARACTER
+      JMP ACCST    NONE FOUND 
+      JSB USTCK     CHECK FOR USING STATEMENT 
+      JMP PRN01     NONE FOUND
+      CPA .+15B     END OF STATEMENT? 
+      JMP ACCST    YES
+      CCB           NO, 
+      JSB SYMCK       SEMI-COLON
+      DEF SEMIB        FOLLOWS
+      JSB SERRS+34,I NO 
+PRN10 JSB SBPUD     ADVANCE SYNTAX BUFFER POINTER 
+      JSB GETCR     FETCH NEXT CHARACTER
+      JSB SERRS+6,I NONE FOUND
+      STA SBPTR,I   SAVE CHARACTER
+      JSB PFSRH     SEARCH FOR PRINT FUNCTION 
+      JMP PRN11     FOUND 
+      STB SFLAG     ENABLE STRING VARIABLE
+      JSB FSC       LOOK FOR FORMULA
+PRN11 CPA .+15B     CARRIAGE RETURN FOLLOWS?
+      JMP ACCST    YES
+      CCB           NO, 
+      JSB SYMCK       COMMA?
+      DEF COMMB 
+      JSB SERRS+6,I NO, ERROR 
+      JMP PRN10     YES 
+PRN01 JSB RECRF     WRITE ONTO FILE?
+      JMP PRIN0-1   NO
+      CCB           YES, SET
+      STB FILRF       'FILE' FLAG 
+      CPA .+15B     NULL WRITE? 
+      JMP ACCST    YES
+      CPA B73       NO, ';' ? 
+      JMP PRIN0     YES 
+      JSB SERRS+6,I NO
+      JSB BCKSP 
+PRIN0 JSB SBPUD     ADVANCE SYNTAX BUFFER POINTER 
+      JSB GETCR     MORE STATEMENT? 
+      JMP PRIN7     NO
+      CCB           YES, ENABLE 
+      STB PFLAG       FORMULA AND TAB 
+      CPA .+42B     " ? 
+      RSS           YES 
+      JMP PRIN3     NO
+PRIN1 JSB GETST     RECORD A STRING CONSTANT
+      CPA .+15B     END OF STATEMENT? 
+      JMP ACCST    YES
+      CCB           NO
+      STB PFLAG 
+PRIN2 CPA .+42B     " ? 
+      JMP PRIN1     YES 
+      LDB .-2       NO
+      JSB SYMCK     COMMA OR
+      DEF COMMB        SEMICOLON? 
+      CLB,RSS       NO
+      JMP PRIN0     YES 
+      STB SBPTR,I   ZERO NEXT WORD
+      JSB SBPUD 
+PRIN3 ISZ PFLAG     FORMULA OR TAB PERMITTED? 
+      JSB SERRS+6,I NO
+      STA SBPTR,I   YES 
+      CCB           'FILE'
+      ISZ FILRF       MODE? 
+      JMP PRIN4     NO
+      STB FILRF     YES, SET FLAG AGAIN 
+      LDA AEND
+      JSB TBSRH     'END' ? 
+      JMP PRIN5     NO
+      JSB SBPUD     YES 
+      JSB GETCR     FETCH NEXT
+      JMP ACCST      CHARACTER
+      JMP PRIN2 
+PRIN4 JSB PFSRH     SEARCH FOR PRINT FUNCTION 
+      JMP PRIN6     FOUND 
+      JMP PRIN8     NOT FOUND 
+PRIN5 JSB BCKSP     BACKUP
+      CCB             TO POINT
+      ADB SBPTR         FOLLOWING 
+      STB SBPTR           LAST OPERATOR 
+PRIN8 STB SFLAG     ENABLE STRING VARIABLE
+      JSB FSC       RECORD FORMULA
+PRIN6 CPA .+15B     END OF STATEMENT? 
+      JMP ACCST    YES
+      JMP PRIN2     NO
+PRIN7 ISZ FILRF     'FILE' MODE?
+      JMP ACCST    NO 
+      JSB SERRS+2,I   YES 
+* 
+      END 

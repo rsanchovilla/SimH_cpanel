@@ -1,0 +1,230 @@
+ASMB,B,X,L
+*001  SPL, L, M, O
+*002        NAME PU..(8)
+        NAM PU..,8
+.A.     EQU  0
+.B.     EQU  1
+        ENT PU..
+        EXT .ENTR 
+        EXT .MPY
+        EXT .DIV
+        EXT .DRCT 
+        EXT .E.R. 
+        EXT I.BUF 
+        EXT N.OPL 
+        EXT PK.DR 
+        EXT IER.
+        EXT DR.RD 
+        EXT LOCK. 
+        EXT PURGE 
+T       BSS 1 
+BLK     BSS 1 
+.2      OCT 177772
+.3      OCT 174052
+.4      OCT 177760
+X       BSS 1 
+.5      OCT 000377
+TI      BSS 1 
+.6      OCT 000016
+.7      OCT 001757
+.8      OCT 000001
+.9      OCT 000100
+.10     OCT 001756
+LOC     BSS 1 
+.11     OCT 000400
+.12     BSS 1 
+.13     OCT 177776
+.14     OCT 000003
+.17     OCT 000010
+.18     OCT 177771
+.19     OCT 177777
+.20     OCT 000002
+.21     OCT 000005
+*003  ! 
+*004  !     PURGE FILE ROUTINE FOR THE RTE FILE MANAGER 
+*005  ! 
+*006  !     ENTERED AFTER A:
+*007  ! 
+*008  !     PU,NAMR 
+*009  ! 
+*010  !     W H E R E:
+*011  ! 
+*012  !     NAMR     IS THE FILE'S NAMR WHICH CAN CONTAIN:
+*013  ! 
+*014  !     CR       (OPTIONAL) IS THE CARTRIDGE ID.
+*015  ! 
+*016  !     SC       (OPTIONAL) IS THE FILE SECURITY CODE.
+*017  ! 
+*018  ! 
+*019  !     DEFINE EXTERNAL ADDRESSES 
+*020  ! 
+*021        LET .E.R.,I.BUF,N.OPL,PK.DR      BE INTEGER,EXTERNAL
+*022  ! 
+*023        LET IER.,DR.RD,LOCK.,PURGE BE SUBROUTINE,EXTERNAL 
+*024  ! 
+*025  ! 
+*026        LET TATSD                        BE CONSTANT (1756K)
+*027        LET SECT2                        BE CONSTANT (1757K)
+*028        LET WRIT                         BE CONSTANT (2)
+*029        LET READI                        BE CONSTANT (1)
+*030  PU..: SUBROUTINE(NCAM,PLIST,ER) GLOBAL  ! ENTRY POINT 
+NCAM    NOP 
+PLIST   NOP 
+ER      NOP 
+PU..    NOP 
+        JSB .ENTR 
+        DEF NCAM
+*031  ! 
+*032        LET NCAM,PLIST,ER  BE INTEGER 
+*033  ! 
+*034        DO[T_@N.OPL+1;BLK_@PLIST+1] 
+        JSB .DRCT 
+        DEF N.OPL 
+        INA 
+        STA T 
+        LDA PLIST 
+        INA 
+        STA BLK 
+*035  ! 
+*036        PURGE(I.BUF,.E.R.,$BLK,N.OPL,$T)
+        JSB PURGE 
+        DEF *+6 
+        DEF I.BUF 
+        DEF .E.R. 
+        DEF BLK,I 
+        DEF N.OPL 
+        DEF T,I 
+*037  ! 
+*038        IF .E.R.= -6 THEN .E.R._ -2006 !SET UNDEFINED MESSAGE 
+        LDB .E.R. 
+        CPB .2
+        RSS 
+        JMP .1
+        LDA .3
+        STA .E.R. 
+*039  ! 
+*040        IF .E.R. = -16 THEN GO TO ZPURG 
+.1      LDB .E.R. 
+        CPB .4
+        JMP ZPURG 
+*041  ! 
+*042        IER.
+        JSB IER.
+        DEF *+1 
+*043        RETURN
+        JMP PU..,I
+*044  ! 
+*045  ZPURG:X_$[T_@I.BUF+1] AND 377K !SET X TO THE SECTOR ADDRESS 
+ZPURG   JSB .DRCT 
+        DEF I.BUF 
+        INA 
+        STA T 
+        LDA .A.,I 
+        AND .5
+        STA X 
+*046        TI,BLK_0    !START WITH BLK ZERO
+        CLA 
+        STA TI
+        STA BLK 
+*047  TEST: IF TI=X THEN GO TO FOUND  !IF MATCH THEN STOP SEARCH
+TEST    LDB TI
+        CPB X 
+        JMP FOUND 
+*048        BLK_BLK+1   !STEP THE BLOCK ADDRESS 
+        LDA BLK 
+        INA 
+        STA BLK 
+*049        TI_(TI+14)/$SECT2  !COMPUTE THE NEXT LOGICAL
+        LDA TI
+        ADA .6
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF .7,I
+        STA TI
+*050        TI_$1              !BLOCK ADDRESS  IN TI
+        LDA .8,I
+        STA TI
+*051        GO TO TEST  !GO SEE IF THIS IS IT 
+        JMP TEST
+*052  ! 
+*053  FOUND:BLK_BLK+(-(I.BUF/64)+$TATSD-1)*$SECT2-1       ! 
+FOUND   LDA I.BUF 
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF .9
+        CMA,INA 
+        ADA .10,I 
+        CCB 
+        ADB .A. 
+        LDA .B. 
+        JSB .MPY
+        DEF .7,I
+        ADA BLK 
+        CCB 
+        ADB .A. 
+        STB BLK 
+*054        LOC_$T/400K+@PK.DR    !COMPUTE ADDRESS IN BUFFER
+        LDA T,I 
+        CLB 
+        SSA 
+        CMB 
+        JSB .DIV
+        DEF .11 
+        STA .12 
+        JSB .DRCT 
+        DEF PK.DR 
+        ADA .12 
+        STA LOC 
+*055        LOCK.(-2,3)?[RETURN]       !LOCK DISC 
+        JSB LOCK. 
+        DEF *+3 
+        DEF .13 
+        DEF .14 
+        SEZ 
+        JMP PU..,I
+*056        DR.RD(READI,-2,BLK)        !READ THE BLOCK
+        JSB DR.RD 
+        DEF *+4 
+        DEF .8
+        DEF .13 
+        DEF BLK 
+*057        IF[T_$(LOC+8)]THEN[IF T-N.OPL THEN [ER_-7;GO TO EXIT]] !CHEC
+        LDA LOC 
+        ADA .17 
+        LDA .A.,I 
+        STA T 
+        SZA,RSS 
+        JMP .16 
+        LDA N.OPL 
+        CMA,INA 
+        ADA T 
+        SZA,RSS 
+        JMP .16 
+        LDA .18 
+        STA ER,I
+        JMP EXIT
+*058
+*059        $LOC _ -1                  !PURGE THE FILE
+.16     CCA 
+        STA LOC,I 
+*060        DR.RD(WRIT,-2,BLK)         !WRITE THE BLOCK 
+        JSB DR.RD 
+        DEF *+4 
+        DEF .20 
+        DEF .13 
+        DEF BLK 
+*061  EXIT: LOCK.(-2,5)                !UNLOCK
+EXIT    JSB LOCK. 
+        DEF *+3 
+        DEF .13 
+        DEF .21 
+*062        RETURN                     !RETURN
+        JMP PU..,I
+*063        END 
+*064        END 
+        END 
+*065        END$

@@ -1,0 +1,1082 @@
+ASMB,R,B,L,X
+      HED FORMATTER 
+      NAM FRMT0,7 
+      SPC 2 
+      ENT FRMAT 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGTH,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,FSCHA,TEMP5 
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM FFLG,TEMP4,EORFL,NCH,TEMP6,STRLN,ATIM,LT5 
+      COM ASTYP,ASBFP,ORDNO,ATMP(2),RETCD 
+      COM DCCNT,NXTDT,VL0,RCRD#,PMASK,ITEMP 
+      COM OPTRQ,EST3,EST2,EST1,TT1,TT2,BINO1
+      COM BINO2,TT3,TT4,CP0,CP1,PS0,MPT,NQT,RT0 
+      COM RT1,TRFCH,TRS0,A1,A2,C1,EOPF,NUMBF(6),FD0 
+      COM OT1,OT2,OT3,LBTMP,REPCT,RNDX1,RNDX2 
+      COM X2TMP(2),CTMP,DTMP(2),BTMP(2),XTEMP(2),YTEMP(2) 
+      COM UTEMP(2),LT0,LT8,LT3,LT6,LT7,LT4,DIGCT
+      COM NMPTR,NMTMP,FFLAG,DGCNT 
+      COM IFSTR,EC,CC,DP,CONTR,CC1,CC2,PC1,PC2
+      COM SFLG,FST,EFLAG,NUM1,NUM2,SBD,SAD,SNFLG
+      COM NAD,NBD,FSP,EST,NUMW1,NUMW2,EXPW
+      COM IHB,HBP,NHBW,NBLK,TOTDG,DCTR
+      COM EDSTA,LCH,ELCNT 
+      SPC 2 
+      EXT DIGCK,#FLUN,OUTCR,BLANK,FSCH,GETDG
+      EXT MBY10,DBY10,FORMX,OPCHK,PSTR,VCHK 
+      EXT XEC1
+      EXT OUTCL,OUTBL,DSRCH,MCHAR,EVEXP 
+      EXT DTL1,ROUND,MTG1 
+      SPC 2 
+B377  OCT 377 
+S     OCT 123 
+E     OCT 105 
+M73   DEC -73 
+..73  DEC 73
+.X    OCT 130 
+.A    OCT 101 
+D     OCT 104 
+M46   DEC -46 
+.58   DEC 58
+M96   DEC -96 
+M32   DEC -32 
+.140  OCT 140 
+OPDMK OCT 100777
+A     EQU 0 
+      SPC 2 
+* 
+*  THE ADDRESS OF THE FIRST WORD OF THE FORMAT
+*  STRING IS IN (B) UPON ENTRY.    THE FORMATTER
+*  EXTRACTS THE NUMBER OF CHARACTERS IN THE STRING
+*  AND THEN EXTRACTS THE FORMAT SPECIFICATIONS
+*  ONE BY ONE.  AS EACH SPECIFICATION IS EXTRACTED, 
+*  IT IS LOADED INTO A STACK, ONE CHARACTER PER 
+*  WORD AND CHECKED FOR SYNTAX ERRORS.  THE 
+*  TYPE OF SPECIFICATION IS DETERMINED AT THIS
+*  TIME AND THE SPECIFICATION IS THEN EXECUTED
+*  FROM THE STACK.
+* 
+FRMAT NOP 
+#FRMT STB EC        SAVE POINTER TO STRING
+      INB           MAKE INTO 
+      CLE,ELB         CHARACTER POINTER 
+      ADB A         ADD IN STARTING CHARACTER 
+      CMA,INA       SAVE STARTING 
+      STA CC          CHARACTER 
+      STB IFSTR     SAVE IN FORMAT STRING ADDRESS 
+      STB DP          AND DELIMITER POINTER 
+      LDB NCH       MAYBE 
+      SZB 
+      JMP FM0       YES 
+      LDA EC,I      NO, COMPUTE # 
+      AND B377        OF CHARACTERS 
+      ADA CC            IN FORMAT 
+      STA NCH             STRING
+      SZA,RSS       NULL STRING?
+      JMP FMEND+1   YES, IGNORE IT
+FM0   CLA           INITIALIZE
+      STA CC          CHARACTER COUNTER 
+      STA CONTR       CONTROL CHARACTER 
+      STA EC          EXPRESSION COUNTER
+      STA CC1         START OF PARENTHESIS LEVEL 1
+      STA CC2         START OF PARENTHESIS LEVEL 2
+      STA PC1         REPETITION COUNT FOR LEVEL 1
+      STA PC2         REPETITION COUNT FOR LEVEL 2
+      STA SFLG        STRING FLAG 
+FMT2  JSB DSRCH     DELIMITER SEARCH
+      STO           IGNORE BLANKS 
+      LDA FST       GET THE 
+      JSB MCHAR       FIRST CHARACTER 
+      CPA DP        DELIMITER FOUND ? 
+      JMP FMEND     YES 
+      CPA .+53B     IS CHARACTER A PLUS ? 
+      JMP FMT1      YES 
+      CPA .+55B     IS IT A MINUS ? 
+      JMP FMT1      YES 
+      CPA .+43B     NO, IS IT A NUMBER SIGN 
+      RSS           YES 
+      JMP FMT3      NO
+FMT1  LDB CC        END OF
+      CPB NCH         STRING ?
+      JSB FERRS,I   YES, ERROR
+      STA CONTR     SAVE CARR. CONTROL CHARACTER
+      ISZ FST       INCREMENT STRING POINTER
+      LDA FST 
+      STO           IGNORE BLANKS 
+      JSB MCHAR     GET NEXT CHARACTER
+      CPA DP        DELIMITER FOUND ? 
+      RSS           YES 
+      JMP FMT01     NO, CHARACTER FOUND ? 
+      CLO           GET 
+      LDA DP          THE 
+      JSB MCHAR         DELIMITER 
+FMT01 CPA .+54B     IS IT A COMMA ? 
+      RSS           YES 
+      JSB FERRS+1,I NO, ERROR 
+      ISZ DP        INCREMENT DELIMITER POINTER 
+      ISZ CC        AND CHARACTER COUNTER 
+      LDB CC
+      CPB NCH       ALL CHARACTERS USED ? 
+      JSB FERRS,I   YES, ERROR
+      LDA DP        NO
+      JSB DSRCH     FIND NEXT DELIMITING CHARACTER
+FMT3  CCA           INITIALIZE
+      STA DPFLG       FIXED FLAG
+      STA EFLAG       FLOATING FLAG 
+      INA 
+      STA NUM1        PRE-DECIMAL POINT D COUNTER 
+      STA NUM2        POST-DECIMAL POINT D COUNTER
+      STA SBD         S BEFORE D COUNTER
+      STA SAD         S AFTER D COUNTER 
+      STA SNFLG       SIGN FLAG 
+      STA NAD         POST-DECIMAL ZERO COUNTER 
+      STA NBD         PRE-DECIMAL POINT DIGIT COUNTER 
+      INA 
+      STA REPCT       REPETITION COUNT
+      LDA IFSS        FORMAT STACK
+      STA FSP           POINTER 
+      LDA FST       GET NON-DELIMITING
+      STO             CHARACTER 
+      JSB MCHAR         IGNORING BLANKS 
+      CPA DP        IS IT A DELIMITER ? 
+      JSB FERRS,I   YES 
+FMT4  CPA .+42B     IS IT A QUOTE ? 
+      RSS           YES 
+      JMP FMT0      NO
+      LDB DP
+      CMB,INB       RESET 
+      ADB FST         CHARACTER 
+      ADB CC            COUNTER 
+      STB CC
+FMT16 ISZ FST       INCREMENT STRING POINTER
+      LDA CC        ALL 
+      CPA NCH        CHARACTERS USED ?
+      JSB FERRS+2,I YES, ERROR
+      ISZ CC        INCREMENT CHARACTER COUNTER 
+      LDA FST 
+      CLO           DON'T IGNORE BLANKS 
+      JSB MCHAR     GET NEXT CHARACTER
+      STA FSP,I     LOAD CHARACTER ONTO STACK 
+      ISZ FSP       INCREMENT STACK POINTER 
+      CPA .+42B     IS IT A " ? 
+      RSS           YES 
+      JMP FMT16     NO
+      ISZ FST       INCREMENT STRING POINTER
+      ISZ CC              AND CHARACTER COUNTER 
+      LDA CC        ALL 
+      CPA NCH        CHARACTERS USED ?
+      JMP FMT46     YES 
+      LDA FST       RESET 
+      STA DP          DELIMITER 
+      JSB DSRCH         POINTER 
+      LDA FST       NEXT CHARACTER
+      CPA DP          A DELIMITER ? 
+      JMP FMT46     YES 
+      STO           IGNORE BLANKS 
+      JSB MCHAR     FETCH A FORMAT STRING CHARACTER 
+      LDA FST       WOULD IT BE 
+      CPB DP          A DELIMITER ? 
+      JMP FMT46     YES 
+      JSB FERRS+1,I NO, ERROR 
+FMT0  CPA S         IS IT AN S ?
+      JMP FMT14     YES 
+      CPA .+56B     IS IT A . ? 
+      JMP FMT9      YES 
+      CPA E         IS IT AN E? 
+      JMP FMT13     YES 
+      JSB DIGCK     IS IT A DIGIT ? 
+      JMP FMT6      NO
+      STA REPCT     YES, STORE IN REPCT 
+      ISZ FST       INCREMENT STRING POINTER
+      LDA FST       NEXT CHARACTER
+      CPA DP          A DELIMITER ? 
+      JSB FERRS+3,I YES, ERROR
+      STO           IGNORE BLANKS 
+      JSB MCHAR     GET NEXT CHARACTER
+      CPA DP        IS IT A DELIMITER ? 
+      JSB FERRS+3,I 
+      JSB DIGCK     IS IT A DIGIT ? 
+      JMP FMT5      NO
+      LDA REPCT     YES,
+      STB REPCT       MULTIPLY PREVIOUS 
+      MPY .+12B         DIGIT BY 10 
+      ADA REPCT     ADD IN ONES DIGIT 
+      STA REPCT 
+      ISZ FST       INCREMENT STRING POINTER
+      LDA FST       NEXT CHARACTER
+      CPA DP        A DELIMITER ? 
+      JSB FERRS+3,I YES, ERROR
+      STO           IGNORE BLANKS 
+      JSB MCHAR     GET NEXT CHARACTER
+      CPA DP        IS IT A DELIMITER ? 
+      JSB FERRS+3,I 
+      JSB DIGCK     THIRD DIGIT ? 
+      RSS 
+      JSB FERRS+4,I YES, ERROR
+FMT5  LDB REPCT 
+      SZB,RSS       REPCT ZERO ?
+      JSB FERRS+5,I YES 
+      ADB M73        NO. GREATER
+      SSB,RSS            THAN 72? 
+      JSB FERRS+4,I YES 
+      ADB ..73      RESTORE REPCT 
+      CMB,INB       SET NUMBER FLAG 
+      STB FSP,I     LOAD ONTO FORMAT STACK
+      ISZ FSP       INCREMENT STACK POINTER 
+FMT6  CPA .X        IS NEXT CHARACTER AN X ?
+      JMP FMT8      YES 
+      CPA .A        IS IT AN A ?
+      JMP FMT10     YES 
+      CPA D         IS IT A D ? 
+      RSS           YES 
+      JMP FMT15     NO
+      LDB DPFLG     DPFLG = -1? 
+      SZB 
+      JMP FMT7      YES 
+      LDB NUM2      ADD REPCT TO
+      ADB REPCT       POST-DECIMAL
+      STB NUM2          DIGIT COUNTER 
+      JMP FMT8
+FMT7  LDB NUM1      ADD REPCT TO
+      ADB REPCT       PRE-DECIMAL 
+      STB NUM1          DIGIT COUNTER 
+FMT8  CLB,INB       REINITIALIZE
+      STB REPCT       REPCT 
+      STA FSP,I     LOAD CHARACTER ONTO STACK 
+      ISZ FST       INCREMENT STRING POINTER
+      ISZ FSP       AND STACK POINTER 
+      LDA FST       NEXT CHARACTER
+      CPA DP          A DELIMITER ? 
+      JMP FMT08     YES 
+      STO           IGNORE BLANKS 
+      JSB MCHAR     GET NEXT CHARACTER
+      CPA DP        IS IT A DELIMITER ? 
+      RSS           YES 
+      JMP FMT0
+FMT08 LDB FSP 
+      STB EST       SET END OF STACK MARK 
+      JMP FMT18 
+FMT9  ISZ DPFLG     DPFLG = -1 ?
+      JSB FERRS+6,I NO
+      JMP FMT8+2    YES 
+FMT10 LDB SFLG      IS SFLG 
+      SZB,RSS 
+FMT11 ISZ SFLG      YES, INCREMENT IT 
+      JMP FMT8      NO
+FMT13 ISZ EFLAG     EFLAG= -1?
+      JSB FERRS+7,I NO
+      JMP FMT8+2    YES 
+FMT14 LDB NUM1
+      ADB NUM2      ANY D'S FOUND ? 
+      SZB,RSS 
+      ISZ SBD       NO, INCREMENT BEFORE COUNTER
+      LDB SBD       ANY S'S BEFORE A D ?
+      SZB,RSS 
+      ISZ SAD       NO, INCREMENT AFTER COUNTER 
+      JMP FMT8+2
+FMT15 CPA .+50B     IS CHARACTER A ( ?
+      JMP FMT95     YES 
+      JSB FERRS+8,I NO, ILLEGAL CHARACTER 
+FMT18 LDA IFSS      REINITIALIZE
+      STA FSP         STACK POINTER 
+      CCA               AND 
+      STA REPCT           REPCT 
+      ADA SFLG      SFLG = 1 ?
+      SZA,RSS 
+      JMP FMT24     YES 
+      ADA .-2       SFLG = 3 ?
+      SSA,RSS 
+      JMP FMT25     YES 
+      LDA NUM1      NO, ANY 
+      ADA NUM2        D'S 
+      SZA,RSS           FOUND ? 
+      JMP FMT20     NO
+      JSB EVEXP     EVALUATE EXPRESSION 
+      JMP FMEND     NONE FOUND
+      JSB FERRS+9,I STING--ERROR
+      STA MANT1     IF NUMBER 
+      STA NUMW1       SAVE HIGN MANTISSA
+      JSB #FLUN     UNPACK NUMBER 
+      STA EXP         AND SAVE THE EXPONENT 
+      LDA MANT1     IS THE NUMBER NEGATIVE ?
+      SSA,RSS 
+      JMP FMT31     NO
+      LDA .+55B     YES, SET SIGN TO MINUS
+      STA SIGN        AND 
+      CMB,CLE,INB       COMPLEMENT
+      LDA MANT1 
+      CMA           OVERFLOW FROM 
+      SEZ,RSS         LOW MANTISSA ?
+      JMP FMT31-3   NO
+      INA           YES, OVERFLOW FROM
+      SOS             HIGH MANTISSA ? 
+      JMP FMT31-3   NO
+      CLE,ERA       YES, SHIFT RIGHT
+      ERB             AND 
+      ISZ EXP           BUMP EXPONENT 
+      NOP 
+      STA MANT1 
+      STA NUMW1     SAVE HIGH MANTISSA
+      JMP *+3 
+FMT31 LDA .+53B     SET SIGN
+      STA SIGN        TO PLUS 
+      STB MANT2 
+      STB NUMW2     SAVE LOW MANTISSA 
+      LDA EXP 
+      STA EXPW        AND EXPONENT
+      CLB,INB       SET EXPRESSION
+      STB EC          FOUND FLAG
+      LDA IHB         HOLDING BUFFER
+      STA HBP           POINTER 
+      LDA EFLAG     EFLAG 
+      SZA,RSS         SET  ?
+      JMP FMT62     YES 
+      LDA DPFLG     DPFLG 
+      SZA,RSS         SET 
+      JMP FMT45     YES 
+      JMP FMT30     NO
+**                             ** 
+***  OUTPUT A LITERAL STRING  *** 
+**                             ** 
+FMT46 LDA IFSS      RESET 
+      STA FSP         STACK POINTER 
+      LDA FSP,I     TOP OF STACK
+      CPA .+42B       A " ? 
+      JMP FMT90     YES, DONE WITH THIS SPEC
+      CPA .+16B     IS IT A PSEUDO-LINEFEED ? 
+      LDA .+12B     YES, MAKE IT A LINEFEED 
+      CPA .+17B     IS IT A PSEUDO CARRIAGE RETURN ?
+      RSS           YES 
+      JMP FMT47     NO
+      LDA .+23B     OUTPUT AN X-OFF 
+      JSB OUTCR 
+      LDA .+15B     OUTPUT A
+      JSB OUTCR       CARRIAGE RETURN 
+      CLA           AND A NULL. 
+FMT47 EQU * 
+      JSB OUTCR     NO, OUTPUT THE CHARACTER
+      ISZ FSP       INCREMENT STACK POINTER 
+      JMP FMT46+2   NO
+**                                  **
+***  OUTPUT A BLANK SPECIFICATION  ***
+**                                  **
+FMT20 LDA FSP,I     LOAD TOP OF STACK 
+      SSA,RSS       IS IT A NUMBER ?
+      JMP FMT21     NO
+      STA REPCT     YES, STORE NUMBER IN REPCT
+      ISZ FSP       INCREMENT STACK POINTER 
+      LDA FSP,I     LOAD NEW TOP OF STACK 
+FMT21 CPA .X        IS IT AN X ?
+      RSS           YES 
+      JSB FERRS+8,I NO, ERROR 
+      JSB OUTBL 
+      CCA           REINITIALIZE
+      STA REPCT       REPCT 
+      LDA FSP       END 
+      CPA EST         OF STACK
+      JMP FMT90     YES 
+      LDA FSP,I     LOAD NEW TOP OF STACK 
+      JMP FMT20 
+**                     ** 
+***  OUTPUT A STRING  *** 
+**                     ** 
+FMT24 EQU * 
+      JSB EVEXP     EVALUATE NEXT EXPRESSION
+      JMP FMEND     NONE FOUND
+FMT25 EQU * 
+      CLB,INB,RSS   SET THE EXPRESSION
+      JSB FERRS+14,I
+      STB EC          FOUND FLAG
+      LDA FSP,I     LOAD TOP OF STACK 
+      SSA,RSS       IS IT A NUMBER ?
+      JMP FMT26     NO
+      STA REPCT     YES 
+      ISZ FSP       INCREMENT STACK POINTER 
+      LDA FSP,I     LOAD NEW TOP OF STACK 
+FMT26 CPA .X        IS IT AN X ?
+      RSS           YES 
+      JMP FMT27     NO
+      JSB OUTBL 
+      JMP FMT28 
+FMT27 CPA .A        IS IT AN A ?
+      RSS           YES 
+      JSB FERRS+9,I NO, ERROR 
+      ISZ FSP       INCREMENT STACK POINTER 
+FMT05 EQU * 
+      JSB FSCH      FETCH STRING CHARACTER
+      LDA BLANK     NO, FETCH A BLANK 
+      CPA .+16B     IS IT A PSEUDO-LINEFEED ? 
+      LDA .+12B     YES, MAKE IT A LINEFEED 
+      CPA .+17B     IS IT A PSEUDO CARRIAGE RETURN ?
+      RSS           YES 
+      JMP FMT29     NO
+      LDA .+23B     OUTPUT AN X-OFF 
+      JSB OUTCR 
+      LDA .+15B     OUTPUT A
+      JSB OUTCR       CARRIAGE RETURN 
+      CLA           AND A NULL. 
+FMT29 EQU * 
+      JSB OUTCR     OUTPUT CHARACTER
+      ISZ REPCT     REPCT USED UP ? 
+      JMP FMT05     NO
+FMT28 CCA           REINITIALIZE
+      STA REPCT       REPCT 
+      LDA FSP       END OF
+      CPA EST         STACK ? 
+      JMP FMT90 
+      JMP FMT25     NO
+**                                   ** 
+***  PREPARE AN INTEGER FOR OUTPUT  *** 
+**                                   ** 
+FMT30 CLA           INITIALIZE PRE-DECIMAL POINT
+      STA EXPON       DIGIT COUNTER 
+      CCA 
+      ADA EXP       EXPONENT ZERO OR NEGATIVE ? 
+      SSA,RSS 
+      JMP FMT32     NO
+      LDA .+60B     YES, LOAD A 
+      STA HBP,I       ZERO
+      ISZ HBP       INCREMENT BUFFER POINTER
+      CCA           NUMBER OF BUFFER WORDS
+      STA NHBW        IS ONE
+      JMP FMT33 
+FMT32 JSB DTL1
+      STA EXPON     SAVE NUMBER 
+      STA NHBW        OF DIGITS 
+      JSB GETDG     GET DIGIT 
+      ADA .+60B     CONVERT TO ASCII
+      STA HBP,I     STORE IN HOLD BUFFER
+      ISZ HBP       ALL DIGITS
+      ISZ EXPON       FOUND ? 
+      JMP FMT32+3   NO
+FMT33 LDA NUM1      COMPUTE NUMBER OF 
+      ADA NHBW        LEADING BLANKS
+      LDB SBD       ANY S'S 
+      ADB SAD         FOUND ? 
+      SZB 
+      JMP FMT43     YES 
+      LDB SIGN      NO, NUMBER POSITIVE ? 
+      CPB .+53B 
+      JMP FMT43     YES 
+      ADA .-1       NO, SAVE ROOM 
+      CLB,INB         FOR 
+      STB SNFLG         PRINTING SIGN 
+FMT43 SSA           NUMBER OF BLANKS NEGATIVE ? 
+      JMP FMT80     YES 
+      STA NBLK      NO
+      JSB ROUND     ROUND NUMBER IN BUFFER
+      RSS 
+      JMP FMT80     NO ROOM FOR CARRY FROM ROUND
+      LDB IHB       REINITIALIZE
+      STB HBP         HOLD BUFFER POINTER 
+**                                       ** 
+***  OUTPUT NUMBER FROM HOLDING BUFFER  *** 
+**                                       ** 
+FMT34 LDA FSP,I     LOAD TOP OF FORMAT STACK
+      CPA S         IS IT AN S ?
+      RSS           YES 
+      JMP FMT36     NO
+      ISZ FSP       INCREMENT STACK POINTER 
+      LDA SNFLG 
+      SZA           SNFLG = 0 ? 
+      JMP FMT59     NO, IGNORE THE S
+      LDB SBD       YES, ANY S'S BEFORE A D ? 
+      SZB 
+      JMP FMT35     YES 
+      LDA SIGN      NO, OUTPUT SIGN 
+      JSB OUTCR       IMMEDIATELY 
+      LDA .+2       SET SNFLG TO 2
+      STA SNFLG 
+      JMP FMT59 
+FMT35 CCB 
+      STB SNFLG     SET SNFLG TO -1 
+      JMP FMT34 
+FMT36 SSA,RSS       TOP OF STACK A NUMBER ? 
+      JMP FMT06     NO
+      STA REPCT     YES, STORE IN REPCT 
+      ISZ FSP       INCREMENT STACK POINTER 
+      LDA FSP,I     LOAD NEW TOP OF STACK 
+FMT06 CPA .X        IS TOP AN X ? 
+      RSS           YES 
+      JMP FMT37     NO
+      JSB OUTBL 
+      CCA           REINITIALIZE
+      STA REPCT       REPCT 
+      JMP FMT59 
+FMT37 CPA D         TOP OF STACK A D ?
+      RSS           YES 
+      JMP FMT57     NO
+      ISZ FSP       INCREMENT STACK POINTER 
+      CCA 
+      ADA NBLK      NUMBER OF BLANKS > 0 ?
+      SSA 
+      JMP FMT07     NO
+      LDA BLANK     YES, OUTPUT A 
+      JSB OUTCR       BLANK 
+      CCB           DECREMENT 
+      ADB NBLK        BLANK 
+      STB NBLK          COUNT 
+      JMP FMT40 
+FMT07 LDA NBLK      NUMBER OF BLANKS
+      SSA             LESS THAN ZERO ?
+      JMP FMT56     YES 
+      CCA           NO, DECREMENT 
+      STA NBLK        BLANK COUNT 
+      CCB 
+      CPB SNFLG     SNFLG = - 1 ? 
+      JMP FMT02     YES 
+      ADB SNFLG     SNFLG = 1 ? 
+      SZB,RSS 
+      JMP FMT40     YES 
+      JMP FMT58     NO
+FMT56 CCB 
+      ADB SNFLG     SNFLG = 1 ? 
+      SZB 
+      JMP FMT58     NO
+FMT02 LDA SIGN      YES, OUTPUT 
+      JSB OUTCR       SIGN AND
+      LDA .+2       SET SNFLG 
+      STA SNFLG     TO 2
+FMT58 LDA IHB       END 
+      ADA .+46        OF
+      CPA HBP           BUFFER ?
+      JMP FMT59 
+      LDA HBP,I     OUTPUT A
+      JSB OUTCR       DIGIT 
+      ISZ HBP       INCREMENT HOLD BUFFER POINTER 
+      LDA EFLAG     IS THIS A 
+      SZA             FLOATING POINT SPECIFICATION ?
+      JMP FMT40     NO
+      CLA,INA       YES, HAS THE DECIMAL POINT
+      CPA DPFLG       BEEN FOUND YET ?
+      JMP FMT40     YES 
+      CCA           NO, DECREMENT 
+      ADA EXPON       DECIMAL 
+      LDB IHB,I     IS THE
+      CPB .+60B       NUMBER ZERO?
+      CLA           YES, ZERO EXPONENT
+      STA EXPON         EXPONENT
+FMT40 ISZ REPCT     REPCT = O ? 
+      JMP FMT37+4   NO
+      CCA           YES,REINITIALIZE
+      STA REPCT       REPCT 
+      JMP FMT59 
+FMT57 LDB DPFLG     FIXED POINT 
+      SZB             SPECIFICATION ? 
+      JMP FMT42     NO
+      CPA .+56B     TOP OF STACK A DECIMAL POINT ?
+      RSS           YES 
+      JMP FMT42     NO
+      ISZ FSP       INCREMENT STACK POINTER 
+      LDB SNFLG 
+      SSB           SNFLG = -1 ?
+      JMP FM00      YES 
+      ADB .-1       NO, = 1 ? 
+      SZB 
+      JMP FM01      NO
+FM00  LDA SIGN      YES, OUTPUT 
+      JSB OUTCR       SIGN
+      LDA .+2       SET SNFLG 
+      STA SNFLG       TO 2
+FM01  LDA .+56B     OUTPUT
+      JSB OUTCR       DECIMAL POINT 
+      ISZ DPFLG     INCREMENT FLAG TO SHOW D.P. FOUND 
+FMT59 LDA FSP       END OF
+      CPA EST         STACK 
+      JMP FMT90     YES 
+      JMP FMT34     NO
+FMT42 ISZ FSP       INCREMENT STACK POINTER 
+      JSB OUTCR     OUTPUT AN E 
+FMT76 LDA FSP       END OF
+      CPA EST         STACK ? 
+      JMP FMT78     YES 
+      LDA FSP,I     NO,TOP OF 
+      SSA,RSS         STACK A NUMBER ?
+      JMP FM02      NO
+      ISZ FSP       YES, INCREMENT STACK POINTER
+      STA REPCT     STORE NUMBER
+      LDA FSP,I     GET NEW TOP OF STACK
+FM02  CPA .X        IS IT AN X ?
+      RSS           YES 
+      JSB FERRS+7,I NO, ERROR 
+      JSB OUTBL 
+      CCA           RESET 
+      STA REPCT       REPCT 
+      JMP FMT76 
+FMT78 LDA .+55B     OUTPUT
+      LDB EXPON 
+      SSB             AN
+      CMB,INB,RSS 
+      LDA .+53B         EXPONENT
+      STB EXPON 
+      JSB OUTCR           SIGN
+      LDA EXPON 
+      CLB           COMPUTE 
+      DIV .+12B 
+      ADA .+60B       EXPONENT'S
+      ADB .+60B 
+      STB EXPON         10'S DIGIT
+      JSB OUTCR     OUTPUT IT 
+      LDA EXPON 
+      JSB OUTCR     OUTPUT 1'S DIGIT
+      JMP FMT90 
+**                                **
+***  PREPARE FIXED POINT NUMBER  ***
+**                                **
+FMT45 CLA           SET PRE-DECIMAL POINT 
+      STA EXPON       DIGIT COUNTER 
+      STA NAD         ZERO COUNTER
+      CPA EXP       ZERO EXPONENT ? 
+      JMP FMT61+3   YES 
+      LDB EXP       NO
+      SSB           EXPONENT NEGATIVE 
+      JMP FMT61     YES 
+      JSB DTL1
+      STA EXPON     LOAD
+      STA NBD         PRE-DECIMAL POINT 
+FM03  JSB GETDG         DIGITS
+      ADA .+60B 
+      STA HBP,I           INTO
+      ISZ HBP               HOLD
+      ISZ EXPON               BUFFER
+      JMP FM03
+FMT50 LDB NUM2      ANY D'S AFTER 
+      SZB,RSS         DECIMAL POINT ? 
+      JMP FMT51     NO
+      LDA IHB       END 
+      ADA .+46        OF
+      CPA HBP           BUFFER ?
+      JMP FM04      YES 
+      LDB NAD       LEADING 
+      CLA             ZEROES
+      SZB,RSS           AFTER 
+      JMP *+4             DECIMAL 
+      ADB .-1               POINT 
+      STB NAD 
+      RSS           YES 
+      JSB GETDG 
+      ADA .+60B     LOAD
+      STA HBP,I       POST-DECIMAL POINT
+      CCB             DIGITS
+      ADB NUM2            INTO
+      STB NUM2              HOLD
+      ISZ HBP                 BUFFER
+      JMP FMT50+1 
+FM04  LDA NUM2      OUTPUT BLANKS 
+      CMA,INA         TO
+      STA REPCT         FILL FIELD
+      JSB OUTBL 
+      CCA           REINITIALIZE
+      STA REPCT       REPCT 
+      ADA FSP       CORRECT 
+      STA FSP         STACK POINTER 
+FMT51 LDA NBD       COMPUT NUMBER 
+      ADA NUM1        OF LEADING BLANKS 
+      LDB SBD       ANY S'S 
+      ADB SAD         FOUND ? 
+      SZB 
+      JMP FMT54     YES 
+      LDB SIGN      NO, NUMBER
+      CPB .+53B       POSITIVE ?
+      JMP FMT54     YES 
+      ADA .-1       NO, LEAVE ROOM FOR
+      CLB,INB         SIGN TO BE PRINTED AND
+      STB SNFLG         SET SNFLG TO 1
+FMT54 SSA           NUMBER OF BLANKS NEGATIVE ? 
+      JMP FMT80     YES 
+      STA NBLK      NO, 
+      CCB           NEXT DIGIT A
+      ADB NAD         LEADING ZERO ?
+      SSB 
+      JSB ROUND     NO, ROUND NUMBER
+      RSS 
+      JMP FMT80     NO ROOM FOR CARRY FROM ROUND
+      LDA IHB       RESET HOLD
+      STA HBP         BUFFER POINTER
+      JMP FMT34     GO OUTPUT THE NUMBER
+FMT61 JSB MTG1
+      LDA EXPON 
+      STA NAD 
+      LDB NUM1      ANY D'S FOUND 
+      SZB,RSS         BEFORE THE DECIMAL POINT ?
+      JMP FMT50     NO
+      LDA NUM2      YES, ANY D'S FOUND
+      SZA,RSS         AFTER THE DECIMAL POINT ? 
+      JMP FMT55     NO
+      CPB .+1       YES, ONLY ONE OF THEM ? 
+      RSS 
+      JMP FMT55     NO
+      LDA SAD       YES, ANY S'S FOUND ?
+      ADA SBD 
+      SZA 
+      JMP FMT55     YES 
+      LDA SIGN      NO, NUMBER
+      CPA .+55B       NEGATIVE ?
+      JMP FMT50     YES 
+FMT55 LDA .+60B     NO, LOAD PRE-DECIMAL POINT
+      STA HBP,I       ZERO INTO BUFFER
+      ISZ HBP 
+      CCA           DECREASE NUMBER OF
+      ADA NUM1        D'S AVAILABLE FOR SIGN
+      STA NUM1          AND BLANKS BEFORE DECIMAL PT. 
+      JMP FMT50 
+**                                   ** 
+***  PREPARE FLOATING POINT NUMBER  *** 
+**                                   ** 
+FMT62 CLA           INITIALIZE DECIMAL
+      STA EXPON       EXPONENT
+      CPA EXP       ZERO EXPONENT ? 
+      JMP *+3       YES 
+      JSB MTG1
+      JSB DTL1
+      CMA,INA       SAVE DECIMAL EXPONENT 
+      STA EXPON 
+      LDA NUM1      GET 
+      ADA NUM2        TOTAL NUMBER
+      STA TOTDG         OF DIGITS 
+      LDA SBD 
+      ADA SAD       ANY S'S FOUND ? 
+      SZA 
+      JMP FMT67     YES 
+      LDA SIGN      NO, NUMBER
+      CPA .+53B       POSITIVE ?
+      JMP FMT67     YES 
+      CCB           NO, LEAVE ROOM
+      ADB NUM1        FOR SIGN
+      SSB           NONE ?
+      JMP FMT80     YES 
+      STB NUM1      NO, DECREMENT 
+      CCA             TOTAL NUMBER OF D'S 
+      ADA TOTDG         AVAILABLE FOR SIGN
+      STA TOTDG           AND BLANKS BEFORE DEC. PT.
+      SZA,RSS 
+      JMP FMT80 
+      CLB,INB       SET SNFLG 
+      STB SNFLG       TO 1
+FMT67 LDA NUM2      NUM2
+      CMA,INA         > 7 ? 
+      LDB .+6 
+      ADB 0 
+      SSB 
+      JMP FMT70     YES 
+      LDA TOTDG     YES, TOTAL NUMBER OF D'S
+      ADA .-10B       > 7 ? 
+      SSA 
+      JMP FMT68     NO
+      LDB .-7       PREPARE TO GET
+      STB DCTR        SEVEN DIGITS
+      INA           NUMBER OF BLANKS
+      STA NBLK        BECOMES TOTDG - 7 
+      JMP FMT72 
+FMT68 LDA TOTDG     PREPARE TO GET
+      CMA,INA 
+      STA DCTR        TOTDG DIGITS
+      CLB           SET NUMBER OF BLANKS
+      STB NBLK        TO ZERO 
+      JMP FMT72 
+FMT70 LDB NUM1      ANY D'S BEFORE
+      SZB             DECIMAL POINT ? 
+      ADA .-1       YES, INCREMENT NUMBER OF DIGITS 
+      STA DCTR      PREPARE TO GET NUM2 DIGITS
+      SZB           SET 
+      ADB .-1         BLANK 
+      STB NBLK          COUNT 
+      LDA DCTR      MORE THAN 
+      ADA .+46        FOURTY-SIX
+      SSA,RSS           DIGITS NEEDED ? 
+      JMP FMT72     NO
+      STA REPCT     YES, OUTPUT NECESSARY BLANKS
+      JSB OUTBL 
+      ADA FSP       CORRECT 
+      STA FSP         STACK POINTER 
+      LDA M46       SET DCTR
+      STA DCTR        TO 46 
+FMT72 EQU * 
+      CCA           REINITIALIZE
+      STA REPCT       REPCT 
+      JSB GETDG 
+      ADA .+60B     CONVERT TO ASCII
+      STA HBP,I     STORE IN HOLD BUFFER
+      ISZ HBP       INCREMENT BUFFER POINTER
+      ISZ DCTR      ALL DIGITS GOT ?
+      JMP FMT72     NO
+      JSB ROUND     YES, ROUND THE NUMBER IN BUFFER 
+      RSS 
+      JMP FMT80     NO ROOM FOR CARRY FROM ROUND
+      LDA IHB       RESET 
+      STA HBP         BUFFER POINTER
+      JMP FMT34 
+**                                 ** 
+***  HANDLE END OF SPECIFICATION  *** 
+**                                 ** 
+FMT90 CLA 
+      STA SFLG        STRING FLAG 
+      LDA CC        ENF OF
+      CPA NCH         FORMAT STRING ? 
+      RSS           YES 
+      JMP FMT92     NO
+FMT09 LDA CC1       YES, PARENTHESIS
+      SZA             BALANCED ?
+      JSB FERRS+10,I NO, ERROR
+FMT91 LDB EC        ANY EXPRESSIONS 
+      SZB,RSS         USED ?
+      JMP FMEND     NO
+      LDB EDSTA     END OF
+      SZB,RSS         STATEMENT ? 
+      JMP FMEND     YES 
+      CLA 
+      STA EC        YES, CLEAR EC 
+      STA CC
+      LDA IFSTR     RESET 
+      STA DP          DELIMITER POINTER 
+      JMP FMT2
+FMT92 LDA DP        GET THE 
+      CLO             DELIMITING CHARACTER
+      JSB MCHAR         NOT IGNORING BLANKS 
+      CPA .+51B     IS IT A RIGHT PARENTHESIS 
+      JMP FMT97     YES 
+      STA LCH       NO, SAVE THE CHARACTER
+      CPA .+54B     IS IT A COMMA ? 
+      JMP FMT93+1   YES 
+      CPA .+57B     IS IT A SLASH ? 
+      RSS           YES 
+      JSB FERRS+1,I NO, ERROR EXIT
+FMT93 JSB OUTCL 
+      ISZ CC        INCREMENT CHARACTER COUNTER 
+      LDA CC        ALL CHARACTERS
+      CPA NCH         USED ?
+      JMP FMT94     YES 
+      ISZ DP        INCREMENT DELIMITER POINTER 
+      JSB DSRCH     FIND NEXT DELIMITER 
+      STO           IGNORE BLANKS 
+      LDA FST 
+      JSB MCHAR       NEXT CHARACTER
+      CPA DP        IS IT A DELIMITER 
+      RSS           YES 
+      JMP FM11      NO
+      LDA CC        ALL CHARACTERS
+      CPA NCH         USED ?
+      JMP FMT94     YES 
+      LDA DP        NO, GET DELIMITING
+      CLO             CHARACTER 
+      JSB MCHAR         IGNORING BLANKS 
+FM11  CPA .+54      IS IT A COMMA 
+      JSB FERRS,I   YES, ERROR
+      CPA .+57B     NO, A SLASH 
+      JMP FMT94     YES 
+      CPA .+51B     NO, A RIGHT PARENTHESIS ? 
+      JMP FMT97     YES 
+      JMP FMT3
+FMT94 LDA LCH       LAST CHARACTER
+      CPA .+54B       A COMMA ? 
+      JSB FERRS,I 
+      LDA CC        NO, ALL CHARACTERS
+      CPA NCH         USED ?
+      JMP FMT09     YES 
+      JMP FMT93     NO
+**                                     ** 
+***  HANDLE GROUPS OF SPECIFICATIONS  *** 
+**                                     ** 
+FMT95 CCA           SECOND
+      ADA FSP         CHARACTER 
+      CPA IFSS          IN STACK ?
+      RSS 
+      JSB FERRS+11,I NO, ERROR
+      LDA CC1       YES, FIRST LEVEL
+      SZA             OF PARENTHESIS ?
+      JMP FMT96     NO
+      ISZ FST       INCREMENT STRING POINTER
+      CCA           FIND CHARACTER COUNT
+      ADA IFSTR           UP TO AND INCLUDING 
+      CMA                     LEFT
+      ADA FST                   PARENTHESIS 
+      STA CC1 
+      LDB REPCT     STORE REPETITION
+      STB PC1         COUNT 
+      JMP FMT3      PROCESS STRING
+FMT96 LDA CC2       SECOND LEVEL
+      SZA             OF PARENTHESIS
+      JSB FERRS+12,I NO, ERROR
+      ISZ FST 
+      CCA           FIND CHARACTER COUNT
+      ADA IFSTR           UP TO AND 
+      CMA                     INCLUDING 
+      ADA FST                   LEFT
+      STA CC2                     PARENTHESIS 
+      LDB REPCT     STORE REPETITION
+      STB PC2             COUNT 
+      JMP FMT3
+FMT97 LDA PC2       SECOND LEVEL OF 
+      SZA,RSS         PARENTHESIS ? 
+      JMP FMT98     NO
+      ADA .-1       YES, REPEAT IT
+      STA PC2 
+      SZA,RSS 
+      JMP FMT99 
+      LDB CC2       RESET 
+      STB CC          CHARACTER COUNTER 
+      ADB IFSTR 
+      STB DP          AND STRING POINTER
+      JSB DSRCH 
+      JMP FMT3      REPROCESS PARENTHESIZED STRING
+FMT99 CLA           CLEAR SECOND
+      STA CC2         LEVEL POINTER 
+      STA SFLG        AND STRING FLAG 
+      ISZ CC        INCREMENT CHARACTER COUNTER 
+      LDA CC        ALL CHARACTERS
+      CPA NCH         USED ?
+      JSB FERRS+1,I YES, ERROR
+      ISZ DP        NO, POINT TO DELIMITER
+      JSB DSRCH     FIND NEXT DELIMITER 
+      STO           GET NEXT
+      LDA FST         NON-BLANK 
+      JSB MCHAR         CHARACTER 
+      CPA DP        IS IT A DELIMITER ? 
+      RSS           YES 
+      JMP FMT92+3   MAYBE 
+      LDB CC        ALL 
+      CPB NCH         CHARACTERS USED ? 
+      JSB FERRS+10,I  YES, ERROR
+      JMP FMT92     NO, INVESTIGATE THE CHARACTER 
+FMT98 LDA PC1       FIRST LEVEL 
+      SZA,RSS         OF PARENTHESIS ?
+      JSB FERRS+13,I NO, ERROR
+      ADA .-1       YES, REPEAT IT
+      STA PC1 
+      SZA,RSS 
+      JMP FMT00 
+      LDB CC1       RESET 
+      STB CC          CHARACTER COUNTER 
+      ADB IFSTR 
+      STB DP
+      JSB DSRCH 
+      JMP FMT3      REPROCESS PARENTHESIZED STRING
+FMT00 CLA           CLEAR FIRST 
+      STA CC1         LEVEL POINTER 
+      STA SFLG        AND STRING FLAG 
+      ISZ CC        INCREMENT CHARACTER COUNTER 
+      ISZ DP        POINT TO DELIMITER
+      LDA CC        ALL 
+      CPA NCH         CHARACTERS USED ? 
+      JMP FMT91     YES 
+      JSB DSRCH     NO, FIND NEXT DELIMITER 
+      STO           GET NEXT
+      LDA FST         NON-BLANK 
+      JSB MCHAR         CHARACTER 
+      CPA DP        IS IT A DELIMITER ? 
+      RSS           YES 
+      JMP FMT92+3   NO
+      LDB CC        ALL 
+      CPB NCH         CHARACTERS USED ? 
+      JMP FMT91     YES 
+      JMP FMT92     NO, INVESTIGATE THE FOUND CHARACTER 
+**                                     ** 
+***  OUTPUT NUMBER IN DEFAULT FORMAT  *** 
+**                                     ** 
+FMT80 LDA NUMW1 
+      STA MANT1     LOAD
+      LDB NUMW2 
+      STB MANT2       SAVED 
+      LDA EXPW
+      STA EXP           NUMBER
+      CLA           CLEAR 
+      STA EXPON       DECIMAL EXPONENT
+      STA EFLAG     SET FLOATING POINT FLAG 
+      CPA EXP       ZERO EXPONENT ? 
+      JMP *+3       YES 
+      JSB MTG1
+      JSB DTL1
+      CMA 
+      STA EXPON 
+      JSB OUTCL 
+      LDA IHB       RESET HOLD
+      STA HBP         BUFFER POINTER
+      LDA .-6       PREPARE TO GET
+      STA TOTDG       SIX DIGITS
+      JSB GETDG     GET 
+      ADA .+60B 
+      STA HBP,I       SIX 
+      ISZ HBP 
+      ISZ TOTDG         DIGITS
+      JMP *-5 
+      LDA .+2       SET NBLK TO 
+      STA NBLK        WHERE IT WONT CAUSE TROUBLE 
+      JSB ROUND     ROUND NUMBER IN HOLD BUFFER 
+      NOP 
+      LDA SIGN      OUTPUT
+      JSB OUTCR       SIGN
+      LDA IHB       INITIALIZE
+      STA HBP       HOLD BUFFER POINTER 
+      LDA HBP,I     OUTPUT
+      JSB OUTCR       DIGIT 
+      ISZ HBP         INCREMENT HOLD BUFFER POINTER 
+      LDA .+56B     OUTPUT
+      JSB OUTCR       DECIMAL POINT 
+      LDA .-5       PREPARE TO OUTPUT 
+      STA TOTDG       FIVE DIGITS 
+      LDA HBP,I     OUTPUT
+      JSB OUTCR       FIVE
+      ISZ HBP           DIGITS
+      ISZ TOTDG 
+      JMP *-4 
+      LDA E         OUTPUT
+      JSB OUTCR       AN E
+      LDA .+55B 
+      LDB EXPON     OUTPUT
+      SSB 
+      CMB,INB,RSS     EXPONENT
+      LDA .+53B 
+      STB EXPON         SIGN
+      JSB OUTCR 
+      LDA EXPON 
+      CLB           GET BOTH EXPONENT DIGITS
+      DIV .+12B 
+      ADA .+60B     CONVERT BOTH
+      ADB .+60B       TO ASCII
+      STB EXPON 
+      JSB OUTCR     OUTPUT 10'S DIGIT 
+      LDA EXPON 
+      JSB OUTCR     OUTPUT 1'S DIGIT
+      JSB OUTCL 
+      JMP FMT90 
+FMEND LDA CONTR     YES, CONTROL
+      SZA           CHARACTER FOUND ? 
+      JMP *+3       YES 
+      JSB OUTCL     NO
+      JMP XEC1
+      CPA .+53B     IS CARRIAGE 
+      RSS                CONTROL A +
+      JMP FM10      NO
+      LDA .+23B     YES 
+      JSB OUTCR     OUTPUT AN X-OFF 
+      LDA .+15B      AND A
+      JSB OUTCR       CARRIAGE RETURN 
+      CLA           AND A 
+      JSB OUTCR     NULL. 
+      CLA 
+      STA CHRCT 
+      JMP XEC1
+FM10  CPA .+55B     IS IT A MINUS ? 
+      RSS           YES 
+      JMP XEC1
+      LDA .+12B     OUTPUT A
+      JSB OUTCR       LINEFEED
+      JMP XEC1
+      END 

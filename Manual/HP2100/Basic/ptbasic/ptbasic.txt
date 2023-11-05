@@ -1,0 +1,177 @@
+Paper-Tape HP-BASIC (20392) info...
+
+Disclaimer: these docs are what I've been able to figure out from poking
+around and reading available docs. Sometimes things are not what they appear
+to be, so no guarantee that this information is 100% correct.
+
+When entering code use underscore to logically erase the previous
+character, use the shift squiggly thing (next to 1) to abandon the line.
+This BASIC has only numeric input, no strings besides PRINT, requires LET,
+one statement per line. Variable names are a single letter plus an optional
+digit, array names are a single letter. The last line must be END. One or
+two dimension arrays can be DIM'd, has matrix ops like MAT C = A + B to
+operate on entire arrays at once, MAT A=ZER clears array. Has floating point
+math and ops like SIN COS TAN etc. Enter SCRATCH to erase the program in
+memory. PTAPE loads a basic listing attached to PTR, the easiest way to save
+a listing is LIST then copy/paste from the terminal to a file (PLIST writes
+to PTP but isn't readable). Lines must be 72 chars or less, printed lines
+too or they will wrap or ignore the ';' on the preceding line. BYE jumps
+to mem loc 77 (OCTAL), stock is halt but a JMP 76,I can be added here with
+loc 76 containing the address to jump to. (note-address/code refs are octal)
+
+Run from 100 to initialize, run from 2027 to re-enter and preserve the
+program in memory, run from 5137 to execute the basic program. Typically
+it's convenient to add JMP 3,I (124003) to location 2 and one of these
+addresses to location 3.
+
+Useful addresses defining where things are...
+Location 110 contains the start of the BASIC program area
+Location 111 contains the end of the BASIC program area
+Location 112 contains the address where the BASIC listing begins
+Location 113 contains the end of the BASIC program/start of arrays
+Location 115 contains the end of arrays/start of expression parms
+Location 120 contains the end of expression parms
+Location 116 contains the start of variables (0 or same as 117 if no vars) (*)
+Location 117 contains the end of variables + 1 (start of drivers) (*)
+Location 121 contains the start of the CALL linkage table
+Location 122 contains the end of the CALL linkage table
+Location 106 contains the last address BASIC will use (other than drivers),
+ to make room for machine code lower this and don't go past previous value.
+ BASIC must be restarted from location 100 to take effect.
+(*) locations 116 and 117 are unreliable until a program containing variables
+ has been actually been run. Some of these things aren't exactly clearly
+ documented and can be confusing, I was fooled by assuming I could put
+ code just before the contents of 117 only to have the KB buffer overwrite
+ my code. Assume everything after the contents of 106/111 can't be touched.
+
+Driver code extends to the nearest 4KW boundary minus 101 to leave
+room for the boot loader.
+
+The following keywords were found by dumping the binary as text.
+The first 8 (RUN to BYE) are immediate commands, the last 5 (ZER-TRN)
+are matrix functions.
+
+RUN        DEF        CALL        AND        LOG
+SCR[ATCH]  REM        DATA        OR         ABS
+LIST       GOTO       READ        >=         SQR
+PLIST      IF         PRINT       <=         INT
+PTA[PE]    FOR        INPUT       <>         RND
+STOP       NEXT       RESTORE     TAB        SGN
+TAP[E]     GOSUB      MAT         SIN        ZER
+BYE        RETURN     THEN        COS        CON
+LET        END        TO          TAN        IDN
+DIM        STOP       STEP        ATN        INV
+COM        WAIT       NOT         EXP        TRN
+
+In addition to this list the normal single-char functions
+< > = + - * / ^ ( ) work as expected. <> is converted to #.
+Many of these are documented in the MSU BASIC materials, all are
+documented in the "Pocket Guide To The 2100 Computer" document
+available from BitSavers (an older version is at www.hpmuseum.net).
+
+COM appears to work like DIM however arrays dimensioned using COM
+survive SCRATCH and RUN, whereas arrays diminsioned using DIM are
+reset to "not a number" (error) when the program is run. For example...
+
+100 COM A[1]
+110 LET A[1]=77
+120 END
+RUN
+READY
+SCRATCH
+100 COM A[1]
+110 PRINT A[1]
+120 END
+RUN
+ 77
+READY
+
+PTAPE adds lines without erasing lines that have already been entered,
+however lines with COM will not be overwritten (remaining lines will load).
+
+CALL is tricky... but figuring out more about it. Location 121 holds the
+start of the subroutine linkage table, location 122 holds the end of the
+linkage table + 1. Each entry consists of a word containing the call number
+in bits 0-5 and the number of parameters in bits 8-15, and the address of
+the subroutine entry point. The first parameter in the CALL command is a
+number that matches the call number of one of the entries, the remaining
+parameters must equal the number specified in the linkage table. Parameters
+are passed by setting the A register to the address of the first variable,
+successive variables are in the addresses before that (decrement the pointer).
+Variables are 2-word floating point quantities.
+
+Theoretically the linkage table and machine code can be put anywhere it
+won't get stomped on. The normal method is to examine location 110, put the
+code there, then set 110 past the end of the code. Location 114 contains the
+first free zero-page address, the rest can be used for variables or code.
+The safest place to put code is past the drivers, anywhere past 70000 if
+a 28KW version. This permits experimenting without having to restart...
+
+HP 2100 (modified) simulator V3.8-1
+
+READY
+100 PRINT "TESTING"
+
+Simulation stopped, P: 67436 (JMP 67435)
+sim>d 121 74000
+sim>d 122 74002
+sim>d 74000 5
+sim>d 74001 74010
+sim>d 74010 nop
+sim>d 74011 lda 74020
+sim>d 74012 ldb 74021
+sim>d 74013 jsb 102,i
+sim>d 74014 jmp 74010,i
+sim>d 74020 13
+sim>d 74021 74022
+sim>d 74022 44111
+sim>d 74023 20111
+sim>d 74024 23515
+sim>d 74025 20103
+sim>d 74026 47504
+sim>d 74027 42440
+sim>c
+110 CALL(5)
+120 END
+RUN
+TESTING
+HI I'M CODE
+
+READY
+
+Location 102 contains a link to string print code.
+
+The following procedure can be used to make a 28KW version of
+papertape BASIC using the prepare.abs and hpbasic.abs files...
+
+------- begin log --------
+sim> set clk dev=10
+sim> set tty dev=11
+sim> set ptr dev=12
+sim> set ptp dev=13
+sim> load prepare.abs
+sim> load hpbasic.abs
+sim> attach ptp basic28.abs
+PTP: creating new file
+sim> d s 11
+sim> run 2
+
+ PHOTO READER I/O ADDRESS? 12
+ PUNCH I/O ADDRESS? 13
+ SYSTEM DUMP I/O ADDRESS?13
+ CORE SIZE? 28
+
+HALT instruction 102077, P: 16562 (JMP 16547)
+sim> detach ptp
+sim> d 0-77777 0
+sim> load basic28.abs
+sim> run 100
+
+READY
+------- end log ----------
+--------------------------------------------------
+3/9/08   oldest known edit date
+5/20/10  added more info about CALL and memory locations
+9/26/10  added more info about the memory locations
+9/28/10  clarified locations 112 and 115
+12/22/10 2027 is a better re-enter point

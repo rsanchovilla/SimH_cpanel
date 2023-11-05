@@ -1,0 +1,714 @@
+ASMB,L,B,C     DOS/RT ASSEMBLER FEBRUARY 1970 
+      HED *** DOS/RTE ASMB5  FALL 1971 ***
+      NAM ASMB5,5,99
+      ENT ASMB5 
+      EXT ?SUP,?BPKU,?PKUP,?BFLG,?LFLG,?RSTA,?ERPR
+      EXT ?OPLK,?GETC,?LINC,?LIST,?LOUT,?OKOL 
+      EXT ?CHOP,?CHPI,?OPER,?ASCN,?MSYM,?ASM1,?LINS 
+      EXT ?LST,?LPER,?PERL,?SETM,EXEC 
+      EXT ?LUNP,?PNLE,?ENDS,?PLIN,?PCOM,?ASMB 
+      SUP 
+TEMP  BSS 225B      RESERVE TEMPORARY AREA
+#     EQU TEMP     SAME AS DATA ORIGIN
+VALU  EQU TEMP+5
+...1  EQU TEMP+7
+.1    EQU ...1
+.12   EQU .1+7
+..M1  EQU .12+6 
+L     EQU ..M1+6
+.9    EQU #+41B 
+.M8   EQU #+43B 
+.M29  EQU #+45B 
+BLNK  EQU #+46B     =40B(LOWER BLANK) 
+.NO   EQU #+51B 
+.OP   EQU #+52B 
+.OV   EQU #+53B 
+.IL   EQU #+47B 
+BLNS  EQU #+55B 
+TW10  EQU #+56B    ADDRESS MASK 
+.1000 EQU #+57B 
+BIT15 EQU #+60B 
+.E    EQU #+61B 
+RELC  EQU #+76B     RELOCATION FLAG 
+SIGN  EQU #+77B 
+SUMP  EQU #+100B   RUNNING SUM FOR 'CHOP' 
+TERM  EQU #+101B   NO. OF TERMS IN AN OPERAND 
+T     EQU #+102B
+CNTB  EQU #+106B
+CODE  EQU #+107B   OPCODE TYPE(FROM OPTABLE)
+DSIG  EQU #+110B    'ASCN'
+FLAG  EQU #+111B
+FLAQ  EQU #+112B
+INST  EQU #+113B   OPCODE FORMAT
+LAST  EQU #+114B
+PASS  EQU #+115B   PASS FLAG(0=PASS 1  AND 1=PASS2) 
+PLCN  EQU #+117B   PROGRAM LOCATION COUNTER 
+PNTR  EQU #+121B L POINTS AT LAST OER CURRENT CHAR. 
+SCN1  EQU #+125B   STATE LNG/OPCODE/OPERAND/LABEL(4)
+TEST  EQU #+135B   TEST CHARACTER 
+*             * I/O STATEMENT BUFFER *
+IOBF  EQU #+142B    50 WORDS + END OF STATEMENT BUFF
+PBUF  OCT 0,0,0,0 
+WCNT  EQU PBUF  WORD(BLK) CNT FOR BIN.RECRD.
+ASM1  EQU ?ASM1 
+BFLAG EQU ?BFLG 
+CHOP  EQU ?CHOP 
+CHOPI EQU ?CHPI 
+ERPR  EQU ?ERPR 
+GETC  EQU ?GETC 
+LINC  EQU ?LINC 
+LIST  EQU ?LIST 
+LOUT  EQU ?LOUT 
+LST   EQU ?LST
+OKOLE EQU ?OKOL 
+OPERR EQU ?OPER 
+RSTA  EQU ?RSTA 
+A     EQU 0 
+*              *************************************
+*              * START PASS 2 OF ABSOLUTE ASSEMBLY *
+*              *************************************
+ASMB5 LDA ?LPER     LENGTH OF CLEAR AREA
+      LDB ?PERL     GET ORIGIN OF 'CLEAR' AREA
+      JSB ?SETM     GO TO SET MEMORY ROUTINE
+      OCT 0         TO SET MEMORY TO ZERO 
+      LDA .2000 
+      STA PLCN      INITIALIZE PROG LOC'N COUNTER 
+      CLA,INA 
+      STA PASS      SET PASS FLAG 
+      JSB RSTA      READ CONTROL STATEMENT
+      LDA TW10
+      STA ASM1      SET FLAG FOR 'INIT' PORTION 
+ASH   JSB RSTA      READ A SOURCE STATEMENT(NAM?) 
+      LDA CODE
+      CPA .12+3     HED?
+      JMP ASH       YES, GO PICK UP THE NEXT STATEME
+      STA ASM1      CLEAR 'CS' AND 'INIT' FLAG
+      CPA .1
+      JMP HI12
+      LDA .NO       'NO'= NO ORG OR NAM STATEMENT 
+     JSB ERPR 
+      JMP HC05      ERROR EXIT FROM INIT
+HI12  JSB ?CHOP     EVALUATE ORG
+      JMP HC02      ERROR RETURN
+      STB PLCN
+      JMP HC02
+.2000 OCT 2000
+      BSS PBUF-*+60 RESERVE REMAINING PUNCH BUFFER
+      SKP 
+*          *************************************************
+*          *  DO NOT MOVE SKPR, SPCR OR BREC AS THEY ARE   *
+*          *   SET ACCORDING TO THE ENTRY POINTS IN ASMB2  *
+*          *************************************************
+*        ****************************** 
+*        * SKIP AND SPACE LIST OUTPUT * 
+*        ****************************** 
+SKPR  LDB LINC  'SKIP'ENTRY 
+      CMB,INB 
+      JMP SK2 
+SPCR  JSB CHOPI EVALUATE SPACE COUNT
+      CLB,INB   ERROR - SET COUNT=1 
+SK2   SZB,RSS  SPACES=0?
+      JMP HC04      EXIT TO HC04(START OF PASS) 
+      LDA ?LFLG     NO, START LINE SKIPPING 
+      SZA,RSS       LIST REQUESTED? 
+      JMP HC04      EXIT TO HC04(START OF PASS) 
+      LDA LST       LST FLAG
+      SZA       SUPPRESS LISTING? 
+      JMP HC04      EXIT TO HC04(START OF PASS) 
+      STB DSIG SET COUNTER
+      LDA LINC
+      CPA ..M1      ON LAST LINE? 
+      JMP HC04      YES - EXIT
+      ADB LINC
+      SSB,RSS       WILL IT GO TO BOTTOM OF PAGE? 
+      JMP *+5       YES,GO TO TOP OF FORM 
+      STB LINC      NO, SAVE NEW LINE COUNT 
+      LDA DSIG      GET NO. OF LINES TO BE SKIPPED
+      JSB ?LINS     GO TO LINE SKIPPER
+      JMP HC04      EXIT TO GET NEXT STATEMENT
+      JSB OKOLE     SKIP TO TOP OF FORM 
+      JMP HC04      EXIT TO GET NEXT STATEMENT
+* 
+*        *************************
+*        * BINARY OUTPUT ROUTINE *
+*        *************************
+.M57  DEC -57 
+      DEF PBUF+2
+BREC NOP
+      LDA BFLAG     GET PUNCH REQUEST FLAG
+      SZA,RSS       WAS PUNCH REQUESTED?
+     JMP BREC,I  NO.
+     LDA WCNT 
+     SZB RECORD OUT?
+     JMP HI66    NO.
+     SZA,RSS WCNT=0?
+     JMP BREC,I YES.
+HI60  LDA WCNT    **OUTPUT A BINARY RECORD **** 
+      ALF,ALF  ROTATE 8 
+      STA WCNT   STORE WCNT IN UPPER PBUF 
+      ALF,ALF 
+      ADA .1+2      ADD 3 TO THE DATA COUNT 
+      STA CNTB      SET COUNTER = WCNT+3
+      JSB EXEC      PUNCH CURRENT RECORD
+      DEF *+5 
+      DEF .1+1      CW
+      DEF ?LUNP     LUN OF PUNCH DEV. 
+      DEF PBUF      PUNCH BUFFER
+      DEF CNTB      WORD COUNT
+      CLA 
+      STA WCNT      INITIALIZE WCNT =0
+     JMP BREC,I  AND EXIT 
+HI66  SZA           1ST WORD OF BINARY RECORD?
+      JMP HI70      -NO-
+     LDB PLCN  PLCN TO BREG 
+      STB PBUF+59   PUT IN CHECKSUM SAVER 
+      STB PBUF+1    SET RECORD ADDR.
+      LDA BREC-1
+      STA STOR      SET STOR=L(PBUF+2)
+      LDA .M57
+      STA CNTB      SET COUNT=-57 
+HI70  LDA INST
+      STA STOR,I    SET CURRENT BIN. WORD 
+      ISZ STOR      BUMP POINTER
+      ADA PBUF+59   UPDATE CHECKSUM 
+      STA PBUF+59 
+      STA STOR,I    SAVE IN LWA+1 OF PUNCH RECORD 
+      ISZ WCNT
+      ISZ CNTB      IS RECORD FULL? 
+      JMP BREC,I    NO - EXIT 
+      JMP HI60      YES - GO PUNCH
+STOR  BSS 1 
+      SKP 
+HC02  LDA ...1+1  LIST PARAMETER
+HC03  JSB LIST
+* 
+*             * READ NEXT STATEMENT 
+HC04  JSB RSTA  READ NEXT STATEMENT 
+* 
+*             * TEST MNEMONIC CODES FOR PROCESS TYPE *
+HC05  LDA CODE
+      LDB INST
+      CPA L+3  (43)  SOC OR SOS ? 
+     JMP HC28  YES
+      AND .M8       (177770)
+      CPA L     I/O ? 
+     JMP IOPR  YES
+      ARS,ARS       SHIFT A RIGHT 4 BITS
+      ARS,ARS 
+      CPA .1+2      60 OR 70?(MICRO-OP?)
+      JMP MICR      YES 
+      LDA CODE
+      ADA CODLC     SET UP ADDRESS OF PROCESSOR 
+      JMP A,I       JUMP TO OPCODE PROCESSOR
+* 
+CODLC DEF *,I 
+      DEF HC42      ORG       1 
+      DEF HC42      ORR       2 
+      DEF HC38      *COM      3 
+      DEF HC38      *ENT      4 
+      DEF HC38      *EXT      5 
+      DEF HC38      *ARITH    6 
+      DEF NUMP      ASC       7 
+      DEF NUMP      DEC       10
+      DEF NUMP      OCT       11
+      DEF BSSP      BSS       12
+      DEF EQUP      EQU       13
+      DEF FIN2      END       14
+      DEF HC38      *NAM      15
+      DEF MEMRY     MEMORY    16
+      DEF X50       HED       17
+      DEF MEMRY     DEF       20
+      DEF HC26      ABS       21
+      DEF SKPR      SKP       2.
+      DEF SPCR      SPC       23
+      DEF X54       LST/UNL   2J
+      DEF NUMP      DEX       25
+      DEF HC70      MPY/DIV ETC.
+      DEF HC80      LONG SHIFT
+      DEF HC30      CLO/STO ETC 
+.I    OCT 111       ASCII I   31
+CBIT  OCT 175777              32
+.1777 OCT 1777                33
+M17   DEC -17                 34   -17 FOR SHIFT-ROT
+      DEF X52       REP       35
+CNTC  NOP                     36   MICRO-OP PROC
+INSV  NOP                     37   MICRO-OP PROC
+      DEF X56       SUP/UNS   40
+SUM.  EQU INSV                     MEMORY REF PROC. 
+DEX   OCT 25        'DEX' OPCODE TYPE 
+      SKP 
+*             * PROCESS MEMORY REFERENCE INSTRUCTIONS * 
+* 
+MEMRY LDA INST
+     AND ..M1+1 NO, CLEAR LDSB OF 'INST'
+      STA INST
+      LDA .I        SET FOR INDIRECT BIT
+      LDB BIT15     INDIRECT BIT MASK(100000B)
+      JSB CHOP
+      JMP HC17E     ERROR EXIT
+      STB SUM.      OPERAND VALUE 
+      CLB           LIST PARAMETER=0
+HCXL  STB TERM      SAVE THE LIST PARAMETER 
+      LDA SUM.
+      LDB CODE
+      CPB .12+4 (16) DEF? 
+      JMP HC17
+      ADA TW10      NO - TEST FOR OPERAND>1023
+      SSA,RSS       IS IT?
+      JMP *+5       YES.
+      LDA INST      NO - SET TO CLEAR'CURRENT' BIT. 
+      AND CBIT      CURRENT BIT MASK(175777)
+      STA INST      RESTORE 
+      JMP HC14
+      LDA PLCN      TEST NOW FOR OPER.AND INSTR.
+      AND TW10        IN THE SAME PAGE OF MEMORY
+      CMA,INA 
+      ADA SUM.
+      AND TW10
+      SZA,RSS       IN SAME PAGE? 
+      JMP *+3       YES 
+      LDA .OV       NO - IT'S AN OVERFLOW 
+      JSB ERPR
+      LDA .1777 
+      AND SUM.      STRIP UPPER 6 BITS OF OPERAND 
+      STA SUM.
+HC14  LDA SUM.   NO, GET ADDR FOR 
+HC17  IOR INST
+     STA INST  SET LOADER FLAG
+*          * OUTPUT A BINARY WORD * 
+HC19  CLB,INB 
+      JSB BREC
+*          * OUTPUT A LINE FOR LISTING *
+      LDB BLNS      GET BLANKS FOR LIST ROUTINE 
+      LDA TERM      GET THE LIST PARAMETER
+      JSB LIST
+      ISZ PLCN
+      JMP HC04
+*        *****************
+*        * BSS PROCESSOR *
+*        *****************
+BSSP JSB CHOPI  EVAL. OPERAND 
+      JMP HC02      ERROR 
+     OCT 6003 B=0?
+      JMP HC02      YES 
+     CLB     B=0
+     JSB BREC 
+     CLA     A=0
+      LDB BLNS  NO RELOC. INDIC.
+      JSB LIST
+      LDA SUMP  PICK UP BLOCK LENGTH FOR PLCN 
+     ADA PLCN 
+     STA PLCN 
+      JMP HC04      EXIT
+      SKP 
+*         **********************************************
+*         * PROCESS THE 'DEF' FOLLOWING THE FIRST WORD *
+*         *  OF AN ARITHMETIC PAIR                     *
+*         **********************************************
+HC70  JSB LOUT      OUTPUT THE ARITH. OPERATION 
+      JSB LIST      LIST THE FIRST WORD 
+      LDA .12+4 (20B) 
+      STA CODE  =DEF
+      CLA 
+      STA INST CLEAR INST 
+      LDA .I        SET UP FOR INDIRECT BIT 
+      LDB BIT15     MASK= 100000B 
+      JSB CHOP
+      NOP 
+      ISZ PLCN      BUMP LOCATION COUNTER 
+      STB SUM.      SAVE OPERAND VALUE
+      LDB .1+3      LIST PARAMETER=4
+      JMP HCXL
+HC17E CLA           LIST PARAMETER =0 
+      STA TERM      SAVE IT 
+      JMP HC17
+* 
+*             * PROCESS 'ABS' OPCODE *
+HC26 JSB CHOPI  GO EVALUATE OPERAND 
+     JMP HP2D ERROR 
+      STB INST
+     JMP HP2D   OK..
+* 
+*             * OUTPUT BIN RECRD AND/OR LIST LINE * 
+HC30  JSB LOUT
+      JSB LIST
+* 
+*             * ADD 1 TO PROG. LOCN. CNTR. *
+     ISZ PLCN  BUMP LOCATION CNTR 
+      JMP HC04
+* 
+*             * COM,ENT,EXT AND ARITH MACRO 
+HC38  LDA .IL       ILLEGAL IN ABSOLUTE ASSEMBLY
+      JSB ERPR
+X39   CLA,INA  1 TO A 
+      JMP HC03
+* 
+*                   * PRE-PROCESSOR FOR ORG AND ORR * 
+HC42 CLB    OUTPUT A
+     JSB BREC RECORD
+      JSB INST,I JUMP TO CORRECT SUBROUT. 
+      JMP HC02      BACK TO START LIST
+X50   LDA ?LFLG     GET THE LIST FLAG 
+      SZA,RSS       IS LIST FLAG OFF? 
+      JMP HC04      YES - GO TO NEXT STATEMENT
+     JSB INST,I  TO HEADER SUBROUTINE 
+      JSB OKOLE  SPACE TO BOTTOM OF PAGE
+      JMP HC04      GET NEXT STATEMENT
+X52   JSB INST,I TO REPSB 
+      JMP X39 
+X54   STB LST  SET LST/UNL FLAG 
+      JMP X39 
+X56   STB ?SUP      SET 'SUP/UNS' FLAG
+      JMP X39 
+      SPC 1 
+*             * PASS 2 'EQU' PROCESSOR *
+EQUP JSB CHOPI     EVAL. OPERAND
+     CLB       ERROR EXITS
+     LDA PLCN 
+      STA SUMP  SAVE PLCN VALUE 
+      STB PLCN  SET PLCN=0
+      LDA ...1+1 (2)  LIST 'EQU'
+      JSB LIST
+      LDA SUMP  REPLACE PLCN VALUE
+      STA PLCN
+      JMP HC04
+HC80  JSB CHOPI    GO EVALUATE THE COUNT
+      JMP HC84     BAD COUNT EXIT 
+      ADB M17       B-17
+      SSB           B GRTR THAN 16? 
+      CPB M17       NO.  IS B=0?
+      JSB OPERR     YES, IT'S AN 'M' ERROR,.
+      LDA SUMP     GET THE SHIFT OR ROTATE COUNT..
+      AND .12+3    MASK OUT LOWEST 4 BITS 
+HC82  ADA INST     MAKE UP THE FINAL INSTRUCTION
+      STA INST
+      JMP HC30     GO AND OUTPUT THE INSTRUCTION
+HC84  CLA          SET COUNT FOR 16 BIT SHIFT ROTATE
+      JMP HC82
+      SKP 
+*             ************************* 
+*             * OCT/DEC/ASC PROCESSOR * 
+*             ************************* 
+NUMP  LDA SCN1+2
+      STA PNTR      SET POINTER 
+     CLA
+      STA T+1  SET FPAS=0 
+      LDA CODE
+      CPA ...1+6 (7)
+     JMP ASCR 
+HE06 LDB PNTR  PNTS AT 1ST CH OF NUMBER 
+      STB SIGN
+     CLB
+      STB CNTC
+     INB
+      STB RELC
+* 
+*             * TEST CHARACTER FOR TERMINATOR * 
+HE08 LDA PNTR 
+     JSB GETC 
+      STA TERM
+      CPA L+4  COMMA? 
+     JMP HE12    YES
+     CPA BLNK BLANK?
+     JMP HE12    YES
+* 
+*             * UPDATE CHAR.CNTR(CNTC) AND POSN. PNTR(TLOC) * 
+     LDB CODE 
+      CPB .9        OCT?
+      JMP HE10+1    YES 
+      CPB DEX       'DEX'?
+      JMP HE11      YES 
+      LDB ...1+1 (2) NOT OCTAL
+      CPA L+6  PERIOD?
+      STB RELC  YES, SET RELC = 2 
+      CPA .E        'E' ? 
+HE10  STB RELC      YES, SET RELC FOR USE AS ASCN MD
+      ISZ CNTC
+     ISZ PNTR  BUMP PNTR
+     JMP HE08 
+HE11  LDB .1+2      SET B=3 FOR DEX MODE
+      JMP HE10
+* 
+*             * SET UP VALUE FOR LIST AND/OR PUNCH *
+HE12 LDA CODE 
+     CLB
+      CPA .9        OCT?
+     JMP *+3   YES
+      LDB RELC  NOT OCT 
+     OCT 5727 BLFBLF
+     ADB CNTC 
+      LDA SIGN
+      JSB ?ASCN     GO TO 'ASCI' CONVERSION 
+     CLA    SET A=0 
+     STA INST 
+      STB SUMP  STORE VALUE 
+      LDA VALU      SAVE LEAST SIG PART OF 'DEX'
+      STA SIGN
+HE18 JSB NOUT 
+      LDA RELC
+      ARS,SLA       IS RELC = 0 OR 1? 
+      JMP HE20      NO, ITS 3 OR 2
+      LDA TERM  NO- 
+     CPA BLNK 
+      JMP HC04      EXIT ON BLANK 
+     ISZ PNTR  BUMP PNTR
+      JSB ?BPKU     SCAN OVER BLANKS
+     JMP HE06 
+* 
+HE20  LDA SUMP
+      STA INST  VALUE TO INST 
+      LDB RELC
+      CPB .1+2      IS RELC=3?
+      JMP HE22      YES- SET SUMP FOR 3RD WORD
+     CLA
+HE21  STA RELC      SET RELC FOR NEXT TEST
+     JMP HE18 
+* 
+HE22  LDA SIGN
+      STA SUMP      VALU TO SUMP
+      LDA .1+1      FOR SETTING RELC=2
+      JMP HE21
+*          ***************************
+*          * OCT DEC ASC WORD OUTPUT *
+*          ***************************
+NOUT  NOP 
+      LDA T+1 1ST LIST LINE FLAG
+      SZA     1ST?
+      JMP *+4  NO 
+      INA     1 TO A
+      STA T+1  SET FLAG 
+      CLA,RSS   CLEAR A,SKIP
+      LDA ...1+3 (4) SET A=4 FOR LIST 
+      LDB BLNS
+      JSB LIST
+      CLA 
+      CLB,INB 
+      JSB BREC    PUNCH 
+      ISZ PLCN    BUMP LOCN CNTR. 
+      JMP NOUT,I  EXIT
+*             ********************
+*             * PROCESS ASC HERE *
+*             ********************
+ASCR  LDA ...1+1 (2) INDIC.'ASC'
+      JSB CHOP    GO EVALUATE WORD LENGTH 
+     JMP HC30  ERROR EXIT 
+     SZA     VALUE ABSOL.?
+      JMP HP2D-1 NO; ERROR
+      ADB .M29      (-29)(VALUE IS IN SUMP TOO) 
+     SSB,RSS   VAL.>28? 
+      JMP HP2D-1 YES; ERROR 
+     LDA PNTR 
+      STA T 
+      LDA SUMP
+     OCT 3004 CMAINA
+      STA CNTC  VALUE(COMPL.) TO CNTC 
+* 
+*             * PICK UP WORDS AND STORE INTO PROGRAM *
+SB    ISZ T 
+      LDA T 
+      JSB GETC
+      ALF,ALF 
+      STA TEST
+      ISZ T 
+      LDA T 
+      JSB GETC
+      STA INST
+* 
+*             *  OUTPUT 2 ASCI CHARACTERS * 
+     JSB NOUT 
+     CLA
+      STA TEST
+     ISZ CNTC 
+      JMP SB
+      JMP HC04      DONE, GO GET NEXT STATEMENT 
+*             ************************* 
+*             * PROCESS I/O GROUP HERE *
+*             **************************
+RAM   OCT 105000
+      OCT 177400
+      OCT 300 
+IOPR  LDA SCN1+2  IS OPERAND
+     SZA    PRESENT?
+      JMP P  YES! 
+      LDA CODE  NO OPERAND
+      CPA L+1  'HLT'? 
+     JMP HP2D 
+* 
+*        * OPERAND ERROR EXIT HERE *
+      JSB OPERR  (HP2D-1) 
+HP2D CLA
+      STA TERM      SAVE THE LIST PARAMETER 
+      JMP HC19
+P     LDA .C        TEST FOR 'CLEAR FLAG'(C). 
+      LDB .1000     GET 'C' MASK FOR IO INSTR.
+      JSB CHOP
+      JMP Q   ERROR EXIT
+     LDA 1      YES 
+      LDB INST     LOAD B WITH OCTAL INSTR
+      ADA IOPR-2     MASK FISST PART
+      CPB RAM     SEE IF A RAM INSTR
+      RSS          SKIP NEXT MASK IF RAM
+      ADA IOPR-1  IF NOT RAM ADD SECOND PART
+      LDB SUMP     RESTORE B REG
+* 
+*             * TEST FOR VALUE>63 * 
+     SSA
+      JMP *+4  VAL>64 
+      LDA .OV      'OV'  ADDRESS OVERFOLW 
+     JSB ERPR 
+Q    CLB
+      ADB INST  (HE54+1)
+      STB INST
+     JMP HP2D 
+.C    OCT 103       ASCII 'C' 
+* 
+*             * PROCESS SOC OR SOS
+HC28  LDA SCN1+2 PNTR TO OPERAND
+      LDB 0    A TO B 
+      JSB ?MSYM 
+      ADA ..M1
+     SZA
+     JMP HP2D 
+      LDA LAST  IS 'C'
+      CPA .C        IS 'C' PRESENT? 
+     JMP *+2    YES 
+     JMP HP2D    NO 
+* 
+*             * 'OR' 1 TO BIT 9 (C BIT) OF I/O INST * 
+      LDA INST
+      IOR .1000     MASK IN CURRENT BIT 
+      STA INST
+     JMP HP2D 
+      SKP 
+*             **********************
+*             * MICRO-OP PROCESSOR *
+*             **********************
+MICRD OCT 7777,4000,60000,60,71,14000 
+MICR  CLA 
+*             * INITIALIZE FLAGS *
+      STA CNTC   =0 WHEN CLE APPEARS
+      STA TERM   BITS 12-11 = 1 IF B REG
+*                               BITS 12-11 = 2 IF A REG 
+      STA TEMP+4  BITS 14-13=1 IF SRG; =2 IF ASG
+     STA INSV  USED TO ACCUMULATE THE CODE
+      STA FLAG
+     STA TEST  CLEAR CHAR TESTER
+* 
+*             * START HERE FOR EACH NEW CODE *
+F     LDA INST UNPACK THE MICRO-OP CODE 
+*              THE FORMAT IS+ 
+*                BITS 14-13=1 IF SRG,2 IF ASG, 0 IF 
+*                                            EITHER 
+*                BITS 12-11=1 IF BREG,2 IF AREG, 0 IF 
+*                                            NEITHER. 
+*                BITS 11-0 = ACTUAL 12 BIT CODE 
+      AND MICRD     EXTRACT OPCODE
+      STA FLAQ  SAVE IT (=+2) 
+     LDA CODE  THIS IS THE GROUP NUMBER.
+     OCT 3004  MAKE SURE'IT'S BIGGER THAN THE LAST
+      ADA FLAG  A=(LAST GRP)-(PRESENT GRP)
+     SSA
+      JMP O    SEQUENCE IS OK 
+* 
+*             * IF PRES GRP IS GO WE CAN CHANGE IT AND MAY BE OK
+     LDA CODE 
+      CPA MICRD+3   IS CODE TYPE = 60B (MICRO-OP)?
+      JMP *+4  CHANGE ERROR GROUP AND OP CODE 
+MERR  LDA .OP       'OP' FOR OPCODE ERROR 
+     JSB ERPR       RETURN
+      JMP HP2D
+      LDA MICRD+4   71B, CHANGE GROUP (FROM *-4)
+     STA CODE  TO 71
+* 
+*             * MOVE BITS 8-5 OF OPCODE TO BITS 4 AND 2-0 * 
+      LDA FLAQ
+      AND MICRD+1   SET A/B BIT 
+     STA 1          SAVE IN B.
+      XOR FLAQ
+     OCT 1727       MOVE TO BITS O AND 15-13
+      RAR,SLA  MOVE BIT 0 TO
+     INA            BIT 1.
+     OCT 1723 ALF,RAR  ROTATE LEFT 3 TO BITS 4,2-0
+      IOR 1     PUT IN THE A/B BIT
+      JMP F+2 
+O     LDA CODE
+      STA FLAG  SET LAST GRP TO PRESENT GRP 
+* 
+*             * CHECK REGISTER CONSISTENCY *
+     LDA INST 
+      AND MICRD+5   GET BITS 12-11
+      IOR TERM
+      CPA MICRD+5   IF EQUAL, THERE'S A REGISTER
+     JMP MERR       INCONSISTENCY.
+      STA TERM   NEW REGS TO REGS,
+* 
+*             * OTHERWISE CHECK GROUP CONSISTENCY * 
+     LDA INST 
+      AND MICRD+2   BITS 14-13
+      IOR TEMP+4
+      CPA MICRD+2   IF EQUAL,THERE ARE 2 CODES
+     JMP MERR       FROM DIFFERENT GROUPS.
+      STA TEMP+4
+*             * CHECK FOR CLE * 
+      LDA FLAQ
+     OCT 2003 SZA,RSS 
+      ISZ CNTC
+* 
+*             * NOW 'OR' THE CODE INTO CURRENT CODE SO FAR *
+     IOR INSV 
+     STA INSV 
+* 
+*             * GET THE NEXT CHARACTER *
+      LDA SCN1+1   OPCODE PNTR
+      ADA ...1+2   (3)
+     STA PNTR  PROINTS AT POSN FOLLOWINT OPCODE 
+      JSB ?PKUP 
+     CPA BLNK  IF SO WE ARE DONE. 
+      JMP *+7 
+      CPA L+4  COMMA ?
+     JMP *+2
+     JMP MERR 
+* 
+*             * GET THE NEXT OPCODE * 
+      JSB ?OPLK     OPCODE LOOKUP 
+      JMP HP2D
+      JMP F 
+* 
+*             * TO FINISH TEST CLE; IF USED AND IN ASG SET, ADD 40
+*             * TO THE CODE.
+      LDA TEMP+4 (FROM *-7) 
+     OCT 1727 ALF,ALF 
+     OCT 2003 SZA,RSS 
+      IOR BLNK      (40B) 
+      LDB CNTC
+     OCT 6003 SZB,RSS 
+     CLA
+     IOR INSV 
+     STA INST 
+      JMP HP2D
+      SKP 
+FIN2  CLB 
+      JSB BREC      PUNCH REST OF LAST DBL RECORD 
+      LDB ?BFLG 
+      SZB,RSS       WAS PUNCHING REQUESTED? 
+      JMP FIN3      NO
+      JSB EXEC      YES- OUTPUT TRAILER 
+      DEF *+3 
+      DEF .1+2      CW
+      DEF ?PNLE     LEADER PARAMETER/LUN
+FIN3  CLA,INA 
+      LDB BLNS
+      JSB LIST      LIST 'END' STATEMENT
+      JSB ?ENDS     GO TO END SUBROUTINE
+      LDB ?PLIN 
+      CPB ?PCOM     TTY OUTPUT? 
+      JMP ASMBX     YES 
+      CCA           NO - ITS ON A PRINTER 
+      JSB ?LINS     SKIP TO TOP OF FORM 
+      JMP ASMBX 
+********************************************************************
+********** CHANGE LOC'N. Z IN ASMB IF THIS PROGS. LWA > 1315B ******
+********************************************************************
+ASMBX EQU ?ASMB 
+      SPC 1 
+      END ASMB5 

@@ -1,0 +1,101 @@
+ASMB,B,R,L,C
+      NAM RWNDF,7 
+      ENT RWNDF 
+      EXT .ENTR,RWND$,EXEC
+      EXT R/W$
+*     THE MODULE OF THE RTE FILE MANAGER PERFORMS 
+*     THE REWIND OR RESET FUNCTION
+* 
+*     A FILE IS RESET TO EXTENT 0 RECORD 1 VIA RWND$
+*     A TYPE ZERO UNIT IS REWOUND VIA AND EXEC CALL 
+* 
+* 
+*     CALLING   SEQUENCE
+* 
+*     CALL RWNDF(IDCB,IER)
+* 
+*         WHERE:
+* 
+*         IDCB  IS THE FILES DATA CONTROL BLOCK ARRAY 
+* 
+*         IER   IS THE ERROR RETURN LOCATION. 
+*               ERRORS ARE RETURNED IN THE A REG
+*               ALSO. 
+*               ERRORS  CODES ARE:
+*             0   NO ERROR
+*            -11 DCB NOT OPEN 
+* 
+* 
+      SPC 2 
+*     PRE CONSTANT AREA 
+      SPC 1 
+.3    DEC 3 
+TYPE  NOP 
+.2    OCT 2 
+.7    DEC 7 
+.5    DEC 5 
+      SPC 3 
+DCB   DEF DCB 
+IER   DEF DCB 
+      SPC 1 
+RWNDF NOP           ENTRY  POINT
+      JSB .ENTR      FETCH
+DFDM  DEF DCB         PRAM ADDRESSES
+      SPC 1 
+      LDB DCB       GET DCB ADDRESS 
+      ADB .2         INDEX TO TYPE AND
+      STB TYPE        SET ADDRESS 
+      ADB .7           INDEX TO OPEN FLAG AND 
+      LDA B,I           FETCH 
+      CPA XEQT      OPEN? 
+      CLA,INA,RSS    YES; SET AWRWND RECORD COUNT/SKIP
+      JMP NOOPN      NO; TAKE ERROR  EXIT 
+      ADB .5        INDEX TO RECORD COUNT AND 
+      STA B,I       SET RECORD COUNT
+      LDA TYPE,I    GET TYPE
+      CLE,SZA        IF NOT ZERO
+      JMP DISC        GO DO DISC THING
+      SPC 1 
+      ISZ TYPE      TYPE =0 -STEP TO LU 
+      LDA TYPE,I     FETCH LU AND 
+      AND B77         ISOLATE IT THEN 
+      ADA B400         ADD THE REWIND BIT 
+      STA TYPE          AND  SAVE  FOR EXEC 
+      SPC 1 
+      JSB EXEC      CALL EXEC TO
+      DEF EXRTN      REWIND 
+      DEF .3          TYPE
+      DEF TYPE         ZERO  FILE 
+EXRTN CLA,RSS       SET ERROR CODE AND SKIP TO EXIT 
+NOOPN LDA N11       NOT OPEN- EXIT -11
+EXIT  STA IER,I     SET ERROR CODE
+      LDB DFDM       RESET ENTRY ADDRESSES
+      STB DCB         AND 
+      STB IER          THEN 
+      JMP RWNDF,I       RETURN
+      SPC 2 
+*     MID CONSTANT AREA 
+      SPC 1 
+B77   OCT 77
+B400  OCT 400 
+N11   DEC -11 
+      SPC 3 
+DISC  LDB DCB       SET UP AND
+      JSB R/W$      WRITE THE BLOCK IF NECESSARY
+      JMP EXIT      IF ERROR EXIT 
+      SPC 1 
+      LDB DCB       DISC  FILE-CALL 
+      CLA            RWND$
+      JSB RWND$       TO SET UP  DCB
+      JMP EXIT         ERROR RETURN 
+      JMP EXRTN         NORMAL RETURN 
+      SPC 2 
+*     POST  CONSTANT AREA 
+      SPC 1 
+A     EQU 0 
+B     EQU 1 
+XEQT  EQU 1717B 
+      SPC 1 
+END   EQU * 
+      SPC 1 
+      END 

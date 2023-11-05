@@ -1,0 +1,262 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0045)http://newton.freehostia.com/hp/msubasic.html -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" ""><HTML><HEAD><META 
+content="IE=5.0000" http-equiv="X-UA-Compatible">
+   
+<META http-equiv="content-type" content="text/html; charset=ISO-8859-1">   
+<TITLE>31KW MSU BASIC</TITLE> 
+<META name="GENERATOR" content="MSHTML 11.00.9600.18500"></HEAD> 
+<BODY>
+<H3>31KW Version of MSU BASIC</H3>
+<P>MSU BASIC is a four-user time-sharing BASIC system for a HP2116 minicomputer 
+from Montana State University, the source code for Revision A is dated December 
+1971. Each user was connected to a separate TTY console interface and the system 
+logged activity on a separate TTY (or perhaps one of the user TTY's, not sure if 
+that works). The system was slightly modified in early 2008 to disable logging, 
+and settings were discovered to permit proper simulation under SimH HP2100, I 
+got ahold of the files and slightly modified them to permit configuring a system 
+for a 31KW memory configuration (to leave the top 1KW free for integration and 
+swap/save code), and figured out how to get it to boot straight to the READY 
+prompt, without logging on and clearing memory, thus permitting programs to be 
+entered and saved in binary form. And here we are...<BR></P>
+<UL>
+  <LI><A href="http://newton.freehostia.com/hp/msubasic.zip">msubasic.zip</A> 
+  (3/7/08) - source, binaries and patches for a 31KW single-user version</LI>
+  <LI><A 
+  href="http://newton.freehostia.com/hp/msubasic_tech.zip">msubasic_tech.zip</A> 
+  (3/8/08) - PDF assembler and binary listings and patch details</LI>
+  <LI><A href="http://newton.freehostia.com/hp/bas/">paper-tape BASIC games</A> 
+  - directory containing paper-tape BASIC game conversions<BR></LI>
+  <LI><A href="http://newton.freehostia.com/hp/absgames.zip">absgames.zip</A> - 
+  contains binaries for MSU BASIC and BCS games<BR></LI>
+  <LI><A href="http://newton.freehostia.com/hp/7906sim.html">7906 disk 
+  simulation</A> - includes MSU BASIC and games, simulator links</LI>
+  <LI><A href="http://newton.freehostia.com/hp/asm21.zip">asm21.zip</A> 
+  (11/26/10) - original and modified versions of Eric Smith's 
+  cross-assembler</LI>
+  <LI><A href="http://newton.freehostia.com/hp/msusrc.zip">msusrc.zip</A> 
+  (11/26/10) - recovered source code for the the 16KW MSU BASIC<BR></LI></UL>
+<P>I restricted the mods to the assembly source code (this time:-) to the bare 
+minimum needed to make it spit out a working 31KW binary, theoretically it can 
+still be configured multi-user. There is a texual glitch while preparing, don't 
+know why but it doesn't keep the configured binary from running, so for now 
+ignoring (same glitch happens when assembled with extasmb so it's not an Asm21 
+glitch, and it doesn't happen with the 16KW so related to something I did... oh 
+well). All further mods were done directly to the configured binary, starting
+ with logging it on so it would initialize its data structures to eliminate the 
+need to re-initialize every time it starts. The patches are essentially memory 
+pokes to skip around some of the startup code and to insert new code to process 
+BYE so that if it is run from HP-IPL/OS it runs the swapper to exit, leaving the 
+BASIC system in alternate memory where it can be saved to disk or punched to a
+ stand-alone ABS file. When the saved results is run the BASIC program is also 
+loaded, ready to run. The patch utility also permits reconfiguring the CLK and 
+TTY slots and entering new information line(s) to be displayed on startup. If 
+desired the stock "_" correction character can be changed to a more user-friendy 
+ascii-8 backspace (if using Linux might have to select a different keymap to 
+use).<BR></P>
+<P>Hopefully now the infrastructure is in mostly in place to get on with the fun 
+part - converting and writing more BASIC code to run!<BR></P>
+<HR style="width: 100%; height: 2px;">
+<SPAN style="font-weight: bold;"></SPAN> 
+<P><SPAN style="font-weight: bold;">The HP BASIC Language supported by MSU 
+BASIC<BR></SPAN></P>
+<P>The MSU BASIC language is very similar to HP paper-tape BASIC (even the error 
+codes are the same), the main difference is there are no CALL and WAIT
+ functions. Regular variable names are a letter followed by an optional digit, 
+array variable names are restricted to a single letter. String variables are not 
+supported. Program lines must begin with a number between 1 and 9999, the last
+ line must be END. When entering lines, the "_" character logically erases the 
+previous character (if desired this can be changed to a regular backspace, 
+change the octal 137 value in the top memory page to 10 octal, location 75530 in 
+the 31KW version). Press Esc to abort the line and start over. Lines with valid 
+syntax replace existing lines with the same line numbers. A running program can 
+be aborted by entering S at an input prompt, or by pressing any key while 
+computing.<BR></P>
+<P><SPAN style="font-weight: bold;">Operation commands...<BR></SPAN></P>
+<P>These are commands given without a line number.<BR></P>
+<P>RUN - runs the program in memory<BR>SCRATCH - erases the program in 
+memory<BR>RENUMBER - renumbers the program, starting at line 10 and incrementing
+ by 10<BR>LIST - lists the entire program<BR>LIST 100 - lists lines from line 
+100 to the end of the program.<BR>TAPE - load a program from the photo reader 
+(not supported under simh?)<BR>PUNCH - lists the program, and punches a binary 
+version (simh device tty2)<BR>MESG message - sends a message to other users (not 
+possible under simh)<BR>BYE - ends the session (location 101 contains the 
+address to jump to)<BR></P>
+<P><SPAN style="font-weight: bold;">Program statements...<BR></SPAN></P>
+<P>These are instructions preceded by a line number which form the program. An 
+error number is displayed if it doesn't understand and the matching line in 
+memory (if it exists) is not affected. Parameters can be simple floating point 
+numbers using standard "E" notation, or expressions of multiple numbers and 
+variables per normal BASIC technique. Supported simple mathematical operations 
+include + - * / and ^ (exponent). When used in expressions, AND OR NOT &lt; &gt;
+&lt; = &gt;= = and # (not equal) return either 0 or 1 depending on if the 
+expression is true or not. Use parenthesis to force a particular evaluation
+ order. For example PRINT (2*3) + (3#5) prints 7. NOT inverts the logic of the 
+following item. Bit logic is not supported.. i.e PRINT 3 AND 4 prints 1 because 
+both 3 and 4 are not 0.<BR></P>
+<P><SPAN style="font-weight: bold;">DIM<BR></SPAN></P>
+<P>Dimensions a one or two dimensional array. The array name must be a single 
+letter, the dimension specifications must be numbers between 1 and 255, not
+ expressions. Subscripts range from 1 to the number of elements dimensioned (or 
+redimensioned by a matrix operation). Multiple arrays can be dimensioned with a 
+single DIM statement, separate with commas. If DIM(specs) is entered the line 
+will be converted to DIM[specs]. Array elements are initially undefined and must 
+be assigned values before using in assignments and calculations. </P>
+<PRE>100 DIM X[100],Y[10,20]<BR>110 DIM Z[255]</PRE>
+<P><SPAN style="font-weight: bold;">LET<BR></SPAN></P>
+<P>Assigns an expression to a variable or array element, variable names must be 
+a single letter optionally followed by a digit. Multiple variables and array
+ elements can be set to the same value on one line, separate with additional = 
+symbols.<BR></P>
+<PRE>100 LET A1=100<BR>110 LET C=A1/10       [C contains 10]<BR>120 DIM B[5,5]<BR>130 LET B[1,1]=C+A1   [element 1,1 of array B contains 110]<BR>140 LET X=Y=Z=5       [X Y Z all set to 5]<BR></PRE><SPAN 
+style="font-weight: bold;"></SPAN> <SPAN style="font-weight: bold;"></SPAN> 
+<P><SPAN style="font-weight: bold;">COM<BR></SPAN></P>
+<P>Like DIM but does not clear the array, useful for multi-part programs that 
+won't all fit in memory at once and for running existing code. Without a working 
+TAPE command the next part has to be pasted or otherwise uploaded to the console 
+after using the SCRATCH command.<BR></P>
+<PRE>100 COM A[2]<BR>110 LET A[1]=5<BR>120 LET A[2]=10<BR>130 END<BR>RUN<BR><BR>READY<BR>SCRATCH<BR><BR>READY<BR>100 COM A[2]<BR>110 PRINT A[1];A[2]<BR>120 END<BR>RUN<BR>&nbsp;5     10<BR></PRE>
+<P><SPAN style="font-weight: bold;">PRINT / TAB<BR></SPAN></P><SPAN style="font-weight: bold;"></SPAN> 
+<P>Prints an expression and/or quoted text list. Separate list elements with 
+commas to separate into fields or with semicolons to space together. Semicolons 
+are not needed to separate quoted text from numerical data. Numbers always print 
+with a certain field size (adjusted if more room is needed) with the sign in the 
+first position. If the last character is ; then no CRLF is emitted, but if the 
+total line length exceeds 72 characters one will be emitted anyway at the 
+beginning of the line that won't fit. TAB(column) moves to the specified column 
+provided the specified column is greater than the current column, if a numerical 
+expression follows separate with a comma or semicolon, not required for quoted 
+text.<BR></P>
+<PRE>100 LET X=5<BR>110 PRINT "X ="X;TAB(20)"X*2 ="X*2<BR>120 END<BR>RUN<BR>X = 5               X*2 = 10<BR><BR>100 LET A1=2<BR>110 LET A2=-1.41837E-23<BR>120 PRINT "A1 ="A1"NEXT PRINT"<BR>130 PRINT "A2 ="A2"NEXT PRINT"<BR>140 END<BR>RUN<BR>A1 = 2    NEXT PRINT<BR>A2 =-1.41837E-23   NEXT PRINT<BR></PRE>
+<P><SPAN style="font-weight: bold;">INPUT<BR></SPAN></P>
+<P>Obtains entry from the console into a variable or array element. To input 
+multiple values separate the variables by commas, when entering the elements can 
+be separated by commas or entered on separate lines. If non-numeric data is 
+entered it prompts again, if S entered it stops the program.<BR></P>
+<PRE>100 PRINT "ENTER A ";<BR>110 INPUT A<BR>120 PRINT "ENTER B,C ";<BR>130 INPUT B,C<BR>140 PRINT "A*B*C ="A*B*C<BR>150 END<BR>RUN<BR>ENTER A ?5<BR>ENTER B,C ?7,9<BR>A*B*C = 315<BR></PRE>
+<P><SPAN style="font-weight: bold;">DATA / READ / RESTORE<BR></SPAN></P>
+<P>DATA statements provide lists of comma-separated numbers to READ into 
+variables or array elements. Multiple variables can be read with successive data 
+items by separating the variable names with commas. The RESTORE statement moves
+ the read pointer to the beginning of the first data statement.<BR></P>
+<PRE>100 DIM X[4]<BR>110 DATA 1,2,3,4<BR>120 READ A,B,C,D<BR>130 RESTORE<BR>140 READ X[A],X[B],X[C],X[D]<BR>150 PRINT "X[] ="X[1];X[2];X[3];X[4]<BR>160 END<BR>RUN<BR>X[] = 1     2     3     4</PRE>
+<P><SPAN style="font-weight: bold;">IF / THEN<BR></SPAN></P>
+<P>Provides conditional branching.. IF expression THEN line#. If the expression 
+is true (non-zero) then the program continues at the specified line, otherwise 
+drops through to the next line. The expression usually is a condition as in 
+something relation something where relation is &lt; &gt; &lt;= &gt;= = or # 
+(&lt;&gt; is converted to #) with multiple conditions separated by AND or OR, 
+but any valid expression seems to be accepted.<BR></P>
+<PRE>100 LET A=5<BR>110 IF A THEN 150<BR>120 IF  NOT (A-5) THEN 160<BR>130 PRINT "BOO!"<BR>140 IF A&gt;4 AND A&lt;6 THEN 120<BR>150 IF A=5 THEN 130<BR>160 END<BR>RUN<BR>BOO!<BR></PRE>
+<P><SPAN style="font-weight: bold;">GOTO<BR></SPAN></P>
+<P>Transfers to a specified line.<BR></P>
+<PRE>100 PRINT "PRESS CTRL-C TO STOP"<BR>110 GOTO 110<BR>120 END<BR>RUN<BR>PRESS CTRL-C TO STOP<BR>[control-C pressed]<BR>STOP<BR></PRE>
+<P><SPAN style="font-weight: bold;">GOSUB / RETURN<BR></SPAN></P>
+<P>GOSUB calls a subroutine, when RETURN is encountered the program continues at 
+the line following the subroutine call.<BR></P>
+<PRE>100 GOSUB 200<BR>110 GOSUB 300<BR>120 GOTO 400<BR>200 PRINT "HELLO ";<BR>210 RETURN<BR>300 PRINT "WORLD"<BR>310 RETURN<BR>400 END<BR>RUN<BR>HELLO WORLD<BR></PRE>
+<P><SPAN style="font-weight: bold;">STOP / END<BR></SPAN></P>
+<P>The last statement of a program must be END, however STOP or END may be used 
+before the end of a program to halt execution. Either one will do, STOP can be 
+used to visually distinguish it from the END line.<BR></P>
+<P><SPAN style="font-weight: bold;">FOR / TO / STEP / NEXT<BR></SPAN></P>
+<P>FOR loopvar = expr TO expr [STEP expr] - repeats a group of lines while 
+modifying a loop variable (not an array element). The loop variable is initially 
+set to the expression preceding TO and looping stops when the loop variable 
+exceeds the expression after TO (greater or lesser depending on if stepping 
+backwards). If the loop variable already exceeds the termination expression then 
+the lines are skipped. By default the loop variable is incremented by 1 but 
+other positive or negative increments can be specified by STEP.<BR></P>
+<PRE>100 DIM A[2]<BR>110 LET A[1]=1<BR>120 LET A[2]=5<BR>130 FOR I=A[1] TO A[2]<BR>140 PRINT I;<BR>150 NEXT I<BR>160 PRINT<BR>170 FOR J1=10 TO 1 STEP -2<BR>180 PRINT J1;<BR>190 NEXT J1<BR>200 END<BR>RUN<BR>&nbsp;1     2     3     4     5<BR>&nbsp;10    8     6     4     2<BR></PRE>
+<P><SPAN style="font-weight: bold;">MAT<BR></SPAN></P>
+<P>MAT can specify a variety of things depending on what follows...<BR>MAT 
+arrayname = ZER&nbsp; sets all elements to 0<BR>MAT arrayname = CON&nbsp; sets 
+all elements to 1<BR>MAT arrayname = IDN&nbsp; sets a square array with 0 with a 
+diagonal of 1's<BR>MAT array1 = TRN (array2)&nbsp; transposes dimensions.. [1,2] 
+put in [2,1] etc<BR>MAT array1 = array2&nbsp; copies array 2 to array 1<BR>MAT 
+array1 = array2 + array3&nbsp; adds elements of arrays (one-to-one)<BR>MAT 
+array1 = array2 - array3&nbsp; subtracts elements of arrays (one-to-one)<BR>MAT 
+array1 = array2 * array3&nbsp; multiplies arrays (by weird rules, see <A href="http://en.wikipedia.org/wiki/Matrix_%28mathematics%29">here</A>)<BR>
+MAT array1 = (expression) * array2&nbsp; multiplies by expression
+ (one-to-one)<BR>MAT PRINT arrayname&nbsp; prints all elements of an array<BR>
+MAT INPUT arrayname&nbsp; inputs all elements of an array<BR>MAT READ 
+arrayname&nbsp; reads DATA elements into all elements of an array<BR>Some or 
+these can redimension the array, such as MAT X=ZER [2,2]<BR></P>
+<PRE>100 DIM X[4,4],Y[4,4],Z[4,4]<BR>110 DATA 1,2,3,4<BR>120 DATA 5,6,7,8<BR>130 DATA 8,7,6,5<BR>140 DATA 4,3,2,1<BR>150 MAT READ X<BR>160 MAT Y=TRN(X)<BR>170 MAT Z=(2)*X<BR>180 MAT X=Y+Z<BR>190 MAT Z=X*Y<BR>200 MAT PRINT Z<BR>210 END<BR>RUN<BR>&nbsp;111            263            231            79<BR><BR> 187            467            443            163<BR><BR> 163            443            467            187<BR><BR> 79             231            263            111<BR></PRE>
+<P><SPAN style="font-weight: bold;">SIN / COS / TAN / ATN / EXP / LOG / SQR / 
+INT / ABS / SGN<BR></SPAN></P>
+<P>Mathematical functions that can be used in expressions, these operate on an 
+expression that follows enclosed in parenthesis. SIN thru ATN are trig functions 
+sine, cosine, tangent and arctangent, which operate in radians. EXP and LOG are 
+base "e" exponent and logarithm. SQR takes a square root. INT rounds down to 
+integer. ABS returns the absolute value, and SGN returns the sign of an 
+expression, -1 0 or 1.</P>
+<PRE>100 PRINT SIN(4)<BR>110 PRINT COS(4)<BR>120 PRINT TAN(4)<BR>130 PRINT ATN(4)<BR>140 PRINT LOG(4)<BR>150 PRINT EXP(4)<BR>160 PRINT SQR(4)<BR>170 PRINT INT(-77.7)<BR>180 PRINT ABS(-1.23)<BR>190 PRINT SGN(-10)<BR>200 END<BR>RUN<BR>-.756803<BR>-.653643<BR>&nbsp;1.15782<BR>&nbsp;1.32582<BR>&nbsp;1.38629<BR>&nbsp;54.5982<BR>&nbsp;2<BR>-78<BR>&nbsp;1.23<BR>-1<BR></PRE>
+<P><SPAN style="font-weight: bold;">DEF FNx<BR></SPAN></P>
+<P>Permits defining custom functions to use in expressions, x=single letter 
+defining the function name which always begins with FN. A variable in 
+parenthesis defines the variable name to use for the context of the definition 
+(doesn't affect existing variables with the same name). After defining, 
+FNx(expression) can be used in other expressions.<BR></P>
+<PRE>100 DEF FNA(X)=X*2+1<BR>110 PRINT FNA(2);FNA(3);FNA(4)<BR>120 END<BR>RUN<BR>&nbsp;5     7     9<BR></PRE>
+<P><SPAN style="font-weight: bold;">RND<BR></SPAN></P>
+<P>A function that returns a "random" number between 0 and 1. Not really random, 
+the sequence is always the same for each run, and the initial values are a bit 
+jumpy. A parameter is required but doesn't seem to do anything.<BR></P>
+<PRE>100 FOR I=1 TO 5<BR>110 PRINT RND(0)<BR>120 NEXT I<BR>130 PRINT "ENTER SEED";<BR>140 INPUT S<BR>150 FOR I=0 TO S<BR>160 LET N=RND(0)<BR>170 NEXT I<BR>180 FOR I=1 TO 5<BR>190 PRINT RND(0)<BR>200 NEXT I<BR>210 END<BR>RUN<BR>&nbsp;1.52602E-05<BR>&nbsp;.500092<BR>&nbsp;.500412<BR>&nbsp;1.64799E-03<BR>&nbsp;6.17992E-03<BR>ENTER SEED?1000<BR>&nbsp;.263123<BR>&nbsp;.800767<BR>&nbsp;.936496<BR>&nbsp;.912073<BR>&nbsp;.543973<BR></PRE>
+<P><SPAN style="font-weight: bold;">REM<BR></SPAN></P>
+<P>Adds non-executing remarks, program flow continues to the next line.<BR></P>
+<PRE>100 REM MY GOOFY PROGRAM<BR>110 REM PRESS CONTROL-C TO STOP<BR>120 FOR I=1 TO 72<BR>130 IF RND(0)&lt;.5 THEN 160<BR>140 PRINT "*";<BR>150 GOTO 170<BR>160 PRINT " ";<BR>170 NEXT I<BR>180 PRINT<BR>190 GOTO 120<BR>200 END<BR></PRE>
+<P><SPAN style="font-weight: bold;">Error numbers...<BR></SPAN></P>
+<P>This was extracted and edited from the MSU BASIC "monitor" assembly
+ source.<BR></P>
+<PRE>--------------------------------------------<BR>1    PREMATURE STATEMENT END<BR>2    INPUT EXCEEDS 71 CHARACTERS<BR>3    SYSTEM COMMAND NOT RECOGNIZED<BR>4    NO STATEMENT TYPE FOUND<BR>5<BR>6    NO LETTER WHERE EXPECTED<BR>7    LET STATEMENT HAS NO STORE<BR>8    ILLIGAL COM STATEMENT<BR>9    NO FUNCTION IDENTIFIER (OR BAD)<BR>10   MISSING PARAMETER<BR>11   MISSING ASSIGNMENT OPERATOR<BR>12   MISSING 'THEN'<BR>13   MISSING OR IMPROPER FOR-VARIABLE<BR>14   MISSING 'TO'<BR>15   BAD 'STEP' PART IN FOR STATEMENT<BR>16<BR>17<BR>18   NO CONSTAND WHERE EXPECTED<BR>19   NO VARIABLE WHERE EXPECTED<BR>20   NO CLOSING QUOTE FOR STRING<BR>21   PRINT JUXTAPOSES FORMULAS<BR>22   IMPROPER WORD IN MAT STATEMENT<BR>23   NO COMMA WHERE EXPECTED<BR>24   IMPROPER ARRAY FUNCTION<BR>25   NO SUBSCRIPT WHERE EXPECTED<BR>26   ARRAY INVERSION INTO SELF<BR>27   MISSING MULTIPLICATION OPERATOR<BR>28   IMPROPER ARRAY OPERATOR<BR>29   ARRAY MULTIPLICATION INTO SELF<BR>30   MISSING LEFT PARENTHESIS<BR>31   MISSING RIGHT PARENTHESIS<BR>32   UNRECOGNIZED OPERAND<BR>33   MISSING SUBSCRIPT<BR>34   MISSING ARRAY IDENTIFIER<BR>35   MISSING OR BAD INTEGER<BR>36   CHARACTERS AFTER STATEMENT END<BR>37<BR>38   PHOTO READER NOT READY<BR>39   FUNCTION MULTIPLY DEFINED<BR>40   UNMATCHED FOR STATEMENT<BR>41   UNMATCHED NEXT<BR>42   OUT OF STORAGE-SYMBOL TABLE<BR>43   INCONSISTENT DIMENSIONS<BR>44   [missing END]<BR>45   ARRAY DOUBLE DIMENSIONED<BR>46   NO OF DIMENSIONS UNSPECIFIED<BR>47   ARRAY TOO LARGE<BR>48   OUT OF STORAGE-ARRAY ALLOCATION<BR>49   SUBSCRIPT TOO LARGE<BR>50   UNDEFINED OPERAND ACCESSED<BR>51   NEGATIVE BASE POWERED TO REAL<BR>52   ZERO TO ZERO POWER<BR>53   MISSING STATEMENT<BR>54   GOSUBS NESTED 10 DEEP<BR>55   RETURN FINDS NO ADDRES<BR>56   OUT OF DATA<BR>57   OUT OF STORAGE - EXECUTION<BR>58   RE-DIMENSIONED ARRAY TOO LARGE<BR>59<BR>60   MATRIX UNASSIGNED<BR>61   NEARLY SINGULAR MATRIX<BR>62   ARGUMENT TOO LARGE<BR>63   SQRT HAS NEGATIVE ARGUMENT<BR>64   LOG OF NEGATIVE ARGUMENT<BR>  ** RECOVERABLE ERRORS FOLLOW **<BR>65   OVERFLOW<BR>66   UNDERFLOW<BR>67   LOG OF ZERO<BR>68   EXPONTIAL OVERFLOW<BR>69   DIVIDE BY ZERO<BR>70   ZERO TO NEGATIVE POWER<BR>--------------------------------------------<BR><BR>100 LET A=1/0<BR>110 PRINT "RECOVERED"<BR>120 LET A=SQR(-1)<BR>130 PRINT "WON'T PRINT"<BR>140 END<BR>RUN<BR><BR>ERR 69:100<BR>RECOVERED<BR><BR>ERR 63:120<BR><BR>140 FOR XX=1 TO 4<BR>ERR 11:140<BR><BR>140 FOR X=1 T 4<BR>ERR 14:140<BR><BR>140 DIM X[255]<BR>140 DIM X[256]<BR>ERR 35:140<BR>
+</PRE>
+<HR style="width: 100%; height: 2px;">
+
+<P><SPAN style="font-weight: bold;">Change notes and stuff...</SPAN><BR></P>
+<P>4/19/08 - While running stuff on real hardware (as opposed to super-fast sim) 
+I noticed that pressing any key before a program is ready for input causes the 
+program to end. HP "paper-tape" BASIC does the same thing. Will have to keep 
+that in mind when playing "action" games... get too excited and it's game 
+over.<BR></P>
+<P>4/16/08 - Removed individual links and replaced with a directory containing 
+converted and original source. Less stuff to update if something changes. Added 
+conversions for GOLF, GOMOKU and BEASTI.</P>
+<P>3/22/08 - Updated the 7906sim.zip package, made a new page for the <A href="http://newton.freehostia.com/hp/7906sim.html">7906 
+disk sim</A>.<BR></P>
+<P>3/15/08 - [disk sim notes removed, see above]<BR></P>
+<P>3/11/08 - Added conversions of WUMPUS and HAMRBI to the PT BASIC
+ "collection", edited OTHPT to make it somewhat faster by recoding unneeded 
+array variables to regular variables. There are many more candidates for 
+conversion in the HP2000 contributed software archives, available from <A href="http://www.bitsavers.org/">BitSavers</A> 
+in the /bits/HP/tapes/2000tsb/ directory (the .tar.gz files extract to regular 
+files). Renamed hposgames.zip to absgames.zip to be more descriptive of its 
+content.<BR></P>
+<P>3/9/08 - MSU BASIC is closer to paper-tape BASIC than I thought...
+ "discovered" that paper-tape BASIC does support letter/digit variables, not 
+sure how I missed that except for having no docs and assuming that because array 
+variables had to be single letters all variables were that way. Edited docs here 
+and there to correct incorrect information. Looks like I did stuff I didn't have 
+to do when making the OTHPT and TREKPT conversions [...].<BR></P>
+<P>3/7/08 - Slightly updated hposutil.abs with UNSHAM for converting octal/ascii 
+binary dumps back into binary code. The "tech" docs included a binary dump for 
+reference, so gotta have a way to recover code printed in such a way, handy way 
+to distribute binaries in text or even PDF files. Moved the trek demo to 
+hposgames.zip to avoid duplication and extra updates. Basically just cleaning it 
+up, same system code as the 3/4 version. Previous code-hacking activity...<BR>
+2/28 - got the nolog source, found it ran OTHPT and got all excited.<BR>3/1 - 
+got even more excited when the 31KW version ran TREKPT, figured out initial 
+patches.<BR>3/3 - made a HP-IPL/OS build containing MSUPATCH and loading/saving
+ utilities<BR>3/4 - stabilized the msubasic.zip binaries, instructions and stuff 
+(I think...)<BR>... along the way wrote technical docs explaining the patches 
+(in msubasic_tech.zip)<BR></P>
+<P>Thanks goes to all who helped to get MSU BASIC running under simulation, 
+without pre-figured out working code this 31KW version wouldn't have happened 
+anytime soon. All I had to do was a bit of editing and studying listings to see 
+what to poke... just a week of part time fun, the hard part was already 
+done.<BR></P>
+<HR style="width: 100%; height: 2px;">
+
+<P>Page created 3/7/08, main sections last modified 4/19/08, links removed/added 
+11/26/10<BR>Terry Newton (wtnewton@infionline.net)<BR></P></BODY></HTML>

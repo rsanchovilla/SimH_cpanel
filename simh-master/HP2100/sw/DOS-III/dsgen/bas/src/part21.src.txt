@@ -1,0 +1,409 @@
+ASMB,R,B,L,X
+      HED EXECUTION SUBROUTINES 
+      NAM XEC7,7
+      SPC 2 
+      ENT ENOUT,NUMOT,GETDG,OUTIN,EDELM,OUTLN 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGHT,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,FSCHA,TEMP5 
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM FFLG,TEMP4,EORFL,NCH,TEMP6,STRLN,ATIM,LT5 
+      COM ASTYP,ASBFP,ORDNO,ATMP(2),RETCD 
+      COM DCCNT,NXTDT,VL0,RCRD#,PMASK,ITEMP 
+      COM OPTRQ,EST3,EST2,EST1,TT1,TT2,BINO1
+      COM BINO2,TT3,TT4,CP0,CP1,PS0,MPT,NQT,RT0 
+      COM RT1,TRFCH,TRS0,A1,A2,C1,EOPF,NUMBF(6),FD0 
+      COM OT1,OT4,OT3,LBTMP,REPCT,RNDX1,RNDX2 
+      COM X2TMP(2),CTMP,DTMP(2),BTMP(2),XTEMP(2),YTEMP(2) 
+      COM UTEMP(2),LT0,LT8,LT3,LT6,LT7,LT4,DIGCT
+      COM NMPTR,NMTMP,FFLAG,DGCNT 
+      SPC 2 
+      EXT OUTCR,ARINV,#IFIX,#FAD,#FLUN,MBY10,DBY10
+      EXT LCALL,NORML 
+      SPC 2 
+M1000 DEC -1000 
+.74   DEC 74
+.58   DEC 58
+.75   DEC 75
+E     OCT 105 
+HMASK OCT 174000
+B377  OCT 377 
+MM74  DEC -74 
+LDVSR DEF DVSRS 
+DVSRS DEC 10000 
+      DEC 1000
+      DEC 100 
+      DEC 10
+NMBFA DEF NUMBF 
+**                    **
+***  PRINT A NUMBER  ***
+**                    **
+* 
+*  ENTER WITH A FLOATING POINT NUMBER IN (A) AND (B).  PRINT THE
+*  NUMBER AND APPEND BLANKS TO REACH THE PRINT POSITION SPECIFIED 
+*  BY -EOPF ON RETURN FROM NUMOT. 
+* 
+ENOUT NOP 
+#ENOT CCE           ENABLE SIGN 
+      JSB NUMOT     OUTPUT NUMBER 
+      JMP *+3 
+      LDA .+40B     OUTPUT
+      JSB OUTCR       A BLANK 
+      LDB EOPF      FIELD 
+      ADB CHRCT 
+      SZB             FULL? 
+      JMP *-5       NO
+      JMP ENOUT,I   YES 
+* 
+MINFX DEC -0.099999959
+MAXFX DEC -999999.5 
+**                     ** 
+***  OUTPUT A NUMBER  *** 
+**                     ** 
+* 
+*  ENTER WITH A FLOATING POINT NUMBER IN (A) AND (B) AND (E) = 1
+*  IF A SIGN IS WANTED.  DETERMINE THE FORM OF THE NUMBER AND 
+*  SET EOPF ACCORDINGLY.  NON-INTEGERS ARE ROUNDED AFTER CONVERSION 
+*  TO DECIMAL.  TRAILING ZEROS ARE SUPPRESSED ON NUMBERS WITHOUT
+*  EXPONENTS (AND ON NUMBERS WITH EXPONENTS IF CALLED FROM 'LIST'). 
+* 
+NUMOT NOP 
+#NMOT STA NUMBF     SAVE HIGH MANTISSA
+      SEZ,RSS       SIGN? 
+      JMP NUMO1     NO
+      SSA,RSS       YES, NEGATIVE NUMBER? 
+      JMP *+5       NO
+      JSB ARINV     YES, NEGATE NUMBER
+      STA NUMBF     SAVE HIGH MANTISSA
+      LDA .+55B     LOAD '-'
+      RSS 
+      LDA .+40B     LOAD '+'
+      STA SIGN      SAVE SIGN 
+      LDA NUMBF     RETRIEVE HIGH MANTISSA
+NUMO1 STB NUMBF+1   SAVE LOW MANTISSA 
+      JSB #IFIX     INTEGER?
+      JMP NUMO2     NO
+      SOC           YES, 16-BIT INTEGER?
+      JMP NUMO2     NO
+*                       * 
+**  OUTPUT AN INTEGER  ** 
+*                       * 
+      STB NUMBF     SAVE INTEGER
+      ADB M1000 
+      LDA .+6 
+      SSB,RSS       3 DIGIT INTEGER?
+      ADA .+3       NO
+      ADA CHRCT     COMPUTE END-OF-FIELD
+      CMA,INA       SAVE
+      STA EOPF        IT
+      ADA .74       ENOUGH
+      SSA             ROOM? 
+      JSB OUTLN     NO
+      LDA SIGN      YES 
+      SZA           SIGN? 
+      JSB OUTCR     YES, OUTPUT IT
+      LDB NUMBF     NO
+      JSB OUTIN     OUTPUT THE INTEGER
+      JMP NUMOT,I 
+*                                    *
+**  OUTPUT A FLOATING POINT NUMBER  **
+*                                    *
+NUMO2 LDA .-2       SET 'FIXED' 
+      STA FFLAG       FLAG FALSE
+      DLD NUMBF     LOAD NUMBER 
+      JSB #FAD      IS NUMBER 
+      DEF MAXFX       LESS THAN 
+      SSA,RSS           999999.5 ?
+      JMP NUMO3     NO
+      DLD NUMBF     YES, IS 
+      JSB #FAD        NUMBER
+      DEF MINFX         LESS THAN 
+      SSA,RSS             0.09999995 ?
+      ISZ FFLAG     NO, SET 'FIXED' FLAG TRUE 
+NUMO3 DLD NUMBF     LOAD NUMBER 
+      STA MANT1     UNPACK
+      JSB #FLUN 
+      STB MANT2       NUMBER
+      STA EXP 
+      CLA           INITIALIZE
+      STA EXPON       DECIMAL EXPONENT
+      CPA EXP       ZERO EXPONENT?
+      JMP NUMO5     YES 
+NUMO0 JSB MBY10     NO
+      LDA EXP       MULTIPLY
+      CMA,SSA,INA,SZA   NUMBER BY 10
+      JMP *+3             UNTIL IT IS 
+      ISZ EXPON             GREATER 
+      JMP NUMO0               THAN 1
+      JSB DBY10     DIVIDE BY 10
+      LDA EXPON 
+NUMO4 LDB EXP       DIVIDE
+      CMB,INB         NUMBER
+      SSB,RSS           BY 10 
+      JMP NUMO5           UNTIL 
+      STA EXPON             IT IS 
+      JSB DBY10               LESS
+      CCA                       THAN
+      ADA EXPON                   1 
+      JMP NUMO4 
+NUMO5 CMA           SET EXPONENT
+      STA EXPON       TO TRUE VALUE-1 
+      LDB .-6       SET DIGIT 
+      STB DIGCT       COUNTER 
+      LDB NMBFA     SET BUFFER
+      STB NMPTR       POINTER 
+*                               * 
+**  CONVERT MANTISSA TO ASCII  ** 
+*                               * 
+NUMO6 JSB GETDG     STORE A 
+      ADA .+60B       DECIMAL 
+      STA NMPTR,I       DIGIT 
+      ISZ NMPTR 
+      ISZ DIGCT     SIXTH DIGIT?
+      JMP NUMO6     NO
+      JSB GETDG     YES,
+      ADA .-5         NEXT DIGIT
+      SSA               >= 5 ?
+      JMP NUMO9+1   NO
+*                          *
+**  ROUND ASCII MANTISSA  **
+*                          *
+      LDB NMPTR 
+NUMO7 ADB .-1       LOAD LAST 
+      LDA 1,I         DIGIT 
+      INA           INCREMENT IT
+      CPA .58       WAS IT A 9? 
+      RSS           YES 
+      JMP NUMO9     NO
+      CPB NMBFA     LEADING DIGIT?
+      JMP NUMO8     YES 
+      LDA .+60B     NO, OVERLAY 
+      STA 1,I         A 0 
+      JMP NUMO7 
+NUMO8 ISZ EXPON     BUMP DECIMAL
+      NOP             EXPONENT AND
+      LDA .+61B         OVERLAY A 1 
+NUMO9 STA 1,I 
+      LDA EXPON     IS NUMBER 
+      SSA,RSS         LESS THAN 1 ? 
+      JMP NMO11     NO
+      STA NMTMP     YES 
+      LDA .+60B 
+      LDB NMPTR 
+NMO10 ISZ NMTMP     COUNT ZEROS 
+      NOP             PLUS 1
+      ADB .-1       LAST
+      CPA 1,I         DIGIT 0?
+      JMP NMO10     YES 
+      LDA NMTMP     NO, ALL SIGNIFICANCE
+      SSA             IN SIX DIGITS?
+      JMP NMO11     NO
+      CCA           YES, SET
+      STA FFLAG       'FIXED' FLAG TRUE 
+NMO11 LDB .+12      COMPUTE 
+      ISZ FFLAG       FIELD 
+      ADB .+3           WIDTH 
+      ADB CHRCT     SAVE
+      CMB,INB         END-OF-FIELD
+      STB EOPF          MARKER
+      ADB .75       ENOUGH
+      SSB             ROOM? 
+      JSB OUTLN     NO
+      LDA SIGN      YES 
+      SZA           SIGN? 
+      JSB OUTCR     YES, OUTPUT IT
+      LDB .-7       SET OUTPUT
+      STB DIGCT       DIGIT COUNTER 
+      LDB NMPTR 
+      CCA           FIXED 
+      CPA FFLAG       FORMAT? 
+      JMP *+5       NO
+      LDA EXPON     YES, SET
+      CMA             INDICATOR TO
+      STA NMTMP         DECIMAL POINT 
+      JMP NMO16 
+      STA NMTMP     SET INDICATOR FOR DECIMAL POINT 
+      LDA LCALL     CALLED
+      CPA NUMOT       FROM 'LIST' ? 
+      JMP NMO16     YES 
+      JMP NMO14     NO
+*                           * 
+**  DELETE TRAILING ZEROS  ** 
+*                           * 
+NMO12 LDA DIGCT     AT RIGHT OF 
+      INA             DECIMAL 
+      CPA NMTMP         POINT?
+      JMP *+6       NO
+      STA DIGCT     YES, DELETE ZERO
+NMO16 ADB .-1       LAST
+      LDA 1,I         DIGIT 
+      CPA .+60B         0?
+      JMP NMO12     YES 
+      CCA           NO, FIXED 
+      CPA FFLAG       FORMAT? 
+      JMP NMO14     NO
+      LDA EXPON     YES, LEADING
+      SSA,RSS         DECIMAL POINT?
+      JMP NMO14     NO
+      STA NMTMP     YES, SET LEADING ZEROS COUNTER
+*                     * 
+**  OUTPUT MANTISSA  ** 
+*                     * 
+      LDA .+56B     OUTPUT A
+      RSS             DECIMAL POINT 
+NMO13 LDA .+60B     OUTPUT
+      JSB OUTCR       A ZERO
+      ISZ NMTMP     MORE LEADING ZEROS? 
+      JMP NMO13     YES 
+      ISZ DIGCT     NO, COUNT DECIMAL POINT 
+NMO14 LDB NMBFA     SET 
+      STB NMPTR       DIGIT POINTER 
+      JMP *+5 
+NMO15 ISZ NMTMP     DECIMAL POINT NEXT? 
+      JMP *+3       NO
+      LDA .+56B     YES, LOAD IT
+      JMP *+3 
+      LDA NMPTR,I   LOAD NEXT 
+      ISZ NMPTR       DIGIT 
+      JSB OUTCR     OUTPUT CHARACTER
+      ISZ DIGCT     MORE DIGITS?
+      JMP NMO15     YES 
+      ISZ FFLAG     NO, EXPONENT? 
+      JMP NUMOT,I   NO
+*                         * 
+**  OUTPUT THE EXPONENT  ** 
+*                         * 
+      LDA E 
+      JSB OUTCR     OUTPUT AN 'E' 
+      LDA .+55B     OUTPUT
+      LDB EXPON 
+      SSB             AN
+      CMB,INB,RSS 
+      LDA .+53B         EXPONENT
+      STB EXPON 
+      JSB OUTCR           SIGN
+      LDA EXPON 
+      CLB           COMPUTE 
+      DIV .+10
+      ADA .+60B       EXPONENT'S
+      ADB .+60B 
+      STB EXPON         10'S DIGIT
+      JSB OUTCR     OUTPUT IT 
+      LDA EXPON     OUTPUT
+      JSB OUTCR       1'S DIGIT 
+      JMP NUMOT,I 
+**                         ** 
+***  GET DIGIT TO OUTPUT  *** 
+**                         ** 
+* 
+*  COMPUTE NEXT DECIMAL DIGIT AND RETURN WITH IT IN (A).
+*  SUBTRACT IT OUT OF THE NUMBER. 
+* 
+GETDG NOP 
+#GTDG JSB MBY10     MULTIPLY BY 10
+      LDB EXP       GET EXPONENT IN (B) 
+      CMB,INB         AS NEGATIVE 
+      AND HMASK     RETAIN HIGH 5 BITS
+      RAL           NORMALIZE TO BIT 15 
+      SSB,INB       ROTATE INTEGER
+      JMP *-2         INTO (A)
+      AND B377      EXTRACT 
+      STA FD0         DIGIT 
+      LDB EXP       ROTATE
+      CMB,INB 
+      RAR             BACK
+      SSB,INB 
+      JMP *-2 
+      XOR MANT1     REMOVE
+      LDB MANT2       DIGIT 
+      JSB NORML     NORMALIZE REMAINDER 
+      LDA FD0       LOAD (A) WITH DIGIT 
+      JMP GETDG,I 
+      SKP 
+**                       ** 
+***  OUTPUT AN INTEGER  *** 
+**                       ** 
+* 
+*  ENTER WITH A POSITIVE INTEGER IN (B).  OUTPUT IT WITHOUT 
+*  LEADING ZEROS. 
+* 
+OUTIN NOP 
+#OTIN LDA .-4       SET DIGIT 
+      STA DGCNT       COUNTER 
+      LDA LDVSR     SET DIVISOR 
+      STA OT1         ADDRESS 
+      CLA           SUPPRESS
+      STA OT4         ZEROS 
+OUTI1 STB 0 
+      CLB 
+      DIV OT1,I       CURRENT DIVISOR 
+      STB OT3       SAVE THE REMAINDER
+      CPA OT4       LEADING ZERO? 
+      JMP OUTI2     YES 
+      ADA .+60B     NO, TURN OFF
+      STA OT4         ZERO SUPPRESS 
+      JSB OUTCR     OUTPUT DIGIT
+OUTI2 LDB OT3       RETRIEVE REMAINDER
+      ISZ OT1       SET FOR NEXT DIVISOR
+      ISZ DGCNT     ALL DIVISORS USED?
+      JMP OUTI1     NO
+      LDA 1         YES 
+      ADA .+60B     OUTPUT
+      JSB OUTCR       LAST DIGIT
+      JMP OUTIN,I 
+**                       ** 
+***  SPACE FOR A COMMA  *** 
+**                       ** 
+* 
+*  MOVE TO THE NEXT FIELD OF 15 ON THE PRINT LINE OR TO THE 
+*  NEXT LINE IF THE CURRENT ONE IS EXHAUSTED. 
+* 
+EDELM NOP 
+#EDLM LDB CHRCT     LOAD CURRENT CHARACTER COUNT
+      SZB,RSS       ZERO? 
+      JMP EDELM,I   YES, AT START OF ZONE 
+      ADB .-15      NO, SUBTRACT ZONE WIDTH 
+      SSB,RSS       NON-NEGATIVE RESULT?
+      JMP #EDLM+1   YES 
+      STB EOL       NO, SAVE COUNT
+      LDA .+40B     OUTPUT
+      JSB OUTCR       A BLANK 
+      ISZ EOL       ZONE FULL?
+      JMP *-3       NO
+      LDB CHRCT     YES,
+      ADB MM74        PAST THE
+      SSB,RSS           END OF LINE?
+      JSB OUTLN     YES 
+      JMP EDELM,I   NO
+      SKP 
+**                           ** 
+***  OUTPUT AN END-OF-LINE  *** 
+**                           ** 
+OUTLN NOP 
+#OTLN LDB EOPF      RESET 
+      ADB CHRCT       END-OF-FIELD
+      STB EOPF          MARKER
+      LDA .+23B     OUTPUT
+      JSB OUTCR       AN X-OFF
+      LDA .+15B     OUTPUT A
+      JSB OUTCR       CARRIAGE RETURN 
+      LDA .+12B         AND A 
+      JSB OUTCR           LINE FEED 
+      JMP OUTLN,I 
+      END 

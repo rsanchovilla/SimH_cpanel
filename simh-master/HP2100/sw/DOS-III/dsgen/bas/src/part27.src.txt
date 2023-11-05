@@ -1,0 +1,835 @@
+ASMB,R,B,L,X
+      HED MATRIX ROUTINES 
+      NAM MAT0,7
+      SPC 2 
+       ENT EMAT,MIO7,VCHK 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGTH,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,DMY3,TEMP5
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM FFLG,TEMP4,EORFL,NCH,TEMP6,STRLN,ATIM,LT5 
+      COM ASTYP,ASBFP,ORDNO,ATMP(2),RETCD 
+      COM DCCNT,NXTDT,VL0,RCRD#,PMASK,ITEMP 
+      COM OPTRQ,EST3,EST2,EST1,TT1,TT2,DMY1 
+      COM DMY2,TT3,TT4,CP0,CP1,PS0,MPT,NQT,RT0
+      COM RT1,TRFCH,TRS0,A1,A2,C1,EOPF,NUMBF(6),FD0 
+      COM OT1,OT2,OT3,LBTMP,REPCT,RNDX1,RNDX2 
+      COM X2TMP(2),CTMP,DTMP(2),BTMP(2),XTEMP(2),YTEMP(2) 
+      COM UTEMP(2),LT0,LT8,LT3,LT6,LT7,LT4,DIGCT
+      COM NMPTR,NMTMP,FFLAG,DGCNT 
+      COM IFSTR,EC,CC,DP,CONTR,CC1,CC2,PC1,PC2
+      COM SFLG,FST,EFLAG,NUM1,NUM2,SBD,SAD,SNFLG
+      COM NAD,NBD,FSP,EST,NUMW1,NUMW2,EXPW
+      COM IHB,HBP,NHBW,NBLK,TOTDG,DCTR
+      COM EDSTA,LCH,ELCNT 
+      COM STPTR,RSPTR,TEMP3 
+      COM MT1,MT0,MT3,MT2,MEXIT,DMY4,MOP,BS2,BS3
+      COM MMT0,MMT1,MMT2,MMT6(2),MMT7(2),MMT3,MMT4,MMT5 
+      COM MMT8(2),SCALR(2),ID0,ID1,MAXE(2),TOL(2),PIVEL 
+      COM VT0,RD0 
+      SPC 2 
+      EXT EPRUS,VLFIL,XEC1,FDATA,FILST,EDELM
+      EXT ENOUT,OUTLN,EIN12,XEC1A,#FMP,#FAD 
+      EXT FETCH,LWAUS,ARINV,#FDV,#FSB,SBFIX 
+      EXT EINPZ,EINP1 
+      SPC 2 
+BS1   EQU SBPTR 
+OPDMK OCT 100777
+B77   OCT 77
+D65   OCT -65 
+OPMSK OCT 77000 
+LBOP  OCT 12000 
+B3000 OCT 3000
+MULOP OCT 22000 
+MNEG  OCT 100000
+BIT15 EQU MNEG
+      HED MATRIX EXECUTION
+MINP2 DEF EINPZ 
+MINP1 DEF EINP1 
+* 
+***                         **
+**  EXECUTE <MAT STATEMENT>  ** 
+***                         **
+* 
+MLP2A DEF MLOP2 
+MLP3A DEF MLOP3 
+MADDA DEF MADD
+MSUBA DEF MSUB
+SMULA DEF SMULT 
+IDNA  DEF IDN 
+MCPYA DEF MCPY
+TOLC  DEC +1E-6 
+F0.0A DEF F0.0
+F0.0  DEC 0.0 
+F1.0A DEF F1.0
+F1.0  DEC 1.0 
+* 
+EMAT  LDA TEMP1,I   FIRST 
+      AND OPDMK       OPERAND 
+      SZA               NULL? 
+      JMP EMAT1     NO
+*                         * 
+**  IDENTIFY MATRIX I/O  ** 
+*                         * 
+      ISZ TEMP1 
+      CCA           CHECK 
+      STA ELCNT       FOR 
+      JSB EPRUS         'MAT PRINT USING' 
+      LDA TEMP1,I   COMPUTE AND SAVE
+      ALF,ALF 
+      RAR 
+      AND B77           INPUT = -2
+      ADA D65           READ  = -1
+      STA MT1           PRINT =  0
+      SSA,INA,SZA   SAVE FLAG 
+      STA MT0         IF 'INPUT'
+      JSB VLFIL     PROCESS ANY 
+      NOP             FILE REQUEST
+MIO1  LDA TEMP1,I   LOAD NEXT 
+      AND OPDMK       IDENTIFIER
+      SZA,RSS       ZERO? 
+      JMP XEC1
+*                              *
+**  PREPARE A MATRIX FOR I/O  **
+*                              *
+      ALS           LOAD
+      ADA SYMTB       BASE ADDRESS
+      ADA .-1           OF ARRAY
+      LDB 0,I 
+      ADB .-2       SAVE POINTER TO 
+      STB SBPTR       DYNAMIC DIMENSIONS
+      LDA TEMP1     LAST
+      INA             WORD OF 
+      CPA PRGCT         STATEMENT?
+      CLA           YES 
+      LDA 0,I       NO, LOAD (A) WITH 
+      AND OPMSK       FOLLOWING OPERATOR
+      LDB MT1       MAT 
+      SZB,RSS         PRINT?
+      JMP MIO2      YES 
+      CPA LBOP      NO, '[' NEXT OPERATOR?
+      JSB REDIM     YES, REDIMENSION ARRAY
+      LDA SBPTR,I   SET POINTER 
+      ISZ SBPTR       TO FIRST ELEMENT
+      MPY SBPTR,I       OF ARRAY
+      ISZ SBPTR           WHILE COMPUTING 
+      CMA,INA               NUMBER OF 
+      STA MCNT                ELEMENTS
+      CCA           MAT 
+      CPA MT1         READ? 
+      JMP MIO9      YES 
+*                             * 
+**  INPUT VALUES FOR MATRIX  ** 
+*                             * 
+      ISZ MT0       FIRST MATRIX TO BE INPUT? 
+      RSS           NO
+      JMP MINP1,I   YES 
+      ADA MT0       RETRIEVE
+      JMP MINP2,I     SAVED CHARACTER 
+*                            *
+**  READ VALUES FOR MATRIX  **
+*                            *
+MIO9  CLB,INB       FETCH 
+      JSB FDATA       CONSTANT
+      DST SBPTR,I   STORE 
+      ISZ SBPTR 
+      ISZ SBPTR       IT
+      ISZ MCNT      DONE? 
+      JMP MIO9      NO
+      JMP MIO7      YES 
+* 
+MIO2  CPA B3000     ';' FOLLOWING ARRAY?
+      CCB           YES 
+      STB MCNT      NO, TREAT AS COMMA
+      LDB SBPTR     VALIDATE
+      JSB VCHK        ARRAY ELEMENTS
+      LDA SBPTR,I   SAVE
+      ISZ SBPTR       COUNT 
+      CMA,INA           OF
+      STA MT0             ROWS
+      LDA SBPTR,I 
+      ISZ SBPTR 
+      LDB FILE#     WRITE ON
+      SSB             A FILE? 
+      JMP MIO3      NO
+*                          *
+**  WRITE MATRIX ON FILE  **
+*                          *
+      MPY MT0       SET 
+      STA MCNT        ELEMENT COUNTER 
+MIO4  LDB .-2       WRITE ELEMENT 
+      JSB FILST       TO FILE 
+      ISZ SBPTR     MOVE TO 
+      ISZ SBPTR       NEXT ELEMENT
+      ISZ MCNT      MATRIX DONE?
+      JMP MIO4      NO
+      JMP MIO7      YES 
+      SKP 
+*                              *
+**  WRITE MATRIX ON TELETYPE  **
+*                              *
+MIO3  CMA,INA       SAVE
+      STA MT3         COLUMN COUNT
+MIO8  STA MT2       SET COLUMN COUNT
+      JMP MIO6
+MIO5  CLA 
+      CPA MCNT
+      JSB EDELM 
+MIO6  DLD SBPTR,I   PRINT 
+      JSB ENOUT       ELEMENT 
+      ISZ SBPTR     MOVE TO 
+      ISZ SBPTR       NEXT ELEMENT
+      ISZ MT2       ROW DONE? 
+      JMP MIO5      NO
+      JSB OUTLN     YES, DOUBLE 
+      JSB OUTLN       SPACE 
+      LDA MT3 
+      ISZ MT0       MATRIX DONE?
+      JMP MIO8      NO
+*                             * 
+**  CHECK FOR MORE MATRICES  ** 
+*                             * 
+MIO7  ISZ TEMP1 
+      LDB TEMP1     STATEMENT 
+      CPB PRGCT       FINISHED? 
+      JMP *+3       YES 
+      STA MT0       NO, SAVE (A)
+      JMP MIO1
+      LDB .-2       MATRIX
+      CPB MT1         INPUT?
+      JMP EIN12 
+      JMP XEC1
+*                               * 
+**  PREPARE MATRIX ASSIGNMENT  ** 
+*                               * 
+EMAT1 LDB XEC1A     SET MAIN LOOP TO
+      STB MEXIT       STATEMENT EXIT MODE 
+      ALS 
+      ADA SYMTB     COMPUTE 
+      ADA .-1         POINTER 
+      LDB 0,I           TO
+      ADB .-2             DESTINATION 
+      STB BS1               MATRIX
+      ISZ TEMP1 
+      LDA TEMP1,I   MATRIX
+      SSA             FUNCTION? 
+      JMP EMAT6     YES 
+      LDB MLP2A     NO, SET OPERATION 
+EMAT2 STB MOP         JUMP TO 'REPLACE' MODE
+      ISZ TEMP1 
+      AND OPDMK     SCALAR
+      SZA,RSS         MULTIPLICATION? 
+      JMP EMAT5     YES 
+      ALS          NO 
+      ADA SYMTB     COMPUTE 
+      ADA .-1         POINTER 
+      LDB 0,I           TO FIRST
+      ADB .-2             SOURCE
+      STB BS2               MATRIX
+      JSB VCHK      VALIDATE ITS ELEMENTS 
+      LDA TEMP1     END OF
+      CPA PRGCT       STATEMENT?
+      JMP EMAT3     YES 
+      LDA TEMP1,I   NO
+      AND OPDMK     COMPUTE 
+      ALS 
+      ADA SYMTB       POINTER TO
+      ADA .-1 
+      LDB 0,I           SECOND
+      ADB .-2 
+      STB BS3             SOURCE MATRIX 
+      JSB VCHK      VALIDATE ITS ELEMENTS 
+      LDA TEMP1,I 
+      AND OPMSK     MATRIX
+      CPA MULOP       MULTIPLICATION? 
+      JMP EMAT4     YES 
+      ALF,RAR 
+      RAR 
+*                                             * 
+**  SET UP MATRIX ADD, SUBTRACT, OR REPLACE  ** 
+*                                             * 
+      LDB MADDA     RECORD
+      SSA             'MATRIX ADD'
+      LDB MSUBA         OR 'MATRIX SUBTRACT'
+      STB MOP             OPERATION JUMP
+      LDB BS1 
+      LDA 1,I       ROW 
+      CPA BS3,I       COMPATIBILITY?
+      INB,RSS       YES 
+      JSB RERRS+11,I  NO
+      ISZ BS3 
+      LDB 1,I       COLUMN
+      CPB BS3,I       COMPATIBILITY?
+      RSS           YES 
+      JSB RERRS+11,I  NO
+      ISZ BS3 
+EMAT3 LDA BS2,I     ROW 
+      CPA BS1,I       COMPATIBILITY?
+      RSS           YES 
+      JSB RERRS+11,I  NO
+      ISZ BS2 
+      ISZ BS1       COMPUTE NUMBER
+      MPY BS2,I       OF MATRIX ELEMENTS
+      LDB BS2,I     COLUMN
+      CPB BS1,I       COMPATIBILITY?
+      CMA,INA,RSS   YES 
+      JSB RERRS+11,I  NO
+      STA MCNT      SAVE 2'S COMPLEMENT OF SIZE 
+      ISZ BS2 
+      ISZ BS1 
+      SKP 
+*                         * 
+**  ASSIGN MATRIX VALUE  ** 
+*                         * 
+* 
+*  MOP HOLDS A POINTER TO CODE WHICH COMPUTES ONE ELEMENT OF THE
+*  DESTINATION MATRIX AND RETURNS IT IN (A) AND (B).  MEXIT 
+*  HOLDS THE EXIT ADDRESS SET BY THE CALLER.
+* 
+MLOOP DLD BS2,I     LOAD ELEMENT OF SOURCE MATRIX 
+      JMP MOP,I     JUMP TO OPERATION 
+MLOP1 ISZ BS3       MOVE TO NEXT ELEMENT
+      ISZ BS3         OF SECOND SOURCE MATRIX 
+MLOP2 ISZ BS2       MOVE TO NEXT ELEMENT
+      ISZ BS2         OF FIRST SOURCE MATRIX
+MLOP3 DST BS1,I     RECORD ELEMENT
+      ISZ BS1         OF DESTINATION MATRIX 
+      ISZ BS1           AND MOVE TO NEXT ELEMENT
+      ISZ MCNT      DONE? 
+      JMP MLOOP     NO
+      JMP MEXIT,I   YES 
+*                            *
+**  COMPUTE MATRIX PRODUCT  **
+*                            *
+EMAT4 LDA BS1,I     DESTINATION MATRIX
+      CPA BS2,I       ROW COMPATIBILITY?
+      CMA,INA,RSS   YES 
+      JSB RERRS+11,I  NO
+      STA MMT0      SAVE ROW COUNTER
+      ISZ BS1 
+      ISZ BS2 
+      LDA BS2,I     INNER PRODUCT 
+      CPA BS3,I       COMPATIBILITY?
+      CMA,INA,RSS   YES 
+      JSB RERRS+11,I  NO
+      STA MMT1      SAVE INNER PRODUCT
+      STA MMT2        COUNTERS
+      ALS           SAVE ROW
+      STA MMT6        BACK UP AMOUNT
+      MPY BS1,I     SAVE COLUMN 
+      ADA .+2         BACK UP 
+      STA MMT7          AMOUNT
+      ISZ BS3 
+      LDA BS1,I     DESTINATION MATRIX
+      CPA BS3,I       COLUMN COMPATIBILITY? 
+      CMA,INA,RSS   YES 
+      JSB RERRS+11,I  NO
+      STA MMT3      SAVE COLUMN 
+      STA MMT4        COUNTERS
+      CMA,INA       SAVE COLUMN 
+      ALS             ADVANCE 
+      STA MMT5          AMOUNT
+      ISZ BS1       MOVE TO 
+      ISZ BS2         FIRST ELEMENT 
+      ISZ BS3           OF MATRICES 
+      LDB BS3       SAVE FIRST-ELEMENT ADDRESS
+      STB MMT8       OF SECOND SOURCE MATRIX
+MPR1  DLD F0.0      INITIALIZE DESTINATION
+      DST BS1,I       ELEMENT TO ZERO 
+MPR2  DLD BS2,I    COMPUTE
+      ISZ BS2         TERM
+      ISZ BS2           OF
+      JSB #FMP            INNER 
+      DEF BS3,I             PRODUCT 
+      JSB #FAD      ADD IN PREVIOUS 
+      DEF BS1,I       RUNNING SUM 
+      DST BS1,I     SAVE RUNNING SUM
+      LDB BS3       ADVANCE TO
+      ADB MMT5        NEXT ROW OF 
+      STB BS3           SECOND SOURCE MATRIX
+      ISZ MMT2      INNER PRODUCT COMPLETE? 
+      JMP MPR2      NO
+      ISZ BS1       YES, MOVE TO NEXT 
+      ISZ BS1         DESTINATION ELEMENT 
+      LDB MMT1      RESET INNER PRODUCT 
+      STB MMT2        TERM COUNTER
+      ISZ MMT4      ROW COMPLETE? 
+      JMP MPR3      NO
+      LDB MMT3      YES, RESET
+      STB MMT4        COLUMN COUNTER
+      ISZ MMT0     DONE?
+      JMP MPR4      NO
+      JMP XEC1
+MPR3  LDB BS2       BACK UP 
+      ADB MMT6        TO BEGINNING OF ROW OF
+      STB BS2           FIRST SOURCE MATRIX 
+      LDB BS3       BACK UP TO BEGINNING
+      ADB MMT7        OF NEXT COLUMN
+      RSS               OF SECOND SOURCE MATRIX 
+MPR4  LDB MMT8      BACK UP TO FIRST ELEMENT
+      STB BS3 
+      JMP MPR1
+*                                  *
+**  SET UP SCALAR MULTIPLICATION  **
+*                                  *
+EMAT5 JSB FETCH     COMPUTE AND 
+      DST SCALR       SAVE SCALAR 
+      ISZ TEMP1     LOAD OPERATION JUMP 
+      ISZ TEMP1     PROCESS 
+      LDA TEMP1,I     FOLLOWING 
+      LDB SMULA         MATRIX
+      JMP EMAT2 
+* 
+EMAT6 ALF,ALF 
+      ALF 
+      AND .+37B       MATRIX
+      ADA .-27B         FUNCTION
+      STA ID0             TYPE
+      SSA,RSS       MATRIX INITIALIZATION?
+      JMP EMAT8     NO
+*                                  *
+**  SET UP MATRIX INITIALIZATION  **
+*                                  *
+      LDB TEMP1 
+      INB 
+      CPB PRGCT     REDIMENSIONING? 
+      RSS           NO
+      JSB REDIM     YES 
+INVL  LDA BS1,I     COMPUTE 
+      STA ID1         NUMBER
+      ISZ BS1           OF ELEMENTS 
+      MPY BS1,I           IN 2'S
+      CMA,INA               COMPLEMENT
+      STA MCNT      SAVE IT 
+      ISZ ID0       'IDN' ? 
+      JMP EMAT7     NO
+      LDA BS1,I     YES 
+      CPA ID1       SQUARE MATRIX?
+      CMA,RSS       YES 
+      JSB RERRS+24,I  NO
+      STA ID0       SET 
+      CCA             DIAGONAL
+      STA ID1           COUNTER 
+      LDA IDNA      LOAD OPERATION JUMP 
+      JMP *+4 
+EMAT7 LDA MLP3A     RECORD
+      LDB F1.0A       CORRECT CONSTANT: 
+      ISZ ID0           0.0 FOR 'ZER' 
+      LDB F0.0A         1.0 FOR 'CON' 
+      STB BS2           0.0 FOR 'IDN' 
+      STA MOP       RECORD OPERATION JUMP 
+      JMP MLOOP-1 
+* 
+EMAT8 ISZ TEMP1     COMPUTE 
+      LDA TEMP1,I 
+      AND OPDMK       POINTER 
+      ALS 
+      ADA SYMTB         TO
+      ADA .-1 
+      LDB 0,I             SOURCE
+      ADB .-2 
+      STB BS2               MATRIX
+      JSB VCHK      VALIDATE IT 
+      LDB BS1,I     LOAD DESTINATION ROW DIMENSION
+      BLS           SAVE COLUMN 
+      STB MMT3        ADVANCE AMOUNT
+      BRS 
+      ISZ BS1 
+      LDA BS1,I     ARE COLUMNS OF DESTINATION
+      CPA BS2,I       AND ROWS OF SOURCE EQUAL? 
+      CMA,INA,RSS   YES 
+      JSB RERRS+11,I  NO
+      STA MMT1      SAVE DESTINATION MATRIX 
+      STA MMT2        COLUMN COUNTERS 
+      ISZ BS2       ARE ROWS OF DESTINATION AND 
+      CPB BS2,I       COLUMNS OF SOURCE EQUAL?
+      CMB,INB,RSS   YES 
+      JSB RERRS+11,I  NO
+      STB MMT0      SAVE ROW COUNTER
+      MPY MMT3      SAVE COLUMN BACK UP 
+      ISZ BS2 
+      LDB ID0 
+      SZB,RSS       'TRN' ? 
+      JMP INV       NO
+      ADA .+2       YES, SAVE COLUMN
+      STA MMT4        BACK UP AMOUNT
+      ISZ BS1           FOR SOURCE MATRIX 
+      JMP TRN 
+TRN1  LDB MMT1      RESET 
+      STB MMT2        COUNTER 
+      LDB BS2       BACK UP TO
+      ADB MMT4        FIRST ELEMENT 
+      STB BS2           OF NEXT COLUMN
+*                        *
+**  TRANSPOSE A MATRIX  **
+*                        *
+TRN   DLD BS2,I     TRANSFER
+      DST BS1,I       ELEMENT 
+      ISZ BS1 
+      ISZ BS1 
+      LDB BS2       ADVANCE TO
+      ADB MMT3        NEXT ELEMENT
+      STB BS2           OF COLUMN 
+      ISZ MMT2      COLUMN TRANSFERRED? 
+      JMP TRN       NO
+      ISZ MMT0      YES, DONE?
+      JMP TRN1      NO
+      JMP XEC1
+*                     * 
+**  INVERT A MATRIX  ** 
+*                     * 
+INV   LDB 0         SAVE 2'S COMPLEMENT 
+      ARS             OF NUMBER OF
+      STA MCNT          ELEMENTS IN MATRIX
+      LDA BS1       SAVE ADDRESS OF 
+      STA BS3         DESTINATION MATRIX
+      LDA TMPST     SET ADDRESS 
+      ADA .+2         OF FREE CORE
+      STA BS1           AS BASE ADDRESS 
+      CMA,INA       SUFFICIENT
+      ADA LWAUS       FREE CORE 
+      ADA 1             TO COPY 
+      CMA,SSA,RSS         SOURCE MATRIX?
+      JSB RERRS+10,I  NO
+      ADA LWAUS     YES, INCLUDE IT 
+      STA PBPTR       IN SWAP AREA
+      CLB           SET 'MAXIMUM ELEMENT' 
+      STB MAXE        VALUE TO
+      STB MAXE+1        ZERO
+      LDA MCPYA     SET UP TO 
+      STA MOP         COPY MATRIX,
+      LDA INV1          FIND MAXIMUM (ABSOLUTE
+      STA MEXIT           VALUE) ELEMENT, 
+      JMP MLOOP             AND RETURN
+INV1  DEF *+1 
+      DLD MAXE      COMPUTE 
+      JSB #FMP        RELATIVE
+      DEF TOLC          TOLERANCE 
+      DST TOL 
+      CCA 
+      STA ID0       RESTORE 
+      ADA BS3         DESTINATION 
+      STA BS1           BASE ADDRESS
+      CMA,INA       COMPUTE DIFFERENCE
+      ADA TMPST       BETWEEN BASE ADDRESSES
+      CMA,INA           OF SOURCE (COPIED)
+      STA BS3             AND DESTINATION 
+      LDA INV2              MATRICES
+      STA MEXIT     SET DESTINATION MATRIX
+      JMP INVL        TO IDENTITY AND RETURN
+INV2  DEF *+1 
+      LDB TMPST     SAVE
+      ADB .+2         BASE ADDRESS
+      LDA 1             OF SOURCE 
+      STB BS2             MATRIX
+      ADB BS3       SAVE BASE ADDRESS OF
+      STB BS1         DESTINATION MATRIX
+      CLB           SET PIVOT ELEMENT 
+      STB ID0         BIAS TO ZERO
+      JMP INV4
+INV3  LDA ID0       SET BIAS
+      ADA .-2         FOR NEXT
+      STA ID0           PIVOT ELEMENT 
+      LDA MMT0      INITIALIZE COUNTER TO 
+      STA MMT2        2'S COMPLEMENT OF COLUMNS 
+      LDA PIVEL     UPDATE PIVOT
+      ADA MMT3        ADDRESS 
+      ADA .+2           TO NEXT 
+INV4  STA PIVEL           DIAGONAL ELEMENT
+      STA MMT4      INITIALIZE
+      CLB             PIVOT ELEMENT 
+      STB MAXE          AS MAXIMUM
+      STB MAXE+1          IN COLUMN 
+      LDB MMT1      SET COUNTER TO SEARCH 
+      STB MMT5        REMAINDER OF COLUMN 
+INV5  STA MMT6      LOAD
+      DLD MMT6,I      ELEMENT 
+      SSA           GET 
+      JSB ARINV       ABSOLUTE
+      DST SCALR         VALUE 
+      JSB #FSB      SUBTRACT
+      DEF MAXE        PREVIOUS MAXIMUM
+      SZA           RESULT
+      SSA             POSITIVE? 
+      JMP INV6      NO
+      DLD SCALR     YES, RECORD 
+      DST MAXE        NEW MAXIMUM 
+      LDA MMT6          AND ITS 
+      STA MMT4            LOCATION
+INV6  LDA MMT6      MOVE TO NEXT
+      ADA MMT3        ELEMENT OF COLUMN 
+      ISZ MMT5      COLUMN DONE?
+      JMP INV5      NO
+      LDB PIVEL     YES 
+      ADB ID0       SET POINTERS
+      STB MMT7        TO OLD
+      ADB BS3           PIVOT ROWS OF 
+      STB MMT5            BOTH MATRICES 
+      STB ID1 
+      LDA MMT4      NEED TO 
+      CPA PIVEL       SWAP ROWS?
+      JMP INV8      NO
+      ADA ID0      YES, SET POINTERS
+      STA MMT8        TO NEW
+      ADA BS3           PIVOT ROWS OF 
+      STA MMT6            BOTH MATRICES 
+INV7  DLD MMT5,I    SWAP
+      DST SCALR 
+      DLD MMT6,I      ROW 
+      DST MMT5,I
+      DLD SCALR         ELEMENT 
+      DST MMT6,I
+      DLD MMT7,I          OF
+      DST SCALR 
+      DLD MMT8,I            EACH
+      DST MMT7,I
+      DLD SCALR               MATRIX
+      DST MMT8,I
+      ISZ MMT5      BUMP
+      ISZ MMT5
+      ISZ MMT6        ALL 
+      ISZ MMT6
+      ISZ MMT7          FOUR
+      ISZ MMT7
+      ISZ MMT8            POINTERS
+      ISZ MMT8
+      ISZ MMT2      ROW SWAPPED?
+      JMP INV7      NO
+INV8  DLD MAXE      YES 
+      JSB #FSB      PIVOT EMELMENT
+      DEF TOL         SMALLER THAN
+      SSA               TOLERANCE?
+      JSB RERRS+26,I  YES 
+      DLD F1.0      NO
+      JSB #FDV      COMPUTE 
+      DEF PIVEL,I     INVERSE OF
+      DST MAXE          PIVOT ELEMENT 
+      LDA MMT1      LAST
+      INA,SZA,RSS     PIVOT?
+      JMP INV10     YES 
+      STA MMT5      NO, PREPARE 
+      LDA PIVEL       TO SCALE
+      STA MMT6          PIVOT ROW 
+INV9  ISZ MMT6      MOVE TO NEXT
+      ISZ MMT6        ELEMENT OF ROW
+      DLD MMT6,I    MULTIPLY
+      JSB #FMP        BY U/PIVOT
+      DEF MAXE          AND STORE 
+      DST MMT6,I          NEW VALUE 
+      ISZ MMT5      ROW DONE? 
+      JMP INV9      NO
+INV10 LDA ID1       YES 
+      STA MMT6
+      LDA MMT0      SET 
+      STA MMT2
+      STA MMT5        COUNTERS
+INV11 DLD MMT6,I    SCALE ELEMENTS OF 
+      SZA,RSS 
+      JMP INV12       PIVOT ROW 
+      JSB #FMP
+      DEF MAXE          OF DESTINATION
+      DST MMT6,I
+INV12 ISZ MMT6           MATRIX 
+      ISZ MMT6
+      ISZ MMT5      ROW DONE? 
+      JMP INV11     NO
+      LDB BS1       YES, SET POINTER TO 
+      STB VT0         DESTINATION ARRAY 
+      LDA BS2       SET POINTER 
+      CMA,INA         TO PIVOT COLUMN 
+      ADA ID0           IN FIRST ROW
+      CMA,INA             OF SOURCE 
+INV13 STA MMT8              MATRIX
+      CPA PIVEL     PIVOT ROW?
+      JMP INV19     YES 
+      STA MMT7      NO
+      DLD MMT7,I    LOAD MULTIPLIER FOR PIVOT ROW 
+      SZA,RSS       ZERO? 
+      JMP INV19     YES 
+      DST SCALR     NO, SAVE MULTIPLIER 
+      LDA MMT1      LAST
+      INA,SZA,RSS     ROW?
+      JMP INV15     YES 
+      STA MMT5      NO, SET POINTER TO
+      LDA PIVEL       PIVOT ELEMENT IN
+      STA MMT6          SOURCE MATRIX 
+INV14 ISZ MMT6      MOVE
+      ISZ MMT6        TO
+      ISZ MMT7          NEXT
+      ISZ MMT7            COLUMN
+      DLD SCALR     COMPUTE 
+      JSB #FMP
+      DEF MMT6,I
+      DST MAXE        TRANSFORMED 
+      DLD MMT7,I
+      JSB #FSB
+      DEF MAXE          ELEMENT 
+      DST MMT7,I
+      ISZ MMT5      ROW DONE? 
+      JMP INV14     NO
+INV15 LDA ID1       YES, SET POINTER TO PIVOT 
+      STA MMT6        ROW OF DESTINATION MATRIX 
+      LDA MMT0      SET 
+      STA MMT4        COUNTER 
+INV16 DLD MMT6,I    COMPUTE 
+      SZA,RSS 
+      JMP INV17 
+      JSB #FMP
+      DEF SCALR       TRANSFORMED 
+      DST MAXE
+      DLD VT0,I 
+      JSB #FSB
+      DEF MAXE          ELEMENT 
+      DST VT0,I 
+INV17 ISZ VT0       MOVE
+      ISZ VT0         TO
+      ISZ MMT6          NEXT
+      ISZ MMT6            COLUMN
+      ISZ MMT4      ROW DONE? 
+      JMP INV16     NO
+INV18 LDA MMT8      YES, MOVE TO NEXT 
+      ADA MMT3        ROW IN SOURCE MATRIX
+      ISZ MMT2      ALL ROWS TRANSFORMED? 
+      JMP INV13     NO
+      ISZ MMT1      YES, MATRIX INVERTED? 
+      JMP INV3      NO
+      LDA TMPST     YES 
+      ADA .+23      RELEASE EXTRA 
+      STA PBPTR       CORE
+      JMP XEC1
+INV19 LDA VT0       ADVANCE TO
+      ADA MMT3        NEXT ROW OF 
+      STA VT0           DESTINATION 
+      JMP INV18           MATRIX
+*                                *
+**  CODE TO COMPUTE AN ELEMENT  **
+*                                *
+MADD  JSB #FAD      ADD 
+      DEF BS3,I       SOURCE
+      JMP MLOP1         ELEMENTS
+* 
+MSUB  JSB #FSB      SUBTRACT
+      DEF BS3,I       SOURCE
+      JMP MLOP1         ELEMENTS
+* 
+IDN   ISZ ID1       DIAGONAL ELEMENT? 
+      JMP MLOP3     NO
+      LDA ID0       YES, RESET
+      STA ID1         DIAGONAL COUNTER
+      DLD F1.0      LOAD
+      JMP MLOP3       1.0 
+* 
+SMULT JSB #FMP      MULTIPLY
+      DEF SCALR       SOURCE ELEMENT
+      JMP MLOP2         BY SCALAR 
+* 
+MCPY  SSA           GET 
+      JSB ARINV       ABSOLUTE
+      DST SCALR         VALUE 
+      JSB #FSB      SUBTRACT
+      DEF MAXE        PREVIOUS
+      SZA               MAXIMUM 
+      SSA           POSITIVE RESULT?
+      JMP MCPY1     NO
+      DLD SCALR     YES, RECORD 
+      DST MAXE        NEW MAXIMUM 
+MCPY1 DLD BS2,I     RELOAD VALUE
+      JMP MLP2A,I 
+**                              **
+***  CHECK VALIDITY OF MATRIX  ***
+**                              **
+* 
+*  ENTER WITH (B) POINTING TO THE DYNAMIC ARRAY DIMENSIONS. 
+*  COMPUTE THE NUMBER OF ELEMENTS AND CHECK EACH ONE.  EXIT 
+*  TO ERROR IF ANY ELEMENT HAS VALUE 'UNDEFINED'. 
+* 
+VCHK  NOP 
+#VCHK LDA 1,I       LOAD ROW DIMENSION
+      INB 
+      STB VT0 
+      MPY VT0,I     MULTIPLY BY 
+      LDB VT0         COLUMN DIMENSION
+      CMA           SAVE 1'S COMPLEMENT 
+      STA VT0         OF MATRIX SIZE
+VCHK1 ISZ VT0       DONE? 
+      INB,RSS       NO, MOVE TO NEXT ELEMENT
+      JMP VCHK,I    YES 
+      LDA 1,I 
+      RAL,RAL       IS
+      INA             OPERAND 
+      RAR,SLA           NORMALIZED? 
+      JMP VCHK2     YES 
+      CPA BIT15     MAYBE, WAS FIRST WORD ZERO? 
+      INB,RSS       YES 
+      JSB RERRS+23,I NO--ERROR
+      LDA 1,I       SECOND
+      SZA             WORD ZERO?
+      JSB RERRS+23,I NO--ERROR
+      JMP VCHK1 
+VCHK2 INB 
+      JMP VCHK1 
+      SKP 
+**                          **
+***  REDIMENSION A MATRIX  ***
+**                          **
+* 
+*  UPON ENTRY (TEMP1)+1 POINTS TO THE REDIMENSION SUBSCRIPT IN
+*  THE PROGRAM AND SBPTR POINTS TO THE CURRENT DYNAMIC DIMENSIONS 
+*  OF THE ARRAY.  THE SUBSCRIPT BOUNDS ARE EVALUATED, ROUNDED,
+*  AND RECORDED.  IF THE NUMBER OF ELEMENTS IS WITHIN THE 
+*  PHYSICAL ARRAY ALLOWANCE, EXIT WITH TEMP1 POINTING TO THE
+*  WORD FOLLOWING THE SUBSCRIPT AND SBPTR AS UPON ENTRY, ELSE 
+*  EXIT TO ERROR. 
+* 
+REDIM NOP 
+#RDIM ISZ TEMP1     COMPUTE NEW 
+      JSB FETCH       ROW DIMENSION 
+      JSB SBFIX     15 BIT INTEGER > 0? 
+      JSB RERRS+17,I  NO
+      INB           YES, SAVE 
+      STB SBPTR,I     TRUE VALUE
+      STB RD0           IN ARRAY
+      ISZ SBPTR           ENTRY 
+      LDB TEMP1,I   EXPLICIT NEW
+      SZB,RSS         COLUMN DIMENSION? 
+      JMP RDIM1     NO
+      JSB FETCH     YES,
+      JSB SBFIX       COMPUTE 
+      JSB RERRS+17,I    IT
+RDIM1 INB           SAVE TRUE VALUE 
+      STB SBPTR,I     IN ARRAY ENTRY
+      LDA RD0       COMPUTE 
+      MPY SBPTR,I     NUMBER OF 
+      SZB,RSS           ELEMENTS
+      CMA,SSA,INA,RSS     SPECIFIED 
+      JSB RERRS+25,I  TOO MANY
+      STA RD0 
+      LDB SBPTR     RESET 
+      ADB .-3         ARRAY POINTER 
+      LDA 1,I           AND COMPUTE 
+      INB                 NUMBER OF 
+      STB SBPTR             ELEMENTS
+      MPY SBPTR,I             AVAILABLE 
+      ISZ SBPTR                 FOR ARRAY 
+      ADA RD0       SUFFICIENT
+      SSA            PHYSICAL SPACE?
+      JSB RERRS+25,I  NO
+      ISZ TEMP1     YES 
+      JMP REDIM,I 
+      END 

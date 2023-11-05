@@ -1,0 +1,560 @@
+ASMB,R,B,L,X
+      HED LIST ROUTINES 
+      NAM LIST0,7 
+      SPC 2 
+      ENT LISTB,LCALL,OUTST 
+      ENT PUNCH,XPNCH 
+      ENT OUTCR,SINIT,BCKSP,MOVER 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGHT,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,FSCHA,TEMP5 
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM FFLG,TEMP4,EORFL,NCH,TEMP6,STRLN,ATIM,LT5 
+      COM ASTYP,ASBFP,ORDNO,ATMP(2),RETCD 
+      COM DCCNT,NXTDT,VL0,RCRD#,PMASK,ITEMP 
+      COM OPTRQ,EST3,EST2,EST1,TT1,TT2,BINO1
+      COM BINO2,TT3,TT4,CP0,CP1,PS0,MPT,NQT,RT0 
+      COM RT1,TRFCH,TRS0,A1,A2,C1,EOPF,NUMBF(6),FD0 
+      COM OT1,OT4,OT3,LBTMP,REPCT,RNDX1,RNDX2 
+      COM X2TMP(2),CTMP,DTMP(2),BTMP(2),XTEMP(2),YTEMP(2) 
+      COM UTEMP(2),LT0,LT8,LT3,LT6,LT7,LT4,DIGCT
+      SPC 2 
+      EXT PBUFF,GETCR,BLDIN,FNDPS 
+      EXT OUTIN,STLCK,FOPBS,NUMOT,ATAB,MCBOP,SCHEQ
+      EXT BLANK,ACCST,S14SC 
+      EXT CW0,OUTCH,CW2 
+      SPC 2 
+B120  OCT 120 
+M71B  OCT -71 
+M72B  OCT -72 
+OPMSK OCT 77000 
+LETOP OCT 73000 
+D62   OCT -62 
+B63   OCT 63
+B177  OCT 177 
+OPDMK OCT 100777
+PDFFL OCT 100017
+B100  OCT 100 
+F     OCT 106 
+N     OCT 116 
+DIMOP OCT 47000 
+COMOP OCT 45000 
+USEOP OCT 43000 
+REMOP OCT 51000 
+FILOP OCT 70000 
+IMGOP OCT 44000 
+B377  OCT 377 
+MNEG  OCT 100000
+CFLAG EQU .+2 
+BIT15 EQU MNEG
+.140  OCT 140 
+BKS   OCT 160023
+B104  OCT 104 
+B101  OCT 101 
+* 
+* 
+      HED LIST ROUTINES 
+* **********************
+****                  *** 
+***  LIST THE PROGRAM  ***
+****                  *** 
+* **********************
+* 
+* 
+* 
+*  'LIST' CONVERTS THE CURRENT USER PROGRAM TO A STANDARD ASCII 
+*  FORMAT AND PRINTS IT ON THE TELETYPE ONE LINE PER PROGRAM
+*  STATEMENT.  'PUNCH' ADDS A LEADER AND TRAILER TO THE ASCII 
+*  PROGRAM DUMP.  LISTING BEGINS WITH THE FIRST PROGRAM STATEMENT 
+*  UNLESS DIRECTED OTHERWISE BY THE 'LIST' OR 'PUNCH' COMMAND.
+*  LT1 IS THE PROGRAM POSITION POINTER.  LT2 IS THE STATEMENT 
+*  LENGTH COUNTER.
+* 
+XPNCH CLA,INA       SET TO 'XPUNCH' MODE
+      JMP PUNCH+1 
+PUNCH CCA 
+      LDB B104
+      JMP LIST+2
+LIST  CLA           SET TO 'LIST' MODE
+LISTB EQU LIST
+      LDB CW0 
+      STB CW2 
+      STA LT0       SAVE MODE 
+      CLA           SET FOR 
+      STA LT8         NO PAGINATION 
+      LDB PBUFF     NULL
+      CPB PBPTR       PROGRAM?
+      JMP LIS16     YES 
+      CLB,INB       NO, SET FIRST STATEMENT NUMBER
+      STB LT3 
+      JSB SINIT     PREPARE PROGRAM FOR LISTING 
+      LDB PBPTR 
+      LDA CFLAG     SAVE
+      AND MAIN,I      PROGRAM 
+      STA LT5           MODE
+*                                            *
+**  DETERMINE FIRST STATEMENT TO BE LISTED  **
+*                                            *
+      SZA           SAVE POINTER TO 
+      LDB SYMTB       LAST WORD +1
+      STB LT6           OF PROGRAM
+      LDB BIT15    GET LARGE SEQUENCE NUMBER
+      STB LT7      SET ENDING SEQUENCE NUMBER 
+      JSB GETCR     STARTING LINE NUMBER? 
+      JMP LISCQ      NO 
+      CLB 
+      CPA .+54B    CHECK FOR COMMA
+      JMP LISCM    FIRST STATEMENT NUMBER OMITTED.
+      CPA B120      PAGINATION? 
+      JMP LISCP       YES 
+      JSB BCKSP     BACK UP FOR FIRST STATEMENT NUMBER
+      JSB BLDIN     FETCH INTEGER 
+      CPA .+15B    CHECK FOR CARRIAGE RETURN
+      JMP LISCR    YES, END OF COMMAND
+      CPA .+54B     COMMA FOLLOWS?
+      RSS           YES 
+      JSB RERRS+12,I
+LISCM EQU * 
+      STB LT3      SAVE STARTING SEQUENCE NUMBER
+      JSB GETCR     GET THE NEXT CHARACTER
+      JSB RERRS+12,I
+      CPA B120      CHECK FOR P 
+      JMP LISCP     PAGINATION
+      JSB BCKSP     BACK UP FOR SECOND STATEMENT #
+      JSB BLDIN    GET INTEGER
+      CMB 
+      STB LT7       SAVE ENDING SEQUENCE NUMBER 
+      CPA .+15B     END OF RECORD?
+      JMP LISCQ     YES 
+      JSB GETCR     NO, GET NEXT CHARACTER
+      JSB RERRS+12,I
+      CPA B120      PAGINATION? 
+      RSS           YES 
+      JSB RERRS+12,I  NO
+LISCP EQU * 
+      LDA M71B      SET LINE COUNTER
+      STA LT8 
+      JSB GETCR     TEST FOR END OF LINE
+      RSS 
+      JSB RERRS+12,I
+LISCQ EQU * 
+      LDB LT3      GET BACK STARTING SEQUENCE NUMBER
+LISCR EQU * 
+      LDA LT6       SEEK
+      JSB FNDPS       STATEMENT 
+      JMP LIS16     ALL LINE NUMBERS < GIVEN INTEGER
+      NOP           SAVE DESIRED
+      STB LT3         STARTING POINT
+      LDA .+12B     OUTPUT A
+      JSB OUTCR       LINE FEED 
+*                         * 
+**  OUTPUT PROGRAM NAME  ** 
+*                         * 
+      LDA LNAME 
+      STA LT1 
+      INA           NULL
+      LDA 0,I 
+      SZA,RSS         NAME? 
+      JMP LISCU     YES 
+      CLB           NO
+      STB LT2       OUTPUT
+      LDA .-3         PROGRAM 
+      JSB OUTST         NAME
+      LDA .+15B     OUTPUT
+      JSB OUTCR       CARRIAGE RETURN 
+LISCU EQU * 
+      LDA .+12B         AND 
+      JSB OUTCR           DOUBLE
+      LDA .+12B             LINE
+      JSB OUTCR               FEED
+*                              *
+**  OUTPUT LEADER IF 'PUNCH'  **
+*                              *
+      CLA           'LIST'
+      CPA LT0         MODE? 
+      JMP LIST2-2   YES 
+      LDA M72B      NO, 
+      STA DIGCT       OUTPUT
+      CLA               FEED
+      JSB OUTCR           FRAMES
+      ISZ DIGCT             FOR 
+      JMP *-3                 LEADER
+      LDB LT3       SET POINTER TO
+      STB LT1         STARTING POINT
+*                    *
+**  MAIN LIST LOOP  **
+*                    *
+LIST2 LDB LT1       PROGRAM 
+      CPB LT6         EXHAUSTED?
+      JMP LIS15     YES 
+      LDB LT1,I    GET LINE NUMBER
+      ADB LT7      CHECK FOR END OF LISTING 
+      SSB,RSS      SKIP IF NOT DONE YET 
+      JMP LIS15    STOP LISTING HERE
+* 
+      ISZ LT8       CHECK FOR NEW PAGE
+      JMP LISPM     NOT YET 
+      LDA .-8 
+      STA LT8 
+LISPF EQU * 
+      LDA .+12B     OUTPUT A
+      JSB OUTCR       BUNCH OF
+      ISZ LT8           LINE FEEDS
+      JMP LISPF 
+      LDA M72B      RESET LINE COUNTER
+      STA LT8 
+LISPM EQU * 
+* 
+      LDB LT1,I     NO, OUTPUT
+      JSB OUTIN       LINE NUMBER 
+      LDA .+40B     OUTPUT
+      JSB OUTCR       BLANK 
+      ISZ LT1       CHECK 
+      LDA LT1,I       STATEMENT 
+      JSB STLCK         LENGTH
+      LDA LT1,I       LENGTH
+      CMA,INA           COUNTER 
+      INA                 FOR 
+      STA LT2               STATEMENT 
+      JMP LIST3 
+      LDB LT1,I    OUTPUT 
+      JSB OUTIN       BOUND 
+LIST3 ISZ LT1       MORE OF 
+      ISZ LT2         STATEMENT?
+      JMP LIST4     YES 
+      CLA,INA 
+      CPA LT0       XPUNCH? 
+      RSS           YES 
+      JMP *+3       NO
+      LDA .+23B     OUTPUT
+      JSB OUTCR       X-OFF 
+      LDA .+15B     NO, 
+      JSB OUTCR       OUTPUT A
+      LDA .+12B         CARRIAGE RETURN 
+      JSB OUTCR           AND LINE FEED 
+      JMP LIST2 
+*                       * 
+**  IDENTIFY OPERATOR  ** 
+*                       * 
+LIST4 LDA LT1,I     EXTRACT 
+      AND OPMSK       OPERATOR
+      SZA,RSS       NULL OPERATOR?
+      JMP LIST5     YES 
+      CPA LETOP     NO, 'IMPLIED' LET?
+      JMP LIST5-2   YES, OUTPUT A BLANK 
+      ALF,ALF       NO, 
+      ADA D62         SINGLE-CHARACTER
+      SSA,RSS           OPERATOR? 
+      JMP LIS12     NO
+      ADA B63       YES,
+      ADA FOPBS       EXTRACT 
+      LDA 0,I           ASCII 
+      ALF,ALF             CODE
+      AND B177
+      CPA .+42B     " ? 
+      JMP LIS14     YES 
+      RSS           NO
+      LDA .+40B     LOAD A BLANK
+      JSB OUTCR 
+*                      *
+**  IDENTIFY OPERAND  **
+*                      *
+LIST5 LDA LT1,I     EXTRACT 
+      AND OPDMK       OPERAND 
+      STA LT3 
+      SSA           FLAG BIT SET? 
+      JMP LIST9     YES 
+      CLB           NO, NULL
+      CPB LT3         OPERAND?
+      JMP LIST3     YES 
+      CPB LT5       NO, 'COMPILED' ?
+      JMP LIST0     NO
+      ADA .-1       YES 
+      ALS           LOAD
+      ADA SYMTB       ACTUAL
+      LDA 0,I           SYMBOL
+      STA LT3       SAVE SYMBOL 
+*                           * 
+**  LIST SYMBOLIC OPERAND  ** 
+*                           * 
+LIST0 AND PDFFL     ISOLATE TYPE PART 
+      CPA .+17B     FUNCTION? 
+      JMP LIST8     YES 
+LIST6 LDA LT3       NO, 
+      RAR,RAR 
+      RAR,RAR 
+      AND .+37B         ASCII FOR 
+      ADA B100            LETTER
+      JSB OUTCR     OUTPUT LETTER 
+      LDA LT3 
+      AND .+17B 
+      CPA .+17B     FUNCTION? 
+      JMP LIST3     YES 
+      SZA,RSS       NO, STRING VARIABLE?
+      JMP LIST7     YES 
+      ADA .-5       NO
+      SSA           DIGIT?
+      JMP LIST3     NO
+      ADA .+60B     YES,
+      JSB OUTCR       OUTPUT IT 
+      JMP LIST3 
+LIST7 LDA .+44B     LOAD ASCII '$'
+      JMP *-3 
+LIST8 LDA F         OUTPUT
+      JSB OUTCR 
+      LDA N           'FN'
+      JSB OUTCR 
+      JMP LIST6 
+*                                        *
+**  LIST CONSTANT OPERAND OR PARAMETER  **
+*                                        *
+LIST9 ELA,CLE,ERA   CLEAR FLAG BIT
+      SZA           CONSTANT? 
+      JMP LIS10     NO
+      STA CHRCT     YES, SET
+      STA SIGN        FOR NO SIGN 
+      ISZ LT1       LOAD
+      ISZ LT2 
+      DLD LT1,I       CONSTANT
+      ISZ LT1 
+      ISZ LT2 
+      CLE,SSA       NEGATIVE NUMBER?
+      CCE           YES, ENABLE SIGN
+      JSB NUMOT     OUTPUT THE CONSTANT 
+      JMP LIST3 
+LIS10 AND .+17B     ISOLATE TYPE PART 
+LCALL EQU LIS10-1 
+      CPA .+3       PROGRAM INTEGER?
+      JMP LIS11     YES 
+      CPA .+17B     NO, PRE-DEFINED FUNCTION? 
+      RSS           YES 
+      JMP LIST6     NO, MUST BE A PARAMETER SYMBOL
+      LDA LT3       OUTPUT
+      ALF,RAL 
+      LDB ATAB        FUNCTION
+      JSB MCOUT 
+      JMP LIST3         SYMBOL
+LIS11 ISZ LT1 
+      ISZ LT2 
+      LDA LT4       RESTORE OPERATOR
+      CPA DIMOP       <DIM STATEMENT> ? 
+      JMP LIST3-2   YES 
+      CPA COMOP     NO, 'COM'?
+      JMP LIST3-2   YES 
+      LDA LT5       NO
+      LDB LT1,I     LOAD PROSPECTIVE INTEGER
+      SZA           PROGRAM 'COMPILED' ?
+      LDB 1,I       YES 
+      JSB OUTIN     OUTPUT INTEGER
+      ISZ LT1       MORE
+      ISZ LT2         STATEMENT?
+      RSS           YES 
+      JMP LIST3+3   NO
+      LDA LT4       LISTING 
+      CPA USEOP       'USING' ? 
+      JMP LIST4     YES 
+      LDA .+54B     EMIT
+      JSB OUTCR       A COMMA 
+      JMP LIS11+7 
+*                                  *
+**  LIST MULTICHARACTER OPERATOR  **
+*                                  *
+LIS12 LDA .+40B     OUTPUT
+      JSB OUTCR       A BLANK 
+      LDA LT1,I     OUTPUT
+      LDB MCBOP       MULTICHARACTER
+      JSB MCOUT         OPERATOR
+      LDA .+40B 
+      LDB LT4       WAS IT
+      CPB REMOP       A 'REM' ? 
+      JMP LIS13     YES 
+      CPB FILOP     NO, 'FILES' ? 
+      JMP LIS13-1   YES 
+      CPB IMGOP     NO, 'IMAGE'?
+      JMP LIS18     YES 
+      JSB OUTCR     NO, OUTPUT A BLANK
+      JMP LIST5 
+LIS18 CLB 
+      LDA LT2 
+      INA,SZA 
+      JSB OUTST     OUTPUT IMAGE STRING 
+      JMP LIST3 
+      JSB OUTCR     OUTPUT A BLANK
+LIS13 CCB           OUTPUT
+      LDA LT2         THE 
+      JSB OUTST         REMARK
+      JMP LIST3 
+*                               * 
+**  OUTPUT TRAILER IF 'PUNCH'  ** 
+*                               * 
+LIS15 EQU * 
+      CLA           'LIST'
+      CPA LT0         MODE? 
+      JMP SCHEQ 
+      LDA .+32B 
+      JSB OUTCR 
+      LDA M72B      NO, 
+      STA DIGCT       OUTPUT
+      CLA               FEED
+      JSB OUTCR           FRAMES
+      ISZ DIGCT             FOR 
+      JMP *-3                 TRAILER 
+      LDA CW0 
+      STA CW2 
+* 
+LIS16 LDA .+12B     ECHO
+      JSB OUTCR       LINE
+      JMP SCHEQ 
+*                            *
+**  LIST A STRING CONSTANT  **
+*                            *
+LIS14 JSB OUTCR     OUTPUT "
+      LDA LT1,I     COMPUTE 
+      AND B377        WORDS 
+      SZA,RSS 
+      JMP LIS17 
+      CMA,INA           OF
+      ARS                 STRING
+      CLB           OUTPUT
+      JSB OUTST       STRING
+LIS17 LDA .+42B 
+      JSB OUTCR     YES, OUTPUT IT
+      JMP LIST3 
+**                                  **
+***  LIST A MULTICHARACTER SYMBOL  ***
+**                                  **
+* 
+*  UPON ENTRY (A) HOLDS A WORD CONTAINING A SYMBOL CODE AND (B) 
+*  HOLDS A POINTER TO THE PRINT NAME TABLE.  THE SYMBOL IS FOUND
+*  IN THE TABLE AND ITS ASCII FORM OUTPUT.
+* 
+MCOUT NOP 
+#MCOT AND OPMSK     SAVE
+      STA LT4         SYMBOL
+MCOT1 LDA 1,I       DESIRED 
+      AND OPMSK       TABLE 
+      CPA LT4           ENTRY?
+      JMP MCOT2     YES 
+      LDA 1,I       NO, 
+      AND .+7         COMPUTE 
+      ADA .+3           ADDRESS 
+      ARS                 OF NEXT 
+      ADB 0                 ENTRY 
+      JMP MCOT1 
+MCOT2 LDA 1,I       COMPUTE 
+      AND .+7         COUNT 
+      CMA,INA           OF
+      ARS                 ASCII 
+      STA LT3               WORDS 
+      STB OUTST     SAVE ASCII SYMBOL ADDRESS 
+MCOT3 ISZ OUTST     MOVE TO NEXT WORD OF SYMBOL 
+      LDA OUTST,I   OUTPUT
+      ALF,ALF         HIGH
+      JSB OUTCR 
+      LDA OUTST,I   OUTPUT
+      AND B377        LOW CHARACTER 
+      SZA               IF NOT
+      JSB OUTCR           NULL
+      ISZ LT3       MORE SYMBOL?
+      JMP MCOT3     YES 
+      JMP MCOUT,I   NO
+**                   ** 
+***  LIST A STRING  *** 
+**                   ** 
+* 
+*  UPON ENTRY (A) HOLDS A NEGATIVE WORD COUNT OF THE STRING.  IF
+*  (B) # 0 THE STRING BEGINS WITH THE LOW HALF OF (LT1),I ; IF
+*  (B) = 0 IT BEGINS WITH THE HIGH HALF OF THE WORD FOLLOWING 
+*  (LT1),I .  A TRAILING NULL CHARACTER WILL NOT BE PRINTED.
+* 
+OUTST NOP 
+#OTST STA LT4       SAVE STRING WORD COUNT
+      SZB           'REM' ? 
+      JMP OTST2     YES 
+OTST1 ISZ LT1       NO, MOVE TO 
+      ISZ LT2         NEXT PROGRAM WORD 
+      LDA LT1,I     OUTPUT
+      ALF,ALF         HIGH
+      JSB OUTCR 
+OTST2 LDA LT1,I     OUTPUT
+      AND B377        LOW CHARACTER 
+      SZA               IF NOT
+      JSB OUTCR           NULL
+      ISZ LT4       MORE STRING?
+      JMP OTST1     YES 
+      JMP OUTST,I   NO
+      SPC 2 
+BCKSP NOP 
+      LDA BKS 
+      JSB S14SC 
+      JMP BCKSP,I 
+      SPC 5 
+**                        **
+***  OUTPUT A CHARACTER  ***
+**                        **
+* 
+*  OUTPUT THE CHARACTER IN (A).  NON-PRINTING CHARACTERS DO NOT 
+*  COUNT AGAINST THE 72 CHARACTERS PER LINE.  A CARRIAGE RETURN 
+*  ('CONTROL O' IN A STRING OR AN END-OF-LINE, FOR EXAMPLE) 
+*  RESETS THE PRINT POSITION TO 0.
+* 
+OUTCR NOP 
+      AND B177
+#OTCR STA OCTMP     SAVE CHARACTER
+      CPA B177      CHECK FOR 
+      JMP OTCRA       RUBOUT
+      AND .140      NON-PRINTING
+      SZA             CHARACTER?
+      ISZ CHRCT     NO, COUNT IT
+OTCRA EQU * 
+      CLB 
+      LDA OCTMP     RETRIEVE CHARACTER
+      CPA .+15B     CARRIAGE RETURN?
+      STB CHRCT     YES, ZERO CHARACTER COUNT 
+      JSB OUTCH 
+      JMP OUTCR,I 
+**                              **
+***  MOVE BLOCK TO LOWER CORE  ***
+**                              **
+* 
+*  UPON ENTRY (B) POINTS TO THE LAST WORD +1 TO BE MOVED AND
+*  (A) POINTS TO THE FIRST WORD TO BE MOVED.  DEST POINTS TO THE
+*  FIRST WORD OF THE DESTINATION SPACE. 
+* 
+MOVER NOP 
+#MOVE STB MVEND     SAVE POINTER TO LAST WORD +1
+      LDB 0,I       TRANSFER
+      STB DEST,I      WORD
+      ISZ DEST      BUMP
+      INA             POINTERS
+      CPA MVEND     DONE? 
+      JMP MOVER,I   YES 
+      JMP #MOVE+1   NO
+      JSB S14SC 
+      JMP BCKSP,I 
+      SPC 5 
+**                                         ** 
+***  INITIALIZE FOR PROGRAM MODIFICATION  *** 
+**                                         ** 
+SINIT NOP 
+#SINI LDA .+40B     TURN ON 
+      STA BLANK       BLANK SUPPRESSION 
+      STA GFLAG     TURN OFF INTEGER ERROR-SUPPRESS 
+      JMP SINIT,I 
+      END 

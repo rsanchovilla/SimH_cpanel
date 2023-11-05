@@ -1,0 +1,3778 @@
+ASMB,R,L,B,C   ** RT SCHEDULER MODULE **
+      NAM SCHED 
+* 
+      SUP 
+********************************************************************
+* 
+* 
+***** AMD-DAS ***** FEB,72 ***** REV.LWH *****
+* 
+* 
+********************************************************************
+* 
+*   SCHED ENTRY POINT NAMES 
+* 
+      ENT $XEQ,$LIST,$MESS,$CVT3,$STRT,$TYPE
+      ENT $MPT1,$MPT2,$MPT3,$MPT4,$MPT5,$MPT6 
+      ENT $MPT7,$CLCK,$TADD,$TREM 
+* 
+*   SCHED EXTERNAL REFERENCE NAMES
+* 
+      EXT $XSIO,$IOUP,$IODN,$ERMG,$DREQ 
+      EXT $OTRL,$DREL,$ABRT,$LUPR,$EQST 
+      EXT $SDSK,$IOCL,$IRT,$DEVT,$CHTO
+      EXT $CVEQ,$SYMG 
+* 
+********************************************************************
+* 
+*     THE SCHED MODULE OF HP2100 REAL TIME EXECUTIVE CONSISTS OF   *
+* 
+*        1.  TIME PROCESSOR ROUTINES                               *
+*        2.  PROGRAM SCHEDULE, EXECUTION, AND SWITCHING ROUTINES   *
+*        3.  LIST PROCESSORS                                       *
+*        4.  LINK PROCESSORS                                       *
+*        5.  OPERATOR INPUT MESSAGE PROCESSORS                     *
+*        6.  SYSTEM START UP AND OPER INPUT REQUEST ACKNOWLEDGE    *
+*        7.  MEMORY PROTECT VIOLATION SCHEDULER PREPROCESSORS      *
+* 
+********************************************************************
+      HED REAL TIME CLOCK-TIME LIST PROCESSING
+********************************************************************
+*        THE REAL TIME CLOCK PROCESSOR SECTION OF HP-2100 REAL TIME*
+*     EXECUTIVE HANDLES ALL TIME DEPENDENT FUNCTIONS:              *
+*        1. INCREMENT REAL TIME CLOCK VALUES EVERY 10 MILLISECOND. *
+*        2. SCHEDULE PROGRAMS AT THE REQUESTED TIME AND COMPUTE ITS*
+*              NEXT START TIME.                                    *
+*        3. ADD PROGRAMS TO THE TIME LIST.                         *
+*        4. REMOVE PROGRAMS FROM THE TIME LIST.                    *
+*        5. OUTPUT CURRENT SYSTEM TIME TO USER ARRAY.              *
+*        6. SET ID SEGMENT VALUES AS REQUESTED BY USER.            *
+********************************************************************
+*                                                                  *
+*        THE $CLCK ROUTINE FUNCTIONS AS FOLLOWS:                   *
+*              THE ROUTINE IS ENTERED EVERY 10 MILLISECOND DUE     *
+*                  TO TIME BASE GENERATOR INTERRUPTS.              *
+*              THE TIME VALUE IS INCREMENTED BY 10 MILLISECONDS.   *
+*              THE TIME VALUES OF EACH PROGRAM IN TIME LIST IS     *
+*                   COMPARED TO THE CURRENT TIME. IF THE TIMES     *
+*                   COMPARE AND THE PROGRAM IS DORMANT, A SCHEDULE *
+*                   REQUEST IS MADE VIA LIST PROCESSOR. REGARDLESS *
+*                   OF PROGRAM STATUS, THE NEXT START TIME IS      *
+*                   COMPUTED UNLESS THE MULTIPLE VALUE IS ZERO-    *
+*                   WHICH MEANS THAT THE PROGRAM IS TO BE REMOVED  *
+*                   FROM TIME LIST.                                *
+*              THE TIME-OUT CLOCKS FOR ALL ACTIVE DEVICES ARE 
+*                   UPDATED.  IF ANY DEVICE HAS TIMED-OUT,
+*                   RTIOC IS ENTERED TO PROCESS THE CONDITION.
+*                                                                  *
+* 
+$CLCK ISZ TMS      INCR 10 MSEC COUNT 
+      JMP CL010     GO TO PROCESS LISTS 
+      LDA TTAB+1   RESET 10 MSEC
+      STA TMS 
+      ISZ SECS      INCREMENT SECONDS COUNTER 
+      JMP CL010     GO TO PROCESS LISTS 
+      LDA TTAB+2   RESET SEC COUNT
+      STA SECS
+      ISZ MINS      INCREMENT MINUTES COUNTER 
+      JMP CL010     GO TO PROCESS LISTS 
+      LDA TTAB+2   RESET MIN COUNT
+      STA MINS
+      ISZ HRS       INCREMENT HOURS COUNTER 
+      JMP CL010    GO TO PROCESS LISTS
+      LDA TTAB+4   RESET HR COUNT 
+      STA HRS 
+      ISZ DAYS      INCREMENT DAYS COUNTER
+* 
+*     CHECK IF TIME TO SCHEDULE PROGRAM 
+CL010 LDB TLIST    TIME LIST
+      SZB,RSS       IF THRU PROCESSING IT, GO 
+      JMP IOTOP      PROCESS DEVICE TIME-OUT CLOCKS-
+      STB POINT     SAVE TIME LINK
+      INB 
+      INB           B NOW PTS TO 10 S OF MILLISECOND
+      LDA B,I 
+      CPA TMS 
+      RSS           TENS OF MILLISECOND COMPARE 
+      JMP CH010     DO NOT COMPARE, SO CHECK NEXT PROG
+      INB 
+      LDA B,I 
+      CPA SECS
+      RSS           SECONDS COMPARE 
+      JMP CH010     DO NOT COMPARE-GO TO NEXT PROG
+      INB 
+      LDA B,I 
+      CPA MINS
+      RSS           MINUTES COMPARE 
+      JMP CH010    DO NOT COMPARE-GO TO NEXT PROG 
+      INB 
+      LDA B,I 
+      CPA HRS 
+      JMP CH020     HOURS COMPARE-SO TIME COMPARES
+* 
+*     INCREMENT TO NEXT PROGRAM IN LIST 
+CH010 LDB POINT,I  GET ADDR OF NEXT PROG IN LIST
+      JMP CL010+1  GO TO COMPARE NEXT PROG IN LIST
+* 
+*     PROGRAM TO BE SCHEDULED 
+CH020 LDA POINT     COMPUTE ID SEGMENT ADDRESS
+      ADA DM16
+      STA CH025 
+      ADA D15 
+      LDA A,I 
+      AND D15      CHECK STATUS 
+      SZA          DORMANT SO GO SCHEDULE IT
+      JMP CH026    NOT DORMANT, GO COMPUTE NEXT TIME
+      JSB $LIST    CALL LIST PROCESSOR TO SCHED PROG
+      OCT 101       THE PROGRAM 
+CH025 DEF * 
+* 
+*     CHECK IF NEXT SCHEDULE TIME TO BE COMPUTED
+CH026 LDB POINT 
+      INB 
+      LDA B,I       RES CODE/MULT FACTOR
+      AND M7777 
+      SZA,RSS       IF ZERO, THEN NO NEW START TIME 
+      JMP CH040     GO REMOVE PROG FROM LIST
+      STA TEMP      SAVE MULTIPLICATION FACTOR
+      LDA B,I       FORM RESOLUTION CODE
+      ALF,RAR 
+      AND D7
+      STA TEMP+1    RESOLUTION CODE 
+      ADB A         TIME VALUE ADDRESS
+      ADA TTAB
+      STA TEMP+2    TABLE VALUE ADDRESS 
+      LDA TEMP+1
+      ADA DM5 
+      STA TCC       LOOP COUNTER
+      CLA 
+      STA TEMP+3   CLEAR INCREMENT COUNTER
+      LDA B,I      ID SEGMENT TIME VALUE
+      ADA TEMP         + MULTIPLE VALUE 
+      STA B,I      STORE BACK IN ID SEGMENT 
+CH030 LDA B,I 
+      SSA 
+      JMP CH035    -, SO DONE 
+      ADA TEMP+2,I ADD TABLE VALUE
+      STA B,I      STORE BACK SUM IN ID SEG 
+      ISZ TEMP+3   INCREMENT COUNT
+      JMP CH030    GO TO CHECK IF O K 
+CH035 ISZ TCC 
+      RSS 
+      JMP CH010    DONE WITH ALL VALUES 
+      ISZ TEMP+2   INCR TABLE ADDRESS 
+      INB 
+      LDA B,I 
+      ADA TEMP+3
+      STA B,I 
+      CLA 
+      STA TEMP+3
+      JMP CH030    GO TO PROCESS NEXT TIME
+* 
+*     REMOVE PROGRAM FROM TIME LIST 
+CH040 LDB POINT     VALUE OF TLINK
+      JSB $TREM    GO TO REMOVE PROGRAM 
+      JMP CH010     GO TO PROCESS NEXT PROGRAM
+* 
+TLIST NOP          TOP OF TIME SCHEDULE LIST
+TMS   DEC -100     REAL TIME TENS OF MILLISEC 
+SECS  DEC -60      REAL TIME SECONDS
+MINS  DEC -60      REAL TIME MINUTES
+HRS   DEC -24      REAL TIME HOURS
+DAYS  NOP          REAL TIME DAYS 
+TTAB  DEF * 
+      DEC -100
+      DEC -60 
+      DEC -60 
+      DEC -24 
+* 
+*   PROCESS DEVICE TIME-OUT CLOCKS
+* 
+IOTOP LDA EQT#      SET NEGATIVE OF 
+      CMA,INA        NUMBER OF EQT
+      STA TEMPW      ENTRIES FOR INDEX
+      LDA EQTA      POINT TO WORD 15
+      ADA D14        OF FIRST EQT ENTRY 
+IOTO2 LDB A,I       LOAD WORKING CLOCK- 
+      SZB,RSS       IS IT ACTIVE? 
+      JMP IOTO3      NO 
+      ISZ A,I        YES: INCREMENT IT
+      RSS           IT HAS NOT TIMED-OUT
+      JMP $DEVT     GO TO TIME-OUT PROCESSOR
+IOTO3 ADA D15       ADJUST TO NEXT ENTRY
+      ISZ TEMPW     THRU? 
+      JMP IOTO2      NO: GO DO NEXT ONE 
+      JMP $XEQ       YES; NO TIME-OUTS-RETURN 
+      SPC 1 
+TEMPW NOP 
+M7777 OCT 7777
+      HED TIME ROUTINE TO GET CURRENT SYSTEM TIME 
+*        THE TIME ROUTINE CONVERTS THE CURRENT REAL TIME VALUES    *
+*              AND STORES THE VALUES INTO A USER SPECIFIED BUFFER. *
+*                                                                  *
+*    ROUTINE TO PROVIDE CURRENT SYSTEM TIME 
+*         CALLING SEQUENCE
+*              JSB TIME 
+*              RQP2 CONTAINS BEGIN ADDRESS OF 5 WORD BUFFER 
+*         ON RETURN,
+*              ARRAY(1) = TENS OF MILLISECOND 
+*              ARRAY(2) = SECONDS 
+*              ARRAY(3) = MINUTES 
+*              ARRAY(4) = HOURS 
+*              ARRAY(5) = DAYS
+* 
+TIME  NOP           ENTRY/EXIT
+      LDB RQP2      ADDRESS OF ARRAY
+      LDA TMS 
+      ADA D100
+      STA B,I       TENS OF MILLISECONDS
+      INB 
+      LDA SECS
+      ADA D60 
+      STA B,I       SECONDS 
+      INB 
+      LDA MINS
+      ADA D60 
+      STA B,I       MINUTES 
+      INB 
+      LDA HRS 
+      ADA D24 
+      STA B,I       HOURS 
+      INB 
+      LDA DAYS
+      STA B,I       DAYS
+      JMP TIME,I   EXIT 
+      HED TIMER ROUTINE SETS UP ID SEGMENT TIME VALUES
+*                                                                  *
+*        THE TIMER ROUTINE WHICH ALLOWS USER TO ENTER TIME VALUES  *
+*        INTO AN ID SEGMENT FUNCTIONS AS FOLLOWS:                  *
+*              IF PROG VALUE IS ZERO, THEN CURRENT EXECUTING PROG. *
+*                   AND IF NON-ZERO, THEN SEARCH FOR ID SEGMENT    *
+*                   ADDRESS.                                       *
+*              IF RESOLUTION CODE SPECIFIED IS ZERO, THEN ERROR    *
+*                   EXIT TAKEN.                                    *
+*              IF RESOLUTION CODE IS NON-ZERO, THEN RES/MULT WORD  *
+*                   STORED. THE NEXT VALUE IS CHECKED FOR + OR -.  *
+*                   IF PLUS, THEN NEXT START TIME VALUES GIVEN AND *
+*                   ARE STORED AND PROGRAM ENTERED INTO TIME LIST. *
+*                   IF MINUS, THEN THE COMPLEMENT OF VALUE IS ADDED*
+*                   TO THE CURRENT TIME AND ENTERED INTO THE ID    *
+*                   SEGMENT. IF PROG VALUE IS ZERO, THIS IS TO BE A*
+*                   TIME DELAY OF CURRENT PROGRAM AND THUS PROGRAM *
+*                   IS SET DORMANT VIA LINK PROCESSOR BUT POINT OF *
+*                   SUSPENSION IS NOT CLEARED. IF PROG VALUE IS NON*
+*                   ZERO, THEN PROGRAM IS ENTERED INTO TIME LIST.  *
+*                   THIS IS METHOD FOR SPECIFYING AN INITIAL OFFSET*
+*                   TIME.                                          *
+* 
+*     ROUTINE TO SET ID SEGMENT TIME VALUES 
+*         CALLING SEQUENCE
+*              JSB EXEC 
+*              DEF *+6  OR DEF *+9
+*              DEF  REQUEST CODE ADDRESS                   RQP1 
+*              DEF  PROG                                   RQP2 
+*              DEF  RES                                    RQP3 
+*              DEF  MULT                                   RQP4 
+*              DEF  OFFSET OR DEF HRS                      RQP5 
+*                             DEF MINS                     RQP6 
+*                             DEF SECS                     RQP7 
+*                             DEF TENS OF MSEC             RQP8 
+*         WHERE 
+*              PROG = 0 IF CURRENTLY EXECUTING
+*                   = ADDRESS OF PROGRAM NAME 
+*              RES  = 1 FOR 10 MILLISECOND RESOLUTION 
+*                   = 2 FOR SECONDS RESOLUTION LIST 
+*                   = 3 FOR MINUTES RESOLUTION LIST 
+*                   = 4 FOR HOURS RESOLUTION LIST 
+*              MULT = 0 FOR N0 MULTIPLE VALUE 
+*                   = N A POSITIVE INTEGER FOR COMPUTING
+*                        NEXT SCHEDULE TIME 
+*             OFFSET= M A NEGATIVE INTEGER FOR COMPUTING INITIAL
+*                        OFFSET TIME
+*                HRS= START TIME HOURS
+*               MINS= START TIME MINUTES
+*               SECS= START TIME SECONDS
+*               TENS= START TIME TENS OF MILLISECONDS 
+* 
+TIMER NOP           ENTRY/EXIT
+      LDA RQP2,I    LOAD PROG VALUE 
+      SZA,RSS 
+      JMP TI010     ZERO SO CURRENT PROG
+      LDB RQP2
+      JSB TNAME     GO TO GET PROG ID SEGMENT ADDRESS 
+      SZA 
+      JMP *+3 
+      LDB ER5      NO SUCH PROG ERR RETURN
+      JMP TI011 
+      LDB A 
+      RSS 
+TI010 LDB XEQT
+      ADB D17       RESOLUTION CODE ADDRESS 
+      STB TCC 
+      ISZ TCC 
+      LDA RQP3,I   CHECK RESOLUTION CODE VALUE
+      SZA          IF ZERO, THEN ILLEGAL VALUE
+      JMP *+4 
+      LDB ER6      RESOLUTION CODE ERROR
+TI011 INA 
+      JMP TIMER,I  TIMER ERROR RETURN 
+      ADA DM5      IF RES GREATER THAN 4, 
+      SSA,RSS           THEN ILLEGAL VALUE
+      JMP TI011-1       ERROR RETURN
+      LDA B,I       SAVE BIT 12 SINCE PROGRAM MAY 
+      AND MWAIT          ALREADY BE IN THE TIME LIST
+      STA B,I 
+      LDA RQP3,I
+      ALF,ALF 
+      ALF,RAL 
+      XOR RQP4,I    RES CODE/MULT FACTOR
+      IOR B,I 
+      STA B,I 
+      INB           INCR TO TEN MSEC ADDR 
+      LDA RQP5,I    NEGATIVE IF OFFSET
+      SSA,RSS       POSITIVE IF START TIME
+      JMP TI100 
+      LDA RQP2,I   CHECK IF CURRENT XEQ PROGRAM 
+      SZA 
+      JMP TI012    NO 
+      LDA XEQT     SETUP TO CALL LINK PROCESSOR 
+      STA WORK     TO REMOVE PROG FROM SCHEDULE 
+      STA WLINK    LIST AND ENTER INTO DORMANT
+      ADA D6       LIST WITHOUT CLEARING PT OF
+      STA WPRIO    SUSPENSION, ETC
+      JSB LINK     CALL LINK PROCESSOR
+      OCT 1        REMOVE PROG FROM SCHED LIST
+      OCT 0        ADD PROG TO DORMANT LIST 
+      LDB XEQT      SET PROGRAM STATUS DORMANT
+      ADB D15 
+      CLA 
+      STA B,I 
+TI012 LDA AADD
+      INA 
+      STA RQP2
+      JSB TIME     GET CURRENT SYSTEM REAL TIME 
+      LDB AADD
+      ADB RQP3,I    COMPUTE OFFSET MULTIPLE ADDRESS 
+      LDA RQP5,I    OFFSET VALUE
+      CMA,INA 
+      ADA B,I 
+      STA B,I 
+TI015 LDB TCC       TIME ADDRESS OF ID SEGMENT
+      LDA TEMP      10 S OF MILLISEC
+TI020 ADA TTAB+1
+      SSA 
+      JMP *+3 
+      ISZ TEMP+1    INCR SECONDS
+      JMP TI020 
+      STA B,I       STORE 10 S MSEC IN ID SEGMENT 
+      INB 
+      LDA TEMP+1    SECONDS 
+TI030 ADA TTAB+2
+      SSA 
+      JMP *+3 
+      ISZ TEMP+2    INCR MINUTES
+      JMP TI030 
+      STA B,I       STORE SECONDS 
+      INB 
+      LDA TEMP+2
+TI040 ADA TTAB+2
+      SSA 
+      JMP *+3 
+      ISZ TEMP+3    INCR HOURS
+      JMP TI040 
+      STA B,I       STORE MINUTES 
+      INB 
+      LDA TEMP+3
+TI050 ADA TTAB+4
+      SSA,RSS 
+      JMP TI050 
+      STA B,I       STORE HOURS 
+      LDB TCC 
+      ADB DM2 
+      JSB $TADD    ENTER PROG INTO TIME LIST
+      CLA 
+      JMP TIMER,I  NORMAL RETURN
+*     GIVEN START TIME
+TI100 STA TEMP+3   HOURS
+      LDA RQP6,I    MINUTES 
+      STA TEMP+2
+      LDA RQP7,I    SECONDS 
+      STA TEMP+1
+      LDA RQP8,I    TENS OF MSEC
+      STA TEMP
+      JMP TI015    GO TO STORE VALUES IN ID SEGMENT 
+AADD  DEF TEMP-1
+TCC   NOP 
+TLINC NOP 
+POINT NOP 
+ER6   ASC 1,06     NO OR ILLEGAL RES CODE VALUE ERROR 
+      HED ADDITION OF PROGRAM TO TIME RESOLUTION CODE LIST
+* 
+*        THE $TADD ROUTINE FUNCTIONS AS FOLLOWS:                   *
+*              IF RESOLUTION CODE IS ZERO, THEN EXIT               *
+*              IF NON-ZERO RESOLUTION, AND PROGRAM NOT IN TIME LIST*
+*                   (BIT 12 OF RES/T/MULT 0), THEN SET BIT 12 OF   *
+*                   MULT WORD TO SIGNIFY THAT IT IS IN TIME LIST.  *
+*                   IF TIME LIST IS NULL, THEN SET IT TO POINT TO  *
+*                   PROGRAM TIME LINK AND SET TLINK TO ZERO.       *
+*                   IF PROGRAM NOT IN LIST, THEN IT IS ADDED TO    *
+*                        TOP OF TIME LIST AND ITS TLINK VALUE MADE *
+*                        TO POINT TO THE PREVIOUS TOP OF LIST      *
+*                        PROGRAM.                                  *
+*                                                                  *
+* 
+*     ADDING A PROGRAM TO A TIME RESOLUTION CODE LIST 
+*         CALLING SEQUENCE
+*              LDB  ADDRESS OF ID SEGMENT TLINK VALUE 
+*              JSB $TADD
+* 
+$TADD NOP 
+      STB TLINC     SAVE TLINK ADDRESS
+      INB           INCR TO RES CODE/MULT FACTOR ADD
+      LDA B,I 
+      ALF,RAR 
+      AND D7
+      SZA,RSS 
+      JMP $TADD,I  EXIT 
+      LDA B,I      CHECK IF PROGRAM ALREADY IN
+      AND MWAIT          TIME LIST
+      SZA 
+      JMP $TADD,I  YES, SO EXIT 
+      LDA B,I 
+      IOR MWAIT    SET T BIT
+      STA B,I 
+      LDB TLIST     LOAD VALUE OF TOP OF LIST 
+      SZB           ZERO IF NULL LIST 
+      JMP T0010     NON ZERO IF PROGRAM IN LIST 
+      LDB TLINC 
+      STB TLIST     STORE TLINK INTO TOP OF LIST
+      CLA 
+      STA TLINC,I   CLEAR ID SEG TLINK FOR END OF LIST
+      JMP $TADD,I  EXIT 
+T0010 LDA TLINC    SET LINK OF NEW PROG TO PREVIOUS 
+      STB A,I           OF TIME LIST
+      STA TLIST    SET TOP OF TIME LIST TO NEW PROG TLINK ADDRESS 
+      JMP $TADD,I  RETURN 
+      HED REMOVE A PROGRAM FROM TIME LIST 
+*                                                                  *
+*        THE $TREM ROUTINE FUNCTIONS AS FOLLOWS:                   *
+*              IF PROGRAM NOT IN TIME LIST, THEN EXIT              *
+*              IF PROGRAM IN TIME LIST, THEN CLEAR BIT 12 OF       *
+*                   RES/T/MULT TO INDICATE NOT IN TIME LIST.       *
+*                   A SEARCH IS MADE OF THE TIME LIST PROGRAMS     *
+*                        UNTIL PROGRAM FOUND OR END OF LIST. THE   *
+*                        TLINK VALUES ARE CHANGED AS NECESSARY.    *
+*                                                                  *
+* 
+*         CALLING SEQUENCE
+*              LDB  TLINK ADDRESS OF ID SEGMENT 
+*              JSB $TREM
+* 
+$TREM NOP          ENTRY/EXIT 
+      CLA 
+      STA TCC       CLEAR PREVIOUS LINK POINTER 
+      STB TLINC     COMPUTE LIST ADDRESS
+      INB 
+      LDA B,I      CHECK IF PROGRAM IS IN TIME LIST 
+      AND MWAIT 
+      SZA,RSS 
+      JMP $TREM,I  NO, SO EXIT
+      LDA B,I      CLEAR T BIT
+      AND CWAIT 
+      STA B,I 
+      LDB TLIST     TOP OF LIST ADDRESS 
+      RSS 
+TR010 LDB B,I       LIST VALUE
+      CPB TLINC     COMPARED AGAINST REMOVAL VALUE
+      JMP TR020     THE ADDRESSES COMPARE-SO REMOVE 
+      SZB,RSS 
+      JMP $TREM,I  EXIT 
+      STB TCC       DO NOT COMPARE-SO SAVE ADDRESS
+      JMP TR010     GO TEST IT
+TR020 LDA TCC 
+      SZA 
+      JMP TR030     NOT TOP OF LIST 
+      LDB B,I 
+      STB TLIST 
+      JMP $TREM,I  EXIT 
+TR030 LDB TLINC,I   SET TLINK VALUE TO BYPASS REMOVED 
+      STB TCC,I     PROGRAM 
+      JMP $TREM,I  EXIT 
+      SPC 1 
+MWAIT OCT 10000 
+CWAIT OCT 167777
+      HED REAL TIME SCHEDULER---EXECUTION SECTION---
+* 
+*        THE $XEQ SECTION OF THE HP-2100 REAL TIME EXECUTIVE       *
+*    PERFORMS THE FOLLOWING FUNCTIONS:                             *
+*        1. IDLE LOOP WHEN NO PROGRAMS ARE SCHEDULED OR CANNOT BE  *
+*           EXECUTED.                                              *
+*        2. SWITCHES PROGRAM EXECUTION SUCH THAT THE HIGHEST       *
+*           PRIORITY EXECUTABLE PROGRAM EXECUTES.                  *
+*        3. SETS THE FENCE REGISTER ACCORDING TO PROGRAM TYPE.     *
+*        4. LOADS AND EXECUTES BACKGROUND DISC RESIDENT PROGRAMS.  *
+*        5. LOADS, SWAPS, AND EXECUTES REAL TIME DISC RESIDENT     *
+*           PROGRAMS                                               *
+* 
+*     CALLING SEQUENCE
+*     JMP $XEQ
+* 
+$XEQ  LDA ZZZZZ     CHECK IF PROGRAM TO BE ABORTED
+      CLB 
+      STB ZZZZZ          RESET ABORT FLAG 
+      SZA 
+      JSB $ABRT     CALL ABORT ROUTINE
+X0005 LDA SKEDD     LOAD TOP OF SCHEDULE LIST 
+      SZA          IF ZERO, THEN NO PROG SCHED
+      JMP X0010    GO TO PROCESS SCHED LIST 
+* 
+*     NO PROGRAM SCHEDULED--SETUP FOR IDLE LOOP 
+*                                                                  *
+*        THE IDLE LOOP SECTION CONSISTS OF:                        *
+*              CLEARING XEQT WORD TO SIGNIFY THAT NO PROGRAM       *
+*                   CURRENTLY EXECUTING.                           *
+*              STORE ADDRESS OF 4 DUMMY WORDS INTO XSUSP-XSUSP+3   *
+*                   DUE TO I/O PROCESSING.                         *
+*              SET MEMORY PROTECT REGISTER TO ZERO.                *
+*              CALL INTERRUPT RESTORE ROUTINE, $IRT 
+*              SET A AND B REGISTERS TO ALL ONES.                  *
+*              TURN INTERRUPT SYSTEM BACK ON                       *
+*              JUMP TO *                                           *
+*                                                                  *
+      LDA DM4      SET XSUSP TO XSUSP+3 TO ADDRESS
+      STA TMP           OF FOUR DUMMY WORDS 
+      LDB DSUSP    ADDRESS OF XSUSP 
+      LDA VSUSP    ADDRESS OF IDLE DUMMY WORDS
+      STA B,I 
+      INA 
+      INB 
+      ISZ TMP 
+      JMP *-4 
+      CLA 
+      STA XEQT     CLEAR XEQT ADDRESS VALUE 
+      STA FENCE     SAVE FENCE REGISTER 
+      OTA 5B       SET MEM PROTECT REG TO 0 
+      JSB $IRT      -RESET INTERRUPT CONDITIONS 
+      CCA          SET A REGISTER TO ALL ONES 
+      CCB          SET B REGISTER TO ALL ONES 
+      STF 0         TURN ON INTERRUPTS
+      STC 5         TURN ON MEMORY PROTECT
+      JMP *        IDLE LOOP
+XQDEF DEF XEQT     XEQT TABLE ADDRESS 
+DSUSP DEF XSUSP    ADDRESS OF XEQT SUSPEND VALUE
+VSUSP DEF *+1      ADDRESS OF IDLE DUMMY WORDS
+      BSS 4        DUMMY XEQT IDLE WORDS
+* 
+*        THE SWITCHING SECTION USES THE SCHEDULE LIST TO DETERMINE *
+*        WHICH PROGRAM TO EXECUTE-STARTING FROM TOP OF LIST.       *
+*              IF PROGRAM FROM LIST OF LOWER PRIORITY, THEN        *
+*                   EXECUTION OF CURRENT PROGRAM CONINUES.         *
+*              IF PROGRAM FROM LIST OF HIGHER PRIORITY AND         *
+*                   TYPE EITHER REAL TIME RESIDENT OR BACKGROUND   *
+*                        RESIDENT, EXECUTION SWITCHING TAKES PLACE.*
+*                   TYPE IS BACKGROUND DISC RESIDENT,              *
+*                        GO TO BACKGROUND DISC PROCESSING.         *
+*                   TYPE IS REAL TIME DISC RESIDENT, GO TO REAL    *
+*                        TIME DISC RESIDENT PROCESSING             *
+* 
+X0010 STA ZWORK    SCHED LIST PROG ID SEG ADDRESS 
+      STA ZLINK    LINKAGE ADDRESS
+      ADA D6
+      STA ZPRIO     PRIORITY ADDRESS
+      ADA D8
+      STA ZTYPE    TYPE ADDRESS 
+*     CHECK FOR WAIT BIT SET
+      LDB ZWORK    ID SEGMENT ADDRESS 
+      ADB D15      LOCATE STATUS WORD 
+      LDA B,I 
+      AND MWAIT     ISOLATE WAIT BIT
+      SZA,RSS      CHECK IF WAIT BIT SET
+      JMP X0015    NO 
+      LDB ZWORK    YES, SO CHECK IF CALLED
+      INB               PROGRAM DORMANT 
+      LDA B,I 
+      ADA D15       CALLED PROGRAM STATUS 
+      LDA A,I 
+      SZA          SKIP IF DORMANT
+      JMP X0035    NO, SO TRY NEXT PROGRAM
+X0015 LDA XEQT     SEE IF PROGRAM CURRENTLY EXECUTING 
+      SZA,RSS       YES 
+      JMP X0030     NO, SO GO XECUTE IT 
+      ADA D15      CHECK STATUS OF XEQT ID SEGMENT
+      LDA A,I 
+      CPA M1
+      RSS          SCHEDULED-SO GO TO CHECK PRIORITY
+      JMP X0030    NOT SCHEDULED -SO GO SWITCH
+      LDA XPRIO,I   LOAD CURRENT XECUTING PROGRAM PR
+      CMA,INA       MAKE NEGATIVE 
+      ADA ZPRIO,I   SCHEDULED PROGRAM PRIORITY
+      SZA,RSS       IF SAME PRIORITY, THEN CONTINUE 
+      JMP X0020     WITH CURRENT PROGRAM
+      SSA           IF SIGN A=O THEN PROG OF LOWER PRIOR
+      JMP X0030     PROGRAM OF HIGHER PRIORITY
+X0020 LDA ZTYPE,I  CHECK IF TYPE IS RT DISK RESIDENT
+      AND D15 
+      CPA D2
+      JMP X0200    YES, SO GO TO RT DISK RESIDENT PROCESSOR 
+      LDA XSUSP,I  NO, SO CONTINUE FROM PT OF SUSPENSION
+X0025 STA TEMP     RETURN ADDRESS STORED
+*     CHECK IF SCHEDULED WAIT 
+      LDB XEQT     CHECK IF CURRENT PROGRAM 
+      ADB D15      WAIT BIT SET 
+      LDA B,I 
+      AND MWAIT 
+      SZA,RSS      YES, SO CHECK IF PROG DORMANT
+      JMP X0026    NO, SO GO EXECUTE IT 
+      LDA XTEMP,I  CHECK IF WAIT PROGRAM DORMANT
+      ADA D15 
+      LDA A,I 
+      SZA 
+      JMP X0035    NOT DORMANT-SO TRY NEXT PROG 
+      LDA B,I 
+      AND CWAIT 
+      STA B,I      CLEAR WAIT BIT 
+* 
+*      CHECK IF PT OF SUSPENSION IN LIBRARY AREA
+X0026 LDA XSUSP,I  CHECK PT OF SUSPENSION VALUE 
+      SZA,RSS 
+      JMP X0027    PROGRAM NOT SUSPENDED
+      CMA,INA      CHECK IF IN LIBRARY AREA 
+      ADA FREG2 
+      SSA 
+      JMP *+3 
+      LDA FREG1    SET FENCE REGISTER TO LIBRARY
+      JMP X0028+1 
+* 
+*     SET MEMORY PROTECT ACCORDING TO PROG TYPE 
+X0027 LDA XEQT     COMPUTE PROGRAM TYPE ADDRESS 
+      ADA D14 
+      LDA A,I 
+      AND D15 
+      ADA DM3 
+      SSA,RSS      - SO RT RES OR RT DISC RES PROG
+      JMP X0028    + SO BACK RES OR BACK DISC RES PROG
+      LDA FREG2     SET FENCE TO REAL TIME RESIDENT 
+      RSS 
+X0028 LDA FREG3     SET FENCE TO BACKGROUND RESIDENT
+      STA FENCE 
+      OTA 5B
+* 
+*     RESTORE REGISTERS, MEMORY PROTECT, AND TURN ON INTERRUPT SYSTEM 
+      JSB $IRT      -RESET INTERRUPT CONDITIONS 
+      LDA XEO,I      RESTORE
+      CLO           E,
+      SLA,ELA       OVERFLOW
+      STF 1 
+      LDA XA,I      A AND 
+      LDB XB,I      B REGISTERS 
+      STF 0         TURN ON INTERRUPTS
+      STC 5B        TURN ON MEMORY PROTECT
+      JMP TEMP,I   GO TO EXECUTE PROGRAM
+* 
+*     CHECK PROGRAM TYPE
+X0030 LDA ZTYPE,I  PROGRAM TYPE 
+      AND D15 
+      CPA M1        CHECK IF REAL TIME RESIDENT 
+      JMP X0040     YES 
+      CPA D2        CHECK IF REAL TIME DISK RESIDENT
+      JMP X0200     YES 
+      CPA D4        CHECK IF BACKGROUND RESIDENT
+      JMP X0040     YES 
+      CPA M3        CHECK IF BACKGROUND DISK RESIDENT PROGRAM 
+      JMP X0100     YES 
+* 
+*     CHECK NEXT PROGRAM IN LIST
+X0035 LDA ZLINK,I   GET NEXT ID SEGMENT ADDRESS 
+      SZA 
+      JMP X0010     GO TO FETCH NEXT SCHED ID SEGMENT 
+      JMP X0005+3 
+* 
+DM12  DEC -12 
+* 
+*     LOAD PROGRAM ID SEGMENT ADDRESSES INTO XEQT AREA
+X0040 LDA DM12      LOAD PROGRAM TO BE EXECUTED 
+      STA TMP       INTO XEQT AREA
+      LDA XQDEF 
+      LDB ZWORK 
+      STB 0,I 
+      INA 
+      STB 0,I 
+      INA 
+      INB 
+      ISZ TMP 
+      JMP *-4 
+      LDA XSUSP,I  CHECK IF PROGRAM SUSPENDED 
+      SZA          NO, SO START AT PRIMARY ENTRY
+      JMP X0025    GO TO SET FENCE,REGISTERS,AND XEQ
+      LDA XPENT,I   SET TO PRIMARY START ADDRESS
+      JMP X0025    GO TO SET FENCE,REGISTERS AND XEQ
+      HED XEQ PROCESSOR--BACKGROUND DISK PROGRAM LOADING
+* 
+*     BACKGROUND DISK RESIDENT PROGRAM SCHEDULED
+*                                                                  *
+*        THE BACKGROUND DISC RESIDENT LOADER FUNCTIONS AS FOLLOWS: *
+*              IF ANOTHER PROGRAM IS RESIDENT THEN NO OTHER        *
+*                   PROGRAM CAN BE LOADED, SO RETURN TO SWITCHING  *
+*                   SECTION OF $XEQ.                               *
+*              IF NO PROGRAM IS RESIDENT OR BEING READ IN, THEN THE*
+*                   CALLING SEQUENCE PARAMETERS ARE GENERATED FROM *
+*                   THE ID SEGMENT, THE READ IN WAIT FLAG IS SET,  *
+*                   AND THE CALL TO READ IN PROGRAM IS MADE,       *
+*                   AND THE PROGRAM IS I/O SUSPENDED.              *
+*              IF THE DESIRED PROGRAM IS RESIDENT, RETURN TO $XEQ  *
+*                   FOR TRANSFERING CONTROL TO PROGRAM.            *
+* 
+X0100 LDA BKRES     CHECK IF BACKGROUND PROGRAM RES 
+      SZA          NO, SO GO TO READ IT IN
+      JMP X0110     YES, SO CHECK IF READ COMPLETE
+      LDA ZWORK     SET BACKGOUND PROGRAM RESIDENT
+      STA BKRES    TO ID SEGMENT ADDRESS
+      JSB BREED    GO TO READ IN PROGRAM
+      JMP X0035    GO TO NEXT PROGRAM 
+X0110 LDA BKRES+1   CHECK READ IN WAIT FLAG 
+      SZA,RSS      SKIP IF READ IN COMPLETE 
+      JMP X0035    RETURN TO XEQ SWITCHER 
+      LDA ZWORK     SEE IF DESIRED PROGRAM
+      CPA BKRES 
+      JMP X0040     DESIRED PROG, SO GO TO SWITCH 
+      JMP X0035     NOT DESIRED PROG SO RETURN
+* 
+*     BACKGROUND READ IN COMPLETION PROCESSOR 
+*                                                                  *
+*        THE BACKGROUND DISC RESIDENT READ COMPLETION PROCESSOR,   *
+*              IF NO READ ERROR, IT CLEARS THE READ IN WAIT FLAG,  *
+*                   ENTERS PROGRAM INTO SCHEDULE LIST VIA LIST     *
+*                   SUCH THAT EXECUTION CAN BEGIN AT THE NEXT      *
+*                   OPPORTUNITY THE PROGRAM BECOME THE TOP OF LIST.*
+*             IF READ ERRORS OCCURRED, CALL $ABRT PROCESSOR        .
+* 
+X0120 STB XXTMP     SAVE READ IN STATUS OF DISC 
+      LDA BKRES    SCHED BACKGROUND DISC
+      STA *+3      RESIDENT PROGRAM 
+      JSB $LIST    CALL $LIST 
+      OCT 101 
+      DEF * 
+      SZA 
+      JMP X0130    ERROR FROM $LIST 
+      LDB XXTMP     CHECK READ IN STATUS FLAG 
+      SSB 
+      JMP X0130          ERROR FROM DISC READ 
+      ISZ BKRES+1  CLEAR READ IN WAIT FLAG
+      JMP $XEQ
+X0130 LDA BKRES    A CONTAINS BACK DISC ID SEG ADDR 
+      JSB $ABRT    GO TO ABORT ROUTINE
+      JMP $XEQ     RETURN TO $XEQ 
+      SPC 1 
+M1777 OCT 1777
+      HED XEQ PROCESSOR--RT DISK RESIDENT LOAD TESTS
+* 
+*         REAL TIME DISC RESIDENT 
+* 
+*       REAL TIME DISC RESIDENT PROGRAM EXECUTION                  *
+*              IF A PROGRAM IS RESIDENT AND                        *
+*                   IT IS THE DESIRED PROGRAM, GO TO SWITCHING     *
+*                        SECTION TO EXECUTE THE PROGRAM.           *
+*                   IT IS NOT THE DESIRED PROGRAM,                 *
+*                        IF NO SWAP OPTION, THEN CANNOT EXECUTE.   *
+*                             RETURN TO CHECK NEXT PROGRAM         *
+*                        IF SWAP OPTION SET AND SCHEDULED PROGRAM  *
+*                             OF HIGHER PRIORITY THAN CURRENTLY    *
+*                             RESIDENT, THEN CHECK IF IN AN I/O    *
+*                             SUSPENSION.                          *
+*                                  IF I/O SUSPENSION, CANNOT SWAP  *
+*                                       (UNLESS I/O BUFFER IS IN   *
+*                                       RT COMMON AREA)            *
+*                                  IF NOT, THEN SWAP OUT RESIDENT  *
+*                                       PROGRAM AND READ IN DESIRED*
+*                                       PROGRAM FROM DISC.         *
+*              IF PROGRAM IS NOT RESIDENT OR BEING LOADED, GO TO   *
+*                   READ IN PROGRAM FROM DISC AND SET READ IN WAIT *
+*                   FLAG, AND I/O SUSPEND THE PROGRAM.             *
+*                                                                  *
+X0200 LDB RDISK     CHECK IF PROGRAM RESIDENT 
+      SZB,RSS      YES, SO CHECK IF READ IN COMPLETE
+      JMP X0255     NO, SO GO READ IT IN
+      LDA RDISK+1   CHECK IF DISK READ COMPLETE 
+      SZA,RSS 
+      JMP X0035    NO, SO RETURN TO $XEQ SWITCHER 
+      CPB ZWORK 
+      JMP X0040     DESIRED PROGRAM SO GO SWITCH
+      LDA SWAP      CHECK USER SWAP OPTION
+      CCE,SZA,RSS 
+      JMP X0035     SWAP OPTION OFF, SO RETURN
+      ADB D6
+      STB BPRIO    RESIDENT PROG PRIORITY ADDRESS 
+      ADB D9
+      LDA B,I 
+      AND D15 
+      CPA D2       CHECK IF I/O SUSPEND 
+      RSS           YES 
+      JMP X0210     NO, GO CHECK IF SCHEDULED 
+      ADA RDISK     GET I/O REQUEST 
+      LDA A,I        BUFFER ADDRESS 
+      CMA           IS IT ABOVE 
+      ADA RTDRA      RT COMMON AREA?
+      CLE,SSA 
+      JMP X0035     YES - DO NOT SWAP 
+X0210 CPA M1        IF SCHEDULED, GO CHECK
+      SEZ,RSS        RELATIVE PRIORITIES
+      JMP X201      SUSPENDED, SWAP.
+      LDA B,I       CHECK IF CURRENT PROGRAM
+      ALF,SLA        WAIT BIT SET-
+      JMP X201     YES-SO GO SWAP 
+      LDA BPRIO,I 
+      CMA,INA       COMPARE RESIDENT PRIOR AND
+      ADA ZPRIO,I   WORKING PROGRAM PRIORITY
+      SSA,RSS      RES PROG OF LOWER PRIORITY 
+      JMP X0035     RESIDENT PROGRAM OF HIGHER PRIOR
+      HED XEQ PROCESSOR--RT DISK RESIDENT PROGRAM SWAP OUT
+* 
+*     SETUP TO SWAP OUT RT DISK RESIDENT
+*                                                                  *
+*        SWAP OUT RT DISC RESIDENT PROGRAM FUNCTIONS AS FOLLOWS:   *
+*                   COMPUTE NUMBER OF TRACKS NEEDED FOR SWAPPING   *
+*                   OUT PROGRAM BY COMPUTING NUMBER OF SECTORS     *
+*                   NEEDED FOR MAIN AND BASE PORTION OF PROGRAM.   *
+*                   REQUEST THE NECESSARY NUMBER OF CONTIGUOUS     *
+*                   TRACKS FROM EXECUTIVE. IF NONE IS AVAILABLE,   *
+*                   THEN CANNOT SWAP AND RETURN TO CHECK NEXT PROG.*
+*                   IF TRACKS AVAILABLE, THEN SAVE STARTING TRACK  *
+*                   ADDRESS, DISC LOGICAL UNIT NUMBER, AND NUMBER  *
+*                   OF TRACKS INTO ID SEGMENT SWAP WORD. GENERATE  *
+*                   PARAMETERS FOR SWAP OUTOF PROGRAM AND CALL     *
+*                   DISC I/O ROUTINE.                              *
+* 
+X201  LDB RDISK    ID SEGMENT ADDRESS 
+      STB ATEMP 
+      ADB D23 
+      LDA RTDRA      LOW MEM BOUND-MAIN 
+      CMA,INA 
+      ADA B,I       UPPER MEM BOUND-MAIN
+      STA TEMP
+      ARS,ARS       CONVERT TO SECTORS
+      ARS,ARS 
+      ARS,ARS 
+      AND M1777 
+      STA TEMP+1
+      LDA TEMP      CHECK IF PARTIAL SECTOR 
+      AND M77 
+      SZA 
+      ISZ TEMP+1    YES, SO INCREMENT SECTOR COUNTER
+      INB 
+      LDA B,I       LOW MEM BOUND -BASE 
+      CMA,INA 
+      INB 
+      ADA B,I       UPPER MEM BOUND-BASE
+      STA TEMP
+      ARS,ARS       CONVERT TO SECTORS
+      ARS,ARS 
+      ARS,ARS 
+      AND M1777 
+      STA TEMP+2
+      LDA TEMP      CHECK IF PARTIAL SECTOR 
+      AND M77 
+      SZA 
+      ISZ TEMP+2    YES, SO INCREMENT SECTOR COUNTER
+      CLA,INA 
+      STA TMP+3    SET TRACK COUNTER TO 1 
+      LDA TEMP+1
+      ADA TEMP+2     FORM TOTAL NUMBER OF SECTORS 
+      ADA N#SEC     ADD MIN # SECTS/TRACK (NEG. VAL)
+      SSA 
+      JMP *+3 
+      ISZ TMP+3    INCREMENT NO. OF TRACKS COUNT
+      JMP *-4 
+      LDA TMP+3    NUMBER OF TRACKS 
+      CLB          B = 0 FOR SYSTEM CALL
+      JSB $DREQ    REQ NECESS NO. OF TRACKS 
+      SZB,RSS      CHECK IF SWAP TRACKS ASSIGNED
+      JMP X0035          NONE AVAILABLE 
+      STB X0250    STORE DISC LOGICAL UNIT IN CALL
+      ADB DM2 
+      RBR           SAVE LOGICAL UNIT NUMBER
+      STB TEMP
+      LDB RDISK    COMPUTE ID SEGMENT SMAN ADDRESS
+      ADB D27 
+      AND M377
+      ALF,RAL 
+      RAL,RAL       TRACK NUMBER
+      XOR TMP+3    NUMBER OF TRACKS 
+      XOR TEMP     LOGICAL UNIT NUMBER
+      STA B,I      LOGICAL UNIT/TRACK NUMBER/NUMBER OF TRACKS 
+      LDA RTDRA 
+      STA TMP+2     SET SWAP SWITCH 
+      LDB RDISK 
+      JSB PREST     GO TO PRESET VALUES 
+      LDA SECT2     # SECTOR/TRACK FOR LU #2
+      LDB X0250     GET LOGICAL UNIT #
+      CPB D2
+      RSS 
+      LDA SECT3     # SECTOR/TRACK FOR LU #3
+      STA C#SEC     STORE CURRENT # SECT/TRACK (+)
+      CMA,INA 
+      STA CN#SC     STORE CURRENT # SECT/TRACK (-)
+      LDA RREDS 
+      JSB SETUP     SETUP FOR MAIN PORTION
+      LDB TMP       BASE WORDS
+      STB TEMP
+      LDB TMP+1     BASE STARTING ADDRESS 
+      STB TEMP+3
+      JSB SETUP     SETUP FOR BASE PORTION
+      STA RSWP
+      JSB $XSIO    CALL FOR DISK I/O
+X0250 NOP                LOGICAL UNIT 
+      DEF X0251     COMPLETION ADDRESS
+      OCT 0 
+      OCT 2              WRITE REQUEST CODE 
+RSWP  DEF RTSWP          ARRAY ADDRESS
+      NOP 
+      CLA 
+      STA XEQT
+      STA RDISK+1 
+      JMP $XEQ
+      SPC 1 
+ATEMP NOP 
+      SPC 1 
+X0251 CLA 
+      LDB *-2 
+      CPB RDISK 
+      STA RDISK 
+      JMP $XEQ
+      SPC 1 
+RREDS DEF RTSWP 
+      HED XEQ PROCESSOR--RT DISK RESIDENT READ IN 
+* 
+*     SETUP TO READ IN RT DISK PROGRAM
+* 
+*        READ IN OF REAL TIME DISC RESIDENT PROGRAM                *
+*              IF ID SEGMENT SWAP ADDRESS IS ZERO, THE SYSTEM      *
+*                   GENERATED DISC ADDRESS IS USED TO COMPUTE THE  *
+*                   PARAMETERS FOR DISC I/O CALL.                  *
+*              IF THERE IS SWAP ADDRESS, THEN THIS DISC ADDRESS    *
+*                   IS USED.                                       *
+*                                                                  *
+X0255 LDB ZWORK     CHECK IF PREVIOUSLY SWAPPED 
+      STB RDISK    STORE ID SEGMENT ADDRESS 
+      CLA 
+      STA RDISK+1  SET READ IN WAIT FLAG
+      ADB D27 
+      LDB B,I       LOAD SWAP DISK ADDR-IF ANY
+      SZB                NOT SWAPPED
+      LDA RTDRA         SWAPPED 
+      STA TMP+2     STORE VALUE IN SWAP 
+      LDA SECT2     (A)= # SECT/TRACK FOR LU #2.
+      SSB            IF LU = 3, THEN
+      LDA SECT3     (A)= # SECT/TRACK FOR LU #3.
+      STA C#SEC     STORE CURRENT # SECT/TRACK (+)
+      CMA,INA        AND AS 
+      STA CN#SC       A NEGATIVE VALUE. 
+      LDB ZWORK 
+      LDA TMP+2 
+      JSB PREST 
+      LDA RREDS 
+      JSB SETUP     SETUP FOR MAIN PORTION
+      LDB TMP       BASE WORDS
+      STB TEMP
+      LDB TMP+1     BASE STARTING ADDRESS 
+      STB TEMP+3
+      JSB SETUP     SETUP FOR BASE PORTION
+      STA RRED
+      LDB RDISK    SETUP DISK LOGICAL UNIT NUMBER 
+      ADB D26 
+      LDA TMP+2    CHECK IF SWAPPED 
+      SZA          NO, SO USE DMAN LOGICAL UNIT 
+      INB          YES, SO USE SMAN LOGICAL UNIT
+      LDA B,I 
+      RAL 
+      AND M1
+      ADA D2
+      STA *+2 
+      JSB $XSIO    CALL FOR DISK I/O
+      NOP                LOGICAL UNIT 
+      DEF X0270          COMPLETION ADDRESS 
+      OCT 0 
+      OCT 1              READ REQUEST 
+RRED  DEF RTSWP 
+      NOP 
+      LDA RDISK    I/O SUSPEND REAL TIME
+      STA *+3      DISC RESIDENT PROGRAM
+      JSB $LIST    UNTIL READ IN FROM 
+      OCT 102      DISC COMPLETE
+      DEF * 
+      JMP X0035     RETURN
+* 
+*     READ IN COMPLETION PROCESSOR
+* 
+*        THE REAL TIME DISC RESIDENT READ COMPLETION PROCESSOR,    *
+* 
+*              IF NO ERRORS, IT CLEARS READ IN WAIT FLAG, AND      *
+*                   SCHEDULES PROGRAM SUCH THAT PROGRAM EXECUTION  *
+*                   CAN BEGIN AT THE NEXT OPPORTUNITY.             *
+*              IF READ ERRORS, CALL $ABRT PROCESSOR                *
+*                                                                  *
+X0270 STB XXTMP    SAVE READ IN STATUS OF DISC
+      LDB RDISK    REAL TIME DISC RESIDENT
+      STB *+4      PROGRAM READ IN COMPLETE - 
+      JSB DREL      (RELEASE SWAP TRACK)
+      JSB $LIST    SO SCHEDULE PROGRAM
+      OCT 101      FOR EXECUTION
+      DEF * 
+      SZA 
+      JMP X0280    ERROR FROM LIST CALL 
+X0275 LDB XXTMP     CHECK READ IN STATUS FLAG 
+      SSB 
+      JMP X0280          ERROR FROM DISC READ 
+      ISZ RDISK+1    CLEAR READ IN WAIT FLAG
+      JMP $XEQ     RETURN TO $XEQ 
+X0280 LDA RDISK    A CONTAINS RT DISC ID SEG ADDR 
+      JSB $ABRT    GO TO ABORT ROUTINE
+      JMP $XEQ     RETURN TO $XEQ 
+      SKP 
+DREL  NOP           ROUTINE TO RELEASE DISC SWAP TRK
+      ADB D27       COMPUTE ID SEGMENT SWAP ADDRESS 
+      LDA B,I 
+      SZA,RSS            SWAPPED, SO GO TO RELEASE
+      JMP DREL,I         NOT, SWAPPED, SO RETURN
+      STA TEMP      SAVE LU/TRK/#TRK
+      AND M177
+      STA TEMP+2         ISOLATE # TRACKS TO RELEASE
+      CLA           CLEAR ID SEGMENT
+      STA B,I        SWAP VALUE 
+      LDA TEMP
+      ALF,ALF 
+      RAL 
+      AND M377
+      LDB TEMP
+      SSB 
+      ADA TATSD          L. U. 3 SO ADD # SYS TRACKS
+      LDB TEMP+2        (B) TO # OF TRACKS TO REL 
+      JSB $DREL     CALL DISC TRACK RELEASE PROCESOR
+      JMP DREL,I    RETURN
+      HED XEQ PROCESSOR--PRELIMINARY SETUP FOR DISK CALL
+* 
+*     PRELIMINARY SETUP FOR DISK I/O CALLS
+* 
+PREST NOP          ENTRY/EXIT 
+      ADB D22       FOR MEM ADDRESS 
+      SZA,RSS       SKIP IF SWAPPED 
+      LDA B,I 
+      STA TEMP+3
+      CMA,INA 
+      INB 
+      ADA B,I       UPPER BOUND (MAIN)
+      STA TEMP      NUMBER OF WORDS (MAIN)
+      INB 
+      LDA B,I       LOWER BOUND (BASE)
+      STA TMP+1 
+      CMA,INA 
+      INB 
+      ADA B,I       UPPER BOUND (BASE)
+      STA TMP       NUMBER OF WORDS (BASE)
+      INB          INCREMENT TO DMAN ADDRESS
+      CLA 
+      STA TEMP+2   SET SECTOR ADDRESS TO ZERO 
+      LDA TMP+2 
+      SZA,RSS 
+      JMP *+3 
+      INB          INCREMENT TO SMAN ADDRESS
+      JMP PR010 
+      LDA B,I      DMAN VALUE 
+      AND M177
+      STA TEMP+2    SECTOR NUMBER 
+PR010 LDA B,I      DMAN OR SMAN VALUE 
+      ALF,ALF 
+      RAL 
+      AND M377
+      STA TEMP+1    TRACK NUMBER
+      JMP PREST,I  EXIT 
+      HED XEQ PROCESSOR--DISK CALLING SEQUENCE GENERATOR
+* 
+*     DISK READ/WRITE CALLING SEQUENCE GENERATOR ROUTINE
+*         ON ENTRY
+*              TEMP   = NUMBER OF WORDS 
+*              TEMP+1 = TRACK ADDRESS 
+*              TEMP+2 = SECTOR ADDRESS
+*              TEMP+3 = STARTING MEMORY ADDRESS 
+*              A      = PARAMETER TABLE ADDRESS 
+* 
+*        THE DISC PARAMETER GENERATOR FUNCTION IS TO GENERATE      *
+*              PARAMETERS FOR DISC CALL GUARANTEEING THAT ALL      *
+*              TRACK CROSSING CALLS ARE BROKEN DOWN INTO SUB-CALLS *
+*              SUCH THAT THE DISC DRIVER CAN HANDLE THE REQUEST.   *
+*              THE CALLS ARE BROKEN UP IN TRIPLETS OF              *
+*                   STARTING CORE MEMORY ADDRESS                   *
+*                   NUMBER OF WORDS TO TRANSFER                    *
+*                   STARTING TRACK/SECTOR ADDRESS.                 *
+*              THE END OF CALL IS INDICATED BY A ZERO FOLLOWING    *
+*              THE LAST TRIPLET.                                   *
+*                                                                  *
+SETUP NOP           ENTRY/EXIT
+      LDB TEMP      COMPUTE NUMBER OF SECTORS 
+      SZB,RSS       ZERO, SO RETURN 
+      JMP SETUP,I 
+      ADA DM3       SET UP TRIPLET
+      STA TEMP+4     ADDRESS
+      ADB M77       ROUND UP NUMBER 
+      ASR 6          OF SECTORS 
+      STB TEMP+5    SAVE NUMBER OF SECTORS
+      LDA TEMP+2    INITIAL SECTOR ADDRESS
+      ADA B 
+      ADA CN#SC     SUB CURRENT # SECTORS/TRACK 
+      LDB TEMP+3
+      STB TEMP+4,I  STORE STARTING MEMORY ADDRESS 
+      ISZ TEMP+4    INCREMENT ARRAY ADDRESS 
+      CMA,INA 
+      SSA,RSS       CHECK IF TRACK OVERFLOW 
+      JMP SETI0     NO, SO LAST TRIPLET 
+      ADA TEMP+5
+      ASL 6 
+UPSET STA TEMP+6    NUMBER OF WORDS 
+      LDB TEMP+1    FORM
+      BLF,RBL        TRACK
+      RBL,RBL         ADDRESS 
+      ADB TEMP+2    AND SECTOR ADDRESS
+      DST TEMP+4,I  STORE LAST TWO WORDS OF TRIPLET 
+      ADA TEMP+3    UPDATE STARTING 
+      STA TEMP+3     MEMORY ADDRESS 
+      LDB TEMP+6    UPDATE NUMBER 
+      CMB,INB        OF 
+      ADB TEMP         WORDS
+      STB TEMP          TO GO 
+      CCA           SUB 1 FOR CORRECT NEXT TRIPLET
+      ADA TEMP+4    ADDRESS CALC. 
+      SZB,RSS       ANY MORE WORDS TO GO
+      JMP PUTS      NO, SO SET UP FOR NEXT TIME 
+      ISZ TEMP+1    INCREMENT TRACK ADDRESS 
+      CLB 
+      STB TEMP+2    SET SECTOR ADDRESS TO 0 
+      JMP SETUP+1   GO TO NEXT LOOP 
+      SPC 1 
+SETI0 LDA TEMP      SET FOR LAST
+      JMP UPSET      TRIPLET
+      SPC 1 
+PUTS  LDB TEMP+2    INCREMENT SECTOR ADDRESS
+      ADB TEMP+5     TO START SECTOR FOR
+      STB TEMP+2      NEXT CALL 
+      CPB C#SEC     CHECK IF NEW TRACK
+      CLB,RSS 
+      JMP SETUP,I   NO, SO RETURN 
+      ISZ TEMP+1    YES, SO INCREMENT TRACK ADDRESS 
+      STB TEMP+2    RESET SECTOR
+      JMP SETUP,I   RETURN
+      HED XEQ PROCESSOR--READ SETUP 
+* 
+*     SETUP TO READ IN BACKGROUND DISK RESIDENT PROGRAM 
+*        OR BACKGROUND DISK RESIDENT SEGMENTS 
+* 
+BREED NOP          ENTRY/EXIT 
+      CLA 
+      STA BKRES+1   SET READ IN WAIT FLAG 
+      STA TMP+2 
+      LDB ZWORK     ID SEGMENT ADDRESS
+      JSB PREST 
+      LDB ZWORK     GET ID SEG ADDR 
+      ADB D26 
+      LDB B,I       GET DISC ADDRESS
+      LDA SECT2     # SECT/TRACK FOR LU #2
+      SSB           SKIP- LU #2 
+      LDA SECT3     # SECT/TRACK FOR LU #3
+      STA C#SEC     STORE CURRENT # SECT/TRACK (+)
+      CMA,INA        AND AS 
+      STA CN#SC       A NEGATIVE VALUE. 
+      LDA BREDS 
+      JSB SETUP    SET MAIN DISC PARAMETERS 
+      LDB TMP       BASE WORDS
+      STB TEMP
+      LDB TMP+1     BASE STARTING ADDRESS 
+      STB TEMP+3
+      JSB SETUP    SET BASE DISC PARAMETERS 
+      STA BRED
+      LDB BKRES    SETUP DISK LOGICAL UNIT NUMBER 
+      ADB D26 
+      LDA B,I 
+      RAL 
+      AND M1
+      ADA D2
+      STA *+2 
+      JSB $XSIO 
+      NOP 
+      DEF X0120         COMPLETION ADDRESS
+      OCT 0 
+      OCT 1             READ REQUEST
+BRED  DEF BREAD         ARRAY ADDRESS 
+      NOP 
+      LDA BKRES    I/O SUSPEND BACKGROUND 
+      STA *+3      DISC RESIDENT PROGRAM OR 
+      JSB $LIST    SEGMENT UNTIL READ IN
+      OCT 102      FROM DISC COMPLETE 
+      DEF * 
+      JMP BREED,I  EXIT 
+      HED XEQ PROCESSOR--BUFFERS, CONSTANTS, POINTERS, ETC
+* 
+BKRES NOP           BACKGROUND PROG RESIDENT SWITCH 
+      NOP           READ COMPL FLAG-BACKGROUND DISC 
+RDISK NOP           RT DISK PROG RESIDENT SWITCH
+      NOP           READ IN COMPL FLAG-RT DISC
+* 
+BREDS DEF BREAD 
+ZWORK NOP          SCHED LIST ID SEGMENT ADDRESS
+ZLINK NOP          SCHED LIST LINKAGE ADDRESS 
+ZPRIO NOP          SCHED LIST PRIORITY LIST 
+ZTYPE NOP          SCHED LIST PRIORITY ADDRESS
+ZZZZZ NOP 
+XXTMP NOP 
+      SPC 1 
+BPRIO NOP          TEMP PRIORITY ADDRESS
+WORK  NOP           WORK ID SEGMENT ADDRESS 
+WLINK NOP          WORK LINKAGE ADDRESS 
+WPRIO NOP          WORK PRIORITY ADDRESS
+TEMP  BSS 7        TEMPORARY WORKING STORAGE AREA 
+TMP   BSS 4         TEMPORARY WORKING STORAGE 
+N#SEC NOP         NEGATIVE # SECTORS/TRACK (MINIMUM)
+C#SEC NOP         CURRENT # SECTORS/TRACK (+) 
+CN#SC NOP         CURRENT # SECTORS/TRACK (-) 
+* 
+DM2   DEC -2
+DM3   DEC -3
+DM4   DEC -4
+DM5   DEC -5
+DM16  DEC -16 
+* 
+D2    DEC 2 
+D4    DEC 4 
+D5    DEC 5 
+D6    DEC 6 
+D7    DEC 7 
+D8    DEC 8 
+D9    DEC 9 
+D14   DEC 14
+D15   DEC 15
+D17   DEC 17
+D22   DEC 22
+D23   DEC 23
+D24   DEC 24
+D26   DEC 26
+D27   DEC 27
+D60   DEC 60
+* 
+M1    OCT 1 
+M3    DEC 3 
+M77   OCT 77
+M177  OCT 177 
+M377  OCT 377 
+      HED REAL TIME SCHEDULER---LIST PROCESSOR SECTION--- 
+* 
+*        THE $LIST PROCESSOR SECTION OF THE HP-2100 REAL TIME      *
+*     EXECUTIVE PROCESSES THE FOLLOWING LIST REQUESTS              *
+*     1. DORMANT                                                   *
+*     2. SCHEDULE                                                  *
+*     3. OPERATOR SUSPEND                                          *
+*     4. NON-OPERATOR SUSPEND                                      *
+*        A. I/O                                                    *
+*        B. MEMORY AVAILABLE                                       *
+*        C. DISC AVAILABLE                                         *
+*     5. SEGMENT LOADING                                           *
+* 
+* 
+* 
+*        CALLING SEQUENCE                                          *
+* 
+*               JSB $LIST                                          *
+*               OCT (ADDRESS CODE)(FUNCTION CODE) 
+*               DEF (ADDRESS) 
+* 
+*               IF A = 0, THEN NO MESSAGE 
+*                  A NOT 0, THEN ADDR OF MESSAGE
+*                  IF ERROR, (B) CONTAINS ASCII ERR CODE
+*               WHERE 
+*                   FUNCTION CODE 
+*                       0 = DORMANT REQUEST 
+*                       1 = SCHEDULE REQUEST
+*                       2 = I/O SUSPEND REQUEST 
+*                       3 = *****NOT CURRENTLY USED*****
+*                       4 = MEMORY AVAILABEL REQUEST
+*                       5 = DISK ALLOCATION REQUEST 
+*                       6 = OPERATOR SUSPEND REQUEST
+*                       7 = SEGMENT READ REQUEST
+*                      17 = RELINK PROGRAM REQUEST
+*                      10 THRU 16 ARE NOT ASSIGNED
+* 
+*                   ADDRESS CODE
+*                       1 = ID SEGMENT ADDRESS
+*                       2 = ASCII PROGRAM NAME ADDRESS
+*                       3 = ID SEGMENT ADDRESS IN WORK
+* 
+* 
+*                   ADDRESS 
+*                       KEYWORD, ID SEGMENT, WORK TEMP STORAGE OR 
+*                       PROGRAM NAME ADDRESS AS SPECIFIED BY CODE 
+* 
+$LIST NOP          ENTRY/EXIT 
+      LDA $LIST,I  WORD 1 
+      AND D15 
+      STA L0090+1    STORE AWAY REQUEST CODE
+      LDA $LIST,I  FORM ADDR CODE 
+      ALF,ALF 
+      RAL,RAL 
+      AND D15 
+      ISZ $LIST    INCR TO WORD 2 
+      CPA M1        SEE IF ID SEGMENT ADDRESS 
+      JMP L0020     YES, SO SETUP TO READ IT IN 
+      CPA M3        CHECK IF DATA IN WORK AREA
+      JMP L0060     YES 
+      JMP L0030    NO, SO ASSUME ASCII PROG NAME ADDR 
+      CLA          CLEAR A REGISTER FOR NORMAL RETURN 
+L0015 ISZ $LIST    INCR TO EXIT ADDR
+      JMP $LIST,I  EXIT 
+L0020 LDA $LIST,I  ID SEGMENT ADDR
+      STA WORK
+      JMP L0060     GO TO PROCESS THE ID SEGMENT
+L0030 LDB $LIST,I  ASCII NAME ADDR
+      JSB TNAME    SEARCH KEYWORDS FOR PROGRAM NAME 
+      STA WORK
+      SZA          NOT FOUND, SO ERROR RETURN 
+      JMP L0060    PROG FOUND, SO GO  PROCESS 
+      LDA NOPRG    NO SUCH PROG ERROR MESSAGE 
+      LDB ER5      NO SUCH PROG ERROR CODE
+      JMP L0015    GO TO RETURN 
+      HED LIST PROCESSOR--REQUEST CODE DETERMINATION
+* 
+*     PROCESS ID SEGMENT ACCORDING TO REQUEST CODE
+L0060 LDA WORK     ID SEGMENT ADDRESS 
+      STA WLINK    LINKAGE ADDRESS
+      ADA D6
+      STA WPRIO    PRIORITY ADDRESS 
+      ADA D9
+      STA WSTAT    STATUS ADDRESS 
+      LDA WSTAT,I 
+      AND D15 
+      STA L0090    STORE CURRENT PROG STATUS
+      STA TEMP
+      LDA L0090+1   REQUEST CODE
+      SZA,RSS       CHECK IF DORMANT REQUEST
+      JMP L0100     DORMANT REQUEST 
+      CPA M1        CHECK IF SCHEDULE REQUEST 
+      JMP L0200     YES 
+      CPA D2       CHECK IF I/O SUSPEND REQUEST 
+      JMP L0400    YES
+      CPA D6        CHECK IF OPERATOR SUSPEND REQUEST 
+      JMP L0300     YES 
+      CPA D5       CHECK IF DISK ALLOC SUSPEND REQUEST
+      JMP L0400 
+      CPA D4       CHECK IF MEM AVAIL SUSPEND REQUEST 
+      JMP L0400 
+      CPA D7       CHECK IF SEGMENT LOAD REQUEST
+      JMP L0500 
+      CPA D15       CHECK IF LINKAGE UPDATE REQUEST 
+      JMP L0080     YES 
+L0075 LDA ILSTT    ILLEGAL STATUS MESSAGE ADDRESS 
+      LDB ERMS3    ILLEGAL STATUS ERROR CODE
+      JMP L0015     GO TO EXIT
+      SPC 5 
+* 
+*           LIST PROCESSOR--LINK UPDATE REQUEST/LINK CALL 
+* 
+      SPC 3 
+* 
+*      LINKAGE UPDATE 
+* 
+L0080 LDA TEMP      PROG PRIOR HAS CHANGED AND
+      STA L0090    PROGRAM MUST BE RELINKED 
+      STA L0090+1 
+      JSB CLINK    CALL LINKAGE PROCESSOR 
+      JMP L0015    GO TO EXIT 
+* 
+      HED LIST PROCESSOR--DORMANT REQUEST 
+* 
+*         DORMANT REQUEST 
+* 
+*        THE DORMANT REQUEST IS PROCESSED AS FOLLOWS:              *
+*              IF ABORT BIT SET, MAKE PROGRAM DORMANT              *
+*              IF ALREADY DORMANT, RETURN                          *
+*              IF SCHEDULED, THEN ENTERED INTO DORMANT LIST, POINT *
+*                   OF SUSPENSION CLEARED.                         *
+*                   IF ID SEGMENT ADDRESS IS SAME AS RESIDING      *
+*                   BACKGROUND DISC RESIDENT PROGRAM, THEN BKRES   *
+*                   FLAGS ARE CLEARED SO ANOTHER PROGRAM MAY BE    *
+*                   LOADED INTO THE AREA.                          *
+*                   IF ID SEGMENT ADDRESS IS SAME AS RESIDING REAL *
+*                   TIME DISC RESIDENT PROGRAM, THEN RDISK FLAGS   *
+*                   ARE CLEARED SO ANOTHER PROGRAM MAY BE LOADED   *
+*                   INTO THE AREA.                                 *
+*              IF NOT ONE OF ABOVE, THEN DORMANT BIT SET IN STATUS *
+L0100 LDA WSTAT,I  CHECK IF ABORT BIT SET 
+      AND M4000 
+      SZA 
+      JMP L0110    YES, SO GO MAKE DORMANT
+      LDA TEMP     GET CURRENT PROGRAM STATUS 
+      SZA,RSS 
+      JMP L0115     ALREADY DORMANT 
+      CPA M1
+      JMP L0110     PROGRAM SCHEDULED- SO MAKE DORMANT
+      CPA D6
+      JMP L0110    PROGRAM OPERATOR SUSPENDED 
+      LDA WSTAT,I   SET OFF BIT IN STATUS 
+      IOR M100
+      STA WSTAT,I 
+      JMP L0015-1  GO TO EXIT 
+L0110 CLA 
+      STA L0090+1  SET LINK CALL PARAM TO 0 
+      STA WSTAT,I   SET STATUS TO DORMANT 
+      JSB CLINK    CALL LINK PROCESSOR
+L0115 JSB CLIDS    GO TO CLEAR ID SEG TEMP AND SET B
+      CLA 
+      LDB WORK
+      ADB D8
+      STA B,I       CLEAR PT OF SUSPENSION
+      LDB WORK     CHECK IF RESIDING PROGRAM
+      CPB BKRES         IN BACKGROUND DISC RESIDENT AREA
+      JMP L0120    YES, SO GO CLEAR FLAGS 
+      CPB RDISK    CHECK IF REAL TIME DISC RESIDENT PROGRAM 
+      CLA,RSS      YES, SO CLEAR FLAGS
+      JMP L0015    EXIT 
+      STA RDISK    RESIDENT FLAGS 
+      STA RDISK+1 
+      JMP L0015 
+L0120 STA BKRES      CLEAR BACKGROUND DISK
+      STA BKRES+1    RESIDENT FLAG
+      JMP L0015    GO TO EXIT 
+      HED LIST PROCESSOR--SCHEDULE REQUEST
+* 
+*     SCHEDULE REQUEST
+* 
+*        THE SCHEDULE REQUEST IS PROCESSED AS FOLLOWS:             *
+*              IF ABORT BIT SET, STORE ID SEGMENT ADDRESS SUCH THAT*
+*                   PROGRAM WILL BE ABORTED AT NEXT ENTRY FROM XEQ *
+*              IF DORMANT BIT SET, GO TO DORMANT REQUEST           *
+*              IF OPERATOR-SUSPEND BIT SET, GO TO OPERATOR-SUSPEND *
+*                   REQUEST                                        *
+*              IF SCHEDULED, THEN STATUS ERROR EXIT                *
+*              IF OPERATOR-SUSPENDED, THEN STATUS ERROR EXIT       *
+*              IF CURRENT STATUS NOT ONE OF ABOVE, THE PROGRAM IS  *
+*                   ENTERED INTO THE SCHEDULE LIST.                *
+*                                                                  *
+L0200 LDA WSTAT,I  CHECK IF DORMANT BIT SET 
+      AND M4000     CHECK IF ABORT BIT SET
+      SZA,RSS 
+      JMP *+4            NO 
+      LDA WORK           YES, SO SAVE ID ADDRESS
+      STA ZZZZZ               AND 
+      JMP L0015-1             RETURN
+      LDA WSTAT,I 
+      AND M100
+      SZA          NO 
+      JMP L0110    YES, SO MAKE PROGRAM DORMANT 
+      LDA WSTAT,I  CHECK IF OPERATOR SUSPEND BIT SET
+      AND M1000 
+      SZA          NO 
+      JMP L0320    YES, SO MAKE PROG OPER-SUSP
+      LDA TEMP     CHECK IF PROG ALREADY SCHED
+      CPA M1
+      JMP L0075    ALREADY SCHED-SO STATUS ERROR
+      CPA D6        IF OPER-SUSP, THEN CANNOT SCHED 
+      JMP L0075    STATUS ERROR 
+      JSB CLINK    CALL LINK PROCESSOR TO SCHEDULE
+      CLB,INB 
+      STB WSTAT,I  UPDATE STATUS TO SCHEDULE
+      JMP L0015    GO TO EXIT 
+      HED  LIST PROCESSOR--SUSPEND REQUESTS 
+* 
+*     OPERATOR SUSPEND REQUEST
+* 
+*        THE OPERATOR-SUSPEND REQUEST IS PROCESSED AS FOLLOWS:     *
+*              IF DORMANT, THEN ENTER INTO OPERATOR SUSPEND LIST   *
+*              IF ALREADY OPERATOR SUSPEND, THEN STATUS ERROR EXIT *
+*              IF SCHEDULED, THEN ENTER INTO OPERATOR SUSPEND LIST *
+*              IF NOT ONE OF ABOVE, THEN OPERATOR-SUSPEND BIT SET  *
+*                                                                  *
+L0300 LDA TEMP
+      SZA,RSS       PROGRAM DORMANT SO
+      JMP L0320     GO MAKE IT OPER SUSPEND 
+      CPA D6       CHECK IF ALREADY OPER SUSPENDED
+      JMP L0075    ILLEGAL STATUS ERROR RETURN
+      CPA M1       CHECK IF PROGRAM SCHEDULED 
+      JMP L0320    YES, SO OPERATOR SUSPEND IT
+      LDA WSTAT,I   SET OPER-SUSP BIT IN STATUS 
+      IOR M1000 
+      STA WSTAT,I 
+      JMP L0015-1  GO TO EXIT 
+L0320 LDA D6
+      STA L0090+1  SET LINKAGE CALL PARAM 2 
+      STA WSTAT,I  UPDATE STATUS TO OPER-SUSPEND
+      JSB CLINK    CALL LINK PROCESSOR
+      JMP L0015    GO TO EXIT 
+      SPC 6 
+*                                                                  *
+*     NON-OPERATOR SUSPEND REQUEST                                 *
+* 
+*        THE NON-OPERATOR SUSPEND REQUEST IS PROCESSED AS FOLLOWS: *
+*              THE PROGRAM IS ENTERED INTO THE REQUESTED LIST AND  *
+*              THE NEW STATUS REPLACES THE 4 LOW ORDER BITS OF THE *
+*              PROGRAM STATUS-THUS SAVING THE DORMANT OR OPERATOR- *
+*              SUSPEND BITS THAT MAY BE PRESENT.                   *
+* 
+* 
+L0400 JSB CLINK    CALL LINK PROCESSOR
+      LDA WSTAT,I  UPDATE STATUS SAVING ALL 
+      AND MASTS    BUT LOW 4 BITS 
+      IOR L0090+1 
+      STA WSTAT,I 
+      JMP L0015-1  GO TO EXIT 
+      SPC 1 
+MASTS OCT 177760
+      HED LIST PROCESSOR--SEGMENT LOAD REQUEST
+* 
+*     SEGMENT REQUEST CALL
+* 
+*        THE SEGMENT LOAD REQUEST IS PROCESSED AS FOLLOWS:         *
+*           IF BACKGROUND SEGMENT (TYPE 5), THE PRIMARY 
+*                   POINT OF THE SEGMENT IS INSERTED INTO THE      *
+*                   POINT OF SUSPENSION OF XEQT PROGRAM. THE DISK  *
+*                   REQUEST IS MADE TO READ IN THE SEGMENT, AND    *
+*                   CALLING PROGRAM IS I/O SUSPENDED.              *
+*                                                                  *
+L0500 LDB WORK     CHECK PROGRAM TYPE 
+      ADB D14 
+      LDA B,I 
+      AND D15 
+      CPA D5       CHECK IF BACKGROUND DISK SEGMENT 
+      RSS 
+      JMP L0075    ERROR
+      LDB WORK      STORE PRIMARY ENTRY VALUE 
+      ADB D7        OF SEGMENT INTO POINT OF
+      LDA B,I       SUSPENSION OF XEQT
+      STA XSUSP,I   PROGRAM 
+      LDA $LIST    SAVE $LIST ENTRY PT VALUE
+      STA TEMPP    SINCE BREED CALLS $LIST
+      LDA WORK
+      STA ZWORK 
+      JSB BREED    GO TO READ IN BACKGROUND SEGMENT 
+      LDA TEMPP    RESTORE ORIGINAL $LIST ENTRY PT
+      STA $LIST 
+      JMP L0015-1  GO TO EXIT 
+      HED LINK SUBROUTINE CALL
+* 
+CLINK NOP          ENTRY/EXIT 
+      JSB LINK     CALL LINK PROCESSOR
+L0090 OCT 0         CODE OF PROGRAM REMOVAL LIST
+      OCT 0         CODE OF PROGRAM ADDITION LIST 
+      JMP CLINK,I  RETURN 
+      SPC 7 
+* 
+*           LIST PROCESSOR--ERROR MESSAGES
+* 
+      SPC 3 
+* 
+* 
+* 
+ILSTT DEF *+1      ILLEGAL STATUS ERROR MESSAGE 
+      DEC -14 
+      ASC 7,ILLEGAL STATUS
+ERMS3 ASC 1,03     ILLEGAL STATUS ERROR CODE
+ER5   ASC 1,05     NO SUCH PROG ERROR CODE
+      HED LINK UPDATE PROCESSOR 
+* 
+*        THE LINK PROCESSOR SECTION OF THE HP-2116 REAL TIME       *
+*     EXECUTIVE                                                    *
+*     1. REMOVES A PROGRAM FROM A LIST                             *
+*      AND                                                         *
+*     2. ENTERS THE PROGRAM INTO ANOTHER LIST AT THE PROPER PLACE  *
+*        ACCORDING TO PRIORITY LEVEL.                              *
+*                                                                  *
+* 
+* 
+*     CALLING SEQUENCE
+*         JSB LINK
+*         OCT CODE1 
+*         OCT CODE2 
+*              WHERE
+*                CODE1 = CODE OF REMOVAL LIST 
+*                CODE2 = CODE OF INSERTION LIST 
+*              THE ID SEGMENT IS ASSUMED TO BE LOCATED IN WORK
+*              AND WLINK AND WPRIO SET
+* 
+*                                                                  *
+*        THE REMOVAL OF PROGRAM FROM A LIST CONSISTS OF:           *
+*              1. IF I/O LIST (CODE 2), THEN THIS IS SPECIAL CASE  *
+*                 AND DOES NOT REQUIRE REMOVAL.                    *
+*              2. IF NULL LIST, THEN ERROR EXIT TAKEN.             *
+*              3. IF FIRST AND ONLY PROGRAM IN LIST, THEN LIST     *
+*                 VALUE SET TO ZERO.                               *
+*              4. IF FIRST PROGRAM IN LIST, BUT NOT THE ONLY       *
+*                 PROGRAM IN LIST(LINKAGE NOT ZERO), THEN SET LIST *
+*                 VALUE TO THE LINKAGE VALUE.                      *
+*              5. IF IN MIDDLE OF LIST, THE LINKAGE OF THE ID SEG  *
+*                 MENT WHICH POINTS TO THE PROGRAM TO BE REMOVED   *
+*                 IS SET TO THE LINKAGE VALUE OF THE PROGRAM THAT  *
+*                 IS REMOVED.                                      *
+*              6. IF LAST PROGRAM IN LIST, THE LINKAGE VALUE OF    *
+*                 PREVIOUS PROGRAM IN LIST IS SET TO ZERO.         *
+* 
+LINK  NOP           ENTRY/EXIT
+      LDA LINK,I    GET CODE 1 VALUE
+      CPA D2
+      JMP LK100 
+      ADA LLIST     ADD TOP OF LIST POINTER 
+      STA TEMP      TOP OF REMOVAL LIST 
+      LDA TEMP,I    EXAMINE VALUE OF LIST POINTER 
+      STA BUFX
+      SZA,RSS       CHECK IF NULL LIST
+      JMP LK020+1 
+      CPA WORK     CHECK IF FIRST PROGRAM IN LIST 
+      RSS           YES 
+      JMP LK010     NO
+      LDA WLINK,I   SET TOP OF LIST POINTER TO LINK 
+      STA TEMP,I    OF ID SEGMENT - THIS WILL BE 0
+      JMP LK100     RETURN
+LK010 LDA BUFX
+      STA BLINK 
+      LDA BLINK,I   CHECK IF LINK WORD POINTS TO WORK 
+      CPA WORK      ID SEGMENT
+      JMP LK030     YES 
+      SZA,RSS       NO, SO CHECK IF AT END OF LIST
+      JMP *+4       NOT IN LIST 
+      STA BUFX
+      JMP LK010     PROCESS NEXT ID SEGMENT 
+LK020 CLA          NORMAL RETURN SO CLEAR A REGISTER
+      ISZ LINK     INCREMENT EXIT ADDRESS 
+      JMP LINK,I    EXIT
+LK030 LDA WLINK,I   UPDATE LINKAGE TO BYPASS
+      STA BLINK,I   THE ID SEGMENT IN WORK
+      HED LINK PROCESSOR--ADDING PROGRAM TO A LIST
+* 
+*     ADD A PROGRAM TO A LIST 
+* 
+*        THE ADDITION OF PROGRAM TO A LIST CONSISTS OF:            *
+*              1. IF I/O LIST (CODE 2), THEN THIS IS SPECIAL CASE  *
+*                 AND NO ADDITION MADE TO LIST.                    *
+*              2. IF NULL LIST, THEN LIST VALUE SET TO POINT TO ID *
+*                 SEGMENT OF PROGRAM TO BE ADDED AND THE LINKAGE   *
+*                 SET TO ZERO.                                     *
+*              3. IF NOT NULL LIST, THE PROGRAM IS INSERTED INTO   *
+*                 LIST ACCORDING TO PRIORITY LEVEL AND LINKAGES    *
+*                 CHANGED TO REFLECT THIS INSERTION.               *
+*              4. IF OF LOWER PRIOR. THAN ANY PROGRAM IN LIST, THEN*
+*                 LAST LINKAGE IS SET TO POINT TO THE PROGRAM TO   *
+*                 BE ADDED AND THE PROGRAM LINKAGE IS CLEARED.     *
+* 
+LK100 CLA 
+      STA TEMP+1    CLEAR ID SEGMENT POINTER
+      ISZ LINK      INCREMENT TO CODE2
+      LDA LINK,I    GET CODE 2 VALUE
+      CPA D2
+      JMP LK020 
+      ADA LLIST     ADD TOP OF LIST POINTER 
+      STA TEMP      TOP OF ADDITION LIST
+      LDA TEMP,I    CHECK IF NULL LIST
+      STA BUFX
+      SZA           YES 
+      JMP LK110     NO
+      LDA WORK      SET LIST POINTER TO POINT TO
+      STA TEMP,I    PROGRAM IN WORK 
+      CLA           CLEAR LINAGE OF PROGRAM IN
+      STA WLINK,I   WORK TO INDICATE END OF LIST
+      JMP LK020     RETURN
+LK110 LDA BUFX     CHECK IF PROG ALREADY IN LIST
+      CPA WORK
+      JMP LK020    ALREADY IN LIST-SO RETURN
+      STA BLINK
+      ADA D6
+      STA BPRIO 
+      LDA WPRIO,I   CHECK IF WORK PRIORITY OF LOWER 
+      CMA,INA       PRIORITY THAN CURRENT ID SEGMENT
+      ADA BPRIO,I 
+      SZA,RSS 
+      JMP LK130 
+      SSA 
+      JMP LK130     NO
+      LDA TEMP+1    SEE IF FIRST IN LIST
+      STA TEMP+2
+      SZA 
+      JMP LK115     NO
+      LDA WORK      YES, SO STORE ID SEG ADDR TO
+      STA TEMP,I    TOP OF LIST POINTER 
+      LDA BUFX      SET LINK OF WORK TO POINT TO
+      STA WLINK,I   PREVIOUS TOP OF LIST
+      JMP LK020     RETURN
+LK115 LDA TEMP+2
+      STA BLINK 
+      LDA BLINK,I   MAKE WORK LINK POINT TO PROGRAM 
+      STA WLINK,I   FOLLOWING IN LIST 
+      LDA WORK      MAKE PREVIOUS LINK POINT TO 
+      STA BLINK,I   WORK LINK 
+      JMP LK020 
+LK130 LDA BLINK,I   CHECK IF AT END OF LIST 
+      SZA,RSS       NO
+      JMP LK140     YES 
+      LDA BUFX      SAVE ADDRESS OF ID SEGMENT 
+      STA TEMP+1
+      LDA BLINK,I   SET CLIST TO ADDRESS OF NEXT
+      STA BUFX     ID SEGMENT IN LIST
+      JMP LK110     GO TO WORK ON NEXT SEGMENT
+LK140 LDA WORK      PROGRAM TO BE INSERTED AT END OF
+      STA BLINK,I   LIST
+      CLA           CLEAR WLINK TO INDICATE END OF
+      STA WLINK,I   LIST
+      JMP LK020     GO RESTORE AND RETURN 
+LLIST DEF DORMT    TOP OF LIST ADDRESS
+      SPC 1 
+BUFX  NOP           TEMP ID SEGMENT ADDRESS 
+BLINK NOP           TEMP LINKAGE ADDRESS
+WSTAT NOP           WORK STATUS ADDRESS 
+DM31  DEC -31 
+M100  OCT 100 
+M1000 OCT 1000
+M4000 OCT 4000
+COM   OCT 54
+AZERO OCT 30000 
+      HED OPERATOR INPUT MESSAGE PROCESSOR
+* 
+*        THE $MESS PROCESSOR SECTION OF HP-2116 REAL TIME EXECUTIVE*
+*     PROCESSES THE FOLLOWING OPERATOR INPUT REQUESTS:             *
+*     1. TURN ON A PROGRAM                                         *
+*           ON,XXXXX                                               *
+*           ON,XXXXX,NOW                                           *
+*           ON,XXXXX,P1,...,P5                                     *
+*           ON,XXXXX,NOW,P1,...,P5                                 *
+*     2. TURN OFF A PROGRAM                                        *
+*           OF,XXXXX,P                                             *
+*     3. OPERATOR SUSPEND A PROGRAM                                *
+*           SS,XXXXX                                               *
+*     4. CONTINUE A OPERATOR SUSPENDED PROGRAM                     *
+*           GO,XXXXX                                               *
+*           GO,XXXXX,P1,...,P5                                     *
+*     5. CURRENT STATUS OF A PROGRAM                               *
+*           ST,XXXXX                                               *
+*     6. CHANGE PROGRAM ID SEGMENT TIME PARAMETERS.                *
+*           IT,XXXXX,R,MMM                                         *
+*           IT,XXXXX,R,MMM,HR,MN                                   *
+*           IT,XXXXX,R,MMM,HR,MN,SC                                *
+*           IT,XXXXX,R,MMM,HR,MN,SC,MS                             *
+*     7. CHANGE PROGRAM PRIORITY                                   *
+*           PR,XXXXX,ZZ                                            *
+*     8. SET REAL TIME CLOCK AND START TIME BASE GENERATOR         *
+*           TM,DAY,HR,MN,SC                                        *
+*     9. CURRENT REAL TIME CLOCK VALUES                            *
+*           TI                                                     *
+*    10. SET A EQUIPMENT DOWN                                      *
+*           DN,NN                                                  *
+*    11. SET A EQUIPMENT UP                                        *
+*           UP,NN                                                  *
+*    12. LOGICAL UNIT                                              *
+*           LU,N1                                                  *
+*           LU,N1,N2                                               *
+*           LU,N1,N2,N3 
+*    13. EQUIPMENT STATUS                                          *
+*           EQ,NN                                                  *
+*    14. SET SOURCE FILE                                           *
+*           LS,P1,P2                                               *
+*    15. SELECT LOAD-AND-GO                                        *
+*           LG,P                                                   *
+*    16. CHANGE DEVICE TIME-OUT PARAMETER 
+*           TO,N1 
+*           TO,N1,N2
+*    17. RELEASE PROGRAM'S TRACKS 
+*           RT,XXXXX
+* 
+      HED OPERATOR INPUT MESSAGE DECIPHER ROUTINE 
+* 
+*     CALLING SEQUENCE
+*         JSB $MESS 
+*         B CONTAINS NUMBER OF CHARACTERS 
+* 
+* 
+*                                                                  *
+*        INPUT DECIPHER ROUTINE ROUTINE SCANS THE ASCII OPERATOR   *
+*     INPUT AND STORES THE DATA INTO PARAMETERS.                   *
+*        THIS ROUTINE ASSUMES THE CHARACTER COUNT IN B ON ENTRY AND*
+*    DATA IN BUFFR. COMMA IS USED TO SEPARATE PARAMETERS. A PARA-  *
+*    METER MAY BE UP TO 6 ASCII CHARACTERS- EXCEPT FOR OP CODE     *
+*    WHICH MUST BE 2 CHARACTERS. A MAXIMUM OF 40 CHARACTERS MAY BE *
+*    INPUT. A COUNT IS KEPT OF THE NUMBER OF PARAMETERS INPUT AND  *
+*    A CHARACTER COUNT IS KEPT FOR EACH PARAMETER. THE VALUES ARE  *
+*    STORED LEFT ADJUSTED IN THE BUFFERS.                          *
+*                                                                  *
+$MESS NOP          ENTRY/EXIT 
+      CLA 
+      STA TEMP+2    CLEAR CHARACTER FLAG
+      SZB,RSS      CHECK IF COUNT ZERO
+      JMP $MESS,I    YES, SO EXIT 
+      CMB,INB       COMPLEMENT CHARACTER COUNT
+      STB TEMP+3   AND STORE
+      LDB DM31     CLEAR PARAMETER AREA 
+      STB TEMP
+      LDB PARPT 
+      STA B,I 
+      INB 
+      ISZ TEMP
+      JMP *-3 
+      LDB BUFAD     LOAD B WITH INPUT BUFFER ADDRESS
+      CLE,ELB 
+      STB TEMPP 
+      LDA INIT     INITIALIZE CURRENT 
+      STA TEMP+5    PARAMETER POINTER 
+      LDA TEMP+5,I
+      STA TEMP+4    INITIALIZE STORE POINTER
+      ADA DM1 
+      STA TEMP+6   PARAMETER CHARACTER COUNT ADDR 
+      CLA 
+      STA TEMP+6,I CLEAR PARAMETER CHARACTER COUNT
+DEC10 LDB TEMPP 
+      CLE,ERB 
+      LDA B,I 
+      SEZ,RSS       CHECK IF TO EXAMINE UPPER/LOWER 
+      ALF,ALF       UPPER, SO ROTATE TO LOWER BITS
+      AND M377      MASK OFF ALL BUT LOW ORDER
+      CPA COM       SEE IF A COMMA
+      JMP DEC60     YES 
+      CPA LASCI    CHECK IF BLANK CHARACTER 
+      JMP DEC50    YES, SO SKIP CHARACTER 
+      STA TEMP+1    NO, SO GO TO CONTINUE PROCESSING
+      LDA TEMP+6,I ADD -1 TO CHARACTER COUNT
+      ADA DM1 
+      STA TEMP+6,I
+      LDA TEMP+2    CHECK IF TO BE UPPER/LOWER CHARACTER
+      SZA           UPPER 
+      JMP DEC40     LOWER 
+      LDB TEMPP 
+      CLE,ERB 
+      LDA B,I       LOAD DATA WORD INTO A 
+      SEZ           CHECK IF UPPER/LOWER DATA CHARACTER 
+      ALF,ALF       LOWER SO PUT INTO UPPER CHARACTER 
+      AND MASKU     MASK ALL BUT UPPER CHARACTER
+      STA TEMP      STORE IN TEMPORARY
+      ISZ TEMP+2    SET FLAG TO LOWER CHARACTER 
+      JMP DEC50     GO TO INCREMENT DATA CHARACTER
+DEC40 LDA TEMP+1    XOR TOGETHER LOWER AND
+      XOR TEMP      UPPER CHARACTER AND 
+      STA TEMP+4,I  STORE 
+      CLA 
+      STA TEMP+2    RESET FLAG TO UPPER CHARACTER 
+      ISZ TEMP+4    INCREMENT STORE LOCATION
+DEC50 ISZ TEMPP    INCREMENT BUFFER ADDRESS 
+      ISZ TEMP+3   INCREMENT CHARACTER COUNT
+      JMP DEC10     GO TO PROCESS NEXT CHARACTER
+      ISZ PARAM    INCREMENT PARAMETER COUNT
+      JMP DEC80     GO TO EXIT
+DEC60 LDA TEMP+2    CHECK IF UPPER CHARACTER STORED 
+      SZA 
+      JMP DEC65    YES
+      LDA TEMP+6,I NO, SO CHECK IF NO CHAR STORED 
+      SZA 
+      JMP DEC70 
+      CCA          SET CHAR COUNT TO -1 
+      STA TEMP+6,I
+      LDA AZERO    STORE ASCII 0 INTO BUFFER
+      STA TEMP+4,I
+      JMP DEC70    GO TO NEXT PARAMETER 
+DEC65 LDA TEMP     STORE CHAR INTO BUFFER 
+      STA TEMP+4,I
+      CLA 
+      STA TEMP+2    RESET UPPER CHARACTER FLAG
+DEC70 ISZ TEMP+5    INCREMENT PARAMETER POINTER 
+      ISZ PARAM 
+      LDA PARAM 
+      CPA D8
+      JMP M0000 
+      LDA TEMP+5,I
+      STA TEMP+4
+      ADA DM1 
+      STA TEMP+6   PARAMETER CHARACTER COUNT ADDR 
+      CLA 
+      STA TEMP+6,I CLEAR PARAM CHARACTER COUNT
+      JMP DEC50     GO TO INCREMENT DATA BUFFER 
+DEC80 LDA TEMP+2    CHECK IF THERE IS CHARACTER 
+      SZA          PROCESSED
+      JMP DEC90    YES, SO GO STORE 
+      LDA TEMP+6,I NO, SO CHECK IF NO CHAR STORED 
+      SZA 
+      JMP M0000    CHAR STORED , SO GO PROCESS
+      CCA 
+      STA TEMP+6,I NONE STORED, SO SET TO -1
+      LDA AZERO 
+      STA TEMP+4,I STORE ASCII 0 INTO BUFFER
+      JMP M0000    GO TO PROCESS INPUT
+DEC90 LDA TEMP     STORE CHARACTER INTO BUFFER
+      STA TEMP+4,I
+      HED MESSAGE PROCESSOR--OP REQUEST SEARCH
+* 
+*        THIS SECTION CHECKS THE OPERATOR REQUEST CODE AGAINST THE *
+*    LEGAL REQUEST CODES AND JUMPS TO THE PROPER PROCESSOR.        *
+********************************************************************
+*    TO ADD NEW REQUEST ONE MERELY,                                *
+*        A. CHANGES WORD -OPCNT-                                   *
+*        B. ADDS ASCII OPERATION CODE TO TABLE -LDOPC-             *
+*        C. ADDS PROCESSOR START ADDRESS TO TABLE -LDJMP-          *
+*        D. ADDS PROCESSOR CODING TO PROCESS THE REQUEST.          *
+********************************************************************
+* 
+M0000 LDB OP         OPERATION CODE INTO A
+      CPB TI         CHECK IF IT IS 'TI'
+      JMP M0750      IF SO, GO TO 'TI' PROCESSOR
+      LDA OPCNT      SET OPERATION COUNTER
+      STA TEMP
+      LDA LDOPC     SET OPERATION TABLE POINTER 
+      STA TEMP+1
+      LDA LDJMP     SET OPERATION PROC. JUMP ADDRESS
+      STA TEMP+2
+      CLA,INA      CHECK IF ONLY ONE PARAMETER
+      CPA PARAM 
+      JMP M0950    ERROR, ONLY ONE PARAMETER
+M0030 CPB TEMP+1,I  COMPARE WITH TABLE VALUE
+      JMP M0040     COMPARES
+      ISZ TEMP+1    DOES NOT COMPARE-INCREMENT OP TABLE 
+      ISZ TEMP+2                     INCREMENT JUMP ADR.
+      ISZ TEMP                       INCREMENT COUNTER
+      JMP M0030     GO TO COMPARE NEXT OP CODE
+      LDA OPERR     ILLEGAL OPERATION CODE REQUEST
+      JMP $MESS,I 
+* 
+TI    ASC 1,TI       SYSTEM TIME REQUEST
+OPCNT DEC -16       OP CODE COUNT 
+LDOPC DEF *+1       OPERATION CODE TABLE ADDRESS
+      ASC 16,RTONOFSSGOSTPRITTMDNUPLUEQLSLGTO 
+LDJMP DEF *+1       JUMP ADDRESS FOR EACH OPER. CODE
+      DEF M0070     RELEASE PROGRAM'S TRACKS
+      DEF M0100     TURN ON 
+      DEF M0200     TURN OFF
+      DEF M0300     OPERATOR SUSPEND
+      DEF M0400     REMOVE OPERATOR SUSPEND 
+      DEF M0500     STATUS
+      DEF M0650     PRIORITY CHANGE 
+      DEF M0600     INTERVAL TIME CHANGE
+      DEF M0700    REAL TIME CLOCK INITIALIZATION 
+      DEF M0780    DN REQUEST 
+      DEF M0800    UP REQUEST 
+      DEF M0850    LU REQUEST 
+      DEF M0900    EQ REQUEST 
+      DEF M0960     LS REQUEST
+      DEF M0970     LG REQUEST
+      DEF M0990     TO REQUEST
+* 
+M0040 LDB TEMP+2,I
+      JMP B,I      TRANSFER TO DESIRED PROCESSOR
+      HED  MESSAGE PROCESSOR--RT,XXXXX COMMAND
+* 
+*     RT,XXXXX
+* 
+*         THE RELEASE TRACKS ROUTINE FUNCTIONS AS FOLLOWS:
+*               IF PROGRAM STATUS NOT DORMANT, STATUS ERROR.
+*               IF DORMANT, ALL TRACKS ASSIGNED TO THAT PROGRAM 
+*                   ARE RELEASED - ALL PROGRAMS IN DISC TRACK 
+*                   ALLOCATION SUSPENSION ARE RESCHEDULED.
+* 
+M0070 JSB TTNAM     GO FIND ID SEGMENT ADDRESS
+      ADA D15 
+      LDA A,I       STATUS
+      AND D15 
+      SZA           PROGRAM MUST BE DORMANT 
+      JMP M0410-3    ILLEGAL STATUS ERROR-
+      LDA WORK      GET ID SEGMENT ADDRESS
+      JSB $OTRL     GO RELEASE ITS TRACKS 
+      JSB $SDSK     RESCHEDULE DISC-SUSP PROGRAMS 
+      JMP M0230     RETURN- 
+      HED MESSAGE PROCESSOR--ON,XXXXX COMMAND 
+* 
+*     ON,XXXXX
+*     ON,XXXXX,NOW
+*     ON,XXXXX,P1,...,P5
+*     ON,XXXXX,NOW,P1,...,P5
+* 
+*        THE ON REQUEST FUNCTIONS AS FOLLOWS:                      *
+*              IF NO RESOLUTION CODE, THEN PROGRAM SCHEDULED.      *
+*              IF -NOW- OPTION, THEN ENTER PROGRAM INTO TIME LIST  *
+*                   AND SET TIME VALUES TO CURRENT TIME PLUS 10 MSC*
+*              IF NOT ONE OF ABOVE, AND TIME VALUES ARE ZERO THEN  *
+*                   PROGRAM FUNCTIONS SAME AS -NOW- OPTION.        *
+*              IF NOT ONE OF ABOVE, AND TIME VALUES ARE PRESENT,   *
+*                   THEN PROGRAM IS ADDED TO TIME LIST.            *
+*              NOTE: ALL THE ABOVE OPTIONS ALLOW PARAMETERS TO BE  *
+*                   PASSED TO THE PROGRAM. THESE MUST BE ASCII     *
+*                   DECIMAL NUMBERS WHICH ARE CONVERTED TO BINARY  *
+*                   AND STORED IN ID SEGMENT TEMP AREA. UPON       *
+*                   EXECUTION, THE B REGISTER WILL POINT TO TEMP.  *
+*                   UP TO 5 PARAMETERS MAY BE INPUT. IF NO PARA-   *
+*                   METERS ARE INPUT, THE TEMP AREA ARE ZEROS BUT  *
+*                   B REGISTER WILL STILL POINT TO TEMP. AREA      *
+*                                                                  *
+M0100 JSB TTNAM    FIND ID SEGMENT ADDR 
+      ADA D15      CHECK IF PROGRAM DORMANT 
+      LDA A,I 
+      SZA 
+      JMP M0410-3  ILLEGAL STATUS ERROR 
+      LDB WORK
+      ADB D17      COMPUTE RES/T/MULT ADDR
+      LDA B,I 
+      ALF,RAR 
+      AND D7       CHECK RESOLUTION CODE
+      SZA          NONE, SO GO TO SCHED NOW 
+      JMP M0110 
+      JSB PLOAD    GO TO PROCESS CONTROL PARAMETERS 
+      JSB $LIST    SCHEDULE PROGRAM 
+      OCT 301 
+      DEF WORK
+      JMP $MESS,I  RETURN 
+M0110 LDA P2
+      CPA NOPRG+2   CHECK IF -NOW- OPTION 
+      JMP M0130 
+* 
+*                  CHECK IF NON ZERO ID SEGMENT TIME VALUES 
+* 
+      LDB WORK      COMPUTE ID SEGMENT TIME ADDRESS 
+      ADB D18 
+      LDA B,I       TENS OF MILLISECOND VALUE 
+      ADA D100
+      SZA 
+      JMP M0135    NOT ZERO, SO ENTER IN TIME LIST
+      INB 
+      LDA B,I       SECONDS VALUE 
+      ADA D60 
+      SZA 
+      JMP M0135    NOT ZERO, SO ENTER IN TIME LIST
+      INB 
+      LDA B,I       MINUTES VALUE 
+      ADA D60 
+      SZA 
+      JMP M0135    NOT ZERO, SO ENTER IN TIME LIST
+      INB 
+      LDA B,I       HOURS VALUE 
+      ADA D24 
+      SZA 
+      JMP M0135    NOT ZERO, SO ENTER IN TIME LIST
+M0130 LDB WORK     STORE CURRENT TIME + 10 MSEC 
+      ADB D18      INTO ID SEGMENT TIME VALUES
+      LDA TMS      STORE TMS+1 INTO ID SEGMENT
+      INA 
+      STA B,I 
+      INB 
+      LDA SECS     STORE SECS INTO ID SEGMENT 
+      STA B,I 
+      INB 
+      LDA MINS     STORE MINS INTO IDS SEGMENT
+      STA B,I 
+      INB 
+      LDA HRS      STORE HRS INTO ID SEGMENT
+      STA B,I 
+      LDB WORK     CHECK IF TMS+1 OVERFLOWS INTO SECS 
+      ADB D18 
+      LDA B,I 
+      SZA 
+      JMP M0135 
+      LDA DM100    SET ID SEGMENT TMS = 0 
+      STA B,I 
+      INB 
+      ISZ B,I 
+      JMP M0135 
+      LDA DM60     SET ID SEGMENT SECS = 0
+      STA B,I 
+      INB 
+      ISZ B,I 
+      JMP M0135 
+      STA B,I      SET ID SEGMENT MINS = 0
+      INB 
+      ISZ B,I 
+      JMP M0135 
+      LDA DM24     SET ID SEGMENT HRS = 0 
+      STA B,I 
+M0135 JSB PLOAD    GO TO PROCESS CONTROL PARAMETERS 
+      LDB WORK
+      ADB D16 
+      JSB $TADD    ADD PROGRAM TO TIME LIST 
+      CLA 
+      JMP $MESS,I  RETURN 
+      HED MESSAGE PROCESSOR--OF,XXXXX COMMAND 
+* 
+*     OF,XXXXX
+*     OF,XXXXX,1    "ABORT" 
+*     OF,XXXXX,8    "ABORT AND REMOVE FROM SYSTEM"
+* 
+*        THE OF REQUEST FUNCTIONS AS FOLLOWS:                      *
+*              IF PROGRAM DORMANT, IT MAY STILL BE IN TIME LIST SO *
+*                   A CALL IS MADE TO REMOVE PROGRAM FROM TIME LIST*
+*                   IF ABORT OPTION 1, THEN $ABRT PROCESSOR IS     *
+*                   CALLED. IF ABORT OPTION 8, IN ADDITION TO      *
+*                   $ABRT PROCESSOR BEING CALLED, IF BIT 7 OF THE  *
+*                   TYPE FIELD IS SET, THEN TRACK(S) WHERE PROGRAM *
+*                   IS STORED IS ALSO RELEASED BY $DREL. THE NAME  *
+*                   FIELD IN THE ID SEGMENT IS CLEARED SO THAT THE *
+*                   PROGRAM CANNOT BE CALLED AGAIN.                *
+*              IF PROGRAM SCHEDULED OR OPERATOR-SUSPENDED, THEN    *
+*                   DORMANT REQUEST MADE VIA LIST PROCESSOR AND    *
+*                   PROCEED AS ABOVE.                              *
+*              IF PROGRAM STATUS NOT ONE OF ABOVE, THE DORMANT BIT *
+*                   IS SET IN STATUS, IF NOT ABORT OPTION. IF ABORT*
+*                   OPTION, CHECK IF AVAILABLE MEMORY OR UNAVAILABL*
+*                   DISC TRACK SUSPENSION-IN WHICH CASE THE ABORT  *
+*                   BIT IS SET AND $ABRT CALLED. IF STATUS IS I/O  *
+*                   SUSPENSION, SET ABORT BIT AND RETURN.          *
+*                   IF INPUT SUSPENSION, CHECK IF                  *
+*                   PROGRAM BEING READ IN FROM DISC. IF YES, THEN  *
+*                   SET ABORT BIT AND RETURN. IF NOT BEING READ IN *
+*                   FROM DISC, SET ABORT BIT AND CALL $IOCL TO     *
+*                   CLEAR THE I/O REQUEST                          *
+*                                                                  *
+M0200 JSB TTNAM    GO TO FIND ID SEG ADDR 
+      ADA D15 
+      STA WSTAT    STATUS ADDRESS 
+      LDA WSTAT,I 
+      AND D15 
+      SZA           CHECK IF PROGRAM DORMANT
+      CPA M1        CHECK IF PROGRAM SCHEDULED
+      JMP M0210     SCHEDULED--SO GO TO MAKE DORMANT
+      CPA D6        CHECK IF PROGRAM OPERATOR SUSPEND 
+      JMP M0210     OPERATOR SUSPENDED--SO MAKE DORMANT 
+      LDA PARAM     CHECK # OF PARAMETERS 
+      CMA,INA 
+      ADA D2
+      SZA,RSS       2, NORMAL OFF COMMAND 
+      JMP M0204      GO TO SET DORMANT BIT
+      JSB CVT1      CONVERT 3RD PARAMETER 
+      DEF P2
+      DEF CP2 
+      SZA           IF 0, SET DORMANT BIT.
+      JMP M0205     PARAMETER > 0.
+M0204 LDA WSTAT,I   NORMAL "OFF", 
+      IOR M100     SO SET DORMANT BIT 
+      STA WSTAT,I   IN STATUS AND RESTORE 
+      JMP M0220    GO REMOVE FROM TIME LIST 
+M0205 LDA WSTAT,I 
+      AND D15 
+      CPA D4        CHECK IF AVAILABLE MEMORY SUSP
+      JMP M0220         YES, SO GO CALL ABORT 
+      CPA D5        CHECK IF DISC ALLOCATION SUSP 
+      JMP M0220         YES, SO GO CALL ABORT 
+      CPA D2
+      JMP M0207          YES, SO GO CHECK IF INPUT
+M0206 LDA WSTAT,I        NO, SO SET ABORT BIT 
+      IOR M4000 
+      STA WSTAT,I 
+      CLA 
+      JMP $MESS,I        RETURN 
+M0207 LDA WORK      CHECK IF PROGRAM IS CURRENT 
+      CPA BKRES          BACKGROUND DISC RESIDENT 
+      RSS 
+      JMP M0208               NO, SO TEST IF RT DISC
+      LDB BKRES+1   CHECK IF IT IS BEING READ IN
+MX208 SZB,RSS           NO, SO GO CLEAR I/O REQUEST 
+      JMP M0206          YES, SO SET ABORT BIT
+MY208 LDA WSTAT,I  SET ABORT BIT INTO 
+      IOR M4000         CURRENT STATUS
+      STA WSTAT,I 
+      LDA WORK
+      JMP $IOCL    GO CLEAR I/O REQUEST 
+M0208 CPA RDISK    CHECK IF PROG IS CURRENT 
+      RSS               RT DISC RESIDENT
+      JMP MY208    NO, SO GO CLEAR I/O REQUEST
+      LDB RDISK+1 
+      JMP MX208         GO CHECK IF READING IN PROGRAM
+M0210 JSB $LIST    CALL $LIST TO CHANGE 
+      OCT 300       SCHED AND OPERATOR SUSP INTO
+      DEF WORK      DORMANT LIST
+M0220 LDB WORK
+      STB TEMPH 
+      ADB D16 
+      JSB $TREM    REMOVE PROGRAM FROM TIME LIST
+      LDB WORK
+      ADB D14 
+      LDA B,I        IF RT DISC RES 
+      LDB WORK       RELEASE SWAP 
+      STA TEMPL      TRACKS.
+      AND M177
+      CPA D2
+      JSB DREL
+      LDA PARAM    IF 3 PARAMETERS, GO TO RELEASE 
+      CMA,INA      ALL TRACKS, ETC
+      ADA D2
+      SZA,RSS      CHECK IF ABORT 
+      JMP $MESS,I  NO, SO RETURN
+      JSB CVT1      CONVERT PARAMETER 
+      DEF P2
+      DEF CP2 
+      SZA,RSS       IF 0, EXIT IMMEDIATELY
+      JMP $MESS,I 
+      STA TEMPZ 
+      LDA WSTAT,I 
+      IOR M4000 
+      STA WSTAT,I 
+      LDA TEMPH 
+      JSB $ABRT    GO TO ABORT ROUTINE
+      LDA TEMPZ      RELEASE PROG'S TRACKS? 
+      CPA D8        IF P = 8, 
+      RSS           YES 
+      JMP M0230     NO-SO RETURN VIA $MESS,I
+      LDA TEMPL 
+      ALF,ALF       CHECK IF TYPE BIT 7 SET 
+      SSA,RSS 
+      JMP M0227     NO-CANNOT REL PROG TRACKS 
+      LDB TEMPH     YES-COMPUTE AND REL PROG TRACKS 
+      ADB D22 
+      LDA B,I 
+      CMA,INA 
+      INB 
+      ADA B,I 
+      STA TEMP+3    # WORDS OF MAIN 
+      INB 
+      LDA B,I 
+      CMA,INA 
+      INB 
+      ADA B,I 
+      CLB 
+      RRL 10
+      SZA 
+      INB 
+      STB TEMP+4    # SECTORS OF BASE 
+      LDA TEMP+3
+      CLB 
+      RRL 10
+      SZA 
+      INB 
+      ADB TEMP+4    # SECTORS IN PROG MAIN
+      STB TEMP+5    TOTAL # SECTORS IN PROGRAM
+      LDB TEMPH 
+      ADB D26 
+      LDA B,I 
+      AND M177
+      ADA TEMP+5
+      STA TEMP      STARTING SECTOR # + # SECTORS IN
+      LDA B,I            PROGRAM MAIN AND BASE
+      STA TEMP+1
+      ALF,ALF 
+      RAL 
+      AND M377
+      LDB B,I       CHECK IF LU 2 OR 3
+      SSB                LU 2 
+      ADA TATSD          LU 3 
+      STA TEMP+2    ACTUAL STARTING TRACK # 
+      LDB SECT2 
+      LDA TEMP+1    CHECK IF LU 2 OR 3 SO CAN DIVIDE
+      SSA                BY # OF TRACKS FOR THAT
+      LDB SECT3        DISC.
+      STB TEMP+1
+      LDA TEMP      (A)=START SECT + # SECT PROG
+      CLB                MAIN AND BASE
+      DIV TEMP+1
+      SZB           CHECK IF PARTIAL TRACK
+      INA                YES
+      STA B         (B)=# TRACKS
+      LDA TEMP+2    (A)=STARTING TRACK
+      JSB $DREL     CALL EXEC SYS RELEASE TRACKS
+      LDB TEMPH     CLEAR DISC
+      ADB D26        TRACK WORD                    $
+      CLA            FOR RELEASED TRACKS.          $
+      STA B,I                                      $
+M0227 LDB TEMPH 
+      ADB D12 
+      CLA 
+      STA B,I 
+      INB 
+      STA B,I 
+      INB 
+      STA B,I 
+M0230 CLA          NORMAL RETURN, SO CLEAR A REGISTER 
+      JMP $MESS,I  RETURN 
+      SPC 1 
+TEMPZ NOP 
+TEMPL NOP 
+TEMPH NOP 
+D12   DEC 12
+D13   DEC 13
+D16   DEC 16
+D18   DEC 18
+DM1   DEC -1
+DM24  DEC -24 
+DM60  DEC -60 
+      HED MESSAGE PROCESSOR--SS,XXXXX COMMAND 
+* 
+*    SS,XXXXX  PROCESSOR
+* 
+*        THE SUSPEND REQUEST FUNCTIONS AS FOLLOWS:                 *
+*              IF PROGRAM DORMANT OR OPERATOR SUSPENDED, THEN      *
+*                   ILLEGAL STATUS ERROR                           *
+*              IF SCHEDULED, THEN OPERATOR SUSPEND VIA $LIST       *
+*              IF OTHER THAN ABOVE, SET THE OPERATOR-SUSPEND BIT   *
+*                   IN STATUS.                                     *
+*                                                                  *
+M0300 JSB TTNAM    GO TO FIND ID SEG ADDR 
+      ADA D15 
+      STA WSTAT    STATUS ADDRESS 
+      LDA WSTAT,I 
+      SZA,RSS      CHECK IF PROGRAM DORMANT 
+      JMP M0410-3  DORMANT, SO ILLEGAL STATUS ERROR 
+      CPA D6        CHECK IF PROGRAM OPERATOR SUSPEND 
+      JMP M0230 
+      CPA M1        CHECK IF PROGRAM SCHEDULED
+      JMP M0310     PROG SCHEDULED SO MAKE DORMANT
+      LDA WSTAT,I   PROG SUSPENDED (NOT OPERATOR) 
+      IOR M1000     SO SET OPER SUSP BIT IN STATUS
+      STA WSTAT,I 
+      JMP M0230    GO TO EXIT 
+M0310 JSB $LIST 
+      OCT 306       SCHED TO OPER-SUSP
+      DEF WORK
+      JMP $MESS,I  EXIT 
+      HED MESSAGE PROCESSOR--GO COMMAND 
+* 
+*     GO,XXXXX
+*     GO,XXXXX,P1,...,P5
+*                                                                  *
+*        THE CONTINUE FROM POINT OF SUSPENSION FUNCTIONS AS        *
+*        FOLLOWS:                                                  *
+*              IF NOT OPERATOR SUSPEND: 
+*                    BIT SET - REMOVE OPER-SUSP BIT IN STATUS 
+*                    BIT NOT SET - ERROR EXIT FOR MESSAGE 
+*              IF OPERATOR SUSPEND, SCHEDULE PROGRAM
+* 
+M0400 JSB TTNAM    GO TO FIND ID SEG ADDR 
+      ADA D15 
+      STA WSTAT    STATUS ADDR
+      LDA WSTAT,I 
+      AND D15 
+      CPA D6        CHECK IF PROGRAM OPERATOR-SUSPEND 
+      JMP M0410     OPERATOR-SUSPEND--SO GO TO PROCESS
+      LDA WSTAT,I   NOT OPER SUSP - 
+      AND M1000      IS BIT SET?
+      SZA,RSS 
+      JMP *+3       NO, ERROR-
+      XOR WSTAT,I   YES, CLEAR BIT
+      JMP M0310-2 
+      LDA ILSTT    ILLEGAL STATUS MESSAGE ADDRESS 
+      LDB ERMS3    ILLEGAL STATUS ERROR CODE
+      JMP $MESS,I  EXIT 
+M0410 LDA D2       CHECK IF CONTROL PARAMETERS FOLLOW 
+      CPA PARAM 
+      RSS          NO 
+      JSB PLOAD    GO TO PROCESS CONTROL PARAMETERS 
+M0415 CLA,INA      SCHEDULE PROG THRU LINK PROCESSOR
+      STA WSTAT,I   SINCE LIST WILL NOT SCHEDULE
+      LDA WORK
+      STA WLINK 
+      ADA D6
+      STA WPRIO 
+      JSB LINK      A OPERATOR SUSPENDED PROGRAM
+      OCT 6 
+      OCT 1 
+      JMP $MESS,I  RETURN 
+      HED MESSAGE PROCESSOR--ST,XXXXX COMMAND 
+* 
+*    ST,XXXXX  PROCESSOR
+* 
+*        THE STATUS REQUEST OUTPUTS THE REQUESTED PROGRAM STATUS   *
+*        IN THE FOLLOWING FORMAT:                                  *
+*              PR S R MMM HR MN SC MS T                            *
+*                                                                  *
+*              PR =PRIORITY                                        *
+*              S = STATUS (0 THRU 6                                *
+*              R = RESOLUTION CODE (0 THRU 4)                      *
+*              MMM = MULTIPLE VALUE                                *
+*              HR = NEXT START TIME -HR                            *
+*              MN = NEXT START TIME -MIN                           *
+*              SC = NEXT START TIME -SEC                           *
+*              MS = NEXT START TIME -10 MSEC                       *
+*              T  =  PRESENT IF PROGRAM IN TIME LIST               *
+* 
+M0500 JSB TTNAM    GO TO FIND ID SEGMENT ADDR 
+      LDA DM24
+      STA BUFFR     STORE CHARACTER COUNT IN BUFFER 
+      LDB WORK
+      ADB D6        PRIORITY ADDRESS
+      CCE 
+      LDA B,I 
+      JSB $CVT3    CONVERT PRIORITY TO ASCII
+      LDA ASCI+2
+      STA BUFFR+1  STORE PRIORITY IN BUFFER 
+      ADB D9        STATUS ADDRESS
+      LDA B,I 
+      AND D15 
+      CCE 
+      JSB $CVT3    CONVERT STATUS TO ASCII
+      LDA ASCI+2
+      AND M377
+      XOR UASCI 
+      STA BUFFR+2  STORE STATUS IN BUFFER 
+      INB 
+      INB           RESOL CODE/MULT ADDRESS 
+      CCE 
+      LDA B,I 
+      ALF,RAR 
+      AND D7
+      JSB $CVT3    CONVERT RESOLUTION CODE TO ASCII 
+      LDA ASCI+2
+      AND M377
+      XOR UASCI 
+      STA BUFFR+3  STORE RESOLUTION CODE IN BUFFER
+      CCE 
+      LDA B,I 
+      AND M7777 
+      JSB $CVT3    CONVERT MULTIPLE TO ASCII
+      LDA ASCI+1
+      AND M377
+      XOR UASCI 
+      STA BUFFR+4  STORE MULTIPLE IN BUFFER 
+      LDA ASCI+2
+      STA BUFFR+5  STORE MULTIPLE IN BUFFER 
+      LDA B,I      CHECK IF PROG IN TIME LIST 
+      AND MWAIT 
+      SZA          NO 
+      JMP *+3      YES
+      LDA AASCI    PROGRAM NOT IN TIME LIST 
+      RSS 
+      LDA TZERO    PROG IN TIME LIST
+      STA BUFFR+12 STORE ASCII BLANK OR T IN BUFFER 
+      ADB D4
+      CCE 
+      LDA B,I       HR
+      ADA D24 
+      JSB $CVT3    CONVERT HOURS TO ASCII 
+      LDA ASCI+2
+      ALF,ALF 
+      AND M377
+      XOR UASCI 
+      STA BUFFR+6  STORE HOURS IN BUFFER
+      LDA ASCI+2
+      ALF,ALF 
+      AND MASKU 
+      XOR LASCI 
+      STA BUFFR+7  STORE HOURS IN BUFFER
+      ADB DM1       MIN 
+      CCE 
+      LDA B,I 
+      ADA D60 
+      JSB $CVT3    CONVERT MINUTES TO ASCII 
+      LDA ASCI+2
+      STA BUFFR+8  STORE MINUTES IN BUFFER
+      ADB DM1       SEC 
+      CCE 
+      LDA B,I 
+      ADA D60 
+      JSB $CVT3    CONVERT SECONDS TO ASCII 
+      LDA ASCI+2
+      ALF,ALF 
+      AND M377
+      XOR UASCI 
+      STA BUFFR+9  STORE SECONDS IN BUFFER
+      LDA ASCI+2
+      ALF,ALF 
+      AND MASKU 
+      XOR LASCI 
+      STA BUFFR+10 STORE SECONDS IN BUFFER
+      ADB DM1       TENS OF MILLISECOND 
+      CCE 
+      LDA B,I 
+      ADA D100
+      JSB $CVT3    CONVERT TENS OF MSEC TO ASCII
+      LDA ASCI+2
+      STA BUFFR+11 STORE TENS OF MSEC IN BUFFER 
+      LDA BUFAD    LOAD A WITH OUTPUT BUFFER ADDRESS
+      JMP $MESS,I  RETURN 
+      SPC 1 
+TZERO ASC 1, T
+      HED MESSAGE PROCESSOR--IT,XXXXX COMMAND 
+* 
+*     IT,XXXXX,R,MMM
+*     IT,XXXXX,R,MMM,HR,MN
+*     IT,XXXXX,R,MMM,HR,MN,SC 
+*     IT,XXXXX,R,MMM,HR,MN,SC,MS
+*                                                                  *
+*        R=RESOLUTION CODE
+*           1= TEN MILLISECOND CODE 
+*           2= SECONDS CODE 
+*           3= MINUTES CODE 
+*           4= HOURS CODE 
+*       MM= MULTIPLICATION FACTOR 
+*       HR= START HOURS 
+*       MN= START MINUTES 
+*       SC= START SECONDS 
+*       MS= START TENS OF MILLISECONDS
+* 
+M0600 JSB TTNAM    GO FIND ID SEG ADDR
+      ADA D15 
+      LDA A,I      STATUS 
+      AND D15 
+      SZA          PROG MUST BE DORMANT TO CONTINUE 
+      JMP M0410-3  ILLEGAL STATUS ERROR 
+      LDA WORK
+      ADA D17 
+      STA TEMPP     STORE STARTING ADDRESS
+      LDA TEMPP,I  SAVE T BIT OF RES/T/MULT 
+      AND MWAIT 
+      STA TEMPP,I 
+      JSB CVT1      CONVERT AND STORE RESOLUTION CODE 
+      DEF P2
+      DEF CP2 
+      SZA,RSS      CHECK IF RESOL CODE 1,2,3, OR 4
+      JMP M0950         0-ILLEGAL RESOLUTION CODE 
+      LDB A 
+      ADB DM5 
+      SSB,RSS 
+      JMP M0950         GREATER THAN 4-ILLEGAL CODE 
+      ALF,ALF 
+      ALF,RAL      OK, SO PUT IN UPPER 3 BITS 
+      XOR TEMPP,I 
+      STA TEMPP,I 
+      JSB CVT1      CONVERT MULTIPLY FACTOR 
+      DEF P3
+      DEF CP3 
+      AND M7777    MASK OFF ALL BUT LOW 12 BITS 
+      XOR TEMPP,I 
+      STA TEMPP,I   RESOL CODE/MULT FACTOR STORED 
+      ISZ TEMPP     INCR TO TMS ADDRESS 
+      LDA PARAM    CHECK IF TIME VALUES GIVEN 
+      ADA DM4 
+      SZA,RSS 
+      JMP M0610    NO , SO GO SET TO ZERO 
+      LDA PARAM    CHECK IF 10 MSEC VALUE GIVEN 
+      CMA,INA 
+      ADA D7
+      SSA 
+      JMP *+3      YES, SO CONVERT TO DECIMAL 
+      LDA DM100    NO SO SET TO ZERO
+      JMP M0602 
+      JSB CVT1      CONVERT TENS OF MILLISECOND 
+      DEF P7
+      DEF CP7 
+      ADA DM100 
+      SSA,RSS      MINUS, IF LEGAL VALUE
+      JMP M0950    INPUT ERROR
+M0602 STA TEMPP,I  STORE 10 MSEC VALUE
+      ISZ TEMPP     INCR TO SECONDS ADDRESS 
+      LDA PARAM    CHECK IF SEC VALUE GIVEN 
+      CMA,INA 
+      ADA D6
+      SSA 
+      JMP *+3      YES SO CONVERT TO DECIMAL
+      LDA DM60     NO, SO SET TO ZERO 
+      JMP M0605 
+      JSB CVT1      CONVERT SECONDS 
+      DEF P6
+      DEF CP6 
+      ADA DM60
+      SSA,RSS      MINUS, IF LEGAL VALUE
+      JMP M0950    INPUT ERROR
+M0605 STA TEMPP,I  STORE SECONDS
+      ISZ TEMPP     INCR TO MINUTES ADDRESS 
+      JSB CVT1      CONVERT MINUTES AND STORE 
+      DEF P5
+      DEF CP5 
+      ADA DM60
+      SSA,RSS      YES, SO CONVERT TO DECIMAL 
+      JMP M0950    INPUT ERROR
+      STA TEMPP,I  STORE MINUTES
+      ISZ TEMPP     INCR TO HOURS ADDRESS 
+      JSB CVT1      CONVERT HOURS AND STORE 
+      DEF P4
+      DEF CP4 
+      ADA DM24
+      SSA,RSS      MINUS, IF LEGAL VALUE
+      JMP M0950    INPUT ERROR
+      STA TEMPP,I  STORE HOURS
+      CLA 
+      JMP $MESS,I  RETURN 
+M0610 LDA DM100    SET TIME VALUES IN ID SEG TO 0 
+      STA TEMPP,I  10 S OF MSEC 
+      ISZ TEMPP 
+      LDA DM60
+      STA TEMPP,I  SECONDS
+      ISZ TEMPP 
+      STA TEMPP,I  MINUTES
+      ISZ TEMPP 
+      LDA DM24
+      STA TEMPP,I  HOURS
+      CLA 
+      JMP $MESS,I  RETURN 
+      HED MESSAGE PROCESSOR--PR,XXXXX,ZZ COMMAND
+* 
+*    PR,XXXXX,ZZ PROCESSOR
+* 
+*        THE PRIORITY CHANGE ROUTINE FUNCTIONS AS FOLLOWS:         *
+*              IF PROGRAM STATUS OTHER THAN DORMANT, STATUS ERROR. *
+*              IF DORMANT, THEN PRIORITY VALUE CHANGED AND PROGRAM *
+*                   LIST UPDATED VIA LINK PROCESSOR.               *
+*                                                                  *
+M0650 JSB TTNAM    GO TO FIND ID SEG ADDR 
+      ADA D15      STATUS ADDRESS 
+      LDA A,I      CHECK PROGRAM STATUS 
+      AND D15 
+      SZA          PROG MUST BE DORMANT TO CONTINUE 
+      JMP M0410-3  ILLEGAL STATUS MESSAGE 
+      JSB CVT1     CONVERT PRIORITY TO DECIMAL
+      DEF P2
+      DEF CP2 
+      SZA,RSS      CHECK IF ZERO PRIORITY REQ 
+      JMP M0950      ERROR-ILLEGAL VALUE
+      LDB A 
+      ADA DM100     MINUS DECIMAL 100 
+      SSA,RSS      CHECK IF GREATER THAN 100
+      JMP M0950     INPUT ERROR 
+      LDA WORK
+      ADA D6
+      STB A,I      STORE NEW PRIORITY VALUE 
+      JSB $LIST    CALL LIST PROCESSOR TO 
+      OCT 317       RELINK PROGRAMS 
+      DEF WORK
+      JMP $MESS,I  RETURN 
+      HED MESSAGE PROCESSOR--TM COMMAND 
+*     TM,DAY,HR,MN,SC  PROCESSOR
+*        THE REAL TIME CLOCK INITIATOR FUNCTIONS AS FOLLOWS:       *
+*              THE INPUT VALUES FOR DAY, HR, MN, SC ARE CONVERTED  *
+*              AND STORED. THE 10 MSEC VALUE IS SET TO ZERO.
+      SPC 1 
+M0700 JSB CVT1      CONVERT DAYS TO DECIMAL 
+      DEF P1
+      DEF CP1 
+      LDB A 
+      ADA DM366 
+      SZA,RSS      CHECK IF DAY 366 
+      JMP *+3           LEAP YEAR, SO ACCEPT IT 
+      SSA,RSS 
+      JMP M0950    INPUT ERROR
+      STB DAYS      STORE DAYS
+      JSB CVT1      CONVERT HOURS TO DECIMAL
+      DEF P2
+      DEF CP2 
+      ADA DM24
+      SSA,RSS 
+      JMP M0950    INPUT ERROR
+      STA HRS       STORE HOURS 
+      JSB CVT1      CONVERT MINUTES TO DECIMAL
+      DEF P3
+      DEF CP3 
+      ADA DM60
+      SSA,RSS 
+      JMP M0950    INPUT ERROR
+      STA MINS      STORE MINUTES 
+      JSB CVT1      CONVERT SECONDS TO DECIMAL
+      DEF P4
+      DEF CP4 
+      ADA DM60
+      SSA,RSS 
+      JMP M0950     INPUT ERROR 
+      STA SECS      STORE SECONDS 
+      LDA DM100 
+      STA TMS      STORE TENS OF MILLISECONDS 
+      CLA 
+      JMP $MESS,I   RETURN
+      SPC 1 
+DM366 DEC -366
+      HED MESSAGE PROCESSOR--TI COMMAND 
+* 
+* 
+*        THE REQUEST TO GET CURRENT SYSTEM TIME OUTPUTS CURRENT    *
+*              DAY NUMBER, HOUR, MINUTES, AND SECONDS IN THE       *
+*              FOLLOWING FORMAT:                                   *
+*                   DAY  HR  MN  SC                                *
+*                                                                  *
+M0750 LDA DM16
+      STA BUFFR     SET OUTPUT CHARACTER COUNT
+      CCE 
+      LDA DAYS
+      JSB $CVT3    CONVERT AND STORE DAYS 
+      LDA ASCI+1
+      AND M377
+      XOR UASCI 
+      STA BUFFR+1 
+      LDA ASCI+2
+      STA BUFFR+2 
+      LDA AASCI     STUFF NECESSARY WORDS WITH
+      STA BUFFR+3   BLANKS
+      STA BUFFR+5 
+      STA BUFFR+7 
+      LDA HRS 
+      ADA D24 
+      CCE 
+      JSB $CVT3    CONVERT AND STORE HOURS
+      LDA ASCI+2
+      STA BUFFR+4 
+      LDA MINS
+      ADA D60 
+      CCE 
+      JSB $CVT3    CONVERT AND STORE MINUTES
+      LDA ASCI+2
+      STA BUFFR+6 
+      LDA SECS
+      ADA D60 
+      CCE 
+      JSB $CVT3    CONVERT AND STORE SECONDS
+      LDA ASCI+2
+      STA BUFFR+8 
+      LDA BUFAD     SET A TO POINT TO OUTPUT BUFFER 
+      JMP $MESS,I  RETURN 
+      HED MESSAGE PROCESSOR--DN,NN  COMMAND 
+* 
+*     REQUEST TO SET A DEVICE DOWN
+* 
+M0780 JSB CVT1      CONVERT NN TO BINARY
+      DEF P1
+      DEF CP1 
+      JMP $IODN    GO TO $IODN ROUTINE
+      SPC 18
+* 
+*           MESSAGE PROCESSOR--UP,NN COMMAND
+* 
+      SPC 3 
+* 
+*     REQUEST TO SET A DEVICE UP
+* 
+M0800 JSB CVT1      CONVERT NN TO BINARY
+      DEF P1
+      DEF CP1 
+      JMP $IOUP    GO TO $IOUP ROUTINE
+      HED MESSAGE PROCESSOR--LU,N1,N2 COMMAND 
+* 
+*     REQUEST OF LOGICAL UNIT ASSIGNMENT(N1 VALUE ONLY) OR
+*     REQUEST LOGICAL UNIT REASSIGNMENT(N1 AND N2 
+*             OR N1,N2 AND N3 PRESENT)
+* 
+M0850 CLA          SET N3-POSSIBLE SWITCH 
+      STA TEMPW 
+      JSB P1OR2 
+      JMP $LUPR    GO TO $LUPR ROUTINE
+P1OR2 NOP          ENTRY/EXIT 
+      JSB CVT1
+      DEF P1
+      DEF CP1 
+      STA TEMPP 
+      LDA PARAM    CHECK IF JUST
+      ADA DM3       ONE PARAMETER 
+      SSA          MORE THAN ONE
+      JMP P1OR5 
+      JSB CVT1      CONVERT N2 TO BINARY
+      DEF P2
+      DEF CP2 
+      LDB TEMPW    IS A THIRD PARAMETER POSSIBLE? 
+      SZB,RSS 
+      JMP P1OR7     YES 
+P1OR3 LDB A        LOAD B WITH 'N2' OR 'N3:N2'
+      LDA TEMPP     LOAD A WITH N1
+      JMP P1OR2,I 
+P1OR5 CCB          SET B REG TO -1 FOR 1 PARAMETER
+      JMP *-3 
+P1OR7 AND M377     SAVE BITS 7-0
+      STA TEMPW     OF 'N2' 
+      LDA PARAM    CHECK IF THREE PARAMETERS
+      ADA DM4 
+      SSA,RSS 
+      JMP P1OR9    YES- GO GET 'N3' 
+      LDB TEMPW    NO- LOAD 'N2' INTO B 
+      JMP P1OR3+1 
+P1OR9 JSB CVT1     CONVERT 'N3' TO BINARY 
+      DEF P3
+      DEF CP3 
+      AND D7       KEEP BITS 2-0 AND
+      ALF,ALF       MOVE THEM TO
+      ALF,RAR       POSITIONS 13-11 
+      IOR TEMPW    ASSEMBLE 'N3:N2' INTO A
+      JMP P1OR3 
+      HED MESSAGE PROCESSOR--EQ,N1,N2 COMMAND 
+* 
+*     REQUEST EQUIPMENT STATUS (N1 PARAMETER ONLY)
+*     REQUEST EQUIPMENT BUFFERING OR NON BUFFERING (N1,N2 PARAMETERS) 
+*             N2 = 0 FOR NO BUFFERING 
+*             N2 = 1 FOR BUFFERING
+* 
+M0900 CCA          CLEAR N3-POSSIBLE SWITCH 
+      STA TEMPW 
+      JSB P1OR2 
+      JMP $EQST    GO TO $EQST ROUTINE
+      SPC 18
+* 
+*           INPUT ERROR MESSAGE OUTPUT
+* 
+* 
+M0950 LDA INERR     INPUT ERROR MESSAGE 
+      JMP $MESS,I  RETURN 
+      HED MESSAGE PROCESSOR - LS N1,N2  PROCESSOR 
+* 
+*  SET "SOURCE FILE" IDENTIFICATION 
+* 
+*  THE OPERATOR REQUEST IS: 
+*    "LS,LUN,1ST TRACK # "
+*  THIS STATEMENT SETS THE SOURCE FILE CONTROL WORD 
+*  IN THE COMMUNICATION AREA IN THE FOLLOWING 
+*  FORMAT( THE WORD IS LABELED "SFCUN" ): 
+*    *******************************
+*    *LU* ST. TRACK #*    ZERO     *
+*    *******************************
+*     15,14    -    7,6     -     0  (BITS) 
+* 
+*  THE LOGICAL UNIT # AND STARTING TRACK # ARE
+*  RECORDED BY THE 'EDITOR' WHEN THE SOURCE FILE
+*  IS CREATED.
+* 
+*  VALIDITY CHECKS ARE FOR  LOGICAL UNIT = 2 OR 3,
+*  HOWEVER, A LU = 0 WILL SET "SFCUN" = 0.
+* 
+M0960 CCA          CLEAR N3-POSSIBLE SWITCH 
+      STA TEMPW 
+      JSB P1OR2 
+      STB M0963      SAVE PARAMETER 2 
+      SZA,RSS        IF PARAM 1 = 0, GO TO
+      JMP M0961      CLEAR "SFCUN"
+      CPB DM1       IF P2 NOT PRESENT,
+      JMP M0962      ERROR. 
+      CPA D2        VERIFY
+      RSS            THAT LU #  (PARAM # 1) 
+      CPA M3         = 2 OR 3.
+      RSS 
+      JMP M0962     -NO, ERROR
+      CLB           SET B = 0 FOR 
+      SLA            LU #2 OR 
+      LDB M0964      BIT 15 = 1 FOR LU #3.
+      LDA M0963     GET STARTING TRACK #, 
+      ALF,RAL       ROTATE TO 
+      RAL,RAL        14-07
+      AND M0965      AND ISOLATE. 
+      IOR B         PUT IN LU IN 15, ZERO 06-00.
+* 
+M0961 STA SFCUN     SET "SFCUN" 
+      CLA           (A) = 0 FOR 
+      JMP $MESS,I    NORMAL RETURN. 
+* 
+M0962 LDA INERR     RETURN TO PRINT 
+      JMP $MESS,I    "INPUT ERROR" DIAGNOSTIC.
+* 
+M0963 NOP           TEMPORARY STORAGE 
+M0964 OCT 100000
+M0965 OCT 77600 
+      HED MESSAGE PROCESSOR - LG,N COMMAND
+* 
+*  SET "LOAD-AND-GO" PARAMETERS 
+* 
+*  THE OPERATOR STATEMENT IS: 
+*     "LG,# OF TRACKS"
+* 
+*  THIS STATEMENT ALLOWS THE OPERATOR TO: 
+*   1. ALLOCATE A NUMBER OF CONTIGUOUS DISC 
+*      TRACKS FOR 'LOAD-AND-GO' USAGE.
+*   2. RELEASE TRACK(S) CURRENTLY ASSIGNED TO LGO.
+* 
+*  THIS REQUEST HAS NO EFFECT IF LGO CURRENTLY IN USE 
+* 
+*  THE BASE PAGE COMMUNICATION AREA WORDS DESCRIBED 
+*  BELOW CONTAIN THE LGO TRACK ASSIGNMENTS: 
+* 
+*           ********************************
+*   'LGOTK' *LU* ST. TRACK # * # OF TRACKS *
+*           ********************************
+*            15,14---------07,06---------00 
+* 
+*           ********************************
+*   'LGOC'  *LU*  TRACK #    * SECTOR  #   *
+*           ********************************
+*            15,14---------07,06---------00 
+* 
+*   LGOTK DEFINES THE LU #, THE STARTING TRACK #
+*    AND THE NUMBER OF CONTIGUOUS TRACKS. THIS
+*    WORD IS ZERO IF NO TRACKS ARE ALLOCATED. 
+* 
+*   LGOC  DEFINES THE CURRENT AVAILABLE SECTOR. 
+*    THIS IS UPDATED BY 'RTIOC' AND RESET TO
+*    THE BEGINNING OF THE AREA BY THE LOADER
+*    AFTER LOADING FROM THE LGO AREA; ALSO BY 
+*    THIS ROUTINE WHEN THE TRACKS ARE ALLOCATED.
+* 
+* 
+M0970 JSB P1OR2     GET PARAMETER 
+      AND M177       MAX. VALUE OF 127. 
+      STA M0974      -SAVE P- 
+      SZA,RSS       IF P = 0, GO TO 
+      JMP M0971      RELEASE LGO TRACK(S).
+      CLA           CHECK FOR 
+      CPA LGOTK      CURRENT ASSIGNMENT.
+      RSS            -NONE
+      JMP M0971      -RELEASE CURRENT 
+* 
+M0975 LDA M0974     (A) = # OF TRACKS 
+      CLB           (B)=0 FOR CALL FROM SYSTEM. 
+      JSB $DREQ     ALLOCATE TRACKS 
+* 
+      SZB,RSS       IF P TRACKS NOT 
+      JMP M0972      AVAILABLE, GO FOR DIAG. RETURN.
+* 
+      ALF,RAL       ROTATE TRACK # TO 
+      RAL,RAL        14-07. 
+      CLE,ERB       PUT LS BIT OF B IN 15 
+      CLB,SEZ        WITH 14-00 = 0.
+      ERB 
+* 
+      IOR B         PUT LU IN (A)15.
+      STA LGOC      SET LGOC. 
+      IOR M0974     SET # OF TRACKS IN 06-00
+      STA LGOTK      AND SET LGOTK. 
+* 
+      CLA           (A)=0 FOR NORMAL RETURN 
+      JMP $MESS,I    -RETURN- 
+* 
+M0971 CPA LGOTK 
+      JMP $MESS,I 
+      LDA LGOTK     GET ASSIGNMENT WORD TO RELEASE. 
+      CLB,INB       SET: B=1 IF LU#2, B=2 IF LU#3 
+      SSA 
+      INB 
+      STB TEMPH 
+      CLB           (B)=0 FOR LU #2.
+      SSA           IF LU #3, SET 
+      LDB TATSD      (B)= # TRACKS ON SYSTEM DISC.
+      ALF,ALF       ROTATE STARTING 
+      RAL            TRACK #
+      AND M377       TO 07-00, ISOLATE, 
+      STA M0978      SAVE IT. 
+      ADA B          ADD (B)
+      STA M0963      AND SAVE TEMPORARILY.
+      LDA LGOTK     PUT # OF
+      AND M177       TRACKS 
+      STA M0976      FOR $DREL ROUTINE
+      CMA,INA        AND FOR CURRENT
+      STA M0977      COUNTER. 
+      SPC 1 
+      LDA TEMPH 
+      ISZ TEMPH 
+      ADA DRT       SET DISC QUEUE
+      LDA A,I        ADDRESS INTO EQT1
+      AND M77 
+      JSB $CVEQ 
+      SPC 1 
+M0980 LDB EQT1,I    GET REQUESTS QUEUED 
+      STB M0979      FOR DISC-
+      SZB,RSS       QUEUE EXHAUSTED?
+      JMP M0982      YES - GO TO NEXT TRACK 
+      INB            NO -SEE IF REQUEST IS
+      LDA B,I         FOR THIS TRACK
+      ALF,ALF 
+      AND M3
+      CPA TEMPH     SAME LU?
+      RSS            YES - SEE IF SAME TRACK
+      JMP M0981      NO - THIS REQUEST OK 
+      ADB M3
+      LDA B,I 
+      CPA M0978     SAME TRACK? 
+      JMP M0972+2    YES - DO NOT RELEASE 
+      SPC 1 
+M0981 LDB M0979,I   GO TO NEXT REQUEST
+      JMP M0980+1    IN QUEUE - 
+      SPC 1 
+M0982 ISZ M0977     ALL TRACKS CHECKED? 
+      RSS            NO - CHECK NEXT TRACK
+      JMP M0984      YES - RELEASE THEM 
+      ISZ M0978 
+      JMP M0980 
+      SPC 1 
+M0984 LDB M0976      NUMBER OF TRACKS IN B, 
+      LDA M0963     STARTING TRACK # IN A.
+      JSB $DREL     -RELEASE- 
+      CLA           CLEAR 
+      STA LGOTK     'LOAD-AND-GO' 
+      STA LGOC       CONTROL WORDS. 
+      CPA M0974     IF P = 0, 
+      JMP $MESS,I    -RETURN- 
+      JMP M0975      GO TO ALLOCATE NEW TRACKS. 
+* 
+M0972 LDA M0973     PRINT: NO LGO SPACE 
+      RSS 
+      LDA M0988     PRINT: LGO IN USE 
+      JMP $MESS,I 
+* 
+M0973 DEF *+1 
+      DEC -12 
+      ASC 6,NO LGO SPACE
+* 
+M0988 DEF *+1 
+      DEC -10 
+      ASC 5,LGO IN USE
+* 
+M0974 NOP 
+M0976 NOP 
+M0977 NOP 
+M0978 NOP 
+M0979 NOP 
+      SPC 3 
+* 
+*           MESSAGE PROCESSOR - TO,N1,N2 COMMAND
+* 
+      SPC 3 
+*     REQUEST DEVICE TIME-OUT PARAMETER (N1 PARAMETER ONLY) 
+*     REQUEST TO ASSIGN DEVICE TIME-OUT PARAMETER (N1,N2 PARAMETERS)
+*             N1 = DEVICE EQUIPMENT NUMBER
+*             N2 = TIME-OUT PARAMETER TO BE ASSIGNED
+* 
+M0990 CCA           CLEAR N3-POSSIBLE SWITCH
+      STA TEMPW 
+      JSB P1OR2 
+      JMP $CHTO 
+      HED MESSAGE PROCESSOR  BUFFERS, POINTERS, ETC 
+* 
+*     PARAMETER POINTERS FOR DATA STORAGE 
+INIT  DEF TAB       PARAMETER INITIALIZATION POINTER
+TAB   DEF OP        OPERATION CODE BUFFER ADDRESS 
+      DEF P1        PARAMETER 1 BUFFER ADDRESS
+      DEF P2        PARAMETER 2 BUFFER ADDRESS
+      DEF P3        PARAMETER 3 BUFFER ADDRESS
+      DEF P4        PARAMETER 4 BUFFER ADDRESS
+      DEF P5       PARAMETER 5 BUFFER ADDRESS 
+      DEF P6       PARAMETER 6 BUFFER ADDRESS 
+      DEF P7       PARAMETER 7 BUFFER ADDRESS 
+*     PARAMETER STORAGE 
+PARPT DEF PARAM 
+PARAM NOP          PARAMETER COUNTER
+      NOP          CHARACTER COUNT-OP CODE
+OP    BSS 1         OPERATION CODE
+CP1   NOP          CHAR COUNT-PARAM 1 
+P1    BSS 3         PARAM 1 (UP TP 3 WORDS-6CHAR.)
+CP2   NOP          CHAR COUNT-PARAM 2 
+P2    BSS 3        PARAMETER 2
+CP3   NOP          CHAR COUNT-PARAM 3 
+P3    BSS 3        PARAMETER 3
+CP4   NOP          CHAR COUNT-PARAM 4 
+P4    BSS 3        PARAMETER 4
+CP5   NOP          CHAR COUNT -PARAM 5
+P5    BSS 3        PARAMETER 5
+CP6   NOP          CHAR COUNT-PARAM 6 
+P6    BSS 3        PARAMETER 6
+CP7   NOP          CHAR COUNT-PARAM 7 
+P7    BSS 3        PARAMETER 7
+LASCI OCT 000040   ASCII BLANK IN LOW CHARACTER 
+UASCI OCT 020000   ASCII BLANK IN HIGH CHARACTER
+AASCI OCT 020040   ASCII BLANK IN BOTH CHAR 
+MASKU OCT 177400    UPPER CHARACTER MASK (AND)
+TEMPP NOP          TEMPORARY STORAGE
+KEY   NOP          TEMPORARY STORAGE
+OPERR DEF *+1       OPERATION CODE ERROR MESSAGE
+      DEC -12 
+      ASC 6,OP CODE ERR 
+NOPRG DEF *+1       NO SUCH PROGRAM ERROR MESSAGE 
+      DEC -12 
+      ASC 6,NO SUCH PROG
+INERR DEF *+1       INPUT ERROR MESSAGE 
+      DEC -12 
+      ASC 6,INPUT ERROR 
+      HED CONTROL PARAMETER CONVERSION AND STORE IN ID SEGMENT
+* 
+* 
+PLOAD NOP          ENTRY/EXIT 
+      JSB CLIDS    GO TO CLEAR ID SEG TEMP AND SET B
+      LDA P2
+      CPA NOPRG+2  CHECK IF -NOW- OPTION
+      JMP PL010    YES
+      LDA PARAM    CHECK IF ANY CONTROL PARAMETERS
+      CMA,INA
+      ADA D2
+      STA KEY       COUNT OF CONTROL PARAMETERS
+      SZA,RSS 
+      JMP PLOAD,I  RETURN 
+      LDA D2
+      JMP PL020    GO TO CONVERT AND STORE
+PL010 LDA PARAM    CHECK IF ANY CONTROL PARAMETERS
+      CMA,INA 
+      ADA M3
+      STA KEY      COUNT OF CONTROL PARAMETERS
+      SZA,RSS 
+      JMP PLOAD,I  RETURN 
+      LDA M3
+PL020 ADA INIT
+      STA TEMPP    STARTING LOCATION OF CONTROL PARAMETERS
+      LDA KEY      CHECK COUNT OF CONTROL PARAMETERS
+      ADA D5
+      SSA          OK-5 OR LESS CONTROL PARAMETERS
+      JMP M0950    ERROR-MORE THAN 5 PARAMETERS 
+*     CONVERT AND STORE PARAMETERS
+PL030 LDA TEMPP,I 
+      STA *+4      DATA ADDRESS 
+      ADA DM1 
+      STA *+3      CHARACTER ADDRESS 
+      JSB CVT1     CONVERT PARAMETER TO DECIMAL 
+      DEF * 
+      DEF * 
+      STA TEMP,I   STORE CONVERTED DATA INTO TEMP 
+      ISZ TEMP     INCREMENT STORE ADDRESS
+      ISZ TEMPP    INCREMENT DATA ADDRESS 
+      ISZ KEY      INCREMENT COUNT
+      JMP PL030    GO TO NEXT CONTROL PARAMETER 
+      JMP PLOAD,I  RETURN 
+* 
+*        SUBROUTINE TO CLEAR ID SEGMENT TEMPORARY 
+*             AND SET B REGISTER TO POINT TO TEMP AREA
+* 
+CLIDS NOP          ENTRY/EXIT 
+      LDA DM5 
+      STA TEMP     CLEAR OUT ID SEGMENT TEMP AREA 
+      LDB WORK     COMPUTE ID SEG TEMP AREA ADDRESS 
+      INB 
+      CLA
+      STA B,I 
+      INB 
+      ISZ TEMP
+      JMP *-3 
+      LDB WORK
+      INB 
+      STB TEMP     ID SEGMENT TEMP ADDRESS
+      LDA WORK
+      ADA D10 
+      STB A,I      SET ID SEG B REG TO PT TO TEMP 
+      JMP CLIDS,I  RETURN 
+      HED MESSAGE PROCESSOR NAME SEARCH 
+* 
+*     CALL TO NAME SEARCH ROUTINE 
+* 
+TTNAM NOP          ENTRY/EXIT 
+      LDB AASCI    SET B TO ASCII BLANKS
+      LDA CP1      CHARACTER COMPARE COUNT
+      CPA DM5      CHECK IF 5 CHARACTERS INPUT
+      JMP TTN20    YES, SO GO SEARCH FOR PROG 
+      STB P1+2     NO, SO STORE ASCII BLANK IN CHAR 5 
+      CPA DM4      CHECK IF 4 CHARACTERS
+      JMP TTN20    YES, SO GO TO SEARCH FOR PROGRAM 
+      CPA DM3      CHECK IF 3 CHARACTERS INPUT
+      RSS          YES, SO SET CHAR 4 TO BLANK
+      JMP TTN10    NO,SO SET CHAR 3 AND 4 TO BLANK
+      LDA P1+1
+      IOR LASCI    IOR BLANK INTO CHARACTER 4 
+      STA P1+1
+      JMP TTN20    GO TO SEARCH FOR PROGRAM 
+TTN10 STB P1+1     STORE BLANK IN CHAR 3 AND 4
+      CPA DM2      CHECK IF 2 CHARACTERS INPUT
+      JMP TTN20    YES, SO GO TO SEARCH FOR PROGRAM 
+      CPA DM1      CHECK IF 1 CHARACTER INPUT 
+      RSS          YES, SO SET CHAR 2 TO BLANK
+      JMP M0950    NO, SO INPUT ERROR 
+      LDA P1
+      IOR LASCI    IOR BLANK INTO CHARACTER 2 
+      STA P1
+TTN20 LDB TAB+1    ADDRESS OF ASCII PROG NAME 
+      JSB TNAME     CALL TO NAME SEARCH ROUTINE 
+      STA WORK
+      SZA          IF ZERO, THEN PROG NOT FOUND 
+      JMP TTNAM,I   EXIT
+      LDA NOPRG    NO SUCH PROG ERROR 
+      JMP $MESS,I  EXIT 
+      HED SEARCH KEYWORD LIST FOR PROGRAM NAME
+*     ON ENTRY
+*         B IS ADDRESS OF ASCII PROGRAM NAME
+*     ON RETURN 
+*         A IS 0 IF PROGRAM NOT FOUND 
+*         A IS ID SEGMENT ADDRESS OF REQUESTED PROGRAM
+* 
+TNAME NOP          ENTRY/EXIT 
+      LDA B,I      ASCII NAME CHAR 1 AND 2
+      STA TEMP+3
+      INB          INCR TO CHAR 3 AND 4 ADDR
+      LDA B,I      ASCII NAME CHARS 3 AND 4 
+      STA TEMP+4
+      INB          INCR TO CHAR 5 ADDR
+      LDA B,I      ASCII NAME CHAR 5 AND X
+      AND MASKU         MASK OFF X
+      STA TEMP+5
+      LDA KEYWD 
+      STA KEY      TOP OF KEYWORD LIST
+TN005 LDA KEY,I    CHECK IF AT END OF LIST
+      SZA,RSS 
+      JMP TNAME,I  END OF LIST ERROR RETURN 
+      ADA D12 
+      STA TEMP+2   ID SEGMENT ASCII NAME ADDRESS
+      LDA TEMP+2,I ID SEG ASCII NAME CHARS 1 AND 2
+      CPA TEMP+3   COMPARE WITH REQUESTED CHAR 1,2
+      RSS          COMPARES 
+      JMP TN030    DOES NOT COMPARE-GO TO NEXT PROG 
+      ISZ TEMP+2   INCR ASCII NAME ADDRESS
+      LDA TEMP+2,I ID SEG ASCII NAME CHARS 3 AND 4
+      CPA TEMP+4   COMPARE WITH REQUESTED CHARS 3,4 
+      RSS          COMPARES 
+      JMP TN030    DOES NOT COMPARE-GO TO NEXT PROG 
+      ISZ TEMP+2   INCR ASCII NAME ADDRESS
+      LDA TEMP+2,I ID SEG ASCII NAME CHARS 5,X
+      AND MASKU         MASK OFF X
+      CPA TEMP+5   COMPARE CHARACTER 5
+      JMP TN040    COMPARES-SO PROGRAM FOUND
+TN030 ISZ KEY      INCREMENT KEYWORD ADDRESS
+      JMP TN005    GO TO COMPARE CHARACTERS 
+TN040 LDA KEY,I    LOAD A WITH ID SEGMENT ADDRESS 
+      JMP TNAME,I  EXIT 
+      HED  CVT1  (ASCII TO BINARY CONVERSION) 
+* 
+*         ASCII TO BINARY CONVERSION ROUTINE
+* 
+*     CALLING SEQUENCE
+* 
+*         JSB CVT1
+*         DEF DATA BUFFER ADDRESS 
+*         DEF ADDRESS OF CHARACTER COUNT
+* 
+CVT1  NOP          ENTRY/EXIT 
+      STB TEMP+3
+      CLA 
+      STA TMP       SET ACCUMULATING VALUE TO ZERO
+      LDB CVT1,I   LOAD DATA ADDR INTO B
+      CLE,ELB 
+      STB TEMP+2    FORM AND STORE CHAR ADDRESS 
+      ISZ CVT1     INCR TO CHARACTER COUNT
+      LDA CVT1,I
+      LDA A,I 
+      STA TMP+1     STORE CHARACTER COUNT 
+      ISZ CVT1     INCR TO EXIT ADDR
+CV015 LDA TMP 
+      ALS,ALS       TMP= 10*TMP 
+      ADA TMP 
+      ALS TMP 
+      STA TMP       STORE MULTIPLIED VALUE
+      LDB TEMP+2    LOAD B WITH CHAR ADDR 
+      CLE,ERB       FORM WORD ADDRESS 
+      LDA B,I       LOAD A WITH DATA VALUE
+      SEZ,RSS       IF E SET, THEN LOWER CHAR.
+      ALF,ALF       UPPER CHAR., SO ROTATE INTO LOWER 
+      AND M377      MASK OFF ALL BUT LOWER CHAR.
+      ADA DM48      CHECK IF LEGAL DATA CHARACTER 
+      STA TMP+2     STORE VALUE TEMPORARILY 
+      SSA 
+      JMP M0950     ERROR 
+      ADA LMDG+3
+      SSA,RSS 
+      JMP M0950     ERROR 
+      LDA TMP+2     CVT1 SO,
+      ADA TMP       ADD TO ACCUMULATED
+      STA TMP       VALUE AND STORE 
+      ISZ TEMP+2    INCR CHAR ADDRESS 
+      ISZ TMP+1     INCREMENT CHARACTER COUNT 
+      JMP CV015     GO TO PROCESS NEXT CHARACTER
+      LDB TEMP+3
+      LDA TMP       LOAD CONVERTED VALUE
+      JMP CVT1,I   RETURN 
+      SPC 1 
+DM48  DEC -48 
+      HED CVT3 (BINARY TO ASCII CONVERSION) 
+* 
+*         BINARY TO ASCII CONVERSION ROUTINE
+* 
+*     CALLING SEQUENCE
+* 
+*         SET E TO 0 IF OCTAL CONVERSION OR 
+*         SET E TO 1 FOR DECIMAL CONVERSION 
+*         LDA NUMBER TO BE CONVERTED
+*         JSB $CVT3 
+* 
+*              RESULTS IN ASCI, ASCI+1, ASCI+2
+$CVT3 NOP          ENTRY/EXIT 
+      STB TEMP+6   SAVE B REGISTER
+      LDB PTT       INIT LOCATION OF BUFFER 
+      STB TEMP+2
+      CCB 
+      STB TEMP+5    START UPPER 
+      LDB FILL      SET BUFFER=ASCII 0'S
+      STB ASCI
+      STB ASCI+1
+      STB ASCI+2
+      SEZ 
+      JMP %         DECIMAL CONVERSION
+      LDB DM6       (-6)
+      STB TEMP
+      OCT 66        CLE,ELA 
+      STA TEMP+1
+      CLA 
+      ELA           SIGN BIT IS SIXTH DIGIT 
+      JSB DPCK
+      LDA TEMP+1
+      OCT 1723      ALF,RAR 
+      STA TEMP+1
+      AND D7        (7) MASK 1 DIGIT
+      ISZ TEMP
+      JMP *-6 
+      LDA PTT      LOAD A WITH ASCI BUFFER ADDRESS
+      LDB TEMP+6   RESTORE B
+      JMP $CVT3,I  RETURN 
+%     LDB DM3          DEC CONV RTN 
+      STB TEMP
+      LDB LMDG
+      STB TEMP+3
+      LDB LPDG
+      STB TEMP+4
+      LDB 0         A TO B
+      ISZ TEMP+2
+DPCR  CLA,RSS 
+      INA       (FROM *+3)
+      ADB TEMP+3,I
+      SSB,RSS 
+      JMP *-3 
+      ADB TEMP+4,I  <10**N, RESTORE VALUE 
+      JSB DPCK      PACK DIGIT
+      ISZ TEMP+4
+      ISZ TEMP+3
+      ISZ TEMP
+      JMP DPCR      RETURN FOR 10**N-1
+      LDA 1 
+      JSB DPCK
+      LDA PTT      LOAD A WITH ASCI BUFFER ADDRESS
+      LDB TEMP+6   RESTORE B REGISTER 
+      JMP $CVT3,I  RETURN 
+DPCK  NOP 
+      ADA TEMP+2,I
+      ISZ TEMP+5
+      JMP *+4 
+      OCT 1727      ALF,ALF 
+      STA TEMP+2,I
+      JMP DPCK,I
+      STA TEMP+2,I
+      ISZ TEMP+2
+      CCA 
+      STA TEMP+5
+      JMP DPCK,I    EXIT
+* 
+DM6   DEC -6
+FILL  OCT 30060 
+LMDG  DEF *+1 
+      DEC -1000 
+DM100 DEC -100      PRIORITY CODE 
+DM10  DEC -10 
+      DEC -11 
+LPDG  DEF *+1 
+      DEC 1000
+D100  DEC 100 
+D10   DEC 10
+PTT   DEF ASCI
+ASCI  BSS 3 
+      HED SYSTEM START UP 
+********************************************************************
+*        THE START SECTION:                                        *
+*              CLEARS INTERRUPT SYSTEM                             *
+*              SETS FENCE REGISTER TO 0                            *
+*              CLEARS XEQT                                         *
+*              SCHEDULES 'FMGR' IF PRESENT
+*              STARTS THE CLOCK (TBG) 
+*              OUTPUTS MESSAGE TO SET TIME (ON CLOCK) 
+*        THIS SECTION IS EXECUTED ONCE - IT IS OVERLAYED
+********************************************************************
+* 
+* 
+BUFFR EQU *        SHOULD BE AT LEAST 21 WORDS LONG 
+$STRT CLC 0         CLEAR INTERRUPT SYSTEM
+* 
+      CLA 
+      STA FENCE 
+      OTA 5B        SET FENCE REGISTER TO ZERO
+      STA XEQT     CLEAR XEQT WORD
+* 
+      LDB DUMMY     GET ADDR OF PRIV INT CARD.
+      SZB            SKIP IF 0 (NOT PRESENT). 
+      STA B,I       STORE 0 (NOP) IN INT. LOCATION. 
+* 
+      LDA SECT3     FIND MINIMUM # SECTORS/TRACK
+      LDB SECT3     SUBTRACT # FOR LU 3 
+      CMB,INB        FROM # FOR LU 2. 
+      ADB SECT2     IF POSITIVE RESULT, 
+      SSB,RSS        LU 3 IS SMALLER. 
+      LDA SECT2     OTHERWISE, USE LU 2 
+      CMA,INA        AND SAVE 
+      STA N#SEC      AS A NEG. #. 
+      SPC 1 
+      JSB $LIST    SCHEDULE 'FMGR' PROGRAM
+      OCT 201       IF IT IS IN THE SYSTEM. 
+      DEF FMGR
+      SPC 1 
+      LDA WORK      FOUND?
+      SZA,RSS 
+      JMP TBGON    NO - 
+      INA          YES - THEREFORE: 
+      LDB TATLG     INHIBIT ALL TRACK 
+      STB A,I       ALLOCATIONS UNTIL 
+      CCB           'FMGR' EXECUTES.
+      STB TATLG    'FMGR' UNDOES THIS 
+      LDA SKEDD 
+      LDB A,I      INSURE 'FMGR' IS 
+      CPA WORK      FIRST IN THE
+      SWP           SCHEDULED LIST. 
+      STB SKEDD 
+      STA B,I 
+      CLB 
+      STB A,I 
+      SPC 1 
+TBGON LDA TBG 
+      IOR OTA 
+      STA *+5 
+      IOR M1100 
+      STA *+4 
+BREAD NOP 
+      LDA D2        SET INTERRUPT 
+      OTA 0          INTERVAL TO 10 MSEC
+      STC 0,C 
+      SPC 1 
+      LDA BEGIN    OUTPUT 
+      JSB $SYMG     "SET TIME"
+      SPC 1 
+      JMP $XEQ
+      SPC 1 
+OTA   OTA 0 
+M1100 OCT 1100
+BEGIN DEF *+1 
+      DEC -10 
+      OCT 6412
+      ASC 4,SET TIME
+FMGR  ASC 3,FMGR
+RTSWP NOP 
+      HED OUTPUT *_ ON SYSTEM TELETYPE
+********************************************************************
+*        THE $TYPE SECTION FUNCTIONS AS FOLLOWS:                   *
+*              ENTRY IS MADE BY STRIKING ANY SYSTEM TELETYPE KEY.  *
+*              IF TELETYPE FLAG NOT BUSY, THEN * IS OUTPUT AND A   *
+*                   REQUEST IS MADE FOR INPUT. IF FLAG IS SET THEN *
+*                   IGNORE REQUEST. UPON COMPLETION OF INPUT (LF), *
+*                   THE MESSAGE PROCESSOR ROUTINE IS CALLED.       *
+*                   UPON RETURN, IF A REGISTER IS ZERO THEN NO     *
+*                   MESSAGE TO BE OUTPUT. IF A NON-ZERO, THEN A IS *
+*                   ADDRESS OF MESSAGE TO OUTPUT WITH CHARACTER    *
+*                   COUNT THE FIRST WORD IN BUFFER.                *
+********************************************************************
+*                                                                  *
+$TYPE LDA FLG      CHECK SYSTEM TTY FLAG
+      SZA 
+      JMP $XEQ     BUSY, SO RETURN TO $XEQ
+      JSB $XSIO    CALL TO OUTPUT ASTERISK(*) 
+      OCT 1              ON SYSTEM TELETYPE 
+      NOP 
+      NOP 
+      OCT 2 
+      DEF ASTRK 
+      DEC -4       OUTPUT CHARACTER COUNT 
+      JSB $XSIO    CALL TO REQUEST OPERATOR INPUT 
+      OCT 1 
+      DEF TYP10    INPUT COMPLETION ADDRESS 
+      NOP 
+      OCT 401      INPUT WITH TYPEOUT 
+BUFAD DEF BUFFR 
+      DEC -44      DETERMINED BY $STRT ROUTINE
+      ISZ FLG       SET SYSTEM TTY BUSY FLAG
+      JMP $XEQ     GO TO $XEQ 
+TYP10 JSB $MESS    GO TO MESSAGE PROCESSOR ROUTINE
+      SZA,RSS       CHECK IF MESSAGE TO BE OUTPUT 
+      JMP TYP30     NO MESSAGE-SO GO RETURN 
+      LDB A,I 
+      STB TYP20+6 
+      INA 
+      STA TYP20+5 
+TYP20 JSB $XSIO    CALL TO OUTPUT ERR MESSAGE 
+      OCT 1 
+      DEF TYP30    COMPLETION ADDRESS 
+      NOP 
+      OCT 2 
+      NOP 
+      NOP 
+      JMP $XEQ     GO TO $XEQ 
+TYP30 CLA           CLEAR SYSTEM FLAG FOR NEXT
+      STA FLG       REQUEST 
+      JMP $XEQ
+ASTRK OCT 006412   CR, LF 
+      ASC 1,*_     ASTERISK, LEFT ARROW 
+      HED MEMORY PROTECT VIOLATION SCHEDULER PREPROCESSORS
+********************************************************************
+*        THE $MPT1 THRU $MPT7 PREPROCESSORS CONSIST OF MEMORY      *
+*        PROTECT VIOLATION CALLS FROM EXEC THAT INVOLVE LIST       *
+*        PROCESSING.                                               *
+*        THE FOLLOWING REQUESTS ARE HANDLED:                       *
+*              PROGRAM COMPLETION (DORMANT)                        *
+*              SUSPEND (OPERATOR)                                  *
+*              BACKGROUND SEGMENT LOAD                             *
+*              SCHEDULE WITH WAIT                                  *
+*              SCHEDULE WITHOUT WAIT                               *
+*              CURRENT SYSTEM TIME (TIME ROUTINE CALL)             *
+*              SET ID SEGMENT TIME VALUES (TIMER ROUTINE CALL)     *
+********************************************************************
+      SPC 3 
+* 
+*     DORMANT REQUEST - PROGRAM HAS RUN TO COMPLETION 
+* 
+$MPT1 LDA XEQT     ID SEG ADDR OF CURRENT 
+      STA *+3       EXECUTING PROGRAM 
+      JSB $LIST 
+      OCT 100      DORMANT REQUEST
+      DEF * 
+      JMP $XEQ     GO TO $XEQ 
+      SPC 3 
+* 
+*     PROGRAM SUSPEND REQUEST 
+* 
+$MPT2 LDA XEQT     ID SEG ADDR OF CURRENT 
+      STA *+3       EXECUTING PROGRAM 
+      JSB $LIST 
+      OCT 106      OPERATOR SUSPEND REQUEST 
+      DEF * 
+      JMP MPT7A+1 
+      SPC 3 
+* 
+*     READ IN BACKGROUND PROGRAM SEGMENT
+* 
+$MPT3 CCA          CHECK PARAMETER COUNT
+      ADA RQCNT 
+      SZA 
+      JMP MEM30    ERROR, SO RETURN 
+      LDA RQP2     ADDR OF ASCII PROG SEGMENT 
+      STA *+3       TO BE READ IN 
+      JSB $LIST 
+      OCT 207      SEGMENT READ REQUEST 
+      DEF * 
+      SZA          CHECK IF ERROR FROM $LIST
+      JMP MEM20 
+      JMP $XEQ     OK, BUT DO NOT STORE RETURN
+      SKP 
+* 
+*    SCHEDULE REQUEST WITH WAIT 
+* 
+$MPT4 LDA XEQT     CHECK IF BACKGROUND DISC RESIDENT
+      ADA D14           PROGRAM EXECUTING 
+      LDA A,I 
+      AND M77 
+      CPA M3
+      RSS 
+      JMP MPTA     NO-SO OMIT CHECKING
+      LDB RQP2
+      JSB TNAME     GET PROG ID SEGMENT ADDR
+      SZA,RSS 
+      JMP MEM25     NO SUCH PROGRAM ERROR 
+      ADA D14 
+      LDA A,I 
+      AND M77 
+      CPA M3
+      JMP MEM20-1 
+      CPA D5
+      JMP MEM20-1 
+MPTA  JSB IDCKK     CHECK IF PROGRAM DORMANT
+      LDA WORK
+      STA XTEMP,I  STORE WAIT PROG ID SEGMENT ADDR IN TEMP
+      LDB XEQT
+      ADB D15 
+      LDA B,I 
+      IOR MWAIT    SET STATUS WAIT REQUEST BIT
+      STA B,I       INTO CURRENT EXEC PROGRAM 
+      RSS 
+* 
+*     SCHEDULE REQUEST WITHOUT WAIT 
+* 
+$MPT5 JSB IDCKK     CHECK IF PROGRAM DORMANT
+      LDA RQCNT     CHECK PARAMETER COUNT 
+      CMA,INA 
+      INA 
+      SZA,RSS 
+      JMP MEM15          NO SCHEDULING PARAMETERS 
+      STA TEMP           SAVE LOOP COUNT
+      ADA D5
+      SSA 
+      JMP MEM30 
+      LDB DEFR3          RQP3 ADDRESS 
+      LDA WORK
+      INA 
+      STA TEMP+1         STORE ADDRESS
+      LDA B,I            GET SCHEDULING PARAMETER 
+      LDA A,I 
+      STA TEMP+1,I            AND STORE 
+      ISZ TEMP+1
+      INB 
+      ISZ TEMP
+      JMP *-6       GO TO STORE NEXT SCHED PARAMETER
+      LDB WORK
+      ADB XD10
+      LDA WORK
+      INA 
+      STA B,I 
+MEM15 LDA RQRTN 
+      STA XSUSP,I  POINT
+      JMP $XEQ
+      LDB ERMS3 
+MEM20 LDA ASY      OUTPUT SC ERROR CODE 
+      JSB $ERMG    CALL SYSTEM ERROR MESSAGE ROUTINE
+      LDA XEQT
+      JSB $ABRT    GO TO ABORT ROUTINE
+      JMP $XEQ     RETURN CONTROL TO $XEQ 
+MEM25 LDB ER5       NO SUCH PROG ERROR CODE 
+      JMP MEM20 
+MEM30 LDB ASC01    ILLEGAL PARAMETER COUNT
+      JMP MEM20 
+      SPC 6 
+* 
+*     CALL TO GET SYSTEM REAL TIME
+* 
+$MPT6 CCA          CHECK PARAMETER COUNT
+      ADA RQCNT 
+      SZA 
+      JMP MEM30    PARAMETER COUNT ERROR
+      LDA XEQT     FORM PROG TYPE ADDR
+      ADA D14 
+      LDA A,I      LOAD IN PROG TYPE
+      AND D15 
+      LDB RQP2     USER BUFFER ADDRESS
+      CMB,INB 
+      ADA DM3 
+      SSA,RSS 
+      JMP MPT6A    BACKGROUND PROGRAM 
+      ADB FREG2    CHECK IF LEGAL RT AREA ADDRESS 
+MPT6C SZB,RSS 
+      JMP MPT6B 
+      SSB 
+      JMP MPT6B 
+      LDB ASC02    NO, SO LOAD B WITH ERROR CODE
+      JMP MEM20    ERROR
+MPT6A ADB FREG3    CHECK IF LEGAL BACK. ADDRESS 
+      JMP MPT6C 
+MPT6B JSB TIME     CALL TIME SUBROUTINE 
+      JMP MEM15     GO TO STORE RETURN ADDRESS
+      SKP 
+* 
+*     CALL TO SET ID SEGMENT TIME VALUES
+* 
+$MPT7 LDA DM4      CHECK PARAM COUNT FOR 4 OR 7 
+      ADA RQCNT 
+      SZA,RSS 
+      JMP MPT7A 
+      LDA DM7 
+      ADA RQCNT 
+      SZA 
+      JMP MEM30    ERROR IN PARAMETER COUNT 
+MPT7A JSB TIMER    CALL TIMER ROUTINE 
+      SZA 
+      JMP MEM20 
+      JMP MEM15 
+*     CHECK IF PROGRAM DORMANT AND THEN SCHEDULE
+IDCKK NOP 
+      LDB RQP2      GET ID SEGMENT ADDRESS
+      JSB TNAME 
+      SZA,RSS 
+      JMP MEM25     NO SUCH PROGRAM ERROR 
+      STA IDCKL     SAVE ID SEG ADDRESS FOR $LIST 
+      ADA D15       CHECK PROGRAM STATUS FOR DORMANT
+      LDA A,I 
+      STA XA,I      RETURN PROG STATUS IN A REG 
+      SZA           DORMANT?
+      JMP MEM15      NO - DO NOT SCHEDULE 
+      JSB $LIST      YES - SCHEDULE 
+      OCT 101 
+IDCKL DEF * 
+      JMP IDCKK,I   RETURN
+      SPC 1 
+DM7   DEC -7
+XD10  DEC 10
+ASY   ASC 1,SC     ASCII -SC- FOR SCHED ERROR 
+ASC01 ASC 1,01     ILLEGAL PARAM COUNT ERR CODE 
+ASC02 ASC 1,02     ILLEGAL BUFFER ADDRESS ERR CODE
+DEFR3 DEF RQP3
+      HED ** SYSTEM BASE PAGE COMMUNICATION AREA *
+* 
+* 
+* 
+*** SYSTEM BASE PAGE  COMMUNICATION  AREA *** 
+* 
+.     EQU 1650B     ESTABLISH ORIGIN OF AREA
+* 
+* SYSTEM TABLE DEFINITION * 
+* 
+EQTA  EQU .+0      FWA  OF  EQUIPMENT TABLE 
+EQT#  EQU .+1       # OF EQT ENTRIES
+* 
+DRT   EQU .+2      FWA  OF  DEVICE REFERENCE TABLE
+LUMAX EQU .+3       # OF LOGICAL UNITS (IN DRT) 
+* 
+INTBA EQU .+4      FWA  OF  INTERRUPT TABLE 
+INTLG EQU .+5       # OF INTERRUPT TABLE ENTRIES
+* 
+TAT   EQU .+6      FWA  OF  TRACK ASSIGNMENT TABLE
+* 
+KEYWD EQU .+7      FWA  OF  KEYWORD BLOCK 
+* 
+* I/O MODULE/DRIVER COMMUNICATION 
+* 
+EQT1  EQU .+8      ADDRESSES
+EQT2  EQU .+9 
+EQT3  EQU .+10      OF
+EQT4  EQU .+11
+EQT5  EQU .+12      CURRENT 
+EQT6  EQU .+13
+EQT7  EQU .+14      15-WORD 
+EQT8  EQU .+15
+EQT9  EQU .+16      EQT 
+EQT10 EQU .+17
+EQT11 EQU .+18      ENTRY 
+EQT12 EQU .+81
+EQT13 EQU .+82
+EQT14 EQU .+83
+EQT15 EQU .+84
+* 
+CHAN  EQU .+19     CURRENT DMA CHANNEL #
+TBG   EQU .+20     I/O ADDRESS OF TIME-BASE CARD
+SYSTY EQU .+21     EQT ENTRY ADDRESS OF SYSTEM TTY
+* 
+* SYSTEM REQUEST PROCESSOR /'EXEC' COMMUNICATION *
+* 
+RQCNT EQU .+22     # OF REQUEST PARAMETERS -1 
+RQRTN EQU .+23      RETURN POINT ADDRESS
+RQP1  EQU .+24      ADDRESSES 
+RQP2  EQU .+25
+RQP3  EQU .+26       OF REQUEST 
+RQP4  EQU .+27
+RQP5  EQU .+28       PARAMETERS 
+RQP6  EQU .+29
+RQP7  EQU .+30       (SET FOR MAXIMUM OF
+RQP8  EQU .+31        8 PARAMETERS) 
+* 
+* DEFINITION OF SYSTEM LISTS (QUEUES) * 
+* 
+DORMT EQU .+32     ADDRESS OF 'DORMANT' LIST, 
+SKEDD EQU .+33      'SCHEDULE' LIST,
+SUSP3 EQU .+36      'AVAILABLE MEMORY' LIST,
+SUSP4 EQU .+37      'DISC ALLOCATION'  LIST,
+SUSP5 EQU .+38      'OPERATOR SUSPEND' LIST 
+* 
+* DEFINITION OF EXECUTING PROGRAM  ID SEGMENT' *
+* 
+XEQT  EQU .+39     ID SEGMENT ADDR. OF CURRENT PROG.
+XLINK EQU .+40       'LINKAGE'
+XTEMP EQU .+41       'TEMPORARY (5-WORDS) 
+XPRIO EQU .+46       'PRIORITY' WORD
+XPENT EQU .+47       'PRIMARY ENTRY POINT'
+XSUSP EQU .+48       'POINT OF SUSPENSION'
+XA    EQU .+49       'A REGISTER' AT SUSPENSION 
+XB    EQU .+50       'B REGISTER' 
+XEO   EQU .+51       'E AND OVERFLOW
+* 
+* SYSTEM MODULE COMMUNICATION FLAGS * 
+* 
+OPATN EQU .+52     OPERATOR/KEYBOARD ATTENTION FLAG 
+OPFLG EQU .+53     OPERATOR COMMUNICATION FLAG
+SWAP  EQU .+54     RT DISC RESIDENT SWAPPING FLAG 
+DUMMY EQU .+55     I/O ADDRESS OF DUMMY INT. CARD 
+IDSDA EQU .+56     DISC ADDR. OF FIRST ID SEGMENT 
+IDSDP EQU .+57      -POSITION WITHIN SECTOR 
+* 
+* DEFINITION OF MEMORY ALLOCATION BASES * 
+* 
+BPA1  EQU .+58     FWA R/T DISC RES. BP LINK AREA 
+BPA2  EQU .+59     LWA R/T DISC RES. BP LINK AREA 
+BPA3  EQU .+60     FWA BKG DISC RES. BP LINK AREA 
+LBORG EQU .+61     FWA OF RESIDENT LIBRARY AREA 
+RTORG EQU .+62     FWA OF REAL-TIME AREA
+RTCOM EQU .+63     LENGTH OF REAL TIME COMMON AREA
+RTDRA EQU .+64     FWA OF R/T DISC RESIDENT AREA
+AVMEM EQU .+65     FWA OF SYSTEM AVAILABLE MEMORY 
+BKORG EQU .+66     FWA OF BACKGROUND AREA 
+BKCOM EQU .+67     LENGTH OF BACKGROUND COMMON AREA 
+BKDRA EQU .+68     FWA OF BKG DISC RESIDENT AREA
+* 
+* UTILITY PARAMETERS
+* 
+TATLG EQU .+69     LENGTH OF TRACK ASSIGNMENT TABLE 
+TATSD EQU .+70      # OF TRACKS ON SYSTEM DISC
+SECT2 EQU .+71      # SECTORS/TRACK ON LU 2 (SYSTEM)
+SECT3 EQU .+72      # SECTORS/TRACK ON LU 3 (AUX.)
+* 
+DSCLB EQU .+73     DISC ADDR OF RES LIB ENTRY PTS 
+DSCLN EQU .+74      # OF RES LIB ENTRY POINTS 
+DSCUT EQU .+75     DISC ADDR OF RELOC UTILITY PROGS 
+DSCUN EQU .+76      # OF RELOC UTILITY PROGS
+LGOTK EQU .+77     LOAD-N-GO: LU,STG TRACK,# OF TRKS
+LGOC  EQU .+78      CURRENT LGO TRACK/SECTOR ADDRESS
+SFCUN EQU .+79     SOURCE FILE LU AND DISC ADDRESS
+MPTFL EQU .+80      MEMORY PROTECT ON/OFF FLAG (0/1)
+FENCE EQU .+85      MEM PROTECT FENCE ADDRESS 
+* 
+BKLWA EQU .+87     LWA OF MEMORY IN BACKGROUND
+* 
+* 
+FREG1 EQU LBORG 
+FREG2 EQU RTORG 
+FREG3 EQU BKORG 
+FLG   EQU OPFLG 
+* 
+A     EQU 0B        LOCATION OF A REGISTER
+B     EQU 1B        LOCATION OF B REGISTER
+      END $STRT 

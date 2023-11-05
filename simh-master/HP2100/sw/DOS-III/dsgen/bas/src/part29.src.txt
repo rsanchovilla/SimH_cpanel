@@ -1,0 +1,621 @@
+ASMB,R,B,L,X
+      HED EXECUTION PROCESSORS
+      NAM XEC2,7
+      SPC 2 
+      ENT EPRIN,EPRUS,ERSTR,EENTR,EASN
+      ENT ECHAN 
+      SPC 2 
+      COM PBPTR,NEG(26),.(52),MAIN,SPROG,SYMTB,ERRCT
+      COM SBPTR,SBUFA,SSTAK,SYNTQ,SERRS(36),RERRS(50) 
+      COM FERRS(15),WERRS(10),MAXCR,MSFLG,PFLAG,SFLAG 
+      COM DFLAG,TEMP(3),CDFLG,ARYAD,GFLAG,SIGN,UFLAG
+      COM PINTG(2),TABLE,LNGHT,SMBGN,SLENG,COUNT
+      COM TBLPT,TSPTR,SBT0
+      COM EXP,MANT1,MANT2,EXPON,DPFLG,NT0,ENOUF 
+      COM LNAME,CHRCT,OCTMP,SPTR,FILTB,NSPTR,INFST
+      COM DCLC1,DEST,DCLC2,STEND,DFILT,FILPT,COMSN
+      COM MVEND 
+      COM STYPE,USESN,FILCT,.LNUM 
+      COM PRGCT,STCT1,STCT2,NUMPT,STCT3,FLINK 
+      COM STMP1,STMP2,VLFLG,VALTB,FCORE,COMPT,VTMP1 
+      COM VTMP2,VTMP3,VTMP4,VTMP5,IFSS
+      COM CU1,APTR,DCFLG,TEMP2,LT1,LT2,FCNTR,RTNST
+      COM ASINP,RTRNQ,FORQ,TEMP1,FILE#
+      COM INTMP,TMPST,TPRME,TNULL,PS1,FSCHA,TEMP5 
+      COM PRIST,FBASE,RQ3,EOL,GTMP,FORST,EFN0,FVT 
+      COM EFN1,EFN2,EFN3,MCNT,INITF,IFCNT,OPDST 
+      COM FFLG,TEMP4,EORFL,NCH,TEMP6,STRLN,ATIM,LT5 
+      COM ASTYP,ASBFP,ORDNO,ATMP(2),RETCD 
+      COM ZZ(101),RSPTR 
+      SPC 2 
+      EXT EDELM,FORMX,OPCHK,ENOUT,FILST,STSTR,PSTR
+      EXT OUTLN,FSCH,OUTCR,GTTYP,FRMAT,SETDP
+      EXT #IFIX,SCHIN,BLANK,BCKSP,NUMCK,ARINV,ASBFA 
+      EXT FCUCA,WRBUF,SCHLB,VLFIL,XEC1
+      EXT FETCH,GETCR,EXIT,FENCA,TRSTR
+      EXT SBFIX,CMPL0,EXIT3,EXEC
+      SPC 2 
+ASNIB ASC 3,ASSIG 
+ECHAN JSB EXEC    LOAD "CHAIN" SEGMENT
+RETAD DEF *+4 
+      DEF .+8 
+      DEF NCHAN 
+      DEF RETAD 
+      SPC 1 
+      JSB RERRS+39,I
+      JSB RERRS+40,I
+      JSB RERRS+41,I
+      JMP EXIT3 
+      JMP CMPL0 
+      SPC 2 
+NCHAN ASC 3,CHAIN 
+      SPC 2 
+OPDMK OCT 100777
+OPMSK OCT 77000 
+B2000 OCT 2000
+B3000 OCT 3000
+B1000 OCT 1000
+ENDOP OCT 60000 
+M74   DEC -74 
+MNEG  OCT 100000
+PRTOP OCT 65000 
+USEOP OCT 43000 
+IMGOP OCT 44000 
+B377  OCT 377 
+B4000 OCT 4000
+STE   OCT 20000 
+M256  DEC -256
+DBLNK OCT 20040 
+RBP   OCT 140000
+B     EQU 1 
+BIT15 EQU MNEG
+?RTIM EQU 17B 
+FTEL  EQU 15
+* 
+***                           **
+**  EXECUTE <PRINT STATEMENT>  ** 
+***                           **
+* 
+EPRIN CLA,INA       FLAG AS 'PRINT' 
+      JSB EPRUS     CHECK FOR USING STATEMENT 
+      CLA           FLAG AS 
+      STA FFLG        NON-FORMATTED 
+      JSB VLFIL     VALIDATE FILE REQUEST 
+      JMP EPR13 
+      JMP EPRI2+1   NO FILE REQUEST FOUND 
+EPRI1 LDA FILE#     FILE
+      SSA,RSS         MODE? 
+      JMP EPRI2     YES 
+      CLA           NO, EXECUTE COMMA 
+      CPA EOL         UNLESS PRECEDED BY
+      JSB EDELM         A 'TAB' (EOL = 1) 
+EPRI2 CCA,RSS       TURN OFF 'END-OF-LINE' FLAG 
+      CLA           TURN ON 
+      STA EOL         'END-OF-LINE' FLAG
+EPRI3 LDA TEMP1,I   EXTRACT 
+      AND OPDMK       NEXT OPERAND
+      SZA           NULL? 
+      JMP EPRI5     NO, BEGINS FORMULA
+      ISZ TEMP1     YES 
+EPRI4 LDB TEMP1     STATEMENT 
+      CPB PRGCT       FINISHED? 
+      JMP EPR12     YES 
+      LDA TEMP1,I   NO, EXTRACT 
+      AND OPMSK       NEXT OPERATOR 
+      CPA B2000     COMMA?
+      JMP EPRI1     YES 
+      CPA B3000     NO, SEMICOLON?
+      JMP EPRI2     YES 
+      CPA B1000     NO, " ? 
+      JMP EPRI8     YES 
+      CPA ENDOP     NO, 'END' ? 
+      JMP EPR11     YES 
+      SZA,RSS       NO, NULL? 
+      JMP EPRI3     YES 
+      CCA           NO, MUST BE FORMULA 
+      ADA TEMP1     RESET TO PRIOR
+      STA TEMP1       NULL OPERAND
+EPRI5 CCA           TURN OFF
+      STA EOL         'TAB' FLAG
+      JSB FORMX     EVALUATE FORMULA
+      LDB OPDST,I   IS IT A 
+      SSB             STRING VARIABLE?
+      JMP EPRI8+1   YES 
+      JSB OPCHK     NO, UNSTACK VALUE ADDRESS 
+      LDA FILE#     TO BE WRITTEN 
+      SSA,RSS         ON A FILE?
+      JMP EPRI7     YES 
+      ISZ EOL       NO, A 'TAB' ? 
+      JMP EPRI4     YES (EOL = 1 NOW) 
+      DLD 1,I       NO, OUTPUT
+      JSB ENOUT       A NUMBER
+      JMP EPRI4 
+EPRI7 STB SBPTR     SAVE VALUE ADDRESS
+      LDB .-2       WRITE NUMBER
+      JSB FILST       ON FILE 
+      JMP EPRI4 
+EPRI8 JSB STSTR     STACK STRING CONSTANT 
+      LDA .-2       PREPARE 
+      JSB PSTR        PRINT 
+      STA TEMP4         STRING
+      STB TPRME 
+      LDB .-3       PRESET TO WRITE ON FILE 
+      LDA FILE#     TO BE WRITTEN 
+      SSA,RSS         ON A FILE?
+      JMP EPRI7+2   YES 
+      CLA           NO, TURN ON 
+      STA EOL         'END-OF-LINE' FLAG
+      LDA TNULL     ENOUGH
+      CMA,INA         SPACE 
+      ADA CHRCT         ON
+      ADA M74             CURRENT 
+      SSA,RSS               LINE? 
+      JSB OUTLN     NO
+      JMP EPR10     YES 
+EPRI9 JSB FSCH      FETCH 
+      LDA .+40B       CHARACTER 
+      CPA .+16B     PSUEDO LINE FEED? 
+      LDA .+12B     YES 
+      CPA .+17B     PSUEDO CARRIAGE RETURN? 
+      RSS           YES 
+      JMP EPR10-1   NO
+      LDA .+15B     OUTPUT
+      JSB OUTCR       CARRIAGE RETURN 
+      CLA               AND A NULL
+      JSB OUTCR     OUTPUT CHARACTER
+EPR10 ISZ TNULL     MORE STRING?
+      JMP EPRI9     YES 
+      JMP EPRI4     NO
+EPR11 STA EORFL     FILE
+      JSB GTTYP 
+      CPA .+3         FULL? 
+      JMP EPRI4-1   YES 
+      CCB           NO, WRITE 
+      JMP EPRI7+2     END-OF-FILE 
+EPR12 ISZ EOL       'END-OF-LINE' FLAG SET? 
+      JSB OUTLN     YES 
+      JMP XEC1      NO
+EPR13 ADB .-8       SET BUFFER
+      LDA B,I         DIR-
+      IOR BIT15         TY
+      STA B,I             BIT 
+      LDB TEMP1     NULL
+      CPB PRGCT       PRINT?
+      JMP XEC1      YES 
+      JMP EPRI2     NO
+* 
+**                                  **
+**  EXECUTE <PRINT USING STATEMENT>  ** 
+**                                  **
+* 
+*  EXIT TO (P+1) IF NO USING OPERATOR FOUND, OTHERWISE PREPARE
+*  FORMAT SPECIFICATION STRING AND CALL FORMATTED OUTPUT ROUTINE. 
+* 
+EPRUS NOP 
+#EPRU STA FFLG      SAVE FORMAT FLAG
+      LDB TEMP1 
+      LDA B,I 
+      CPA PRTOP     NULL OPERAND? 
+      INB,RSS       YES 
+      JMP EPRUS,I   NO, CAN'T BE USING STATEMENT
+      CPB PRGCT     END OF STATEMENT? 
+      JMP EPRUS,I   YES 
+      LDA B,I       NO, 'USING' 
+      AND OPMSK       OPERATOR
+      CPA USEOP         NEXT? 
+      RSS           YES 
+      JMP EPRUS,I   NO, EXIT
+      XOR B,I       GET OPERAND 
+      STB TEMP1     SAVE POINTER
+      SSA,RSS       INTEGER FOLLOWS?
+      JMP EPRU1     NO
+      INB 
+      LDB B,I       GET ADDRESS OF IMAGE STATEMENT
+      ADB .+2       => LENGTH WORD
+      LDA B,I 
+      AND OPMSK     GET OPERATOR
+      CPA IMGOP     IMAGE?
+      RSS           YES 
+      JSB RERRS+38,I  NO, ERROR 
+      ISZ TEMP1     BUMP TO POINT 
+      ISZ TEMP1       TO FIRST OPERAND
+      CLA 
+      STA NCH 
+      JSB FRMAT     CALL FORMATTER
+EPRU1 SZA,RSS       NULL OPERAND? 
+      JMP EPRU4     YES 
+      JSB FORMX     NO, FETCH 
+      LDA .-2         STRING
+      JSB PSTR          OPERAND 
+      LDA TEMP6,I   GET 
+      AND B377        LENGTH
+      SZA,RSS       NULL STRING?
+      JMP XEC1      YES 
+      CMA,INA       NO, SAVE
+      STA STRLN       -LENGTH 
+      LDB TMPST 
+      ADB .+2 
+      LDA B,I       GET FIRST SUBSCRIPT 
+      CMA,INA       NEGATE IT 
+      INB 
+      ISZ B,I       SECOND SUBSCRIPT EXIST? 
+      JMP EPRU2     YES 
+      CLA           NO, SET 
+      STA NCH         CHARACTER COUNT 
+      JMP EPRU3 
+EPRU2 ADA B,I       COMPUTE DIFFERENCE
+      SZA,RSS       NULL STRING?
+      JMP XEC1      YES 
+      SSA           NO, NEGATIVE? 
+      JSB RERRS+44,I YES
+      STA NCH       NO, SAVE DIFFERENCE 
+      CCA 
+      ADA B,I       SECOND
+      ADA STRLN       SUBSCRIPT 
+      SSA,RSS           VALID?
+      JSB RERRS+44,I NO 
+EPRU3 ADB .-1       YES 
+      LDA B,I       FIRST 
+      ADA STRLN       SUBSCRIPT 
+      SSA,RSS           VALID?
+      JSB RERRS+44,I NO 
+      LDA B,I       YES, LOAD IT
+      LDB TEMP6     => FIRST WORD OF STRING 
+      JSB FRMAT     CALL FORMATTER
+EPRU4 INB           => 1ST WORD OF STRING 
+      LDA B,I       UPDATE
+      AND OPDMK 
+      INA             INTRA-
+      ARS 
+      ADA TEMP1         STATEMENT 
+      ADA .+2 
+      STA TEMP1           POINTER 
+      CLA 
+      STA NCH 
+      JSB FRMAT     CALL FORMATTER
+* 
+***                             **
+**  EXECUTE <RESTORE STATEMENT>  ** 
+***                             **
+* 
+ERSTR LDA TEMP1,I   LOAD FLAG WORD
+      ISZ TEMP1     ADVANCE STATEMENT POINTER 
+      LDB SPROG     SET (B) TO START OF PROGRAM 
+      SSA           'LABELLED RESTORE'
+      LDB TEMP1,I   YES, RESET (B) TO STATEMENT 
+      JSB SETDP     SET DATA POINTERS 
+      JMP XEC1
+* 
+***                            ** 
+**  EXECUTE <ENTER STATEMENT>   **
+***                            ***
+* 
+EENTR LDA TEMP1,I   => FIRST OPERATOR 
+      AND OPDMK 
+      SZA           IS '#' PRESENT? 
+      JMP EENT3     NO
+      LDB TEMP1 
+      INB 
+      LDA B,I       GET NEXT OPERATOR 
+      AND OPMSK 
+      CPA B4000     '#'?
+      RSS           YES 
+      JMP EENT3     NO
+      STB TEMP1 
+      JSB FORMX     EVALUATE ADDRESS
+      LDB OPDST,I 
+      STB SBPTR     => SYMBOL 
+      LDA OPDST     UNSTACK 
+      ADA .-2 
+      STA OPDST       ADDRESS 
+      LDB MAIN
+      INB           => USERS TTY # IN TELETYPE TABLE
+      LDA 1,I       GET TTY # AND 
+      ALF,ALF         RIGHT JUSTIFY 
+      EXT FLOAT 
+      JSB FLOAT 
+      STA SBPTR,I   STORE 
+      ISZ SBPTR       TTY 
+      STB SBPTR,I       NUMBER
+      LDA TEMP1     ENTER STATEMENT 
+      CPA PRGCT       FINISHED? 
+      JMP XEC1      YES 
+EENT3 JSB FETCH     NO--FETCH ALLOWED TIME
+      JSB #IFIX     CONVERT 
+      NOP             TO
+      LDA 1             SECONDS 
+      AND B377      MASK TO 8 BITS
+      SZA,RSS       IF 0, SET 
+      INA             TO 1
+      STA ATIM
+      LDA MAIN      DOES THIS USER
+      INA             HAVE THE
+      CPA PRIST         LINE PRINTER? 
+      JSB WERRS+9,I YES - RELEASE IT
+      LDA .+21B     OUTPUT
+      JSB OUTCR       AN X-ON 
+      LDA STE       START 
+      IOR ATIM        ENTER 
+      JSB SCHIN 
+ENTRT EQU * 
+      JMP EENT6     INPUT ENTERED 
+      JSB FORMX     TIMEOUT OCCURED 
+      LDB OPDST,I   => RESPONSE 
+      STB SBPTR       TIME
+      LDA OPDST     UNSTACK 
+      ADA .-2 
+      STA OPDST       ADDRESS 
+      LDA M256      SET 
+      JSB FLOAT 
+      STA SBPTR,I       TIME
+      ISZ SBPTR           TO
+      STB SBPTR,I           -256
+      JMP *+1,I 
+      DEF EEN18 
+EENT6 EQU * 
+      CLB           DON'T SUPPRESS
+      STB BLANK       BLANKS
+      JSB GETCR     FIRST 
+      NOP             CHARACTER A 
+      LDB .+40B     SUPPRESS
+      STB BLANK       BLANKS
+      CPA .+3           CONTROL C?
+      JMP EXIT
+      JSB BCKSP     NO
+      JSB FORMX     EVALUATE ADDRESS
+      LDB OPDST,I 
+      STB SBPTR     => RESPONSE TIME
+      STB RSPTR 
+      LDA OPDST     UNSTACK 
+      ADA .-2 
+      STA OPDST       ADDRESS 
+      LDB MAIN
+      ADB .+?RTIM   GET RESPONSE
+      LDA 1,I         TIME
+      JSB FLOAT 
+      STA SBPTR,I   STORE 
+      ISZ SBPTR       IT
+      STB SBPTR,I 
+      JSB FORMX     EVALUATE ADDRESS
+      LDB OPDST,I   IS IT A 
+      SSB             STRING VARIABLE?
+      JMP EEN10     YES 
+      LDA OPDST     NO, 
+      ADA .-2         UNSTACK 
+      STA OPDST         ADDRESS 
+      STB SBPTR     SAVE DESTINATION ADDRESS
+      CLA           SET SIGN
+      STA SIGN        TO POSITIVE 
+      JSB GETCR     FETCH FIRST CHARACTER 
+      JMP EEN17     NONE FOUND--ERROR 
+      CCB           TURN OFF
+      STB ENOUF       OVER/UNDERFLOW FLAG 
+      CPA .+55B     '-'?
+      JMP EENT7     YES 
+      CLB,INB       NO
+      CPA .+53B     '+'?
+      RSS           YES 
+      JMP EENT8     NO
+EENT7 STB SIGN      SET SIGN
+      JSB GETCR     GET NEXT CHARACTER
+      JMP EEN17     NONE FOUND
+EENT8 JSB NUMCK     NUMBER? 
+      NOP           NO--ERROR 
+      JMP EEN17     BAD EXPONENT--ERROR 
+      ISZ ENOUF     DID OVER/UNDERFLOW OCCUR? 
+      JMP EEN17     YES--ERROR
+EENT9 CPA .+15B     NO, CARRIAGE RETURN FOLLOWS?
+      JMP EEN18     YES 
+      JMP EEN17     NO--ERROR 
+EEN10 CMB           EXTRACT 
+      LDA 1,I         PHYSICAL
+      ALF,ALF           LENGTH OF 
+      AND B377            DESTINATION STRING
+      CMA           SET IT AS END 
+      ADA TMPST,I     OF UNSPECIFIED
+      STA TPRME         DESTINATION STRING
+      CCA           PREPARE 
+      JSB PSTR        DESTINATION STRING
+      LDB TNULL     SAVE LENGTH 
+      STB INTMP       ALLOWANCE 
+      CLB           TURN OFF
+      STB BLANK       BLANK SUPPRESSION 
+      LDA FENCA     POINT TO ENTER CHAR ROUTINE 
+      JSB TRSTR     TRANSFER STRING 
+      CLB           ALL REQUESTED 
+      CPB TNULL       CHARACTERS TRANSFERRED? 
+      JMP EEN14     YES 
+      CPB PS1       NO, TRANSFER LENGTH SPECIFIED?
+      JMP EEN13     NO
+      STA INTMP     YES--SAVE (A) 
+      CCA           FINISH
+      STA TPRME 
+      ADA TNULL       TRANSFER
+      STA TNULL 
+      LDA FSCHA         WITH BLANKS 
+      JSB TRSTR 
+      JMP EEN18 
+EEN13 LDB TEMP6,I   SET LOGICAL 
+      ADB TNULL       TO ACTUAL 
+      STB TEMP6,I       STRING LENGTH 
+      JMP EEN18 
+EEN14 CPB PS1       LENGTH OF TRANSFER SPECIFIED? 
+      JMP EEN16     NO
+EEN15 JSB GETCR     YES 
+      JMP EEN18     CARRIAGE RETURN 
+      JMP EEN15     LOOK FOR CARRIAGE RETURN
+EEN16 JSB GETCR     END-OF-INPUT NEXT?
+      JMP EEN18     YES 
+      LDA INTMP     NO--DESTINATION STRING EXCEEDED 
+      STA TNULL     RESTORE 
+      LDA SBPTR       DESTINATION STRING
+      STA TEMP5         PARAMETERS
+EEN17 LDA RSPTR,I   TAKE
+      ISZ RSPTR     ARITHMETIC
+      LDB RSPTR,I       INVERSE OF
+      JSB ARINV           RESPONSE TIME 
+      STB RSPTR,I   STORE 
+      CCB             IN
+      ADB RSPTR         VALUE 
+      STA 1,I             TABLE 
+      STB ENOUF     CLEAR OVER/UNDERFLOW FLAG 
+EEN18 CLA           ZERO CHARACTER
+      STA CHRCT       COUNTER 
+      LDA .+40B     RESTORE 
+      STA BLANK       BLANK SUPPRESSION 
+      CLA           OUTPUT A
+      JSB OUTCR     NULL. 
+      JMP XEC1
+* 
+***                            ** 
+**  EXECUTE <ASSIGN STATEMENT>  **
+***                            ** 
+* 
+EASN  EQU * 
+      LDA .-3 
+      STA LT5 
+      STA ASINP     SET FLAG TO SAY ASSIGN OCCURRED 
+      LDB ASBFA 
+      LDA DBLNK 
+EASN0 EQU * 
+      STA B,I       BLANK OUT 3 WORDS 
+      INB 
+      ISZ LT5 
+      JMP EASN0 
+      CLA,INA       ALLOW STRING
+      STA EOL         CONSTANT
+      JSB FORMX     EVALUATE STRING 
+      LDA .-2 
+      JSB PSTR      PREPARE STRING OPERAND
+      STA TEMP4     SAVE SORCE POINTER
+      CLA           INITIALIZE TO 
+      STA ASTYP       LOCAL LIBRARY 
+      CPB .-1       NULL STRING?
+      JMP EAS02     YES 
+      STB TPRME 
+      LDB TEMP4     GET FIRST 
+      CLE,ERB 
+      LDA B,I         CHARACTER 
+      SEZ,RSS 
+      ALF,ALF           OF STRING 
+      AND B377
+      CPA .+44B      '$'? 
+      JMP EAS01     YES 
+      CPA .+52B     '*'?
+      RSS           YES 
+      JMP EAS00     NO
+EAS01 EQU * 
+      ISZ TEMP4     BUMP SOURCE POINTER 
+      ISZ TPRME     BUMP LENGTH 
+EAS00 EQU * 
+      LDA TPRME 
+      ADA .+7 
+      SSA           LENGTH > 6? 
+      CLA           YES, SET TO 6 
+      ADA .-7       NO
+      STA TPRME 
+      STA TNULL 
+      LDA ASBFA     POINTER TO
+      STA ASBFP       NAME BUFFER 
+      RAL 
+      STA TEMP5     DESTINATION STRING POINTER
+      LDA FCUCA     UPPER CASE CHARACTERS ONLY
+      JSB TRSTR     MOVE NAME 
+EAS02 JSB FETCH     EVALUATE NUMERIC OPERAND
+      JSB SBFIX     ROUND TO INTEGER
+      LDB B1000 
+      STB ORDNO     SAVE SPECIFIED ORDINAL NUMBER 
+      JSB FORMX     LEAVE NEXT VARIABLE ON TOP OF STACK 
+      LDA OPDST,I   SAVE ADDRESS OF USER VARIABLE 
+      STA ATMP+1
+      LDA .+4            DEFAULT
+      JSB FLOAT 
+      DST ATMP+1,I         TO NON-EXISTENT FILE 
+      JSB OPCHK          UNSTACK VALUE ADDRESS
+      LDA ORDNO     DOES
+      CMA             REQUESTED 
+      ADA FCNTR         FILE
+      CMA,SSA,RSS         EXIST?
+      JMP XEC1      NO, DONE
+EASN1 CLB 
+      LDA ORDNO     LOCATE
+      MPY .+FTEL       CORRECT
+      ADA FILTB         FCB 
+      ADA .+5 
+      STA FBASE       DISC ADDRESS AND SAVE IT
+      ADA .+3 
+      LDB 0,I       GET CURRENT BUFFER ADDRESS
+      ADA .-7 
+      LDA 0,I 
+      ALR,RAR       CLEAR BITS 15 AND 14
+      CMA,INA 
+      ADA 1 
+      STA RQ3 
+      JSB WRBUF     WRITE OUT RECORD
+      LDA FBASE     RESTORE 
+      ADA .-5         FCB 
+      STA FBASE           POINTER 
+      CLB 
+      STB 0,I       INITIALIZE
+      ADA .+14
+      STB 0,I       INITIALIZE PROTECTMASK TO 0 
+      STB RETCD     INITIALIZE RETURN CODE
+      JSB EXEC
+      DEF *+4 
+      DEF .+8 
+      DEF ASNIB 
+      DEF *-3 
+      EXT EXEC
+      JMP EASN5     ASSIGNED FILE RECORD SIZE TOO LARGE 
+      JMP EASN4     FILE DOESN'T EXIST
+      ISZ RETCD     'READ ONLY' - GROUP OR A000 
+      ISZ RETCD     'READ ONLY' - IN USE
+EASN2 LDA TEMP1 
+      CPA PRGCT          END OF STATEMENT ? 
+      JMP EASN3          YES
+      LDA 0,I            TEST FOR A COMMA 
+      AND OPMSK 
+      CPA B2000     COMMA FOLLOWING?
+      RSS 
+      JMP EASN3     NO
+      CLA,INA       ALLOW 
+      STA EOL       STRING CONSTANT 
+      JSB FORMX     YES, EVALUATE STRING OPERAND
+      LDA .-2       PREPARE 
+      JSB PSTR        SOURCE
+      STA TEMP4         STRING
+      STB TPRME 
+      LDA ASBFA 
+      STA ASBFP     GET CHARACTER 
+      RAL 
+      STA TEMP5         PASSWORD BUFFER 
+      LDA .-3 
+      STA LT5 
+      LDB ASBFP 
+      LDA DBLNK 
+      STA 1,I       FILL PASSWORD 
+      INB             BUFFER WITH 
+      ISZ LT5           BLANKS
+      JMP *-3 
+      LDA .-7       SET LENGTH (IN CHARACTERS)
+      STA TNULL       OF PASSWORD BUFFER
+      LDA FSCHA 
+      JSB TRSTR     MOVE PASSWORD TO BUFFER 
+      LDA ASBFP 
+      INA 
+      DLD 0,I 
+      ADA ASBFP,I   ADD WORD1 AND WORD2 
+      XOR 1         EXCLUSIVE OR - WORD3
+      IOR RBP       INCLUSIVE OR BITS 14 AND 15 
+      LDB FBASE 
+      ADB .+14
+      STA 1,I       STORE PROTECTMASK IN FCB
+EASN3 LDA RETCD 
+      JSB FLOAT 
+      DST ATMP+1,I       STORE IN USER VARIABLE 
+      JMP XEC1      DONE
+EASN4 LDA .+3       SET RETURN CODE FOR NON-EXISTENT FILE 
+      JMP EASN3+1 
+EASN5 LDA .+5       SET RETURN CODE FOR RECORD SIZE TOO BIG 
+      JMP EASN3+1 
+      END 
