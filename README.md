@@ -40,6 +40,7 @@ i650, NORC, i701 and MarkI simulators are my own SimH simulators.
 <thead>
 <tr>
 <th>IBM 701</th>
+<th>IBM NORC</th>
 <th>IBM 650</th>
 </tr>
 </thead>
@@ -47,6 +48,9 @@ i650, NORC, i701 and MarkI simulators are my own SimH simulators.
 <tr>
 <td>
 <p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701_animated.gif" alt="IBM701" title="IBM 701" /></p>
+</td>
+<td>
+<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/NORC/NORC_animated.gif" alt="IBM701" title="IBM 701" /></p>
 </td>
 <td>
 <p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650_animated.gif" alt="IBM650" title="IBM 650" /></p>
