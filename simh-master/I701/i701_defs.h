@@ -132,7 +132,7 @@ typedef struct {
     t_int64 ReadyTickCount;                 // value of GlobalTickCount (=simulated time) when tape will be ready to accept command
 } mtinforec;
 // extended info for tapes. Holds detailed info of tape command operation
-mtinforec mt_info[4];
+extern mtinforec mt_info[4];
 
 
 extern char    digits_ascii[31];

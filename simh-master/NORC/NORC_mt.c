@@ -39,6 +39,8 @@
 #include "NORC_defs.h"
 #include "sim_tape.h"
 
+mtinforec mt_info[9];
+
 #define UNIT_MT         UNIT_ATTABLE | UNIT_ROABLE | UNIT_DISABLE
 
 // Tapes in NORC have address assigned by the console. So tape P can be tied to address 00-12
