@@ -67,7 +67,7 @@ char   lptPrintOut[LPT_COLUMNS * lptPrintOutMAX];
 int    lptPrintOutCount = 0; // total number of lines printed
 
 // IBM NORC tape/printer control Unit internal state
-int bFastMode;              // =1 for FAST operation
+extern int bFastMode;              // =1 for FAST operation
 
 // lpt print routine. If line is NULL prints empty lines
 // add CR LF at end of each line

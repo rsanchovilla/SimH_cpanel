@@ -22,7 +22,7 @@
 
 */
 
-#include "NORC_defs.h"	        
+#include "NORC_defs.h"
 #include "sim_card.h"
 #include <ctype.h>
 
