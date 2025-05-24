@@ -1,0 +1,135 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0   125
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF    23  RDALF
+; SY   1  DEF    73  RDCHR
+; SY   2  USE        BMPAD
+; SY   3  USE        RDBMP
+;  
+         0000 +A  I 0121 RDPARAM1 + ADD       TWO          GET 1 PARAMS: COL (EITHER VALUE OR VAR ADDR)
+         0001 +SA I 0011          + STORE A   RDAP2        STORE ADDR OF PARAM (COL)
+         0002 +A  I 0120          + ADD       ONE
+         0003 +SA I 0072          + STORE A   EXIT         RETURN TO MAIN PROG CALLER
+         0004 +RA I 0110          + R ADD     ZERO               
+         0005 +ST I 0118          + STORE     TXT
+         0006 +LL A 0035          + L LEFT    0035         Acc=MQ=RETURN ADDR
+         0007 +A  I 0121          + ADD       TWO
+         0008 +SA I 0018          + STORE A   RDPRMEX      PARAMS PARSED, RETURN TO CALLER
+         0009 +RA I 0117          + R ADD     BITMAPAD     IF ADDR OF BASE48 BITMAP NOT COMPUTED
+         0010 +TZ I 0019          + TR 0      GETBMP1      TR TO LOAD IT
+         0011 +RA A 0000   RDAP2  + R ADD     /   /        GET COLUMN PARAM 1..72
+         0012 +TP I 0015          + TR +      RDAP4
+         0013 +SA I 0014          + STORE A   RDAP3        COL<0 -> INTERPRET COL AS LOC(COL) = ADDR OF COL VAR
+         0014 +RA A 0000   RDAP3  + R ADD     /   /        READ VAR COL PASED AS PARAM
+         0015 +TP I 0017   RDAP4  + TR +      RDAP5
+         0016 +T  I 0072          + TR        EXIT         COL<0 -> EXIT
+         0017 +ST I 0030   RDAP5  + STORE     COL          
+         0018 +T  A 0000 RDPRMEX  + TR        /   /        RETURN TO CALLER
+         0019 +RA I 0019 GETBMP1  + R ADD     *
+         0020 +T  S 0002          + TR        BMPAD        GET BASE48 CHARS BITMAP ADDRESS
+         0021 +ST I 0117          + STORE     BITMAPAD     
+         0022 +T  I 0011          + TR        RDAP2        RETURN
+         0023 +LM I 0023 RDALF    + LOAD MQ   *
+         0024 +T  I 0000          + TR        RDPARAM1
+         0025 +RA I 0029          + R ADD     D3
+         0026 +ST I 0119          + STORE     LEN
+         0027 +RA I 0027          + R ADD     *            READ 3 CHARS BITMAP
+         0028 +T  S 0003          + TR        RDBMP
+         0029 +H  A 0003 D3       + STOP      0003         
+         0030 +H  A 0000 COL      + STOP      0000
+         0031 -SM I 0112          - STORE MQ  BITMAP       WILL BE CM1CM2CM3, EACH CM 12 BITS LONG
+         0032 +ST I 0116          + STORE     NUM          WILL BE -1 OR 0..999 IF CHARS FORMS AN UNSIGNED NUMBER
+         0033 -RA I 0112          - R ADD     BITMAP       EXTRACT LEFTMOST (CM1) CHAR, HANDLE THE SIGN BIT 
+         0034 -LR A 0001          - L RIGHT   0001         SHIFT RIGHT TO MAKE ROOM FOR EXTRA BIT SIGN
+         0035 +TP I 0037          + TR +      CONV1
+         0036 +S  I 0124          + SUB       D200KOCT     REPLICATE SIGN BIT ON EXTRA BIT 
+         0037 -LR A 0023 CONV1    - L RIGHT   0023
+         0038 +AL A 0018          + A LEFT    0018
+         0039 +ST I 0114          + STORE     BITS         BITS FOR LEFTMOST CHAR
+         0040 +RA I 0110          + R ADD     ZERO         REMOVE SIGN FROM MQ
+         0041 +LR A 0001          + L RIGHT   0001
+         0042 +LL A 0025          + L LEFT    0025
+         0043 -ST I 0112          - STORE     BITMAP       REMOVED LEFTMOST CHAR CM1. NOW BITMAP CONTAINS 2 CHARS OF 12 BITS EACH (CM1 CM3)
+         0044 +RA I 0029          + R ADD     D3
+         0045 +ST I 0119          + STORE     LEN          LEN=3 TO GENERATE 3 CHARS
+         0046 +RA I 0046 CONV2    + R ADD     *
+         0047 +T  I 0088          + TR        CONVB48      CONVERT BITS BITMAP. RETURN ACC=BASE48 CHAR
+         0048 +ST I 0115          + STORE     CHAR
+         0049 +RA I 0118          + R ADD     TXT  
+         0050 +LR A 0053          + L RIGHT   0053         TXT=TXT*48+CHAR
+         0051 +M  I 0123          + MPY       D48
+         0052 +SM I 0118          + STORE MQ  TXT
+         0053 +RA I 0118          + R ADD     TXT
+         0054 +A  I 0115          + ADD       CHAR
+         0055 +ST I 0118          + STORE     TXT
+         0056 -RA I 0112          - R ADD     BITMAP       GET NEXT CHAR BITMAP 
+         0057 +LR A 0012          + L RIGHT   0012
+         0058 +AL A 0018          + A LEFT    0018
+         0059 +ST I 0114          + STORE     BITS
+         0060 +RA I 0110          + R ADD     ZERO
+         0061 +LL A 0024          + L LEFT    0024
+         0062 -ST I 0112          - STORE     BITMAP
+         0063 +RA I 0119          + R ADD     LEN
+         0064 +S  I 0120          + SUB       ONE
+         0065 +ST I 0119          + STORE     LEN
+         0066 +TZ I 0068          + TR 0      CONV3
+         0067 +T  I 0046          + TR        CONV2
+         0068 +RA I 0110 CONV3    + R ADD     ZERO
+         0069 +S  I 0118          + SUB       TXT          
+         0070 +LR A 0035          + L RIGHT   0035         MQ=-TXT
+         0071 +RA I 0116          + R ADD     NUM          ACC=-1 OR 0..999
+         0072 +T  A 0000 EXIT     + TR        /   /        RETURN TO CALLER 
+         0073 +LM I 0073 RDCHR    + LOAD MQ   *
+         0074 +T  I 0000          + TR        RDPARAM1
+         0075 +RA I 0120          + R ADD     ONE
+         0076 +ST I 0119          + STORE     LEN
+         0077 +TF I 0078          + TR OV     CLOV         CLEAR OV JUST IN CASE
+         0078 +RA I 0078 CLOV     + R ADD     *            READ 1 CHAR BITMAP
+         0079 +T  S 0003          + TR        RDBMP
+         0080 +H  A 0001          + STOP      0001         
+         0081 -H  I 0030          - STOP      COL          POINTS TO COL VARIABLE
+         0082 +RA I 0110          + R ADD     ZERO         MQ=000 000 CM1 (CM1 IS 12 BITS LONG)
+         0083 +LL A 0018          + L LEFT    0018         
+         0084 +SM I 0114          + STORE MQ  BITS         BITS=CM1
+         0085 +RA I 0085          + R ADD     *
+         0086 +T  I 0088          + TR        CONVB48      CONVERT BITMAP TO BASE48 
+         0087 +T  I 0072          + TR        EXIT
+         0088 +A  I 0121 CONVB48  + ADD       TWO          CONVERT LEN CHARS FROM BITMAP TO BASE48. RESULT IN TXT
+         0089 +SA I 0109          + STORE A   CONVEX
+         0090 +RA I 0114          + R ADD     BITS         IF BITS=0 -> CHAR=0 -> PROCEED TO CHFOUND
+         0091 +TZ I 0104          + TR 0      CHBLANK
+         0092 +RA I 0123          + R ADD     D48          FIND BITMAP IN TABLE. IF NOT FOUND, CHAR WILL BE ZERO
+         0093 +ST I 0115          + STORE     CHAR         
+         0094 +RA I 0115  CHLOOP  + R ADD     CHAR
+         0095 +TZ I 0106          + TR 0      CHNOTFND
+         0096 +S  I 0120          + SUB       ONE
+         0097 +ST I 0115          + STORE     CHAR
+         0098 +A  I 0117          + ADD       BITMAPAD     
+         0099 +SA I 0100          + STORE A   CHBMPAD      
+         0100 +RA A 0000  CHBMPAD + R ADD     /   /        GET BITMAP FOR SELECTED CHAR
+         0101 +SV I 0114          + SUB AB    BITS         COMPARE WITH BITMAP TO SEARCH FOR
+         0102 +TZ I 0108          + TR 0      CHFOUND
+         0103 +T  I 0094          + TR        CHLOOP
+         0104 +RA I 0110 CHBLANK  + R ADD     ZERO
+         0105 +T  I 0109          + TR        CONVEX   
+         0106 +RA I 0122 CHNOTFND + R ADD     D47          IF CHAR NOT FOUND, SET BASE48 CODE = 47 (THE SPECIAL CHAR '-')
+         0107 +T  I 0109          + TR        CONVEX   
+         0108 +RA I 0115 CHFOUND  + R ADD     CHAR
+         0109 +T  A 0000 CONVEX   + TR        /   / 
+         0110 +000000    ZERO       DEF       0            
+         0111 +000000               DEF       0            
+         0112 +000000    BITMAP     DEF       0            
+         0113 +000000               DEF       0            
+         0114 +000000    BITS       DEF       0
+         0115 +000000    CHAR       DEF       0
+         0116 +000000    NUM        DEF       0
+         0117 +000000    BITMAPAD   DEF       0
+         0118 +000000    TXT        DEF       0
+         0119 +000000    LEN        DEF       0
+         0120 +000001    ONE        DEF       1
+         0121 +000002    TWO        DEF       2
+         0122 +000047    D47        DEF       47
+         0123 +000048    D48        DEF       48
+         0124 +065536    D200KOCT   DEF       *200000 

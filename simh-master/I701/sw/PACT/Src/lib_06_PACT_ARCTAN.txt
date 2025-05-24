@@ -1,0 +1,112 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:ARCTANFN         ARC TAN PACT instruction 
+                                          Return value with Q=1
+                                          computing procedure:
+                                          ARCT(XX)=x/(1+x^2) + (2/3)*x^3/(1+x^2)^2 + (2/3)*(4/5)*x^5/(1+x^2)^3 ...
+                                          (newton method) 
+                                          acurate for X=-1..1
+
+ARCTANFN - STORE MQ  XX           SAVE FUNCTION ARGUMENT
+         + ADD       TWO
+         + STORE A   ATANP1
+         + ADD       ONE
+         + STORE A   ATANEX       RETURN TO CALLER         
+
+ATANP1   + R ADD     /   /        GET Q OF ARGUMENT -35..+35
+         + STORE     Q
+                                  NORMALIZE ARG XX TO Q=1 
+         + SUB       ONE
+         + TR +      SHL          IF Q>1 -> TR TO SHIFT ARG LEFT
+
+         + STORE A   SHR1
+         - R ADD     XX
+SHR1     + A RIGHT   /   /        SHIFT XX SO ITS Q IS NOW Q=1
+         + TR        SHL2
+
+SHL      + STORE A   SHL1
+         - R ADD     XX
+SHL1     + A LEFT    /   /        SHIFT XX SO ITS Q IS NOW Q=1
+SHL2     - STORE     XX
+                                  HERE XX HAS Q=1. NOW CALC XX=XX*XX
+         + L RIGHT   0035         MQ=XX
+         - MPY       XX           MULT RESULT HAS Q=2
+         + ADD       ONEQ2
+         - STORE     XD           XD=(1+X*X) AT Q=2
+
+         - R ADD     XX
+         + A RIGHT   0001         SET Q=2
+         + LOAD MQ   ZERO
+         - DIV       XD           RESULT IN MQ AT Q=Q OF XX (=2) - Q OF XD (=2)
+         + R ADD     ZERO
+         + L RIGHT   0001         SHIFT SO RESULT IS AT Q=1
+         - STORE MQ  TERM         TERM=X/XD AT Q=1
+         - STORE MQ  RES          RESULT=X/XD AT Q=1
+
+         + R ADD     ONE
+         + STORE     N            N=1
+
+LOOP     - R ADD     TERM         COMPUTE: TERM=TERM * (XX*XX / XD)
+         + L RIGHT   0035         MQ=TERM AT Q=1
+         - MPY       XX           ACC=TERM (Q=1) * XX (Q=1) -> RESULT ACC AT Q=1+1=2
+         + L RIGHT   0035         MQ=TERM*XX AT Q=2
+         - MPY       XX           * XX (Q=1) -> RESULT ACC AT Q=2+1=3
+         + LOAD MQ   ZERO
+         - DIV       XD           RESULT IN MQ AT Q=Q OF DIVIDEND (=3) - Q OF XD (=2) -> Q=1
+         - STORE MQ  TERM         
+         
+         + R ADD     N
+         + A LEFT    0001         ACC=N*2
+         + STORE     ND1          ND1=2*N AT Q=17
+         + ADD       ONE
+         + STORE     ND2          ND2=2*N+1 AT Q=17
+
+         + R ADD     ND1
+         + LOAD MQ   ZERO
+         + DIV       ND2          MQ=ND1/ND2 AT Q=0
+                                  
+         - MPY       TERM         NO NEED TO LOAD MQ WITH VALUE. ALREADY SET BY DIV ABOVE
+         - STORE     TERM         TERM=(ND1/ND2)*TERM
+
+         - ADD       RES          NO NEED TO SHIFT RESULT OF MULT: TERM IS Q=1, 1/N IS Q=0
+         - STORE     RES          RESULT=RESULT*TERM
+
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+         + SUB       D9
+         + TR 0      LOOPE
+         + TR        LOOP
+
+LOOPE    + R ADD     RES          PUT THE RESULT IN ACC
+ATANEX   + TR        /   /        RETURN TO CALLER         
+                                
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D9         DEF       6
+
+ONEQ2      DEF       *100000
+
+           ORG       EVEN
+
+XX         RES       2
+TERM       RES       2
+RES        RES       2
+
+N          RES       1
+Q          RES       1
+ND1        RES       1            
+ND2        RES       1            
+

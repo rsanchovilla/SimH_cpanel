@@ -1,0 +1,205 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0   237
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF     0  WRIBREL
+; SY   1  USE        CLMEM
+; SY   2  USE        CHKSUM
+;  
+         0000 +A  I 0232 WRIBREL  + ADD       TWO          CHECK IF CURRENT CARD IN MEMORY IS TYPE/SYMBOL GIVEN AS PARAM, 
+         0001 +SA I 0014          + STORE A   CHKP1        LOC OF DATA TO ADD IS IN SEQUENCE WITH PREVIOUS ONES, AND CARD HAS ROOM FOR DATA.
+         0002 +A  I 0231          + ADD       ONE          IF NOT, FLUSH CURRENT CARD AND CREATE A NEW ONE, THEN PLACE THE DATA.
+         0003 +SA I 0016          + STORE A   CHKP2        WHEN FLUSHING THE CARD, CALL WRITE ROUTINE DEFINED
+         0004 +A  I 0231          + ADD       ONE
+         0005 +SA I 0020          + STORE A   CHKP3
+         0006 +A  I 0231          + ADD       ONE
+         0007 +SA I 0024          + STORE A   CHKP4
+         0008 +A  I 0231          + ADD       ONE
+         0009 +SA I 0026          + STORE A   CHKP5
+         0010 +A  I 0231          + ADD       ONE
+         0011 +SA I 0030          + STORE A   CHKP6
+         0012 +A  I 0231          + ADD       ONE
+         0013 +SA I 0136          + STORE A   CHKEXIT
+         0014 +RA A 0000 CHKP1    + R ADD     /   /
+         0015 +ST I 0222          + STORE     CRDTY        PARAM: BIN CARD TYPE REQUITED: -01 -> CONTROL CARD, -00 -> MC INSTR CARD, 
+         0016 +RA A 0000 CHKP2    + R ADD     /   /                                       +01 -> FLUSH CURRENT CARD (NO MORE PARAMS)
+         0017 +SA I 0018          + STORE A   CHKP2A                                      +02 -> SET WRITE CARD ROUTINE TO BE CALLED IN NEXT PARAM 
+         0018 +RA A 0000 CHKP2A   + R ADD     /   /                                              RETURNS IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN
+         0019 +ST I 0223          + STORE     CRDSY        
+         0020 +RA A 0000 CHKP3    + R ADD     /   /
+         0021 +SA I 0022          + STORE A   CHKP3A
+         0022 +RA A 0000 CHKP3A   + R ADD     /   /
+         0023 +ST I 0224          + STORE     CRDLOC       PARAM: LOCATION 0..4095 
+         0024 +RA A 0000 CHKP4    + R ADD     /   /
+         0025 +ST I 0225          + STORE     CRDDATY      PARAM: DATA TYPE: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+         0026 +RA A 0000 CHKP5    + R ADD     /   /                          =1 -> DATA1/DATA2=FULL WORD TO STORE
+         0027 +SA I 0028          + STORE A   CHKP5A
+         0028 +RA A 0000 CHKP5A   + R ADD     /   /
+         0029 +ST I 0228          + STORE     CRDDATA      PARAM: DATA 
+         0030 +RA A 0000 CHKP6    + R ADD     /   /        
+         0031 +SA I 0032          + STORE A   CHKP6A
+         0032 +RA A 0000 CHKP6A   + R ADD     /   /
+         0033 +ST I 0229          + STORE     CRDDATA2     PARAM: DATA2 (RIGHT HALF-WORD / INDEX TAG)
+         0034 +RA I 0222          + R ADD     CRDTY        
+         0035 +S  I 0231          + SUB       ONE
+         0036 +TZ I 0137          + TR 0      CHKFLSHR     IF CRDTY=1 -> JUST FLUSH THE CURRENT CARD AND RETURN
+         0037 +S  I 0231          + SUB       ONE
+         0038 +TZ I 0146          + TR 0      CHKWR        IF CRDTY=2 -> SET WRITE CARD ROUTINE TO BE CALLED WHEN FLUSHING THE CURRENT CARD AND RETURN
+         0039 +RA I 0214          + R ADD     BINCRD44     CODE + ORIGIN IN CARD IN MEMORY. 
+         0040 +SA I 0226          + STORE A   CRDORG
+         0041 +TP I 0070          + TR +      CHKNEWC      IF >=0 -> CREATE A FRESH NEW CARD 
+         0042 +AR A 0012          + A RIGHT   0012         GET CODE ON CURRENT CARD BEING BUILD IE MEM
+         0043 +AR A 0018          + A RIGHT   0018         CLEAR RIGHT ACC HALF-WORD
+         0044 +AL A 0018          + A LEFT    0018
+         0045 +S  I 0222          + SUB       CRDTY
+         0046 +TZ I 0048          + TR 0      CHK1         SAME TYPE, TR TO CONTINUE
+         0047 +T  I 0068          + TR        CHKFLSH      NOT SAME TYPE, TR TO FLUSH CURRENT CARD 
+         0048 +RA I 0215 CHK1     + R ADD     BINCRD45     CURRENT CARD SYMBOL
+         0049 +S  I 0223          + SUB       CRDSY
+         0050 +TZ I 0052          + TR 0      CHK2         SAME TOP SYMBOL, TR TO CONTINUE
+         0051 +T  I 0068          + TR        CHKFLSH      NOT SAME SYMBOL, TR TO FLUSH CURRENT CARD 
+         0052 +RA I 0212 CHK2     + R ADD     BINCRD42     COUNT IN CARD
+         0053 +S  I 0235          + SUB       D36
+         0054 +TZ I 0068          + TR 0      CHKFLSH      CARD FULL, TR TO FLUSH CURRENT CARD 
+         0055 +RA I 0226          + R ADD     CRDORG
+         0056 +A  I 0212          + ADD       BINCRD42     ACC=ORIGIN + COUNT = NEXT CONSECUTIVE REL LOCATION ON BIN CARD
+         0057 +S  I 0224          + SUB       CRDLOC       
+         0058 +TZ I 0081          + TR 0      CHKADD       IF ORIGIN+COUNT=LOC -> ADD DATA TO CURRENT CARD IN MEMORY, AT NEXT CONSECUTIVE LOCATION LOC
+         0059 +TP I 0068          + TR +      CHKFLSH      IF ORIGIN+COUNT>LOC -> LOC IS LESS THAN LAST LOC ADDED -> TR TO FLUSH AND START A NEW CARD AT NEW LOC
+         0060 +RA I 0224          + R ADD     CRDLOC
+         0061 +S  I 0226          + SUB       CRDORG       ACC=LOC - ORIGIN = POSITION IN CARD 
+         0062 +ST I 0227          + STORE     CRDN
+         0063 +S  I 0235          + SUB       D36          
+         0064 +TP I 0068          + TR +      CHKFLSH      IF POSITION IN CARD >= 36 -> LOC DOES NOT FIT IN CURRENT CARD -> TR TO FLUSH
+         0065 +RA I 0227          + R ADD     CRDN         ELSE -> POSITION IN CARD < 36 -> LOC FITS IN CURRENT CARD
+         0066 +ST I 0212          + STORE     BINCRD42     ADJUST COUNT
+         0067 +T  I 0081          + TR        CHKADD       TR TO ADD DATA TO CURRENT CARD IN MEMORY
+         0068 +RA I 0068 CHKFLSH  + R ADD     *            
+         0069 +T  I 0157          + TR        FLUSHCRD 
+         0070 +RA I 0070 CHKNEWC  + R ADD     *            NEW CARD: CLEAR CARD BUFFER IN MEM
+         0071 +T  S 0001          + TR        CLMEM        BINCARD
+         0072 +H  I 0170          + STOP      BINCARD
+         0073 +H  I 0236          + STOP      D48
+         0074 +RA I 0222          + R ADD     CRDTY        CODE   = -01 / -00 
+         0075 +AL A 0012          + A LEFT    0012         PLACE AS OP
+         0076 +S  I 0224          + SUB       CRDLOC       ORIGIN = CURRENT LOC
+         0077 +ST I 0214          + STORE     BINCRD44     STORE CODE + ORIGIN IN CARD IN MEMORY. 
+         0078 +SA I 0226          + STORE A   CRDORG
+         0079 +RA I 0223          + R ADD     CRDSY        SYMBOL 
+         0080 +ST I 0215          + STORE     BINCRD45     CURRENT CARD SYMBOL
+         0081 +RA I 0224 CHKADD   + R ADD     CRDLOC       COMPUTE WHERE TO STORE THE DATA
+         0082 +S  I 0226          + SUB       CRDORG       ADDR = BINCRD ADDRESS + (LOC - ORIGIN)
+         0083 +A  I 0156          + ADD       BINCRDAD 
+         0084 +SA I 0086          + STORE A   CHKSTO1
+         0085 +RA I 0228          + R ADD     CRDDATA      STORE DATA
+         0086 +ST A 0000 CHKSTO1  + STORE     /   /
+         0087 +RA I 0225          + R ADD     CRDDATY      PARAM: DATA TYPE: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+         0088 +TZ I 0098          + TR 0      CHKIDX                         =1 -> DATA1/DATA2=FULL WORD TO STORE
+         0089 +RA I 0086          + R ADD     CHKSTO1      STORE A FULL WORD
+         0090 +A  I 0231          + ADD       ONE       
+         0091 +SA I 0093          + STORE A   CHKSTO2
+         0092 +RA I 0229          + R ADD     CRDDATA2     STORE DATA2
+         0093 +ST A 0000 CHKSTO2  + STORE     /   /
+         0094 +RA I 0212          + R ADD     BINCRD42     COUNT IN CARD
+         0095 +A  I 0232          + ADD       TWO
+         0096 +ST I 0212          + STORE     BINCRD42     
+         0097 +T  I 0136          + TR        CHKEXIT
+         0098 +RA I 0229 CHKIDX   + R ADD     CRDDATA2     STORE DATA HALF-WORD + DATA2 INDEX
+         0099 +TZ I 0133          + TR 0      CHK20
+         0100 +RA I 0224          + R ADD     CRDLOC       COMPUTE WHERE TO STORE THE DATA
+         0101 +S  I 0226          + SUB       CRDORG       IN INDICES BLOCK
+         0102 +ST I 0227          + STORE     CRDN
+         0103 +RA I 0156          + R ADD     BINCRDAD     SET START OD INICES ADDR
+         0104 +A  I 0235          + ADD       D36
+         0105 +SA I 0125          + STORE A   CHKSTO3A
+         0106 +SA I 0132          + STORE A   CHKSTO3B
+         0107 +RA I 0230          + R ADD     ZERO
+         0108 -ST I 0218          - STORE     DATA
+         0109 -ST I 0220          - STORE     SUM
+         0110 +RA I 0227 CHK10    + R ADD     CRDN         INDICES ADDR += (LOC - ORIGIN) DIV 6
+         0111 +S  I 0234          + SUB       D6
+         0112 +TP I 0114          + TR +      CHK11
+         0113 +T  I 0120          + TR        CHK12
+         0114 +ST I 0227 CHK11    + STORE     CRDN
+         0115 +RA I 0125          + R ADD     CHKSTO3A
+         0116 +A  I 0231          + ADD       ONE
+         0117 +SA I 0125          + STORE A   CHKSTO3A
+         0118 +SA I 0132          + STORE A   CHKSTO3B
+         0119 +T  I 0110          + TR        CHK10
+         0120 +RA I 0227 CHK12    + R ADD     CRDN         SHIFT = (N+1)*3
+         0121 +A  I 0227          + ADD       CRDN
+         0122 +A  I 0227          + ADD       CRDN
+         0123 +A  I 0233          + ADD       D3
+         0124 +SA I 0128          + STORE A   CHKSHF
+         0125 +RA A 0000 CHKSTO3A + R ADD     /   /
+         0126 +ST I 0219          + STORE     DATA2
+         0127 +RA I 0229          + R ADD     CRDDATA2     SHIFT RIGHT AND STORE AT INDICES ADDR
+         0128 +AR A 0000 CHKSHF   + A RIGHT   /   /
+         0129 -A  I 0218          - ADD       DATA
+         0130 -ST I 0220          - STORE     SUM
+         0131 +RA I 0221          + R ADD     SUM2
+         0132 +ST A 0000 CHKSTO3B + STORE     /   /
+         0133 +RA I 0212 CHK20    + R ADD     BINCRD42     COUNT IN CARD
+         0134 +A  I 0231          + ADD       ONE
+         0135 +ST I 0212          + STORE     BINCRD42     
+         0136 +T  A 0000 CHKEXIT  + TR        /   /
+         0137 +RA I 0137 CHKFLSHR + R ADD     *            JUST FLUSH CURRENT CARD AND RETURN
+         0138 +T  I 0157          + TR        FLUSHCRD
+         0139 +RA I 0139          + R ADD     *            CLEAR CARD BUFFER IN MEM
+         0140 +T  S 0001          + TR        CLMEM        BINCARD
+         0141 +H  I 0170          + STOP      BINCARD
+         0142 +H  I 0236          + STOP      D48
+         0143 +RA I 0016          + R ADD     CHKP2        SECOND PARAM HAS THE RETURN ADDR
+         0144 +SA I 0145          + STORE A   FLSHEX       
+         0145 +T  A 0000 FLSHEX   + TR        /   /        RETURN TO CALLER
+         0146 +RA I 0018 CHKWR    + R ADD     CHKP2A       SECOND PARAM HAS THE ADDR OF BIN CARD WRITE ROUTINE TO BE CALLED BY FLUSH (INSTEAD THE TOP SYMBOL)
+         0147 +SA I 0166          + STORE A   WRCRD
+         0148 +RA I 0020          + R ADD     CHKP3        THIRD PARAM HAS THE RETURN ADDR 
+         0149 +SA I 0155          + STORE A   CHKWREX
+         0150 +RA I 0150          + R ADD     *            CLEAR CARD BUFFER IN MEM
+         0151 +T  S 0001          + TR        CLMEM        BINCARD
+         0152 +H  I 0170          + STOP      BINCARD
+         0153 +H  I 0236          + STOP      D48
+         0154 +RA I 0156          + R ADD     BINCRDAD     RETURN IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN BY WRITE ROUTINE  
+         0155 +T  A 0000 CHKWREX  + TR        /   /        RETURN TO CALLER
+         0156 +H  I 0170 BINCRDAD + STOP      BINCARD      SOURCE ADDR
+         0157 +A  I 0232 FLUSHCRD + ADD       TWO          PUNCH PACT CARD IN CARD BUFFER
+         0158 +SA I 0169          + STORE A   FLUSHEX
+         0159 +RA I 0212          + R ADD     BINCRD42     GET COUNT
+         0160 +TZ I 0169          + TR 0      FLUSHEX      IF =0 -> THE CARD IS EMPTY -> EXIT WITHOUT PUNCHING
+         0161 +RA I 0161          + R ADD     *
+         0162 +T  S 0002          + TR        CHKSUM       COMPUTE CHECKSUM OF CARD ...
+         0163 +H  I 0170          + STOP      BINCARD      
+         0164 -ST I 0216          - STORE     BINCRD46     ... AND STORE IT AT LOCATION 46 AND 47
+         0165 +RA I 0165          + R ADD     *
+         0166 +T  A 0000 WRCRD    + TR        /   /        CALL WRITE CARD ROUTINE
+         0167 +RA I 0230          + R ADD     ZERO
+         0168 +ST I 0212          + STORE     BINCRD42     CLEAR COUNT 
+         0169 +T  A 0000 FLUSHEX  + TR        /   /
+         0170 +000000    BINCARD    RES       42           BUFFER FOR PACT RELATIVE BINARY CARD INSTR 
+         0212 +000000    BINCRD42   DEF       0            COUNT OF INSTR IN CARD
+         0213 +000000               DEF       0
+         0214 +000000    BINCRD44   DEF       0            CODE + ORIGIN IN CARD
+         0215 +000000    BINCRD45   DEF       0            SYMBOL 
+         0216 +000000    BINCRD46   DEF       0            CHECKSUM
+         0217 +000000               DEF       0            BINCARD TAKES 48 HALF-WORDS IN TOTAL
+         0218 +000000    DATA       DEF       0            
+         0219 +000000    DATA2      DEF       0
+         0220 +000000    SUM        DEF       0            
+         0221 +000000    SUM2       DEF       0
+         0222 +000000    CRDTY      DEF       0            BIN CARD TYPE REQUITED: -01 -> CONTROL CARD, -00 -> MC INSTR CARD
+         0223 +000000    CRDSY      DEF       0            BIN CARD SYMBOL REQUITED
+         0224 +000000    CRDLOC     DEF       0            LOCATION 0..4095 
+         0225 +000000    CRDDATY    DEF       0            DATA TYPE: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+         0226 +000000    CRDORG     DEF       0
+         0227 +000000    CRDN       DEF       0
+         0228 +000000    CRDDATA    DEF       0
+         0229 +000000    CRDDATA2   DEF       0
+         0230 +000000    ZERO       DEF       0
+         0231 +000001    ONE        DEF       1
+         0232 +000002    TWO        DEF       2
+         0233 +000003    D3         DEF       3
+         0234 +000006    D6         DEF       6
+         0235 +000036    D36        DEF       36
+         0236 +000048    D48        DEF       48

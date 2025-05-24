@@ -1,0 +1,102 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:EXPFN            EXP PACT instruction 
+                                          computing procedure:
+                                          EXP(X)=e^x = 1 + x + x^2/2! + x^3/3! ...
+                                          Q of result should be >=1
+
+EXPFN    - STORE MQ  XX           SAVE FUNCTION ARGUMENT
+         + ADD       TWO
+         + STORE A   EXPP1
+         + ADD       ONE
+         + STORE A   EXPP2
+         + ADD       ONE
+         + STORE A   EXPEX        RETURN TO CALLER         
+
+EXPP1    + R ADD     /   /        GET Q OF ARGUMENT -35..+35  (ITS VALUE IS 34-Q)
+         + STORE     Q
+EXPP2    + R ADD     /   /        GET Q OF RESULT. SHOULD BE >=1
+         + STORE     QR
+         + STORE A   SHL3
+         + SUB       ONE
+         + STORE A   SHR3
+          
+         + R SUB     Q            NORMALIZE ARG XX TO QR 
+         + ADD       D34
+         + SUB       QR
+         + TR +      SHL          IF Q>Q OF RESULT -> TR TO SHIFT ARG LEFT
+
+         + STORE A   SHR1
+         - R ADD     XX
+SHR1     + A RIGHT   /   /        SHIFT XX SO ITS Q IS NOW Q=QR
+         + TR        SHL2
+
+SHL      + STORE A   SHL1
+         - R ADD     XX
+SHL1     + A LEFT    /   /        SHIFT XX SO ITS Q IS NOW Q=QR
+SHL2     - STORE     XX
+
+                                  HERE XX HAS Q=QR. 
+
+         - STORE     TERM         TERM=XX
+
+         + R ADD     ONE
+         + A LEFT    0016         
+SHR3     + A RIGHT   /   /        ACC=1 AT QR
+         + ADD       XX
+         + STORE     RES          RESULT=XX+1
+
+         + R ADD     TWOQ6
+         + STORE     N            N=2 AT Q=6
+
+LOOP     + R ADD     ONEQ6        COMPUTE: 1/N 
+         + LOAD MQ   ZERO
+         + DIV       N            MQ=1/N AT Q=0
+                                  COMPUTE: TERM = TERM * XX/N
+         - MPY       XX           NO NEED TO LOAD MQ WITH VALUE. ALREADY SET BY DIV ABOVE
+         - L RIGHT   0035         MOVE RESULT OF PREVIOUS MULT IN ACC TO MQ. HERE Q=0+QR=QR
+         - MPY       TERM         RESULT OF MULT HAS Q=QR+QR. 
+SHL3     - L LEFT    /   /        SHIFT LEFT TO RESTORE Q=QR
+         - STORE     TERM         SO MULT Q=QR
+         + TR 0      LOOPE        IF TERM IS NULL -> TERMINATE POWER SERIES
+
+         - ADD       RES
+         - STORE     RES          RESULT = RESULT + TERM
+
+         + R ADD     N
+         + ADD       ONEQ6
+         + STORE     N
+         + TR        LOOP
+
+LOOPE    + R ADD     RES          PUT THE RESULT IN ACC
+EXPEX    + TR        /   /        RETURN TO CALLER         
+                                
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D34        DEF       34
+
+ONEQ6      DEF       *4000
+TWOQ6      DEF       *10000
+
+           ORG       EVEN
+
+XX         RES       2
+TERM       RES       2            
+RES        RES       2
+
+N          RES       1
+Q          RES       1
+QR         RES       1            
+

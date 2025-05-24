@@ -1,0 +1,293 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0   281
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF    44  PRTALF
+; SY   1  DEF    21  PRTSTR
+; SY   2  DEF   164  PRTCHR
+; SY   3  DEF   122  PRTINT
+; SY   4  DEF    88  PRTOCT
+; SY   5  USE        BMPAD
+;  
+         0000 +A  I 0271 PRTPARM2 + ADD       TWO          GET 2 PARAMS: LEN AND COL (EITHER VALUE OR VAR ADDR)
+         0001 +SA I 0020          + STORE A   PRTPRMEX
+         0002 +RA I 0010          + R ADD     PRTP1
+         0003 +A  I 0271          + ADD       TWO          PRINT PACKED TEXT FROM FULL-WORD VALUE IN MQ REGISTER 
+         0004 +SA I 0010          + STORE A   PRTP1        STORE ADDR OF FIRST PARAM (LEN)
+         0005 +A  I 0270          + ADD       ONE
+         0006 +SA I 0012          + STORE A   PRTP2        STORE ADDR OF SECOND PARAM (COL)
+         0007 +A  I 0270          + ADD       ONE
+         0008 +SA I 0087          + STORE A   EXIT
+         0009 -SM I 0260          - STORE MQ  NUM          SAVE VALUE TO PRINT PARAM MQ (NUM IS ALIASED TO TXT)
+         0010 +RA A 0000   PRTP1  + R ADD     /   /        GET LEN: NUMBER OF CHARS TO PRINT (1..6)
+         0011 +ST I 0264          + STORE     LEN
+         0012 +RA A 0000   PRTP2  + R ADD     /   /        GET COLUMN PARAM 1..72
+         0013 +TP I 0016          + TR +      PRTP4
+         0014 +SA I 0015          + STORE A   PRTP3        COL<0 -> INTERPRET COL AS LOC(COL) = ADDR OF COL VAR
+         0015 +RA A 0000   PRTP3  + R ADD     /   /        READ VAR COL PASED AS PARAM
+         0016 +TZ I 0087   PRTP4  + TR 0      EXIT         COL=0 -> EXIT
+         0017 +TP I 0019          + TR +      PRTP5
+         0018 +T  I 0087          + TR        EXIT         COL<0 -> EXIT
+         0019 +ST I 0070   PRTP5  + STORE     COL
+         0020 +T  A 0000 PRTPRMEX + TR        /   /        RETURN TO CALLER
+         0021 +SA I 0010 PRTSTR   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+         0022 +RA I 0022          + R ADD     *            FOR PRINT STRINGZ FROM MEM
+         0023 +T  I 0000          + TR        PRTPARM2
+         0024 +ST I 0034          + STORE     COLSZ
+         0025 +RA I 0264          + R ADD     LEN          LEN IS IN FACT THE LOCATION WHERE THE STRING STARTS
+         0026 +SA I 0029          + STORE A   STRZAD
+         0027 +RA I 0087          + R ADD     EXIT
+         0028 +SA I 0042          + STORE A   STRZEX
+         0029 +RA A 0000 STRZAD   + R ADD     /   /        GET HALF-WORD WITH NEXT 3 CHARS TO PRINT
+         0030 +TZ I 0042          + TR 0      STRZEX       IF +0 -> END OF STRING (-0 DOES NOT TERMINATES THE STRING)
+         0031 +LR A 0035          + L RIGHT   0035         MQ=3-CHARS TO PRINT
+         0032 +RA I 0032          + R ADD     *            
+         0033 +T  I 0044          + TR        PRTALF       PRINT 3 CHARS
+         0034 +H  A 0000 COLSZ    + STOP      0000         COL 
+         0035 +RA I 0029 STRZ1    + R ADD     STRZAD       INCR STRING ADDRESS
+         0036 +A  I 0270          + ADD       ONE
+         0037 +SA I 0029          + STORE A   STRZAD
+         0038 +RA I 0034          + R ADD     COLSZ        INCR COLUMN
+         0039 +A  I 0272          + ADD       D3
+         0040 +SA I 0034          + STORE A   COLSZ
+         0041 +T  I 0029          + TR        STRZAD
+         0042 +TP A 0000 STRZEX   + TR +      /   /        IF ZERO -> END OF STRING
+         0043 +T  I 0035          + TR        STRZ1
+         0044 +A  I 0271 PRTALF   + ADD       TWO          PRINT 3-PACKED CHARS IN MQ REGISTER 
+         0045 +SM I 0266          + STORE MQ  TXT          SAVE TEXT TO PRINT (IN LEFT HALF WORD)
+         0046 +SA I 0049          + STORE A   PRTAP2       STORE ADDR OF PARAM (COL)
+         0047 +A  I 0270          + ADD       ONE
+         0048 +SA I 0087          + STORE A   EXIT
+         0049 +RA A 0000   PRTAP2 + R ADD     /   /        GET COLUMN NUMBER PARAM 1..72
+         0050 +TP I 0053          + TR +      PRTAP4
+         0051 +SA I 0052          + STORE A   PRTAP3       COL<0 -> INTERPRET COL AS L(COL) = ADDR OF COL VAR
+         0052 +RA A 0000   PRTAP3 + R ADD     /   /        READ VAR COL PASED AS PARAM
+         0053 +ST I 0070   PRTAP4 + STORE     COL
+         0054 +RA I 0272          + R ADD     D3
+         0055 +ST I 0264          + STORE     LEN
+         0056 +RA I 0254 PRT1     + R ADD     ZERO         UNPACK LEFTMOST CHAR 
+         0057 +AV I 0266          + ADD AB    TXT          GET TEXT DISCARD SIGN
+         0058 +LR A 0035          + L RIGHT   0035         MQ=Acc
+         0059 +RA I 0254          + R ADD     ZERO
+         0060 +D  I 0279          + DIV       D48X48
+         0061 +ST I 0266          + STORE     TXT          remainder=char to print, mq=c2 * 48 + c3 in right half-word
+         0062 +RA I 0254          + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW BIT SET
+         0063 +LL A 0018          + L LEFT    0018         put c2 and c3 in left half-word of MQ to be saved in CHAR half word
+         0064 +SM I 0265          + STORE MQ  CHAR         CHAR TO PRINT
+         0065 +RA I 0265          + R ADD     CHAR 
+         0066 +TZ I 0071          + TR 0      NXTCHR       IF BLANK PROCEED TO NEXT COL
+         0067 +LR A 0035          + L RIGHT   0035         MQ=CHAR TO PRINT
+         0068 +RA I 0068          + R ADD     *            PRINT CHAR
+         0069 +T  I 0164          + TR        PRTCHR
+         0070 +H  A 0000 COL      + STOP      0000         COL: COLUMN NUMBER TO PRINT (1..72)
+         0071 +RA I 0264 NXTCHR   + R ADD     LEN          DECR LEN COUNT
+         0072 +S  I 0270          + SUB       ONE
+         0073 +ST I 0264          + STORE     LEN
+         0074 +TZ I 0087          + TR 0      EXIT         IF NO MORE CHARS TO PRINT EXIT
+         0075 +RA I 0070          + R ADD     COL          INCR COL POSITION
+         0076 +A  I 0270          + ADD       ONE
+         0077 +ST I 0070          + STORE     COL
+         0078 +S  I 0278          + SUB       D72          IF COL > 72 RETURN TO CALLER
+         0079 +TZ I 0081          + TR 0      GNXTCHR      ELSE PROCEED WITH NEXT CHAR
+         0080 +TP I 0087          + TR +      EXIT
+         0081 +RA I 0254 GNXTCHR  + R ADD     ZERO         GET NEXT CHAR 
+         0082 +LM I 0266          + LOAD MQ   TXT
+         0083 +M  I 0277          + MPY       D48
+         0084 +AL A 0017          + A LEFT    0017         GET RESULT IN LEFT HALF-WORD OF ACC
+         0085 +ST I 0266          + STORE     TXT
+         0086 +T  I 0056          + TR        PRT1         PROCEED TO PRINT CHAR
+         0087 +T  A 0000 EXIT     + TR        /   /        RETURN TO CALLER
+         0088 +SA I 0010 PRTOCT   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+         0089 +RA I 0089          + R ADD     *            FOR PRINT OCTIONARY VALUE
+         0090 +T  I 0000          + TR        PRTPARM2
+         0091 +RA I 0264          + R ADD     LEN          LEN = OCTAL DIGITS TO PRINT
+         0092 +A  I 0070          + ADD       COL
+         0093 +S  I 0270          + SUB       ONE
+         0094 +ST I 0106          + STORE     COLN         COL POINTS TO LEAST SIGNIFICANT DIGIT
+         0095 +RA I 0260 PRTIOCG  + R ADD     NUM          GENERATE OCTINARY DIGIT
+         0096 +LM I 0254          + LOAD MQ   ZERO         CLEAR MQ
+         0097 +LR A 0021          + L RIGHT   0021         3 LSB BITS OF LEFT HALF-WORD OF ACC TO MQ
+         0098 +AL A 0018          + A LEFT    0018         BACK TO LEFT HALF OF ACC (BIT SHIFTED RIGHT 3 BIT)
+         0099 +ST I 0260          + STORE     NUM          SAVE BACK NUM WITH RIGHTMOST OCTIONARY DIGIY EXTRACTED (NUM'=NUM/8)
+         0100 +RA I 0254          + R ADD     ZERO
+         0101 +LL A 0021          + L LEFT    0021         LEFT HALF-WORD OF ACC IS NOW RIGHTMOST OCTINARY DIGIT EXTRACTED FROM NUM 
+         0102 +TZ I 0120          + TR 0      PRTIOZ       TR IF THIS DIGIT IS ZERO TO PRINT A '0' (BASE48 CODE = 10) INSTEAD OF A BLANK (BASE48 CODE = 0)
+         0103 +LR A 0035          + L RIGHT   0035         PUT DIGIT 1..9 TO PRINT IN MQ
+         0104 +RA I 0104 PRTOCTD  + R ADD     *            PRINT OCTINARY DIGIT
+         0105 +T  I 0164          + TR        PRTCHR
+         0106 +H  A 0000 COLN     + STOP      0000
+         0107 +RA I 0106          + R ADD     COLN        DECR COL NUMBER TO PRINT NEXT DIGIT
+         0108 +S  I 0270          + SUB       ONE
+         0109 +ST I 0106          + STORE     COLN
+         0110 +RA I 0264          + R ADD     LEN          DECR COL NUMBER TO PRINT NEXT DIGIT
+         0111 +S  I 0270          + SUB       ONE
+         0112 +TZ I 0087          + TR 0      EXIT         PRINTED LEN OCTINARY DIGITS -> EXIT
+         0113 +ST I 0264          + STORE     LEN
+         0114 +RA I 0260          + R ADD     NUM          IF NUM < 0, ADD SIGN BIT TO LEFTMOST DIGIT
+         0115 +TP I 0095          + TR +      PRTIOCG
+         0116 +RA I 0280          + R ADD     OCT04K       
+         0117 +S  I 0260          + SUB       NUM
+         0118 +ST I 0260          + STORE     NUM
+         0119 +T  I 0095          + TR        PRTIOCG
+         0120 +LM I 0273   PRTIOZ + LOAD MQ   D10          ACC=BASE48 CODE FOR '0'
+         0121 +T  I 0104          + TR        PRTOCTD      TR TO PRINT IT
+         0122 +SA I 0010 PRTINT   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+         0123 +RA I 0123          + R ADD     *            FOR PRINT OCTIONARY VALUE
+         0124 +T  I 0000          + TR        PRTPARM2
+         0125 +RA I 0070          + R ADD     COL          PRINT DECIMAL NUMBER. VALUE OF LEN = DIGITS TO PRINT, NOT INCLUDING SIGN
+         0126 +A  I 0264          + ADD       LEN
+         0127 +S  I 0270          + SUB       ONE          
+         0128 +ST I 0149          + STORE     COLNI        COL POINTS TO END OF NUMBER
+         0129 +RA I 0254          + R ADD     ZERO
+         0130 +ST I 0263          + STORE     SGN          SIGN IS POSITIVE
+         0131 +RA I 0260          + R ADD     NUM
+         0132 +TP I 0137          + TR +      PRTINTG
+         0133 +RS I 0260          + R SUB     NUM          NUM IS NEGATIVE. CONVERT TO POSITIVE
+         0134 +ST I 0260          + STORE     NUM          AND SET SGN=1
+         0135 +RA I 0270          + R ADD     ONE
+         0136 +ST I 0263          + STORE     SGN          
+         0137 +RA I 0260 PRTINTG  + R ADD     NUM          GENERATE DECIMAL DIGIT
+         0138 +LR A 0035          + L RIGHT   0035         MQ=Acc
+         0139 +RA I 0254          + R ADD     ZERO
+         0140 +D  I 0273          + DIV       D10
+         0141 +TZ I 0162          + TR 0      PRTINZ
+         0142 +ST I 0265 PRTINTG2 + STORE     CHAR         acc=remainder=digit to print, mq=num/10
+         0143 +RA I 0254          + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW BIT SET
+         0144 +LL A 0018          + L LEFT    0018         digit in left half-word of MQ to be saved in CHAR half word
+         0145 +SM I 0260          + STORE MQ  NUM 
+         0146 +LM I 0265          + LOAD MQ   CHAR 
+         0147 +RA I 0147 PRTINTD  + R ADD     *            PRINT DECIMAL DIGIT
+         0148 +T  I 0164          + TR        PRTCHR
+         0149 +H  A 0000 COLNI    + STOP      0000
+         0150 +RA I 0149          + R ADD     COLNI        DECR COL NUMBER TO PRINT NEXT DIGIT
+         0151 +S  I 0270          + SUB       ONE
+         0152 +ST I 0149          + STORE     COLNI
+         0153 +RA I 0260          + R ADD     NUM          DO NOT CARE ABOUT LEN, JUST CHECK IF NUM=0 
+         0154 +TZ I 0156          + TR 0      PRTINS       (SO NO MORE DIGITS REMAINS TO BE PRINTED)
+         0155 +T  I 0137          + TR        PRTINTG      NUM NOT FINISHED, PROCEED WITH NEXT DIGIT
+         0156 +RA I 0263 PRTINS   + R ADD     SGN
+         0157 +TZ I 0087          + TR 0      EXIT         NO SIGN -> NUM FINISHED
+         0158 +RA I 0254          + R ADD     ZERO
+         0159 +ST I 0263          + STORE     SGN          CLEAR SGN FLAG
+         0160 +LM I 0274          + LOAD MQ   D11          BASE48 CODE FOR '-' (MINUS) CHAR
+         0161 +T  I 0147          + TR        PRTINTD      GO TO PRINT IT
+         0162 +RA I 0273   PRTINZ + R ADD     D10          ACC=BASE48 CODE FOR '0'
+         0163 +T  I 0142          + TR        PRTINTG2     TR TO PRINT IT
+         0164 +A  I 0271 PRTCHR   + ADD       TWO          PRINT CHAR IN MQ REGISTER 
+         0165 +SM I 0265          + STORE MQ  CHAR         SAVE CHAR TO PRINT (IN LEFT HALF WORD)
+         0166 +SA I 0170          + STORE A   PRTCP2       STORE ADDR OF PARAM (COL)
+         0167 +A  I 0270          + ADD       ONE
+         0168 +SA I 0248          + STORE A   PRTCEX
+         0169 +TF I 0170          + TR OV     PRTCP2       CLEAR OV JUST IN CASE
+         0170 +RA A 0000   PRTCP2 + R ADD     /   /        GET COLUMN NUMBER PARAM 1..72
+         0171 +TP I 0174          + TR +      PRTCP4
+         0172 +SA I 0173          + STORE A   PRTCP3       COL<0 -> INTERPRET COL AS L(COL) = ADDR OF COL VAR
+         0173 +RA A 0000   PRTCP3 + R ADD     /   /        READ VAR COL PASED AS PARAM
+         0174 +S  I 0270   PRTCP4 + SUB       ONE
+         0175 +ST I 0268          + STORE     N            N=COL-1 -> IN RANGE 0..71
+         0176 +TP I 0178          + TR +      PRTSA        IF N >= 0 PROCEED WITH BASE BUFFER ADDR CALCULATION
+         0177 +T  I 0248          + TR        PRTCEX       IF N<0 EXIT
+         0178 +RA I 0254    PRTSA + R ADD     ZERO         CARD BUFFER USES LOCATION 0..47
+         0179 +SA I 0267          + STORE A   PRTROWAD     DETERMINE ADDRESS OF LOWER ROW TO PRINT
+         0180 +RA I 0268          + R ADD     N
+         0181 +S  I 0276          + SUB       D36
+         0182 +TP I 0184          + TR +      PRTC0
+         0183 +T  I 0190          + TR        PRTC1
+         0184 +ST I 0268    PRTC0 + STORE     N            COL NOW 0..35 
+         0185 +S  I 0276          + SUB       D36
+         0186 +TP I 0248          + TR +      PRTCEX       IF COL >= 36 (IE COL PASSED AS PARAM > 72) THEN EXIT
+         0187 +RA I 0267          + R ADD     PRTROWAD
+         0188 +A  I 0271          + ADD       TWO
+         0189 +SA I 0267          + STORE A   PRTROWAD     SET BASE BUFFER ADDR 
+         0190 +RA I 0270    PRTC1 + R ADD     ONE          DETERMINE MASKCOL WITH MASK TO SET IN CARD BUFFER
+         0191 +LR A 0053          + L RIGHT   53           SET RIGHTMOST BIT OF MQ TO 1 (SHIFT 35+18=53)
+         0192 +RA I 0275          + R ADD     D35
+         0193 +S  I 0268          + SUB       N
+         0194 +SA I 0196          + STORE A   PRTC2
+         0195 +RA I 0254          + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW
+         0196 +LL A 0000    PRTC2 + L LEFT    /   /        SHIFT MQ LEFT N PLACES
+         0197 +TZ I 0200          + TR 0      PRTC3        IF ACC STILL ZERO -> MASKCOL VALID
+         0198 +RS I 0270          + R SUB     ONE          ACC NOT ZERO -> SHOULD GENERATE -0 TO SET SIGN BIT ON
+         0199 +LR A 0072          + L RIGHT   0072         NOW MQ = -0 -> LEFTMOST BIT OF MQ SET
+         0200 -SM I 0256    PRTC3 - STORE MQ  MASKCOL
+         0201 +RA I 0254          + R ADD     ZERO         READ THE BITMAP OF CHAR 
+         0202 +AV I 0265          + ADD AB    CHAR         DISCARD SIGN OF CHAR, IF ANY
+         0203 +ST I 0265          + STORE     CHAR
+         0204 +S  I 0277          + SUB       D48
+         0205 +TP I 0248          + TR +      PRTCEX       IF CHAR >= 48 EXIT
+         0206 +RA I 0262          + R ADD     BITMAPAD     IF ADDR OF BASE48 BITMAP NOT COMPUTED
+         0207 +TZ I 0249          + TR 0      GETBMP1      TR TO LOAD IT
+         0208 +A  I 0265  GETBMP2 + ADD       CHAR         READ THE BITMAP OF CHAR 
+         0209 +SA I 0210          + STORE A   PRTC4        INDICATES THE BITS TO SET IN SELECTED 
+         0210 +RA A 0000    PRTC4 + R ADD     /   /        COLUMN OF CARD BUFFER 
+         0211 +ST I 0269          + STORE     BITS
+         0212 +RS I 0270          + R SUB     ONE
+         0213 +ST I 0268          + STORE     N            SET TO -1
+         0214 +RA I 0268    LOOP1 + R ADD     N            CURRENT ROW (STARTS AT ZERO) = OFFSET ON PRTROWAD     
+         0215 +A  I 0270          + ADD       ONE
+         0216 +ST I 0268          + STORE     N
+         0217 +RA I 0269          + R ADD     BITS         EXTRACT RIGHTMOST BIT OF LEFT HALF OF ACC TO MQ
+         0218 +TZ I 0248          + TR 0      PRTCEX       NO MORE BITS -> EXIT
+         0219 +LR A 0019          + L RIGHT   0019         LSB BIT OF LEFT HALF-WORD OF ACC TO MQ
+         0220 +AL A 0018          + A LEFT    0018         BACK TO LEFT HALF OF ACC (BIT SHIFTED RIGHT 1 BIT)
+         0221 +ST I 0269          + STORE     BITS         SAVE BACK BITS. LSB HAS BEEN EXTACTED, CONTENTS SHIFTED RIGHT ONE PLACE
+         0222 +RA I 0254          + R ADD     ZERO
+         0223 +LL A 0001          + L LEFT    0001         PUT EXTACTED BIT BACK INTO ACC
+         0224 +TZ I 0214          + TR 0      LOOP1        NO BIT 
+         0225 +RA I 0268          + R ADD     N            READ THE ROW N AT CARD BUFFER 
+         0226 +AL A 0002          + A LEFT    0002         MULT N BY 4 AS THERE ARE 4 HALF WORDS PER ROW
+         0227 +A  I 0267          + ADD       PRTROWAD     
+         0228 +SA I 0230          + STORE A   PRTROWR
+         0229 +SA I 0246          + STORE A   PRTROWW
+         0230 -RA A 0000  PRTROWR - R ADD     /   /        
+         0231 -ST I 0258          - STORE     ROW          CURRENT CONTENTS OF ROW
+         0232 -RA I 0256          - R ADD     MASKCOL      "OR" MASKCOL IN SELECTED ROW
+         0233 +TP I 0241          + TR +      PRTW2
+         0234 -RA I 0258          - R ADD     ROW 
+         0235 +TZ I 0239          + TR 0      PRTW1         
+         0236 +RA I 0254          + R ADD     ZERO         MASKCOL IS MINUS ZERO AND ROW IS NOT-EMPTY (EITHER POSITIVE OR NEGATIVE) -> SET ROW AS NEGATIVE
+         0237 -SV I 0258          - SUB AB    ROW 
+         0238 +T  I 0246          + TR        PRTROWW
+         0239 -RA I 0256    PRTW1 - R ADD     MASKCOL      MASKCOL IS MINUS ZERO AND ROW IS EMPTY -> SET ROW = MASKCOL = MINUS ZERO
+         0240 +T  I 0246          + TR        PRTROWW
+         0241 -RA I 0258    PRTW2 - R ADD     ROW          
+         0242 +TP I 0245          + TR +      PRTW3              
+         0243 -S  I 0256          - SUB       MASKCOL      MASKCOL IS POSITIVE AND ROW IS NEGATIVE -> SUB MASKCOL FROM ROW
+         0244 +T  I 0246          + TR        PRTROWW
+         0245 -A  I 0256    PRTW3 - ADD       MASKCOL      MASKCOL IS POSITIVE AND ROW IS POSITIVE OR EMPTY -> ADD MASKCOL TO ROW         
+         0246 -ST A 0000  PRTROWW - STORE     /   /        ROW UPDTATE
+         0247 +T  I 0214          + TR        LOOP1        PROCEED TO NEXT ROW
+         0248 +T  A 0000 PRTCEX   + TR        /   /
+         0249 +RA I 0249 GETBMP1  + R ADD     *
+         0250 +T  S 0005          + TR        BMPAD        GET BASE48 CHARS BITMAP ADDRESS
+         0251 +ST I 0262          + STORE     BITMAPAD     
+         0252 +T  I 0208          + TR        GETBMP2      RETURN
+         0253 +000000               ORG       EVEN
+         0254 +000000    ZERO       DEF       0            
+         0255 +000000               DEF       0            
+         0256 +000000    MASKCOL    DEF       0
+         0257 +000000               DEF       0
+         0258 +000000    ROW        DEF       0
+         0259 +000000               DEF       0
+         0260 +000000    NUM        DEF       0
+         0261 +000000               DEF       0
+         0262 +000000    BITMAPAD   DEF       0
+         0263 +000000    SGN        DEF       0
+         0264 +000000    LEN        DEF       0
+         0265 +000000    CHAR       DEF       0
+         0266 +000000    TXT        DEF       0
+         0267 +000000    PRTROWAD   DEF       0
+         0268 +000000    N          DEF       0
+         0269 +000000    BITS       DEF       0
+         0270 +000001    ONE        DEF       1
+         0271 +000002    TWO        DEF       2
+         0272 +000003    D3         DEF       3
+         0273 +000010    D10        DEF       10
+         0274 +000011    D11        DEF       11
+         0275 +000035    D35        DEF       35
+         0276 +000036    D36        DEF       36
+         0277 +000048    D48        DEF       48
+         0278 +000072    D72        DEF       72
+         0279 +002304    D48X48     DEF       2304
+         0280 +016384    OCT04K     DEF       *040000      BIT SIGN ON 5TH OCTINARY DIGIT

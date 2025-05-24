@@ -1,0 +1,537 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 32 CHECK VARS ON EQ INSTR ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRTSTR      PRINT ALFANUMERIC TEXT STRING, ZERO TERMINATED
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:RWDRUM      ENDLOG1A  READ FROM DRUM / WRITE TO DRUM
+              
+                                  PURPOSE:
+                                  - SCAN SOURCE CODE LOOKING FOR EQ INSTR.
+                                  - FOR EACH ONE OF THEM, CHECK IF VARIABLE ALREADY DEFINED
+                                    IF VAR ALREADY DEFINED, ERROR IF NOT THE SAME CHARACTERISTICS
+                                    IF VAR NOT DEFINED, CREATE IT: FILL IN A VARIABLE RECORD AND 
+                                    SAVE IT TO DRUM
+                                  - READ AND SAVE BACK UPDATED VARIABLE HASH TABLE TO DRUM
+
+
+SRCHVAR  + ADD       TWO          SEARCH VAR 
+         + STORE A   SRCHP1       PARAMS: ADDR OF VAR NAME TO SEARCH
+         + ADD       ONE
+         + STORE A   SRCHP2
+         + ADD       ONE
+         + STORE A   SRCHP3
+         + ADD       ONE
+         + STORE A   SRCHVAEX     RETURN INDEX POS IN ACC
+                                  0=NOT FOUND, =1 -> ON FIRST VAR SLOT IN DRUM
+                                  POS IN DRUM: (POS-1)*8 OM DRUM 0128 AND 0129
+
+SRCHP1   + R ADD     /   /        GET ADDR OF NAME     
+         + STORE A   SRCHN0   
+         + STORE A   SRCHP1A
+SRCHP1A  + R ADD     /   /
+         + STORE     FNDVAR      
+SRCHP2   + R ADD     /   /        GET ADDR OF NAME1
+         + STORE A   SRCHN1
+         + STORE A   SRCHP2A
+SRCHP2A  + R ADD     /   /
+         + STORE     FNDVAR1
+SRCHP3   + R ADD     /   /        GET ADDR OF NAME2
+         + STORE A   SRCHN2
+         + STORE A   SRCHP3A
+SRCHP3A  + R ADD     /   /
+         + STORE     FNDVAR2
+
+         + R ADD     *            GET THE HASH OF VAR BEING SEARCHED
+         + TR        GETHASH
+         + ADD       HASHAD       ADD HASH TABLE ADDR
+         + STORE A   SRCHHA1
+SRCHHA1  + R ADD     /   /        GET HASH[HASH VARNAME] -> VAR NUMBER
+         + TR 0      SRCHNFND     =0 -> VAR NOT IN HASH TABLE -> VAR NOT EXISTS
+         + STORE     N
+         + SUB       ONE
+         + A LEFT    0003         ADDR IN DRUM = 8*(NVAR -1)
+         + STORE A   SRCHDRAD
+         + R ADD     ONE
+         + STORE     HASHFLAG     -> USING HASH VALUE
+         + TR        SRCHTEST     TEST IF VAR FOUND USING HASH 
+
+SRCHLOOP + R ADD     N
+         + SUB       NVARS
+         + TR 0      SRCHNFND
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+
+SRCHTEST + R ADD     *
+         + TR        RWDRUM       READ VAR FROM DRUM
+         + READ      0128         DRUM INSTR
+SRCHDRAD + STOP      /   /        DRUM ADDR 
+         + STOP      FNDVAR
+         + STOP      0004         GET 4 HALF-WORD. ONLY 3 ARE NEEDED (THE NAME), BUT NUMER OF HW WORDS READ SHOULD BE EVEN
+
+         + R ADD     FNDVAR
+SRCHN0   + SUB       /   /
+         + TR 0      SRCHV1
+         + TR        NXTSRCH
+SRCHV1   + R ADD     FNDVAR1
+SRCHN1   + SUB       /   /
+         + TR 0      SRCHV2
+         + TR        NXTSRCH
+SRCHV2   + R ADD     FNDVAR2
+SRCHN2   + SUB       /   /
+         + TR 0      SRCHFND      VAR FOUND
+
+NXTSRCH  + R ADD     HASHFLAG     VAR NOT FOUND, SEARCH NEXT
+         + TR 0      NXTSRCH2
+         + R ADD     ZERO
+         + STORE     HASHFLAG     VAR NOT FOUND USING HASH, START A SEQUENTIAL SEARCH
+         + STORE     N
+         + STORE A   SRCHDRAD
+         + TR        SRCHLOOP 
+
+NXTSRCH2 + R ADD     SRCHDRAD
+         + ADD       D8
+         + STORE A   SRCHDRAD
+         + TR        SRCHLOOP
+
+SRCHFND  + R ADD     N
+         + TR        SRCHVAEX
+         
+SRCHNFND + R ADD     ZERO
+SRCHVAEX + TR        /   /
+
+GETHASH  + ADD       TWO          CALC HASH VALUE (0..198) FOR VARIABLE NAME FNDVAR, FNDVAR1, FNDVAR2
+         + STORE A   GETHAEX      RETURN HASH IN ACC
+
+         + R ADD     ZERO
+         + ADD AB    FNDVAR
+         + ADD AB    FNDVAR1
+         + ADD AB    FNDVAR2
+
+         + L RIGHT   0035         MQ=ABS(VARIABLE FULL NAME)
+         + DIV       D199         DIV BY 199, ACC=REMINDER
+GETHAEX  + TR        /   /
+HASHAD   + STOP      HASH         HASH TABLE ADDRESS
+
+
+SETNVARS + ADD       TWO          COMPUTE NVARS READING TABLE
+         + STORE A   SETNVEX      STORED IN DRUM
+
+         + R ADD     *
+         + TR        RWDRUM       READ  RELNUM0 AND NVARS FROM DRUM
+         + READ      0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         + STOP      0002         2 HALF WORDS
+
+SETNVEX  + TR        /   /        RETURN TO CALLER
+
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "CHECK EQ INSTR"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "CCLEN" NOT REFERENCED WARNING ON ASSEMBLING             
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "CCLEN" NOT REFERENCED WARNING ON ASSEMBLING             
+
+         + R ADD     *            
+         + TR        RWDRUM       READ VARIABLE NAMES HASH TABLE FROM DRUM
+         + READ      0128         DRUM INSTR
+         + STOP      3800         DRUM ADDR 
+         + STOP      HASH         ADDR OF DATA TO SAVE
+         + STOP      0200         200 HALF WORDS
+
+         + R ADD     *            COMPUTE NVARS READING TABLE
+         + TR        SETNVARS     STORED IN DRUM
+
+         + R ADD     ZERO
+         + STORE     NNEWVARS     
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+
+READREG  + NOOP      0000
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE CARD
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO
+         + STORE     NEWVAR       INIT NEWVAR FLAG 
+
+         + R ADD     OP
+         + SUB       OPEQ
+         + TR 0      CHKEQ        OP="EQ VAR" -> TR TO CHECK IF VARS EXISTS
+
+NEXT     + NOOP      0000         CONTINUE WITH NEXT STEP RECORD
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1A     TR IF NO LOG SELECTED
+         + R ADD     NEWVAR       IF NEWVAR FLAG SET 
+         + TR 0      ENDLOG1A     THEN ADD NOTE TO PACT SOURCE CODE LINE
+         + R ADD     *
+         + TR        PRTSTR
+         + STOP      MSGNEW       "NEW VAR DEF"
+         + STOP      0040         COL 40
+ENDLOG1A + NOOP      0000
+ 
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+
+         + R ADD     *            PRINT STEP JUST PROCESSED
+         + TR        PRINTCRD
+ENDLOG1  + NOOP      0000 
+
+                                  PROCESS NEXT STEP
+         + TR        READSTEP
+
+CHKEQ    + R ADD     FACTREG    
+         + SUB       D32          'T'
+         + TR 0      NEXT         IF EQ TO TEMP VAR -> NO NEW VAR -> CONTINUE TO NEXT STEP
+
+         + R ADD     FACT
+         + TR +      ERREQNA      ERROR IF VARIABLE IS NOT ALFA
+
+         + R ADD     *
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      FACT
+         + STOP      S1
+         + STOP      S2
+         + TR 0      EQ1
+         + TR        NEXT         EQ VAR FOUND -> PROCEED TO NEXT INSTR
+
+EQ1      + R ADD     *
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      FACT
+         + STOP      S1
+         + STOP      ZERO
+         + TR 0      EQ2
+         + TR        NEXT         EQ VAR FOUND -> PROCEED TO NEXT INSTR
+
+EQ2      + R ADD     *
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      FACT
+         + STOP      ZERO
+         + STOP      ZERO
+         + TR 0      VARNFND      TR EQ VAR NOT FOUND
+         + TR        NEXT         EQ VAR FOUND -> PROCEED TO NEXT INSTR
+
+ADDVAROV + R ADD     *            
+         + TR        ERROR
+         + STOP      ERROVVAR     TOO MANY VARS DEFINED
+
+EQWNOQ   + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOQ       ERROR: MISSING Q ON EQ NEW-VAR
+
+ERREQNA  + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRVNA       ERROR IF VARIABLE IS NOT ALFA
+
+                                  VAR IN EQ NOT FOUND -> CREATE IT
+         
+VARNFND  + R ADD     NVARS        INCR NUM OF VARS DEFINED
+         + ADD       ONE
+         + STORE     NVARS
+         + SUB       MAXNVARS
+         + TR +      ADDVAROV     ERROR IF > TABLE SIZE
+
+                                  POPULATE VAR RECORD
+         + R ADD     FACT
+         + STORE     VARNAME    
+         + R ADD     S1
+         + STORE     VARNAM1
+         + R ADD     S2
+         + STORE     VARNAM2
+         + R ADD     ONE
+         + STORE     VTYPE        VAR TYPE. 1=SCALAR, 2=VECTOR, 3=MATRIX
+         + STORE     D1           DIMENSIONS
+         + STORE     D2         
+         + R ADD     TWO
+         + STORE     LEN
+         + R ADD     ZERO
+         + STORE     CONSTR       CONSTRAINT VAR NAME
+         + STORE     CONSTR1      
+         + STORE     CONSTR2      
+         + STORE     CTYPE        CONSTRAINT VAR TYPE. 0=NONE, 1=SYN, 2=IMS, 3=SUC, 9=REL
+         + STORE     RELADDR      RELATIVE ADDR IN VAR POOL
+         + STORE     PHASE        
+         + STORE     FLAG         
+         + STORE     SIZE         NUM OF HALF-WORDS NEEDED TO ACCOMODATE LEN USED BY SUB-CHAINS VARIABLES
+         + R ADD     QR
+         + STORE     Q          
+         + TR 0      EQWNOQ       IF QR IN EQ INSTR IS BLANK -> TR ERROR MISSING Q ON EQ NEW-VAR
+
+                                  SAVE VAR TO DRUM 
+         + R ADD     NVARS
+         + SUB       ONE          ADDRESS IN DRUM = (NVARS-1)*8 
+         + A LEFT    0003      
+         + STORE A   DRADDR1
+         + STORE A   DRADDR2
+         
+         + R ADD     *
+         + TR        RWDRUM       WRITE VAR RECORD TO DRUM
+         + WRITE     0128         DRUM INSTR
+DRADDR1  + STOP      /   /        DRUM ADDR 
+         + STOP      VARNAME      ADDR OF START OF FIRST HALF OF VAR RECORD
+         + STOP      0008         8 HALF WORDS
+
+         + R ADD     *
+         + TR        RWDRUM       WRITE VAR RECORD TO DRUM
+         + WRITE     0129         DRUM INSTR
+DRADDR2  + STOP      /   /        DRUM ADDR 
+         + STOP      CONSTR       ADDR OF START OF SECOND HALF OF VAR RECORD
+         + STOP      0008         8 HALF WORDS
+
+         + R ADD     ZERO         UPDATE VARNAME HASH TABLE WITH
+         + ADD AB    VARNAME      NEW VARIABLE
+         + ADD AB    VARNAM1
+         + ADD AB    VARNAM2
+
+         + L RIGHT   0035         MQ=ABS(VARIABLE FULL NAME)
+         + DIV       D199         DIV BY 199, ACC=REMINDER
+
+         + ADD       HASHAD       ADD HASH TABLE ADDR
+         + STORE A   SETHA1
+         + R ADD     NVARS
+SETHA1   + STORE     /   /        SET HASH[HASH VARNAME] = VAR NUMBER
+
+         + R ADD     NNEWVARS     INCR NUM OF NEW VARS DEFINED
+         + ADD       ONE
+         + STORE     NNEWVARS
+
+         + R ADD     ONE
+         + STORE     NEWVAR       SET NEWVAR FLAG 
+
+         + TR        NEXT         
+
+EOR      + NOOP      0000         END OF REGION  
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF FILE
+
+                                  NO MORE STEPS. 
+
+         + R ADD     *            
+         + TR        RWDRUM       WRITE VARIABLE NAMES HASH TABLE TO DRUM
+         + WRITE     0128         DRUM INSTR
+         + STOP      3800         DRUM ADDR 
+         + STOP      HASH         ADDR OF DATA TO SAVE
+         + STOP      0200         200 HALF WORDS
+
+         + R ADD     *
+         + TR        RWDRUM       WRITE RELNUM0 AND NVARS TO DRUM
+         + WRITE     0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         + STOP      0002         2 HALF WORDS
+
+                                  IF SW6 ON THEN 
+                                  PRINT NUMBER OF NEW VARS CREATED
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGNNEW      "NEW VARS DEF"
+         + STOP      0213         INT AT COL 13
+         + STOP      NNEWVARS     NUMBER OF NEW VARS CREATED
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+ENDLOG1B + NOOP      0000
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE. PRINT ALLWAYS
+
+         + STOP      READSTEP     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING NEXT SOURCE CODE STEP 
+
+           ORG       EVEN
+
+                                  COMPACT CODE RECORD
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0            IF OP CALLS IN A RESULT OF STEP -> FACTN=TEMP ADDR (2, 4, ..)
+D2N        DEF       0                                               FACTREG='T'
+NINST      DEF       0
+NINCR      DEF       0
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+N          DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+VARNAME    DEF       0            VARIABLE NAME
+VARNAM1    DEF       0            
+VARNAM2    DEF       0            
+VTYPE      DEF       0            VAR TYPE. 1=SCALAR, 2=VECTOR, 3=MATRIX
+LEN        DEF       0            HALF-WORD USED BY VARS
+Q          DEF       0
+D1         DEF       0            DIMENSIONS
+D2         DEF       0
+CONSTR     DEF       0            CONSTRAINT VAR NAME
+CONSTR1    DEF       0
+CONSTR2    DEF       0
+CTYPE      DEF       0            CONSTRAINT VAR TYPE. 0=NONE, 1=SYN, 2=IMS, 3=SUC, 9=REL
+RELADDR    DEF       0            RELATIVE ADDR IN VAR POOL
+PHASE      DEF       0
+FLAG       DEF       0
+SIZE       DEF       0            NUM OF HALF-WORDS NEEDED TO ACCOMODATE LEN USED BY SUB-CHAINS VARIABLES
+
+                                  TABLES (SHOULD AT EVEN LOCATION)
+
+RELNUM0    DEF       0            REL NUM ORIGIN
+NVARS      DEF       0            NUMBER OF VARS DEFINED
+
+FNDVAR     DEF       0            TEMP ON VAR SEARCH (SHOULD BE AT EVEN ADDR)
+FNDVAR1    DEF       0            TEMP ON VAR SEARCH
+FNDVAR2    DEF       0            TEMP ON VAR SEARCH
+DUMMY      DEF       0            NEEDED AS RWDRUM NEED EVEN NUMBER OF HALF-WORDS
+
+HASH       RES       200          VARIABLES NAMES HASH TABLE (199 ENTRIES)
+
+MAXNVARS   DEF       341          MAX VARIABLES THAT CAN DE DEFINED IN ONE PROGRAM 
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+D7         DEF       7
+D8         DEF       8
+D32        DEF       32
+D199       DEF       199
+
+NNEWVARS   DEF       0            NUMBER OF NEW VARS CREATED
+NEWVAR     DEF       0            FLAG TO SIGNAL IF A NEW VAR HAS BEEN CREATED
+HASHFLAG   DEF       0
+
+                                  TEXT
+
+ERROVVAR   TXT       "TOO MANY VARS DEFINED",0
+ERRNOQ     TXT       "MISSING Q ON EQ NEW-VAR",0   ERROR: WHEN EQ DEFINES A NEW VAR, SHOULD HAVE Q SET
+ERRVNA     TXT       "FACTOR NOT ALFA",'           ERROR IF VARIABLE IN FACTOR IS NOT ALFA
+
+MSGSTART   TXT       "CHECK EQ INSTR",0
+MSGNEW     TXT       "NEW VAR DEF",0
+MSGNNEW    TXT       "NEW VARS DEF",0
+
+OPEQ       EQU       D7           EQ
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEIN     EQU       0258         INPUT FROM TAPE 3 (PACT COMPACT CODE)
+
+

@@ -1,17 +1,23 @@
 # SimH_cpanel
 
+Old computers were massive, noisy, power-hungry and very beautiful, with plenty of blinkenlights, turning tapes, 
+punched cards, and of course rows and rows of buttons and switches.
 
-**NEW!: HP2100 with Plotter, TV and Scope Displays
+The aim of this project is to add nice visuals to SimH simulators on an interactive GUI to recreate the hypnotic experience 
+of looking the computer _processing_ and pushing/toggling that buttons and switches.
 
-The aim of this project is to add visuals to SimH emulator/simulator on an interactive GUI.
+The visuals covers interactive control panels (lights, switches, buttons toggles) but also
+other devices: tapes, card readers, disk, plotters, scopes, etc.
 
-The visuals covers interactive control panels (lights, switches, buttons) but also
-other devices: tapes, card readers, disk, etc.
+Another main goal of this project is to recover original historical software and bring it back 
+to runnable condition on its original environment.
 
 IBM360 and i7000 work is based on Richard Cornwell SimH fork, modified to use cpanel modules. 
 swtpc6800 work is based on Bill Beech SimH simulator.
-HP2100 work is based on David Bryan. 
+HP2100 work is based on David Bryan simulator. 
 i650, NORC, i701 and MarkI simulators are my own SimH simulators.
+
+***WHAT'S NEW!: IBM 701 PACT Compiler + Punched Card Viewer***
 
 <table>
 <thead>
@@ -149,6 +155,21 @@ Hot keys are available when GUI window has the focus:
 Press power button to quit the simulator.
 (On i7000 control panels, only ^E, ^Y and ^T available)
 
+
+## IBM 701
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701.zip) to download all the test run.
+
+Once uncompressed, you will find several ready to run .bat files: 
+
+* execute `run CPanel IBM 701 demo.bat` batch file to demo computer control panel and its i/o equipement 
+* execute `run CPanel IBM 701 PACT compiler demo.bat` batch file to demo PACT compiler  
+* execute `run IBM 701 NAA SpeedEx Assembler (1953).bat` batch file to assemble and run a sample program 
+* execute `run IBM 701 NR9003 Assembly (1952).bat` batch file to assemble and run a sample program with Nathaniel Rochester Symbolic Assembler
+* execute `run IBM 701 SO2 Regional Assembler (1952).bat` batch file to assemble and run a sample program with William F. McClelland Assembler  
+* execute `run IBM 701 PACT compiler (1955).bat` batch file to compile and run a sample program with PACT I compiler   
+ 
+  ![IBM 701 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/i701.png)
 
 ## HP 2100 Family
 
@@ -444,19 +465,6 @@ Once uncompressed, you will find several ready to run .bat files:
 * execute `run IBM 360 OS360 MVT r21.8F TSO (1974).bat` to open an interactive TSO session (max speed, no control panel)
  
   ![IBM 360 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360M65.png)
-
-## IBM 701
-
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701.zip) to download all the test run.
-
-Once uncompressed, you will find several ready to run .bat files: 
-
-* execute `run CPanel IBM 701 demo.bat` batch file to demo computer control panel and its i/o equipement 
-* execute `run IBM 701 NAA SpeedEx Assembler (1953).bat` batch file to assemble and run a sample program 
-* execute `run IBM 701 NR9003 Assembly (1952).bat` batch file to assemble and run a sample program with Nathaniel Rochester Symbolic Assembler
-* execute `run IBM 701 SO2 Regional Assembler (1952).bat` batch file to assemble and run a sample program with William F. McClelland Assembler  
- 
-  ![IBM 701 DEMO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/i701.png)
 
 ## IBM NORC
 

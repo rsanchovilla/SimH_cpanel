@@ -1,0 +1,197 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:RDALF           READ PACKED ALFANUMERIC VALUE FROM CARD BUFFER
+
+                                  RETURN 3 PACKED BASE48 ALFANUMERIC CHARS VALUE
+                                  IN MQ REGISTER (IN LEFT HALF-WORD). BY CONVENTION
+                                  PACKED ALFA CHARS IS NEGATIVE. =0 IS 3 BLANKS. 
+                                  THE PACKED VALUE IS AT MOST -(((47 * 48) + 47) * 48 + 47) = 110591 
+                                  IF CHARS READ ARE 0..9 (NO DOUBLE PUNCH, NO SIGN IN X(11) NOR Y(12)), THEN 
+                                  ACC=NUMBER READ (0..999) IN LEFT HALF WORD. ELSE ACC=-1 IN LEFT HALF WORD
+                                  PARAMS: COL: COLUMN TO USE (1..72). SAME BEHAVIOUR AS COL IN PRA
+
+           HEAD      DEF:RDCHR           READ BASE48 CHAR FROM CARD BUFFER
+
+                                  RETURN ONE BASE48 ALFANUMERIC CHAR VALUE AT GIVEN COL 
+                                  IF HOLES PUNCHED IN CARD IMAGE DOES NOT MATCH ANY PRINTABLE
+                                  CHAR, THEN THE BASE48 CODE RETURNED IS 47
+                                  IN ACC REGISTER (IN LEFT HALF-WORD). 
+                                  PARAMS: COL: COLUMN TO USE (1..72). SAME BEHAVIOUR AS COL IN PRA
+
+                   
+           HEAD      USE:BMPAD           RETURNS ADDRESS OF BASE48 BITMAP
+           HEAD      USE:RDBMP           READ CHAR BITMAP FROM CARD BUFFER
+                          
+   
+
+RDPARAM1 + ADD       TWO          GET 1 PARAMS: COL (EITHER VALUE OR VAR ADDR)
+         + STORE A   RDAP2        STORE ADDR OF PARAM (COL)
+         + ADD       ONE
+         + STORE A   EXIT         RETURN TO MAIN PROG CALLER
+
+         + R ADD     ZERO               
+         + STORE     TXT
+         + L LEFT    0035         Acc=MQ=RETURN ADDR
+         + ADD       TWO
+         + STORE A   RDPRMEX      PARAMS PARSED, RETURN TO CALLER
+
+         + R ADD     BITMAPAD     IF ADDR OF BASE48 BITMAP NOT COMPUTED
+         + TR 0      GETBMP1      TR TO LOAD IT
+  RDAP2  + R ADD     /   /        GET COLUMN PARAM 1..72
+         + TR +      RDAP4
+         + STORE A   RDAP3        COL<0 -> INTERPRET COL AS LOC(COL) = ADDR OF COL VAR
+  RDAP3  + R ADD     /   /        READ VAR COL PASED AS PARAM
+  RDAP4  + TR +      RDAP5
+         + TR        EXIT         COL<0 -> EXIT
+  RDAP5  + STORE     COL          
+RDPRMEX  + TR        /   /        RETURN TO CALLER
+
+GETBMP1  + R ADD     *
+         + TR        BMPAD        GET BASE48 CHARS BITMAP ADDRESS
+         + STORE     BITMAPAD     
+         + TR        RDAP2        RETURN
+
+
+RDALF    + LOAD MQ   *
+         + TR        RDPARAM1
+         + R ADD     D3
+         + STORE     LEN
+
+         + R ADD     *            READ 3 CHARS BITMAP
+         + TR        RDBMP
+D3       + STOP      0003         
+COL      + STOP      0000
+         - STORE MQ  BITMAP       WILL BE CM1CM2CM3, EACH CM 12 BITS LONG
+         + STORE     NUM          WILL BE -1 OR 0..999 IF CHARS FORMS AN UNSIGNED NUMBER
+
+         - R ADD     BITMAP       EXTRACT LEFTMOST (CM1) CHAR, HANDLE THE SIGN BIT 
+         - L RIGHT   0001         SHIFT RIGHT TO MAKE ROOM FOR EXTRA BIT SIGN
+         + TR +      CONV1
+         + SUB       D200KOCT     REPLICATE SIGN BIT ON EXTRA BIT 
+CONV1    - L RIGHT   0023
+         + A LEFT    0018
+         + STORE     BITS         BITS FOR LEFTMOST CHAR
+
+         + R ADD     ZERO         REMOVE SIGN FROM MQ
+         + L RIGHT   0001
+         + L LEFT    0025
+         - STORE     BITMAP       REMOVED LEFTMOST CHAR CM1. NOW BITMAP CONTAINS 2 CHARS OF 12 BITS EACH (CM1 CM3)
+         
+         + R ADD     D3
+         + STORE     LEN          LEN=3 TO GENERATE 3 CHARS
+
+CONV2    + R ADD     *
+         + TR        CONVB48      CONVERT BITS BITMAP. RETURN ACC=BASE48 CHAR
+
+         + STORE     CHAR
+         + R ADD     TXT  
+         + L RIGHT   0053         TXT=TXT*48+CHAR
+         + MPY       D48
+         + STORE MQ  TXT
+         + R ADD     TXT
+         + ADD       CHAR
+         + STORE     TXT
+ 
+         - R ADD     BITMAP       GET NEXT CHAR BITMAP 
+         + L RIGHT   0012
+         + A LEFT    0018
+         + STORE     BITS
+         + R ADD     ZERO
+         + L LEFT    0024
+         - STORE     BITMAP
+
+         + R ADD     LEN
+         + SUB       ONE
+         + STORE     LEN
+         + TR 0      CONV3
+         + TR        CONV2
+
+CONV3    + R ADD     ZERO
+         + SUB       TXT          
+         + L RIGHT   0035         MQ=-TXT
+         + R ADD     NUM          ACC=-1 OR 0..999
+EXIT     + TR        /   /        RETURN TO CALLER 
+
+
+
+
+RDCHR    + LOAD MQ   *
+         + TR        RDPARAM1
+         + R ADD     ONE
+         + STORE     LEN
+         + TR OV     CLOV         CLEAR OV JUST IN CASE
+
+CLOV     + R ADD     *            READ 1 CHAR BITMAP
+         + TR        RDBMP
+         + STOP      0001         
+         - STOP      COL          POINTS TO COL VARIABLE
+         + R ADD     ZERO         MQ=000 000 CM1 (CM1 IS 12 BITS LONG)
+         + L LEFT    0018         
+         + STORE MQ  BITS         BITS=CM1
+
+         + R ADD     *
+         + TR        CONVB48      CONVERT BITMAP TO BASE48 
+         + TR        EXIT
+
+
+CONVB48  + ADD       TWO          CONVERT LEN CHARS FROM BITMAP TO BASE48. RESULT IN TXT
+         + STORE A   CONVEX
+                  
+         + R ADD     BITS         IF BITS=0 -> CHAR=0 -> PROCEED TO CHFOUND
+         + TR 0      CHBLANK
+
+         + R ADD     D48          FIND BITMAP IN TABLE. IF NOT FOUND, CHAR WILL BE ZERO
+         + STORE     CHAR         
+
+ CHLOOP  + R ADD     CHAR
+         + TR 0      CHNOTFND
+         + SUB       ONE
+         + STORE     CHAR
+         + ADD       BITMAPAD     
+         + STORE A   CHBMPAD      
+ CHBMPAD + R ADD     /   /        GET BITMAP FOR SELECTED CHAR
+         + SUB AB    BITS         COMPARE WITH BITMAP TO SEARCH FOR
+         + TR 0      CHFOUND
+         + TR        CHLOOP
+
+CHBLANK  + R ADD     ZERO
+         + TR        CONVEX   
+
+CHNOTFND + R ADD     D47          IF CHAR NOT FOUND, SET BASE48 CODE = 47 (THE SPECIAL CHAR '-')
+         + TR        CONVEX   
+
+CHFOUND  + R ADD     CHAR
+CONVEX   + TR        /   / 
+
+          
+           ORG       EVEN
+
+ZERO       DEF       0            
+           DEF       0            
+BITMAP     DEF       0            
+           DEF       0            
+
+BITS       DEF       0
+CHAR       DEF       0
+NUM        DEF       0
+BITMAPAD   DEF       0
+TXT        DEF       0
+LEN        DEF       0
+
+ONE        DEF       1
+TWO        DEF       2
+D47        DEF       47
+D48        DEF       48
+D200KOCT   DEF       *200000 
+

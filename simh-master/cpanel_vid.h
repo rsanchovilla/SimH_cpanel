@@ -56,6 +56,7 @@ struct cpvidrec {
     int InitialScale;                                   // initial scale 10..200 to be used when window is created
     int InitialPosX, InitialPosY;                       //         x,y postion of window on screen to be used when window is created
     int bTextInput;                                     // if=0, window scales with +/-/^+/^-/^Y key, does not trasnlate natinal char to ascii. If =1, scales only eith ^+/^- but translates national keyboard
+    int bCanBeClosed;                                   // if=1, the window can be closed and reopened, without closing the whole emulator
     uint32 *surface;                                    // control panel pixels array. This is the whole 100% scale panel image bitmat
     rectlist RectList;                                  // rectangle list: indicate rectangles in pixels array to update on screen at given scale    
     int keyb_buf[MAX_CPVID_KEYBUF];                     // keyboard buffer of ascii values/scancodes for non-ascii keys typed (if bit30 (1<<30) set then bits 29..0 contains the scancode
@@ -71,6 +72,7 @@ extern void cpvid_poll(void);                           // scan GUI and update c
 extern void cpvid_sync(void);                           // send surface rectable to GUI window
 extern int  cpvid_checkredraw(void);                    // check if refresh in progress
 extern int  cpvid_init(int ncp, const char *, int, int, void *, int, int, int); // open GUI window for given cpanel title, width and height
+extern void cpvid_open(int ncp);                       // open a single cpanel windows named ncd. At least another panel should be visible (so DF file has been parsed)
 extern void cpvid_close(int ncp);                      // close GUI window of given cpanel name
 extern char cpvid_getkey(int ncp);
 extern int  find_cpvid_by_vptr(VID_DISPLAY * ); 

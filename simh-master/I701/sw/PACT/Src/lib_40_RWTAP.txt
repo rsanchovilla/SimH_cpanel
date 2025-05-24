@@ -1,0 +1,129 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:RDTAPE           READ FROM MAGNETIC TAPE
+
+                                  ON RETURN, ACC=NUMBER OF HALF WORDS READ
+                                             OVERFLOW FLAG SET IF END OF FILE ENCOUNTERED
+                                  PARAMS: TAPE: 0256  0257  0258  0259
+                                          BUF: LOCATION OF BUFFER WHERE TO STORE DATA READ FROM TAPE
+                                               (MUST BE EVEN)
+
+           HEAD      DEF:WRTAPE           WRITE TO MAGNETIC TAPE
+
+                                  PARAMS: TAPE: 0256  0257  0258  0259
+                                          BUF: LOCATION OF BUFFER TO WRITE TO TAPE (MUST BE EVEN)
+                                          LEN: LOCATION OF LEN=NUMBER OF HALF-WORDS TO WRITE (MUST BE EVEN)
+
+           HEAD      DEF:RWDRUM           READ FROM DRUM / WRITE TO DRUM
+
+                                  PARAMS: DRUM INSTR: READ/WRITE 0128  0129  0130  0131
+                                          DRUM ADDR: DRUM ADDRESS (0..4094, MUST BE EVEN)
+                                          BUF: LOCATION OF BUFFER TO READ/WRITE (MUST BE EVEN)
+                                          SIZE: NUMBER OF HALF-WORDS TO RD/WR (MUST BE EVEN)
+
+
+
+
+RWDRUM   + ADD       TWO 
+         + STORE A   PDR1         PARM1: DRUM INSTR: READ/WRITE 0128  0129  0130  0131
+         + ADD       ONE          
+         + STORE A   PDR2         PARM2: DRUM ADDRESS (0..4094)
+         + ADD       ONE          
+         + STORE A   PDR3         PARM3: BUF START ADDRESS
+         + ADD       ONE          
+         + STORE A   PDR4         PARM4: LEN: NUMBER OF HALF-WORDS (MUST BE EVEN)
+         + ADD       ONE          
+         + STORE A   EXIT               
+
+PDR1     + R ADD     /   /        GET DRUM INSTR
+         + STORE     DRIO
+PDR2     + R ADD     /   /        GET DRUM ADDR
+         + STORE A   DRADDR
+PDR3     + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+         + STORE A   RWCOPY    
+PDR4     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+         + STORE     LEN
+
+DRIO     + STOP      /   /        INSTR: READ/WRITE 0128  0129  0130  0131
+DRADDR   + SET DR    /   /
+         + TR        LOOP
+
+
+RDTAPE   + ADD       TWO 
+         + STORE A   PR1          PARM1: TAPE ADDRESS
+         + ADD       ONE          
+         + STORE A   PR2          PARM2: BUF START ADDRESS
+         + ADD       ONE          
+         + STORE A   EXIT
+
+         + TR OV     CLOV1        CLEAR OV THAT MAY HAVE BEEN SET
+   CLOV1 + NOOP      0000
+
+PR1      + R ADD     /   /        GET TAPE ADDR
+         + STORE A   RTAPAD       TAPE UNITS: 0256  0257  0258  0259
+PR2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+         + STORE A   RWCOPY    
+
+RTAPAD   + READ      /   /
+         + R ADD     ZERO
+         + TR        LOOP1
+
+WRTAPE   + ADD       TWO 
+         + STORE A   PW1          PARM1: TAPE ADDRESS
+         + ADD       ONE          
+         + STORE A   PW2          PARM2: BUF START ADDRESS
+         + ADD       ONE          
+         + STORE A   PW3          PARM3: BUF LEN
+         + ADD       ONE          
+         + STORE A   EXIT
+
+PW1      + R ADD     /   /        GET TAPE ADDR
+         + STORE A   WTAPAD       TAPE UNITS: 0256  0257  0258  0259
+PW2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+         + STORE A   RWCOPY    
+PW3      + R ADD     /   /        GET ADDR OF LEN 
+         + STORE A   PW3A
+PW3A     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+         + STORE     LEN
+
+WTAPAD   + WRITE     /   /        PREPARE TO WRITE ON TAPE
+LOOP     + R ADD     LEN
+         + TR 0      RWOK
+LOOP1    + SUB       TWO
+         + STORE     LEN
+RWCOPY   - COPY      /   /        WRITE BUFFER TO TAPE
+         + TR        GO 
+         + TR        EOF          END OF FILE
+         + TR        EOR          END OF RECORD
+GO       + R ADD     RWCOPY
+         + SUB       TWO
+         + STORE A   RWCOPY
+         + TR        LOOP
+
+EOF      + R ADD     ONE          SET OV FLAG TO SIGNAL END OF FILE CONDITION
+         + A LEFT    36
+EOR      + R SUB     LEN          RETURN NUMBER OF HALF-WORDS READ
+         + SUB       TWO
+RWOK     + WRITE     2052         INSURE THAT MQ NOT IN USE            
+EXIT     + TR        /   /        RETURN TO CALLER
+
+ZERO     + STOP      0000
+ONE      + STOP      0001         
+TWO      + STOP      0002         
+
+LEN        RES       1
+
+
+
+

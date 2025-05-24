@@ -1,0 +1,1117 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 67 PUNCH ABSOLUTE TEXT CARDS FOR COMPILED PROGRAM
+           HEAD      USE:CLRBUF      CLEAR CARD BUFFER 
+           HEAD      USE:WRITECRD    WRITE CARD (SEND CARD BUFFER TO CARD PUNCH DEVICE)
+           HEAD      USE:PRTCHR      PRINT BASE48 CHAR 
+           HEAD      USE:PRTSTR      PRINT ALFANUMERIC TEXT STRING, ZERO TERMINATED
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:PRTALF      PRINT PACKED ALFANUMERIC TEXT STRING
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:MEMCOPY     COPY MEMORY STORAGE FROM ONE ADDR TO ANOTHER
+           HEAD      USE:SRCHTBL         SEARCH TABLE
+           HEAD      USE:READTBL        TAKE VALUE FROM TABLE
+           HEAD      USE:WRIBREL     WRITE DATA INTO A BINARY REL CARD IMAGE
+              
+                                  PURPOSE:
+
+                                  - READ GLOBAL SYMBOL TABLE (TSYMBREF) FROM DRUM 
+                                       DRUM 0130, ADDR 0000     RELNUM0      LOCATION OF 1ST NUM IN POOL              <- set by stage 31 Read Var Cards
+                                                       0001     NVARS        NUMBER OF VARS DEFINED                   <- set by stage 33 Compute Var loc
+                                                       0002     V.EXT        EXTENSION OF VARIABLE REGION (IS EVEN)   <- set by stage 33 Compute Var loc
+                                                       0003     N.EXT        EXTENSION OF NUMBER REGION (IS EVEN)     <- set by stage 34 Storage Assign
+                                                       0004     T.EXT        EXTENSION OF TEMP VARS REGION (IS EVEN)  <- set by stage 63 final assembly pass 3
+                                                       0005     I.EXT        EXTENSION OF TOTAL INSTR OF PROGRAM      <- set by stage 63 final assembly pass 3
+                                                       0006     P.EXT        EXTENSION (IS EVEN) OF PERISHABLE REGION <- set by stage 64 Scan Library
+                                                       0007     IL.EXT       TOTAL STORAGE NEEDED BY ALL LIBRARIES    <- set by stage 64 Scan Library
+                                                       0008     ROTBLAD      ABS LOCATION OF REGION ORIGIN TABLE      <- set by stage 65 Punch loader
+                                                       0009     INIREG       ABS LOCATION OF 1ST REGION OF PACT PRG   <- set by stage 65 Punch loader
+                                                       0010     LR.EXT       SPACE RESERVED FOR LOADER                <- set by stage 65 Punch loader
+                                                       0016     MAXNNUMS     MAX NUMBER OF NUMBERS (512)              <- set by stage 34 Storage Assign
+                                                       0017     NNUMS        NUMBER OF NUMBERS IN NUMBER POOL         <- set by stage 34 Storage Assign
+                                                       0018     TNUMPOOL     NUMBER POOL. EACH ENTRY IS 2 HALF-WORDS  <- set by stage 34 Storage Assign
+                                                       
+                                       DRUM 0128, ADDR 0000     MAXNSYMB     MAX (600) SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+                                                       0001     NSYMBS       NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+                                                       0002     TSYMBREF     GLOBAL SYMBOL TABLE: ALFA VALUE OF SYMBOLS REFERENCED. 
+                                                       0602     TSYMBEXT     EXTENSION FOR DEFINED SYMBOLS. 
+                                                                             -1 IF SYMBOL NOT RESOLVED 
+                                                                             00 NNNN = SIZE OF REGION 
+                                                                             01 NNNN = SIZE OF LIB ROUTINE 
+                                                                             -1 IF SYMBOL IS USED BUT NOT DEFINED (=LIBRARY ROUTINES CALLED)
+                                  - PUNCH PACT PROGRAM ABS TEXT CARDS 
+                                  
+                                    RSV: This stage does not exist on original compiler
+                                         It punches the compiled program as absolute text cards. 
+                                         You can browse the card deck punched (is a text file in fact), and load it
+                                         with SCP LOAD command to have nice symbolic information on debug traces
+                                         Quite usefull on understanding the generated code 
+                                         
+                                         This stage is called when compiling in debug mode.
+                                  
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "PUNCH ABS TEXT CARDS"
+         + STOP      0006         END OF LINE. 
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     LCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DUMMY2       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DUMMY3       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     MAXNINST     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     NVARS        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     I.EXT        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     P.EXT        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     IL.EXT       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         
+         + R ADD     *            TO CONSTRUCT REGION ORIGIN TABLE/CARDS
+         + TR        RWDRUM       READ TSYMBREF TABLE (SYMBOLS USED BY ALL REGIONS) FROM DRUM 
+         + READ      0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNSYMB     ADDR OF START OF TABLES
+         + STOP      1202         MAXNSYMB (1 HALF-WORD) + NSYMBS (1 HW) 
+                                  + TSYMBREF (600 HW) + TSYMBEXT (600 HW)
+
+         + R ADD     *            TO CONSTRUCT REGION ORIGIN INITIAL CARDS
+         + TR        RWDRUM       READ RELNUM0, NVARS, HIVRELAD, HINRELAD, HITRELAD, HIIRELAD, HIPRELAD AND HISIZE
+         + READ      0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         + STOP      0012         12 HALF WORDS
+
+         + R ADD     *            TO CONSTRUCT REGION ORIGIN INITIAL CARDS
+         + TR        RWDRUM       READ MAXNNUMS, NNUMS. KEEP TNUMPOOL IN DRUM
+         + READ      0130         DRUM INSTR
+         + STOP      0016         DRUM ADDR 
+         + STOP      MAXNNUMS     ADDR OF DATA TO SAVE
+         + STOP      0002         MAXNNUMS (1 HALF-WORD) + NNUMS (1 HW) 
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE) TO BE USED 
+
+         + R ADD     *            MAKE REGION ORIGIN TABLE = RUN TIME COMPILED PROG MEMORY MAP
+         + TR        MAKROTBL
+
+         + R ADD     *            PUNCH PROGRAM START
+         + TR        PCHSTART
+
+         + R ADD     *            PUNCH REGION ORIGIN TABLE
+         + TR        PCHROTBL
+
+         + R ADD     *            PUNCH PROGRAM
+         + TR        PCHPROG
+
+         + R ADD     *            PUNCH LIBS
+         + TR        LIBPCH
+
+         + R ADD     *            PUNCH NUMBER CONSTANTS CARDS (REGION N)
+         + TR        PCHNUMS
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGEPCH      "ABS PROG PUNCHED"
+         + STOP      0006         END OF LINE. 
+
+         + STOP      4095
+
+                                  ADD REGION EXTENT 
+
+ADDEXT   + ADD       TWO          HI=HI - MAKE EVEN(SYMBOL EXTENT IN MQ)
+         + STORE A   ADDEXTEX     RESULT IN ACC
+         
+         + STORE MQ  EXT
+         + R ADD     HI           HERE  OP>0 -> SET ABSOLUTE LOCATION OF SYMBOL = HI - OP.EXT
+         + SUB       EXT          HI=HI - MAKE EVEN(SYMBOL EXTENT+1)
+         + A RIGHT   0019      
+         + A LEFT    0019
+         + STORE A   HI           
+        
+ADDEXTEX + TR        /   /        RETURN
+
+MAKROTBL + ADD       TWO          MAKE REGION ORIGIN TABLE: THE RUN TIME COMPILED PROG MEMORY MAP
+         + STORE A   MAKROEX
+         
+         + R ADD     V.EXT
+         + ADD       LR.EXT       ADD RESERVED SPACE FOR LOADER TO PREVENT VARS LOC BEING OVER LOADER
+         + STORE     V.EXT
+         
+         + R ADD     D4094
+         + STORE     HI
+        
+         + LOAD MQ   V.EXT        ADD VAR REGION
+         + R ADD     *
+         + TR        ADDEXT
+         + STORE     V.ORG        SET THE RUN-TIME LOCATION OF VARS
+        
+         + LOAD MQ   T.EXT        ADD TEMP STORAGE REGION (FOR PACT PROGRAM USE)
+         + R ADD     *
+         + TR        ADDEXT
+         + STORE     T.ORG        SET THE RUN-TIME LOCATION OF VARS
+        
+         + LOAD MQ   N.EXT        ADD NUMBERS REGION 
+         + R ADD     *
+         + TR        ADDEXT
+         + STORE     N.ORG        SET THE RUN-TIME LOCATION OF VARS
+         
+         + R ADD     INIREG       ABS LOCATION OF 1ST REGION OF PACT PRG   <- set by stage 65 Punch loader
+         + STORE A   TSYMBEXT     1ST REGION IS THE ONLY ONE THAT IS PLACED ON LOW MEM, JUST AFTER RO TABLE
+                          
+         + R ADD     ONE          1ST REGION (=1ST SYMBOL) ALREADY SET, SO N STARTS IN 1 (INSTEAD OF 0)
+         + STORE     N            LOOP ON TSYMBEXT TABLE CONVERTING EXT VALUE IN ABS LOCATION OF REGION
+         + STORE     EXT          
+         + R ADD     TSYMBAD
+         + ADD       MAXNSYMB
+         + ADD       N
+         + STORE A   SYEXT1A
+         + STORE A   SYEXT2A
+         
+MAKROLOO + R ADD     N
+         + SUB       NSYMBS
+         + TR 0      MAKROEX      EXIT LOOP, ALL SYMBOLS NOW WITH ABS LOCATION 
+
+SYEXT1A  + R ADD     /   /        GET SYMBOL EXTENSION
+         + TR +      MAKROLO1
+         + R ADD     ZERO         IF EXTENSION < 0 -> SYMBOL NOT DEF -> STORE ZERO AS LOCATION
+         + TR        SYEXT2A
+MAKROLO1 + STORE A   EXT
+         + LOAD MQ   EXT          ADD REGION EXTENT
+         + R ADD     *
+         + TR        ADDEXT
+SYEXT2A  + STORE     /   /        SAVE RUNTIME ABS LOCATION WHERE REGION STARTS
+
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+         + R ADD     SYEXT1A
+         + ADD       ONE
+         + STORE A   SYEXT1A
+         + STORE A   SYEXT2A
+         
+         + TR        MAKROLOO
+         
+MAKROEX  + TR        /   /
+
+
+PCHSTART + ADD       TWO          PUNCH PROGRAM START
+         + STORE A   PCHSTEX
+
+         + R ADD     *
+         + TR        CLRBUF
+         
+         + R ADD     *
+         + TR        PRTSTR
+         + STOP      TDEC         "DEC"
+         + STOP      0001         AT COL 1
+
+         + R ADD     *
+         + TR        WRITECRD     PUNCH CARD BUFFER
+
+         + R ADD     *
+         + TR        CLRBUF
+         
+         + R ADD     *
+         + TR        PRTSTR
+         + STOP      THDR         "NNNN OP ADDR COMMENTS"
+         + STOP      0001         AT COL 1
+
+         + R ADD     *
+         + TR        WRITECRD     PUNCH CARD BUFFER
+        
+         + R ADD     *            PUNCH LOCATION, INSTR DATA, COMMENT
+         + TR        PCHATXT
+         + STOP      ZERO         LOC TO PUNCH
+         + 01        XFERBIN1
+         + ADD       TXFER1       "R ADD   4095  HAS LOC OF 1ST REGION"
+         + 01        XFERBIN2
+         + ADD       TXFER2       "STORE A 0003"
+         + 01        XFERBIN3
+         + ADD       TXFER3       "R ADD   *"
+         + 01        XFERBIN4
+         + ADD       TXFER4       "TR      /   / TR TO 1ST REGION"
+         + 01        XFERBIN5
+         + STOP      TXFRE5       "STOP    0000  END OF PACT PROG"
+         
+         + R ADD     *            PUNCH LOCATION (PCHLOC++), INSTR DATA, COMMENT
+         + TR        PCHATXT
+         + STOP      D4094        LOC TO PUNCH
+         + 01        ROTBLAD
+         + ADD       T4ROTAD      "/4094/ HAS RO TABLE LOC"
+         + 01        INIREG
+         + STOP      T4LOC1ST     "/4095/ HAS LOC OF 1ST REGION"
+
+         + R ADD     *            PUNCH BLANK CARD/LINE AS SEPARATOR
+         + TR        PCHBLANK 
+
+PCHSTEX  + TR        /   /
+
+XFERBIN1 + R ADD     4095         [4095]=ABS LOC OF 1ST REGION 
+XFERBIN2 + STORE A   0003
+XFERBIN3 + R ADD     0002         R ADD *
+XFERBIN4 + TR        0000         TR    1ST REGION
+XFERBIN5 + STOP      0000         STOP  END OF COMPILED PROGRAM EXECUTION
+
+
+PCHROTBL + ADD       TWO          PUNCH REGION ORIGIN TABLE
+         + STORE A   PCHROEX
+         
+         + R ADD     *            PUNCH LOCATION (PCH.LOC++), INSTR DATA, COMMENT
+         + TR        PCHATXT
+         + STOP      ROTBLAD      VALUE PUNCHED AS LOCATION = ABS LOC OF RO TABLE AT RUNTIME 
+
+         + 02        ZERO         01 -> MC INSTR FORMAT, 02 -> HALF-WORD VALUE FORMAT
+         + ADD       TREGA        "0 REG.A"
+         + 01        ZERO         
+         + ADD       TREGLOC      "START LOCATION"
+         
+         + 02        ONE
+         + ADD       TREGI        "1 REG.I"
+         + 01        ZERO         
+         + ADD       TREGLOC      "START LOCATION"
+         
+         + 02        TWO          
+         + ADD       TREGV        "2 REG.V - PACT VARS"
+         + 01        V.ORG        
+         + ADD       TREGLOC      "START LOCATION"
+         
+         + 02        D3           
+         + ADD       TREGT        "3 REG.T - PACT TEMP STORAGE"
+         + 01        T.ORG        
+         + ADD       TREGLOC      "START LOCATION"
+
+         + 02        D4           
+         + ADD       TREGN        "4 REG.N - NUMBERS"
+         + 01        N.ORG        
+         + ADD       TREGLOC      "START LOCATION"
+
+         + 02        D5           
+         + ADD       TREGP        "5 REG.P - PERISHABLE STORAGE "
+         + 01        P.ORG        
+         + ADD       TREGLOC      "START LOCATION"
+
+         + 01        ZERO
+         + ADD       TREG6        "6 REG.# - NOT USED "
+         + 01        ZERO         
+         + STOP      ZERO         STOP -> NO MORE LINES
+
+         + R ADD     ZERO         LOOP ON TSYMBEXT TABLE TO PUNCH ABS LOCATION OF REGION
+         + STORE     N    
+         + R ADD     TSYMBAD
+         + STORE A   SYNAM1B
+         + ADD       MAXNSYMB
+         + STORE A   SYEXT1B
+         
+RDROLOOP + R ADD     N
+         + SUB       NSYMBS
+         + TR 0      PCHROLEX     EXIT LOOP, ALL SYMBOLS OF RO TABLE PUNCHED
+
+SYNAM1B  + R ADD     /   /        GET SYMBOL ALFA BASE48 NAME
+         + STORE     TNAM         SAVE IT
+
+SYEXT1B  + R ADD     /   /        GET SYMBOL RUN-TIME ABS LOCATION 
+         + STORE     LOC
+
+         + R ADD     *            PUNCH LOCATION (PCH.LOC++), INSTR DATA, COMMENT
+         + TR        PCHATXT
+         + STOP      PCH.LOC      
+         + 02        TNAM          
+         + ADD       TNAM         "AAA ROUTINE"
+         + 01        LOC
+         + STOP      TREGLOC      "START LOCATION"
+
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+         + R ADD     SYNAM1B
+         + ADD       ONE
+         + STORE A   SYNAM1B
+         + ADD       MAXNSYMB
+         + STORE A   SYEXT1B
+         
+         + TR        RDROLOOP
+        
+PCHROLEX + R ADD     *
+         + TR        PCHBLANK     PUNCH A BLANK CARD AS SEPARATOR
+
+PCHROEX  + TR        /   /         
+
+
+PCHNUMS  + ADD       TWO          PUNCH NUMBER CONSTANTS CARDS (REGION N)
+         + STORE A   PCHNUMEX
+
+         + R ADD     RELNUM0      WHERE NUMBERS STARTS IN NUMBER POOL (USUALLY = 0)
+         + ADD       N.ORG
+         + STORE     LOC
+
+         + R ADD     *            PUNCH LOCATION, INSTR DATA, COMMENT
+         + TR        PCHATXT
+         + STOP      LOC      
+         + 02        ZERO          
+         + ADD       TNUM         "CONSTANT ZERO - START OF NUMBERS POOL"
+         + 02        ZERO
+         + STOP      ZERO
+
+         + R ADD     ZERO
+         + STORE     N
+         + R ADD     D18          TNUMPOOL STARTS AT ADDR 0018 ON DRUM 0130 
+         + STORE A   RDNUM
+
+PCHNULOO + R ADD     N
+         + SUB       NNUMS
+         + TR 0      PCHNUEND     TR IF ALL NUMBERS PUNCHED
+
+         + READ      0130
+RDNUM    + SET DR    /   /
+         - COPY      NUM          GET NUMBER N FROM POOL
+         + R ADD     RDNUM        INCR ADDR IN POOL
+         + ADD       TWO
+         + STORE A   RDNUM
+
+         + R ADD     LOC          PRE-INCREMENT LOC, SO 1ST ENTRY In NUMBER POOL (N=0) GOES
+         + ADD       TWO          TO LOC=0002. LOC=0000 CONATAINS CONSTANT ZERO
+         + STORE     LOC
+         
+         + R ADD     *            WRITE NUMBER IN BINARY REL CARD 
+         + TR        WRIBREL
+         - STOP      0000         PARAM: BIN CARD TYPE REQUITED: -00 -> INSTR CARD, 
+         + STOP      D4           PARAM: BIN CARD SYMBOL REQUITED
+         + STOP      LOC          PARAM: LOCATION 0..4095 
+         + STOP      0001         PARAM: =1 -> NEXT PARAM IS A FULL WORD TO ADD TO BIN CARD (INDEX = 0)
+         + STOP      NUM          PARAM: LEFT HALF WORD = BASE48 SYMBOL ALFA NAME 
+         + STOP      NUM2         PARAM: RIGHT HALF WORD = (OP=01) << 12 + SYMBOL EXTENSION 
+
+         + R ADD     *            PUNCH LOCATION, INSTR DATA, COMMENT
+         + TR        PCHATXT
+         + STOP      LOC      
+         + 02        NUM 
+         + ADD       ZERO
+         + 02        NUM2
+         + STOP      ZERO
+
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+         
+         + TR        PCHNULOO
+
+PCHNUEND + R ADD     *            
+         + TR        PCHBLANK     PUNCH A BLANK CARD AS SEPARATOR
+
+PCHNUMEX + TR        /   /        RETURN TO CALLER
+
+
+LIBPCH   + ADD       TWO          PUNCH ABS TEXT CARDS FOR USED LIBRARIES 
+         + STORE A   LIBPCHEX 
+         
+         + R ADD     ZERO
+         + STORE     LIB          INIT NAME OF CURRENT LIB BEING PROCESSED
+         + STORE     LPCHFLG      LIB PUNCH FLAG: =1 -> SHOULD PUNCH CURRENT LIB, =0 -> SHOULD SKIP CURRENT LIB
+
+READLIB  + R ADD     *            READ LIBRARY FROM TAPE
+         + TR        RDTAPE       
+         + STOP      TAPETXT
+         + STOP      LIBCODE      BUF TO WRITE TO TAPE
+
+         + R ADD     LTYPE         
+         + SUB       D999         999 SIGNAL END OF LIB 
+         + TR 0      LIBSDONE     IF =0 -> NO MORE LIBRARY ROUTINE TO SCAN
+
+         + R ADD     LLIBNAM      IF READING NEXT RECORD OF CURRENT LIB ROUTINE 
+         + SUB       LIB          THEN TR TO LIBOK TO PUNCH IT IF REQUERIED
+         + TR 0      LIBOK
+                                  NEW LIB ROUTINE FOUND. CHECK IF MUST BE PUNCHED
+                                 
+         + R ADD     LLIBNAM      NEW ROUTINE
+         + STORE     LIB          IS SET AS CURRENT ONE
+         + R ADD     ZERO         RESET LIB PUNCH FLAG
+         + STORE     LPCHFLG      LIB PUNCH FLAG: =1 -> SHOULD PUNCH CURRENT LIB, =0 -> SHOULD SKIP CURRENT LIB
+                                           
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TSYMBREF     ... GLOBAL SYMBOL TABLE
+         + STOP      NSYMBS       ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NSYMBS
+         + STOP      LLIBNAM      ... THE VALUE TO FIND 
+         
+         + STORE     ISYMB
+         + TR 0      READLIB      ROUTINE IN LIBRARY IS NOT REFERENCED IN PACT PROG SYMBOL LIST -> TR TO 
+                                  TRY WITH NEXT ROUTINE IN LIBRARY
+
+         + R ADD     *            GET THE ABS LOACTION FOR THIS LIBRARY ROUTINE     
+         + TR        READTBL      
+         + STOP      TSYMBEXT
+         + STOP      ISYMB
+         + STOP      I.ORG        = TSYMBEXT[ISYMB] 
+
+         + R ADD     ONE          SET LIB PUNCH FLAG
+         + STORE     LPCHFLG      LIB PUNCH FLAG: =1 -> SHOULD PUNCH CURRENT LIB, =0 -> SHOULD SKIP CURRENT LIB
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0401         CHAR AT COL 1
+         + STOP      D45          '/'
+         + STOP      0502         ALFA TXT
+         + STOP      LLIBNAM      LIB ROUTINE TO BE ADDED TO PACT PROGRAM
+         + STOP      0405         CHAR AT COL 5
+         + STOP      D45          '/'
+         + STOP      0107         STRINGZ AT COL 7
+         + STOP      MSGLPCH     "LIB ROUTINE PUNCHED"
+         + STOP      0006         END OF LINE. 
+        
+LIBOK    + R ADD     LPCHFLG      LIB PUNCH FLAG: =1 -> SHOULD PUNCH CURRENT LIB, =0 -> SHOULD SKIP CURRENT LIB
+         + TR 0      READLIB      ROUTINE IN LIBRARY NOT TO BE PUNCHED -> TR TO TRY WITH NEXT RECORD IN LIBRARY
+         
+         + R ADD     *
+         + TR        PCHLREC      PUNCH LIB RECORD
+         
+         + TR        READLIB      ROUTINE IN LIBRARY PUNCHED -> TR TO PROCEED WITH NEXT RECORD IN LIBRARY
+         
+LIBSDONE + R ADD     *            
+         + TR        PCHBLANK     PUNCH A BLANK CARD AS SEPARATOR
+
+LIBPCHEX + TR        /   /
+
+PCHLREC  + ADD       TWO          PUNCH LIB RECORD
+         + STORE A   PCHLREX
+                                  LSRC IS CARD IMAGE OF PACT REL ASSEMBLER CARD/REL BINARY CARD (24 FULL WORDS)
+                                  COLS 1..16 ARE BLANK (CLEARED WHEn CREATIN THE LIB RECODS IN "01 CREATE LIB TAPES" 
+                                  COPY TO CARD IMAGE LSRC TO 0000..0047 
+         + R ADD     *            
+         + TR        MEMCOPY
+         + STOP      LSRC
+         + STOP      0000
+         + STOP      D48
+
+         + R ADD     OPADDR       = +/- MC.OP  MC.ADDR
+         + STORE A   MC.ADDR
+         
+         + R ADD     REGLOC       = + MC.REG MC.LOC (REG A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+         + STORE A   LOC
+         + A RIGHT   0012         GET THE REGION
+         + A LEFT    0001         COMPUTE ABS LOC OF ADDR FOR ITS REGION
+         + ADD       ROAD
+         + ADD       ONE
+         + STORE A   LORG
+LORG     + R ADD     /   /        GET THE REGION ORIGIN
+         + ADD       MC.ADDR
+         + STORE A   OPADDR       NOW OPADDR HAS THE ADDR AS ABSLUTE LOCATION
+
+         + R ADD     LOC          COMPUTE ABS LOC OF MCINSTR
+         + ADD       I.ORG
+         + STORE     LOC
+
+         + R ADD     PCHLFMT
+         + L RIGHT   0030         30 = 12 + 18
+         + R ADD     ZERO
+         + L LEFT    0018
+         + ADD       FORMAT       =0 -> BINARY FORMAT, =1 -> TEXT FORMAT (MC INSTR), =2 -> TEXT FORMAT (NUM)
+         + A LEFT    0012
+         + STORE     PCHLFMT      NOW LIBFMT = NN OPADDR
+
+         + R ADD     *            PUNCH LOCATION, INSTR DATA, COMMENT
+         + TR        PCHATXT
+         + STOP      LOC      
+PCHLFMT  + 00        OPADDR       PUNCH DATA MCINSTR/NUM
+         + STOP      0000         KEEPING CURRENT CARD IMAGE 
+
+PCHLREX  + TR        /   /
+
+
+PCHPROG  + ADD       TWO          PUNCH PACT COMPILED PROGRAM
+         + STORE A   PCHPRGEX
+
+READREG  + R ADD     ZERO
+         + STORE     IRELADDR     REL ADDRESS USED BY I REGION 
+
+         + R SUB     ONE
+         + STORE     I.ORG        I.ORG=-1 -> NOT DEFINED
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     I.ORG        IF I.ORG SET -> PROCEED WITH CURRENT PACT STEP
+         + TR +      RDSTEP
+                                  I.ORG NOT SET -> SEARCH THE REGION In TSYMBREF TABLE TO GET ITS ABS LOC
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TSYMBREF     ... GLOBAL SYMBOL TABLE
+         + STOP      NSYMBS       ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NSYMBS
+         + STOP      REGION       ... THE VALUE TO FIND 
+         + STORE     ISYMB
+
+         + R ADD     *            GET THE ABS LOCATION FOR THIS REGION 
+         + TR        READTBL      
+         + STOP      TSYMBEXT
+         + STOP      ISYMB
+         + STOP      I.ORG        = TSYMBEXT[ISYMB] 
+
+RDSTEP   + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     IRELADDR     I RELATIVE LOCATION STEP
+         + STORE     IREL0        I RELATIVE LOCATION OF THIS STEP
+         + ADD       NINST        NUMBER OF INST IN THIS STEP
+         + STORE     IRELADDR 
+         
+         + R ADD     *
+         + TR        MCPCH        PUNCH MC INSTR FOR CURRENT STEP
+                                  
+         + TR        READSTEP     PROCEED WITH NEXT STEP
+
+EOR      + NOOP      0000         END OF REGION  
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0401         CHAR AT COL 1
+         + STOP      D45          '/'
+         + STOP      0502         ALFA TXT
+         + STOP      REGION       PACT REGION NAME
+         + STOP      0405         CHAR AT COL 5
+         + STOP      D45          '/'
+         + STOP      0107         STRINGZ AT COL 7
+         + STOP      MSGPPCH      "PACT REGION PUNCHED"
+         + STOP      0006         END OF LINE. 
+
+         + R ADD     *            
+         + TR        PCHBLANK     PUNCH A BLANK CARD AS SEPARATOR
+
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF PACT PROGRAM
+
+PCHPRGEX + TR        /   /
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO
+         - STORE     0000
+
+         + R ADD     TWO          COPY TO RIGHT SIDE OF CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0050         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+                                  PUNCH ALL MACHINE CODE INSTRUCTIONS FOR CURRENT STEP
+MCPCH    + ADD       TWO
+         + STORE A   MCPCHEX
+
+         + R ADD     ZERO         INSTR GENERATED IN THIS STEP
+         + STORE     MCNUM
+
+MCLOOP   + R ADD     MCNUM
+         + SUB       NINST
+         + TR 0      MCLOEND      TR TO PROCESS NEXT STEP IF ALL NINST INSTRUCTIONS PRINTED
+         + R ADD     MCNUM        INCR COUNT
+         + ADD       ONE
+         + STORE     MCNUM        GET MC INSTR FROM TINST[ (PRTMCNUM-1)*2 ]
+         + ADD       MCNUM
+         + SUB       TWO
+         + ADD       TINSTAD
+         + STORE A   MCAD1
+         + ADD       ONE
+         + STORE A   MCAD2
+         + R ADD     ZERO
+         + STORE     MC.REG       INIT REGION REFERENCED BY MC
+MCAD1    + R ADD     /   /  
+         + STORE     OPADDR       
+         + STORE A   MC.REG
+         + A RIGHT   0012
+         + STORE     MC.OP        MC.OP HAS NOW THE SIGNED OPCODE -31..31 
+
+MCAD2    + R ADD     /   /
+         + STORE     MC.ADDR
+
+         + R ADD     IREL0        SET MC.LOC = THE RELATIVE LOCATION OF STEP 
+         + ADD       MCNUM        ADD THE NUMBER OF INSTR (-1 BECAUSE STARTS AT 1)
+         + SUB       ONE
+         + STORE     MC.LOC       
+         
+         + R ADD     *
+         + TR        PCHMC        PUNCH ONE MC INSTRUCTION GIVEN BY MC.LOC, MC.OP, MC.REG. MC.ADDR
+
+         + TR        MCLOOP
+
+TINSTAD  + STOP      TINST  
+
+MCLOEND  + NOOP      0000
+
+MCPCHEX  + TR        /   /
+
+
+PCHMC    + ADD       TWO          PUNCH ONE MC INSTRUCTION GIVEN BY MC.LOC, MC.OP, MC.REG. MC.ADDR
+         + STORE A   PCHMCEX      ALL ADDR ARE RELATIVE
+        
+         + LOAD MQ   MC.LOC
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0004         LEN=4
+         + STOP      0018         COL 18
+
+         + LOAD MQ   D12          '+'
+         + R ADD     MC.OP
+         + TR +      PMC6
+         + LOAD MQ   D11          '-'
+PMC6     + R ADD     *            PRINT OP SIGN
+         + TR        PRTCHR
+         + STOP      0023         COL 23
+
+         + R ADD     ZERO
+         + ADD AB    MC.OP
+         + ADD       TMNEAD
+         + STORE A   PMC7
+PMC7     + LOAD MQ   /   /
+         + R ADD     *            PRINT OP MNEMONIC
+         + TR        PRTALF
+         + STOP      0024         COL 24
+
+         + R ADD     MC.REG       REGION 0..7
+         + ADD       TREGMNEA     CHARS IN TREGMNE ARE TXT ALFA VALUES  
+         + STORE A   PMC8         THUS ARE NEGATIVE
+PMC8     + R SUB     /   /        CHANGE SIGN BEFORE STORING IT IN MQ
+         + L RIGHT   0035
+         + R ADD     *            PRINT REGION LETTER V I S T A N
+         + TR        PRTCHR
+         + STOP      0027         COL 27
+
+         + LOAD MQ   MC.ADDR      PRINT ADDRESS IN DECIMAL 
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0004         LEN=4
+         + STOP      0029         COL 29
+
+         + R ADD     MC.LOC       CONVER LOC TO ABS ADDR
+         + ADD       I.ORG
+         + STORE     LOC
+
+         + R ADD     MC.REG 
+         + A LEFT    0001         COMPUTE ABS LOC OF ADDR FOR ITS REGION
+         + ADD       ROAD
+         + ADD       ONE
+         + STORE A   MORG
+MORG     + R ADD     /   /        GET THE REGION ORIGIN
+         + ADD       MC.ADDR
+         + STORE A   OPADDR       NOW OPADDR HAS THE ADDR AS ABSOLUTE LOCATION
+
+         + R ADD     *            PUNCH LOCATION, INSTR DATA, COMMENT
+         + TR        PCHATXT
+         + STOP      LOC      
+         + 01        OPADDR       PUNCH DATA MCINSTR
+         + STOP      0000         KEEPING CURRENT CARD IMAGE 
+
+         + R ADD     *            CLEAR BUF AFTER PUNCHING
+         + TR        CLRBUF            
+
+PCHMCEX  + TR        /   /
+
+TMNEAD   + STOP      TMNE
+TREGMNEA + STOP      TREGMNE
+
+
+
+
+PCHATXT  + ADD       TWO          PUNCH AN ABS TEXT CARD
+                                  PARAM0: STOP LOC         ADDR TO GET THE LOCATION FOR 1ST LINE TO PUNCH
+                                  PARAM1: NN VAR1          NN  =00 -> LOC/INSTR BLANK, COMMENT PUNCHED (PCHLOC NOT INCREMENTED)
+                                                                01 -> MC INSTR FORMAT, 02 -> HALF-WORD VALUE FORMAT   
+                                                           VAR1=LOCATION OF THE INSTR/NUMBER TO PUNCH
+                                  PARAM2: ADD|STOP VAR2    VAR2=LOCATION OF THE COMMENT (AS STRINGZ -> "+STOP ZERO" IS NO COMMENT)
+                                                               =0000 -> NO COMMENT, KEEP CURRENT CONTENTS OF CARD IMAGE BUFFER
+                                                           STOP -> NO MORE LINES TO PUCH AFTER THIS ONE
+                                                           ADD  -> MORE LINES TO PUCH AFTER THIS ONE -> EXPECTS AGAIN PARAM1 AND PARAM2
+         + STORE A   PCHP0
+         + ADD       ONE                                                            
+         + STORE A   PCH.P        NEXT PARAM LOCATION
+         
+PCHP0    + R ADD     /   /
+         + STORE A   PCHP0A
+PCHP0A   + R ADD     /   /                 
+         + STORE     PCH.LOC      LOC TO PUNCH
+         
+PCHACRD  + R ADD     PCH.P
+         + STORE A   PCHP1
+         + ADD       ONE
+         + STORE A   PCHP2
+         + ADD       ONE
+         + STORE A   PCH.P
+         + STORE A   PCHAEX       JUST IN CASE THIS PARAM IS LAST ONE
+         
+PCHP1    + R ADD     /   /
+         + STORE A   PCHP1A
+         + A RIGHT   0012
+         + STORE     PCH.FMT      FORMAT: 00 -> LOC/INSTR BLANK, COMMENT PUNCHED (PCHLOC NOT INCREMENTED)
+PCHP1A   + R ADD     /   /                01 -> MC INSTR FORMAT, 02 -> HALF-WORD VALUE FORMAT   
+         + STORE     PCH.DATA     THE HALF-WORD DATA TO PUNCH
+PCHP2    + R ADD     /   /
+         + STORE A   PCHCMAD      LOCATION OF COMMENT (AS STRINGZ)
+         + A RIGHT   0012
+         + STORE     PCH.MORE     >0 -> TR TO PUNCH MORE LINES, =0 -> THIS WAS THE LAST LINE PUNCHED
+                              
+         + R ADD     PCHCMAD      IF LOCATION OF COMMENT <> 0000 
+         + TR 0      PCHNOCMN     THEN CLEAR THE CURRENT CARD IMAGE                               
+         + R ADD     *            ELSE DO NOT CLEAR CURRENT CARD IMAGE                               
+         + TR        CLRBUF            AND SET ZERO AS LOCATIOn OF COMMENT 
+         + TR        PCHGO             (ZERO INTERPRETED AS STRINGZ MEANS EMPTY STRING)
+PCHNOCMN + R ADD     ZEROAD
+         + STORE A   PCHCMAD
+         
+PCHGO    + R ADD     PCH.FMT      IF FORMAT = 00 -> DO NOT PRINT LOC/DATA, NOR INCREMENT LOC
+         + TR 0      PCHCMNT      TR TO PRINT COMMENT
+
+         + LOAD MQ   PCH.LOC      PRINT LOC IN DECIMAL 
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0004         LEN=4
+         + STOP      0001         COLUMN TO PRINT AT
+
+         + R ADD     PCH.LOC      INCREMENT PCHLOC 
+         + ADD       ONE
+         + STORE     PCH.LOC
+
+         + LOAD MQ   D12
+         + R ADD     PCH.DATA
+         + TR +      PCHSGN
+         + LOAD MQ   D11
+PCHSGN   + R ADD     *            
+         + TR        PRTCHR       PRINT SIGN CHAR
+         + STOP      0005         AT COL 5
+
+ZEROAD   + R ADD     ZERO
+         + ADD AB    PCH.DATA
+         + STORE     PCH.DATA     REMOVE SIGN
+  
+         + R ADD     PCH.FMT      IF FORMAT = 01 -> MC INSTR FORMAT, 02 -> HALF-WORD VALUE FORMAT   
+         + SUB       ONE
+         + TR 0      PCHMCFMT
+
+         + LOAD MQ   PCH.DATA     PRINT DATA AS NUMBER IN DECIMAL 
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0006         LEN=6
+         + STOP      0006         COLUMN TO PRINT AT
+         
+         + TR        PCHCMNT
+
+PCHMCFMT + R ADD     PCH.DATA
+         + A RIGHT   0012
+         + L RIGHT   0035         MQ=0..31 OPCODE
+
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0002         LEN=2
+         + STOP      0006         COLUMN TO PRINT AT
+
+         + R ADD     PCH.DATA
+         + L RIGHT   0030
+         + R ADD     ZERO
+         + L RIGHT   0005         MQ=0..4095 ADDR
+
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0004         LEN=4
+         + STOP      0009         COLUMN TO PRINT AT
+
+PCHCMNT  + R ADD     *
+         + TR        PRTSTR
+PCHCMAD  + STOP      /   /        PRINT COMMENT IN CARD IMAGE
+         + STOP      0014         AT COL 14
+
+         + R ADD     *
+         + TR        WRITECRD     PUNCH CARD BUFFER
+
+         + R ADD     PCH.MORE      
+         + TR 0      PCHAEX       IF MORE = 0 -> NO MORE CARDS TO PUNCH -> EXIT
+         + TR        PCHACRD      ELSE TR TO PROCESS NEXT PAIR OF PARAMS
+
+                                  LOCAL VARS
+PCH.LOC  + STOP      0000         LOC 
+PCH.P    + STOP      0000         PARAMS POINTER
+PCH.FMT  + STOP      0000         FORMAT
+PCH.DATA + STOP      0000         THE HALF-WORD DATA TO PUNCH
+PCH.MORE + STOP      0000         
+
+PCHAEX   + TR        /   /
+
+PCHBLANK + ADD       TWO          PUNCH A BLANK CARD AS SEPARATOR
+         + STORE A   PCHBLEX
+
+         + R ADD     *
+         + TR        CLRBUF
+         + R ADD     *
+         + TR        WRITECRD     PUNCH CARD BUFFER
+
+PCHBLEX  + TR        /   /
+
+           ORG       EVEN
+
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+NUM2       DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0            FACTN=ADDR (0, 2, 4, ..) FACTREG=' ', 'T', 'V', 'N'
+D2N        DEF       0            S1N/S2N=INDEX (IF <0), BLANK (IF =0), CONST (IF >0)
+NINST      DEF       0            D1N/D2N=HALF-WORD SIZE OF EACH DIMENSION
+NINCR      DEF       0
+TINST      RES       200          MACHINE CODE: 1ST HALF-WORD OPCODE + REGION/LOCATION INTO STEP (FOR TRANSFERS)
+                                                2ND HALF-WORD ADDR INTO REGION/DESTINATION STEPN (FOR TRANSFERS)
+
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+MAXNINST   DEF       100          MAX NUMBER OF MACHINE CODE INSTRUTIONS PER STEP
+
+                                  LIBRARY CODE RECORD.
+
+LTYPE      DEF       0            TYPE OF RECORD: 100=REGULAR RECORD. 999=END OF LIB 
+LLIBNAM    DEF       0            LIBRARY ROUTINE NAME TO WITCH THIS RECORD BELONGS
+LSRC       RES       48           CARD IMAGE OF PACT REL ASSEMBLER CARD/REL BINARY CARD (24 FULL WORDS)
+OPADDR     DEF       0            = +/- MC.OP  MC.ADDR
+FORMAT     DEF       0            =0 -> BINARY FORMAT, =1 -> TEXT FORMAT (MC INSTR), =2 -> TEXT FORMAT (NUM), 
+REGLOC     DEF       0            = + MC.REG MC.LOC (REG A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+DUMMY      DEF       0            Spare
+
+LIBCODE    EQU       LTYPE        LOCATION OF LIBRARY CODE RECORD START
+
+LCLEN      DEF       54           LENGH OF LIBRARY CODE RECORD 
+DUMMY2     DEF       0            Spare
+
+RELNUM0    DEF       0            LOCATION OF 1ST NUM IN POOL              <- set by stage 31 Read Var Cards
+NVARS      DEF       0            NUMBER OF VARS DEFINED                   <- set by stage 33 Compute Var loc
+V.EXT      DEF       0            EXTENSION OF VARIABLE REGION (IS EVEN)   <- set by stage 33 Compute Var loc
+N.EXT      DEF       0            EXTENSION OF NUMBER REGION (IS EVEN)     <- set by stage 34 Storage Assign
+T.EXT      DEF       0            EXTENSION OF TEMP VARS REGION (IS EVEN)  <- set by stage 63 final assembly pass 3
+I.EXT      DEF       0            EXTENSION OF TOTAL INSTR OF PROGRAM      <- set by stage 63 final assembly pass 3
+P.EXT      DEF       0            EXTENSION (IS EVEN) OF PERISHABLE REGION <- set by stage 64 Scan Library
+IL.EXT     DEF       0            TOTAL STORAGE NEEDED BY ALL LIBRARIES    <- set by stage 64 Scan Library
+ROTBLAD    DEF       0            ABS LOCATION OF REGION ORIGIN TABLE      <- set by stage 65 Punch loader
+INIREG     DEF       0            ABS LOCATION OF 1ST REGION OF PACT PRG   <- set by stage 65 Punch loader
+LR.EXT     DEF       0            SPACE RESERVED FOR LOADER                <- set by stage 65 Punch loader
+DUMMY3     DEF       0
+
+
+MAXNNUMS   DEF       512          MAX NUMBER OF NUMBERS THAT CAN BE DEFINED
+NNUMS      DEF       0            NUMBER OF NUMBERS IN NUMBER POOL
+
+MAXNSYMB   DEF       600          MAX (600) SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+NSYMBS     DEF       0            NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+TSYMBREF   RES       600          GLOBAL SYMBOL TABLE: ALFA VALUE OF SYMBOLS REFERENCED. 
+TSYMBEXT   RES       600          EXTENSION (=SIZE) FOR DEFINED SYMBOLS
+                                            -1 IF SYMBOL NOT RESOLVED 
+                                            00 NNNN = SIZE OF REGION 
+                                            01 NNNN = SIZE OF LIB ROUTINE 
+
+TSYMBAD  + STOP      TSYMBREF  
+ROAD     + STOP      RO
+
+                                  REGION ORIGIN TABLE AS IT WOULD BE IN RUN-TIME
+
+RO         DEF       0            (REG A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+           DEF       0
+           DEF       1            INSTR REGION (I=1)
+I.ORG      DEF       0            ABS LOC FOR REG.I IN RUNTIME
+           DEF       2            VAR REGION (V=2)
+V.ORG      DEF       0            ABS LOC FOR REG.V IN RUNTIME
+           DEF       3            TEMP STORAGE REGION (T=3)
+T.ORG      DEF       0            ABS LOC FOR REG.T IN RUNTIME
+           DEF       4            NUMBERS REGION (N=4)
+N.ORG      DEF       0            ABS LOC FOR REG.N IN RUNTIME
+           DEF       5            PERISHABLE STORAGE REGION (P=5)
+P.ORG      DEF       6            ABS LOC ALLWAYS = 6
+
+                                  VARS/CONST HALF-WORD
+
+N          DEF       0
+LOC        DEF       0
+EXT        DEF       0
+HI         DEF       0            START OF REGIONS IN HI-MEM 
+LIB        DEF       0
+LPCHFLG    DEF       0
+ISYMB      DEF       0
+
+MC.LOC     DEF       0            MC OPCODE RELATIVE LOCATION
+MC.OP      DEF       0            MC OPCODE GENERATED
+MC.REG     DEF       0            REGION REFERENCED BY MC OPCODE GENERATED
+MC.ADDR    DEF       0            MC ADDR GENERATED. BOTH WILL BE STORED IN TINST TABLE IN COMPCAT CODE RECORD
+MCNUM      DEF       0            NEXT INSTR TO PROCESS
+IRELADDR   DEF       0            I RELATIVE LOCATION OF STEP
+IREL0      DEF       0            I RELATIVE LOCATION OF THIS STEP
+
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D3         DEF       3
+D4         DEF       4
+D5         DEF       5
+D11        DEF       11
+D12        DEF       12
+D18        DEF       18
+D45        DEF       45
+D48        DEF       48
+D999       DEF       999
+D4094      DEF       4094
+
+                                  TEXT
+
+MSGSTART   TXT       "PUNCH ABS TEXT CARDS",0
+MSGEPCH    TXT       "ABS PROG PUNCHED",0
+MSGLPCH    TXT       "LIB ROUTINE PUNCHED",0
+MSGPPCH    TXT       "PACT REGION PUNCHED",0
+TDEC       TXT       "DEC",0
+THDR       TXT       "NNNN OP ADDR COMMENTS",0
+
+T4ROTAD    TXT       "/4094/ HAS RO TABLE LOC",0
+T4LOC1ST   TXT       "/4095/ HAS LOC OF 1ST REGION",0
+
+TXFER1     TXT       "R ADD   4095  HAS LOC OF 1ST REGION",0
+TXFER2     TXT       "STORE A 0003",0
+TXFER3     TXT       "R ADD   *",0
+TXFER4     TXT       "TR      /   / TR TO 1ST REGION",0
+TXFRE5     TXT       "STOP    0000  END OF PACT PROG",0
+
+TREGLOC    TXT       "START LOCATION",0
+TREGA      TXT       "REG.A - START OF REGION ORIGIN TABLE",0
+TREGI      TXT       "REG.I - INSTR",0
+TREGV      TXT       "REG.V - PACT VARS",0
+TREGT      TXT       "REG.T - PACT TEMP STORAGE",0
+TREGN      TXT       "REG.N - NUMBERS",0
+TREGP      TXT       "REG.P - PERISHABLE STORAGE",0
+TREG6      TXT       "NOT USED",0
+TNAM       TXT       "AAA ROUTINE",0
+TNUM       TXT       "CONSTANT ZERO - START OF NUMBERS POOL",0
+
+TREGMNE    TXT       '  A'
+           TXT       '  I'
+           TXT       '  V'
+           TXT       '  T'
+           TXT       '  N'
+           TXT       '  P'        PERISHABLE STORAGE (=LIB LOCAL VARS)
+           TXT       '  #'        UNUSED
+           TXT       '  S'
+
+TMNE       TXT       'H  '        STOP/HALT
+           TXT       'T  '        TRANSFER
+           TXT       'TF '        TRANSFER ON OVERLOF
+           TXT       'TP '        TRANSFER ON PLUS
+           TXT       'TZ '        TRANSFER ON ZERO
+           TXT       'S  '        SUBTRACT
+           TXT       'RS '        RESET AND SUBTRACT
+           TXT       'SV '        SUBTRACT ABSOLUTE VALUE
+           TXT       'N  '        NO OPERATION
+           TXT       'A  '        ADD
+           TXT       'RA '        RESET AND ADD
+           TXT       'AV '        ADD ABSOLUTE VALUE
+           TXT       'ST '        STORE
+           TXT       'SA '        STORE ADDRESS
+           TXT       'SM '        STORE MQ
+           TXT       'LM '        LOAD MQ
+           TXT       'M  '        MULTIPLY
+           TXT       'MR '        MULTIPLY AND ROUND
+           TXT       'D  '        DIVIDE
+           TXT       'R  '        ROUND
+           TXT       'LL '        LONG LEFT SHIFT
+           TXT       'LR '        LONG RIGHT SHIFT
+           TXT       'AL '        ACCUMULATOR LEFT SHIFT
+           TXT       'AR '        ACCUMULATOR RIGHT SHIFT
+           TXT       'RD '        READ
+           TXT       'RB '        READ BACKWARDs
+           TXT       'W  '        WRITE
+           TXT       'WE '        WRITE END OF FILE
+           TXT       'RW '        REWIND TAPE
+           TXT       'SD '        SET DRUM DDR
+           TXT       'SE '        SENSE
+           TXT       'C  '        COPY
+                                  PACT Compiler does not generates EX (Extract) instruction
+                                  so there is no need to add it here. EX inst
+                                  can be used in libraries
+
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+TAPETXT    EQU       0256         COMPILER PROGRAM TAPE 1 (HAS THE LIBRARY ASB TEXT CARDS)
+TAPEIN     EQU       0259         PACT COMPILED COMPACT CODE 
+
+
+
+
+
+
+
+

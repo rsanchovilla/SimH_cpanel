@@ -25,7 +25,10 @@
 #include "i701_defs.h"
 #include "sim_card.h"
 
-#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | MODE_026 
+// default: charset for keypunch 026, 
+//          columns 1-8 are used for card identification, 
+//          "; comment" lines in text input deck file are ignored (thus no card starting with ';' can be  read into i701
+#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | MODE_026A | OPTION_SKIPCOLS18 | SKIPCOMMENTCARD
 
 #define OPTION_SKIPCOLS18         (1 << (UNIT_V_UF + 8))
 
@@ -87,23 +90,25 @@ int cdr_CardImage_index = 0; // next word to be read with copy instrction. if <0
 int cdr_EchoLevel = 0; // echo card read to console. 0=no echo, 1=only text, 2=text+octal, 3=text+octal+binary
 
 // timing variables
-t_int64 cdr_timing_StartTickCount  = 0; // value of GlobalTickCount when card read cycle starts
-t_int64 cdr_timing_DisconTickCount = 0; // value of GlobalTickCount when card read disconnects if no data is provied with COPY opcode
+t_int64 cdr_timing_StartTickCount  = 0; // value of GlobalTickCount when last card read cycle starts
 extern int IOTicks;                     // ticks needed to execute i/o operation
-extern int IOREMAIN;                    // cpu ticks ramaining to disconnect IO device
+extern int IOREMAIN;                    // cpu ticks remaining to disconnect IO device
+extern int CpuSpeed_Acceleration;       // cpu speed multiplier
 
 // buffer to hold read cards in take hopper (cards just read)
 // to be printed by carddeck echolast command
-// is a circular buffer of MAX_CARDS_IN_READ_STAKER_HOPPER cards
-uint16 ReadStaker[MAX_CARDS_IN_READ_STAKER_HOPPER * 80];
-int    ReadStakerLast; // index of last card read into circular buffer
+// is a circular buffer of MAX_CARDS_IN_READ_STACKER_HOPPER cards
+uint16 ReadStacker[MAX_CARDS_IN_READ_STACKER_HOPPER * 80];
+int    ReadStackerLast; // index of last card read into circular buffer
 
 
+// returns first col of data after skipping identification cols
 int cdr_skip_cols (void)
 {
     if ((uint32)(cdr_unit[0].flags & OPTION_SKIPCOLS18)) return 8; 
     return 0; 
 }
+
 
 /*
  * Device entry points for card reader.
@@ -165,24 +170,40 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
             tm0CardInReadStacker = sim_os_msec();  // this is the time stamp (in real word msec) when starts the animation of read-card entering card-read-stacker) 
         }
 
+#if defined(CPANEL)
+        {
+            // if Punched Cards View Panel showing input hopper, change card selected as 1st card has been read 
+            // (so selected card number is now one less in deck position)
+            // if Punched Cards View Panel showing input stacker, advance card selected
+            extern int pch_HopperToShow; 
+            extern int pch_nCardToShow;
+            extern int pch_RedrawNeeded; 
+            if ((pch_HopperToShow==1) && (pch_nCardToShow>1)) {pch_nCardToShow--; }
+            if ((pch_HopperToShow==2) && (pch_nCardToShow==sim_card_output_hopper_count(uptr)-1)) {
+               pch_nCardToShow++; 
+            }
+            if ((pch_HopperToShow==1) || (pch_HopperToShow==2)) pch_RedrawNeeded = 1; 
+        }
+#endif
+
         // Timing calculation
+        // complete reader card cycle: 400 msec (150 cards per minute)
         // calc msec = time for card reader to finish current in progress cycle
         // calc nTick = number to ticks READ needs to be executed by cpu
-        // reader card cycle: 400 msec (150 cards per minute)
-        if (cdr_timing_DisconTickCount == 0) {
-            // =0 when exiting fast mode -> resync with global tick count
-            cdr_timing_StartTickCount = 0;
-        }
-        if ((cdr_timing_StartTickCount == 0) || ((msec = msec_elapsed(cdr_timing_StartTickCount, GlobalTicksCount)) > 400)) {
-            msec = -1; // card reader not in motion
-        }
-        if (msec == -1) {
+        msec = msec_elapsed(cdr_timing_StartTickCount, GlobalTicksCount);
+        if ((msec > 400) || (msec <= 0)) msec = -1; // card reader not in motion
+
+        if ((FAST) || (CpuSpeed_Acceleration<=0)) {
+            cdr_timing_StartTickCount = GlobalTicksCount;
+            IOTicks = 0; 
+            IOREMAIN = msec_to_ticks(100); 
+        } else if (msec == -1) {
             // card reader not in motion. Set start of motion as current tickcount
             cdr_timing_StartTickCount = GlobalTicksCount;
-            // first 9-left copy must be given before 270 msec counting after start of motion
-            cdr_timing_DisconTickCount = cdr_timing_StartTickCount + msec_to_ticks(270); 
             // time needed for READ to execute and start card reader motion: 220 msec
             IOTicks = msec_to_ticks(220); 
+            // after this, first COPY instr must be given before 50 msec elapsed
+            IOREMAIN = IOTicks + msec_to_ticks(50); 
             sim_debug(DEBUG_CMD, &cdr_dev, "READ CARD: Start Card Motion\n");
         } else {
             // card reader in motion. Wait to finish current cycle 
@@ -190,19 +211,17 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
             IOTicks = msec_to_ticks(msec); 
             // card reader in motion. Next cycle is 400 msec after the previous one
             cdr_timing_StartTickCount +=msec_to_ticks(400); 
-            // first 9-left copy must be given before 120 msec counting after start of cycle
-            cdr_timing_DisconTickCount = cdr_timing_StartTickCount + msec_to_ticks(120); 
-            // time needed for READ to execute in contonuous motion: 80 msec (educated guess)
-            IOTicks += msec_to_ticks(80); 
+            // max time needed for READ to execute in continuous motion: 20 msec 
+            IOTicks += msec_to_ticks(20); 
+            // after this, first COPY instr must be given before 100 msec elapsed
+            IOREMAIN = IOTicks + msec_to_ticks(100); 
             sim_debug(DEBUG_CMD, &cdr_dev, "READ CARD: Continuous Card Read (wait %d msec to start card cycle\n", msec);
         }
-        // set the max time (in tick counts) to auto-disconnect device
-        IOREMAIN = (int) (cdr_timing_DisconTickCount - GlobalTicksCount + 10); 
         
         // advance read circular buffer last card 
-        ReadStakerLast = (ReadStakerLast + 1) % MAX_CARDS_IN_READ_STAKER_HOPPER;
+        ReadStackerLast = (ReadStackerLast + 1) % MAX_CARDS_IN_READ_STACKER_HOPPER;
         // save card in read card hopper buffer
-        memcpy(&ReadStaker[ReadStakerLast * 80], image, sizeof(image));
+        memcpy(&ReadStacker[ReadStackerLast * 80], image, sizeof(image));
 
         /* read the cards */
 
@@ -253,13 +272,12 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
         // buffer has 24 36-bits words 
         // each word will be returned in sequence with COPY intructions into MQ register
         // MQ has 72 bits, so can only read 72 columns
-        //
         // normally columns 1-72 from punched card are read in MQ register. 
         // If OPTION_SKIPCOLS18 flag is set, MQ gets contentes of columns 9-80 (columns 1-8 are 
         // skipped)
 
         SkipCols = cdr_skip_cols();
-
+        
         n=0;
         vmask=1; 
         while (vmask <= 0x800) {
@@ -294,30 +312,20 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
         }
 
         // Timing calculation
-        // calc msec = time remaining for card reader to accept next data from COPY
-        // calc nTick = number to ticks COPY needs to be executed by cpu
-        if (cdr_timing_DisconTickCount == 0) {
-            // =0 when exiting fast mode -> resync with global tick count
-            cdr_timing_DisconTickCount = GlobalTicksCount; 
-            cdr_timing_StartTickCount = 0;
-        }
-
-        msec = msec_elapsed(GlobalTicksCount, cdr_timing_DisconTickCount);
-        if ((n = (int) (cdr_timing_DisconTickCount - GlobalTicksCount)) <0) {
-            sim_debug(DEBUG_CMD, &cdr_dev, "COPY is %d Ticks (%d msec) too late. Card reader disconnected\n", -n, -msec);
-            return STOP_COPYCHECK;
+        if ((FAST) || (CpuSpeed_Acceleration<=0)) {
+            IOTicks = 0; 
         } else {
-            sim_debug(DEBUG_CMD, &cdr_dev, "COPY has been waiting for %d Ticks (%d msec)\n", n, msec);
+            IOTicks = IOREMAIN; // IOREMAIN is the number of ticks COPY should wait to have data ready 
+            msec = msec_elapsed(0, IOREMAIN);
         }
-        // wait for card reader to be able to accept COPY data
-        IOTicks = n; 
+        // calc time card reader will need to accept COPY data
         if (cdr_CardImage_index & 1) {
-            cdr_timing_DisconTickCount += usec_to_ticks(540); // right copy must be given within 540 microsec. 
+            IOREMAIN = IOTicks + usec_to_ticks(540); // right copy must be given within 540 microsec. 
+            IOREMAIN += 20; // add 20 ticks as margin
         } else {
-            cdr_timing_DisconTickCount += msec_to_ticks(15); // left copy must be given within 15 msec. 
+            IOREMAIN = IOTicks + msec_to_ticks(15); // left copy must be given within 15 msec. 
+            IOREMAIN += 120; // add 120 ticks as margin
         }
-        cdr_timing_DisconTickCount += 20; // add 20 ticks as margin
-        IOREMAIN = (int) (cdr_timing_DisconTickCount - GlobalTicksCount); 
 
     } else {
         sim_debug(DEBUG_CMD, &cdr_dev, "Unknown CDR command\n");
@@ -372,6 +380,13 @@ t_stat cdr_attach(UNIT * uptr, CONST char *file)
         if (SCPE_BARE_STATUS(r) != SCPE_OK) return r;
         nCardInReadHopper = nCardInReadHopperMax = sim_card_input_hopper_count(uptr);
         nCardInReadStacker = sim_card_output_hopper_count(uptr);
+#if defined(CPANEL)
+        {
+            extern int pch_HopperToShow; 
+            extern int pch_RedrawNeeded; 
+            if (pch_HopperToShow==1) pch_RedrawNeeded = 1; 
+        }
+#endif
         return SCPE_OK; 
     }
 
@@ -385,8 +400,8 @@ t_stat cdr_attach(UNIT * uptr, CONST char *file)
     uptr->u6 = 0;
 
     // clear read card take hopper buffer 
-    ReadStakerLast = 0;
-    memset(ReadStaker, 0, sizeof(ReadStaker));
+    ReadStackerLast = 0;
+    memset(ReadStacker, 0, sizeof(ReadStacker));
 
     // adjust size of deck
     nCardInReadHopper = nCardInReadHopperMax = sim_card_input_hopper_count(uptr);
@@ -394,6 +409,19 @@ t_stat cdr_attach(UNIT * uptr, CONST char *file)
     tm0CardInReadStacker = 0; // no animation
 
     cdr_CardImage_index = -1; 
+
+#if defined(CPANEL)
+    {
+        // if Punched Cards View Panel showing input deck, invalidate selected card
+        extern int pch_HopperToShow; 
+        extern int pch_nCardToShow;
+        extern int pch_RedrawNeeded; 
+        if ((pch_HopperToShow==1) || (pch_HopperToShow==2)) {
+            pch_nCardToShow=0; 
+            pch_RedrawNeeded = 1; 
+        }
+    }
+#endif
 
     return SCPE_OK;
 }
@@ -405,6 +433,18 @@ t_stat cdr_detach(UNIT * uptr)
     tm0CardInReadStacker = 0;
 
     cdr_CardImage_index = -1; 
+#if defined(CPANEL)
+    {
+        // if Punched Cards View Panel showing input deck, invalidate selected card
+        extern int pch_HopperToShow; 
+        extern int pch_nCardToShow; 
+        extern int pch_RedrawNeeded; 
+        if ((pch_HopperToShow==1) || (pch_HopperToShow==2)) {
+            pch_nCardToShow=0; 
+            pch_RedrawNeeded = 1; 
+        }
+    }
+#endif
     return sim_card_detach(uptr);
 }
 

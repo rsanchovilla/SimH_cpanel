@@ -1,0 +1,430 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:READ             READ PACT instruction implementation
+
+                                          THIS ROUTINE IS ORIGINAL PACT CODE RETRIEVED FROM
+                                          OCTAL BINARY DUMP FROM The Charles Babbage Institute Archives
+                                          Florence R. Anderson papers (CBI 101)   
+                                          Class notes for experienced programmers, 1955.
+
+                                  READ NEXT CARD FROM CARD READER INTO CARD BUFFER
+                                  DECIMAL DATA CARD FORMAT:
+
+                                      +    1    + +  2         3         4         5         6         7
+                                  123456789012345678901234567890123456789012345678901234567890123456789012
+                                  LOC.NNNNNNNNNNPPQQLOC.+         +P+QLOC.+         +P+QLOC.+         +P+Q
+              
+                                  EACH DATA CARD CAND HOLD UP TO 4 DECIMAL NUMBER
+                                  LOC = THE LOCATION IN VARIABLE REGION. 0000=1ST VARIABLE, 0002=2ND VARIABLE, 
+                                        0004=3RD ... AND SO ON
+                                  NNN = TEN DIGITS NUMBER
+                                  PP  = POWER OF TEN OF NUMBER. EXAMPLE: NNN=1234567890 AND PP=02 
+                                                                MEANS DECIMAL NUMBER READ IS 12.34567890
+                                  QQ  = MUST MATCH THE Q OF VARIABLE THAT WILL HOLD THE NUMBER.
+                                        INDICATES NUMBER OF BITS USED TO REPRESENT INTEGER PART OF NUMBER
+                                        IN THIS EXAMPLE, QQ=04 -> 4 BITS -> CAN HOLD VALUES UP TO 15.999...
+
+                                        IF QQ IS NOT BIG ENOUGH TO ACCOMODATE INTEGER PART OF DECIMAL NUMBER
+                                        THEN A DIV CHECK HALT WILL OCCURS WHEN READING THE NUMBER
+
+                                  IF NONE OF LOC, NNN, PP, QQ ARE PUNCHED, THE DECIMAL NUMBER IS SKIPPED
+                                  THIS ALSO MEANS THAT BLANK CARDS ARE SKIPPED
+
+                                  IF DECIMAL NUMBER IS NOT BLANK, THE ALL THE COLUMNS MUST BE PUNCHED.
+                                  IF ANY COLUMN OF DECIMAL NUMBER IS LEFT UNPUNCHED OR HAS A SPECIAL CHAR THE
+                                  READ ROUTINE WILL HALT. REPLACE OFFENDING CARD AND PRESS START ON CONSOLE 
+                                  CPANEL (OR 'GO' COMMAND AT SIM> PROMPT) TO RESUME READING CARDS
+
+                                  NNN, PP, QQ CAN BE MADE NEGATIVE BY OVERPUNCHING ON ROW X(11) MINUS COLUMN ON 
+                                  FIRST DIGIT TO SIGNAL A MINUS SIGN
+
+                                  HOW THIS IS DONE: JUST USE THE FOLLOWING CHARS:
+                                      0 1 2 3 4 5 6 7 8 9
+                                      ! J K L M N O P Q R  <-- 'J' CHAR IS A '1' WITH X(11) MINUS ROW PUNCHED 
+                                                               '!'           '0' AND SO ON
+
+                                      EXAMPLE: NNN=K3456... AND PP=!3 -> MEANS NNN=-23456... AND PP=-3
+                                      SO THE DECIMAL NUMBER READ IS -0.0023456...
+                                  
+                                  LAST DATA CARD IS SIGNALED WITH A Y(12) ROW OVERPUNCH ON COLUMN 80
+                                  DEPENDING ON CONTENTS OF COLUMN 80, THE Y(12) OVERPUNCH IS DONE
+                                     <blank> 0 1 2 3 4 5 6 7 8 9
+                                      +      ? A B C D E F G H I  <-- 'A' CHAR IS A '1' WITH Y(12) ROW PUNCHED 
+                                                                      '?'           '0' 
+                                                                      '+' CHAR IS JUST ROW Y(12) PUNCHED
+
+
+READ     + ADD       TWO    
+         + STORE A   READEX       SAVE RETURN ADDR
+         
+READCRD  - READ      2048         START READING DATA PUNCHED CARD
+
+         + R SUB     ZERO
+         - STORE     NUM1         NUMn  = NUMBER PART OF DATA 1 TO 4
+         - STORE     LPQ1         LPQn  = LOCATION, PP AND QQ OF DATA 1 TO 4 
+         - STORE     NUM2
+         - STORE     LPQ2
+         - STORE     NUM3
+         - STORE     LPQ3
+         - STORE     NUM4
+         - STORE     LPQ4
+         - STORE     SUM
+                     
+         + R ADD     D9           CARD STARTS WITH ROW 9 
+                                  
+                                  READ A CARD ROW (2 FULLWORDS)
+                                  POPULATE DATA1..DATA4 WITH 1 IN PUNCHED COLS
+                                  
+LOOPROW  + STORE     NROW         LOOP ON NROW=CARD ROW BEING PROCESSED
+         + R ADD     DATA1AD      
+         + STORE A   RDDATA1      SET INITIAL ADDRESS TO 
+         + R ADD     NUM1AD       READ FROM DATA1, UPDATE IN NUM1 AND LPQ1
+         + STORE A   RDNUM1
+         + STORE A   WRNUM1
+         + ADD       TWO
+         + STORE A   RDLPQ1
+         + STORE A   WRLPQ1
+                     
+         - COPY      DATA1          
+         + L LEFT    0000         MQ HAS READ FULLWORD, THIS SETS ACC SIGN=1ST COL OF READ CARD
+         + TR +      LR1          NO PUNCH ON COL 1 (LEFTMOST ONE)
+         - R ADD     ZERO         LOAD ZERO IN LEFT-HALF OF ACC, ONE IN RIGHT-HALF OF ACC
+         + L RIGHT   0000
+LR1      + L LEFT    0017           
+         + A LEFT    0017         COL1 IN LEFTMOST BIT Of ACC, COL18 IN SIGN OF RIGHT HALF ACC
+         - STORE     DATA1        =octal 200000|400000 for 1 in col  1 and col 18
+         - STORE MQ  DATA2        =octal 200000|400000 for 1 in col 19 and col 36
+                     
+         - COPY      DATA3 
+         + L LEFT    0000
+         + TR +      LR2
+         - R ADD     ZERO         LOAD ZERO IN LEFT-HALF OF ACC, ONE IN RIGHT-HALF OF ACC
+         + L RIGHT   0000
+LR2      + L LEFT    0017
+         + A LEFT    0017
+         - STORE     DATA3        =octal 200000|400000 for 1 in col 37 and col 54
+         - STORE MQ  DATA4        =octal 200000|400000 for 1 in col 55 and col 72
+                     
+                                  LOOP ON 1..4 TO PROCESS THE FOUR SEPARATE DATA NUMBERS IN EACH CARD ROW
+                                  ACCUMULATE VALUE IN NUM1..NUM4, LOC1..LOC4, PP1..PP4, QQ1..44
+LOOPDATA + R ADD     ZERO         
+RDDATA1  - LOAD MQ   /   /        MQ=DATA1, DATA2, DATA3, DATA4
+         + L LEFT    0004         
+         + A LEFT    0018         ACC=binary 0000..1111 (decimal 0..15) <- punches for LOCATION OF DATA On ROW NROW
+         + ADD       TBL1AD
+         + STORE A   LOC4D        SET ADDR TO RETRIEVE 4 DIGITS FOR LOCATION
+         + L LEFT    0005
+         + A LEFT    0018         ACC=columns 1..5 of number
+         + ADD       TBL1AD
+         + STORE A   NUM5D1       SET ADDR TO RETRIEVE 5 DIGITS FOR NUM 
+         + L LEFT    0005
+         + A LEFT    0018         ACC=columns 6..10 of number
+         + ADD       TBL1AD
+         + STORE A   NUM5D2       SET ADDR TO RETRIEVE NEXT 5 DIGITS FOR NUM 
+         + L LEFT    0002
+         + A LEFT    0018         ACC=PP columns
+         + ADD       TBL1AD
+         + STORE A   PP2D
+         + L LEFT    0020         ACC=QQ columns
+         + ADD       TBL1AD
+         + STORE A   QQ2D
+NUM5D2   + R ADD     /   /        RETRIEVE DECIMAL DIGITS 6-10 FOR NUM 
+         + A RIGHT   0018
+NUM5D1   + ADD       /   /        RETRIEVE DECIMAL DIGITS 1-5 FOR NUM 
+         + L RIGHT   0035
+         + MPY       NROW         MULT BY NROW
+         + L LEFT    0017
+RDNUM1   - ADD       /   /        ACCUMULATE NUM VALUE AND STORE IT
+WRNUM1   - STORE     /   /        
+LOC4D    + R ADD     /   /        RETRIEVE 4 DECIMAL DIGITS 0000..1111 FOR LOCATION
+         + A RIGHT   0018
+PP2D     + ADD       /   /        RETRIEVE 2 DECIMAL DIGITS 00..11 FOR PP VALUE
+         + L RIGHT   0010
+QQ2D     + ADD       /   /        RETRIEVE 2 DECIMAL DIGITS 00..11 FOR QQ VALUE
+         + L LEFT    0010
+         + TR 0      ZLOCPPQQ     LOC, PP AND QQ HAVE NO PUNCH
+         + L RIGHT   0035
+         + MPY       NROW         MULT BY NROW
+         + L LEFT    0017
+RDLPQ1   - ADD       /   /        ACCUMULATE LOC, PP AND QQ VALUE
+WRLPQ1   - STORE     /   /        LPQn= QQ (7bits) PP (10bits) | LOC (18bits)
+                     
+ZLOCPPQQ + R ADD     RDDATA1      TEST IF END OF LOOPDATA
+         + ADD       LOOPDEND     
+         + TR 0      NXTROW       TR IF LOOP ENDS -> ALL 4 DATA NUMBERS IN ROW PROCESSED, PROCEED TO NEXT CARD ROW
+                     
+         + R ADD     RDDATA1      INCREMENT TO ADDRESS
+         + SUB       TWO          READ DATAn -> n+1
+         + STORE A   RDDATA1      UPDATE NUMn -> n+1
+         + R ADD     RDLPQ1       UPDATE LOCn, PPn AND QQn -> n+1
+         + SUB       TWO
+         + STORE A   RDNUM1
+         + STORE A   WRNUM1
+         + SUB       TWO
+         + STORE A   RDLPQ1
+         + STORE A   WRLPQ1
+         + TR        LOOPDATA
+                     
+NXTROW   - R ADD     DATA1        SUM=ALL PUNCHES ADDED TOGETHER FOR EACH DATA NUM
+         - ADD       DATA2 
+         - ADD       DATA3 
+         - ADD       DATA4 
+         + A RIGHT   0017
+         - ADD       SUM          
+         - STORE     SUM
+         + R ADD     NROW         SELECT NEXT ROW 
+         + SUB       ONE
+         + TR +      LOOPROW      AND TR TO ROW LOOP TO PROCESS IT
+                     
+         - COPY      DATA1        READ X(11) MINUS ROW IN DATA1 AND DATA2
+         - COPY      DATA2 
+                     
+         + R ADD     NUM1AD       LOOP ON NUM1..NUM3 TO COMPUTE EACH ONE AS 
+LOOPNUM  + STORE A   RDNUM2       A WHOLE 10 DIGITS NUMBER
+         + STORE A   WRNUM2
+         + ADD       ONE
+         + STORE A   RDNUM2B
+                     
+         - R ADD     DEC10A
+         + L RIGHT   0001
+RDNUM2B  + ADD       /   /        NOW ACC = RIGHTS DIGITS 6..10 OF NUM | 50000 (THE FRACT PART)
+         + L RIGHT   0035
+         - DIV       DEC10A       NOW ACC = RIGHTS DIGITS 6..10 OF NUM / 100.000 (THE FRACT PART)
+         + R ADD     ZERO
+         + L LEFT    0035
+RDNUM2   + ADD       /   /        NOW ACC = LEFT DIGITS 1..5 OF NUM (INT PART) + RIGHTS DIGITS 6..10 OF NUM / 100.000 (THE FRACT PART)
+WRNUM2   - STORE     /   /        STORE NUM AS PP=05 (5 DECIMAL DIGITS ON LEFT OF DECIMAL POINT) AND QQ=17 (17 BITS ON LEFT OF DECIMAL POINT)
+         + R ADD     RDNUM2
+         + SUB       LOOPNEND
+         + TR 0      LSTROW       TR TO PROCESS LAST ROW OF CARD
+         + R ADD     RDNUM2B
+         + ADD       D3
+         + TR        LOOPNUM  
+                     
+LSTROW   - COPY      DATA3        READ Y(12) PLUS ROW IN DATA3 AND DATA4. 
+         - COPY      DATA4        THIS IS THE LAST ROW OF CARD
+                     
+         - LOAD MQ   SUM          CHECK ALL COLUMNS WITH AT LEAST ONE PUNCH
+         + R ADD     ZERO
+         - DIV       D0001111
+         + TR 0      WRVARS
+L3634    + STOP      READCRD      STOP: NOT ALL 80 COLUMNS PUNCHED. 
+                                  ACC BIT TO ZERO INDICATES UNPUNCHED/DOUBLE PUNCH COL IN ANY OF 4 DECIMAL DATA NUMBER 
+                     
+         + R ADD     ZERO         unreachable code. 
+         + TR        L3634
+                     
+WRVARS   + R ADD     DATA1AD      WRITE DATA NUMBERS IN VARIABLES
+         + STORE A   RDDATA2
+         + STORE A   RDDATA3
+         + STORE A   RDDATA4
+                     
+         + R ADD     NUM1AD
+LOOPVARS + STORE A   RDNUM3       LOOP TO WRITE NUM1..NUM4 IN VAR AT LOC1..LOC4
+         + STORE A   RDNUM4
+         + STORE A   RDNUM5
+         + ADD       TWO
+         + STORE A   RDLPQ2
+         + STORE A   RDLPQ3
+RDLPQ3   - R ADD     /   /        LPQn= QQ (7bits) PP (10bits) | LOC (18bits) = QQ * 1024 + PP | LOC
+         + TR 0      NXTVAR       RSV: On original code, the instructions here are "TR + QQOK, TR NXTVAR"
+         + TR        QQOK              This is a bug, as LPQ can never be negative at this point (QQ sign will be set at RDDATA3 label)
+                                       Fixed with "TR 0 NXTVAR, TR QQOK" to skip the number if PP QQ LOC are blank
+QQOK     + A LEFT    0018         NOW LEFT HALF OF ACC=LOCATION WHERE TO STORE DATA NUMBER
+         + ADD       VARAD        ADD LOCATION OF VARS REGION
+         + STORE A   WRVAR        SET ABSOLUTE VAR ADDR WHERE TO STORE DATA NUMBER
+RDLPQ2   + R ADD     /   /        LPQn= QQ (7bits) PP (10bits) | LOC (18bits)
+         + L RIGHT   0045         NOW MQ=QQ IN LEFT HALFWORD
+RDDATA3  + R SUB     /   /        ACC=-DATA1 -> bit=1 -> minus sign set in this column
+         + A LEFT    0016         NOW ACC <> 0 IF QQ HAS MINUS SIGN SET
+         + TR 0      QQPLUS
+         + L RIGHT   0000         SEND ACC MINUS SIGN TO MQ -> MQ=-QQ
+QQPLUS   + STORE MQ  QQ           SAVE QQ VALUE (-35 .. +35)
+         + L LEFT    0020
+         + R SUB     ZERO
+         + L RIGHT   0010
+RDDATA2  + R ADD     /   /        ACC=DATA1 -> bit=1 -> minus sign set in this column
+         + A RIGHT   0020
+         + A LEFT    0035
+         + TR 0      PPPLUS
+         + L RIGHT   0000
+PPPLUS   + L LEFT    0036         NOW LEFT HALF OF ACC=-2*PP
+         + ADD       D10
+         + TR 0      PP05         TR IF PP=05 -> SHOULD ADJUST ONLY TO DESIRED QQ BY SHIFTING
+         + TR +      PP04LS       TR IF PP<=04 -> SHOULD ADJUST TO DESIRED PP BY DIVIDING, THEN ADJUST TO DESIRED QQ BY SHIFTING 
+                     
+         + SUB       TBL2AD       HERE PP > 05
+         + STORE A   RDTBL2B      SHOULD ADJUST TO DESIRED PP BY MULTIPLYING, THEN ADJUST TO DESIRED QQ BY SHIFTING 
+         + R ADD     D52
+         + SUB       QQ
+         + STORE A   SHLQQB
+         + TR OV     RDNUM3
+RDNUM3   - LOAD MQ   /   /
+RDTBL2B  - MPY       /   /
+SHLQQB   + L LEFT    /   /
+         + ROUND     0000
+         + TR OV     QQOV         QQ IS TO SMALL TO HOLD NUMBER -> OVERFLOW
+         + TR        NUMTOMQ      TR TO SAVE NUM IN MQ
+                     
+PP04LS   + ADD       TBL2AD
+         + STORE A   RDTBL2A
+         + STORE A   DVTBL2A
+         + R ADD     QQ
+         + ADD       D18
+         + STORE A   SHRQQA
+         + R ADD     D18
+         + SUB       QQ
+         + STORE A   SHLQQA
+RDTBL2A  - R ADD     /   /        READ TBL2[PP] -> PP=4 -> 10, PP=3 -> 100, PP=2 -> 1000 ...
+SHLQQA   + L RIGHT   /   /
+RDNUM4   - ADD       /   /
+SHRQQA   + L RIGHT   /   /
+DVTBL2A  - DIV       /   /        DIV BY 10, 100, 1000 ...
+         + TR        RDDATA4      TR TO APPY SIGN TO NUMBER
+                     
+QQOV     - R ADD     DEC10E
+         + TR        DVTBL2A
+                     
+PP05     + R ADD     D36          JUST SHIFT NUM TO MATCH DESIRES QQ
+         + SUB       QQ
+         + STORE A   SHLQQC
+RDNUM5   - R ADD     /   /
+         + LOAD MQ   ZERO
+         + L RIGHT   0019
+SHLQQC   + L LEFT    /   /
+         + ROUND     0000
+NUMTOMQ  + L RIGHT   0035         NOW MQ=NUMBER TO STORE
+                     
+RDDATA4  + R SUB     /   /        APPY SIGN: ACC=DATA1 -> bit=1 -> minus sign set in this column
+         + A RIGHT   0031         ISOLATE BIT FOR SIGN ON NUMBER
+         + TR 0      WRVAR        TR TO WRITE NUMBER ON DESTINATION VAR IF NO SIGN       
+         + L RIGHT   0000         MAKE MQ NEGATIVE
+WRVAR    - STORE MQ  /   /        WRITE DATA NUMBER IN VAR ABSOLUTE ADDR 
+                     
+NXTVAR   + R ADD     RDDATA4
+         + SUB       LOOPWEND
+         + TR 0      CARDDONE
+         + R ADD     RDDATA4
+         + ADD       ONE
+         + STORE A   RDDATA3
+         + STORE A   RDDATA2
+         + STORE A   RDDATA4
+         + R SUB     RDLPQ3
+         + ADD       TWO
+         + TR        LOOPVARS
+                     
+CARDDONE + R ADD     DATA4B       IF Y(12) PUNCH ON COLUMN 80 -> THE LAST CARD HAS BEEN READ
+         + A LEFT    0018         ELSE TR TO READ NEXT DATA CARD
+         + TR 0      READCRD      
+READEX   + TR        /   /        RETURN TO CALLER
+                                 
+           ORG       EVEN 
+           
+D9         DEF       9           
+DATA1AD  + STOP      DATA1        ADDR OF DATA1
+NUM1AD   + STOP      NUM1         ADDR OF NUM1
+TBL1AD   + STOP      TBL1        
+LOOPNEND + ADD       NUM4         END VALUE FOR LOOPNUM LOOP
+VARAD    + STOP      V0000        LOCATION 1ST VAR (=VARS REGION ADDRESS)
+D0001111   DEF       0            LEFT HALF WORD IS ZERO
+           DEF       *777777      RIGHT HALF WORD IS ALL ONES 
+TBL2AD   + STOP      TBL2        
+D52        DEF       52          
+D18        DEF       18          
+D36        DEF       36          
+LOOPWEND + R SUB     DATA2B       END VALUE FOR LOOPERTV LOOP
+LOOPDEND + LOAD MQ   DATA4        END VALUE FOR LOOPDATA LOOP
+                                 
+TBL1       DEF       0           
+           DEF       1           
+           DEF       10          
+           DEF       11          
+           DEF       100         
+           DEF       101         
+           DEF       110         
+           DEF       111         
+           DEF       1000        
+           DEF       1001        
+           DEF       1010        
+           DEF       1011        
+           DEF       1100        
+           DEF       1101        
+           DEF       1110        
+           DEF       1111        
+           DEF       10000       
+           DEF       10001       
+           DEF       10010       
+           DEF       10011       
+           DEF       10100       
+           DEF       10101       
+           DEF       10110       
+           DEF       10111       
+           DEF       11000       
+           DEF       11001       
+           DEF       11010       
+           DEF       11011       
+           DEF       11100       
+           DEF       11101       
+TBL2       DEF       11110       
+           DEF       11111       
+           DEF       0           
+D10        DEF       10          
+           DEF       0           
+           DEF       100         
+           DEF       0           
+           DEF       1000        
+           DEF       0           
+           DEF       10000       
+DEC10A     DEF       0           
+           DEF       100000      
+           DEF       3            IS 1.000.000 = 10^6
+           DEF       -82496      
+           DEF       38           IS 10.000.000 = 10^7
+           DEF       38528       
+           DEF       381          IS 10^8
+           DEF       123136      
+           DEF       3814         IS 10^9
+           DEF       -51712      
+DEC10E     DEF       38146        IS 10^10
+           DEF       -123904     
+                                 
+ZERO     + STOP      0000        
+ONE      + STOP      0001        
+TWO      + STOP      0002        
+D3       + STOP      0003        
+                                 
+           HEAD      TEMP
+                                 
+DATA1      RES       2            DATAn = PUNCHED COLUMNS IN DATA NUMBER 1 TO 4
+DATA2      RES       1           
+DATA2B     RES       1           
+DATA3      RES       2              
+DATA4      RES       1             
+DATA4B     RES       1           
+                                 
+NUM1       RES       2            NUMn  = NUMBER PART OF DATA 1 TO 4
+LPQ1       RES       2            LPQn  = LOCATION, PP AND QQ OF DATA 1 TO 4 
+NUM2       RES       2           
+LPQ2       RES       2           
+NUM3       RES       2           
+LPQ3       RES       2           
+NUM4       RES       2           
+LPQ4       RES       2           
+                                 
+NROW       RES       1            ROW NUMBER BEING PROCESSED
+QQ         RES       1            
+SUM        RES       2            SUM=ALL PUNCHES ADDED TOGETHER FOR EACH DATA NUM
+                                 
+V0000      RES       1            PLACEHOLDER FOR VAR REGION
+

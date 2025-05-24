@@ -43,6 +43,7 @@
 #include "cpanel.h"
 #include "i701_defs.h"	        
 #include "sim_tape.h"
+#include "sim_card.h"
 #include <math.h>
 
 // cpu registers
@@ -98,6 +99,7 @@ void IBM701_OnClick_Sw(void);
 void IBM701_OnClick_Sw2(void);
 void IBM701_OnClick_BTN(void);
 void IBM701_OnClick_BTN2(void);
+void IBM701_OnClick_PCH_BTN(void);
 
 // control panel available types
 CP_TYPE cp_types = {
@@ -130,194 +132,219 @@ static struct {
    int ReadStacker, ReadDeck;
    int LI_Ready_CardReader, LI_Select_CardReader, LI_FeedStop_CardReader; 
    int Drop_InputDeckFile; 
+   int ClickArea_Show_ReadHopper, ClickArea_Show_ReadStacker, ClickArea_Detach_cdr;
    // IBM 721 card Punch
    int PunchStacker, OutputDeck;
    int LI_Ready_CardPunch, LI_Select_CardPunch, LI_FeedStop_CardPunch; 
+   int ClickArea_Show_PunchedCards; 
    // IBM 716 print out
    int Paper, PaperBackground, PrinterCharSet;
    int LI_Ready_Printer, LI_Select_Printer; 
    // IBM 726 Tapes
    int MT_InfoPanel;
    int MT_DoorOpen[4];
-   int MT[4], MT_L[4], MT_R[4], MT_head[4], MT_head_medium[4];
+   int MT[4], MT_L[4], MT_R[4], MT_head[4], MT_head_actuator[4], MT_head_medium[4];
    int MT_L_VacCol[4], MT_R_VacCol[4];
    int MT_LI_Read[4], MT_LI_Neutral[4], MT_LI_Write[4], MT_LI_Rewind[4], MT_LI_Select[4], MT_LI_Ready[4];
    int MT_BTN_UnLoad[4], MT_BTN_Backward[4];
    int MT_VacColumn, MT_VacColMedium; 
    int Drop_MT_File[4];
+   // Punched Card view panel
+   int PCH_CardBackground; 
+   int PCH_NextCard, PCH_PrevCard, PCH_FirstCard, PCH_LastCard, PCH_SelectCard; 
+   int PCH_CardImage, PCH_CardPrintedCharSet; 
+
 } IBM701 = {0}; // must be init to zero
 
 // mapping variables that holds the control Id with control name and event handler
 // the name identifies the control in the definition file
 CP_DEF IBM701_cp[] = {
     // IBM 701
-    { &IBM701.CtrlInfoPanel,             "CtrlInfoPanel",                     NULL},
-    { &IBM701.Reg_MR,                    "Reg_MR",                            NULL},
-    { &IBM701.Reg_ACC,                   "Reg_ACC",                           NULL},
-    { &IBM701.Reg_MQ,                    "Reg_MQ",                            NULL},
-    { &IBM701.Reg_IC,                    "Reg_IC",                            NULL},
-    { &IBM701.Reg_IR,                    "Reg_IR",                            NULL},
-    { &IBM701.LI_Program_Stop,           "LI_Program_Stop",                   NULL},
-    { &IBM701.LI_Manual,                 "LI_Manual",                         NULL},
-    { &IBM701.LI_Instr_Time,             "LI_Instr_Time",                     NULL},
-    { &IBM701.LI_Exec_Time,              "LI_Exec_Time",                      NULL},
-    { &IBM701.LI_Overflow,               "LI_Overflow",                       NULL},
-    { &IBM701.LI_Input_Output,           "LI_Input_Output",                   NULL},
-    { &IBM701.Reg_Sense,                 "Reg_Sense",                         NULL},
-    { &IBM701.SW_Sense[1],               "SW_Sense_1",                        &IBM701_OnClick_Sw},
-    { &IBM701.SW_Sense[2],               "SW_Sense_2",                        &IBM701_OnClick_Sw},
-    { &IBM701.SW_Sense[3],               "SW_Sense_3",                        &IBM701_OnClick_Sw},
-    { &IBM701.SW_Sense[4],               "SW_Sense_4",                        &IBM701_OnClick_Sw},
-    { &IBM701.SW_Sense[5],               "SW_Sense_5",                        &IBM701_OnClick_Sw},
-    { &IBM701.SW_Sense[6],               "SW_Sense_6",                        &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[1],            "SW_IR_Entry_1",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[2],            "SW_IR_Entry_2",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[3],            "SW_IR_Entry_3",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[4],            "SW_IR_Entry_4",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[5],            "SW_IR_Entry_5",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[6],            "SW_IR_Entry_6",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[7],            "SW_IR_Entry_7",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[8],            "SW_IR_Entry_8",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[9],            "SW_IR_Entry_9",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[10],           "SW_IR_Entry_10",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[11],           "SW_IR_Entry_11",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[12],           "SW_IR_Entry_12",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[13],           "SW_IR_Entry_13",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[14],           "SW_IR_Entry_14",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[15],           "SW_IR_Entry_15",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[16],           "SW_IR_Entry_16",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[17],           "SW_IR_Entry_17",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_IR_Entry[18],           "SW_IR_Entry_18",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[1],            "SW_MQ_Entry_1",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[2],            "SW_MQ_Entry_2",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[3],            "SW_MQ_Entry_3",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[4],            "SW_MQ_Entry_4",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[5],            "SW_MQ_Entry_5",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[6],            "SW_MQ_Entry_6",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[7],            "SW_MQ_Entry_7",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[8],            "SW_MQ_Entry_8",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[9],            "SW_MQ_Entry_9",                     &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[10],           "SW_MQ_Entry_10",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[11],           "SW_MQ_Entry_11",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[12],           "SW_MQ_Entry_12",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[13],           "SW_MQ_Entry_13",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[14],           "SW_MQ_Entry_14",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[15],           "SW_MQ_Entry_15",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[16],           "SW_MQ_Entry_16",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[17],           "SW_MQ_Entry_17",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_MQ_Entry[18],           "SW_MQ_Entry_18",                    &IBM701_OnClick_Sw},
-    { &IBM701.SW_AutoManual[1],          "SW_AutoManual",                     &IBM701_OnClick_Sw},
-    { &IBM701.BTN_Power_Off,             "BTN_Power_Off",                     &IBM701_OnClick_BTN},
-    { &IBM701.BTN_Reset,                 "BTN_Reset",                         &IBM701_OnClick_BTN},
-    { &IBM701.BTN_Reset_clr_mem,         "BTN_Reset_and_clear_mem",           &IBM701_OnClick_BTN},
-    { &IBM701.BTN_Start,                 "BTN_Start",                         &IBM701_OnClick_BTN},
-    { &IBM701.BTN_Load,                  "BTN_Load",                          &IBM701_OnClick_BTN},
-    { &IBM701.BTN_Mem_Display,           "BTN_Mem_Display",                   &IBM701_OnClick_BTN},
-    { &IBM701.BTN_Enter_MQ,              "BTN_Enter_MQ",                      &IBM701_OnClick_BTN},
-    { &IBM701.BTN_Enter_Instr,           "BTN_Enter_Instr",                   &IBM701_OnClick_BTN},
-    { &IBM701.LI_Ready,                  "LI_Ready",                          NULL },
-    { &IBM701.LI_Operating,              "LI_Operating",                      NULL },
-    { &IBM701.LI_Copy_Check,             "LI_Copy_Check",                     NULL },
-    { &IBM701.LI_Tape_Check,             "LI_Tape_Check",                     NULL },
-    { &IBM701.LI_Div_Check,              "LI_Div_Check",                      NULL },
-    { &IBM701.RSwitch,                   "RSwitch",                           &IBM701_OnClick_Sw2},
-    { &IBM701.BTN_Half_Step,             "BTN_Half_Step",                     &IBM701_OnClick_BTN},
-    { &IBM701.BTN_Multiple_Step,         "BTN_Multiple_Step",                 &IBM701_OnClick_BTN},
-    // IBM 711 Card Reader
-    { &IBM701.InputDeck,                 "InputDeck",                         NULL, "ibm711/1"  },
-    { &IBM701.ReadHopper,                "ReadHopper",                        NULL, "ibm711/1"  },
-    { &IBM701.ReadHopperRear,            "ReadHopperRear",                    NULL, "ibm711/1"  },
-    { &IBM701.ReadHopperFront,           "ReadHopperFront",                   NULL, "ibm711/1"  },
-    { &IBM701.ReadDeck,                  "ReadDeck",                          NULL, "ibm711/1"  },
-    { &IBM701.ReadStacker,               "ReadStacker",                       NULL, "ibm711/1"  },
-    { &IBM701.LI_Ready_CardReader,       "LI_Ready_CardReader",               NULL, "ibm711/1"  },
-    { &IBM701.LI_Select_CardReader,      "LI_Select_CardReader",              NULL, "ibm711/1"  },
-    { &IBM701.LI_FeedStop_CardReader,    "LI_FeedStop_CardReader",            NULL, "ibm711/1"  },
-    { &IBM701.Drop_InputDeckFile,        "Drop_InputDeckFile",                NULL, "ibm711/1"  },
+    { &IBM701.CtrlInfoPanel,               "CtrlInfoPanel",                     NULL},
+    { &IBM701.Reg_MR,                      "Reg_MR",                            NULL},
+    { &IBM701.Reg_ACC,                     "Reg_ACC",                           NULL},
+    { &IBM701.Reg_MQ,                      "Reg_MQ",                            NULL},
+    { &IBM701.Reg_IC,                      "Reg_IC",                            NULL},
+    { &IBM701.Reg_IR,                      "Reg_IR",                            NULL},
+    { &IBM701.LI_Program_Stop,             "LI_Program_Stop",                   NULL},
+    { &IBM701.LI_Manual,                   "LI_Manual",                         NULL},
+    { &IBM701.LI_Instr_Time,               "LI_Instr_Time",                     NULL},
+    { &IBM701.LI_Exec_Time,                "LI_Exec_Time",                      NULL},
+    { &IBM701.LI_Overflow,                 "LI_Overflow",                       NULL},
+    { &IBM701.LI_Input_Output,             "LI_Input_Output",                   NULL},
+    { &IBM701.Reg_Sense,                   "Reg_Sense",                         NULL},
+    { &IBM701.SW_Sense[1],                 "SW_Sense_1",                        &IBM701_OnClick_Sw},
+    { &IBM701.SW_Sense[2],                 "SW_Sense_2",                        &IBM701_OnClick_Sw},
+    { &IBM701.SW_Sense[3],                 "SW_Sense_3",                        &IBM701_OnClick_Sw},
+    { &IBM701.SW_Sense[4],                 "SW_Sense_4",                        &IBM701_OnClick_Sw},
+    { &IBM701.SW_Sense[5],                 "SW_Sense_5",                        &IBM701_OnClick_Sw},
+    { &IBM701.SW_Sense[6],                 "SW_Sense_6",                        &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[1],              "SW_IR_Entry_1",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[2],              "SW_IR_Entry_2",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[3],              "SW_IR_Entry_3",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[4],              "SW_IR_Entry_4",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[5],              "SW_IR_Entry_5",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[6],              "SW_IR_Entry_6",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[7],              "SW_IR_Entry_7",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[8],              "SW_IR_Entry_8",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[9],              "SW_IR_Entry_9",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[10],             "SW_IR_Entry_10",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[11],             "SW_IR_Entry_11",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[12],             "SW_IR_Entry_12",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[13],             "SW_IR_Entry_13",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[14],             "SW_IR_Entry_14",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[15],             "SW_IR_Entry_15",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[16],             "SW_IR_Entry_16",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[17],             "SW_IR_Entry_17",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_IR_Entry[18],             "SW_IR_Entry_18",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[1],              "SW_MQ_Entry_1",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[2],              "SW_MQ_Entry_2",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[3],              "SW_MQ_Entry_3",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[4],              "SW_MQ_Entry_4",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[5],              "SW_MQ_Entry_5",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[6],              "SW_MQ_Entry_6",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[7],              "SW_MQ_Entry_7",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[8],              "SW_MQ_Entry_8",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[9],              "SW_MQ_Entry_9",                     &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[10],             "SW_MQ_Entry_10",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[11],             "SW_MQ_Entry_11",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[12],             "SW_MQ_Entry_12",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[13],             "SW_MQ_Entry_13",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[14],             "SW_MQ_Entry_14",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[15],             "SW_MQ_Entry_15",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[16],             "SW_MQ_Entry_16",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[17],             "SW_MQ_Entry_17",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_MQ_Entry[18],             "SW_MQ_Entry_18",                    &IBM701_OnClick_Sw},
+    { &IBM701.SW_AutoManual[1],            "SW_AutoManual",                     &IBM701_OnClick_Sw},
+    { &IBM701.BTN_Power_Off,               "BTN_Power_Off",                     &IBM701_OnClick_BTN},
+    { &IBM701.BTN_Reset,                   "BTN_Reset",                         &IBM701_OnClick_BTN},
+    { &IBM701.BTN_Reset_clr_mem,           "BTN_Reset_and_clear_mem",           &IBM701_OnClick_BTN},
+    { &IBM701.BTN_Start,                   "BTN_Start",                         &IBM701_OnClick_BTN},
+    { &IBM701.BTN_Load,                    "BTN_Load",                          &IBM701_OnClick_BTN},
+    { &IBM701.BTN_Mem_Display,             "BTN_Mem_Display",                   &IBM701_OnClick_BTN},
+    { &IBM701.BTN_Enter_MQ,                "BTN_Enter_MQ",                      &IBM701_OnClick_BTN},
+    { &IBM701.BTN_Enter_Instr,             "BTN_Enter_Instr",                   &IBM701_OnClick_BTN},
+    { &IBM701.LI_Ready,                    "LI_Ready",                          NULL },
+    { &IBM701.LI_Operating,                "LI_Operating",                      NULL },
+    { &IBM701.LI_Copy_Check,               "LI_Copy_Check",                     NULL },
+    { &IBM701.LI_Tape_Check,               "LI_Tape_Check",                     NULL },
+    { &IBM701.LI_Div_Check,                "LI_Div_Check",                      NULL },
+    { &IBM701.RSwitch,                     "RSwitch",                           &IBM701_OnClick_Sw2},
+    { &IBM701.BTN_Half_Step,               "BTN_Half_Step",                     &IBM701_OnClick_BTN},
+    { &IBM701.BTN_Multiple_Step,           "BTN_Multiple_Step",                 &IBM701_OnClick_BTN},
+    // IBM 711 Card Reader 
+    { &IBM701.InputDeck,                   "InputDeck",                         NULL, "ibm711/1"  },
+    { &IBM701.ReadHopper,                  "ReadHopper",                        NULL, "ibm711/1"  },
+    { &IBM701.ReadHopperRear,              "ReadHopperRear",                    NULL, "ibm711/1"  },
+    { &IBM701.ReadHopperFront,             "ReadHopperFront",                   NULL, "ibm711/1"  },
+    { &IBM701.ReadDeck,                    "ReadDeck",                          NULL, "ibm711/1"  },
+    { &IBM701.ReadStacker,                 "ReadStacker",                       NULL, "ibm711/1"  },
+    { &IBM701.LI_Ready_CardReader,         "LI_Ready_CardReader",               NULL, "ibm711/1"  },
+    { &IBM701.LI_Select_CardReader,        "LI_Select_CardReader",              NULL, "ibm711/1"  },
+    { &IBM701.LI_FeedStop_CardReader,      "LI_FeedStop_CardReader",            NULL, "ibm711/1"  },
+    { &IBM701.Drop_InputDeckFile,          "Drop_InputDeckFile",                NULL, "ibm711/1"  },
+    { &IBM701.ClickArea_Show_ReadHopper,   "ClickArea_Show_ReadHopper",         IBM701_OnClick_PCH_BTN, "ibm711/1"  },
+    { &IBM701.ClickArea_Show_ReadStacker,  "ClickArea_Show_ReadStacker",        IBM701_OnClick_PCH_BTN, "ibm711/1"  },
+    { &IBM701.ClickArea_Detach_cdr,        "ClickArea_Detach_cdr",              IBM701_OnClick_PCH_BTN, "ibm711/1"  },
     // IBM 721 Card Punch
-    { &IBM701.PunchStacker,              "PunchStacker",                      NULL, "ibm721/1"  },
-    { &IBM701.OutputDeck,                "OutputDeck",                        NULL, "ibm721/1"  },
-    { &IBM701.LI_Ready_CardPunch,        "LI_Ready_CardPunch",                NULL, "ibm721/1"  },
-    { &IBM701.LI_Select_CardPunch,       "LI_Select_CardPunch",               NULL, "ibm721/1"  },
-    { &IBM701.LI_FeedStop_CardPunch,     "LI_FeedStop_CardPunch",             NULL, "ibm721/1"  },
+    { &IBM701.PunchStacker,                "PunchStacker",                      NULL, "ibm721/1"  },
+    { &IBM701.OutputDeck,                  "OutputDeck",                        NULL, "ibm721/1"  },
+    { &IBM701.LI_Ready_CardPunch,          "LI_Ready_CardPunch",                NULL, "ibm721/1"  },
+    { &IBM701.LI_Select_CardPunch,         "LI_Select_CardPunch",               NULL, "ibm721/1"  },
+    { &IBM701.LI_FeedStop_CardPunch,       "LI_FeedStop_CardPunch",             NULL, "ibm721/1"  },
+    { &IBM701.ClickArea_Show_PunchedCards, "ClickArea_Show_PunchedCards",       IBM701_OnClick_PCH_BTN, "ibm721/1"  },
+    
     // IBM 716 Printer
-    { &IBM701.Paper,                     "Paper",                             NULL, "ibm716/1"  },
-    { &IBM701.PaperBackground,           "PaperBackground",                   NULL, "ibm716/1"  },
-    { &IBM701.PrinterCharSet,            "PrinterCharSet",                    NULL, "ibm716/1"  },
-    { &IBM701.LI_Ready_Printer,          "LI_Ready_Printer",                  NULL, "ibm716/1"  },
-    { &IBM701.LI_Select_Printer,         "LI_Select_Printer",                 NULL, "ibm716/1"  },
+    { &IBM701.Paper,                       "Paper",                             NULL, "ibm716/1"  },
+    { &IBM701.PaperBackground,             "PaperBackground",                   NULL, "ibm716/1"  },
+    { &IBM701.PrinterCharSet,              "PrinterCharSet",                    NULL, "ibm716/1"  },
+    { &IBM701.LI_Ready_Printer,            "LI_Ready_Printer",                  NULL, "ibm716/1"  },
+    { &IBM701.LI_Select_Printer,           "LI_Select_Printer",                 NULL, "ibm716/1"  },
     // IBM 726 Tape
-    { &IBM701.MT_InfoPanel,              "MT_InfoPanel",                      NULL, "ibm726/1"  },
-    { &IBM701.MT_VacColumn,              "MT_VacColumn",                      NULL, "ibm726/1"  },
-    { &IBM701.MT_VacColMedium,           "MT_VacColMedium",                   NULL, "ibm726/1"  },
-    { &IBM701.MT_DoorOpen[0],            "MT_01_door_L",                      NULL, "ibm726/1"  },
-    { &IBM701.MT[0],                     "MT_0",                              NULL, "ibm726/1"  },
-    { &IBM701.MT_L[0],                   "MT_0_L",                            NULL, "ibm726/1"  },
-    { &IBM701.MT_R[0],                   "MT_0_R",                            NULL, "ibm726/1"  },
-    { &IBM701.MT_head[0],                "MT_0_head",                         NULL, "ibm726/1"  },
-    { &IBM701.MT_head_medium[0],         "MT_0_head_medium",                  NULL, "ibm726/1"  },
-    { &IBM701.Drop_MT_File[0],           "Drop_MT0_File",                     NULL, "ibm726/1"  },
-        { &IBM701.MT_L_VacCol[0],        "MT_0_L_VacCol",                     NULL, "ibm726/1"  },
-        { &IBM701.MT_R_VacCol[0],        "MT_0_R_VacCol",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Read[0],      "MT_0_LI_Read",                      NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Neutral[0],   "MT_0_LI_Neutral",                   NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Write[0],     "MT_0_LI_Write",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Rewind[0],    "MT_0_LI_Rewind",                    NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Select[0],    "MT_0_LI_Select",                    NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Ready[0],     "MT_0_LI_Ready",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_BTN_UnLoad[0],   "MT_0_BTN_UnLoad",                   &IBM701_OnClick_BTN2, "ibm726/1"  },
-           { &IBM701.MT_BTN_Backward[0], "MT_0_BTN_Backward",                 &IBM701_OnClick_BTN2, "ibm726/1"  },
-    { &IBM701.MT_DoorOpen[1],            "MT_01_door_R",                      NULL, "ibm726/1"  },
-    { &IBM701.MT[1],                     "MT_1",                              NULL, "ibm726/1"  },
-    { &IBM701.MT_L[1],                   "MT_1_L",                            NULL, "ibm726/1"  },
-    { &IBM701.MT_R[1],                   "MT_1_R",                            NULL, "ibm726/1"  },
-    { &IBM701.MT_head[1],                "MT_1_head",                         NULL, "ibm726/1"  },
-    { &IBM701.MT_head_medium[1],         "MT_1_head_medium",                  NULL, "ibm726/1"  },
-    { &IBM701.Drop_MT_File[1],           "Drop_MT1_File",                     NULL, "ibm726/1"  },
-        { &IBM701.MT_L_VacCol[1],        "MT_1_L_VacCol",                     NULL, "ibm726/1"  },
-        { &IBM701.MT_R_VacCol[1],        "MT_1_R_VacCol",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Read[1],      "MT_1_LI_Read",                      NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Neutral[1],   "MT_1_LI_Neutral",                   NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Write[1],     "MT_1_LI_Write",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Rewind[1],    "MT_1_LI_Rewind",                    NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Select[1],    "MT_1_LI_Select",                    NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Ready[1],     "MT_1_LI_Ready",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_BTN_UnLoad[1],   "MT_1_BTN_UnLoad",                   &IBM701_OnClick_BTN2, "ibm726/1"  },
-           { &IBM701.MT_BTN_Backward[1], "MT_1_BTN_Backward",                 &IBM701_OnClick_BTN2, "ibm726/1"  },
-    { &IBM701.MT_DoorOpen[2],            "MT_23_door_L",                      NULL, "ibm726/1"  },
-    { &IBM701.MT[2],                     "MT_2",                              NULL, "ibm726/1"  },
-    { &IBM701.MT_L[2],                   "MT_2_L",                            NULL, "ibm726/1"  },
-    { &IBM701.MT_R[2],                   "MT_2_R",                            NULL, "ibm726/1"  },
-    { &IBM701.MT_head[2],                "MT_2_head",                         NULL, "ibm726/1"  },
-    { &IBM701.MT_head_medium[2],         "MT_2_head_medium",                  NULL, "ibm726/1"  },
-    { &IBM701.Drop_MT_File[2],           "Drop_MT2_File",                     NULL, "ibm726/1"  },
-        { &IBM701.MT_L_VacCol[2],        "MT_2_L_VacCol",                     NULL, "ibm726/1"  },
-        { &IBM701.MT_R_VacCol[2],        "MT_2_R_VacCol",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Read[2],      "MT_2_LI_Read",                      NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Neutral[2],   "MT_2_LI_Neutral",                   NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Write[2],     "MT_2_LI_Write",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Rewind[2],    "MT_2_LI_Rewind",                    NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Select[2],    "MT_2_LI_Select",                    NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Ready[2],     "MT_2_LI_Ready",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_BTN_UnLoad[2],   "MT_2_BTN_UnLoad",                   &IBM701_OnClick_BTN2, "ibm726/1"  },
-           { &IBM701.MT_BTN_Backward[2], "MT_2_BTN_Backward",                 &IBM701_OnClick_BTN2, "ibm726/1"  },
-    { &IBM701.MT_DoorOpen[3],            "MT_23_door_R",                      NULL, "ibm726/1"  },
-    { &IBM701.MT[3],                     "MT_3",                              NULL, "ibm726/1"  },
-    { &IBM701.MT_L[3],                   "MT_3_L",                            NULL, "ibm726/1"  },
-    { &IBM701.MT_R[3],                   "MT_3_R",                            NULL, "ibm726/1"  },
-    { &IBM701.MT_head[3],                "MT_3_head",                         NULL, "ibm726/1"  },
-    { &IBM701.MT_head_medium[3],         "MT_3_head_medium",                  NULL, "ibm726/1"  },
-    { &IBM701.Drop_MT_File[3],           "Drop_MT3_File",                     NULL, "ibm726/1"  },
-        { &IBM701.MT_L_VacCol[3],        "MT_3_L_VacCol",                     NULL, "ibm726/1"  },
-        { &IBM701.MT_R_VacCol[3],        "MT_3_R_VacCol",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Read[3],      "MT_3_LI_Read",                      NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Neutral[3],   "MT_3_LI_Neutral",                   NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Write[3],     "MT_3_LI_Write",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Rewind[3],    "MT_3_LI_Rewind",                    NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Select[3],    "MT_3_LI_Select",                    NULL, "ibm726/1"  },
-           { &IBM701.MT_LI_Ready[3],     "MT_3_LI_Ready",                     NULL, "ibm726/1"  },
-           { &IBM701.MT_BTN_UnLoad[3],   "MT_3_BTN_UnLoad",                   &IBM701_OnClick_BTN2, "ibm726/1"  },
-           { &IBM701.MT_BTN_Backward[3], "MT_3_BTN_Backward",                 &IBM701_OnClick_BTN2, "ibm726/1"  },
+    { &IBM701.MT_InfoPanel,                "MT_InfoPanel",                      NULL, "ibm726/1"  },
+    { &IBM701.MT_VacColumn,                "MT_VacColumn",                      NULL, "ibm726/1"  },
+    { &IBM701.MT_VacColMedium,             "MT_VacColMedium",                   NULL, "ibm726/1"  },
+    { &IBM701.MT_DoorOpen[0],              "MT_01_door_L",                      NULL, "ibm726/1"  },
+    { &IBM701.MT[0],                       "MT_0",                              NULL, "ibm726/1"  },
+    { &IBM701.MT_L[0],                     "MT_0_L",                            NULL, "ibm726/1"  },
+    { &IBM701.MT_R[0],                     "MT_0_R",                            NULL, "ibm726/1"  },
+    { &IBM701.MT_head[0],                  "MT_0_head",                         NULL, "ibm726/1"  },
+    { &IBM701.MT_head_actuator[0],         "MT_0_head_actuator",                NULL, "ibm726/1"  },
+    { &IBM701.MT_head_medium[0],           "MT_0_head_medium",                  NULL, "ibm726/1"  },
+    { &IBM701.Drop_MT_File[0],             "Drop_MT0_File",                     NULL, "ibm726/1"  },
+        { &IBM701.MT_L_VacCol[0],          "MT_0_L_VacCol",                     NULL, "ibm726/1"  },
+        { &IBM701.MT_R_VacCol[0],          "MT_0_R_VacCol",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Read[0],        "MT_0_LI_Read",                      NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Neutral[0],     "MT_0_LI_Neutral",                   NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Write[0],       "MT_0_LI_Write",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Rewind[0],      "MT_0_LI_Rewind",                    NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Select[0],      "MT_0_LI_Select",                    NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Ready[0],       "MT_0_LI_Ready",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_BTN_UnLoad[0],     "MT_0_BTN_UnLoad",                   &IBM701_OnClick_BTN2, "ibm726/1"  },
+           { &IBM701.MT_BTN_Backward[0],   "MT_0_BTN_Backward",                 &IBM701_OnClick_BTN2, "ibm726/1"  },
+    { &IBM701.MT_DoorOpen[1],              "MT_01_door_R",                      NULL, "ibm726/1"  },
+    { &IBM701.MT[1],                       "MT_1",                              NULL, "ibm726/1"  },
+    { &IBM701.MT_L[1],                     "MT_1_L",                            NULL, "ibm726/1"  },
+    { &IBM701.MT_R[1],                     "MT_1_R",                            NULL, "ibm726/1"  },
+    { &IBM701.MT_head[1],                  "MT_1_head",                         NULL, "ibm726/1"  },
+    { &IBM701.MT_head_actuator[1],         "MT_1_head_actuator",                NULL, "ibm726/1"  },
+    { &IBM701.MT_head_medium[1],           "MT_1_head_medium",                  NULL, "ibm726/1"  },
+    { &IBM701.Drop_MT_File[1],             "Drop_MT1_File",                     NULL, "ibm726/1"  },
+        { &IBM701.MT_L_VacCol[1],          "MT_1_L_VacCol",                     NULL, "ibm726/1"  },
+        { &IBM701.MT_R_VacCol[1],          "MT_1_R_VacCol",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Read[1],        "MT_1_LI_Read",                      NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Neutral[1],     "MT_1_LI_Neutral",                   NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Write[1],       "MT_1_LI_Write",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Rewind[1],      "MT_1_LI_Rewind",                    NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Select[1],      "MT_1_LI_Select",                    NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Ready[1],       "MT_1_LI_Ready",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_BTN_UnLoad[1],     "MT_1_BTN_UnLoad",                   &IBM701_OnClick_BTN2, "ibm726/1"  },
+           { &IBM701.MT_BTN_Backward[1],   "MT_1_BTN_Backward",                 &IBM701_OnClick_BTN2, "ibm726/1"  },
+    { &IBM701.MT_DoorOpen[2],              "MT_23_door_L",                      NULL, "ibm726/1"  },
+    { &IBM701.MT[2],                       "MT_2",                              NULL, "ibm726/1"  },
+    { &IBM701.MT_L[2],                     "MT_2_L",                            NULL, "ibm726/1"  },
+    { &IBM701.MT_R[2],                     "MT_2_R",                            NULL, "ibm726/1"  },
+    { &IBM701.MT_head[2],                  "MT_2_head",                         NULL, "ibm726/1"  },
+    { &IBM701.MT_head_actuator[2],         "MT_2_head_actuator",                NULL, "ibm726/1"  },
+    { &IBM701.MT_head_medium[2],           "MT_2_head_medium",                  NULL, "ibm726/1"  },
+    { &IBM701.Drop_MT_File[2],             "Drop_MT2_File",                     NULL, "ibm726/1"  },
+        { &IBM701.MT_L_VacCol[2],          "MT_2_L_VacCol",                     NULL, "ibm726/1"  },
+        { &IBM701.MT_R_VacCol[2],          "MT_2_R_VacCol",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Read[2],        "MT_2_LI_Read",                      NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Neutral[2],     "MT_2_LI_Neutral",                   NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Write[2],       "MT_2_LI_Write",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Rewind[2],      "MT_2_LI_Rewind",                    NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Select[2],      "MT_2_LI_Select",                    NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Ready[2],       "MT_2_LI_Ready",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_BTN_UnLoad[2],     "MT_2_BTN_UnLoad",                   &IBM701_OnClick_BTN2, "ibm726/1"  },
+           { &IBM701.MT_BTN_Backward[2],   "MT_2_BTN_Backward",                 &IBM701_OnClick_BTN2, "ibm726/1"  },
+    { &IBM701.MT_DoorOpen[3],              "MT_23_door_R",                      NULL, "ibm726/1"  },
+    { &IBM701.MT[3],                       "MT_3",                              NULL, "ibm726/1"  },
+    { &IBM701.MT_L[3],                     "MT_3_L",                            NULL, "ibm726/1"  },
+    { &IBM701.MT_R[3],                     "MT_3_R",                            NULL, "ibm726/1"  },
+    { &IBM701.MT_head[3],                  "MT_3_head",                         NULL, "ibm726/1"  },
+    { &IBM701.MT_head_actuator[3],         "MT_3_head_actuator",                NULL, "ibm726/1"  },
+    { &IBM701.MT_head_medium[3],           "MT_3_head_medium",                  NULL, "ibm726/1"  },
+    { &IBM701.Drop_MT_File[3],             "Drop_MT3_File",                     NULL, "ibm726/1"  },
+        { &IBM701.MT_L_VacCol[3],          "MT_3_L_VacCol",                     NULL, "ibm726/1"  },
+        { &IBM701.MT_R_VacCol[3],          "MT_3_R_VacCol",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Read[3],        "MT_3_LI_Read",                      NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Neutral[3],     "MT_3_LI_Neutral",                   NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Write[3],       "MT_3_LI_Write",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Rewind[3],      "MT_3_LI_Rewind",                    NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Select[3],      "MT_3_LI_Select",                    NULL, "ibm726/1"  },
+           { &IBM701.MT_LI_Ready[3],       "MT_3_LI_Ready",                     NULL, "ibm726/1"  },
+           { &IBM701.MT_BTN_UnLoad[3],     "MT_3_BTN_UnLoad",                   &IBM701_OnClick_BTN2, "ibm726/1"  },
+           { &IBM701.MT_BTN_Backward[3],   "MT_3_BTN_Backward",                 &IBM701_OnClick_BTN2, "ibm726/1"  },
+    // Punched Card view panel
+    { &IBM701.PCH_CardBackground,          "PCH_CardBackground",                NULL, "Pch/1"},
+       { &IBM701.PCH_NextCard,             "PCH_NextCard",                      &IBM701_OnClick_PCH_BTN, "Pch/1"},
+       { &IBM701.PCH_PrevCard,             "PCH_PrevCard",                      &IBM701_OnClick_PCH_BTN, "Pch/1"},
+       { &IBM701.PCH_FirstCard,            "PCH_FirstCard",                     &IBM701_OnClick_PCH_BTN, "Pch/1"},
+       { &IBM701.PCH_LastCard,             "PCH_LastCard",                      &IBM701_OnClick_PCH_BTN, "Pch/1"},
+       { &IBM701.PCH_SelectCard,           "PCH_SelectCard",                    &IBM701_OnClick_PCH_BTN, "Pch/1"},
+    { &IBM701.PCH_CardImage,               "PCH_CardImage",                     NULL, "Pch/1"}, 
+    { &IBM701.PCH_CardPrintedCharSet,      "PCH_CardPrintedCharSet",            NULL, "Pch/1"}, 
 
     { NULL }  
 };
@@ -379,6 +406,14 @@ int bTapeLastButtonPressedCId =0;           // to detect pressing BackWatd then 
 int lptPrintOutDoneCount       = -1; // number of lines already printed on cpanel paper
 int hPaperBackgroundOffset;          // offset of background image on paper image
 
+// for Punched Card View Panel
+int pch_HopperToShow = 0;                   // 1=read hopper cards shown in Punched Card View Panel, 2=read take stacker, 3=punch stacker
+int pch_nCardToShow  = 0;                   // card number to be show on panel (=1 -> 1st card, =0 -> no card)
+uint16 pchCards[PCH_CARDS_MAX][80] = {0};   // buffer for cards already punched
+int pch_RedrawNeeded = 0;                   // =1 -> will draw punched card
+int ncp_Punched_View_Panel;                 // cpanel number (ncp) for Punched Card View Panel
+int pch_total(int hopper);                  // return number of cards in given hopper (1..3)
+
 // Control Panel callbacks
 void IBM701_Init(void)
 {
@@ -403,6 +438,9 @@ void IBM701_Init(void)
 
     hInputDeck = hOutputDeck = 0;
     lptPrintOutDoneCount=-1; // number of lines already printed on cpanel paper
+
+    ncp_Punched_View_Panel=GetControlInfo(IBM701.PCH_CardBackground, CINFO_NCP); 
+
 }
 
 void IBM701_Done(void)
@@ -770,13 +808,13 @@ void mt_add_load_seq(int unit)
     AddSeq(unit, 150, MT_anim_step_inc, 
             0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
             0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-            0 /* MT_Reel_Amount */, 1112 /* MT_head + Open Door + no medium */);        
+            0 /* MT_Reel_Amount */, 1110 /* MT_head + Open Door + no medium */);        
 
     // user needs time to open magnetc tape r/w head assembly
     // prepare animation sequence each given msec
-    // states 12..1 = closed head .. open head
-    MT_head          = 12;   // head full closed
-    msec= PARAM_HeadOpenTime / 12; // time for animation step 
+    // states 10..1 = closed head .. open head
+    MT_head          = 10;   // head full closed
+    msec= PARAM_HeadOpenTime / 10; // time for animation step 
     for(i=0;;i++) {
         AddSeq(unit, msec, MT_anim_step_inc, 
                 0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
@@ -794,14 +832,14 @@ void mt_add_load_seq(int unit)
 
     // user closes magnetc tape r/w head assembly
     // prepare animation sequence each given msec
-    // states 1..12 = open to closed head, open door
-    msec= PARAM_HeadOpenTime / 12; // time for animation step 
+    // states 1..10 = open to closed head, open door
+    msec= PARAM_HeadOpenTime / 10; // time for animation step 
     for(i=0;;i++) {
         AddSeq(unit, msec, MT_anim_step_inc, 
                 0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
                 0 /* L_ang_inc */, 0 /* R_ang_inc */, 
                 1 /* MT_Reel_Amount - all medium on Left */, 1000 + MT_head);       
-        if (MT_head==12) break; 
+        if (MT_head==10) break; 
         MT_head++;
     }
 
@@ -809,7 +847,7 @@ void mt_add_load_seq(int unit)
     AddSeq(unit, 750, MT_anim_step_inc, 
             0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
             0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-            1 /* MT_Reel_Amount */, 12 /* MT_head closed */);        
+            1 /* MT_Reel_Amount */, 10 /* MT_head closed */);        
 
     // reels rotates 360 + 90 + 45 gr during this time (take motor goes at 46 rpm)
     // prepare animation sequence each given msec
@@ -837,7 +875,7 @@ void mt_add_load_seq(int unit)
         AddSeq(unit, msec, MT_anim_step_inc, 
                 L_inc_h  /* L_VacCol_inc */, R_inc_h /* R_VacCol_inc */, 
                 +ang_inc /* L_ang_inc */, -ang_inc /* R_ang_inc */, 
-                1 /* MT_Reel_Amount */, 12 /* MT_head */ );       
+                1 /* MT_Reel_Amount */, 10 /* MT_head */ );       
         L_h += L_inc_h; 
         R_h += R_inc_h; 
         if ((R_h > PARAM_VacCol_h_Low) && (L_h > PARAM_VacCol_h_Low)) break; 
@@ -879,7 +917,7 @@ void mt_add_unload_seq(int unit)
         AddSeq(unit, msec, MT_anim_step_inc, 
                 -L_inc_h  /* L_VacCol_inc */, -R_inc_h /* R_VacCol_inc */, 
                 -ang_inc /* L_ang_inc */, +ang_inc /* R_ang_inc */, 
-                1 /* MT_Reel_Amount */, 12 /* MT_head */ );       
+                1 /* MT_Reel_Amount */, 10 /* MT_head */ );       
         L_h -= L_inc_h; 
         R_h -= R_inc_h; 
         if ((R_h < 0) && (L_h < 0)) break; 
@@ -889,13 +927,13 @@ void mt_add_unload_seq(int unit)
     AddSeq(unit, 750, MT_anim_step_inc, 
             0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
             0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-            1 /* MT_Reel_Amount - all medium on Left */, 1012 /* MT_head + Open Door + medium */);        
+            1 /* MT_Reel_Amount - all medium on Left */, 1010 /* MT_head + Open Door + medium */);        
 
     // user needs time to open magnetc tape r/w head assembly
     // prepare animation sequence each given msec
-    // states 12..1 = closed head .. open head
-    MT_head          = 12;   // head full closed
-    msec= PARAM_HeadOpenTime / 12; // time for animation step 
+    // states 10..1 = closed head .. open head
+    MT_head          = 10;   // head full closed
+    msec= PARAM_HeadOpenTime / 10; // time for animation step 
     for(i=0;;i++) {
         AddSeq(unit, msec, MT_anim_step_inc, 
                 0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
@@ -920,7 +958,7 @@ void mt_add_unload_seq(int unit)
                 0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
                 0 /* L_ang_inc */, 0 /* R_ang_inc */, 
                 0 /* MT_Reel_Amount */, 1100 + MT_head);       
-        if (MT_head==12) break; 
+        if (MT_head==10) break; 
         MT_head++;
     }
 
@@ -928,7 +966,7 @@ void mt_add_unload_seq(int unit)
     AddSeq(unit, 750, MT_anim_step_inc, 
             0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
             0 /* L_ang_inc */, 0 /* R_ang_inc */, 
-            0 /* MT_Reel_Amount */, 1112 /* MT_head closed */);        
+            0 /* MT_Reel_Amount */, 1110 /* MT_head closed */);        
 
     // mt_dump_animation_seq(unit);
 }
@@ -1042,7 +1080,7 @@ void mt_set_anim_seq(int unit, char cmode)
                 0 /* L_VacCol_inc */, 0 /* R_VacCol_inc */, 
                 0 /* L_ang_inc */, 0 /* R_ang_inc */, 
                 (cmode == 'U') ? MT_anim_no_change:0  /* MT_Reel_Amount */, 
-                (cmode == 'U') ? 12:0 /* MT_head */ ); // head closed + medium on unload, close no meduim on load
+                (cmode == 'U') ? 10:0 /* MT_head */ ); // head closed + medium on unload, close no meduim on load
 
 
     if (cmode == 'U') {
@@ -1352,7 +1390,7 @@ void mt_reels_mov(int unit, int cmd,
     *MT_Reel_Amount = 1 + (int) (50 * (mt_unit[unit].u3 / (mt_unit[unit].u4*1000.0))); 
     if (*MT_Reel_Amount > 51) *MT_Reel_Amount = 51;
     // tape head on closed position
-    *MT_head = 12; 
+    *MT_head = 10; 
 
     // save last tnow used to know how much time elapsed since last refresh
     old_tnow = tnow;  
@@ -1446,6 +1484,7 @@ void Refresh_MagTape(void)
                 if ((GetState(IBM701.MT[unit])==0) && (GetState(IBM701.MT_head[unit])==0)) continue; 
                 cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT[unit], 0);          // no magnetic medium on reels
                 cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT_head[unit], 0);     // head transparent (seen as closed)
+                cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT_head_actuator[unit], 0); // head actuator transparent (seen as closed)
                 cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT_L[unit], GetState(IBM701.MT_L[unit]) % 12); // keep the angular position of reel          
                 cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT_R[unit], GetState(IBM701.MT_R[unit]) % 12);          
                 cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT_head_medium[unit], 0); // no tape medium into read/write head
@@ -1517,7 +1556,7 @@ void Refresh_MagTape(void)
         // MT_head holds the position of r/w head
         //   =0  -> transparent (so head closed)
         //   =1  -> head open, prepared to manualy remove tape medium
-        //   =12 -> closed head, prepared to read or write tape medium
+        //   =10 -> closed head, prepared to read or write tape medium
         // MT_head_medium signals if there is tape medium in read/write head capstains
         //  = 0 -> no tape medium
         //  = 1 -> there is tape medium
@@ -1614,6 +1653,7 @@ void Refresh_MagTape(void)
             cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT_R[unit], 0);
             cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT_head_medium[unit], 0); 
             cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT_head[unit], 0); 
+            cpanel_ControlRedrawNeeded = 1; SetState(IBM701.MT_head_actuator[unit], 0); 
         }
 
         // update tape control states
@@ -1628,6 +1668,7 @@ void Refresh_MagTape(void)
         }
         SetState(IBM701.MT_head_medium[unit], MT_head_medium); 
         SetState(IBM701.MT_head[unit], MT_head); 
+        SetState(IBM701.MT_head_actuator[unit], MT_head); // MT_head_actuator has same number of states as MT_head
         
         // set dynamic state for vacCol controls 
         mt_VacColSetDynamicState(L_VacColMedium_h, &mtcab[unit].L_VacColMedium_h0, IBM701.MT_L_VacCol[unit]);
@@ -1655,8 +1696,8 @@ void Refresh_MagTape(void)
 int PARAM_char_ww2       =    13;  // horizontal spacing between first pixel of a char and first pixel of next char in next char same line
 int PARAM_char_hh2       =    23;  // height between top line of one char and top line of char in next text line
 int PARAM_xPaperMargin   =    52;  // left and right margin on printed paper
-int PARAM_ink0           =   255;  // ammount of ink on top of char (0..255, 0=no ink, 255=full black)
-int PARAM_ink1           =    50;  // ammount of ink on bottom top of char 
+int PARAM_ink0           =   235;  // ammount of ink on top of char (0..255, 0=no ink, 255=full black)
+int PARAM_ink1           =   100;  // ammount of ink on bottom of char 
 
 // draw paper background on paper from y0 to y1-1
 void lpt_set_paper_background(int paper_y0, int paper_y1)
@@ -1682,7 +1723,7 @@ void lpt_set_paper_background(int paper_y0, int paper_y1)
 
 void lpt_print_line(int y0, char * sLin)
 {
-    static char sCharSet[50] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,.()=*+-/$";
+    static char sCharSet[50] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,.()=*+-/$#%";
     uint32 * surface0;      // printed paper dynamicaly generated 
     uint32 * surface1;      // character to be printed on paper
     int paper_ww, paper_hh; // printed paper control size
@@ -1718,7 +1759,7 @@ void lpt_print_line(int y0, char * sLin)
                     if (x0+x >= paper_ww - PARAM_xPaperMargin) break; // check if outside paper margins
                     p = x0 + x + (y0 + y) * paper_ww;
                     get_surface_rgb_color(surface0[p], &r, &g, &b);
-                    // apply ink to paper, ink=255->dark, ink=128->half dark, ink=0-> no ink
+                    // apply ink to paper, here ink=0->add dark ink, ink=128->half dark, ink=255-> no ink                 
                     if (ink < r) r=r + (ink-r) * (256-n) / 256;  
                     if (ink < g) g=g + (ink-g) * (256-n) / 256; 
                     if (ink < b) b=b + (ink-b) * (256-n) / 256; 
@@ -1840,7 +1881,9 @@ void Refresh_CardRead(void)
 {
     int has_changed, AnimationFinished, n, h;
 
-    SetState(IBM701.LI_Ready_CardReader, ((cdr_unit[0].flags & UNIT_DIS) || ((cdr_unit[0].flags & UNIT_ATT) == 0)) ? 0:1); // Ready light on -> device under control of calculator
+    SetState(IBM701.LI_Ready_CardReader, ((cdr_unit[0].flags & UNIT_DIS) || 
+                                          ((cdr_unit[0].flags & UNIT_ATT) == 0) || 
+                                          (nCardInReadHopper == 0)) ? 0:1); // Ready light on -> device under control of calculator, and cards in read hopper
     SetState(IBM701.LI_Select_CardReader, ((IOADDR & 4095) == 2048) ? 1:0); // Select light on -> calculator gives a read 
     SetState (IBM701.LI_FeedStop_CardReader, bCardReadError);
 
@@ -1913,7 +1956,6 @@ void Refresh_CardPunch(void)
     AnimateCard(tm0CardInPunchStacker, IBM701.PunchStacker, 1,4, 120, &has_changed, &AnimationFinished);
     if (AnimationFinished) {
         tm0CardInPunchStacker=0;         // signal end of animation
-        nCardInPunchStacker++;           // one more card on take stacker
     }
     // dynamic state image: output cards on punch stacker
 
@@ -2048,6 +2090,30 @@ void process_HotKeys(void)
             ShowInfoTm0 = 0;
         }
     }
+    // get keys sent to Punched card view cpanel, if visible
+    if (cpanel_visible(ncp_Punched_View_Panel)) {
+        if (vid_keyb.LastKeyPress & (1<<30)) {
+            // LastKeyPress has the ascii code, but if bit30 is 1 (1<<30) then bits 0..29 holds the scancode
+            // scancode
+            int key = vid_keyb.LastKeyPress & ((1<<30)-1);
+            if (key == SDL_SCANCODE_HOME) {
+                pch_nCardToShow = 1; 
+                goto ncp_Punched_View_Panel_key; 
+            } else if (key == SDL_SCANCODE_END) {
+                pch_nCardToShow = pch_total(pch_HopperToShow); 
+                goto ncp_Punched_View_Panel_key; 
+            } else if (key == SDL_SCANCODE_RIGHT) {
+                pch_nCardToShow++; 
+                goto ncp_Punched_View_Panel_key; 
+            } else if (key == SDL_SCANCODE_LEFT) {
+                if (pch_nCardToShow > 1) pch_nCardToShow--; 
+              ncp_Punched_View_Panel_key:
+                pch_RedrawNeeded = 1; // to request punched card redraw on cpanel
+                vid_keyb.LastKeyPress = 0; // clear key as it is processed
+            } 
+        }
+    }
+
 }
 
 
@@ -2217,6 +2283,269 @@ void Refresh_ShowInfo(int bOnlyInit)
 
 }
 
+// returns the total number of cards in given hopper
+// if hopper = 1 -> returns cards in card reader input hopper
+//           = 2 -> returns cards in card reader output stacker
+//           = 3 -> returns cards in card punch output stacker
+int pch_total(int hopper)
+{
+    if (hopper==1) {
+        return sim_card_input_hopper_count(cdr_unit); // total cards in read hopper
+    } else if (hopper==2) {
+        return sim_card_output_hopper_count(cdr_unit); // total cards in read stacker
+    } else if (hopper==3) {
+        int nTotal = sim_card_output_hopper_count(cdp_unit); 
+        if (nTotal >= PCH_CARDS_MAX) nTotal = PCH_CARDS_MAX-1;
+        return nTotal; 
+    }
+    return 0; // safety
+}
+
+
+int PARAM_Pch_Cardink = 130; // ink for punched card alfanumetrric text on top (255=full black, 0=no ink)
+int PARAM_Pch_HoleW   = 12;  // punched card hole is this width
+int PARAM_Pch_HoleH   = 24;  // punched card hole is this height
+int PARAM_Pch_HoleCol = 10;  // B/W color for punched card hole (0=full black, 128=grey, 255=white)
+
+void Refresh_Punched_Cards_View_Panel()
+{
+    static char sCharSet[60] = "+@#896=¤.HIF(*$QRO)%,YZW743125GDC&ABEPML-JKNXUT0/SV";
+    char buf[300];
+    char crdText[81], crdId[9], c; 
+    int firstCol, isbin, crdType; 
+    uint16 hol; 
+    int i, nCard,nTotal, row;
+    int Pos, res, CardPosX, CardPosY; 
+    uint16 image[80]; 
+    uint32 * surface0;
+    uint32 * surface1;
+    uint32 col; 
+    int x,y,card_ww,card_hh,ix,iy,p;
+    int x0,y0,ic,n,char_ww,char_hh,ink,r,g,b;
+
+    if ((pch_HopperToShow < 1) || (pch_HopperToShow > 3)) {
+        pch_HopperToShow=2; // if pch_HopperToShow out of range, select card reader output stacker
+        pch_nCardToShow = pch_total(pch_HopperToShow);
+    } else {
+       if (pch_RedrawNeeded==0) return; // the card shown has not changed
+    }
+
+    nCard  = pch_nCardToShow; // nCard = Card to Show in cpanel. 
+    nTotal = pch_total(pch_HopperToShow); // if nTotal = 0 -> no cards in hopper
+    if (nCard > nTotal) nCard = nTotal; 
+    if ((nCard == 0) && (nTotal > 0)) nCard = 1; // if cards added to empty hopper -> select first card
+
+    // nCard = Card to Show in cpanel. nCard=1 -> next card to be read. If nCard=0 -> No cards)
+    if (pch_HopperToShow==1) {
+        // nCard = Card from Card reader input hopper to Show in cpanel. 
+        // nCard=1 -> is next card to be read by card reader
+        Pos = cdr_unit[0].pos + nCard-1; // this is the card to be shown from whole input deck
+        goto ReadInputDeck;
+    } else if (pch_HopperToShow==2) {
+        // nCard = Card from Card reader output stacker to Show in cpanel. 
+        // nCard=1 -> the first card that was read -> the first card in input deck
+        Pos = nCard-1; // this is the card to be shown from whole input deck
+      ReadInputDeck: 
+        if (nTotal == 0) {
+            res=CDSE_EMPTY; 
+        } else {
+            res=sim_peek_card(cdr_unit, Pos, image); 
+            if (res) res=CDSE_EMPTY;  // if any error reading card -> generate empty card
+        }
+    } else if (pch_HopperToShow==3) {
+        // nCard = Card from Card punch output stacker to Show in cpanel. 
+        Pos = nCard-1; 
+        if (nTotal == 0) {
+            res=CDSE_EMPTY; 
+        } else {
+            for (i=0;i<80;i++) {
+               image[i]=pchCards[Pos][i];
+            }
+            res=0; // using current image data
+        }
+    } else {
+        nTotal = nCard = 0; // safety
+        res=CDSE_EMPTY; 
+    }
+    pch_nCardToShow=nCard; 
+
+    sprintf(buf, "IBM 701 %s %d/%d - Punched Card View Panel", 
+                    pch_HopperToShow == 1 ? "Read Hopper" :
+                    pch_HopperToShow == 2 ? "Read Stacker" :
+                    pch_HopperToShow == 3 ? "Punch" : "???", 
+                    nCard, nTotal);
+    cpanel_title(ncp_Punched_View_Panel, buf);
+
+    // determine if binary/text card (and its text)
+    if (res != 0) {
+        // empty card or error reading card
+        crdText[0] = crdId[0] = 0; 
+    } else {
+        isbin=0; // start assuming is a text card
+        firstCol = cdr_skip_cols(); // this is the first column of data (either 0 or 8)
+        for (i=0; i<80; i++) {
+            hol = image[i] & 0x0fff; 
+            if (hol == 0) {
+                c = 32; 
+            } else if (((hol == 0x600) || (hol == 0x700)) && 
+                       (i==firstCol)) { // "-0" or "-1" in first column card
+                isbin=1; // punching a PACT compiled card
+                break;   // exit loop if binary card
+            } else {
+                c = hol_to_ascii(hol);
+                if (c == '?') c = '+'; // convert char '?' (for "+0") to be printed as "+" in top of punched card
+                if (c == '!') c = '-'; // convert char '!' (for "-0") to be printed as "-" in top of punched card
+                if (c == ' ') {
+                    isbin=1; // column holes does not correspond to an IBM 701 charset -> is a binary card
+                    break;   // exit loop if binary card
+                } 
+            } 
+            crdText[i] = c;  
+        }
+        crdText[isbin ? 0:80] = 0;
+         
+        // get the identification columns in card image 
+        for (i=0; i<8; i++) {
+            hol = image[i + (firstCol ? 0:72)] & 0x0fff; 
+            crdId[i] = hol_to_ascii(hol); 
+        }
+        crdId[8] = 0; 
+     }
+
+    // determine the card image to use
+    if (res) {                               crdType=3; } // no card image
+    else if (isbin) {                        crdType=0; } // binary card
+    else if (0==strncmp(crdId, "BIN",3))   { crdType=0; } // binary card 
+    else if (0==strcmp(crdId, "NR9003  ")) { crdType=0; } // Rochester NR9003 Assembly card
+    else if (0==strcmp(crdId, "PACTSRC ")) { crdType=4; } // PACT compiler source code card 
+    else if (0==strcmp(crdId, "PACTVAR ")) { crdType=5; } // PACT compiler variable code card 
+    else if (0==strcmp(crdId, "PACTDTA ")) { crdType=6; } // PACT compiled program execution data card 
+    else  {                                  
+        extern int lp_wiring;                             // wiring set for printer
+        int isInputCard = (pch_HopperToShow == 1) ? 1: (pch_HopperToShow == 2) ? 1:0; // =1 if is an input card
+        if ((lp_wiring == WIRING_NR9003) && (isInputCard)) { crdType=2; } // Rochester NR9003 Assembly source code card
+        else {                                               crdType=1; } // default card
+    }
+
+    // check if current card image has changed
+    {
+        static int Prev_crdType = -1; 
+        static uint16 Prev_image[80] = {0}; 
+
+        // if card type to draw has changed -> should redraw image
+        if (Prev_crdType != crdType) goto DrawCard; 
+        // if drawing again a "no card image", no need to check image holes as there are none
+        if (crdType == 3) goto NoDraw; 
+        // same card type, check the card holes to draw
+        for (i=0; i<80; i++) if (Prev_image[i] != image[i]) goto DrawCard; // if different holes to draw -> should redraw image
+        // here, same type of card, with same holes in it -> nothing to redraw. 
+      NoDraw:
+        pch_RedrawNeeded=0; // clear flag as pch redraw finally is not needed
+        return; 
+      DrawCard:
+        // update previous state, and proceed to drawing
+        Prev_crdType = crdType;
+        memcpy(Prev_image, image, sizeof(Prev_image)); 
+    }
+
+    CardPosX = 0;   // pos of card to be drawn relative to coords of background
+    CardPosY = 25; 
+
+    // copy card image to cpanel background
+    CopyControlImage(IBM701.PCH_CardImage, crdType, // int FromCId, int FromState, 
+                     0,0,0,0,                       // int x0, int y0, int w, int h, 
+                     IBM701.PCH_CardBackground, 0,  // int ToCId, int ToState, 
+                     CardPosX, CardPosY);           // int x1, int y1);
+
+    // draw punched holes
+    if (res == 0) {
+        //  Row Name    
+        //
+        //  Y     0x800               Hi Punch Y(12)
+        //  X     0x400               Minus Punch X(11)
+        //  0     0x200               also called T (Ten, 10)
+        //  1     0x100
+        //  2     0x080
+        //  3     0x040
+        //  4     0x020
+        //  5     0x010
+        //  6     0x008
+        //  7     0x004
+        //  8     0x002
+        //  9     0x001
+
+        // get surface todraw to, and ww/hh = width/heigh of surface
+        surface0 = GetControlSurface(IBM701.PCH_CardBackground, 0, &card_ww, &card_hh);
+        surface1 = GetControlSurface(IBM701.PCH_CardPrintedCharSet, 0, &char_ww, &char_hh); 
+
+        // set B/W color for punched card hole (0=black, 128=grey, 255=white)
+        col = surface_rgb_color (PARAM_Pch_HoleCol,PARAM_Pch_HoleCol,PARAM_Pch_HoleCol); 
+
+        for (i=0; i<80; i++) {
+            hol = image[i]; 
+            for (row=0;row<12;row++){
+                if (hol & (1 << (row))) { // hole punched in card at row,col
+                    // calc x,y coords in surface for hole
+                    x=CardPosX + 45 + (int) (i*17.385);
+                    y=CardPosY + 40 + (int) ((11-row)*50);
+                    // draw black box as punched hole
+                    for (iy=0;iy<PARAM_Pch_HoleH;iy++) {
+                        p=(y+iy) * card_ww + x; 
+                        for (ix=0;ix<PARAM_Pch_HoleW;ix++) {
+                            surface0[p++]=col; // set black pixel
+                        }
+                    }
+                }
+            }
+        }
+        // if binary card, set card id text
+        if (crdType == 0) {
+            memset(crdText, 32, sizeof(crdText)); // card text as spaces
+            // set the identification columns in card text
+            // (copy also zero string terminator from crdId
+            for (i=0; i<=8; i++) {
+               crdText[i + (firstCol ? 0:72)] = crdId[i]; 
+            }
+        }
+        // draw card text on top if any and it is not a binary card
+        if (crdText[0]) {
+            for (i=0; i<80; i++) {
+                // get char in card column i
+                c = crdText[i]; 
+                if (c == 32) continue; if (c==0) break; 
+                ic = -1; 
+                for (n=0;sCharSet[n];n++) if (c==sCharSet[n]) {ic = n; break;};
+                if (ic>=0) {
+                    // char printable
+                    x0=CardPosX + 42 + (int) (i*17.385);
+                    y0=CardPosY + 7; 
+                    ink = 255-PARAM_Pch_Cardink;
+                    for (y=0;y<char_hh-1;y++) {
+                        for(x=1;x<char_ww;x++) {
+                            p = x + y * char_ww + ic * char_ww * char_hh; 
+                            get_surface_rgb_color(surface1[p], &r, &g, &b);
+                            n = (r + g + b) / 3;  // n=256 -> use bg color, n=0-> ink color
+                            p = x0 + x + (y0 + y) * card_ww;
+                            get_surface_rgb_color(surface0[p], &r, &g, &b);
+                            // apply ink to paper, here ink=0->add dark ink, ink=128->half dark, ink=255-> no ink
+                            if (ink < r) r=r + (ink-r) * (256-n) / 256;  
+                            if (ink < g) g=g + (ink-g) * (256-n) / 256; 
+                            if (ink < b) b=b + (ink-b) * (256-n) / 256; 
+                            surface0[p]=surface_rgb_color(r,g,b);
+                        }
+                    }
+                }
+            }
+        } 
+    }
+
+    // force the controls redraw on cpanel refresh
+    cpanel_ControlRedrawNeeded = 1;
+    SetState(IBM701.PCH_CardBackground, 0);
+    pch_RedrawNeeded=0; // clear flag as pch redraw done, controls redraw requested 
+}
+
+
 void IBM701_Refresh(void)
 {
     // refresh console
@@ -2246,6 +2575,11 @@ void IBM701_Refresh(void)
         // if (bShowInfo==2) ips will be shown each frame
         Refresh_ShowInfo(0);
     }
+    // Punched Cards View Panel
+    if (cpanel_visible(ncp_Punched_View_Panel)) {
+        Refresh_Punched_Cards_View_Panel(); 
+    }
+
     // process HotKeys on Control Panel GUI window (Hot Keys)
     process_HotKeys();
     // Must be called after Refresh_ShowInfo. when ^F is pressed it resets speed measurement vars
@@ -2253,6 +2587,88 @@ void IBM701_Refresh(void)
     if ((bShowInfo==1) && (ShowInfoTm0==0)) Refresh_ShowInfo(1);
 }
 
+
+// Click on Punched card View Panel
+void IBM701_OnClick_PCH_BTN(void)
+{
+    int Show_Punched_View_Panel = 0; 
+    int xm, ym; 
+
+    if (CP_Click.KeyPress_KeyRelease == 1) {
+        // char *s = (char*) GetControlInfo(CP_Click.CId, CINFO_NAME); // get the name of control for debugging
+
+        // press mouse button -> press button -> set state to 1
+        if (CP_Click.CId == IBM701.ClickArea_Detach_cdr) {
+            // click on top of card reader -> detach current attached deck 
+            extern t_stat   cdr_detach(UNIT *);
+            int32 sv; 
+            sv=sim_switches; // save current switches
+            sim_switches = SWMASK ('Q'); // set switch -Q (quiet) 
+            cdr_detach(&cdr_unit[0]);
+            sim_switches=sv; 
+        } else if (CP_Click.CId == IBM701.ClickArea_Show_PunchedCards) {
+            // click on punched card take stacker -> select it to be shown 
+            // will show punched cards in Punched Card View Panel
+            Show_Punched_View_Panel = 3; 
+        } else if (CP_Click.CId == IBM701.ClickArea_Show_ReadHopper) {
+            // click on punched card take stacker -> select it to be shown 
+            // will show punched waiting to be read 
+            Show_Punched_View_Panel = 1; 
+        } else if (CP_Click.CId == IBM701.ClickArea_Show_ReadStacker) {
+            // click on punched card take stacker -> select it to be shown 
+            // will show punched cards already read
+            Show_Punched_View_Panel = 2; 
+        } else if (CP_Click.CId == IBM701.PCH_FirstCard) {
+            pch_nCardToShow = 1; 
+            pch_RedrawNeeded = 1; // to request punched card redraw on cpanel
+        } else if (CP_Click.CId == IBM701.PCH_LastCard) {
+            pch_nCardToShow = pch_total(pch_HopperToShow); 
+            pch_RedrawNeeded = 1; // to request punched card redraw on cpanel
+        } else if (CP_Click.CId == IBM701.PCH_NextCard) {
+            pch_nCardToShow++; 
+            pch_RedrawNeeded = 1; // to request punched card redraw on cpanel
+        } else if (CP_Click.CId == IBM701.PCH_PrevCard) {
+            if (pch_nCardToShow > 1) pch_nCardToShow--; 
+            pch_RedrawNeeded = 1; // to request punched card redraw on cpanel
+        } else if (CP_Click.CId == IBM701.PCH_SelectCard) {
+            int nTotal = pch_total(pch_HopperToShow);
+            if (nTotal > 1) {
+               // compute n = position inside the bottom button (0=left, 0.5=center, 1=right)
+               double n = ((double) CP_Click.OfsX) / ((double) (GetControlInfo(CP_Click.CId, CINFO_W)));
+               pch_nCardToShow = (int) (n * nTotal);
+               if (pch_nCardToShow < 1) pch_nCardToShow=1; // safety
+               if (pch_nCardToShow > nTotal) pch_nCardToShow=nTotal; // safety
+               pch_RedrawNeeded = 1; // to request punched card redraw on cpanel
+            }
+        }        
+    }
+
+    // check if must show Punched Card View Panel
+    if (Show_Punched_View_Panel) {
+        // if already showing this hopper -> return
+        if (pch_HopperToShow != Show_Punched_View_Panel) {
+            // set the hopper to show in Punched Card View Panel
+            // 1=read hopper, 2=read take stacker, 3=punch stacker
+            pch_HopperToShow = Show_Punched_View_Panel; 
+            // select first cards for card reader input hopper, last card on output stackers
+            pch_nCardToShow = (pch_HopperToShow == 1) ? 1:pch_total(pch_HopperToShow); 
+            pch_RedrawNeeded = 1; // to request punched card redraw on cpanel
+        }
+        // if cpanel window already opened -> return
+        if (cpanel_visible(ncp_Punched_View_Panel)==0) {
+            // open window at mouse pointer coords, with 50% scale
+            SDL_GetGlobalMouseState(&xm, &ym); // get current mouse coords
+            cpvid[ncp_Punched_View_Panel].InitialPosX=xm-40; 
+            cpvid[ncp_Punched_View_Panel].InitialPosY=ym+80; 
+            cpvid[ncp_Punched_View_Panel].InitialScale=50; 
+            cpvid_open(ncp_Punched_View_Panel);
+            pch_RedrawNeeded = 1; // to request punched card redraw on cpanel
+        }
+        // raise GUI window, get focus
+        vid_SetWindowSizeAndPos(cpvid[ncp_Punched_View_Panel].vptr_cp, SIM_SETWIN_RAISE,0, 0); 
+        return; 
+    }
+}
 
 // drag and drop a file handling. Called when a file of given filename is droped on given CId control 
 void IBM701_DropFile(int CId, char * FileName)
@@ -2271,6 +2687,7 @@ void IBM701_DropFile(int CId, char * FileName)
         if (sim_card_input_hopper_count(&cdr_unit[0]) > 0) sim_switches |= SWMASK ('S'); 
         cdr_attach(&cdr_unit[0], FileName);
         sim_switches=sv; 
+        pch_RedrawNeeded = 1; // to force redraw of Punched card view panel 
     } else for (n=0;n<4;n++) if (CId == IBM701.Drop_MT_File[n]) {
         // drag and drop a file on tape -> attach it
         sv=sim_switches; // save current switches

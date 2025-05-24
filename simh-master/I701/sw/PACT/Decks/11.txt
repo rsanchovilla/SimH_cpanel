@@ -1,0 +1,1618 @@
+        DEC
+        NNNN OP ADDR COMMENTS
+          96+ 9  231 RDALNUM  + ADD       TWO          READ 3 CHARS. RETURN ACC=0..999 IF IT IS A NUMERIC VALUE
+          97+13  100          + STORE A   RDALN1       OR RETURN ACC=ALFA 3-CHAR PACKED STRING (IT IS NEGATIVE)
+          98+ 9  198          + ADD       ONE
+          99+13  108          + STORE A   RDALNEX
+         100+10    0 RDALN1   + R ADD     /   /        READ PARAM: THE START COL
+         101+12  104          + STORE     COL
+         102+10  102          + R ADD     *           
+         103+ 1   59          + TR        RDALF        READ 3 CHARS (CAN BE ALFA OR NUM)
+         104+ 0    0 COL      + STOP      0000         STARTING AT COL GIVEN AS PARAM
+         105+ 3  108          + TR +      RDALNEX      IF ACC>=0 THEN TR BECAUSE IT IS A NUMERIC VALUE
+         106+10  708          + R ADD     ZERO         ACC WAS <0: READ AN ALFA VALUE
+         107+20   35          + L LEFT    0035         ACC=THE ALFA VALUE OF FACTOR FROM MQ
+         108+ 1    0 RDALNEX  + TR        /   /
+         109+ 9  231 ADDEOR   + ADD       TWO          ADD END OF REGION (EOR) RECORD TO TAPEOUT TO FINISH LAST REGION
+         110+13  123          + STORE A   ADDEOREX     EOR RECORD IS A COMPACT CODE EMPTY (ZEROED)
+         111+10  503          + R ADD     TPOUTAD
+         112+13  115          + STORE A   AETAP
+         113+10  598          + R ADD     CCLEN
+         114+12  599          + STORE     N
+         115+26    0 AETAP    + WRITE     /   /        PREPARE TO WRITE ON TAPE
+         116-31  708 AELOOP   - COPY      ZERO         WRITE ZERO TO TAPE
+         117+10  599          + R ADD     N
+         118+ 5  231          + SUB       TWO
+         119+12  599          + STORE     N
+         120+ 4  122          + TR 0      AELOOPE
+         121+ 1  116          + TR        AELOOP
+         122+26 2052 AELOOPE  + WRITE     2052         INSURE THAT MQ NOT IN USE            
+         123+ 1    0 ADDEOREX + TR        /   /
+         124+ 9  231 ADDREG   + ADD       TWO          ADD REGION TO LIST OF REGIONS
+         125+13  148          + STORE A   ADDREGEX     ERROR IF ALREADY IN LIST
+         126+10  126          + R ADD     *
+         127+ 1   73          + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         128+ 0  602          + STOP      TREGIONS     ... TREGIONS TABLE 
+         129+ 0  601          + STOP      NREGIONS     ... SEARCH RANGE (SEARCH FROM 1..LEN)
+         130+ 0  578          + STOP      REGION       ... THE VALUE TO FIND 
+         131+ 4  138          + TR 0      ADDREG1      IF REGION NOT FOUND, TR TO ADD IT 
+         132+10  132          + R ADD     *            IF REGION FOUND -> ERROR
+         133+ 1  542          + TR        ERROR
+         134+ 0  758          + STOP      ERRREGAE     ERROR: REGION ALREADY EXITS
+         135+10  135 ADDREGOV + R ADD     *            
+         136+ 1  542          + TR        ERROR
+         137+ 0  766          + STOP      ERROVREG     TOO MANY REGIONS DEFINED
+         138+10  601 ADDREG1  + R ADD     NREGIONS     INCR NUM OF REGIONS DEFINED
+         139+ 9  198          + ADD       ONE
+         140+12  601          + STORE     NREGIONS     
+         141+ 5  600          + SUB       MAXNREGS
+         142+ 3  135          + TR +      ADDREGOV     ERROR IF > TABLE SIZE
+         143+10  143          + R ADD     *
+         144+ 1   75          + TR        EQTBL
+         145+ 0  602          + STOP      TREGIONS     ... TREGION[NREGIONS]=PVREG
+         146+ 0  601          + STOP      NREGIONS     
+         147+ 0  578          + STOP      REGION
+         148+ 1    0 ADDREGEX + TR        /   /
+         149+10  149 INIT     + R ADD     *
+         150+ 1   63          + TR        PRTNLINE     
+         151+ 0  101          + STOP      0101         STRINGZ AT COL 1
+         152+ 0  819          + STOP      MSGSTART     "READ CARDS"
+         153+ 0    6          + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+         154+10  708          + R ADD     ZERO
+         155+12  724          + STORE     NCARDS       TOTAL NUMBER OF PACT SOURCE CODE CARDS PROCESSED
+         156+12  725          + STORE     LAST         FLAG FOR LAST CARD
+         157+12  601          + STORE     NREGIONS     NUMBER OF REGIONS
+         158+12  726          + STORE     PVREG        PREVIOUS REGION
+         159+12  727          + STORE     PVSTEP       PREVIOUS STEP
+         160+28  257          + REWIND    TAPEOUT      REWIND TAPE OUT (PACT COMPACT CODE)
+         161+10  161 READCARD + R ADD     *            READ PACT USER PROGRAM SOURCE CODE CARD
+         162+ 1   55          + TR        READCRD
+         163+ 2  537          + TR OV     ERRUEOD      ERROR: UNEXPECTED END OF DECK (LAST CARD SHOULD BE MARKED WITH Y(12) ON COL 72
+         164+10  724          + R ADD     NCARDS
+         165+ 9  198          + ADD       ONE
+         166+12  724          + STORE     NCARDS
+         167+10  720          + R ADD     D48          SKIP BLANK CARDS
+         168+12  599          + STORE     N            RSV: The manual does not state what to do on blank cards
+         169+10  599 RD0      + R ADD     N                 but we implement to be ignored to ease the
+         170+ 4  161          + TR 0      READCARD          PACT source code readability
+         171+ 5  202          + SUB       D4
+         172+12  599          + STORE     N
+         173+13  174          + STORE A   RD1
+         174-10    0 RD1      - R ADD     /   /
+         175+ 4  169          + TR 0      RD0
+         176+10  708          + R ADD     ZERO         CLEAR CC RECORD
+         177+12  578          + STORE     REGION     
+         178+12  579          + STORE     STEP       
+         179+12  580          + STORE     OP         
+         180+12  581          + STORE     FACT       
+         181+12  582          + STORE     S1         
+         182+12  583          + STORE     S2         
+         183+12  584          + STORE     QR         
+         184+12  585          + STORE     QF         
+         185-12  586          - STORE     NUM        
+         186+12  588          + STORE     CLUE       
+         187+12  589          + STORE     STEPN      
+         188+12  590          + STORE     FACTN      
+         189+12  591          + STORE     FACTREG    
+         190+12  592          + STORE     S1N        
+         191+12  593          + STORE     S2N        
+         192+12  594          + STORE     D1N        
+         193+12  595          + STORE     D2N        
+         194+12  596          + STORE     NINST      
+         195+12  597          + STORE     NINCR      
+         196+10  196          + R ADD     *           
+         197+ 1   59          + TR        RDALF        READ REGION 
+         198+ 0    1 ONE      + STOP      0001         STARTING AT COL 1         
+         199+14  578          + STORE MQ  REGION       STORE ALFA 
+         200+10  200          + R ADD     *           
+         201+ 1   57          + TR        RDINT        READ STEP
+         202+ 0    4 D4       + STOP      0004         LEN=4 CHARS
+         203+ 0    4          + STOP      0004         STARTING AT COL 4
+         204+12  579          + STORE     STEP         STORE INTEGER
+         205+10  205          + R ADD     *           
+         206+ 1   59          + TR        RDALF        READ OPERATION (READ ONLY 3 CHARS, IGNORE 4TH ONE)
+         207+ 0    8          + STOP      0008         STARTING AT COL 8         
+         208+14  580          + STORE MQ  OP           STORE ALFA 
+         209+10  209          + R ADD     *           
+         210+ 1   61          + TR        RDCHR        READ CLUE CHAR
+         211+ 0   12          + STOP      0012         AT COL 12
+         212+12  588          + STORE     CLUE         STORE BASE48 CHAR
+         213+10  213          + R ADD     *           
+         214+ 1   96          + TR        RDALNUM      READ FACTOR (ALFA OR NUM)
+         215+ 0   13          + STOP      0013         AT COL 13
+         216+12  581          + STORE     FACT         (ALFA IF <0, NUM IF>0, BLANK IF =0) 
+         217+10  217          + R ADD     *           
+         218+ 1   61          + TR        RDCHR        READ 4TH FACTOR CHAR
+         219+ 0   16          + STOP      0016         AT COL 16
+         220+12  721          + STORE     FACT4        STORE BASE48 CHAR
+         221+10  221          + R ADD     *           
+         222+ 1   96          + TR        RDALNUM      READ S1 (ALFA OR NUM)
+         223+ 0   17          + STOP      0017         AT COL 17
+         224+12  582          + STORE     S1           (ALFA IF <0, NUM IF>0, BLANK/0 IF =0) 
+         225+10  225          + R ADD     *           
+         226+ 1   96          + TR        RDALNUM      READ S2 (ALFA OR NUM)
+         227+ 0   20          + STOP      0020         AT COL 20
+         228+12  583          + STORE     S2           (ALFA IF <0, NUM IF>0, BLANK/0 IF =0) 
+         229+10  229          + R ADD     *           
+         230+ 1   57          + TR        RDINT        READ Q OF RESULT VALUE
+         231+ 0    2 TWO      + STOP      0002         LEN=2 CHARS
+         232+ 0   23          + STOP      0023         STARTING AT COL 23
+         233+12  584          + STORE     QR           STORE INTEGER
+         234+10  234          + R ADD     *           
+         235+ 1   61          + TR        RDCHR        READ NUMBER SIGN CHAR
+         236+ 0   25          + STOP      0025         AT COL 25
+         237+12  723          + STORE     NUMSGN       STORE BASE48 CHAR
+         238+10  708          + R ADD     ZERO         
+         239-12  586          - STORE     NUM
+         240-12  704          - STORE     NUMDECPT     DECIMAL POINT DIVIDENT
+         241+12  585          + STORE     QF           Q OF FACTOR
+         242+10  716          + R ADD     D26          COLUMN WHERE NUMBER STARTS
+         243+ 5  198          + SUB       ONE
+         244+12  252          + STORE     DIGCOL     
+         245+10  252 NLOOP1   + R ADD     DIGCOL
+         246+ 9  198          + ADD       ONE
+         247+12  252          + STORE     DIGCOL     
+         248+ 5  719          + SUB       D36
+         249+ 4  283          + TR 0      NLOOPEND     ALL DIGITS PROCESSED
+         250+10  250          + R ADD     *           
+         251+ 1   61          + TR        RDCHR        READ NUMBER CHAR
+         252+ 0    0 DIGCOL   + STOP      0000
+         253+12  722          + STORE     CHAR         STORE BASE48 CHAR
+         254+ 4  283          + TR 0      NLOOPEND     BLANK CHAR -> ALL DIGITS PROCESSED
+         255+ 5  710          + SUB       D10
+         256+ 4  264          + TR 0      DIG0         BASE48 CODE=10 -> CHAR='0'
+         257+ 3  259          + TR +      DIGA
+         258+ 1  266          + TR        DIG9         BASE48 CODE=1..9 -> CHAR='1'..'9'
+         259+ 5  717 DIGA     + SUB       D33     
+         260+ 4  279          + TR 0      DIGPT        BASE48 CODE=43 -> CHAR='.'
+         261+10  261          + R ADD     *            
+         262+ 1  542          + TR        ERROR
+         263+ 0  737          + STOP      ERRBADN      ERROR: CHAR IN NUMBER IS NOT 0..9 OR DECIMAL POINT
+         264+10  708 DIG0     + R ADD     ZERO
+         265+12  722          + STORE     CHAR
+         266-15  586 DIG9     - LOAD MQ   NUM          MULT NUM X 10
+         267-16  702          - MPY       NUM10        
+         268-14  586          - STORE MQ  NUM
+         269+10  722          + R ADD     CHAR         NUM = NUM + CHAR
+         270+23   18          + A RIGHT   0018
+         271- 9  586          - ADD       NUM
+         272-12  586          - STORE     NUM
+         273-10  704          - R ADD     NUMDECPT     
+         274+ 4  245          + TR 0      NLOOP1
+         275-15  704          - LOAD MQ   NUMDECPT     MULT NUMDECPT X 10
+         276-16  702          - MPY       NUM10        
+         277-14  704          - STORE MQ  NUMDECPT
+         278+ 1  245          + TR        NLOOP1
+         279+10  198 DIGPT    + R ADD     ONE          FOUND DECIMAL POINT
+         280+23   18          + A RIGHT   0018         NUMDECPT=1
+         281-12  704          - STORE     NUMDECPT     
+         282+ 1  245          + TR        NLOOP1
+         283+15  708 NLOOPEND + LOAD MQ   ZERO
+         284-10  704          - R ADD     NUMDECPT     IF NO DECIMAL POINT, THE NUMBER IS CONSIDERED 
+         285+ 4  310          + TR 0      NUMISINT     TO BE AN INTEGER (Q=17). 
+         286-15  586          - LOAD MQ   NUM
+         287-18  704          - DIV       NUMDECPT     ACC=REMAINDER, MQ=INT PART OF VALUE
+         288-12  706          - STORE     FRAC         
+         289-14  586          - STORE MQ  NUM          INTEGER PART OF VALUE
+         290-10  706          - R ADD     FRAC
+         291+15  708          + LOAD MQ   ZERO         FRAC IS > NUMDECPT, SO NO PROBLEM ON DIVISION         
+         292-18  704          - DIV       NUMDECPT     
+         293-14  706          - STORE MQ  FRAC         FRACTIONAL PART OF VALUE
+         294+10  708          + R ADD     ZERO
+         295-11  586          - ADD AB    NUM
+         296-12  586          - STORE     NUM
+         297+ 4  299          + TR 0      ISZ1
+         298+ 1  301          + TR        NORM0        NUMBER NOT ZERO
+         299-10  706 ISZ1     - R ADD     FRAC
+         300+ 4  317          + TR 0      NONUM        NUMBER IS ZERO
+         301+10  718 NORM0    + R ADD     D35          INIT Q=35
+         302+12  585 NORM1    + STORE     QF
+         303-10  586          - R ADD     NUM          ACC,MQ PAIR CONTAINS THE FULL NUMBER
+         304-20    1          - L LEFT    0001         NORMALIZE NUM
+         305+ 2  327          + TR OV     SETSGN       ALREADY NORMALIZED, PROCEED TO SET THE SIGN
+         306-12  586          - STORE     NUM          
+         307+10  585          + R ADD     QF
+         308+ 5  198          + SUB       ONE
+         309+ 1  302          + TR        NORM1
+         310-10  586 NUMISINT - R ADD     NUM          NUMBER IS INT. CHECK IF IT FITS IN LEFT-HALF WORD
+         311+ 4  317          + TR 0      NONUM
+         312+23   18          + A RIGHT   0018         IF NOT, ERROR INTEGER TOO BIG
+         313+ 4  322          + TR 0      NUMISI1
+         314+10  314          + R ADD     *            
+         315+ 1  542          + TR        ERROR
+         316+ 0  814          + STOP      ERRTOOBG     ERROR: INTEGER TOO BIG, OVERFLOWS Q=17. ADD A DECIMAL POINT SO IT CAN BE NORMALIZED TO THE NEEDED Q
+         317+10  708 NONUM    + R ADD     ZERO
+         318+12  585          + STORE     QF
+         319+10  723          + R ADD     NUMSGN       NO NUMBER. CHECK ALSO THERE IS NO SIGN
+         320+ 4  340          + TR 0      NUMOK
+         321+ 1  335          + TR        ERRSGN
+         322-10  586 NUMISI1  - R ADD     NUM          PUT NUMBER IN LEFT-HALF WORD, SET Q=17
+         323+22   18          + A LEFT    0018
+         324-12  586          - STORE     NUM
+         325+10  714          + R ADD     D17
+         326+12  585          + STORE     QF        
+         327+10  708 SETSGN   + R ADD     ZERO         IF NUMBER SET -> IGNORE FACTOR
+         328+12  581          + STORE     FACT
+         329+10  723          + R ADD     NUMSGN       BASE48 CHAR
+         330+ 4  340          + TR 0      NUMOK        BLANK -> POSITIVE NUMBER
+         331+ 5  711          + SUB       D11          IS '-' ?
+         332+ 4  338          + TR 0      NUMNEG       YES, CHANGE NUM SIGN
+         333+ 5  198          + SUB       ONE          IS '+'?
+         334+ 4  340          + TR 0      NUMOK        YES, POSITIVE NUMBER
+         335+10  335 ERRSGN   + R ADD     *            
+         336+ 1  542          + TR        ERROR
+         337+ 0  742          + STOP      ERRBADS      ERROR: SIGN FOR NUMBER IS NOT BLANK/+/-
+         338- 6  586 NUMNEG   - R SUB     NUM
+         339-12  586          - STORE     NUM
+         340+ 8    0 NUMOK    + NOOP      0000
+         341+10  719          + R ADD     D36         SCAN ALFA VALUES OP TABLE
+         342+12  599          + STORE     N 
+         343+10  356          + R ADD     OPTBLEAD    SCAN STARTING AT END OF TABLE 
+         344+13  345          + STORE A   OPTBLR
+         345+10    0 OPTBLR   + R ADD     /   /       READ OP TABLE MNEMONIC
+         346+ 5  580          + SUB       OP          
+         347+ 4  360          + TR 0      OPFOUND
+         348+10  599          + R ADD     N
+         349+ 5  198          + SUB       ONE
+         350+12  599          + STORE     N
+         351+ 4  357          + TR 0      OPNOTFND
+         352+10  345          + R ADD     OPTBLR
+         353+ 5  198          + SUB       ONE
+         354+13  345          + STORE A   OPTBLR
+         355+ 1  345          + TR        OPTBLR
+         356+ 0  864 OPTBLEAD + STOP      OPTBLE       LOC OF END OF OPERATION TABLE
+         357+10  357 OPNOTFND + R ADD     *            
+         358+ 1  542          + TR        ERROR
+         359+ 0  748          + STOP      ERRBADOP     ERROR: BAD OPERATION
+         360+10  599 OPFOUND  + R ADD     N
+         361+12  580          + STORE     OP           REPLACE OP ALFA VALUE WITH ITS OP NUMBER
+         362+10  362          + R ADD     *            CHECK Y(12) ON COL 72 ON CARD BUFFER
+         363+ 1   61          + TR        RDCHR        READ CHAR
+         364+ 0   72          + STOP      0072         AT COL 72
+         365+12  722          + STORE     CHAR         STORE BASE48 CHAR
+         366+10  712          + R ADD     D12
+         367+ 5  722          + SUB       CHAR
+         368+ 4  370          + TR 0      LASTCRD      IF PUNCHED, THIS IS LAST CARD
+         369+ 1  372          + TR        NOTLAST
+         370+10  198 LASTCRD  + R ADD     ONE
+         371+12  725          + STORE     LAST         LAST=1 TO SIGNAL THIS IS LAST CARD OF PACT SOURCE PROGRAM DECK
+         372+ 8    0 NOTLAST  + NOOP      0000
+         373+10  578          + R ADD     REGION
+         374+ 4  381          + TR 0      USEPVREG     IF REGION BLANK IN CARD THEN TR TO USE THE PREVIOUS REGION
+         375+ 5  726          + SUB       PVREG
+         376+ 4  396          + TR 0      REGOK        TR IF NO REGION CHANGE (USING SAME REGION AS PREVIOUS STEP)
+         377+ 1  388          + TR        NEWREG       TR TO HANDLE READING CARDS FOR A NEW REGION
+         378+10  378 NOREG    + R ADD     *            
+         379+ 1  542          + TR        ERROR
+         380+ 0  754          + STOP      ERRNOREG     ERROR: BLANK REGION, BUT NO PREVIOUS REGION DEFINED
+         381+10  726 USEPVREG + R ADD     PVREG
+         382+12  578          + STORE     REGION
+         383+15  578          + LOAD MQ   REGION       PUT REGION IN CARD BUFFER
+         384+10  384          + R ADD     *
+         385+ 1   65          + TR        PRTALF
+         386+ 0    1          + STOP      0001         PUT REGION IN COL 1
+         387+ 1  396          + TR        REGOK
+         388+10  708 NEWREG   + R ADD     ZERO         A NEW REGION STARTS
+         389+12  727          + STORE     PVSTEP       INIT PREVIOUS STEP
+         390+10  726          + R ADD     PVREG        IF PREVIOUS REG <> 0 THEN CALL ADDEOR TO ADD
+         391+ 4  394          + TR 0      ADDNEWRG     AN END OF REGION RECORD TO TAPEOUT. 
+         392+10  392          + R ADD     *
+         393+ 1  109          + TR        ADDEOR       ADD END OF REGION RECORD TO TAPEOUT
+         394+10  394 ADDNEWRG + R ADD     *
+         395+ 1  124          + TR        ADDREG       ADD NEW REGION TO LIST OF REGIONS
+         396+10  578 REGOK    + R ADD     REGION       FINAL CHECK TO GUARANTEE REGION DEFINED
+         397+ 4  378          + TR 0      NOREG
+         398+12  726          + STORE     PVREG
+         399+10  579          + R ADD     STEP
+         400+ 5  198          + SUB       ONE
+         401+ 3  408          + TR +      STEPOK1      
+         402+10  402          + R ADD     *            
+         403+ 1  542          + TR        ERROR
+         404+ 0  775          + STOP      ERRBADST     ERROR: STEP IS ZERO, BLANK OR NON NUMERIC
+         405+10  405 STSEQER  + R ADD     *            ERROR: BAD STEP SEQUENCE
+         406+ 1  542          + TR        ERROR
+         407+ 0  795          + STOP      ERRSTSEQ
+         408+10  727 STEPOK1  + R ADD     PVSTEP 
+         409+ 5  579          + SUB       STEP
+         410+ 3  405          + TR +      STSEQER      TR TO ERROR IF STEP <= PREVIOUS STEP  
+         411+10  579          + R ADD     STEP 
+         412+12  727          + STORE     PVSTEP
+         413+10  580          + R ADD     OP
+         414+ 5  711          + SUB       OPTR
+         415+ 3  417          + TR +      FACTA1
+         416+ 1  425          + TR        FACT0        OP < OPTR -> FACTOR FOR ARITHMETIC INSTR
+         417+10  580 FACTA1   + R ADD     OP
+         418+ 5  715          + SUB       OPSET
+         419+ 3  425          + TR +      FACT0        OP >= SET -> FACTOR FOR FUNCTION INSTR
+         420+10  588          + R ADD     CLUE         HERE, OP IS A TRANSFER INSTR, FACTOR IS THE DESTINATION STEP NUMBER
+         421+ 4  451          + TR 0      FACTSTEP     GET FACT AS DESTINATION STEP NUMBER
+         422+10  422 ERRNCLUE + R ADD     *            ERROR: CLUE MUST BE BLANK ON TRANSFERS/ON BLANK FACTOR
+         423+ 1  542          + TR        ERROR
+         424+ 0  807          + STOP      ERRNOCLU
+         425+10  581 FACT0    + R ADD     FACT         HERE IS FACTOR FOR ARITH INSTR
+         426+ 4  429          + TR 0      FACT0BLK     IF FACTOR IS BLANK TR TO CHECK IF 4TH CHAR OF FACTOR IS BLANK
+         427+ 3  433          + TR +      FACT1        FACTOR > 0 -> IT IS AN INTEGER NUM/A STEP NUMBER MAYBE WITH CLUE
+         428+ 1  473          + TR        FACTOK2      FACTOR < 0 -> FACTOR IS ALFA MAYBE WITH CLUE -> LEAVE ITS CURRENT VALUE
+         429+10  721 FACT0BLK + R ADD     FACT4
+         430+ 4  470          + TR 0      FACTOK1      IF FACT4=0 AND FACTOR = 0 -> FACTOR IS BLANK -> LEAVE ITS CURRENT VALUE, NO CLUE ALLOWED
+         431+ 3  433          + TR +      FACT1        IF FACT4>0 -> FACTOR IS AN INTEGER NUM/A STEP NUMBER MAYBE WITH CLUE
+         432+ 1  457          + TR        ERRFACT4     FACT=0 BUT FACT4 IS CHAR -> ERROR, FACT 4TH CHAR CANNOT BE ALFA
+         433+10  588 FACT1    + R ADD     CLUE         
+         434+ 4  444          + TR 0      FACTNUM      BLANK CLUE -> FACTOR IS AN INTEGER POSITIVE NUMBER
+         435+ 5  711          + SUB       D11
+         436+ 4  444          + TR 0      FACTNUM      CLUE = '-' -> FACTOR IS A NEGATIVE INTEGER NUMBER
+         437+ 5  713          + SUB       D15
+         438+ 4  451          + TR 0      FACTSTEP     CLUE = 'N' -> FACTOR IS MINUS RESULT OF STEP 
+         439+ 5  202          + SUB       D4
+         440+ 4  451          + TR 0      FACTSTEP     CLUE = 'R' -> FACTOR IS RESULT OF STEP 
+         441+10  441          + R ADD     *            ERROR: INVALID CLUE. SHOULD BE - R N
+         442+ 1  542          + TR        ERROR
+         443+ 0  802          + STOP      ERRCLUE
+         444+10  581 FACTNUM  + R ADD     FACT
+         445-12  586          - STORE     NUM
+         446+10  714          + R ADD     D17
+         447+12  585          + STORE     QF
+         448+10  708          + R ADD     ZERO
+         449+12  581          + STORE     FACT
+         450+ 1  473          + TR        FACTOK2
+         451+10  721 FACTSTEP + R ADD     FACT4        4TH FACTOR CHAR
+         452+ 4  461          + TR 0      FACTOK0B     =0 -> IS BLANK -> INTERPRETED AS ZERO
+         453+10  710          + R ADD     D10 
+         454+ 5  721          + SUB       FACT4        
+         455+ 4  460          + TR 0      FACTOK0A     ='0' (BASE48 VALUE=10) -> CONVERT TO BINARY ZERO
+         456+ 3  461          + TR +      FACTOK0B     =1..9 -> 4TH FACTOR CHAR IS A DIGIT
+         457+10  457 ERRFACT4 + R ADD     *            ERROR: 4TH FACTOR CHAR IS NOT A DIGIT '0'..'9'/BLANK
+         458+ 1  542          + TR        ERROR
+         459+ 0  785          + STOP      ERRBADF4
+         460+12  721 FACTOK0A + STORE     FACT4
+         461+10  581 FACTOK0B + R ADD     FACT         FACTOR IS A STEP NUMBER. 
+         462-12  706          - STORE     FRAC         COMPUTE FACTOR'=FACTOR X 10 + 4TH FACTOR CHAR
+         463-15  706          - LOAD MQ   FRAC         USE FRAC AS SCRATCHPAD FULL-WORD 
+         464-16  702          - MPY       NUM10        FRAC = FACT X 10
+         465-14  706          - STORE MQ  FRAC         FACT' = FRAC + FACT4 
+         466+10  706          + R ADD     FRAC         FACT = 1..9999
+         467+ 9  721          + ADD       FACT4
+         468+12  581          + STORE     FACT 
+         469+ 1  473          + TR        FACTOK2
+         470+10  588 FACTOK1  + R ADD     CLUE         CHECK NO CLUE
+         471+ 4  473          + TR 0      FACTOK2
+         472+ 1  422          + TR        ERRNCLUE     TR TO ERROR IF CLUE
+         473+ 8    0 FACTOK2  + NOOP      0000         FACT < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+         474+10  580          + R ADD     OP           IF OP=TAKE, AND QR IS BLANK
+         475+ 5  198          + SUB       OPTAKE       THEN USE AS QR THE QF VALUE (MAY HAVE BEEN SET BY FACTOR/NUMBER)
+         476+ 4  478          + TR 0      FACTOK3A
+         477+ 1  483          + TR        FACTOK
+         478+10  584 FACTOK3A + R ADD     QR
+         479+ 4  481          + TR 0      FACTOK3B
+         480+ 1  483          + TR        FACTOK
+         481+10  585 FACTOK3B + R ADD     QF
+         482+12  584          + STORE     QR
+         483+ 8    0 FACTOK   + NOOP      0000
+         484+10  708          + R ADD     ZERO         COPY LEFT SIDE OF SOURCE CODE CARD IMAGE
+         485+13  488          + STORE A   CPCC1        AT 0..46 TO PACTSCR
+         486+10  500          + R ADD     CPCC2
+         487+13  489          + STORE A   CPCC 
+         488-10    0 CPCC1    - R ADD     /   /
+         489-12    0 CPCC     - STORE     /   /
+         490+10  489          + R ADD     CPCC
+         491+ 5  231          + SUB       TWO
+         492+13  489          + STORE A   CPCC
+         493+10  488          + R ADD     CPCC1
+         494+ 5  202          + SUB       D4
+         495+13  488          + STORE A   CPCC1
+         496+ 5  499          + SUB       CPCCE
+         497+ 4  500          + TR 0      CPCC2
+         498+ 1  488          + TR        CPCC1 
+         499-10   48 CPCCE    - R ADD     0048         LAST LOCATION TO COPY FROM 
+         500+ 8  554 CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY TO 
+         501+10  501          + R ADD     *
+         502+ 1   69          + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT (PACT COMPACT CODE)
+         503+ 0  257 TPOUTAD  + STOP      TAPEOUT
+         504+ 0  554          + STOP      CCODE        BUF TO WRITE TO TAPE
+         505+ 0  598          + STOP      CCLEN        LEN
+         506+30   74          + SENSE     0074         SENSE SWITCH 6
+         507+ 1  510          + TR        ENDLOG1      TR IF NO LOG SELECTED
+         508+10  508          + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         509+ 1   67          + TR        PRINTCRD
+         510+ 8    0 ENDLOG1  + NOOP      0000 
+         511+10  725          + R ADD     LAST
+         512+ 4  161          + TR 0      READCARD
+         513+10  513          + R ADD     *
+         514+ 1  109          + TR        ADDEOR       ADD END OF REGION RECORD TO TAPEOUT TO FINISH LAST REGION
+         515+10  515          + R ADD     *
+         516+ 1   71          + TR        RWDRUM       SAVE TREGIONS ARRAY IN DRUM
+         517+26  128          + WRITE     0128         DRUM INSTR
+         518+ 0    0          + STOP      0000         DRUM ADDR 
+         519+ 0  600          + STOP      MAXNREGS     ADDR OF START OF TABLES
+         520+ 0  102          + STOP      0102         MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW)
+         521+27  257          + WRITE EF  TAPEOUT      WRITE EOF IN TAPE OUT (COMPACT CODE)
+         522+30   74          + SENSE     0074         SENSE SWITCH 6
+         523+ 1  531          + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         524+10  524          + R ADD     *
+         525+ 1   63          + TR        PRTNLINE     
+         526+ 0  101          + STOP      0101         STRINGZ AT COL 1
+         527+ 0  824          + STOP      MSGDONE      "CARDS"
+         528+ 0  210          + STOP      0210         INT AT COL 10
+         529+ 0  724          + STOP      NCARDS       NUMBER OF PACT SOURCE CODE CARDS PROCESSED
+         530+ 0    6          + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+         531+ 8    0 ENDLOG1B + NOOP      0000
+         532+28  257          + REWIND    TAPEOUT      OUTPUT TO TAPE 1 (PACT COMPACT CODE)
+         533+10  533          + R ADD     *
+         534+ 1   51          + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         535+ 0  256          + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+         536+ 0 4095          + STOP      4095
+         537+10  537 ERRUEOD  + R ADD     *            CLEAR CARD BUFFER AS NO CARD HAS BEEN READ
+         538+ 1   53          + TR        CLRBUF
+         539+10  539          + R ADD     *
+         540+ 1  542          + TR        ERROR
+         541+ 0  728          + STOP      ERRUEODS     ERROR: UNEXPECTED END OF DECK (LAST CARD SHOULD BE MARKED WITH Y(12) ON COL 72
+         542+ 9  231 ERROR    + ADD       TWO
+         543+13  544          + STORE A   ERRP1
+         544+10    0 ERRP1    + R ADD     /   /
+         545+13  551          + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+         546+10  546          + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         547+ 1   67          + TR        PRINTCRD
+         548+10  548          + R ADD     *
+         549+ 1   63          + TR        PRTNLINE     
+         550+ 0  101          + STOP      0101         STRINGZ AT COL 1
+         551+ 0    0 ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         552+ 0    0          + STOP      0000         END OF LINE. PRINT ALLWAYS
+         553+ 0  161          + STOP      READCARD     IF USER PRESS STARTS, PROGRAM RESUMES READING NEXT SOURCE CODE CARD 
+         554+     0  PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+         578+     0  REGION     DEF       0
+         579+     0  STEP       DEF       0            REGION = ALFA (<0)
+         580+     0  OP         DEF       0            STEP   = INT (>0)
+         581+     0  FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+         582+     0  S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+         583+     0  S2         DEF       0            FACT = 0 -> BLANK FACTOR
+         584+     0  QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+         585+     0  QF         DEF       0            CLUE = -, R OR N
+         586+     0  NUM        DEF       0            
+         587+     0             DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+         588+     0  CLUE       DEF       0
+         589+     0  STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+         590+     0  FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+         591+     0  FACTREG    DEF       0
+         592+     0  S1N        DEF       0
+         593+     0  S2N        DEF       0
+         594+     0  D1N        DEF       0
+         595+     0  D2N        DEF       0
+         596+     0  NINST      DEF       0
+         597+     0  NINCR      DEF       0
+         598+    44  CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+         599+     0  N          DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+         600+   100  MAXNREGS   DEF       100          MAX 100 REGIONS CAN DE DEFINED IN ONE PROGRAM 
+         601+     0  NREGIONS   DEF       0            NUMBER OF REGIONS DEFINED
+         602+     0  TREGIONS   RES       100          EACH ENTRY IN TABLE IS 1 HALF-WORD. HAS THE NAME (ALFA) OF REGION
+         702+     0  NUM10      DEF       0            
+         703+    10             DEF       10
+         704+     0  NUMDECPT   DEF       0            
+         705+     0             DEF       0
+         706+     0  FRAC       DEF       0            
+         707+     0             DEF       0
+         708+     0  ZERO       DEF       0
+         709+     0             DEF       0
+         710+    10  D10        DEF       10
+         711+    11  D11        DEF       11
+         712+    12  D12        DEF       12
+         713+    15  D15        DEF       15
+         714+    17  D17        DEF       17
+         715+    18  D18        DEF       18
+         716+    26  D26        DEF       26
+         717+    33  D33        DEF       33
+         718+    35  D35        DEF       35
+         719+    36  D36        DEF       36
+         720+    48  D48        DEF       48
+         721+     0  FACT4      DEF       0            
+         722+     0  CHAR       DEF       0            
+         723+     0  NUMSGN     DEF       0            
+         724+     0  NCARDS     DEF       0            TOTAL NUMBER OF PACT SOURCE CODE CARDS PROCESSED
+         725+     0  LAST       DEF       0            FLAG FOR LAST CARD
+         726+     0  PVREG      DEF       0            PREVIOUS REGION
+         727+     0  PVSTEP     DEF       0            PREVIOUS STEP
+         728- 77297  ERRUEODS   TXT       "UNEXPECTED END OF DECK",0    ERROR: UNEXPECTED END OF DECK (LASt CARD SHOULD BE MARKED WITH Y(12) ON COL 72
+         729- 84305  
+         730- 36113  
+         731- 36881  
+         732- 60672  
+         733- 63072  
+         734- 37695  
+         735- 52992  
+         736+     0  
+         737- 32896  ERRBADN    TXT       "BAD NUMBER",0                CHAR IN NUMBER IS NOT 0..9 OR DECIMAL POINT
+         738-  1281  
+         739- 58289  
+         740- 69120  
+         741+     0  
+         742- 32896  ERRBADS    TXT       "BAD NUMBER SIGN",0           SIGN FOR NUMBER IS NOT BLANK/+/-
+         743-  1281  
+         744- 58289  
+         745- 69151  
+         746- 49322  
+         747+     0  
+         748- 32896  ERRBADOP   TXT       "BAD OPERATION",0             UNKNOWN PACT OPERATION
+         749-  1324  
+         750- 40621  
+         751- 74763  
+         752- 59904  
+         753+     0  
+         754- 61200  ERRNOREG   TXT       "NO REGION",0                 BLANK REGION, BUT NO PREVIOUS REGION DEFINED
+         755- 69955  
+         756- 49706  
+         757+     0  
+         758- 69955  ERRREGAE   TXT       "REGION ALREADY EXITS",0  
+         759- 49706  
+         760-   648  
+         761- 69949  
+         762- 38640  
+         763- 40917  
+         764- 75216  
+         765+     0  
+         766- 75051  ERROVREG   TXT       "TOO MANY REGIONS DEFINED",0
+         767-  1213  
+         768- 61680  
+         769- 69955  
+         770- 49706  
+         771- 71440  
+         772- 40053  
+         773- 60736  
+         774+     0  
+         775- 33421  ERRBADST   TXT       "BLANK OR NON NUMERIC STEP",0
+         776- 61008  
+         777- 63648  
+         778- 61226  
+         779-  1281  
+         780- 58446  
+         781- 49104  
+         782- 72977  
+         783- 64512  
+         784+     0  
+         785- 10772  ERRBADF4   TXT       "4TH FACTOR CHAR NO NUMERIC",0
+         786-   877  
+         787- 36123  
+         788- 69135  
+         789- 46734  
+         790-  1275  
+         791-  1281  
+         792- 58446  
+         793- 49104  
+         794+     0  
+         795- 32896  ERRSTSEQ   TXT       "BAD STEP SEQUENCE",0         CURRENT STEP NUMBER IS NOT > PREVIOUS ONE
+         796-  1520  
+         797- 40512  
+         798- 72269  
+         799- 76874  
+         800- 35376  
+         801+     0  
+         802- 49666  ERRCLUE    TXT       "INVALID CLUE",0              INVALID CLUE. SHOULD BE - R N
+         803- 31125  
+         804- 36879  
+         805- 56897  
+         806+     0  
+         807- 35745  ERRNOCLU   TXT       "CLUE MUST BE BLANK",0        TRANSFER OPERATIONS DOES NOT ALLOWS ANY CLUE
+         808- 39193  
+         809- 77552  
+         810-   689  
+         811-   696  
+         812- 31223  
+         813+     0  
+         814- 49664  ERRTOOBG   TXT       "INT TOO BIG",0               INTEGER IN NUMBER FIELD TOO BIG FOR Q=17. ADD A DECIMAL POINT SO IT CAN BE NORMALIZED TO THE NEEDED Q
+         815-  1563  
+         816- 62222  
+         817- 49296  
+         818+     0  
+         819- 69949  MSGSTART   TXT       "READ CARDS",0
+         820- 36879  
+         821- 31408  
+         822- 71424  
+         823+     0  
+         824- 35214  MSGDONE    TXT       "CARDS READ",0
+         825- 38352  
+         826- 69949  
+         827- 36864  
+         828+     0  
+         829+     0             TXT       '   '        OP=1   TAKE OPERATION
+         830- 27648             TXT       '+  '        OP=2
+         831- 25344             TXT       '-  '        OP=3
+         832- 82944             TXT       'X  '        OP=4
+         833-103680             TXT       '/  '        OP=5
+         834- 69967             TXT       'RES'        OP=6
+         835- 40560             TXT       'EQ '        OP=7
+         836- 28286             TXT       '+AB'        OP=8   +ABS
+         837- 25982             TXT       '-AB'        OP=9   -ABS
+         838- 30655             TXT       'ABS'        OP=10
+         839- 73728             TXT       'T  '        OP=11
+         840- 75552             TXT       'TZ '        OP=12
+         841- 75072             TXT       'TP '        OP=13
+         842- 74976             TXT       'TN '        OP=14
+         843- 74592             TXT       'TF '        OP=15
+         844- 46728             TXT       'HAL'        OP=16  HALT
+         845- 74575             TXT       'TES'        OP=17  TEST
+         846- 72272             TXT       'SET'        OP=18
+         847- 77537             TXT       'USE'        OP=19
+         848- 38160             TXT       'DO '        OP=20
+         849- 40917             TXT       'EXI'        OP=21  EXIT
+         850- 38476             TXT       'DUP'        OP=22
+         851- 56318             TXT       'LIB'        OP=23
+         852- 49152             TXT       'ID '        OP=24
+         853- 42798             TXT       'FOR'        OP=25
+         854- 35208             TXT       'CAL'        OP=26  CALL
+         855- 72458             TXT       'SIN'        OP=27
+         856- 35887             TXT       'COS'        OP=28
+         857- 31407             TXT       'ARC'        OP=29  ARCT
+         858- 72846             TXT       'SQR'        OP=30  SQRT
+         859- 56611             TXT       'LOG'        OP=31
+         860- 40924             TXT       'EXP'        OP=32
+         861- 72240             TXT       'SE '        OP=33
+         862- 35712             TXT       'CL '        OP=34
+         863- 69949             TXT       'REA'        OP=35  READ
+         864- 56335  OPTBLE     TXT       'LIS'        OP=36  LIST
+         866+15  880 CLRBUF   + LOAD MQ   IOCL
+         867+14  885          + STORE MQ  BUFIO
+         868+15  906          + LOAD MQ   IOSTORE         
+         869+ 1  877          + TR        INIT2
+         870+15  902 READCRD  + LOAD MQ   IORDCRD
+         871+ 1  875          + TR        INIT1
+         872+15  904 WRITECRD + LOAD MQ   IOWRCRD
+         873+ 1  875          + TR        INIT1
+         874+15  905 PRINTCRD + LOAD MQ   IOPRCRD
+         875+14  885 INIT1    + STORE MQ  BUFIO
+         876+15  903          + LOAD MQ   IOCOPY         
+         877+14  886 INIT2    + STORE MQ  BUFROW
+         878+ 9  912          + ADD       TWO          
+         879+13  901          + STORE A   EXIT
+         880+10  908 IOCL     + R ADD     ZERO         RESET TO INITIAL COPY LOOP ADDRESS     
+         881+13  886          + STORE A   BUFROW       FOR BUFFER
+         882+10  886          + R ADD     BUFROW       X .*echo Print
+         883+ 5  913          + SUB       D48          X 
+         884+12  910          + STORE     ENDLP        X LOOP END VALUE
+         885- 0    0   BUFIO  - STOP      /   /        READ OR WRITE
+         886-31    0   BUFROW - COPY      /   /        COPY WORD TO/FROM PRINTER/CARDREADER
+         887+ 1  891          + TR        BUFOK2       NORMAL PROCESSING 
+         888+ 1  898          + TR        EODECK       FOR COPY READING END OF REG (=END OF DECK BEING READ)
+         889+ 6  912          + R SUB     TWO          END OF FILE -> NO CARD TO READ -> STOP with Acc=-2
+         890+ 0  885          + STOP      BUFIO        ON PRESSING START RETRY CARD READ
+         891+10  886   BUFOK2 + R ADD     BUFROW       X
+         892+ 5  912          + SUB       TWO          INCR BUF ADDR
+         893+13  886          + STORE A   BUFROW       X
+         894+ 5  910          + SUB       ENDLP        CHECK FOR END
+         895+ 4  900          + TR 0      ENDIO
+         896+10  908          + R ADD     ZERO         CLEAR ACC IN CASE WE ARE CLEANING THE BUFFER
+         897+ 1  886          + TR        BUFROW
+         898+10  911 EODECK   + R ADD     ONE          SET OV FLAG TO SIGNAL END OF DECK CONDITION
+         899+22   36          + A LEFT    36
+         900+26 2052 ENDIO    + WRITE     2052         END OF I/O: INSURE THAT MQ NOT IN USE            
+         901+ 1    0 EXIT     + TR        /   /
+         902+24 2048 IORDCRD  + READ      2048         PREPARE TO READ FROM CARD READER
+         903-31    0 IOCOPY   - COPY      /   /   
+         904+26 1024 IOWRCRD  + WRITE     1024         PREPARE TO PUNCH CARD 
+         905+26  512 IOPRCRD  + WRITE     0512         PREPARE WRITE PRTBUF ON PRINTER
+         906-12    0 IOSTORE  - STORE     /   /        CLEAR BUFFER
+         907+     0             ORG       EVEN           
+         908+     0  ZERO       DEF       0            
+         909+     0             DEF       0            
+         910+     0  ENDLP      DEF       0            LOOP END VALUE
+         911+     1  ONE        DEF       1
+         912+     2  TWO        DEF       2
+         913+    48  D48        DEF       48
+         914+ 9 1185 PRTPARM2 + ADD       TWO          GET 2 PARAMS: LEN AND COL (EITHER VALUE OR VAR ADDR)
+         915+13  934          + STORE A   PRTPRMEX
+         916+10  924          + R ADD     PRTP1
+         917+ 9 1185          + ADD       TWO          PRINT PACKED TEXT FROM FULL-WORD VALUE IN MQ REGISTER 
+         918+13  924          + STORE A   PRTP1        STORE ADDR OF FIRST PARAM (LEN)
+         919+ 9 1184          + ADD       ONE
+         920+13  926          + STORE A   PRTP2        STORE ADDR OF SECOND PARAM (COL)
+         921+ 9 1184          + ADD       ONE
+         922+13 1001          + STORE A   EXIT
+         923-14 1174          - STORE MQ  NUM          SAVE VALUE TO PRINT PARAM MQ (NUM IS ALIASED TO TXT)
+         924+10    0   PRTP1  + R ADD     /   /        GET LEN: NUMBER OF CHARS TO PRINT (1..6)
+         925+12 1178          + STORE     LEN
+         926+10    0   PRTP2  + R ADD     /   /        GET COLUMN PARAM 1..72
+         927+ 3  930          + TR +      PRTP4
+         928+13  929          + STORE A   PRTP3        COL<0 -> INTERPRET COL AS LOC(COL) = ADDR OF COL VAR
+         929+10    0   PRTP3  + R ADD     /   /        READ VAR COL PASED AS PARAM
+         930+ 4 1001   PRTP4  + TR 0      EXIT         COL=0 -> EXIT
+         931+ 3  933          + TR +      PRTP5
+         932+ 1 1001          + TR        EXIT         COL<0 -> EXIT
+         933+12  984   PRTP5  + STORE     COL
+         934+ 1    0 PRTPRMEX + TR        /   /        RETURN TO CALLER
+         935+13  924 PRTSTR   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+         936+10  936          + R ADD     *            FOR PRINT STRINGZ FROM MEM
+         937+ 1  914          + TR        PRTPARM2
+         938+12  948          + STORE     COLSZ
+         939+10 1178          + R ADD     LEN          LEN IS IN FACT THE LOCATION WHERE THE STRING STARTS
+         940+13  943          + STORE A   STRZAD
+         941+10 1001          + R ADD     EXIT
+         942+13  956          + STORE A   STRZEX
+         943+10    0 STRZAD   + R ADD     /   /        GET HALF-WORD WITH NEXT 3 CHARS TO PRINT
+         944+ 4  956          + TR 0      STRZEX       IF +0 -> END OF STRING (-0 DOES NOT TERMINATES THE STRING)
+         945+21   35          + L RIGHT   0035         MQ=3-CHARS TO PRINT
+         946+10  946          + R ADD     *            
+         947+ 1  958          + TR        PRTALF       PRINT 3 CHARS
+         948+ 0    0 COLSZ    + STOP      0000         COL 
+         949+10  943 STRZ1    + R ADD     STRZAD       INCR STRING ADDRESS
+         950+ 9 1184          + ADD       ONE
+         951+13  943          + STORE A   STRZAD
+         952+10  948          + R ADD     COLSZ        INCR COLUMN
+         953+ 9 1186          + ADD       D3
+         954+13  948          + STORE A   COLSZ
+         955+ 1  943          + TR        STRZAD
+         956+ 3    0 STRZEX   + TR +      /   /        IF ZERO -> END OF STRING
+         957+ 1  949          + TR        STRZ1
+         958+ 9 1185 PRTALF   + ADD       TWO          PRINT 3-PACKED CHARS IN MQ REGISTER 
+         959+14 1180          + STORE MQ  TXT          SAVE TEXT TO PRINT (IN LEFT HALF WORD)
+         960+13  963          + STORE A   PRTAP2       STORE ADDR OF PARAM (COL)
+         961+ 9 1184          + ADD       ONE
+         962+13 1001          + STORE A   EXIT
+         963+10    0   PRTAP2 + R ADD     /   /        GET COLUMN NUMBER PARAM 1..72
+         964+ 3  967          + TR +      PRTAP4
+         965+13  966          + STORE A   PRTAP3       COL<0 -> INTERPRET COL AS L(COL) = ADDR OF COL VAR
+         966+10    0   PRTAP3 + R ADD     /   /        READ VAR COL PASED AS PARAM
+         967+12  984   PRTAP4 + STORE     COL
+         968+10 1186          + R ADD     D3
+         969+12 1178          + STORE     LEN
+         970+10 1168 PRT1     + R ADD     ZERO         UNPACK LEFTMOST CHAR 
+         971+11 1180          + ADD AB    TXT          GET TEXT DISCARD SIGN
+         972+21   35          + L RIGHT   0035         MQ=Acc
+         973+10 1168          + R ADD     ZERO
+         974+18 1193          + DIV       D48X48
+         975+12 1180          + STORE     TXT          remainder=char to print, mq=c2 * 48 + c3 in right half-word
+         976+10 1168          + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW BIT SET
+         977+20   18          + L LEFT    0018         put c2 and c3 in left half-word of MQ to be saved in CHAR half word
+         978+14 1179          + STORE MQ  CHAR         CHAR TO PRINT
+         979+10 1179          + R ADD     CHAR 
+         980+ 4  985          + TR 0      NXTCHR       IF BLANK PROCEED TO NEXT COL
+         981+21   35          + L RIGHT   0035         MQ=CHAR TO PRINT
+         982+10  982          + R ADD     *            PRINT CHAR
+         983+ 1 1078          + TR        PRTCHR
+         984+ 0    0 COL      + STOP      0000         COL: COLUMN NUMBER TO PRINT (1..72)
+         985+10 1178 NXTCHR   + R ADD     LEN          DECR LEN COUNT
+         986+ 5 1184          + SUB       ONE
+         987+12 1178          + STORE     LEN
+         988+ 4 1001          + TR 0      EXIT         IF NO MORE CHARS TO PRINT EXIT
+         989+10  984          + R ADD     COL          INCR COL POSITION
+         990+ 9 1184          + ADD       ONE
+         991+12  984          + STORE     COL
+         992+ 5 1192          + SUB       D72          IF COL > 72 RETURN TO CALLER
+         993+ 4  995          + TR 0      GNXTCHR      ELSE PROCEED WITH NEXT CHAR
+         994+ 3 1001          + TR +      EXIT
+         995+10 1168 GNXTCHR  + R ADD     ZERO         GET NEXT CHAR 
+         996+15 1180          + LOAD MQ   TXT
+         997+16 1191          + MPY       D48
+         998+22   17          + A LEFT    0017         GET RESULT IN LEFT HALF-WORD OF ACC
+         999+12 1180          + STORE     TXT
+        1000+ 1  970          + TR        PRT1         PROCEED TO PRINT CHAR
+        1001+ 1    0 EXIT     + TR        /   /        RETURN TO CALLER
+        1002+13  924 PRTOCT   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+        1003+10 1003          + R ADD     *            FOR PRINT OCTIONARY VALUE
+        1004+ 1  914          + TR        PRTPARM2
+        1005+10 1178          + R ADD     LEN          LEN = OCTAL DIGITS TO PRINT
+        1006+ 9  984          + ADD       COL
+        1007+ 5 1184          + SUB       ONE
+        1008+12 1020          + STORE     COLN         COL POINTS TO LEAST SIGNIFICANT DIGIT
+        1009+10 1174 PRTIOCG  + R ADD     NUM          GENERATE OCTINARY DIGIT
+        1010+15 1168          + LOAD MQ   ZERO         CLEAR MQ
+        1011+21   21          + L RIGHT   0021         3 LSB BITS OF LEFT HALF-WORD OF ACC TO MQ
+        1012+22   18          + A LEFT    0018         BACK TO LEFT HALF OF ACC (BIT SHIFTED RIGHT 3 BIT)
+        1013+12 1174          + STORE     NUM          SAVE BACK NUM WITH RIGHTMOST OCTIONARY DIGIY EXTRACTED (NUM'=NUM/8)
+        1014+10 1168          + R ADD     ZERO
+        1015+20   21          + L LEFT    0021         LEFT HALF-WORD OF ACC IS NOW RIGHTMOST OCTINARY DIGIT EXTRACTED FROM NUM 
+        1016+ 4 1034          + TR 0      PRTIOZ       TR IF THIS DIGIT IS ZERO TO PRINT A '0' (BASE48 CODE = 10) INSTEAD OF A BLANK (BASE48 CODE = 0)
+        1017+21   35          + L RIGHT   0035         PUT DIGIT 1..9 TO PRINT IN MQ
+        1018+10 1018 PRTOCTD  + R ADD     *            PRINT OCTINARY DIGIT
+        1019+ 1 1078          + TR        PRTCHR
+        1020+ 0    0 COLN     + STOP      0000
+        1021+10 1020          + R ADD     COLN        DECR COL NUMBER TO PRINT NEXT DIGIT
+        1022+ 5 1184          + SUB       ONE
+        1023+12 1020          + STORE     COLN
+        1024+10 1178          + R ADD     LEN          DECR COL NUMBER TO PRINT NEXT DIGIT
+        1025+ 5 1184          + SUB       ONE
+        1026+ 4 1001          + TR 0      EXIT         PRINTED LEN OCTINARY DIGITS -> EXIT
+        1027+12 1178          + STORE     LEN
+        1028+10 1174          + R ADD     NUM          IF NUM < 0, ADD SIGN BIT TO LEFTMOST DIGIT
+        1029+ 3 1009          + TR +      PRTIOCG
+        1030+10 1194          + R ADD     OCT04K       
+        1031+ 5 1174          + SUB       NUM
+        1032+12 1174          + STORE     NUM
+        1033+ 1 1009          + TR        PRTIOCG
+        1034+15 1187   PRTIOZ + LOAD MQ   D10          ACC=BASE48 CODE FOR '0'
+        1035+ 1 1018          + TR        PRTOCTD      TR TO PRINT IT
+        1036+13  924 PRTINT   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+        1037+10 1037          + R ADD     *            FOR PRINT OCTIONARY VALUE
+        1038+ 1  914          + TR        PRTPARM2
+        1039+10  984          + R ADD     COL          PRINT DECIMAL NUMBER. VALUE OF LEN = DIGITS TO PRINT, NOT INCLUDING SIGN
+        1040+ 9 1178          + ADD       LEN
+        1041+ 5 1184          + SUB       ONE          
+        1042+12 1063          + STORE     COLNI        COL POINTS TO END OF NUMBER
+        1043+10 1168          + R ADD     ZERO
+        1044+12 1177          + STORE     SGN          SIGN IS POSITIVE
+        1045+10 1174          + R ADD     NUM
+        1046+ 3 1051          + TR +      PRTINTG
+        1047+ 6 1174          + R SUB     NUM          NUM IS NEGATIVE. CONVERT TO POSITIVE
+        1048+12 1174          + STORE     NUM          AND SET SGN=1
+        1049+10 1184          + R ADD     ONE
+        1050+12 1177          + STORE     SGN          
+        1051+10 1174 PRTINTG  + R ADD     NUM          GENERATE DECIMAL DIGIT
+        1052+21   35          + L RIGHT   0035         MQ=Acc
+        1053+10 1168          + R ADD     ZERO
+        1054+18 1187          + DIV       D10
+        1055+ 4 1076          + TR 0      PRTINZ
+        1056+12 1179 PRTINTG2 + STORE     CHAR         acc=remainder=digit to print, mq=num/10
+        1057+10 1168          + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW BIT SET
+        1058+20   18          + L LEFT    0018         digit in left half-word of MQ to be saved in CHAR half word
+        1059+14 1174          + STORE MQ  NUM 
+        1060+15 1179          + LOAD MQ   CHAR 
+        1061+10 1061 PRTINTD  + R ADD     *            PRINT DECIMAL DIGIT
+        1062+ 1 1078          + TR        PRTCHR
+        1063+ 0    0 COLNI    + STOP      0000
+        1064+10 1063          + R ADD     COLNI        DECR COL NUMBER TO PRINT NEXT DIGIT
+        1065+ 5 1184          + SUB       ONE
+        1066+12 1063          + STORE     COLNI
+        1067+10 1174          + R ADD     NUM          DO NOT CARE ABOUT LEN, JUST CHECK IF NUM=0 
+        1068+ 4 1070          + TR 0      PRTINS       (SO NO MORE DIGITS REMAINS TO BE PRINTED)
+        1069+ 1 1051          + TR        PRTINTG      NUM NOT FINISHED, PROCEED WITH NEXT DIGIT
+        1070+10 1177 PRTINS   + R ADD     SGN
+        1071+ 4 1001          + TR 0      EXIT         NO SIGN -> NUM FINISHED
+        1072+10 1168          + R ADD     ZERO
+        1073+12 1177          + STORE     SGN          CLEAR SGN FLAG
+        1074+15 1188          + LOAD MQ   D11          BASE48 CODE FOR '-' (MINUS) CHAR
+        1075+ 1 1061          + TR        PRTINTD      GO TO PRINT IT
+        1076+10 1187   PRTINZ + R ADD     D10          ACC=BASE48 CODE FOR '0'
+        1077+ 1 1056          + TR        PRTINTG2     TR TO PRINT IT
+        1078+ 9 1185 PRTCHR   + ADD       TWO          PRINT CHAR IN MQ REGISTER 
+        1079+14 1179          + STORE MQ  CHAR         SAVE CHAR TO PRINT (IN LEFT HALF WORD)
+        1080+13 1084          + STORE A   PRTCP2       STORE ADDR OF PARAM (COL)
+        1081+ 9 1184          + ADD       ONE
+        1082+13 1162          + STORE A   PRTCEX
+        1083+ 2 1084          + TR OV     PRTCP2       CLEAR OV JUST IN CASE
+        1084+10    0   PRTCP2 + R ADD     /   /        GET COLUMN NUMBER PARAM 1..72
+        1085+ 3 1088          + TR +      PRTCP4
+        1086+13 1087          + STORE A   PRTCP3       COL<0 -> INTERPRET COL AS L(COL) = ADDR OF COL VAR
+        1087+10    0   PRTCP3 + R ADD     /   /        READ VAR COL PASED AS PARAM
+        1088+ 5 1184   PRTCP4 + SUB       ONE
+        1089+12 1182          + STORE     N            N=COL-1 -> IN RANGE 0..71
+        1090+ 3 1092          + TR +      PRTSA        IF N >= 0 PROCEED WITH BASE BUFFER ADDR CALCULATION
+        1091+ 1 1162          + TR        PRTCEX       IF N<0 EXIT
+        1092+10 1168    PRTSA + R ADD     ZERO         CARD BUFFER USES LOCATION 0..47
+        1093+13 1181          + STORE A   PRTROWAD     DETERMINE ADDRESS OF LOWER ROW TO PRINT
+        1094+10 1182          + R ADD     N
+        1095+ 5 1190          + SUB       D36
+        1096+ 3 1098          + TR +      PRTC0
+        1097+ 1 1104          + TR        PRTC1
+        1098+12 1182    PRTC0 + STORE     N            COL NOW 0..35 
+        1099+ 5 1190          + SUB       D36
+        1100+ 3 1162          + TR +      PRTCEX       IF COL >= 36 (IE COL PASSED AS PARAM > 72) THEN EXIT
+        1101+10 1181          + R ADD     PRTROWAD
+        1102+ 9 1185          + ADD       TWO
+        1103+13 1181          + STORE A   PRTROWAD     SET BASE BUFFER ADDR 
+        1104+10 1184    PRTC1 + R ADD     ONE          DETERMINE MASKCOL WITH MASK TO SET IN CARD BUFFER
+        1105+21   53          + L RIGHT   53           SET RIGHTMOST BIT OF MQ TO 1 (SHIFT 35+18=53)
+        1106+10 1189          + R ADD     D35
+        1107+ 5 1182          + SUB       N
+        1108+13 1110          + STORE A   PRTC2
+        1109+10 1168          + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW
+        1110+20    0    PRTC2 + L LEFT    /   /        SHIFT MQ LEFT N PLACES
+        1111+ 4 1114          + TR 0      PRTC3        IF ACC STILL ZERO -> MASKCOL VALID
+        1112+ 6 1184          + R SUB     ONE          ACC NOT ZERO -> SHOULD GENERATE -0 TO SET SIGN BIT ON
+        1113+21   72          + L RIGHT   0072         NOW MQ = -0 -> LEFTMOST BIT OF MQ SET
+        1114-14 1170    PRTC3 - STORE MQ  MASKCOL
+        1115+10 1168          + R ADD     ZERO         READ THE BITMAP OF CHAR 
+        1116+11 1179          + ADD AB    CHAR         DISCARD SIGN OF CHAR, IF ANY
+        1117+12 1179          + STORE     CHAR
+        1118+ 5 1191          + SUB       D48
+        1119+ 3 1162          + TR +      PRTCEX       IF CHAR >= 48 EXIT
+        1120+10 1176          + R ADD     BITMAPAD     IF ADDR OF BASE48 BITMAP NOT COMPUTED
+        1121+ 4 1163          + TR 0      GETBMP1      TR TO LOAD IT
+        1122+ 9 1179  GETBMP2 + ADD       CHAR         READ THE BITMAP OF CHAR 
+        1123+13 1124          + STORE A   PRTC4        INDICATES THE BITS TO SET IN SELECTED 
+        1124+10    0    PRTC4 + R ADD     /   /        COLUMN OF CARD BUFFER 
+        1125+12 1183          + STORE     BITS
+        1126+ 6 1184          + R SUB     ONE
+        1127+12 1182          + STORE     N            SET TO -1
+        1128+10 1182    LOOP1 + R ADD     N            CURRENT ROW (STARTS AT ZERO) = OFFSET ON PRTROWAD     
+        1129+ 9 1184          + ADD       ONE
+        1130+12 1182          + STORE     N
+        1131+10 1183          + R ADD     BITS         EXTRACT RIGHTMOST BIT OF LEFT HALF OF ACC TO MQ
+        1132+ 4 1162          + TR 0      PRTCEX       NO MORE BITS -> EXIT
+        1133+21   19          + L RIGHT   0019         LSB BIT OF LEFT HALF-WORD OF ACC TO MQ
+        1134+22   18          + A LEFT    0018         BACK TO LEFT HALF OF ACC (BIT SHIFTED RIGHT 1 BIT)
+        1135+12 1183          + STORE     BITS         SAVE BACK BITS. LSB HAS BEEN EXTACTED, CONTENTS SHIFTED RIGHT ONE PLACE
+        1136+10 1168          + R ADD     ZERO
+        1137+20    1          + L LEFT    0001         PUT EXTACTED BIT BACK INTO ACC
+        1138+ 4 1128          + TR 0      LOOP1        NO BIT 
+        1139+10 1182          + R ADD     N            READ THE ROW N AT CARD BUFFER 
+        1140+22    2          + A LEFT    0002         MULT N BY 4 AS THERE ARE 4 HALF WORDS PER ROW
+        1141+ 9 1181          + ADD       PRTROWAD     
+        1142+13 1144          + STORE A   PRTROWR
+        1143+13 1160          + STORE A   PRTROWW
+        1144-10    0  PRTROWR - R ADD     /   /        
+        1145-12 1172          - STORE     ROW          CURRENT CONTENTS OF ROW
+        1146-10 1170          - R ADD     MASKCOL      "OR" MASKCOL IN SELECTED ROW
+        1147+ 3 1155          + TR +      PRTW2
+        1148-10 1172          - R ADD     ROW 
+        1149+ 4 1153          + TR 0      PRTW1         
+        1150+10 1168          + R ADD     ZERO         MASKCOL IS MINUS ZERO AND ROW IS NOT-EMPTY (EITHER POSITIVE OR NEGATIVE) -> SET ROW AS NEGATIVE
+        1151- 7 1172          - SUB AB    ROW 
+        1152+ 1 1160          + TR        PRTROWW
+        1153-10 1170    PRTW1 - R ADD     MASKCOL      MASKCOL IS MINUS ZERO AND ROW IS EMPTY -> SET ROW = MASKCOL = MINUS ZERO
+        1154+ 1 1160          + TR        PRTROWW
+        1155-10 1172    PRTW2 - R ADD     ROW          
+        1156+ 3 1159          + TR +      PRTW3              
+        1157- 5 1170          - SUB       MASKCOL      MASKCOL IS POSITIVE AND ROW IS NEGATIVE -> SUB MASKCOL FROM ROW
+        1158+ 1 1160          + TR        PRTROWW
+        1159- 9 1170    PRTW3 - ADD       MASKCOL      MASKCOL IS POSITIVE AND ROW IS POSITIVE OR EMPTY -> ADD MASKCOL TO ROW         
+        1160-12    0  PRTROWW - STORE     /   /        ROW UPDTATE
+        1161+ 1 1128          + TR        LOOP1        PROCEED TO NEXT ROW
+        1162+ 1    0 PRTCEX   + TR        /   /
+        1163+10 1163 GETBMP1  + R ADD     *
+        1164+ 1   87          + TR        BMPAD        GET BASE48 CHARS BITMAP ADDRESS
+        1165+12 1176          + STORE     BITMAPAD     
+        1166+ 1 1122          + TR        GETBMP2      RETURN
+        1167+     0             ORG       EVEN
+        1168+     0  ZERO       DEF       0            
+        1169+     0             DEF       0            
+        1170+     0  MASKCOL    DEF       0
+        1171+     0             DEF       0
+        1172+     0  ROW        DEF       0
+        1173+     0             DEF       0
+        1174+     0  NUM        DEF       0
+        1175+     0             DEF       0
+        1176+     0  BITMAPAD   DEF       0
+        1177+     0  SGN        DEF       0
+        1178+     0  LEN        DEF       0
+        1179+     0  CHAR       DEF       0
+        1180+     0  TXT        DEF       0
+        1181+     0  PRTROWAD   DEF       0
+        1182+     0  N          DEF       0
+        1183+     0  BITS       DEF       0
+        1184+     1  ONE        DEF       1
+        1185+     2  TWO        DEF       2
+        1186+     3  D3         DEF       3
+        1187+    10  D10        DEF       10
+        1188+    11  D11        DEF       11
+        1189+    35  D35        DEF       35
+        1190+    36  D36        DEF       36
+        1191+    48  D48        DEF       48
+        1192+    72  D72        DEF       72
+        1193+  2304  D48X48     DEF       2304
+        1194+ 16384  OCT04K     DEF       *040000      BIT SIGN ON 5TH OCTINARY DIGIT
+        1196+ 9 1271 PRTNLINE + ADD       TWO          PRINT A NEW LINE OF DATA
+        1197+12 1274          + STORE     PARAM        SAVE PARAM LIST ADDR
+        1198+10 1198          + R ADD     *            CLEAR CARD BUFFER
+        1199+ 1   53          + TR        CLRBUF 
+        1200+10 1274 GPARAM   + R ADD     PARAM        GET PARAM PAIR FMT/DATA
+        1201+13 1206          + STORE A   P1
+        1202+ 9 1270          + ADD       ONE
+        1203+13 1210          + STORE A   P2
+        1204+ 9 1270          + ADD       ONE
+        1205+12 1274          + STORE     PARAM
+        1206+10    0 P1       + R ADD     /   /
+        1207+12 1276          + STORE     FMT
+        1208+ 3 1210          + TR +      P2           IF FMT < 0 THEM SKIP THIS PAIR FMT/DATA
+        1209+ 1 1200          + TR        GPARAM
+        1210+10    0 P2       + R ADD     /   /
+        1211+12 1236          + STORE     DATALOC      GET DATA ADDRESS PASED AS PARAM
+        1212+13 1213          + STORE A   P2A
+        1213+10    0 P2A      + R ADD     /   /
+        1214+12 1275          + STORE     DATA         GET EFFECTIVE DATA
+        1215+10 1269          + R ADD     ZERO
+        1216+15 1276          + LOAD MQ   FMT
+        1217+18 1273          + DIV       D100         ACC=REMAINDER=COL NUMBER, MQ=QUOTIEN=TYPE OF DATA
+        1218+12 1277          + STORE     COL
+        1219+10 1269          + R ADD     ZERO
+        1220+20   18          + L LEFT    0018
+        1221+14 1276          + STORE MQ  FMT
+        1222+15 1275          + LOAD MQ   DATA
+        1223+10 1227          + R ADD     TYPETRAD
+        1224+ 9 1276          + ADD       FMT
+        1225+13 1226          + STORE A   TYPETR
+        1226+ 1    0 TYPETR   + TR        /   /        TR SELECTED ROUTINE
+        1227+ 0 1228 TYPETRAD + STOP      TYPETRT      TYPE TRANSFER TABLE ADDRESS
+        1228+ 1 1257 TYPETRT  + TR        EOL          FMT=0..6 (IE <100) -> END OF PARAM LIST -> END OF LINE 
+        1229+ 1 1234          + TR        TYSTR        FMT=1 -> PRINT A STRINGZ
+        1230+ 1 1239          + TR        TYINT        FMT=2 -> PRINT AN INT
+        1231+ 1 1244          + TR        TYOCT        FMT=3 -> PRINT AN OCT
+        1232+ 1 1249          + TR        TYCHR        FMT=4 -> PRINT A CHAR
+        1233+ 1 1253          + TR        TYALF        FMT=5 -> PRINT A 3-CHR PACKED ALFA STRING
+        1234+10 1234 TYSTR    + R ADD     *            PRINT STRINGZ
+        1235+ 1   79          + TR        PRTSTR
+        1236+ 0    0 DATALOC  + STOP      /   /
+        1237- 0 1277          - STOP      COL          COLUMN WHERE TXT STARTS
+        1238+ 1 1200          + TR        GPARAM
+        1239+10 1239 TYINT    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+        1240+ 1   83          + TR        PRTINT
+        1241+ 0    6          + STOP      0006         UP TO 6 DECIMAL DIGITS 
+        1242- 0 1277          - STOP      COL          COLUMN WHERE TXT STARTS
+        1243+ 1 1200          + TR        GPARAM
+        1244+10 1244 TYOCT    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+        1245+ 1   85          + TR        PRTOCT
+        1246+ 0    6          + STOP      0006         UP TO 6 DECIMAL DIGITS 
+        1247- 0 1277          - STOP      COL          COLUMN WHERE TXT STARTS
+        1248+ 1 1200          + TR        GPARAM
+        1249+10 1249 TYCHR    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+        1250+ 1   81          + TR        PRTCHR
+        1251- 0 1277          - STOP      COL          COLUMN WHERE TXT STARTS
+        1252+ 1 1200          + TR        GPARAM
+        1253+10 1253 TYALF    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+        1254+ 1   65          + TR        PRTALF
+        1255- 0 1277          - STOP      COL          COLUMN WHERE TXT STARTS
+        1256+ 1 1200          + TR        GPARAM
+        1257+10 1277 EOL      + R ADD     COL          SEND CARD BUFFER TO PRINTER AND RETURN TO CALLER
+        1258+ 4 1263          + TR 0      DOPRINT      =0 -> PRINT ALLWAYS (NO SENSE SW CHECK)
+        1259+ 9 1272          + ADD       D68          =1..6 -> SENSE 69..74 = OPERATOR'S PANEL SENSE SWITCH 1..6
+        1260+13 1261          + STORE A   CHKSW
+        1261+30    0 CHKSW    + SENSE     /   /         
+        1262+ 1 1265          + TR        RETURN       SW NOT AT ON POSITION
+        1263+10 1263 DOPRINT  + R ADD     *            PRINT CARD BUFFER
+        1264+ 1   67          + TR        PRINTCRD
+        1265+10 1274 RETURN   + R ADD     PARAM        PARAM-1 IS THE RETURN ADDR      
+        1266+ 5 1270          + SUB       ONE
+        1267+13 1268          + STORE A   EXIT
+        1268+ 1    0 EXIT     + TR        /   /        RETURN TO CALLER
+        1269+ 0    0 ZERO     + STOP      0000
+        1270+ 0    1 ONE      + STOP      0001
+        1271+ 0    2 TWO      + STOP      0002
+        1272+ 0   68 D68      + STOP      0068
+        1273+ 0  100 D100     + STOP      100
+        1274+ 0    0 PARAM    + STOP      0000
+        1275+ 0    0 DATA     + STOP      0000
+        1276+ 0    0 FMT      + STOP      0000
+        1277+ 0    0 COL      + STOP      0000
+        1278+ 9 1292 BMPAD    + ADD       TWO
+        1279+13 1281          + STORE A   EXIT
+        1280+10 1282          + R ADD     BITMAPAD
+        1281+ 1    0 EXIT     + TR        /   /
+        1282+ 0 1284 BITMAPAD + STOP      BITMAP
+        1283+     0             ORG       EVEN
+        1284+     0  BITMAP     DEF       0              <blank>     0     <none>
+        1285+   256             DEF       256               1        1       1        256          =  256   
+        1286+   128             DEF       128               2        2       2        128          =  128   
+        1287+    64             DEF       64                3        3       3         64          =   64   
+        1288+    32             DEF       32                4        4       4         32          =   32   
+        1289+    16             DEF       16                5        5       5         16          =   16   
+        1290+     8             DEF       8                 6        6       6          8          =    8   
+        1291+     4             DEF       4                 7        7       7          4          =    4   
+        1292+     2  TWO        DEF       2                 8        8       8          2          =    2   
+        1293+     1             DEF       1                 9        9       9          1          =    1   
+        1294+   512             DEF       512               0       10       0        512          =  512   
+        1295+  1024             DEF       1024              -       11       X       1024          = 1024   
+        1296+  2048             DEF       2048              +       12       Y       2048          = 2048   
+        1297+  2304             DEF       2304              A       13      Y-1        256+2048    = 2304   
+        1298+  2176             DEF       2176              B       14      Y-2        128+2048    = 2176   
+        1299+  2112             DEF       2112              C       15      Y-3         64+2048    = 2112   
+        1300+  2080             DEF       2080              D       16      Y-4         32+2048    = 2080   
+        1301+  2064             DEF       2064              E       17      Y-5         16+2048    = 2064   
+        1302+  2056             DEF       2056              F       18      Y-6          8+2048    = 2056   
+        1303+  2052             DEF       2052              G       19      Y-7          4+2048    = 2052   
+        1304+  2050             DEF       2050              H       20      Y-8          2+2048    = 2050   
+        1305+  2049             DEF       2049              I       21      Y-9          1+2048    = 2049   
+        1306+  1280             DEF       1280              J       22      X-1        256+1024    = 1280   
+        1307+  1152             DEF       1152              K       23      X-2        128+1024    = 1152   
+        1308+  1088             DEF       1088              L       24      X-3         64+1024    = 1088   
+        1309+  1056             DEF       1056              M       25      X-4         32+1024    = 1056   
+        1310+  1040             DEF       1040              N       26      X-5         16+1024    = 1040   
+        1311+  1032             DEF       1032              O       27      X-6          8+1024    = 1032   
+        1312+  1028             DEF       1028              P       28      X-7          4+1024    = 1028   
+        1313+  1026             DEF       1026              Q       29      X-8          2+1024    = 1026   
+        1314+  1025             DEF       1025              R       30      X-9          1+1024    = 1025   
+        1315+   640             DEF       640               S       31      0-2        128+512     = 640    
+        1316+   576             DEF       576               T       32      0-3         64+512     = 576    
+        1317+   544             DEF       544               U       33      0-4         32+512     = 544    
+        1318+   528             DEF       528               V       34      0-5         16+512     = 528    
+        1319+   520             DEF       520               W       35      0-6          8+512     = 520    
+        1320+   516             DEF       516               X       36      0-7          4+512     = 516    
+        1321+   514             DEF       514               Y       37      0-8          2+512     = 514    
+        1322+   513             DEF       513               Z       38      0-9          1+512     = 513    
+        1323+   578             DEF       578               ,       39      8-3-0        2+64+512  = 578    
+        1324+   546             DEF       546               %       40      8-4-0        2+32+512  = 546    
+        1325+  1090             DEF       1090              $       41      8-3-X        2+64+1024 = 1090   
+        1326+  1058             DEF       1058              *       42      8-4-X        2+32+1024 = 1058   
+        1327+  2114             DEF       2114              .       43      8-3-Y        2+64+2048 = 2114   
+        1328+  2082             DEF       2082              #       44      8-4-Y        2+32+2048 = 2082   
+        1329+   768             DEF       768               /       45      0-1          512+256   = 768    
+        1330+    66             DEF       66                +       46      8-3          2+64      = 66     
+        1331+    34             DEF       34                -       47      8-4          2+32      = 34    This is the non-minus-sign separator
+        1332+15 1332 RDINT    + LOAD MQ   *
+        1333+ 1 1352          + TR        RDCHRS
+        1334+10 1489          + R ADD     SGN          APPLY SGN FLAG TO NUM
+        1335+ 3 1340          + TR +      RDINT3
+        1336- 6 1480          - R SUB     NUM
+        1337-21   35          - L RIGHT   0035         MQ=ACC=-NUM
+        1338+ 6 1481          + R SUB     NUM2         ACC=-NUM2
+        1339+ 1 1477          + TR        EXIT
+        1340+10 1481 RDINT3   + R ADD     NUM2         GET NUMBER IN LEFT HALF WORD OF ACC (17 BITS)
+        1341-15 1480          - LOAD MQ   NUM          AND THE FULL 35 BIT VALUE IN MQ
+        1342+ 1 1477          + TR        EXIT
+        1343+15 1343 RDBMP    + LOAD MQ   *
+        1344+ 1 1352          + TR        RDCHRS
+        1345-15 1484          - LOAD MQ   BITMAP       SIGN IS BIT36 OF BITMAP
+        1346+10 1490          + R ADD     ISNUM
+        1347+ 4 1350          + TR 0      RDBMP3       TR IF CHARS READ ARE NOT AN UNSIGNED NUMBER (HAS NON 0..9 CHARS, OR DOUBLE PUNCH)
+        1348+10 1481          + R ADD     NUM2         RETURN POSITIVE NUMBER 0..999 IN LEFT HALF-WORD OF ACC
+        1349+ 1 1477          + TR        EXIT
+        1350+ 6 1493 RDBMP3   + R SUB     ONE          ALFA CHARS READ, RETURN ACC=-1
+        1351+ 1 1477          + TR        EXIT
+        1352+ 9 1494 RDCHRS   + ADD       TWO          READ LEN CHARS FROM CARD BUFFER, STARTING AT COL
+        1353+13 1369          + STORE A   RDIP1        STORE ADDR OF FIRST PARAM (LEN)
+        1354+ 9 1493          + ADD       ONE
+        1355+13 1371          + STORE A   RDIP2        STORE ADDR OF SECOND PARAM (COL)
+        1356+ 9 1493          + ADD       ONE
+        1357+13 1477          + STORE A   EXIT         RETURN TO MAIN PROG CALLER
+        1358+14 1488          + STORE MQ  N            RDCHRS SETS THE FOLLOWING VARIABLES
+        1359+10 1488          + R ADD     N               ISNUM=0 IF ANY CHAR IS NOT 0..9 OR HAS Y(12) X(11) PUNCH
+        1360+ 9 1494          + ADD       TWO             NUM READ NUMBER UNTIL LEN OR '.'
+        1361+13 1459          + STORE A   RET             BITMAP: 12 BITS FOR EACH ONE OF 3-LAST CHARS
+        1362+ 2 1363          + TR OV     CLOV         CLEAR OV JUST IN CASE
+        1363+10 1478 CLOV     + R ADD     ZERO         READ A SIGNED INT OF LEN DIGITS
+        1364-12 1480          - STORE     NUM          NUM=0
+        1365+12 1489          + STORE     SGN          SGN FLAG=0 (WILL BE +1 OR -1)
+        1366-12 1484          - STORE     BITMAP       BITMAP (UP TO 3 CHARS, 12 BITS EACH)
+        1367+10 1493          + R ADD     ONE
+        1368+12 1490          + STORE     ISNUM        ISNUM=1 -> ALL READ CHARS ARE UNSIGNED 0..9 DIGITS (BLANK IS INTERPRETED AS ZERO)
+        1369+10    0   RDIP1  + R ADD     /   /        GET LEN: NUMBER OF DIGITS TO READ (1..10)
+        1370+12 1487          + STORE     LEN
+        1371+10    0   RDIP2  + R ADD     /   /        GET COLUMN PARAM 1..72
+        1372+ 3 1375          + TR +      RDIP4
+        1373+13 1374          + STORE A   RDIP3        COL<0 -> INTERPRET COL AS LOC(COL) = ADDR OF COL VAR
+        1374+10    0   RDIP3  + R ADD     /   /        READ VAR COL PASED AS PARAM
+        1375+ 4 1477   RDIP4  + TR 0      EXIT         COL=0 -> EXIT
+        1376+ 3 1378          + TR +      RDIP5
+        1377+ 1 1477          + TR        EXIT         COL<0 -> EXIT
+        1378+ 5 1493   RDIP5  + SUB       ONE          
+        1379+12 1486          + STORE     COL          COL IS 0..71
+        1380+10 1486 NXTDIG   + R ADD     COL
+        1381+12 1488          + STORE     N
+        1382+ 5 1498          + SUB       D36
+        1383+ 3 1387          + TR +      GDIG0        IF COL >=36 CARD BUF ADDR = 0002
+        1384+10 1478          + R ADD     ZERO
+        1385+13 1400          + STORE A   ROWRD          
+        1386+ 1 1392          + TR        GDIG1
+        1387+12 1488    GDIG0 + STORE     N            NOW N=0..35 
+        1388+ 5 1498          + SUB       D36
+        1389+ 3 1459          + TR +      RET          IF COL >= 72 THEN RETURN TO CALLER
+        1390+10 1494          + R ADD     TWO
+        1391+13 1400          + STORE A   ROWRD        SET BUF BASE ADDR
+        1392+10 1497    GDIG1 + R ADD     D35
+        1393+ 5 1488          + SUB       N
+        1394+13 1404          + STORE A   ROWSHF       SET SHIFTING
+        1395+10 1496          + R ADD     D9           SCAN CARD STARTING AT ROWAD
+        1396+12 1488          + STORE     N            N = 9..0 -> THE DECIMAL NUMBER IF PUNCH IN ROW
+        1397+10 1493          + R ADD     ONE
+        1398+12 1492          + STORE     MASK         MASK=1 -> THE MASK TO SET CHAR BITMAP
+        1399+12 1491          + STORE     NOPCH        FLAG. INIT TO 1, BECOMES 0 ON READING FIRST PUNCH. ALLOWS TO IDENTIFY IS THE COLUMN HAS TWO OR MORE PUNCHES
+        1400-10    0 ROWRD    - R ADD     /   /        GET ROW WORD
+        1401-21    1          - L RIGHT   0001         SHIFT RIGHT TO MAKE ROOM FOR EXTRA BIT SIGN
+        1402+ 3 1404          + TR +      ROWSHF
+        1403+ 5 1500          + SUB       D200KOCT     REPLICATE SIGN BIT ON EXTRA BIT 
+        1404-21    0 ROWSHF   - L RIGHT   /   /        SHIFT ROW WORD. SCANNED BIT IS PLACED AS MSB OF MQ
+        1405-10 1478          - R ADD     ZERO
+        1406-20    1          - L LEFT    0001         ACC=MSB OF MQ BIT
+        1407+ 4 1428          + TR 0      NXTROW       IF =0 THEN TR AS ROW IS NOT PUNCHED
+        1408+10 1491          + R ADD     NOPCH        NOPCH=1 IF NO PUNCH ON COLUMN FOUND YET    
+        1409+ 4 1412          + TR 0      NOT09        NOPCH IS 0 -> COLUMN WITH DOBLE PUNCH -> NOT AN UNSIGNED NUMBER 0..9 
+        1410+10 1488          + R ADD     N            IF N >= 0 THEN TR TO NUM=NUM+N
+        1411+ 3 1415          + TR +      SETN         ELSE, SET ISNUM=0 AS NUM HAS SIGN OR ALFA CHARS
+        1412+10 1478 NOT09    + R ADD     ZERO
+        1413+12 1490          + STORE     ISNUM
+        1414+ 1 1418          + TR        SETCHR
+        1415+23   18 SETN     + A RIGHT   0018         NUM = NUM + N
+        1416- 9 1480          - ADD       NUM
+        1417-12 1480          - STORE     NUM
+        1418+10 1484 SETCHR   + R ADD     BITMAP       BITMAP CAN BE NEGATIVE IF BIT36 IS SET
+        1419+ 3 1422          + TR +      SETCHR1
+        1420+ 6 1492          + R SUB     MASK         ADD MASK TO BITMAP
+        1421+ 1 1423          + TR        SETCHR2  
+        1422+10 1492 SETCHR1  + R ADD     MASK         ADD MASK TO BITMAP
+        1423+23   18 SETCHR2  + A RIGHT   0018
+        1424- 9 1484          - ADD       BITMAP
+        1425-12 1484          - STORE     BITMAP
+        1426+10 1478          + R ADD     ZERO
+        1427+12 1491          + STORE     NOPCH
+        1428+10 1492 NXTROW   + R ADD     MASK
+        1429+ 5 1499          + SUB       D2048
+        1430+ 4 1451          + TR 0      NXTCOL       ALL ROWS SCANNED. PROCEED WITH NEXT COL
+        1431+10 1400          + R ADD     ROWRD        SELECT NEXT ROW
+        1432+ 5 1495          + SUB       D4
+        1433+13 1400          + STORE A   ROWRD 
+        1434+10 1488          + R ADD     N            DECR NUM REPRESENTED BY HOLE IN ROW
+        1435+ 5 1493          + SUB       ONE
+        1436+12 1488          + STORE     N
+        1437+10 1492          + R ADD     MASK         SHIFT LEFT ONE BIT
+        1438+22    1          + A LEFT    0001          
+        1439+12 1492          + STORE     MASK
+        1440+ 1 1400          + TR        ROWRD        PROCEED WITH NEW ROW
+        1441-10 1484 GETSGN   - R ADD     BITMAP
+        1442+21   11          + L RIGHT   0011         SHR 11 SO X(11) BIT IS THE MSB OF MQ
+        1443+10 1478          + R ADD     ZERO
+        1444+20    1          + L LEFT    0001
+        1445+ 4 1448          + TR 0      GETSGN2
+        1446+ 6 1493          + R SUB     ONE          X(11) BIT SET -> SGN=-1
+        1447+ 1 1449          + TR        GETSGN3
+        1448+10 1493 GETSGN2  + R ADD     ONE          X(11) BIT NOT SET -> SGN=1
+        1449+12 1489 GETSGN3  + STORE     SGN
+        1450+ 1 1453          + TR        NXTCOL2
+        1451+10 1489 NXTCOL   + R ADD     SGN          IF SGN FLAG NOT SET, TR TO GET THE SIGN ON DIGIT, IF ANY
+        1452+ 4 1441          + TR 0      GETSGN       
+        1453+10 1486 NXTCOL2  + R ADD     COL          DECR COL
+        1454+ 9 1493          + ADD       ONE
+        1455+12 1486          + STORE     COL
+        1456+10 1487          + R ADD     LEN          DECR LEN
+        1457+ 5 1493          + SUB       ONE
+        1458+12 1487          + STORE     LEN 
+        1459+ 4    0 RET      + TR 0      /   /        IF LEN=0 PROCEED TO RDINT/RDALF POST-PROCESSING
+        1460-15 1480          - LOAD MQ   NUM          MULT NUM X 10
+        1461-16 1482          - MPY       NUM10        
+        1462-14 1480          - STORE MQ  NUM
+        1463-10 1484          - R ADD     BITMAP       SHIFT LEFT BITMAP 12 BITS
+        1464-22   12          - A LEFT    0012
+        1465-12 1484          - STORE     BITMAP    
+        1466+ 2 1468          + TR OV     NXTCOL3      IF OVERLOW, STORE BIT36 AS SIGN 
+        1467+ 1 1380          + TR        NXTDIG       PROCEED WITH NEXT DIGIT ON NEXT COLUMN
+        1468+10 1478 NXTCOL3  + R ADD     ZERO         MAKE BITMAP NEGATIVE -> BIT36 SET
+        1469- 7 1484          - SUB AB    BITMAP
+        1470-12 1484          - STORE     BITMAP    
+        1471+ 4 1473          + TR 0      NXTCOL4      IF -BITMAP IS ZERO -> TR TO DEVELOP -0
+        1472+ 1 1380          + TR        NXTDIG       PROCEED WITH NEXT DIGIT ON NEXT COLUMN
+        1473+ 6 1493 NXTCOL4  + R SUB     ONE          TO DEVELP -0, FIRTS SET ACC=-1, THEN
+        1474+22   18          + A LEFT    18           SHIFT OUT ALL BITS. SIGN IS THE ONLY BIT THAT WILL REMAIN
+        1475-12 1484          - STORE     BITMAP    
+        1476+ 2 1380          + TR OV     NXTDIG       TR OV CLEARS OVERFLOWS 
+        1477+ 1    0 EXIT     + TR        /   /        RETURN TO CALLER 
+        1478+     0  ZERO       DEF       0            
+        1479+     0             DEF       0            
+        1480+     0  NUM        DEF       0            
+        1481+     0  NUM2       DEF       0            
+        1482+     0  NUM10      DEF       0
+        1483+    10             DEF       10
+        1484+     0  BITMAP     DEF       0            
+        1485+     0             DEF       0            
+        1486+     0  COL        DEF       0
+        1487+     0  LEN        DEF       0
+        1488+     0  N          DEF       0
+        1489+     0  SGN        DEF       0
+        1490+     0  ISNUM      DEF       0
+        1491+     0  NOPCH      DEF       0
+        1492+     0  MASK       DEF       0
+        1493+     1  ONE        DEF       1
+        1494+     2  TWO        DEF       2
+        1495+     4  D4         DEF       4
+        1496+     9  D9         DEF       9
+        1497+    35  D35        DEF       35
+        1498+    36  D36        DEF       36
+        1499+  2048  D2048      DEF       2048
+        1500+ 65536  D200KOCT   DEF       *200000 
+        1502+ 9 1623 RDPARAM1 + ADD       TWO          GET 1 PARAMS: COL (EITHER VALUE OR VAR ADDR)
+        1503+13 1513          + STORE A   RDAP2        STORE ADDR OF PARAM (COL)
+        1504+ 9 1622          + ADD       ONE
+        1505+13 1574          + STORE A   EXIT         RETURN TO MAIN PROG CALLER
+        1506+10 1612          + R ADD     ZERO               
+        1507+12 1620          + STORE     TXT
+        1508+20   35          + L LEFT    0035         Acc=MQ=RETURN ADDR
+        1509+ 9 1623          + ADD       TWO
+        1510+13 1520          + STORE A   RDPRMEX      PARAMS PARSED, RETURN TO CALLER
+        1511+10 1619          + R ADD     BITMAPAD     IF ADDR OF BASE48 BITMAP NOT COMPUTED
+        1512+ 4 1521          + TR 0      GETBMP1      TR TO LOAD IT
+        1513+10    0   RDAP2  + R ADD     /   /        GET COLUMN PARAM 1..72
+        1514+ 3 1517          + TR +      RDAP4
+        1515+13 1516          + STORE A   RDAP3        COL<0 -> INTERPRET COL AS LOC(COL) = ADDR OF COL VAR
+        1516+10    0   RDAP3  + R ADD     /   /        READ VAR COL PASED AS PARAM
+        1517+ 3 1519   RDAP4  + TR +      RDAP5
+        1518+ 1 1574          + TR        EXIT         COL<0 -> EXIT
+        1519+12 1532   RDAP5  + STORE     COL          
+        1520+ 1    0 RDPRMEX  + TR        /   /        RETURN TO CALLER
+        1521+10 1521 GETBMP1  + R ADD     *
+        1522+ 1   87          + TR        BMPAD        GET BASE48 CHARS BITMAP ADDRESS
+        1523+12 1619          + STORE     BITMAPAD     
+        1524+ 1 1513          + TR        RDAP2        RETURN
+        1525+15 1525 RDALF    + LOAD MQ   *
+        1526+ 1 1502          + TR        RDPARAM1
+        1527+10 1531          + R ADD     D3
+        1528+12 1621          + STORE     LEN
+        1529+10 1529          + R ADD     *            READ 3 CHARS BITMAP
+        1530+ 1   89          + TR        RDBMP
+        1531+ 0    3 D3       + STOP      0003         
+        1532+ 0    0 COL      + STOP      0000
+        1533-14 1614          - STORE MQ  BITMAP       WILL BE CM1CM2CM3, EACH CM 12 BITS LONG
+        1534+12 1618          + STORE     NUM          WILL BE -1 OR 0..999 IF CHARS FORMS AN UNSIGNED NUMBER
+        1535-10 1614          - R ADD     BITMAP       EXTRACT LEFTMOST (CM1) CHAR, HANDLE THE SIGN BIT 
+        1536-21    1          - L RIGHT   0001         SHIFT RIGHT TO MAKE ROOM FOR EXTRA BIT SIGN
+        1537+ 3 1539          + TR +      CONV1
+        1538+ 5 1626          + SUB       D200KOCT     REPLICATE SIGN BIT ON EXTRA BIT 
+        1539-21   23 CONV1    - L RIGHT   0023
+        1540+22   18          + A LEFT    0018
+        1541+12 1616          + STORE     BITS         BITS FOR LEFTMOST CHAR
+        1542+10 1612          + R ADD     ZERO         REMOVE SIGN FROM MQ
+        1543+21    1          + L RIGHT   0001
+        1544+20   25          + L LEFT    0025
+        1545-12 1614          - STORE     BITMAP       REMOVED LEFTMOST CHAR CM1. NOW BITMAP CONTAINS 2 CHARS OF 12 BITS EACH (CM1 CM3)
+        1546+10 1531          + R ADD     D3
+        1547+12 1621          + STORE     LEN          LEN=3 TO GENERATE 3 CHARS
+        1548+10 1548 CONV2    + R ADD     *
+        1549+ 1 1590          + TR        CONVB48      CONVERT BITS BITMAP. RETURN ACC=BASE48 CHAR
+        1550+12 1617          + STORE     CHAR
+        1551+10 1620          + R ADD     TXT  
+        1552+21   53          + L RIGHT   0053         TXT=TXT*48+CHAR
+        1553+16 1625          + MPY       D48
+        1554+14 1620          + STORE MQ  TXT
+        1555+10 1620          + R ADD     TXT
+        1556+ 9 1617          + ADD       CHAR
+        1557+12 1620          + STORE     TXT
+        1558-10 1614          - R ADD     BITMAP       GET NEXT CHAR BITMAP 
+        1559+21   12          + L RIGHT   0012
+        1560+22   18          + A LEFT    0018
+        1561+12 1616          + STORE     BITS
+        1562+10 1612          + R ADD     ZERO
+        1563+20   24          + L LEFT    0024
+        1564-12 1614          - STORE     BITMAP
+        1565+10 1621          + R ADD     LEN
+        1566+ 5 1622          + SUB       ONE
+        1567+12 1621          + STORE     LEN
+        1568+ 4 1570          + TR 0      CONV3
+        1569+ 1 1548          + TR        CONV2
+        1570+10 1612 CONV3    + R ADD     ZERO
+        1571+ 5 1620          + SUB       TXT          
+        1572+21   35          + L RIGHT   0035         MQ=-TXT
+        1573+10 1618          + R ADD     NUM          ACC=-1 OR 0..999
+        1574+ 1    0 EXIT     + TR        /   /        RETURN TO CALLER 
+        1575+15 1575 RDCHR    + LOAD MQ   *
+        1576+ 1 1502          + TR        RDPARAM1
+        1577+10 1622          + R ADD     ONE
+        1578+12 1621          + STORE     LEN
+        1579+ 2 1580          + TR OV     CLOV         CLEAR OV JUST IN CASE
+        1580+10 1580 CLOV     + R ADD     *            READ 1 CHAR BITMAP
+        1581+ 1   89          + TR        RDBMP
+        1582+ 0    1          + STOP      0001         
+        1583- 0 1532          - STOP      COL          POINTS TO COL VARIABLE
+        1584+10 1612          + R ADD     ZERO         MQ=000 000 CM1 (CM1 IS 12 BITS LONG)
+        1585+20   18          + L LEFT    0018         
+        1586+14 1616          + STORE MQ  BITS         BITS=CM1
+        1587+10 1587          + R ADD     *
+        1588+ 1 1590          + TR        CONVB48      CONVERT BITMAP TO BASE48 
+        1589+ 1 1574          + TR        EXIT
+        1590+ 9 1623 CONVB48  + ADD       TWO          CONVERT LEN CHARS FROM BITMAP TO BASE48. RESULT IN TXT
+        1591+13 1611          + STORE A   CONVEX
+        1592+10 1616          + R ADD     BITS         IF BITS=0 -> CHAR=0 -> PROCEED TO CHFOUND
+        1593+ 4 1606          + TR 0      CHBLANK
+        1594+10 1625          + R ADD     D48          FIND BITMAP IN TABLE. IF NOT FOUND, CHAR WILL BE ZERO
+        1595+12 1617          + STORE     CHAR         
+        1596+10 1617  CHLOOP  + R ADD     CHAR
+        1597+ 4 1608          + TR 0      CHNOTFND
+        1598+ 5 1622          + SUB       ONE
+        1599+12 1617          + STORE     CHAR
+        1600+ 9 1619          + ADD       BITMAPAD     
+        1601+13 1602          + STORE A   CHBMPAD      
+        1602+10    0  CHBMPAD + R ADD     /   /        GET BITMAP FOR SELECTED CHAR
+        1603+ 7 1616          + SUB AB    BITS         COMPARE WITH BITMAP TO SEARCH FOR
+        1604+ 4 1610          + TR 0      CHFOUND
+        1605+ 1 1596          + TR        CHLOOP
+        1606+10 1612 CHBLANK  + R ADD     ZERO
+        1607+ 1 1611          + TR        CONVEX   
+        1608+10 1624 CHNOTFND + R ADD     D47          IF CHAR NOT FOUND, SET BASE48 CODE = 47 (THE SPECIAL CHAR '-')
+        1609+ 1 1611          + TR        CONVEX   
+        1610+10 1617 CHFOUND  + R ADD     CHAR
+        1611+ 1    0 CONVEX   + TR        /   / 
+        1612+     0  ZERO       DEF       0            
+        1613+     0             DEF       0            
+        1614+     0  BITMAP     DEF       0            
+        1615+     0             DEF       0            
+        1616+     0  BITS       DEF       0
+        1617+     0  CHAR       DEF       0
+        1618+     0  NUM        DEF       0
+        1619+     0  BITMAPAD   DEF       0
+        1620+     0  TXT        DEF       0
+        1621+     0  LEN        DEF       0
+        1622+     1  ONE        DEF       1
+        1623+     2  TWO        DEF       2
+        1624+    47  D47        DEF       47
+        1625+    48  D48        DEF       48
+        1626+ 65536  D200KOCT   DEF       *200000 
+        1628+15 1695 SRCHTBL  + LOAD MQ   ZERO
+        1629+ 1 1633          + TR        START
+        1630+15 1696 EQTBL    + LOAD MQ   ONE
+        1631+ 1 1633          + TR        START
+        1632+15 1697 READTBL  + LOAD MQ   TWO
+        1633+ 9 1697 START    + ADD       TWO 
+        1634+13 1641          + STORE A   P1           PARM: ADDR OF TABLE
+        1635+ 9 1696          + ADD       ONE          
+        1636+13 1643          + STORE A   P2           PARM: LEN OF TABLE
+        1637+ 9 1696          + ADD       ONE          
+        1638+13 1648          + STORE A   P3           PARM: VAL TO FIND
+        1639+ 9 1696          + ADD       ONE          
+        1640+13 1689          + STORE A   EXIT
+        1641+10    0 P1       + R ADD     /   /        GET ADDR OF TABLE
+        1642+13 1692          + STORE A   TBL
+        1643+10    0 P2       + R ADD     /   /        GET ADDR OF LEN OF TABLE/ENTRY ON TABLE
+        1644+13 1645          + STORE A   P2A
+        1645+10    0 P2A      + R ADD     /   /        DERREFERENCE -> ACC=LEN/ENTRY (1..LEN)
+        1646+12 1690          + STORE     N
+        1647+ 4 1689          + TR 0      EXIT         EXIT, CANNOT READ/STORE ON ENTRY 0, SEARCH ON EMPTY TABLE
+        1648+10    0 P3       + R ADD     /   /        GET ADDR OF VAL TO FIND
+        1649+13 1665          + STORE A   WRVAL
+        1650+13 1651          + STORE A   P3A
+        1651+10    0 P3A      + R ADD     /   /        DERREFERENCE -> ACC=VAL
+        1652+12 1691          + STORE     VAL
+        1653+14 1694          + STORE MQ  TEMP         JUMP TABLE DISPATCH
+        1654+10 1694          + R ADD     TEMP
+        1655+ 4 1670          + TR 0      LOOP0        TR TO SEARCH TABLE
+        1656+10 1690          + R ADD     N            SUB ONE AS FIRST ENTRY ON TABLE IS "1"
+        1657+ 5 1696          + SUB       ONE          
+        1658+ 9 1692          + ADD       TBL          TABLE BASE ADDR
+        1659+13 1668          + STORE A   WRTBL
+        1660+13 1664          + STORE A   RDTBL2
+        1661+10 1694          + R ADD     TEMP
+        1662+ 5 1696          + SUB       ONE
+        1663+ 4 1667          + TR 0      STORETBL 
+        1664+10    0 RDTBL2   + R ADD     /   /        VAL=TBL[ENT]
+        1665+12    0 WRVAL    + STORE     /   /
+        1666+ 1 1689          + TR        EXIT
+        1667+10 1691 STORETBL + R ADD     VAL          TBL[ENT]=VAL
+        1668+12    0 WRTBL    + STORE     /   /    
+        1669+ 1 1689          + TR        EXIT
+        1670+10 1692 LOOP0    + R ADD     TBL
+        1671+13 1677          + STORE A   RDTBL
+        1672+10 1677          + R ADD     RDTBL
+        1673+12 1693          + STORE     TBL0
+        1674+ 9 1690          + ADD       N
+        1675+12 1694          + STORE     TEMP         THE END ADDR OF TABLE
+        1676+10 1691 LOOP     + R ADD     VAL          ACC=THE SEARCHED VALUE
+        1677+ 5    0 RDTBL    + SUB       /   /    
+        1678+ 2 1679          + TR OV     OVOK         CLEAR OV JUST IN CASE
+        1679+ 4 1686 OVOK     + TR 0      FOUND        TR IF VAL FOUND IN ENTRY N
+        1680+10 1677          + R ADD     RDTBL
+        1681+ 9 1696          + ADD       ONE
+        1682+13 1677          + STORE A   RDTBL
+        1683+ 5 1694          + SUB       TEMP
+        1684+ 4 1689          + TR 0      EXIT         NOT FOUND -> RETURN ZERO
+        1685+ 1 1676          + TR        LOOP
+        1686+10 1677 FOUND    + R ADD     RDTBL        RETURN ENTRY FOUND
+        1687+ 5 1693          + SUB       TBL0
+        1688+ 9 1696          + ADD       ONE
+        1689+ 1    0 EXIT     + TR        /   /
+        1690+ 0    0 N        + STOP      0000
+        1691+ 0    0 VAL      + STOP      0000
+        1692+ 0    0 TBL      + STOP      0000
+        1693+ 0    0 TBL0     + STOP      0000
+        1694+ 0    0 TEMP     + STOP      0000
+        1695+ 0    0 ZERO     + STOP      0000
+        1696+ 0    1 ONE      + STOP      0001         constant 1
+        1697+ 0    2 TWO      + STOP      0002         constant 2
+        1698+ 9 1771 RWDRUM   + ADD       TWO 
+        1699+13 1708          + STORE A   PDR1         PARM1: DRUM INSTR: READ/WRITE 0128  0129  0130  0131
+        1700+ 9 1770          + ADD       ONE          
+        1701+13 1710          + STORE A   PDR2         PARM2: DRUM ADDRESS (0..4094)
+        1702+ 9 1770          + ADD       ONE          
+        1703+13 1712          + STORE A   PDR3         PARM3: BUF START ADDRESS
+        1704+ 9 1770          + ADD       ONE          
+        1705+13 1714          + STORE A   PDR4         PARM4: LEN: NUMBER OF HALF-WORDS (MUST BE EVEN)
+        1706+ 9 1770          + ADD       ONE          
+        1707+13 1768          + STORE A   EXIT               
+        1708+10    0 PDR1     + R ADD     /   /        GET DRUM INSTR
+        1709+12 1716          + STORE     DRIO
+        1710+10    0 PDR2     + R ADD     /   /        GET DRUM ADDR
+        1711+13 1717          + STORE A   DRADDR
+        1712+10    0 PDR3     + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+        1713+13 1755          + STORE A   RWCOPY    
+        1714+10    0 PDR4     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+        1715+12 1772          + STORE     LEN
+        1716+ 0    0 DRIO     + STOP      /   /        INSTR: READ/WRITE 0128  0129  0130  0131
+        1717+29    0 DRADDR   + SET DR    /   /
+        1718+ 1 1751          + TR        LOOP
+        1719+ 9 1771 RDTAPE   + ADD       TWO 
+        1720+13 1727          + STORE A   PR1          PARM1: TAPE ADDRESS
+        1721+ 9 1770          + ADD       ONE          
+        1722+13 1729          + STORE A   PR2          PARM2: BUF START ADDRESS
+        1723+ 9 1770          + ADD       ONE          
+        1724+13 1768          + STORE A   EXIT
+        1725+ 2 1726          + TR OV     CLOV1        CLEAR OV THAT MAY HAVE BEEN SET
+        1726+ 8    0    CLOV1 + NOOP      0000
+        1727+10    0 PR1      + R ADD     /   /        GET TAPE ADDR
+        1728+13 1731          + STORE A   RTAPAD       TAPE UNITS: 0256  0257  0258  0259
+        1729+10    0 PR2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+        1730+13 1755          + STORE A   RWCOPY    
+        1731+24    0 RTAPAD   + READ      /   /
+        1732+10 1769          + R ADD     ZERO
+        1733+ 1 1753          + TR        LOOP1
+        1734+ 9 1771 WRTAPE   + ADD       TWO 
+        1735+13 1742          + STORE A   PW1          PARM1: TAPE ADDRESS
+        1736+ 9 1770          + ADD       ONE          
+        1737+13 1744          + STORE A   PW2          PARM2: BUF START ADDRESS
+        1738+ 9 1770          + ADD       ONE          
+        1739+13 1746          + STORE A   PW3          PARM3: BUF LEN
+        1740+ 9 1770          + ADD       ONE          
+        1741+13 1768          + STORE A   EXIT
+        1742+10    0 PW1      + R ADD     /   /        GET TAPE ADDR
+        1743+13 1750          + STORE A   WTAPAD       TAPE UNITS: 0256  0257  0258  0259
+        1744+10    0 PW2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+        1745+13 1755          + STORE A   RWCOPY    
+        1746+10    0 PW3      + R ADD     /   /        GET ADDR OF LEN 
+        1747+13 1748          + STORE A   PW3A
+        1748+10    0 PW3A     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+        1749+12 1772          + STORE     LEN
+        1750+26    0 WTAPAD   + WRITE     /   /        PREPARE TO WRITE ON TAPE
+        1751+10 1772 LOOP     + R ADD     LEN
+        1752+ 4 1767          + TR 0      RWOK
+        1753+ 5 1771 LOOP1    + SUB       TWO
+        1754+12 1772          + STORE     LEN
+        1755-31    0 RWCOPY   - COPY      /   /        WRITE BUFFER TO TAPE
+        1756+ 1 1759          + TR        GO 
+        1757+ 1 1763          + TR        EOF          END OF FILE
+        1758+ 1 1765          + TR        EOR          END OF RECORD
+        1759+10 1755 GO       + R ADD     RWCOPY
+        1760+ 5 1771          + SUB       TWO
+        1761+13 1755          + STORE A   RWCOPY
+        1762+ 1 1751          + TR        LOOP
+        1763+10 1770 EOF      + R ADD     ONE          SET OV FLAG TO SIGNAL END OF FILE CONDITION
+        1764+22   36          + A LEFT    36
+        1765+ 6 1772 EOR      + R SUB     LEN          RETURN NUMBER OF HALF-WORDS READ
+        1766+ 5 1771          + SUB       TWO
+        1767+26 2052 RWOK     + WRITE     2052         INSURE THAT MQ NOT IN USE            
+        1768+ 1    0 EXIT     + TR        /   /        RETURN TO CALLER
+        1769+ 0    0 ZERO     + STOP      0000
+        1770+ 0    1 ONE      + STOP      0001         
+        1771+ 0    2 TWO      + STOP      0002         
+        1772+     0  LEN        RES       1
+        1774+ 9 1789 CHAIN    + ADD       TWO
+        1775+13 1776          + STORE A   CHP1
+        1776+10    0 CHP1     + R ADD     /   /        GET TAPE NUMBER
+        1777+13 1784          + STORE A   TAPELOAD
+        1778+30   70          + SENSE     0070         SENSE SWITCH 2                                  
+        1779+ 1 1783 CONTAD   + TR        ENDSTOP      (ON POSITION MAKES SENSE OPCODE TO SKIP NEXT INSTR)
+        1780+10 1779          + R ADD     CONTAD       IF SW2 IS ON, A +STOP 4095 IS EXECUTED.  
+        1781+12 4095          + STORE     4095         IF THEN USER PRESS START, EXECUTION WILL BE RESUMED 
+        1782+ 0 4095          + STOP      4095         AND CHAINED PROGRAM WILL BE LOADED AND EXECUTED
+        1783+ 8    0 ENDSTOP  + NOOP      0000
+        1784+24    0 TAPELOAD + READ      0000         
+        1785-31    0 TL0      - COPY      0000         READ 1ST WORD OF SELF-LOADER FROM TAPE
+        1786+ 1    0          + TR        0000         TR TO SELF-LOADER
+        1787+ 0 2221          + STOP      2221         ERROR LOADING: UNEXPECTED END OF FILE
+        1788+ 0 2222          + STOP      2222         ERROR LOADING: UNEXPECTED END OF RECORD 
+        1789+ 0    2 TWO      + STOP      0002         ERROR LOADING: UNEXPECTED END OF FILE
+          48-     0  ROUTINE INIT
+          49+ 1  149 ENTRY POINT
+          50-     0  ROUTINE CHAIN
+          51+ 1 1774 ENTRY POINT
+          52-     0  ROUTINE CLRBUF
+          53+ 1  866 ENTRY POINT
+          54-     0  ROUTINE READCRD
+          55+ 1  870 ENTRY POINT
+          56-     0  ROUTINE RDINT
+          57+ 1 1332 ENTRY POINT
+          58-     0  ROUTINE RDALF
+          59+ 1 1525 ENTRY POINT
+          60-     0  ROUTINE RDCHR
+          61+ 1 1575 ENTRY POINT
+          62-     0  ROUTINE PRTNLINE
+          63+ 1 1196 ENTRY POINT
+          64-     0  ROUTINE PRTALF
+          65+ 1  958 ENTRY POINT
+          66-     0  ROUTINE PRINTCRD
+          67+ 1  874 ENTRY POINT
+          68-     0  ROUTINE WRTAPE
+          69+ 1 1734 ENTRY POINT
+          70-     0  ROUTINE RWDRUM
+          71+ 1 1698 ENTRY POINT
+          72-     0  ROUTINE SRCHTBL
+          73+ 1 1628 ENTRY POINT
+          74-     0  ROUTINE EQTBL
+          75+ 1 1630 ENTRY POINT
+          76-     0  ROUTINE WRITECRD
+          77+ 1  872 ENTRY POINT
+          78-     0  ROUTINE PRTSTR
+          79+ 1  935 ENTRY POINT
+          80-     0  ROUTINE PRTCHR
+          81+ 1 1078 ENTRY POINT
+          82-     0  ROUTINE PRTINT
+          83+ 1 1036 ENTRY POINT
+          84-     0  ROUTINE PRTOCT
+          85+ 1 1002 ENTRY POINT
+          86-     0  ROUTINE BMPAD
+          87+ 1 1278 ENTRY POINT
+          88-     0  ROUTINE RDBMP
+          89+ 1 1343 ENTRY POINT
+          90-     0  ROUTINE READTBL
+          91+ 1 1632 ENTRY POINT
+          92-     0  ROUTINE RDTAPE
+          93+ 1 1719 ENTRY POINT
+        4094+    48  REGION ORIGIN TABLE LOCATION
+        4095+   149  INITIAL REGION
+           0+ 1  149          + TR        INIT         PROGRAM START

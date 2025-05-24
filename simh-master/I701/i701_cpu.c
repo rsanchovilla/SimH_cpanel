@@ -348,12 +348,14 @@ void DisconnectIO(void)
         mt_cmd(&mt_unit[n], OP_STOP, 0);
     } else if ((ioaddr >=  128) && (ioaddr <= 131)) {
         // disconned from drum
+        n=ioaddr &3; 
+        sim_debug(DEBUG_DATA, &cpu_dev, "... Disconect from Drum %d \n", n);
     } else {
         sim_debug(DEBUG_DATA, &cpu_dev, "... Disconect from unknow device at IO addr %d \n", ioaddr);
 
     }
     IOADDR=0;
-    IOREMAIN=0;                // cpu ticks ramaining to disconnect IO device
+    IOREMAIN=0;                // cpu ticks remaining to disconnect IO device
 
 }
 
@@ -363,6 +365,7 @@ void SetIOADDR(int opaddr, int opcode)
     char cbuf[4];
     int ioaddr; 
 
+    opaddr = abs(opaddr); // ignore sign of instr
     if ((opaddr == 2052) && (opcode == OP_WRITE) ) {
         // delay instruction: do the folllowing things as side effect:
         // - wait so MQ finisheds its transfer (if any in progress) and 
@@ -404,13 +407,10 @@ void GetIOADDR(int * ioaddr, int * ioop)
 void dr_cmd(int unit, int cmd, int addr)
 {
     if (cmd == OP_SET_DR) {
-        DRUM_Addr=addr; 
-        if (DRUM_Addr < 0) DRUM_Addr=-DRUM_Addr; // ignore address sign
+        DRUM_Addr=abs(addr); // ignore address sign
         DRUM_Addr=(DRUM_Addr & 07776) + 0x8000;  // make drum addr even, mark as addr just set
         sim_debug(DEBUG_DATA, &cpu_dev, "Set Drum Address %d \n", DRUM_Addr & 07776);
-        // 40 msec is the avg time a COPY can be issued after a WRITE/READ to DRUM to store info at addr 
-        // multiple of 32
-        IOREMAIN=usec_to_ticks(40*1000); 
+        IOREMAIN=0; // any number of instr can be exec after SET DRUM instr and frist COPY
     } else {
         if ((DRUM_Addr & 0x8000) != 0) { 
             // this is the first COPY issued after SET DR 
@@ -710,7 +710,7 @@ t_stat ExecOpcode(int opcode, int opaddr,
                 if (ioaddr==2052) {
                     // delay instruction: do the folllowing things as side effect:
                     // - wait so MQ finisheds its transfer (if any in progress) and 
-                    // - disconeect device from MQ. A new READ/WRITE should be issued 
+                    // - disconect device from MQ. A new READ/WRITE should be issued 
                     DisconnectIO(); 
                 } else if (ioaddr==1024) {
                     r=cdp_cmd(cdp_unit, OP_WRITE, 0);
@@ -739,7 +739,7 @@ t_stat ExecOpcode(int opcode, int opaddr,
                     DisconnectIO();
                 }
             }
-            if (bFastMode==0) *CpuTicksUsed += IOTicks; 
+            *CpuTicksUsed += IOTicks; 
             if (r) {
                 // if error in tape signal tape check
                 if ((ioaddr>=256) && (ioaddr<=259)) {
@@ -748,15 +748,25 @@ t_stat ExecOpcode(int opcode, int opaddr,
                 // return on error
                 return r;  
             }
+            if (IOREMAIN) {
+               sim_debug(DEBUG_DATA, &cpu_dev, "... Execution time for I/O instr: %d ticks (%d msec)\n"
+                                               "... program should exec first COPY instr in following %d ticks (%d msec)\n",
+                                                    IOTicks, msec_elapsed(0, IOTicks),
+                                                    IOREMAIN-IOTicks, msec_elapsed(0, IOREMAIN-IOTicks));
+            }
             break; 
         case OP_COPY:        // 31  // Copy and Skip
             r = SCPE_OK; 
             GetIOADDR(&ioaddr, &ioop);
             unit = ioaddr & 3; 
             if (ioaddr==0) {
-                sim_debug(DEBUG_DATA, &cpu_dev, "... Not connected to a IO device\n");
+                sim_debug(DEBUG_DATA, &cpu_dev, "... Not connected to an IO device\n");
                 r=STOP_COPYCHECK; 
-            } else if (ioop == OP_READ) {
+                return r; 
+            }
+            sim_debug(DEBUG_DATA, &cpu_dev, "... COPY will wait for IOREMAIN=%d (%d msec) for device ready\n", 
+                                                 IOREMAIN, msec_elapsed(0, IOREMAIN));
+            if (ioop == OP_READ) {
                 if (ioaddr==2048) {
                     r=cdr_cmd(&cdr_unit[0], OP_COPY, 0);
                 rdrec:
@@ -805,7 +815,9 @@ t_stat ExecOpcode(int opcode, int opaddr,
                     ReadAddr(opaddr, &d, "... Mem to Card Punch");
                     MQ = MR;
                     r=cdp_cmd(cdp_unit, OP_COPY, 0);
-                    if (r!=SCPE_OK) r=STOP_COPYCHECK;                     
+                    if (r!=SCPE_OK) {
+                        r=STOP_COPYCHECK;                     
+                    }
                 } else if (ioaddr==512) {
                     ReadAddr(opaddr, &d, "... Mem to Printer");
                     MQ = MR;
@@ -825,7 +837,7 @@ t_stat ExecOpcode(int opcode, int opaddr,
             } else {
                 r=SCPE_IERR; 
             }
-            if (bFastMode==0) *CpuTicksUsed += IOTicks; 
+            *CpuTicksUsed += IOTicks; 
             if (r) {
                 // if error in tape signal tape check
                 if ((ioaddr>=256) && (ioaddr<=259)) {
@@ -834,6 +846,10 @@ t_stat ExecOpcode(int opcode, int opaddr,
                 // return on error
                 return r;  
             }
+            sim_debug(DEBUG_DATA, &cpu_dev, "... Execution time for COPY instr: %d ticks (%d msec)\n"
+                                            "... program should exec next COPY instr in following %d ticks (%d msec)\n",
+                                                 IOTicks, msec_elapsed(0, IOTicks),
+                                                 IOREMAIN-IOTicks, msec_elapsed(0, IOREMAIN-IOTicks));
             break;
         case OP_SENSE:       // 30  // Sense and Skip
             // device addresses:  printer input          : 0522
@@ -877,7 +893,7 @@ t_stat ExecOpcode(int opcode, int opaddr,
             GetIOADDR(&ioaddr, &ioop);
             unit = ioaddr & 3; 
             if ((ioaddr>=128) && (ioaddr<=131)) {
-                dr_cmd(unit, OP_SET_DR, opaddr);
+                dr_cmd(unit, OP_SET_DR, opaddr); // set DR address
             } else {
                 sim_debug(DEBUG_DATA, &cpu_dev, "... Not connected to drum (IO Address is %d). SET DR interpreted as NOOP\n", ioaddr);
             }
@@ -1142,15 +1158,10 @@ int Symbolic_Trace(uint32 Symbolic_Trace_tm0, char * Symbolic_Buffer, char * sTr
 
 void ClearInterlocks(void) 
 { 
-    extern t_int64 cdr_timing_DisconTickCount; 
-    extern t_int64 cdp_timing_DisconTickCount; 
-    extern t_int64 lp_timing_DisconTickCount; 
     extern mtinforec mt_info[4];
 
     int unit; 
 
-    IOREMAIN = msec_to_ticks(400); 
-    cdr_timing_DisconTickCount = cdp_timing_DisconTickCount = lp_timing_DisconTickCount = 0;                     
     for (unit=0;unit<=3;unit++) {
         mt_info[unit].ReadyTickCount=0;
         if (mt_info[unit].TapeCheck) {
@@ -1212,6 +1223,7 @@ t_stat sim_instr(void)
 
     Symbolic_Trace_tm0 = CpuSpeed.start_tm0; // sim_os_msec() when run starts
     Stall = bStallMsg = 0;
+    StopReason = 0; 
 
     if (sim_step != 0) {
         // step scp command. Can be step full instr or step half-cycles
@@ -1233,18 +1245,15 @@ t_stat sim_instr(void)
             }
         }
         sim_interval -= 1;         /* count down one tick */
-        if (CpuTicksUsed > 0) {
+        if (CpuTicksUsed) {
             CpuTicksUsed--;
             // check if must disconnect I/O device because too much time passed from last COPY
-            if ((IOREMAIN) && (bFastMode==0)) {
-                if (((IOADDR & 07774) == 128) && ((DRUM_Addr & 0x8000) != 0) && (IOREMAIN < 10)) {
-                    // if DRUM selected and SET DR just issued and DRUM about to disconnect
-                } else {
-                    // else decr IOREAMIN, diconnect when reachs zero
-                    IOREMAIN --;
-                    if (IOREMAIN == 0) {
-                        DisconnectIO();
-                    }
+            if (IOREMAIN) {
+                IOREMAIN --;
+                if ((IOREMAIN == 0) && (IOADDR)) {
+                   sim_debug(DEBUG_DATA, &cpu_dev, "... Too much time elapsed from previous COPY instr \n");
+                   // disconnect from device
+                   DisconnectIO();
                 }
             }
         }
@@ -1266,9 +1275,7 @@ t_stat sim_instr(void)
                 if ((b) && (bFastMode==0)) {
                     // user has released ^F to exit fast mode 
                     // during fast mode, CpuTicksUsed (Ticks that an instruction need to execute) and
-                    // *_timing_* still being calculated, but there is no wait on these values
-                    // when exiting fast mode should clear interlock and CpuTicksUsed values, 
-                    // so cpu does not start waiting on fast mode exit!
+                    // IOREMAIN still being calculated, but there is no wait on these values
                     CpuTicksUsed = 0; 
                     ClearInterlocks();
                 }
@@ -1291,7 +1298,7 @@ t_stat sim_instr(void)
         if (stop_cpu) {                                // stop_cpu set by scp on SIGINT (^C) or ^E on console
             if (halt_cpu_requested_reason == SCPE_STOP) {
                 reason = SCPE_STOP;
-                break;                                  // if ^E pressed twice, break if stalled/waitng fot end of tape movement
+                break;                                  // if ^E pressed twice, break if stalled/waitng for end of tape movement
             }
             halt_cpu_requested_reason = SCPE_STOP;      // signal it so cpu is halted on end of current intr execution cycle
         }
@@ -1299,8 +1306,16 @@ t_stat sim_instr(void)
         // increment number of ticks count elapsed from starting of simulator -> this is the global time measurement
         if ((bFastMode) || (CpuSpeed_Acceleration<=0)) {  
             // FAST mode -> increment GlobalTicksCount at once
-            GlobalTicksCount += CpuTicksUsed;
-            CpuTicksUsed = 0; 
+            int n = CpuTicksUsed; 
+            GlobalTicksCount += n;
+            CpuTicksUsed = 0;
+            // FAST mode -> decrement IOREMAIN at once
+            if (IOREMAIN) {
+                IOREMAIN -= n;
+                if (IOREMAIN <=0) {
+                    IOREMAIN = 1; CpuTicksUsed = 1; // so will disconect I/O device on next instr
+                }
+            } 
         } else {
             // increment GlobalTicksCount, loop if should wait
             GlobalTicksCount++;
@@ -1417,6 +1432,11 @@ t_stat sim_instr(void)
 
     } /* end while */
     StopReason = reason; // save stop reason to be displayed in control panel
+    if (reason) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "CPU STOP reason %d - %s\n", reason, 
+            (reason == SCPE_STOP) ? "^E pressed in console" :
+            (reason <= STOP_TAPECHECK) ? sim_stop_messages[reason]: "");
+    }
 
     #if defined(CPANEL)
     // post-run refresh
@@ -1515,6 +1535,9 @@ t_stat cpu_reset(DEVICE * dptr)
     OV = SENSE_OUT = 0;
     StopReason = 0;
         
+    IOADDR = 0; 
+    IOREMAIN = 0; 
+
     ClearInterlocks();
     
     return SCPE_OK;
@@ -1658,5 +1681,8 @@ const char * cpu_description (DEVICE *dptr) {
  
 
 // en i701
-// nuevo sw: pact compiler
+// poner LIST/READ originales como progs de la libreria de PACT
+// cambiar pact.exe por addlib.exe
+// actualizar manual con novedades
+
 

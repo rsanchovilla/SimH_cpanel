@@ -1,0 +1,266 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 23 SEPARATE DUP REGIONS ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:PRTALF      PRINT PACKED ALFANUMERIC TEXT STRING
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:WRTAPE      WRITE MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:READTBL     TAKE VALUE FROM TABLE
+              
+                                  PURPOSE:
+                                  - READ COMPACT CODE TAPE, WRITE 
+                                    REGIONS TO BE DUPLICATED IN ONE OUTPUT TAPE, 
+                                    NON-DUPLICATED REGIONS IN ANOTHER
+                                    OUTPUT TAPE
+ 
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "PREPARE REGIONS TO DUP"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     *
+         + TR        RWDRUM       READ TREGIONS ARRAY FROM DRUM
+         + READ      0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNREGS     ADDR OF START OF TABLES
+         + STOP      0202         MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW) + TRISDUP (100 HW)
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     NREGIONS     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TREGIONS     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + R ADD     ZERO
+         + STORE     IREG         REGION NUMBER BEING PROCESSED
+         + STORE     NDUPREGS     NUMBER OF REGIONES TO BE DUPLICATED
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEOUT      REWIND TAPE OUT WITH NON-DUPLICATED REGIONS
+         + REWIND    TAPEOUTD     REWIND TAPE OUT WITH DUPLICATED REGIONS
+
+READREG  + R ADD     IREG         SELECT NEXT REGION
+         + ADD       ONE
+         + STORE     IREG
+
+         + R ADD     *            
+         + TR        READTBL
+         + STOP      TRISDUP      ... VAL=TRISDUP[IREG] =1 IF THIS REGION IS REFERENCED IN A DUP INSTR ELSEWHERE (IE THIS REGION IS DUPLICATED)
+         + STOP      IREG
+         + STOP      ISDUP
+
+         + R ADD     ISDUP        KEEP TRACK OF NUMBER OF DUPLICATED REGIONS
+         + TR 0      RR1
+         + R ADD     NDUPREGS     
+         + ADD       ONE
+         + STORE     NDUPREGS     
+RR1      + NOOP      0000         
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+NONDUP   + NOOP      TAPEOUT      NON DUPLICTAED REGIONS TAPE
+DUPREG   + NOOP      TAPEOUTD     DUPLICATED REGIONS TAPE
+         + R ADD     NONDUP
+         + STORE A   TAPEO
+         + R ADD     ISDUP        IF REGION NOT DUPLICATED, SKIP
+         + TR 0      RS1
+         + R ADD     DUPREG       ID REGION DUPLICATED, WRITE TO TAPEOUTD
+         + STORE A   TAPEO
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1A     TR IF NO LOG SELECTED
+         + LOAD MQ   ALFDUP       PUT 'DUP' TEXT ON STEP PRINTOUT
+         + R ADD     *
+         + TR        PRTALF
+         + STOP      0040         PRT AT COLUMN 40
+ENDLOG1A + NOOP      0000
+
+RS1      + NOOP      0000
+                                  SAVE COMPACT CODE RECORD IN TAPE
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT 
+TAPEO    + STOP      /   /        TAPE WHERE TO WRITE
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      CCLEN        LEN
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+         + R ADD     *            PRINT STEP JUST PROCESSED
+         + TR        PRINTCRD
+ENDLOG1  + NOOP      0000 
+                                  PROCESS NEXT STEP
+         + TR        READSTEP
+
+EOR      + NOOP      0000         END OF REGION  
+
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF FILE
+
+         + WRITE EF  TAPEOUT      WRITE EOF IN TAPE OUT NON DUP REGIONS
+         + WRITE EF  TAPEOUTD     WRITE EOF IN TAPE OUT DUP REGIONS
+
+                                  IF SW6 ON THEN 
+                                  PRINT NUMBER OF DUPLICATED REGION SAVED IN TAPE 4
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGDONE      "DUP REGIONS"
+         + STOP      0210         INT AT COL 10
+         + STOP      NDUPREGS     NUMBER OF DUPLICATED REGIONS 
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+ENDLOG1B + NOOP      0000
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEOUT      REWIND TAPE OUT WITH NON-DUPLICATED REGIONS
+         + REWIND    TAPEOUTD     REWIND TAPE OUT WITH DUPLICATED REGIONS
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+
+           ORG       EVEN
+
+                                  COMPACT CODE RECORD
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0               OP CALLS IN A RESULT OF STEP -> FACTN=TEMP ADDR (2, 4, ..)
+D2N        DEF       0                                               FACTREG='T'
+NINST      DEF       0
+NINCR      DEF       0
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+DUMMY      DEF       0            (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+                                  TABLES (SHOULD AT EVEN LOCATION)
+
+MAXNREGS   DEF       100          MAX 100 REGIONS CAN DE DEFINED IN ONE PROGRAM 
+NREGIONS   DEF       0            NUMBER OF REGIONS DEFINED
+TREGIONS   RES       100          EACH ENTRY IN TABLE IS 1 HALF-WORD. HAS THE NAME (ALFA) OF REGION
+TRISDUP    RES       100          =1 IF THIS REGION IS REFERENCED IN A DUP INSTR ELSEWHERE (IE THIS REGION IS DUPLICATED)
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+
+IREG       DEF       0            REGION NUMBER BEING PROCESSED (INDEX IN TREGIONS, IREG=1 -> FIRST ENTRY IN TREGIONS TABLE)
+NDUPREGS   DEF       0            NUMBER OF DUPLICATED REGIONS
+ISDUP      DEF       0            =1 IF THIS REGION IS REFERENCED IN A DUP INSTR ELSEWHERE (IE THIS REGION IS DUPLICATED)
+
+                                  TEXT
+
+MSGSTART   TXT       "PREPARE REGIONS TO DUP",0
+MSGDONE    TXT       "DUP REGIONS",0
+
+ALFDUP     TXT       'DUP'
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEOUT    EQU       0257         OUTPUT NON-DUPLICATED REGIONS TO TAPE 2
+TAPEIN     EQU       0258         INPUT UPDATED PACT COMPACT CODE FROM TAPE 3
+TAPEOUTD   EQU       0259         OUTPUT DUPLICATED REGIONS TO TAPE 4
+

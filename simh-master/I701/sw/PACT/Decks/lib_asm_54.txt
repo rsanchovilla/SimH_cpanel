@@ -1,0 +1,146 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0   134
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF     0  DECOTNNN
+; SY   1  DEF    11  DECOTABS
+; SY   2  USE        RDINT
+; SY   3  USE        RDCHR
+; SY   4  USE        PRTNLINE
+; SY   5  USE        PRINTCRD
+;  
+         0000 +A  I 0130 DECOTNNN + ADD       TWO          DECODE TEXT RELATIVE ASSEMBLER CARD
+         0001 +SA I 0095          + STORE A   EXIT         RETURN ADDR
+         0002 +RA I 0002          + R ADD     *
+         0003 +T  S 0003          + TR        RDCHR        READ 1 CHAR
+         0004 +H  A 0001          + STOP      0001         AT COL 1 
+         0005 +S  I 0133          + SUB       D26          'N'
+         0006 +TZ I 0009          + TR 0      DECON        IF CHAR = 'N' TR DECON
+         0007 +RA I 0128          + R ADD     ZERO
+         0008 +T  I 0095          + TR        EXIT
+         0009 +RA I 0129 DECON    + R ADD     ONE
+         0010 +T  I 0095          + TR        EXIT
+         0011 +A  I 0130 DECOTABS + ADD       TWO          DECODE TEXT RELATIVE ASSEMBLER CARD
+         0012 +SA I 0095          + STORE A   EXIT         RETURN ADDR
+         0013 +TF I 0014          + TR OV     DECO0        CLEAR OV
+         0014 +RA I 0014 DECO0    + R ADD     *           
+         0015 +T  S 0003          + TR        RDCHR        READ SIGN '+' OR '-'
+         0016 +H  A 0005          + STOP      0005         AT COL 5
+         0017 +ST I 0121          + STORE     MC.SGN       STORE BASE48 CHAR. 
+         0018 +TZ I 0029          + TR 0      DECOBLNK     SIGN IS ' ' -> BLANK LINE
+         0019 +RA I 0019          + R ADD     *           
+         0020 +T  S 0002          + TR        RDINT        READ RELATIVE LOCATION
+         0021 +H  A 0004          + STOP      0004         LEN=4 CHARS
+         0022 +H  A 0001          + STOP      0001         STARTING AT COL 1
+         0023 +ST I 0120          + STORE     MC.LOC       STORE INTEGER
+         0024 +AR A 0030          + A RIGHT   0030         SHIFT 30=A RIGHT 0012 + A RIGHT 0018
+         0025 +TZ I 0032          + TR 0      DECO1        TR IF CHECK MC.LOC < 4096
+         0026 +RA I 0026 EGT4K    + R ADD     *            
+         0027 +T  I 0096          + TR        ERROR
+         0028 +H  I 0111          + STOP      ERRGT4K      ERROR: LOCATION/ADDRESS > 4095
+         0029 +RA I 0129 DECOBLNK + R ADD     ONE          SIGN IS ' ' -> BLANK LINE
+         0030 +AL A 0019          + A LEFT    0019         SET OV=1
+         0031 +T  I 0095          + TR        EXIT
+         0032 +RA I 0121 DECO1    + R ADD     MC.SGN       
+         0033 +S  I 0131          + SUB       D11          '-'
+         0034 +TZ I 0040          + TR 0      DECO2
+         0035 +S  I 0129          + SUB       ONE          WAS =12 -> '+'        
+         0036 +TZ I 0040          + TR 0      DECO2
+         0037 +RA I 0037          + R ADD     *            
+         0038 +T  I 0096          + TR        ERROR
+         0039 +H  I 0116          + STOP      ERRBADSG     ERROR: BAD SIGN. SHOULD BE '+' OR '-'
+         0040 +RA I 0040 DECO2    + R ADD     *
+         0041 +T  S 0003          + TR        RDCHR        READ 1 CHAR 
+         0042 +H  A 0008          + STOP      0008         AT COL 8 (=1ST CHAR AFTER OPCODE)
+         0043 +ST I 0127          + STORE     CHAR8
+         0044 +RA I 0044          + R ADD     *
+         0045 +T  S 0003          + TR        RDCHR        READ 1 CHAR
+         0046 +H  A 0007          + STOP      0007         AT COL 7 (=LAST CHAR OF OPCODE)
+         0047 +ST I 0126          + STORE     CHAR7
+         0048 +RA I 0127          + R ADD     CHAR8
+         0049 +TZ I 0051          + TR 0      DECO2A
+         0050 +T  I 0054          + TR        DECONUM      IF CHAR IN COL 8 NOT EMPTY -> IS A NUMBER FOR SURE -> TR TO PROCESS AS NUMBER
+         0051 +RA I 0126 DECO2A   + R ADD     CHAR7
+         0052 +TZ I 0054          + TR 0      DECONUM      COL 8 EMPTY. IF CHAR IN COL 7 ALSO EMPTY -> IS A NUMBER FOR SURE -> TR TO PROCESS AS NUMBER
+         0053 +T  I 0068          + TR        DECOMC
+         0054 +RA I 0054 DECONUM  + R ADD     *            
+         0055 +T  S 0002          + TR        RDINT        READ NUMBER         NOTE: NO SIGN IS READ HERE. BUT IF NUM READ >= 131072 (=octal 400000)
+         0056 +H  A 0006          + STOP      0006         LEN=6 DIGITS              RETURNED NUM WILL BE NEGATIVE
+         0057 +H  A 0006          + STOP      0006         STARTING AT COL 6
+         0058 +ST I 0125          + STORE     NUM          STORE INTEGER.   
+         0059 +TP I 0065          + TR +      DECO3        TR IF NUM >= 0
+         0060 +RA I 0131          + R ADD     D11          BASE48 CODE FOR '-' IS 11
+         0061 +ST I 0121          + STORE     MC.SGN       SGN='-' -> SET SIGN NEGATIVE
+         0062 +RA I 0128          + R ADD     ZERO
+         0063 +AV I 0125          + ADD AB    NUM
+         0064 +ST I 0125          + STORE     NUM          MAKE NUM POSITIVE 0..131071
+         0065 +RA I 0130 DECO3    + R ADD     TWO
+         0066 +ST I 0124          + STORE     MC.FMT       =2 -> SET AS REL TEXT NUMBER 
+         0067 +T  I 0087          + TR        DECODEOK     DECODE DONE, TR TO RETURN DECODED INSTR
+         0068 +RA I 0068 DECOMC   + R ADD     *           
+         0069 +T  S 0002          + TR        RDINT        READ OPCODE
+         0070 +H  A 0002          + STOP      0002         LEN=2 DIGITS
+         0071 +H  A 0006          + STOP      0006         STARTING AT COL 6
+         0072 +ST I 0122          + STORE     MC.OP        STORE INTEGER
+         0073 +RA I 0073          + R ADD     *           
+         0074 +T  S 0002          + TR        RDINT        READ INSTR ADDRESS
+         0075 +H  A 0004          + STOP      0004         LEN=4 DIGITS
+         0076 +H  A 0009          + STOP      0009         STARTING AT COL 9
+         0077 +ST I 0123          + STORE     MC.ADDR      STORE INTEGER
+         0078 +AR A 0030          + A RIGHT   0030         SHIFT 30=A RIGHT 0012 + A RIGHT 0018
+         0079 +TZ I 0081          + TR 0      MC5          TR ERROR IF ADDR < 4096
+         0080 +T  I 0026          + TR        EGT4K        TR ERROR IF ADDR > 4095
+         0081 +RA I 0129 MC5      + R ADD     ONE
+         0082 +ST I 0124          + STORE     MC.FMT       =1 -> SET AS REL TEXT INSTR 
+         0083 +RA I 0122          + R ADD     MC.OP        IS 0..31
+         0084 +AL A 0012          + A LEFT    0012
+         0085 +A  I 0123          + ADD       MC.ADDR      IS 0..4095
+         0086 +ST I 0125          + STORE     NUM 
+         0087 +RA I 0121 DECODEOK + R ADD     MC.SGN       IS 11 ('-') OR 12 ('+')
+         0088 +S  I 0132          + SUB       D12
+         0089 +LR A 0000          + L RIGHT   0000         IF MC.SGN = '-' THEN MQ IS SET TO NEGATIVE
+         0090 +RA I 0124          + R ADD     MC.FMT       IS 1..2 
+         0091 +AR A 0018          + A RIGHT   0018         PLACE MC.FORMAT IN RIGHT HALF WORD OF ACC
+         0092 +A  I 0125          + ADD       NUM
+         0093 +LL A 0000          + L LEFT    0000         COPY SIGN FROM MQ TO ACC 
+         0094 +LM I 0120          + LOAD MQ   MC.LOC
+         0095 +T  A 0000 EXIT     + TR        /   /
+         0096 +A  I 0130 ERROR    + ADD       TWO
+         0097 +SA I 0098          + STORE A   ERRP1
+         0098 +RA A 0000 ERRP1    + R ADD     /   /
+         0099 +SA I 0105          + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+         0100 +RA I 0100          + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         0101 +T  S 0005          + TR        PRINTCRD
+         0102 +RA I 0102          + R ADD     *
+         0103 +T  S 0004          + TR        PRTNLINE     
+         0104 +H  A 0101          + STOP      0101         STRINGZ AT COL 1
+         0105 +H  A 0000 ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         0106 +H  A 0000          + STOP      0000         END OF LINE
+         0107 +H  I 0108          + STOP      ERRCONT      IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING 
+         0108 +RA I 0128 ERRCONT  + R ADD     ZERO
+         0109 +LM I 0128          + LOAD MQ   ZERO
+         0110 +T  I 0095          + TR        EXIT
+         0111 -032896    ERRGT4K    TXT       "BAD LOC/ADDR",0              ERROR: LOCATION/ADDRESS > 4095
+         0112 -001179    
+         0113 -036733    
+         0114 -037662    
+         0115 +000000    
+         0116 -032896    ERRBADSG   TXT       "BAD SIGN",0                  ERROR: BAD SIGN. SHOULD BE '+' OR '-'
+         0117 -001509    
+         0118 -045024    
+         0119 +000000    
+         0120 +000000    MC.LOC     DEF       0            
+         0121 +000000    MC.SGN     DEF       0            =1 -> '+', =-1 -> '-'
+         0122 +000000    MC.OP      DEF       0            0..31 (NO SIGN)
+         0123 +000000    MC.ADDR    DEF       0            0..4095
+         0124 +000000    MC.FMT     DEF       0            =1 -> TEXT FORMAT, MC INSTR, =2 -> TEXT FORMAT, NUM
+         0125 +000000    NUM        DEF       0            0..131071 (NO SIGN) 
+         0126 +000000    CHAR7      DEF       0
+         0127 +000000    CHAR8      DEF       0
+         0128 +000000    ZERO       DEF       0
+         0129 +000001    ONE        DEF       1
+         0130 +000002    TWO        DEF       2
+         0131 +000011    D11        DEF       11
+         0132 +000012    D12        DEF       12
+         0133 +000026    D26        DEF       26

@@ -1,0 +1,606 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 65 PUNCH LOADER, CONTROL CARDS AND NUMBER CARDS, PACT COMPILER 
+           HEAD      USE:CLRBUF      CLEAR CARD BUFFER 
+           HEAD      USE:WRITECRD    WRITE CARD (SEND CARD BUFFER TO CARD PUNCH DEVICE)
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:MEMCOPY     COPY MEMORY STORAGE FROM ONE ADDR TO ANOTHER
+           HEAD      USE:WRIBREL     WRITE DATA INTO A BINARY REL CARD IMAGE
+           HEAD      USE:WRITECR2    WRITE CARD (SEND CARD BUFFER TO CARD PUNCH DEVICE)
+              
+                                  PURPOSE:
+
+                                  - READ GLOBAL SYMBOL TABLE (TSYMBREF) FROM DRUM 
+                                       DRUM 0130, ADDR 0000     RELNUM0      LOCATION OF 1ST NUM IN POOL              <- set by stage 31 Read Var Cards
+                                                       0001     NVARS        NUMBER OF VARS DEFINED                   <- set by stage 33 Compute Var loc
+                                                       0002     V.EXT        EXTENSION OF VARIABLE REGION (IS EVEN)   <- set by stage 33 Compute Var loc
+                                                       0003     N.EXT        EXTENSION OF NUMBER REGION (IS EVEN)     <- set by stage 34 Storage Assign
+                                                       0004     T.EXT        EXTENSION OF TEMP VARS REGION (IS EVEN)  <- set by stage 63 final assembly pass 3
+                                                       0005     I.EXT        EXTENSION OF TOTAL INSTR OF PROGRAM      <- set by stage 63 final assembly pass 3
+                                                       0006     P.EXT        EXTENSION (IS EVEN) OF PERISHABLE REGION <- set by stage 64 Scan Library
+                                                       0007     IL.EXT       TOTAL STORAGE NEEDED BY ALL LIBRARIES    <- set by stage 64 Scan Library
+                                                       0016     MAXNNUMS     MAX NUMBER OF NUMBERS (512)              <- set by stage 34 Storage Assign
+                                                       0017     NNUMS        NUMBER OF NUMBERS IN NUMBER POOL         <- set by stage 34 Storage Assign
+                                                       0018     TNUMPOOL     NUMBER POOL. EACH ENTRY IS 2 HALF-WORDS  <- set by stage 34 Storage Assign
+                                                       
+                                       DRUM 0128, ADDR 0000     MAXNSYMB     MAX (600) SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+                                                       0001     NSYMBS       NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+                                                       0002     TSYMBREF     GLOBAL SYMBOL TABLE: ALFA VALUE OF SYMBOLS REFERENCED. 
+                                                       0602     TSYMBEXT     EXTENSION FOR DEFINED SYMBOLS. 
+                                                                             -1 IF SYMBOL NOT RESOLVED 
+                                                                             00 NNNN = SIZE OF REGION 
+                                                                             01 NNNN = SIZE OF LIB ROUTINE 
+                                                                             -1 IF SYMBOL IS USED BUT NOT DEFINED (=LIBRARY ROUTINES CALLED)
+                                  - PUNCH PACT BINARY REL CARDS LOADER
+                                  - PUNCH INITIAL CONTROL CARD(S)
+                                  - PUNCH PROGRAM DATA CARDS (NUMBERS USED WITHIN PACT PROG CODE)
+                                  - IF SW6 IS ON, PRINT THE MEMORY MAP LAYOUT THAT WILL HAVE THE COMPILED PROG IN RUN-TIME
+                                  - SAVE IN DRUM
+                                       DRUM 0130, ADDR 0008     ROTBLAD      ABS LOCATION OF REGION ORIGIN TABLE      <- set by stage 65 Punch loader
+                                                       0009     INIREG       ABS LOCATION OF 1ST REGION OF PACT PRG   <- set by stage 65 Punch loader
+                                                       0010     LR.EXT       SPACE RESERVED FOR LOADER                <- set by stage 65 Punch loader
+                                  
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "PUNCH LOADER AND CONTROL CARDS"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     NVARS        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TSYMBEXT     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         
+         + R ADD     *            TO CONSTRUCT REGION ORIGIN TABLE/CARDS
+         + TR        RWDRUM       READ TSYMBREF TABLE (SYMBOLS USED BY ALL REGIONS) FROM DRUM 
+         + READ      0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNSYMB     ADDR OF START OF TABLES
+         + STOP      1202         MAXNSYMB (1 HALF-WORD) + NSYMBS (1 HW) 
+                                  + TSYMBREF (600 HW) + TSYMBEXT (600 HW)
+
+         + R ADD     *            TO CONSTRUCT REGION ORIGIN INITIAL CARDS
+         + TR        RWDRUM       READ RELNUM0, NVARS, HIVRELAD, HINRELAD, HITRELAD, HIIRELAD, HIPRELAD AND HISIZE
+         + READ      0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         + STOP      0008         8 HALF WORDS
+
+         + R ADD     *            TO CONSTRUCT REGION ORIGIN INITIAL CARDS
+         + TR        RWDRUM       READ MAXNNUMS, NNUMS. KEEP TNUMPOOL IN DRUM
+         + READ      0130         DRUM INSTR
+         + STOP      0016         DRUM ADDR 
+         + STOP      MAXNNUMS     ADDR OF DATA TO SAVE
+         + STOP      0002         MAXNNUMS (1 HALF-WORD) + NNUMS (1 HW) 
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE) TO BE USED 
+
+         + R ADD     *            SET WRITE CARD ROUTINE TO BE CALLED WHEN FLUSHING THE REL BINARY CARD 
+         + TR        WRIBREL      RETURNS IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN BY WRITE ROUTINE  
+         + STOP      0002         +02 -> SET WRITE CARD ROUTINE
+         + STOP      PCHCRD       THE WRITE ROUTINE ADDRESS
+         + STORE A   LBINCRD      SAVE ADDR OF BINCARD BUFFER TO BE WRITTEN, RETURNED IN ACC
+
+         + R ADD     *            PUNCH PACT RELATIVE BINARY LOADER
+         + TR        PCHBLOAD     
+
+         + R ADD     *            PUNCH CONTROL CARDS 
+         + TR        PCHCCARD
+
+         + R ADD     *            PUNCH NUMBER CONSTANTS CARDS (REGION N)
+         + TR        PCHNUMS
+
+         + R ADD     *
+         + TR        PRTFREE      PRINT FREE MEM STORAGE
+
+         + R ADD     *            FLUSH ANY PENDING BINARY CARD  
+         + TR        WRIBREL
+         + STOP      0001         +01 -> FLUSH LAST CARD
+
+         + R ADD     *
+         + TR        RWDRUM       SAVE ROTBLAD, INIREG AND LR.EXT TO DRUM 
+         + WRITE     0130         DRUM INSTR
+         + STOP      0008         DRUM ADDR 
+         + STOP      ROTBLAD        
+         + STOP      0004         ROTBLAD (1 HALF-WORD) + INIREG (1 HW) + LR.EXT (1 HW)
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+PCHCRD   + ADD       TWO          PUNCH A BINARY REL CARD        
+         + STORE A   PCHCRDEX
+         
+         + R ADD     *
+         + TR        WRITECR2     PUNCH THE CARD
+LBINCRD  + STOP      /   /        ADDR OF BINCARD BUFFER TO BE WRITTEN 
+         
+PCHCRDEX + TR        /   /         
+         
+                                  PUNCH PACT RELATIVE BINARY LOADER
+                                  READ THE LOADER CARDS FROM TAPE 
+
+PCHBLOAD + ADD       TWO          
+         + STORE A   PCHBLOEX
+
+PCHLLOOP + R ADD     *            READ LOADER CARDS IMAGES FROM TAPE
+         + TR        RDTAPE
+         + STOP      TAPELDR
+         + STOP      0000         BUF TO READ IN FROM TAPE
+         + TR OV     PCHBLOEX     TR IF END OF FILE
+
+         + R ADD     *
+         + TR        WRITECRD     PUNCH LOADER CARD
+
+         + R ADD     0001         GET TTTT FROM CONTROL WORD OF CARD
+         + TR 0      PCHLLOOP     IF =0 -> NOT THE LAST CARD -> READ NEXT CARD
+         + SUB       D4094 
+         + TR +      PCHLLOOP     IF >= 4094 -> NOT A "00 TTTT" CONTROL WORD -> READ NEXT CARD
+
+         + R ADD     D4094        4094 - TTTT = LOADER SIZE
+         + SUB       0001         
+         + ADD       ONE
+         + A RIGHT   0019
+         + A LEFT    0019
+         + STORE     LDRSIZE    
+
+         + TR OV     PCHBLOEX     CL OV
+PCHBLOEX + TR        /   /        RETURN TO CALLER
+
+
+
+                                  PACT  REGION ORIGIN CONTROL CARD (INITIAL CONTROL CARD)
+
+                                              CODE=-01 -> CONTROL CARD
+
+                                   / ........ [CODE][ORIGIN=0  ] [TOP SYMBOL = 0  ] ............[      CHECK SUM       ].
+                                  |  ........ .................. .................. [COUNT           ] .................. 
+                                  |  ........ .................. .................. .................. .................. 
+                                  |  ........ ........^......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ [SYMBOL 4        ] [OP=1][EXT       ] .................. ..................
+                                  |  ........ [SYMBOL 2        ] [OP=1][EXT       ] [SYMBOL 3        ] [OP=1][EXT       ] 
+                                  |  ........ .................. .................. [1ST PACT REGION ] [OP=0][INI REG   ] 
+                                  |  ........ [4=NUMS REGION   ] [OP=1][EXT       ] [5=PERISHBLE REG ] [OP=1][EXT       ] 
+                                  |  ........ [2=VARS REGION   ] [OP=1][EXT       ] [3=TEMP REGION   ] [OP=1][EXT       ] 
+                                  |  ........ .................. .................. .................. ......[RO TBL AD ] 
+
+                                              INI REG   = INITAL REGION = ABS LOCATION OF 1ST REGION TO BE EXECUTED
+                                              RO TBL AD = REGION ORIGIN TABLE ABSOLUTE LOCATION
+                                              OP=1 -> REGION EXTENT IS GIVEN
+                                              OP=0 -> REGION ABSOLUTE LOCATION IS GIVEN / REGION NOT USED
+                                              SYMBOL    = <0 -> BASE48 NAME OF PACT REGION. 
+                                                        = >0 -> BASE48 NAME OF LIBRARY ROUTINE. 
+
+
+PCHCCARD + ADD       TWO          PUNCH CONTROL CARDS 
+         + STORE A   PCHCCEX         
+                                  CALC DEFAULT REGION ORIGIN TABLE ABSOLUTE LOCATION / INITIAL REGION
+         + R ADD     D6           
+         + ADD       P.EXT        ABS LOCATION OF RO TABLE = MAX( 6 + PERISHABLE STORAGE NEEDED, 48)     
+         + STORE     N
+         + SUB       D48
+         + TR +      PCHCC1
+         + R ADD     D48
+         + STORE     N
+
+PCHCC1   + R ADD     N
+         + STORE     ROTBLAD      ABS LOCATION OF REGION ORIGIN TABLE
+         
+         + ADD       D14          ABS LOCATION OF INITAL REGION = ABS LOCATION OF RO TABLE + 14 + (NUM SYMBOLS * 2)
+         + ADD       NSYMBS
+         + ADD       NSYMBS
+         + STORE     INIREG       ABS LOCATION OF 1ST REGION OF PACT PROGRAM (1ST ONE TO BE EXECUTED)
+                  
+         + R ADD     ZERO
+         + STORE     LR.EXT       SPACE RESERVED FOR LOADER
+
+         + R ADD     V.EXT        IF V.EXT+T.EXT < LOADER SIZE  -> MAKE T.EXT = LOADER SIZE SO 
+         + ADD       T.EXT        VARS REGION NOT OVERLAPS WITH LOADER
+         + SUB       LDRSIZE      
+         + TR +      PRTCC2
+         + R ADD     LDRSIZE
+         + SUB       T.EXT
+         + STORE     LR.EXT       SPACE RESERVED FOR LOADER
+PRTCC2   + NOOP      0000      
+
+         + R ADD     D4094        COMPUTE FREE STORAGE AVAILABLE ON RUN-TIME
+         + SUB       INIREG       PERISHABLE (P-EXT) REG WILL NOT SUBSTRACTED AS 
+         + SUB       V.EXT        IT IS IS ALREADY INCLUDED IN INIREG COMPUTATION. 
+         + SUB       T.EXT
+         + SUB       N.EXT
+         + SUB       I.EXT
+         + SUB       IL.EXT
+         + SUB       LR.EXT
+         + STORE     FREEMEM      AVAILABLE STORAGE
+                  
+         + R ADD     *            CLEAR DEFAULT CARD IMAGE BUF AT 0000..0047
+         + TR        CLRBUF       WE USE THIS BUFFER TO BUILD INITIAL CONTROL CARD
+                                  THEN BUF AT 0000..0047 IS COPIED TO BINCRD BUFFER
+         + R ADD     ROTBLAD
+         + STORE     0003         [0003]= ROTBLAD
+         
+         + R ADD     TWO
+         + STORE     0004         [0004]= 2 | V.EXT
+         + R ADD     V.EXT
+         + ADD       LR.EXT       ADD RESERVED SPACE FOR LOADER TO PREVENT VARS LOC BEING OVER LOADER
+         + ADD       OP1
+         + STORE     0005
+         
+         + R ADD     D3
+         + STORE     0006         [0006]= 3 | T.EXT
+         + R ADD     T.EXT
+         + ADD       OP1
+         + STORE     0007
+
+         + R ADD     D4
+         + STORE     0008         [0008]= 4 | N.EXT
+         + R ADD     N.EXT
+         + ADD       OP1
+         + STORE     0009
+
+         + R ADD     D5
+         + STORE     0010         [0010]= 5 | P.EXT
+         + R ADD     D6           ABS LOC 6 = START OF PERISHABE REGION
+         + STORE     0011
+
+         + R ADD     TSYMBREF     BASE48 ALFA NAME OF 1ST REGION OF PROGRAM
+         + STORE     0014
+         + R ADD     INIREG
+         + STORE     0015         [0014]= 1ST REGION ALFA | INIREG
+         
+         + R ADD     D16
+         + STORE     0042         COUNT=16
+         + R SUB     OP1
+         + STORE     0044         CARD CODE = -01 -> CONTROL CARD (IS THE INITIAL CONTROL CARD)
+
+         + R ADD     LBINCRD      GET ADDR OF BIN CARD BUFFER
+         + STORE A   LBINCRD1
+         
+         + R ADD     *            COPY 0000..0047 CARD IMAGE BUFFER TO BIN CARD BUFFER 
+         + TR        MEMCOPY
+         + STOP      0000         DEFAULT CARD BUFFER IMAGE
+LBINCRD1 + STOP      /   /        ADDR OF BINCARD BUFFER TO BE WRITTEN 
+         + STOP      D48          LEN
+         
+         + R ADD     D16          WILL POPULATE CONTROL CARD WITH TSYMBREF STARTING AT CARD LOC 0016
+         + STORE     LOC          (CARD LOC 000..0015 USED FOR REG.V, REG.N, ETC)
+                 
+         + R ADD     ONE          1ST REGION (=1ST SYMBOL) ALREADY SET, SO N STARTS IN 1 (INSTEAD OF 0)
+         + STORE     N
+         + R ADD     TSYMBAD
+         + ADD       N
+         + STORE A   SYNAME
+         
+PCHCCLOO + R ADD     N
+         + SUB       NSYMBS
+         + TR 0      PCHCCEND     EXIT LOOP, ALL SYMBOLS PUNCHED IN CONTROL CARD 
+
+SYNAME   + R ADD     /   /        GET SYMBOL NAME (EITHER A PACT REGION OR A LIBRARY ROUTINE)
+         + STORE     SY
+         + R ADD     SYNAME
+         + ADD       MAXNSYMB
+         + STORE A   SYEXT
+SYEXT    + R ADD     /   /        GET SYMBOL EXTENSION
+         + TR +      PCHCCLO1
+         + R ADD     ZERO         IF EXTENSION < 0 -> SYMBOL NOT DEF -> STORE ZERO AS RIGHT HALF WORD
+         + TR        PCHCCLO2
+PCHCCLO1 + L RIGHT   0030         30 = 12 + 18
+         + R ADD     ZERO
+         + L LEFT    0030
+         + ADD       OP1          EXT = (OP=01) << 12 + SYMBOL EXTENSION 
+PCHCCLO2 + STORE     EXT         
+
+         + R ADD     *            ADD TO REL BINARY CARD  (THIS ROUTINE CALL PCHCRD WHEN NEEDED)
+         + TR        WRIBREL
+         - STOP      0001         PARAM: BIN CARD TYPE REQUITED: -01 -> CONTROL CARD, 
+         + STOP      0000         PARAM: TOP SYMBOL FOR INITIAL CONTROL CARD = 0
+         + STOP      LOC          PARAM: LOCATION 16 .. 16 + (NSYMBS-1) * 2
+         + STOP      0001         PARAM: =1 -> NEXT PARAM IS A FULL WORD TO ADD TO BIN CARD (INDEX = 0)
+         + STOP      SY           PARAM: LEFT HALF WORD = BASE48 SYMBOL ALFA NAME 
+         + STOP      EXT          PARAM: RIGHT HALF WORD = (OP=01) << 12 + SYMBOL EXTENSION 
+
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+         + R ADD     SYNAME
+         + ADD       ONE
+         + STORE A   SYNAME
+         + R ADD     LOC
+         + ADD       TWO
+         + STORE     LOC
+         
+         + TR        PCHCCLOO
+TSYMBAD  + STOP      TSYMBREF         
+
+PCHCCEND + R ADD     *            FLUSH ANY PENDING BINARY CARD 
+         + TR        WRIBREL
+         + STOP      0001         +01 -> FLUSH CURRENT CARD
+
+PCHCCEX  + TR        /   /        RETURN TO CALLER
+         
+         
+                                  PACT  REGION DATA CARD 
+
+                                              CODE=-00 -> INSTR CARD
+
+                                   / ........ [CODE][ORIGIN    ] [TOP SYMBOL = 4  ] ............[      CHECK SUM       ].
+                                  |  ........ .................. .................. [COUNT           ] .................. 
+                                  |  ........ .................. .................. .................. .................. 
+                                  |  ........ ........^......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ [NUMBER POOL ENTRY 4                ] .................. ..................
+                                  |  ........ [NUMBER POOL ENTRY 0                ] [NUMBER POOL ENTRY 2                ] 
+
+                                              TOP SYMBOL = 4 -> REGION N (NUMBERS)
+                                              NUMBER POOL ENTRY 0 IS ALLWAYS 000000|000000
+                                              ORIGIN = RELNUM0
+         
+PCHNUMS  + ADD       TWO          PUNCH NUMBER CONSTANTS CARDS (REGION N)
+         + STORE A   PCHNUMEX
+
+         + R ADD     RELNUM0      WHERE NUMBERS STARTS IN NUMBER POOL (USUALLY = 0)
+         + STORE     LOC
+                                  WRITE CONSTANT ZERO AS FIRST NUMBER IN NUMBER POOL (IS N 0000)
+         + R ADD     *            WRITE NUMBER IN BINARY REL CARD 
+         + TR        WRIBREL
+         - STOP      0000         PARAM: BIN CARD TYPE REQUITED: -00 -> INSTR CARD, 
+         + STOP      D4           PARAM: BIN CARD SYMBOL REQUITED
+         + STOP      LOC          PARAM: LOCATION 0..4095 
+         + STOP      0001         PARAM: =1 -> NEXT PARAM IS A FULL WORD TO ADD TO BIN CARD (INDEX = 0)
+         + STOP      ZERO         PARAM: LEFT HALF WORD = BASE48 SYMBOL ALFA NAME 
+         + STOP      ZERO         PARAM: RIGHT HALF WORD = (OP=01) << 12 + SYMBOL EXTENSION 
+
+         + R ADD     ZERO
+         + STORE     N
+         + R ADD     D18          TNUMPOOL STARTS AT ADDR 0018 ON DRUM 0130 
+         + STORE A   RDNUM
+
+PCHNULOO + R ADD     N
+         + SUB       NNUMS
+         + TR 0      PCHNUEND     TR IF ALL NUMBERS PUNCHED
+
+         + READ      0130
+RDNUM    + SET DR    /   /
+         - COPY      NUM          GET NUMBER N FROM POOL
+         + R ADD     RDNUM        INCR ADDR IN POOL
+         + ADD       TWO
+         + STORE A   RDNUM
+
+         + R ADD     LOC          PRE-INCREMENT LOC, SO 1ST ENTRY In NUMBER POOL (N=0) GOES
+         + ADD       TWO          TO LOC=0002. LOC=0000 CONATAINS CONSTANT ZERO
+         + STORE     LOC
+         
+         + R ADD     *            WRITE NUMBER IN BINARY REL CARD 
+         + TR        WRIBREL
+         - STOP      0000         PARAM: BIN CARD TYPE REQUITED: -00 -> INSTR CARD, 
+         + STOP      D4           PARAM: BIN CARD SYMBOL REQUITED
+         + STOP      LOC          PARAM: LOCATION 0..4095 
+         + STOP      0001         PARAM: =1 -> NEXT PARAM IS A FULL WORD TO ADD TO BIN CARD (INDEX = 0)
+         + STOP      NUM          PARAM: LEFT HALF WORD = BASE48 SYMBOL ALFA NAME 
+         + STOP      NUM2         PARAM: RIGHT HALF WORD = (OP=01) << 12 + SYMBOL EXTENSION 
+
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+         
+         + TR        PCHNULOO
+
+PCHNUEND + R ADD     *            FLUSH ANY PENDING BINARY CARD 
+         + TR        WRIBREL
+         + STOP      0001         +01 -> FLUSH CURRENT CARD
+
+PCHNUMEX + TR        /   /        RETURN TO CALLER
+
+        
+PRTFREE  + ADD       TWO          PRINT MEM USAGE AND FREE MEM 
+         + STORE A   PRTFREEX
+
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        CHKFREE      TR IF NO LOG SELECTED (SW6 OFF) -> TR JUST TO CHECK FREE MEM
+         + TR        PRMEMUSE     TR IF LOG SELECTED (SW6 ON) -> TR TO PRINT MEMORY USAGE AND THEN CHECK FREE MEM
+
+CHKFREE  + R SUB     FREEMEM      JUST CHECK FREEMEM > 0
+         + TR +      ERRNOMEM     TR IF FREEMEM <= 0 TO PRINT MEMORY OVERFLOW ERROR
+         + TR        PRTFREEX     IF FREEMEM > 0 EXIT WITHOUT ANY LOG PRINTING
+
+PRMEMUSE + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      ROTBLAD      ABS LOCATION OF REGION ORIGIN TABLE
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGROTBL     "RO TBL      ABS LOC"
+         + STOP      0000         END OF LINE. 
+        
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      INIREG       ABS LOCATION OF 1ST REGION OF PACT PRG
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGINIR      "PRG START   ABS LOC"
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      V.EXT        EXTENSION OF VARIABLES REGION
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGVEXT      "VAR REGION  EXTENSION"
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      T.EXT        EXTENSION OF TEMP STORAGE REGION
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGTEXT      "TEMP REGION EXTENSION"
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      N.EXT        EXTENSION OF NUM REGION
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGNEXT      "NUM REGION  EXTENSION"
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      P.EXT        EXTENSION OF PERISHABLE STORAGE REGION
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGPEXT      "PERISHABLE  EXTENSION"
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      I.EXT        EXTENSION OF PACT PROGRAM INSTR CODE (ALL REGIONS)
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGIEXT      "PACT PROG   EXTENSION"
+         + STOP      0000         END OF LINE. 
+         
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      IL.EXT       EXTENSION OF ALL CALLED-IN LIBRARY ROUTINES INSTR CODE 
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGJEXT      "ALL LIBS    EXTENSION"
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      LR.EXT       SPACE RESERVED FOR LOADER
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGLDRE      "RESERVED FOR LOADER"
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      FREEMEM      NUMBER OF FREE HALF-WORDS AVAILABLE IN MEM IN RUN-TIME
+         + STOP      0108         STRINGZ AT COL 8
+         + STOP      MSGFREE      "AVAILABLE STORAGE"
+         + STOP      0000         END OF LINE.               
+
+         + R ADD     FREEMEM      CHECK NO MEM OVERFLOW
+         + TR +      PRTFREEX
+         
+ERRNOMEM + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGMEMOV     "STORAGE OVERFLOW"
+         + STOP      0000         END OF LINE. PRINT ALLWAYS
+
+         + STOP      PRTFREEX     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING 
+
+PRTFREEX + TR        /   /        RETURN TO CALLER
+
+           ORG       EVEN
+
+RELNUM0    DEF       0            LOCATION OF 1ST NUM IN POOL              <- set by stage 31 Read Var Cards
+NVARS      DEF       0            NUMBER OF VARS DEFINED                   <- set by stage 33 Compute Var loc
+V.EXT      DEF       0            EXTENSION OF VARIABLE REGION (IS EVEN)   <- set by stage 33 Compute Var loc
+N.EXT      DEF       0            EXTENSION OF NUMBER REGION (IS EVEN)     <- set by stage 34 Storage Assign
+T.EXT      DEF       0            EXTENSION OF TEMP VARS REGION (IS EVEN)  <- set by stage 63 final assembly pass 3
+I.EXT      DEF       0            EXTENSION OF TOTAL INSTR OF PROGRAM      <- set by stage 63 final assembly pass 3
+P.EXT      DEF       0            EXTENSION (IS EVEN) OF PERISHABLE REGION <- set by stage 64 Scan Library
+IL.EXT     DEF       0            TOTAL STORAGE NEEDED BY ALL LIBRARIES    <- set by stage 64 Scan Library
+ROTBLAD    DEF       0            ABS LOCATION OF REGION ORIGIN TABLE      <- set by stage 65 Punch loader
+INIREG     DEF       0            ABS LOCATION OF 1ST REGION OF PACT PRG   <- set by stage 65 Punch loader
+LR.EXT     DEF       0            SPACE RESERVED FOR LOADER                <- set by stage 65 Punch loader
+DUMMY      DEF       0
+
+MAXNNUMS   DEF       512          MAX NUMBER OF NUMBERS THAT CAN BE DEFINED
+NNUMS      DEF       0            NUMBER OF NUMBERS IN NUMBER POOL
+NUM        DEF       0
+NUM2       DEF       0
+
+MAXNSYMB   DEF       600          MAX (600) SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+NSYMBS     DEF       0            NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+TSYMBREF   RES       600          GLOBAL SYMBOL TABLE: ALFA VALUE OF SYMBOLS REFERENCED. <0 IF NOT RESOLVED, >0 IF RESOLVED
+TSYMBEXT   RES       600          EXTENSION (=SIZE) FOR DEFINED SYMBOLS
+                                            -1 IF SYMBOL NOT RESOLVED 
+                                            00 NNNN = SIZE OF REGION 
+                                            01 NNNN = SIZE OF LIB ROUTINE 
+
+                                  VARS/CONST HALF-WORD
+
+N          DEF       0
+LOC        DEF       0
+SY         DEF       0
+EXT        DEF       0
+FREEMEM    DEF       0
+LDRSIZE    DEF       0            SIZE OF REL BINARY LOADER IN HALFWORDS 
+
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D3         DEF       3
+D4         DEF       4
+D5         DEF       5
+D6         DEF       6
+D14        DEF       14
+D16        DEF       16
+D18        DEF       18
+D48        DEF       48
+D4094      DEF       4094
+
+OP1        DEF       *010000
+
+                                  TEXT
+
+MSGSTART   TXT       "PUNCH LOADER AND CONTROL CARDS",0
+MSGROTBL   TXT       "RO TBL      ABS LOC",0
+MSGINIR    TXT       "PRG START   ABS LOC",0
+MSGVEXT    TXT       "VAR REGION  EXTENSION",0
+MSGTEXT    TXT       "TEMP REGION EXTENSION",0
+MSGNEXT    TXT       "NUM REGION  EXTENSION",0
+MSGPEXT    TXT       "PERISHABLE  EXTENSION",0
+MSGIEXT    TXT       "PACT PROG   EXTENSION",0
+MSGJEXT    TXT       "ALL LIBS    EXTENSION",0
+MSGLDRE    TXT       "RESERVED FOR LOADER",0
+MSGFREE    TXT       "AVAILABLE STORAGE",0
+
+MSGMEMOV   TXT       "STORAGE OVERFLOW",0
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPELDR    EQU       0256         COMPILER PROGRAM TAPE 1 (HAS THE LOADER)
+TAPEIN     EQU       0259         PACT COMPILED COMPACT CODE 
+
+
+
+

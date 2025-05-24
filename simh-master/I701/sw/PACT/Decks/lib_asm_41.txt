@@ -1,0 +1,87 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0    79
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF     7  RDFTAPE
+; SY   1  DEF     0  RDBTAPE
+;  
+         0000 +ST I 0076 RDBTAPE  + STORE     DUMMY
+         0001 +RA I 0070          + R ADD     RDBKW        SET THE TAPE I/O INSTRUCTION
+         0002 +ST I 0040          + STORE     RTAPAD
+         0003 +RA I 0071          + R ADD     ADD2         SET TO DECREMENT RWCOPY ADDRESS
+         0004 +ST I 0050          + STORE     INCR         (INSTR IS -COPY -> NEGATIVE -> DECREMENT BY ADDING TWO)
+         0005 +LM I 0074          + LOAD MQ   ONE          FLAG OF COMPUTE: ADD=ADD+LEN-2
+         0006 +T  I 0013          + TR        READ
+         0007 +ST I 0076 RDFTAPE  + STORE     DUMMY
+         0008 +RA I 0069          + R ADD     RDFWD        SET THE TAPE I/O INSTRUCTION
+         0009 +ST I 0040          + STORE     RTAPAD
+         0010 +RA I 0072          + R ADD     SUB2         SET TO INCREMENT RWCOPY ADDRESS
+         0011 +ST I 0050          + STORE     INCR         (INSTR IS -COPY -> NEGATIVE -> INCREMENT BY SUBSTRACTING TWO)
+         0012 +LM I 0073          + LOAD MQ   ZERO
+         0013 +RA I 0076 READ     + R ADD     DUMMY        PROCEED
+         0014 +A  I 0075          + ADD       TWO 
+         0015 +SA I 0022          + STORE A   PR1          PARM1: TAPE ADDRESS
+         0016 +A  I 0074          + ADD       ONE          
+         0017 +SA I 0025          + STORE A   PR2          PARM2: BUF START ADDRESS
+         0018 +A  I 0074          + ADD       ONE          
+         0019 +SA I 0027          + STORE A   PR3          PARM2: BUF LEN ADDRESS
+         0020 +A  I 0074          + ADD       ONE          
+         0021 +SA I 0068          + STORE A   EXIT
+         0022 +RA A 0000 PR1      + R ADD     /   /        GET TAPE ADDR
+         0023 +SA I 0040          + STORE A   RTAPAD       TAPE UNITS: 0256  0257  0258  0259
+         0024 +TF I 0025          + TR OV     PR2          CLEAR OVERFLOW FLAG
+         0025 +RA A 0000 PR2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+         0026 +SA I 0045          + STORE A   RWCOPY    
+         0027 +RA A 0000 PR3      + R ADD     /   /        GET ADDR OF LEN 
+         0028 +SA I 0029          + STORE A   PR3A
+         0029 +RA A 0000 PR3A     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+         0030 +ST I 0077          + STORE     LEN
+         0031 +RA I 0073          + R ADD     ZERO
+         0032 +LL A 0035          + L LEFT    0035         ACC=MQ
+         0033 +TZ I 0038          + TR 0      PR4          IF MQ=0 -> READ FWD -> TR TO PR4
+         0034 +RA I 0045          + R ADD     RWCOPY       HERE READ BKW -> SET BUFFER START AT ADD+LEN-2
+         0035 +S  I 0077          + SUB       LEN
+         0036 +A  I 0075          + ADD       TWO
+         0037 +SA I 0045          + STORE A   RWCOPY
+         0038 +RA I 0073 PR4      + R ADD     ZERO
+         0039 +ST I 0078          + STORE     RECLEN
+         0040 +H  A 0000 RTAPAD   + STOP      /   /        WILL BE REPLACED BY RDFWD OR RDBKW
+         0041 +RA I 0077 LOOP     + R ADD     LEN
+         0042 +TZ I 0056          + TR 0      SKIP
+         0043 +S  I 0075          + SUB       TWO
+         0044 +ST I 0077          + STORE     LEN
+         0045 -C  A 0000 RWCOPY   - COPY      /   /        WRITE BUFFER TO TAPE
+         0046 +T  I 0049          + TR        GO 
+         0047 +T  I 0064          + TR        EOF          END OF FILE
+         0048 +T  I 0066          + TR        EOR          END OF RECORD
+         0049 +RA I 0045 GO       + R ADD     RWCOPY
+         0050 +S  I 0075 INCR     + SUB       TWO
+         0051 +SA I 0045          + STORE A   RWCOPY
+         0052 +RA I 0078          + R ADD     RECLEN
+         0053 +A  I 0075          + ADD       TWO
+         0054 +ST I 0078          + STORE     RECLEN
+         0055 +T  I 0041          + TR        LOOP
+         0056 -C  I 0076 SKIP     - COPY      DUMMY
+         0057 +T  I 0060          + TR        GO2 
+         0058 +T  I 0064          + TR        EOF          END OF FILE
+         0059 +T  I 0066          + TR        EOR          END OF RECORD
+         0060 +RA I 0078 GO2      + R ADD     RECLEN
+         0061 +A  I 0075          + ADD       TWO
+         0062 +ST I 0078          + STORE     RECLEN
+         0063 +T  I 0056          + TR        SKIP
+         0064 +RA I 0074 EOF      + R ADD     ONE          SET OV FLAG TO SIGNAL END OF FILE CONDITION
+         0065 +AL A 0036          + A LEFT    36
+         0066 +RA I 0078 EOR      + R ADD     RECLEN       RETURN NUMBER OF HALF-WORDS IN TAPE RECORD
+         0067 +W  A 2052          + WRITE     2052         INSURE THAT MQ NOT IN USE            
+         0068 +T  A 0000 EXIT     + TR        /   /        RETURN TO CALLER
+         0069 +RD A 0000 RDFWD    + READ      0000         TAPE I/O INSTRUCTIONS 
+         0070 +RB A 0000 RDBKW    + READ B    0000
+         0071 +A  I 0075 ADD2     + ADD       TWO
+         0072 +S  I 0075 SUB2     + SUB       TWO
+         0073 +H  A 0000 ZERO     + STOP      0000
+         0074 +H  A 0001 ONE      + STOP      0001         
+         0075 +H  A 0002 TWO      + STOP      0002         
+         0076 +000000    DUMMY      RES       1
+         0077 +000000    LEN        RES       1
+         0078 +000000    RECLEN     RES       1

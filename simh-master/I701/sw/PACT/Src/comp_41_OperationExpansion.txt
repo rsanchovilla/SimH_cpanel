@@ -1,0 +1,1546 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 41 OPERATION EXPANSION ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:CLRBUF      CLEAR CARD BUFFER 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:PRTALF      PRINT PACKED ALFANUMERIC TEXT STRING
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:PRTCHR      PRINT BASE48 CHAR 
+           HEAD      USE:RDFTAPE     READ FORWARD FROM MAGNETIC TAPE A GIVEN LEN 
+           HEAD      USE:RDBTAPE     READ BACKWARD FROM MAGNETIC TAPE BACKWARDS A GIVEN LEN 
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:WRTAPE      WRITE MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:CLMEM       CLEAR MEMORY STORAGE
+              
+                                  PURPOSE:
+                                  - SCAN SOURCE CODE. 
+                                  - FOR EACH PACT INSTRUCTION, EXPAND IT
+                                    GENERATING MACHINE CODE INSTRUCTIONS
+                                  - SAVE UPDATED COMPACT CODE TO TAPE
+                                  - PACT INSTRUCTIONS NOT EXPANDED: 
+                                       CALL/ID/FOR
+                                       USE/SET/TEST
+
+
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "OPERATION EXPANSION"
+         + STOP      0159         STRINGZ AT COL 59
+         + STOP      MSGSTAR2     "QPV QF QOP QR"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     *            CLEAR GENERATED MACHINE CODE INSTR ON CC RECORD
+         + TR        CLMEM        
+TINSTAD  + STOP      TINST      
+         + STOP      D200         TINST (200 HALF-WORDS) = 2 * MAXNINST (MAX NUMBER OF MACHINE CODE INSTRUTIONS PER STEP)
+
+         + R ADD     ZERO
+         + STORE     N
+         
+         + R ADD     *            
+         + TR        RWDRUM       READ RELNUM0
+         + READ      0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      REL NUM ORIGIN
+         + STOP      0002         2 HALF WORDS
+         
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEOUT      REWIND TAPE OUT WITH UPDATED PACT COMPACT CODE
+
+READREG  + R ADD     ZERO
+         + STORE     QRPREV       QR VALUE OF PREVIOUS STEP
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     QRPREV
+         + STORE     QRPREV0      SAVE INITAL VALUE OF QRPREV
+         + R ADD     D1000
+         + STORE     QROP         INIT QOP=1000 AS NOT USED
+
+         + R ADD     CLUE         
+         + SUB       D11          '-'
+         + TR 0      FACTMI       CLUE IS MINUS
+         + R ADD     CLUE         
+         + SUB       D26          'N'
+         + TR 0      FACTMI       CLUE IS MINUS
+         + LOAD MQ   ZERO
+         + TR        FACTSGN
+FACTMI   + LOAD MQ   ONE
+FACTSGN  + STORE MQ  FACTNEG      IF =1 THEN FACT SHOULD BE USED WITH MINUS SIGN
+
+         + R ADD     OP           JUMP TABLE TO HANDLE THE FACTOR OF EACH TYPE OF PACT OPERATION
+         + ADD       OPTBL
+         + STORE A   OPTBLTR
+OPTBLTR  + TR        /   /
+OPTBL    + STOP      *
+         + TR        TAKEFACT     OP=1   TAKE   FACTOR CANNOT BE BLANK 
+         + TR        ADDSUB       OP=2   ADD    ALLOWS BLANK FACTOR -> BEHAVES AS ACC=ACC+ACC=ACC*2
+         + TR        ADDSUB       OP=3   SUB    ALLOWS BLANK FACTOR ->            ACC=ACC-ACC -> ACC=0
+         + TR        MULT         OP=4   MUL    ALLOWS BLANK FACTOR ->            ACC=ACC*ACC -> ACC=ACC^2
+         + TR        DIV          OP=5   DIV    FACTOR CANNOT BE BLANK -> RSV: DIV UNARY IS A NON-SENSE, EVEN IF STATED AS ALLOWED ON MANUAL
+         + TR        RESMQ        OP=6   RES    RSV: JUST RETRIEVES MQ, AT GIVEN QR
+         + TR        EQVAR        OP=7   EQ     NEEDS VARIABLE AS FACTOR
+         + TR        ADDABS       OP=8   +ABS   ALLOWS BLANK FACTOR
+         + TR        SUBABS       OP=9   -ABS   ALLOWS BLANK FACTOR
+         + TR        TAKEABS      OP=10  ABS    FACTOR CANNOT BE BLANK 
+         + TR        TROP         OP=11  T      FACTOR=DESTINATION STEP, QR IGNORED
+         + TR        TROP2        OP=12  TZ     FACTOR=DESTINATION STEP, SHIFT TO MATCH QR BEFORE CONDITIONAL TEST
+         + TR        TROP2        OP=13  TP     FACTOR=DESTINATION STEP, SHIFT TO MATCH QR BEFORE CONDITIONAL TEST
+         + TR        TROP2        OP=14  TN     FACTOR=DESTINATION STEP, SHIFT TO MATCH QR BEFORE CONDITIONAL TEST
+         + TR        TROP2        OP=15  TF     FACTOR=DESTINATION STEP, SHIFT TO MATCH QR BEFORE CONDITIONAL TEST
+         + TR        TROP2        OP=16  HALT   FACTOR=DESTINATION STEP, SHIFT TO MATCH QR BEFORE CONDITIONAL TEST
+         + TR        NEXT         OP=17  TEST   WILL BE PROCESSED ON INDEX EXPANSION STAGE
+         + TR        NEXT         OP=18  SET    WILL BE PROCESSED ON INDEX EXPANSION STAGE
+         + TR        NEXT         OP=19  USE    WILL BE PROCESSED ON INDEX EXPANSION STAGE
+         + TR        DO           OP=20  DO     FACTOR=REGION -> NO VARIABLE FACTOR TO PROCESS    
+         + TR        EXIT         OP=21  EXIT
+         + TR        BADOP2       OP=22  DUP    SHOULD NOT BE PRESENT. IT IS ALREADY PROCESSED
+         + TR        LIB          OP=23  LIB    FACTOR=REGION -> NO VARIABLE FACTOR TO PROCESS    
+         + TR        BADOP        OP=24  ID     SHOULD NOT BE PRESENT. IT IS DESAMBIGUATED
+         + TR        BADOP        OP=25  FOR    SHOULD NOT BE PRESENT. IT IS DESAMBIGUATED
+         + TR        NEXT         OP=26  CALL   WILL BE PROCESSED ON CALL EXPANSION STAGE
+         + TR        SIN          OP=27  SIN    ALLOWS BLANK FACTOR
+         + TR        COS          OP=28  COS    ALLOWS BLANK FACTOR
+         + TR        ARCT         OP=29  ARCT   ALLOWS BLANK FACTOR
+         + TR        SQRT         OP=30  SQRT   ALLOWS BLANK FACTOR
+         + TR        LOG          OP=31  LOG    ALLOWS BLANK FACTOR
+         + TR        EXP          OP=32  EXP    ALLOWS BLANK FACTOR
+         + TR        SENSE        OP=33  SE
+         + TR        CL           OP=34  CL     NEEDS VARIABLE AS FACTOR
+         + TR        READ         OP=35  READ
+         + TR        LIST         OP=36  LIST
+         + TR        MULTRES      OP=37  RES for MULT        RETRIEVES RESIDUE AFTER MULT (FROM MQ)       
+         + TR        NEXT         OP=38  RES for DIV         RES OP HANDLED WITHIN DIV PROCEESING
+         + TR        IDLIST       OP=39  ID for LIST         FACTOR CAN BE BLANK 
+         + TR        IDDO         OP=40  ID for DO/LIB       WILL BE PROCESSED HERE, AND IN CALL EXPANSION STAGE
+         + TR        NEXT         OP=41  ID for CALL         WILL BE PROCESSED ON CALL EXPANSION STAGE
+         + TR        NEXT         OP=42  FOR for DO/LIB      WILL BE PROCESSED ON CALL EXPANSION STAGE
+         + TR        NEXT         OP=43  FOR for CALL        WILL BE PROCESSED ON CALL EXPANSION STAGE
+
+BADOP    + STOP      1111         INTERNAL COMPILER ERROR: SHOULD NOT BE PRESENT. IT SHOULD HAVE BEEN DESAMBIGUATED
+BADOP2   + STOP      1111         INTERNAL COMPILER ERROR: SHOULD NOT BE PRESENT. IT IS ALREADY PROCESSED
+
+NEXT     + NOOP      0000         CONTINUE 
+
+                                  SAVE COMPACT CODE RECORD IN TAPE
+          
+         + R ADD     CCLEN        SAVE MC INSTRUCTIONS GENERATED SO FAR
+         + ADD       NINST        ADD NINST TWICE AS EACH MC INSTR USES TWO HALF-WORDS
+         + ADD       NINST
+         + STORE     N
+
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT (PACT COMPACT CODE)
+         + STOP      TAPEOUT
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      N            LEN
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+
+         + R ADD     QROP
+         + SUB       D1000
+         + TR 0      PRTQ2
+         + LOAD MQ   QRPREV0      PRINT VALUE OF QR AT ENTRY OF STEP 
+         + R ADD     *                                    
+         + TR        PRTINT
+         + STOP      0060         AT COL 59
+         + STOP      0002         LEN=2
+         + LOAD MQ   QF           PRINT VALUE OF QF OF STEP 
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0063         AT COL 63
+         + STOP      0002         LEN=2
+         + LOAD MQ   QROP         PRINT VALUE OF QOP 
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0067         AT COL 67
+         + STOP      0002         LEN=2
+         + LOAD MQ   QRPREV       PRINT VALUE OF QR AT END OF STEP
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0071         AT COL 71
+         + STOP      0002         LEN=2
+PRTQ2    + NOOP      0000
+
+         + R ADD     *            PRINT STEP JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTMC        PRINT TINST TABLE WITH MC INSTRUCTIONS GENERATED FOR THIS STEP
+ENDLOG1  + NOOP      0000 
+
+                                  PROCESS NEXT STEP
+         + TR        READSTEP
+
+
+EOR      + NOOP      0000         END OF REGION  
+
+                                  SAVE END OF RECORD TO TAPE
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT (PACT COMPACT CODE)
+         + STOP      TAPEOUT
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      CCLEN        LEN
+
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF FILE
+
+         + WRITE EF  TAPEOUT      WRITE EOF IN TAPE OUT (COMPACT CODE)
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEOUT      REWIND TAPE OUT WITH UPDATED PACT COMPACT CODE
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE
+
+         + STOP      READSTEP     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING NEXT SOURCE CODE STEP 
+
+                                  CODE GENERATION ROUTINES
+
+                                  PACT OP=2 ADD   OR OP=3 SUB   ALL THESE OPEARTIONS CAN BE UNARY
+                                  PACT OP=8 +ABS     OP=9 -ABS 
+
+ADDABS   + LOAD MQ   MC.AABS
+         + TR        AS5
+SUBABS   + LOAD MQ   MC.SABS
+         + TR        AS5
+
+ADDSUB   + R ADD     FACTNEG
+         + TR 0      ASPLUS
+         + R ADD     D5           IF - FACT -> OP=2 ADD BECOMES OP=3 SUB, OP=3 BECOMES OP=2
+         + SUB       OP  
+         + TR        AS3
+ASPLUS   + R ADD     OP
+AS3      + SUB       TWO          HERE ACC=0 FOR OP=ADD, =1 FOR SUB
+         + TR 0      AS4
+         + LOAD MQ   MC.SUB       MACHINE CODE TABLE FOR OP=SUB
+         + TR        AS5
+AS4      + LOAD MQ   MC.ADD       MACHINE CODE TABLE FOR OP=ADD
+AS5      + STORE MQ  MC.TABLE     HERE MQ=MACHINE CODE TABLE FOR OP
+
+         + R ADD     QRPREV       DETERMINE THE Q OF ARITH OPERATION RESULT
+         + SUB       QF
+         + TR +      AQROP1       QROP = MAX(QRPREV, QF)
+         + R ADD     QF
+         + TR        AQROP2
+AQROP1   + R ADD     QRPREV
+AQROP2   + STORE     QROP
+
+                                  APPLIES SHIFT NEEDED TO ACC/FACTOR BASED ON QRPREV AND QF
+                                  GENERATES MC CODE FOR PACT OPERATION
+                                  APPLIES SHIFT NEEDED TO RESULT IN ACC TO MATCH DESIRED QR
+                               
+          
+GENARITH + R ADD     FACTREG      IF FACTREG=0 -> IS AN UNARY OPERATION 
+         + TR 0      SHUNARY
+         + R ADD     QRPREV       // calc shift needed before arith instr to align Q of both operands (align to higher one)
+         + SUB       QF           // nShift = Qr_prev - Qf;
+         + STORE     SHIFT1       // if =0 -> no need to shift
+         + TR 0      NOSH         // if >0 -> shift right n bits Fact before performing arithmetic instruction
+         + TR +      SHFACT       // if <0 -> shift right abs(n) bits acc before using it in arithmetic instruction
+         + R ADD     TWO          MUST SHIFT ACC
+         + TR        GENMCTBL
+NOSH     + R ADD     ONE          NO NEED TO SHIFT FACT
+         + TR        GENMCTBL
+SHFACT   + R ADD     D3           MUST SHIFT FACT
+         + TR        GENMCTBL
+SHUNARY  + R ADD     QRPREV       ON UNARY ADD/SUB, THE QR OF OPERATION = QR OF ACC = QR PREV OPEARTION
+         + STORE     QROP
+         + R ADD     D4
+GENMCTBL + ADD       MC.TABLE     DERREFRENENCE TABLE  MC.TABLE +STOP *
+         + STORE A   GENMCRD                                    +STOP ADDR FOR NO SHIFT  
+GENMCRD  + R ADD     /   /                                      +STOP ADDR FOR SHIFT ACC 
+         + STORE     MC.TABLE                                   +STOP ADDR FOR SHIFT FACT
+                                                                +STOP ADDR FOR UNARY OPERATOR
+
+                                  GENERATES MC CODE FOR PACT OPERATION
+                                  APPLIES SHIFT NEEDED TO RESULT IN ACC TO MATCH DESIRED QR
+GENARIT2 + R ADD     *            
+         + TR        GENTABLE
+
+         + R ADD     QR
+         + TR 0      SH2          IF =0 TR AS NO QR SET IN PACT INSTR. NO SHIFT On RESULT DONE, ASSUME THE QR OF OPERATION AS QR FOR NEXT OPERATION 
+         + SUB       QROP
+         + STORE     SHIFT1       IF QR=QROP TR AS NO SHIFT ON RESULT NEEDED
+         + TR 0      SH2          IF QR < QROP TR TO SHIFT RESULT TO THE LEFT
+         + TR +      SH1B         IF QR > QROP TR TO SHIFT RESULT TO THE RIGHT
+
+         + R ADD     OP           MUST SHIFT LEFT. IF OP=MULT, USE LONG SHIFH, AS MQ=LOWER 36 BITS OF MULT
+         + SUB       OPMULT       IF OP<>MULT, USE ACC SHIFT AS CONTENTS OF MQ IS UNKNOWN
+         + TR 0      SH1A         
+
+         + R ADD     *            SHIFT RESULT AFTER OP <> MULT
+         + TR        GENINST      HERE ADD INSTR TO SHIFT RESULT TO LEFT USING "A LEFT"
+         + A LEFT    ANN          SO Q OF OPERATION RESULT (QROP) MATCHES QR DESIRED BY THE USER
+         + STOP      0000
+
+         + TR        SH2
+
+SH1A     + R ADD     *            SHIFT RESULT AFTER MULT
+         + TR        GENINST      HERE ADD INSTR TO SHIFT RESULT TO LEFT USING "L LEFT"
+         + L LEFT    ANN          SO Q OF OPERATION RESULT (QROP) MATCHES QR DESIRED BY THE USER
+         + STOP      0000
+
+         + TR        SH2
+
+SH1B     + R ADD     *
+         + TR        GENINST      HERE ADD INSTR TO SHIFT RESULT TO RIGHT
+         + L RIGHT   ANN          SO Q OF OPERATION RESULT (QROP) MATCHES QR DESIRED BY THE USER
+         + STOP      0000
+
+SH2      + R ADD     QR           IF QR=0 THEN USE QROP INSTEAD
+         + TR 0      SH3          SET QRPREV=QR  (OR QRPREV=QROP IF QR IS ZERO)
+         + TR        SH4
+SH3      + R ADD     QROP
+SH4      + STORE     QRPREV
+
+         + TR        NEXT
+
+                                  PACT OP=7 EQ
+
+EQVAR    + LOAD MQ   MC.EQ        MACHINE CODE TABLE FOR OP=EQ  FACT
+         + R ADD     FACTNEG      =1 IF -FACT
+         + TR 0      EQMC
+         + LOAD MQ   MC.EQSUB     MACHINE CODE TABLE FOR OP=EQ -FACT
+EQMC     + STORE MQ  MC.TABLE     HERE MQ=MACHINE CODE TABLE FOR OP
+
+         + R ADD     QF           DETERMINE THE Q OF OPERATION RESULT
+         + STORE     QROP
+         + TR        GENARITH     TR TO SHIFT ACC TO QF BEFORE STORING IT. HERE QR=QF, SO NO SHIFT WILL BE DONE AFTER STORING
+
+
+                                  PACT OP=1 TAKE
+
+TAKEFACT + LOAD MQ   MC.TAKE      MACHINE CODE TABLE FOR OP=TAKE  FACT
+         + R ADD     FACTNEG      =1 IF -FACT
+         + TR 0      TAKMC
+         + LOAD MQ   MC.TAKSB     MACHINE CODE TABLE FOR OP=TAKE -FACT
+TAKMC    + STORE MQ  MC.TABLE     HERE MQ=MACHINE CODE TABLE FOR OP
+         + R ADD     QF           DETERMINE THE Q OF OPERATION RESULT: QROP=QF
+         + STORE     QROP
+         + TR        GENARIT2     TR AS NO SHIFT NEED TO BE DONE BEFORE READING FACT. SHIFT WILL BE DONE AFTER READING FACT TO MATCH DESIRED QR
+
+
+                                  PACT OP=4 MULT
+          
+MULT     + R ADD     FACTREG      IF FACTOR IS BLANK, THEN 
+         + TR 0      SQUARE       MULT SQUARES THE ACC 
+         + R ADD     FACTNEG      =1 IF -FACT
+         + TR 0      MULT1
+         + LOAD MQ   MC.MULTS
+         + TR        MULTMC
+MULT1    - R ADD     NUM
+         + SUB       TWO
+         + TR 0      MULTX2 
+         + LOAD MQ   MC.MULT
+
+MULTMC   + R ADD     QRPREV       DETERMINE THE Q OF OPERATION RESULT: QROP=QRPREV + QF
+         + ADD       QF
+         + STORE     QROP
+GENMULT  + STORE MQ  MC.TABLE
+         + TR        GENARIT2     TR AS NO SHIFT NEED TO BE DONE BEFORE READING FACT. 
+                                  SHIFT WILL BE DONE AFTER OPERATION TO MATCH DESIRED QR
+
+SQUARE   + LOAD MQ   MC.SQURE     GENERATE ACC = ACC X ACC    
+         + R ADD     QRPREV       DETERMINE THE Q OF OPERATION RESULT: QROP=QRPREV X 2
+         + ADD       QRPREV
+         + STORE     QROP
+         + TR        GENMULT
+
+                                  // RSV: manual does not states that mult x2 is optimezed as shift,
+                                  // but seems a logical optimization for the era
+                                  // mult by 2 is done by adjust the resulting Q of operation, does not do anything to value
+                                  // the shifting on result will effectively perform the mult
+
+MULTX2   + LOAD MQ   MC.MULT2     GENERATE ACC=ACC X 2 (INTEGER)
+         + R ADD     QRPREV       DETERMINE THE Q OF OPERATION RESULT: QROP=QRPREV + 1
+         + ADD       ONE
+         + STORE     QROP
+         + TR        GENMULT      TR AS NO SHIFT NEED TO BE DONE BEFORE READING FACT. 
+                                  SHIFT WILL BE DONE AFTER OPERATION TO MATCH DESIRED QR
+
+
+                                  PACT OP=5 DIV
+                                  PACT OP=38 RES FOR DIV
+          
+DIV      + R ADD     *            READ START OF NEXT COMPACT CODE RECORD 
+         + TR        RDFTAPE      READ FORWARD FROM MAGNETIC TAPE A GIVEN LEN 
+         + STOP      TAPEIN
+         + STOP      TINST        BUF TO READ IN FROM TAPE
+         + STOP      D28         
+
+         + R ADD     *            READ BACK TO POSITION TAPE AT START OF NEXT COMPACT CODE RECORD 
+         + TR        RDBTAPE      READ BACKWARDS FROM MAGNETIC TAPE A GIVEN LEN 
+         + STOP      TAPEIN
+         + STOP      TINST        BUF TO READ IN FROM TAPE
+         + STOP      TWO         
+
+         + R ADD     D26
+         + ADD       TINSTAD
+         + STORE A   DIV1
+DIV1     + R ADD     /   /        ACC=OP OF STEPN JUST FOLLOWING CURRENT DIV
+         + STORE     OP2          SAVE IT 
+
+         + R ADD     FACTNEG      =1 IF -FACT
+         + TR 0      DIVP
+         + LOAD MQ   MC.DIVS
+         + TR        DIVMC
+DIVP     + LOAD MQ   MC.DIV
+DIVMC    + STORE MQ  MC.TABLE
+
+         + R ADD     OP2
+         + SUB       OPDIVRES
+         + TR 0      DIVRES       TR IF A RES FOLLOWS THE DIV OPERATION
+
+         + R ADD     QRPREV       DETERMINE THE Q OF OPERATION RESULT: QROP=QRPREV - QF
+         + SUB       QF
+         + STORE     QROP
+
+         + R ADD     *            GENERATE DIV MC INSTR        
+         + TR        GENTABLE
+
+         + LOAD MQ   MC.GETMQ     MC INSTR TO GET QUOTIENT FROM MQ
+         + STORE MQ  MC.TABLE
+         + TR        GENARIT2     TR AS NO SHIFT NEED TO BE DONE BEFORE READING FACT. SHIFT WILL BE DONE AFTER OPERATION TO MATCH DESIRED QR
+          
+DIVRES   + R ADD     QRPREV       DETERMINE THE Q OF OPERATION RESULT: QROP=QRPREV - 35
+         + SUB       D35
+         + STORE     QROP
+         + TR        GENARIT2     TR AS NO SHIFT NEED TO BE DONE BEFORE READING FACT. SHIFT WILL BE DONE AFTER OPERATION TO MATCH DESIRED QR
+
+                                  PACT OP=37 RES FOR MULT
+
+MULTRES  + LOAD MQ   MC.GETMQ     RETRIEVES RESIDUE IN MQ 
+         + STORE MQ  MC.TABLE    
+         + R ADD     QRPREV       DETERMINE THE Q OF OPERATION RESULT: QROP=QRPREV - 35 
+         + SUB       D35
+         + STORE     QROP
+         + TR        GENARIT2     TR AS NO SHIFT NEED TO BE DONE BEFORE READING FACT. SHIFT WILL BE DONE AFTER OPERATION TO MATCH DESIRED QR
+
+                                  PACT OP=6 RES
+
+RESMQ    + LOAD MQ   MC.GETMQ     RES NOT TIED TO DIV/MULT. JUST RETRIEVES MQ 
+         + STORE MQ  MC.TABLE
+         + R ADD     QR           RSV: Even it not stated in manual, seems logical that QR sets the Q to
+         + STORE     QROP         use on retrieved value of MQ
+         + TR        GENARIT2     TR AS NO SHIFT NEED TO BE DONE BEFORE READING FACT. SHIFT WILL BE DONE AFTER OPERATION TO MATCH DESIRED QR
+
+                                  PACT OP=10 TAKE ABS
+
+TAKEABS  + LOAD MQ   MC.ABS       MACHINE CODE TABLE FOR OP=ABS  FACT
+         + STORE MQ  MC.TABLE     HERE MQ=MACHINE CODE TABLE FOR OP
+         + R ADD     QF           DETERMINE THE Q OF OPERATION RESULT: QROP=QF
+         + STORE     QROP
+         + TR        GENARIT2     TR AS NO SHIFT NEED TO BE DONE BEFORE READING FACT. SHIFT WILL BE DONE AFTER READING FACT TO MATCH DESIRED QR
+
+
+                                  PACT OP=27/28/29/30/31/32 SIN COS ARTN SQRT LOG EX
+          
+SIN      + LOAD MQ   FNSIN        'SI$'
+         + R ADD     ONE
+         + TR        FNCALL
+
+COS      + LOAD MQ   FNCOS        'CO$'
+         + R ADD     ONE
+         + TR        FNCALL
+
+ARCT     + LOAD MQ   FNARCT       'AT$'
+         + R ADD     ONE
+         + TR        FNCALL
+
+SQRT     + LOAD MQ   FNSQRT       'SQ$'
+         + R ADD     ZERO
+         + TR        FNCALL
+
+LOG      + LOAD MQ   FNLOG        'LO$'
+         + R ADD     D6
+         + TR        FNCALL
+
+EXP      + R ADD     QR           CHECK QR ON EXP STEP
+         + SUB       ONE          MUST BE >= ONE (ELSE, EXP ROUTINE OVERFLOWS)
+         + TR +      EXP2
+
+         + R ADD     *
+         + TR        ERROR
+         + STOP      ERREQR0S     ERROR: QR OF EXP CANNOT BE LESS THAT ONE
+
+EXP2     + LOAD MQ   FNEXP        'EX$'
+         + R ADD     QR
+         + TR        FNCALL
+
+FNCALL   + STORE MQ  TRANSFER     SYMBOL TO TRANSFER TO    
+         + STORE     QROP         Q OF FUNC RESULT 
+         + R ADD     FACTREG      IF FACTOR IS BLANK, THEN 
+         + TR 0      FN1          FUNC ARGUMENT IS ACC
+         + R ADD     FACTNEG      =1 IF -FACT
+         + TR 0      FN2
+         + LOAD MQ   MC.FN-FA     FUNC ARG IS -FACT
+         + R ADD     QF
+         + TR        FN3
+FN1      + LOAD MQ   MC.FNACC     FUNC ARG IS ACC
+         + R ADD     QRPREV
+         + TR        FN3
+FN2      + LOAD MQ   MC.FNFAC     FUNC ARG IS +FACT
+         + R ADD     QF
+         + TR        FN3
+FN3      + STORE     PARAM1       PASS Q OF ARGUMENT TO CALLED ROUTINE
+         + STORE MQ  MC.TABLE
+         + R ADD     OP           OP=SQRT?
+         + SUB       D30
+         + TR 0      FN4SQRT      TR IF YES, 
+         + R ADD     OP           OP=EXP?
+         + SUB       D32
+         + TR 0      FN4EXP       TR IF YES, 
+         + TR        GENARIT2     TR AS NO SHIFT NEED TO BE DONE BEFORE READING FACT. SHIFT WILL BE DONE AFTER OPERATION TO MATCH DESIRED QR
+                                  MACHINE CODE TABLES
+
+FN4SQRT  + R ADD     PARAM1       SPECIAL CASE: QROP OF SQRT = (PARAM1+1) DIV 2
+         + ADD       ONE
+         + A RIGHT   0001
+         + STORE     QROP
+         + TR        GENARIT2
+
+FN4EXP   + R ADD     D34          SPECIAL CASE: 2ND PARAM: QR ARG FOR EXP = 34-PARAM1
+         + SUB       PARAM1
+         + STORE     PARAM1
+
+         + R ADD     *            
+         + TR        GENTABLE
+
+         + LOAD MQ   MC.FN2
+         + STORE MQ  MC.TABLE
+         + R ADD     QR
+         + STORE     PARAM2       PARAM2=PASS TO FUNC Q OF RESULT SELECTED BY USER
+         + TR        GENARIT2
+
+
+LIB      + LOAD MQ   FACT
+         + STORE MQ  TRANSFER     SYMBOL TO TRANSFER TO 
+         + LOAD MQ   MC.LIB        
+         + TR        GENMC
+
+DO       + LOAD MQ   FACT
+         + TR        DOCALL
+
+READ     + LOAD MQ   FNREAD       'RD$'
+         + TR        DOCALL
+
+LIST     + LOAD MQ   FNLIST       'LS$'
+DOCALL   + STORE MQ  TRANSFER     SYMBOL TO TRANSFER TO 
+         + LOAD MQ   MC.DO        LIBRARY ROUTINE CALL
+GENMC    + STORE MQ  MC.TABLE     
+         + R ADD     *            
+         + TR        GENTABLE     GENERATE INSTR
+         + R ADD     QR           
+         + STORE     QRPREV       PROPAGATE QR TO NEXT INSTR
+         + TR        NEXT
+
+
+                                  PACT OP=11 T (FACTOR=DESTINATION STEP)
+
+TROP     + LOAD MQ   MC.TR        INST TABLE FOR TRANSFER OP
+         + R ADD     FACTN        DESTINATION STEPN
+         + STORE     TRANSFER
+         + R ADD     ONE          DESTIMATION IS LOCATION 1 OF STEPN
+         + STORE     TRSTLOC 
+         + TR        GENMC
+      
+                                  PACT OP=12 TZ    
+                                  PACT OP=13 TP    
+                                  PACT OP=14 TN    
+                                  PACT OP=15 TF    
+                                  PACT OP=16 HALT  
+
+TROP2    + R ADD     QR           SHIFT TO MATCH QR BEFORE CONDITIONAL TEST
+         + TR 0      TRNOSH
+         + SUB       QRPREV       // nShift = Qr - Qr_prev ;
+         + STORE     SHIFT1       // if =0 -> no need to shift
+         + TR 0      TRSHOK       // if <0 -> shift left acc before performing conditional test
+         + TR +      TRSHRI       // if >0 -> shift right acc before performing conditional test
+                                  
+         + R ADD     *            MUST SHIFT ACC LEFT 
+         + TR        GENINST      HERE ADD INSTR TO SHIFT ACC TO LEFT
+         + A LEFT    ANN          CANNOT USE "L LEFT" BECAUSE "L LEFT" SET SIGN OF ACC TO MATCH MQ SIGN, THUS OVERWRITTING CURRENT ACC SIGN
+         + STOP      0000
+         + TR        TRSHOK
+
+TRSHRI   + R ADD     *            MUST SHIFT ACC RIGHT 
+         + TR        GENINST      HERE ADD INSTR TO SHIFT ACC TO LEFT
+         + L RIGHT   ANN          
+         + STOP      0000
+         + TR        TRSHOK
+
+TRNOSH   + R ADD     QRPREV       IF QR NOT SET, PROPAGATE QR OF PREVIOUS STEP
+         + STORE     QR
+
+TRSHOK   + R ADD     OP           
+         + SUB       D10
+         + ADD       MC.TRTAD 
+         + STORE A   TR1
+TR1      + LOAD MQ   /   /        INST TABLE FOR TRANSFER OP
+         + R ADD     FACTN        DESTINATION STEPN
+         + STORE     TRANSFER
+         + R ADD     ONE          DESTIMATION IS LOCATION 1 OF STEPN
+         + STORE     TRSTLOC 
+         + TR        GENMC
+                                       
+
+                                  PACT OP=21 EXIT
+
+EXIT     + LOAD MQ   MC.TR
+         + R ADD     ONE          // transfer to second inst of first step (the call's return addr)
+         + STORE     TRANSFER
+         + R ADD     TWO          DESTIMATION IS LOCATION 2 OF FIRST STEPN
+         + STORE     TRSTLOC 
+         + TR        GENMC
+
+                                  PACT OP=33 SENSE
+
+SENSE    + LOAD MQ   MC.SENSE
+         + R ADD     S1
+         + STORE     PARAM1
+         + TR        GENMC
+
+
+                                  PACT OP=34 CLEAR
+
+CL       + LOAD MQ   MC.CL
+         + TR        GENMC
+
+
+                                  PACT OP=39 ID and previous op was LIST -> generate ID for variable list
+
+IDLIST   + R ADD     FACTREG
+         + TR 0      IDLI0        TR IF NO FACT
+         + R ADD     QR           IF QR IS SET, USE IT TO OVERRIDE THE QF OF VARIABLE/NUMBER
+         + TR 0      IDLI1        THIS ALLOWS TO PRINT ANY VAR AT ANY Q
+         + TR        IDLI2
+IDLI1    + R ADD     QF
+IDLI2    + STORE     PARAM1       THE Q TO USE WHEN PRINTING THE FACTOR
+         + LOAD MQ   MC.IDLST     ID FOR LIST WITH FACTOR=VAR OR NUM
+         + TR        GENMC
+
+IDLI0    + R ADD     ZERO
+         + STORE     PARAM1
+         + LOAD MQ   MC.IDLS0     ID FOR LIST WITH NO VAR 
+         + TR        GENMC
+
+                                  PACT OP=40 ID INSTRUCTION BELOW A DO/LIB INSTR
+
+IDDO     + R ADD     FACTREG                  ID with DO INSTR
+         + SUB       D34          'V'         IF INST IS "ID VAR" -> VAR CAN BE A VECTOR OR A MATRIX, TO BE 
+         + TR 0      IDDOADDR                 PROCESSED IN LOOP EXPANSION STAGE -> GENERATE INST NOW 
+         + TR        NEXT                     ELSE DO NOT GENERATE INSTR AND PROCEES WITH NEXT INSTR
+
+IDDOADDR + R ADD     *            GENERATE THE INSTRUCTIONS FOR CALLER'S PARAMETERS
+         + TR        GENINST     
+         - STOP      CC.FACT      '-H  V nnnn'  OR '-H  T nnnn'
+         + STOP      0000         END OF INSTR TABLE
+         + TR        NEXT
+
+         
+                                  // MC CODE GENERATION TABLES
+
+                                  // OP=2 ADD, CLUE=+ -> "+ fact"    -> Acc = Acc + fact
+                                  //   =3 SUB      =- -> "- (- fact) -> Acc = Acc + fact
+
+
+MC.ADD   + STOP      *
+         + STOP      MC.ADD0      mc table addr for no shift
+         + STOP      MC.ADDSA                       acc shift
+         + STOP      MC.ADDFA                       factor shift
+         + STOP      MC.ADDU                        unary operation
+
+MC.ADD0  - ADD       CC.FACT      no shift needed
+         + STOP      0000
+
+MC.ADDSA + L RIGHT   ANN          acc shift right needed
+         - ADD       CC.FACT      
+         + STOP      0000
+         
+MC.ADDFA - STORE     T0           fact shift right needed
+         - R ADD     CC.FACT
+         + L RIGHT   ANN 
+         - ADD       T0      
+         + STOP      0000
+ 
+MC.ADDU  - STORE     T0           unary add -> Acc=acc + acc
+         - ADD       T0
+         + STOP      0000
+
+                                  // OP=3 SUB      =+ -> "- fact    -> Acc = Acc - fact
+                                  //   =2 ADD, CLUE=- -> "+ (-fact) -> Acc = Acc - fact
+
+MC.SUB   + STOP      *
+         + STOP      MC.SUB0      mc table addr for no shift
+         + STOP      MC.SUBSA                       acc shift
+         + STOP      MC.SUBFA                       factor shift
+         + STOP      MC.SUBU                        unary operation
+
+MC.SUB0  - SUB       CC.FACT      no shift needed
+         + STOP      0000
+
+MC.SUBSA + L RIGHT   ANN          acc shift right needed
+         - SUB       CC.FACT      
+         + STOP      0000
+         
+MC.SUBFA - STORE     T0           fact shift right needed
+         - R SUB     CC.FACT
+         + L RIGHT   ANN
+         - ADD       T0      
+         + STOP      0000
+
+MC.SUBU  - STORE     T0           unary sub -> Acc=Acc-Acc
+         - SUB       T0
+         + STOP      0000
+
+
+                                  MACHINE CODE TABLES
+
+                                  // OP=8 +ABS  ->  Acc = Acc + abs(fact)
+                                  // CLUE DOES NOT ALTERS THE RESULT
+
+
+MC.AABS  + STOP      *
+         + STOP      MC.AABS0     mc table addr for no shift
+         + STOP      MC.AABSA                       acc shift
+         + STOP      MC.AABSF                       factor shift
+         + STOP      MC.AABSU                       unary operation
+
+MC.AABS0 - ADD AB    CC.FACT      no shift needed
+         + STOP      0000
+
+MC.AABSA + L RIGHT   ANN          acc shift right needed
+         - ADD AB    CC.FACT      
+         + STOP      0000
+         
+MC.AABSF - STORE     T0           fact shift right needed
+         - R ADD     N0
+         - ADD AB    CC.FACT
+         + L RIGHT   ANN 
+         - ADD       T0      
+         + STOP      0000
+
+MC.AABSU - STORE     T0           unary +abs -> Acc=abs(acc)
+         - R ADD     N0
+         - ADD AB    T0
+         + STOP      0000
+
+                                  // OP=9 -ABS  ->  Acc = Acc - abs(fact)
+                                  // CLUE DOES NOT ALTERS THE RESULT
+
+MC.SABS  + STOP      *
+         + STOP      MC.SABS0     mc table addr for no shift
+         + STOP      MC.SABSA                       acc shift
+         + STOP      MC.SABSF                       factor shift
+         + STOP      MC.SABSU                       unary operation
+
+MC.SABS0 - SUB AB    CC.FACT      no shift needed
+         + STOP      0000
+
+MC.SABSA + L RIGHT   ANN          acc shift right needed
+         - SUB AB    CC.FACT      
+         + STOP      0000
+         
+MC.SABSF - STORE     T0           fact shift right needed
+         - R ADD     N0
+         - SUB AB    CC.FACT
+         + L RIGHT   ANN 
+         - ADD       T0      
+         + STOP      0000
+
+MC.SABSU - STORE     T0           unary +abs -> Acc=abs(acc)
+         - R ADD     N0
+         - SUB AB    T0
+         + STOP      0000
+
+                                  // OP=7 EQ, CLUE=+ -> "EQ  fact -> fact = Acc 
+
+
+MC.EQ    + STOP      *
+         + STOP      MC.EQ0       mc table addr for no shift
+         + STOP      MC.EQSR                        acc shift right
+         + STOP      MC.EQSL                        acc shift left
+
+MC.EQ0   - STORE     CC.FACT      no shift needed
+         + STOP      0000
+
+MC.EQSR  + L RIGHT   ANN          acc shift right needed
+         - STORE     CC.FACT      
+         + STOP      0000
+         
+MC.EQSL  + A LEFT    ANN          acc shift left needed
+         - STORE     CC.FACT      
+         + STOP      0000
+
+                                  // OP=7 EQ, CLUE=- -> "EQ -fact -> fact = -Acc
+
+MC.EQSUB + STOP      *
+         + STOP      MC.EQS0      mc table addr for no shift
+         + STOP      MC.EQSSR                       acc shift right
+         + STOP      MC.EQSSL                       acc shift left
+
+MC.EQS0  - STORE     T0
+         - R SUB     T0
+         - STORE     CC.FACT      no shift needed
+         + STOP      0000
+
+MC.EQSSR - STORE     T0
+         - R SUB     T0
+         + L RIGHT   ANN          acc shift right needed
+         - STORE     CC.FACT      
+         + STOP      0000
+         
+MC.EQSSL - STORE     T0
+         - R SUB     T0
+         + A LEFT    ANN          acc shift left needed
+         - STORE     CC.FACT      
+         + STOP      0000
+
+                                  // OP=1 TAKE CLUE=+ -> -> acc =  fact 
+                                  // OP=1 TAKE CLUE=- -> -> acc = -fact 
+
+
+MC.TAKE  + STOP      MC.TAK       mc table addr for no shift, clue=+
+MC.TAKSB + STOP      MC.TAKS                                  clue=-
+
+MC.TAK   - R ADD     CC.FACT      no shift needed
+         + STOP      0000
+
+MC.TAKS  - R SUB     CC.FACT      no shift needed, clue=-
+         + STOP      0000
+
+                                  // OP=4 MULT CLUE=+ -> -> acc =  acc * fact 
+                                  // OP=4 MULT CLUE=- -> -> acc = -acc * fact 
+                                  // OP=37 RES -> RESIDUE OF MULTIPLICATION
+
+
+MC.MULT  + STOP      MC.MLT
+MC.MULTS + STOP      MC.MLTS
+MC.MULT2 + STOP      MC.MLT2
+MC.SQURE + STOP      MC.SQRE
+
+MC.MLTS  - STORE     T0
+         - R SUB     T0
+MC.MLT   + L RIGHT   A35          ACC TO MQ
+         - MPY       CC.FACT      ACC = ACC X FACT
+         + STOP      0000
+
+MC.MLT2  - LOAD MQ   N0           MULT x 2 -> JUST CLEARS MQ AS THERE IS NO RESIDUE. 
+         + STOP      0000         MULT WILL BE PERFORMED ON SHIFTING THE RESULT FOR DESIRED QR
+
+MC.SQRE  - STORE     T0           ACC TO TEMP 0
+         + L RIGHT   A35          ACC TO MQ
+         - MPY       T0           ACC = ACC X ACC
+         + STOP      0000
+
+
+                                  // OP=5 DIV CLUE=+ -> -> acc =  acc / fact 
+                                  // OP=5 DIV CLUE=- -> -> acc = -acc / fact 
+                                  // OP=6/37/38 RES 
+
+MC.DIV   + STOP      MC.DIVI
+MC.DIVS  + STOP      MC.DIVIS
+MC.GETMQ + STOP      MC.GQ
+         
+MC.DIVIS - STORE     T0
+         - R SUB     T0
+MC.DIVI  + LOAD MQ   N0
+         - DIV       CC.FACT      MQ=RESULT OF DIVISION, ACC=REMAINDER
+         + STOP      0000
+
+MC.GQ    - STORE MQ  T0           ACC=MQ=RESULT OF DIVISION / RESIDUE OF MULT
+         - R ADD     T0           DO NOT USE "L LEFT" TO TRANSFER MQ TO ACC TO 
+         + STOP      0000         AVOID OVERFLOW IF ACC WAS NOT ZERO
+
+                                  // OP=10 ABS -> acc =  abs(fact)
+                                  // CLUE DOES NOT ALTERS THE RESULT
+
+MC.ABS   + STOP      MC.TKABS
+MC.TKABS - R ADD     N0
+         - ADD AB    CC.FACT
+         + STOP      0000
+
+                                  // OP=27 SIN 28 COS 29 ARCT 30 SQRT 31 LOG CLUE=+ -> acc =  func(fact)
+                                  // OP=27                                   CLUE=- -> acc =  func(-fact)
+                                  // OP=32 EXP CLUE=+ -> acc =  func(fact) (2 params call)
+                                  // OP=32     CLUE=- -> acc =  func(-fact) (2 params call)
+
+MC.FNFAC + STOP      MC.FNPL      FUNC ARG IS +FACT, 1 PARAM IN CALL
+MC.FN-FA + STOP      MC.FNMI      FUNC ARG IS -FACT
+MC.FNACC + STOP      MC.FNU       UNIARY OPERATION. FUNC ARG IS ACC
+MC.FN2   + STOP      MC.FN2PA     FUNC 2ND PARAM IN CALL
+
+MC.FNPL  - R ADD     CC.FACT
+MC.FNU   + L RIGHT   A35          MQ=ACC
+         + R ADD     STAR         RA *
+         + TR        SYMB         CALL FUNCTION ROUTINE
+         + STOP      P1           Q OF ARGUMENT SENT TO ROUTINE
+         + STOP      0000
+
+MC.FNMI  - R SUB     CC.FACT
+         + L RIGHT   A35          MQ=ACC
+         + R ADD     STAR         RA *
+         + TR        SYMB         CALL FUNCTION ROUTINE
+         + STOP      P1           Q OF ARGUMENT SENT TO ROUTINE
+         + STOP      0000
+
+MC.FN2PA + STOP      P2           Q OF RESULT SENT TO ROUTINE
+         + STOP      0000
+
+
+
+                                  // OP=20 DO fact  (fact is a region name)
+                                  // OP=23 LIB fact  (fact is a region name)
+                                  // OP=35 READ
+                                  // OP=36 LIST
+
+MC.LIB   + STOP      MC.LIBCA
+MC.DO    + STOP      MC.DOCAL
+
+MC.LIBCA + L RIGHT   A35          MQ=ACC
+MC.DOCAL + R ADD     STAR         RA *
+         + TR        SYMB         CALL FUNCTION ROUTINE
+         + STOP      0000
+
+                                  // Transfers T TZ TP TN TF HALT
+MC.TRTAD + STOP      *
+MC.TR    + STOP      MC.TRA
+         + STOP      MC.TRZ
+         + STOP      MC.TRP
+         + STOP      MC.TRN
+         + STOP      MC.TROV
+         + STOP      MC.HALT
+
+MC.TRA   + TR        INN          transfer to stepN given in var TRANSFER = stepN, TRSTLOC = location in step machine code
+         + STOP      0000
+
+MC.TRZ   + TR 0      INN          Transfer if acc=0
+         + STOP      0000
+
+MC.TRP   + TR 0      STAR+2
+         + TR +      INN          Transfer if acc>0
+         + STOP      0000
+
+MC.TRN   + TR 0      STAR+3
+         + TR +      STAR+2
+         + TR        INN          Transfer if acc<0
+         + STOP      0000
+
+MC.TROV  + TR OV     INN          Transfer if Overflow
+         + STOP      0000
+
+MC.HALT  + STOP      INN          Halt and tranfer on restart
+         + STOP      0000
+
+                                  // OP=33 SE (Sense)
+
+MC.SENSE + STOP      MC.SE
+MC.SE    + SENSE     P1
+         + STOP      0000
+
+                                  // OP=34 CL
+
+MC.CL    + STOP      MC.CLR
+MC.CLR   - R ADD     N0
+         - STORE     CC.FACT
+         + STOP      0000
+
+                                  // OP=39 ID for LIST
+
+MC.IDLST + STOP      MC.IDL       ID FOR LIST WITH VAR AS PARAM
+MC.IDLS0 + STOP      MC.IDL0      ID FOR LIST WITH NO VAR 
+
+MC.IDL   - STOP      CC.FACT      // factor to print via LIST op
+         + STOP      P1           // Q of factor 
+         + STOP      0000
+
+MC.IDL0  + STOP      P1           // blank factor (p1=0)
+         + STOP      P1           // Q of factor
+         + STOP      0000
+
+
+GENINST  + ADD       TWO          GENERATE MACHINE CODE (MC) INSTRUCTIONS
+         + STORE A   MC.TABLE     MC TABLE FOLLOWS CALL AS PARAMTERS (UNTIL -STOP 0000 INSTR)
+         + R ADD     *
+         + TR        GENTABLE
+         + R ADD     GEN1
+         + ADD       ONE
+
+         + STORE A   GENEXIT2      
+GENEXIT2 + TR        /   /
+
+
+GENTBOV  + R ADD     *
+         + TR        ERROR
+         + STOP      ERROVINS     ERROR: TOO MANY INSTR IN THIS STEP
+
+GENTABLE + ADD       TWO          GENERATE MACHINE CODE (MC) INSTRUCTIONS
+         + STORE A   GENEXIT      MC TABLE AT LOCATION IN MC.TABLE VAR
+                                  ADD THEM TO COMPACT CODE REGISTER 
+         + R ADD     MC.TABLE
+         + STORE A   GEN1
+
+GEN1     + R ADD     /   /        READ MACHINE CODE TABLE
+GENEXIT  + TR 0      /   /        =0 -> END OF MC.TABLE-> RETURN TO CALLER
+         + STORE     MC
+         + A RIGHT   0030         SAVE OPCODE ONLY
+         + A LEFT    0030         (WITH SIGN)
+         + STORE     MC.OP        IN MC.OP
+
+         + R ADD     NINST        INCR NUMBER OF MC INSTRUCTIONS IN CC TABLE
+         + ADD       ONE          ERROR IF > MAXIMUN ALLOWED
+         + STORE     NINST
+         + SUB       MAXNINST
+         + TR 0      GENTBOV      ERROR: TOO MANY INSTR IN THIS STEP
+
+         + R ADD     ZERO
+         + ADD AB    MC           EXTRACT ADDR PART OF MC 
+         + SUB AB    MC.OP        
+         + SUB       D1000
+         + TR +      GEN2
+         + STOP      1111         INVALID MC.TABLE
+GEN2     + ADD       ADTBL        USE THE TRANSFER TABLE TO PROCESS IT
+         + STORE A   ADTBLTR
+         + R ADD     ZERO
+         + ADD AB    MC.OP        ON ENTRY TO ROUTINE, ACC=ABS(MC.OP). SIGN IS IN MC VARIABLE
+ADTBLTR  + TR        /   /
+ADTBL    + STOP      *
+         + TR        GEN.T0       T 0000  temporal location 0 
+         + TR        GEN.ANN      A nnnn  where nnnn is the value of SHIFT1 var
+         + TR        GEN.A35      A 0035  
+         + TR        GEN.FACT     factor to be replaced by V 0005 (variable), T 0010 (result of a step) or N 0012 (a number)
+         + TR        GEN.N0       N 0000  will point to contant zero
+         + TR        GEN.P1       A nnnn  where nnnn is the value of PARAM1 var
+         + TR        GEN.P2       A nnnn  where nnnn is the value of PARAM2 var
+         + TR        GEN.STAR     * will be filled with final own instruction location 
+         + TR        GEN.ST+2     *+2 will be filled with final own instruction location + 2
+         + TR        GEN.ST+3     *+3 will be filled with final own instruction location + 3
+         + TR        GEN.SYMB     transfer to symbol given in TRANSFER var
+         + TR        GEN.INN      transfer to location n (1..199) into stepN given in var TRANSFER = stepN, TRSTLOC = location in step machine code
+
+
+GENADD   + R ADD     MC           ADD A GENERATED MC INSTR TO TINST TABLE
+         + TR +      GENADD1      TAKE THE SIGN OF MC AND PLACE IT IN MC.OP
+         + R SUB     MC.OP
+         + STORE     MC.OP
+GENADD1  + R ADD     NINST        ADD NINST TWICE AS EACH MC INSTR USES TWO HALF-WORDS
+         + ADD       NINST
+         + SUB       TWO          
+         + ADD       TINSTAD      TINSTAD=LOCATION OF TABLE WITH MC INSTRUCTIONS GENERATED FOR THE CURRENT STEP
+         + STORE A   GENADD2      TINST[ (INST- 1)*2 ] =MC instr op and region
+         + ADD       ONE
+         + STORE A   GENADD3      TINST[ (INST- 1)*2 ] =MC instr addr
+         + R ADD     MC.OP        
+GENADD2  + STORE     /   /        STORE GENERATED MC INSTRUCTION MC.OP (MC.OP CAN BE >0 OR <0)
+         + R ADD     MC.ADDR
+GENADD3  + STORE     /   /                                       MC.ADDR (CAN BE >0 OR <0 IF HOLDS A STEPN/LOCATION PAIR)
+
+         + R ADD     GEN1         PROCEED WITH NEXT MC INST N LIST
+         + ADD       ONE
+         + STORE A   GEN1
+         + TR        GEN1
+
+
+
+GEN.INN  + ADD       TRSTLOC      TRSTLOC=LOCATION INTO STEPN NUMBER THE MC INSTR HAS TO TRANSFER TO 
+         + STORE     MC.OP        MC.OP   = OPCODE + LOCATION INTO STEPN
+         + R SUB     TRANSFER     TRANSFER=STEPN NUMBER THE MC INSTR HAS TO TRANSFER TO 
+         + STORE     MC.ADDR      MC.ADDR = STEPN (WITH MINUS SIGN, TO SIGNAL ADDR POINTS TO STEPN/LOCATION IN THIS STEP PAIR)
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.ST+3 + ADD       ONE
+GEN.ST+2 + ADD       TWO
+GEN.STAR + ADD       NINST      
+         + STORE     MC.OP        MC.OP   = OPCODE + CURRENT OWN LOCATION INTO STEPN
+         + R SUB     STEPN
+         + STORE     MC.ADDR      MC.ADDR = STEPN (WITH MINUS SIGN, TO SIGNAL ADDR POINTS TO STEPN/LOCATION IN THIS STEP PAIR)
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.SYMB + ADD       REG.S
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION S
+         + R ADD     ZERO
+         + ADD AB    TRANSFER     REMOVE MINUS SIGN FROM VALUE
+         + STORE     MC.ADDR      MC.ADDR = SYMBOL ALFA VALUE/NUMBER TO TRANSFER TO
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.T0   + ADD       REG.T
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION T
+         + R ADD     ZERO
+         + STORE     MC.ADDR      MC.ADDR = 0
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+         
+GEN.ANN  + ADD       REG.A
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION A
+         + R ADD     ZERO
+         + ADD AB    SHIFT1
+         + STORE     MC.ADDR      MC.ADDR = ABS(SHIFT1) VARIABLE
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.A35  + ADD       REG.A
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION A
+         + R ADD     D35
+         + STORE     MC.ADDR      MC.ADDR = 0035
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.FACT + LOAD MQ   REG.V
+         + R ADD     FACTREG
+         + SUB       D34          'V'
+         + TR 0      GEN.FA1
+         + LOAD MQ   REG.N
+         + R ADD     FACTREG
+         + SUB       D26          'N'
+         + TR 0      GEN.FA1
+         + LOAD MQ   REG.T
+         + R ADD     FACTREG
+         + SUB       D32          'T'
+         + TR 0      GEN.FA1
+         + STOP      1111         INTERNAL COMPILER ERROR: INVALID FACT REGION
+GEN.FA1  + R ADD     ZERO
+         + L LEFT    0035         A=MQ
+         + ADD AB    MC.OP
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION OF FACTOR (CAN BE V, N OR T)
+         + R ADD     FACTN
+         + STORE     MC.ADDR      MC.ADDR = FACTN
+         + R ADD     NINST   
+         + STORE     NINCR        NINCR= THE LOCATION OF FACTOR MC INSTRUCTION INTO THE STEP 
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.N0   + ADD       REG.N
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION N
+         + R ADD     RELNUM0      ORIGIN OF NUMBERS (USUALLY = 0)
+         + STORE     MC.ADDR      MC.ADDR = 0000
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.P2   + LOAD MQ   PARAM2
+         + TR        GEN.P0
+GEN.P1   + LOAD MQ   PARAM1
+GEN.P0   + ADD       REG.A
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION A
+         + R ADD     ZERO
+         + L LEFT    0035         ACC=MQ 
+         + STORE     PARAM0
+         + TR +      GEN.P1PL     TR IF PARAM > 0 -> KEEP OP SIGN
+         + R SUB     MC           IF PARAM IS NEGATIVE, STORE IT AS POSITIVE VALUE IN MC.ADDR
+         + STORE     MC           AND REVERSET THE MC INSTRUCTIOn SIGN 
+         + R SUB     PARAM0
+GEN.P1PL + STORE     MC.ADDR      MC.ADDR = PARAM1/2/3 
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+                             
+PRTMC    + ADD       TWO          PRINT TINST TABLE WITH MC INSTRUCTIONS GENERATED FOR THIS STEP
+         + STORE A   PRTMCEX
+         + R ADD     ZERO
+         + STORE     PRTMCNUM
+
+PMCLOOP  + R ADD     PRTMCNUM
+         + SUB       NINST
+         + TR 0      PRTMCEX      EXIT IF ALL NINST INSTRUCTIONS PRINTED
+         + R ADD     PRTMCNUM     INCR COUNT
+         + ADD       ONE
+         + STORE     PRTMCNUM     GET MC INSTR FROM TINST[ (PRTMCNUM-1)*2 ]
+         + ADD       PRTMCNUM
+         + SUB       TWO
+         + ADD       TINSTAD
+         + STORE A   PMCAD1
+         + ADD       ONE
+         + STORE A   PMCAD2
+         + R ADD     ZERO
+         + STORE     MC.REG       INIT REGION REFERENCED BY MC
+PMCAD1   + R ADD     /   /
+         + STORE A   MC.REG
+         + A RIGHT   0012
+         + STORE     MC.OP        MC.OP HAS NOW THE SIGNED OPCODE -31..31 
+
+PMCAD2   + R ADD     /   /
+         + STORE     MC.ADDR
+         + TR +      PMC3         IF MC.ADDR >=0 THEN MC.REG HOLDS THE REGION FOR MC.ADDR 
+         + R ADD     MC.REG       IF MC.ADDR <0 THEN MC.REG VAR HOLDS THE LOCATION INTO STEPN REFERENCED BY MC.ADDR
+         + STORE     TRSTLOC      LOCATION IN STEP GIVEN BY MC.ADDR
+         + R SUB     MC.ADDR      MAKES MC.ADDR POSITIVE. IT IS THE DESTINATION STEP
+         + STORE     MC.ADDR
+         + R ADD     REG.I
+         + STORE     MC.REG       SET REGION I -> MC.ADDR=THE STEPN, TRSTLOC=THE NINST REFERENCED IN THIS STEPN
+
+PMC3     + R ADD     *            START NEW LINE TO PRINT
+         + TR        CLRBUF
+
+         + LOAD MQ   STEPN        PRINT STEPN
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0040         AT COL 40 
+         + STOP      0004         LEN=4
+         + LOAD MQ   D43          PRINT '.'
+         + R ADD     *
+         + TR        PRTCHR
+         + STOP      0044         AT COL 44 
+         + LOAD MQ   TWO
+         + R ADD     PRTMCNUM     IF INST NUMBER < 10 PRINT IT
+         + SUB       D10          WITH LEN=1, IF >= 10 USE LEN=2
+         + TR +      PMC4
+         + LOAD MQ   ONE
+PMC4     + STORE MQ  PMC5
+         + LOAD MQ   PRTMCNUM
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0045         AT COL 45 
+PMC5     + STOP      0002         LEN=1 OR 2
+
+         + LOAD MQ   D12          '+'
+         + R ADD     MC.OP
+         + TR +      PMC6
+         + LOAD MQ   D11          '-'
+PMC6     + R ADD     *            PRINT OP SIGN
+         + TR        PRTCHR
+         + STOP      0048         AT COL 48
+
+         + R ADD     ZERO
+         + ADD AB    MC.OP
+         + ADD       TMNEAD
+         + STORE A   PMC7
+PMC7     + LOAD MQ   /   /
+         + R ADD     *            PRINT OP MNEMONIC
+         + TR        PRTALF
+         + STOP      0049         AT COL 49
+
+         + R ADD     MC.REG
+         + ADD       TREGMNEA     CHARS IN TREGMNE ARE TXT ALFA VALUES  
+         + STORE A   PMC8         THUS ARE NEGATIVE
+PMC8     + R SUB     /   /        CHANGE SIGN BEFORE STORING IT IN MQ
+         + L RIGHT   0035
+         + R ADD     *            PRINT REGION LETTER V I S T A N
+         + TR        PRTCHR
+         + STOP      0052         AT COL 52
+         
+         + R ADD     MC.REG       IF MC.REG='I' THEN ...
+         + SUB       REG.I        
+         + TR 0      PMC9         TR TO PRINT STEPN.LOCATION
+         + R ADD     MC.REG       IF MC.REG='S' THEN ...
+         + SUB       REG.S
+         + TR 0      PMC8B        TR TO PRINT ALFA SYMBOL TO TRANSFER TO
+         
+         + LOAD MQ   MC.ADDR      MC.REG IS 'V', 'T', 'A' OR 'N'
+         + R ADD     *            JUST PRINT THE INST ADDRESS
+         + TR        PRTINT
+         + STOP      0053         AT COL 53 
+         + STOP      0004         LEN=4
+         + TR        PMC12
+
+PMC8B    + LOAD MQ   D45          PRINT ALFA SYMBOL TO TRANSFER TO
+         + R ADD     *            '/'
+         + TR        PRTCHR
+         + STOP      0054         AT COL 54
+         + LOAD MQ   D45          '/'
+         + R ADD     *
+         + TR        PRTCHR
+         + STOP      0058         AT COL 58
+         + LOAD MQ   MC.ADDR      GET SYMBOL ALFA
+         + R ADD     *            
+         + TR        PRTALF
+         + STOP      0055         AT COL 55
+         + TR        PMC12
+
+TMNEAD   + STOP      TMNE
+TREGMNEA + STOP      TREGMNE
+
+PMC9     + LOAD MQ   MC.ADDR      PRINT STEPN.TRSTLOC 
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0053         AT COL 53 
+         + STOP      0004         LEN=4
+         + LOAD MQ   D43          PRINT '.'
+         + R ADD     *
+         + TR        PRTCHR
+         + STOP      0057         AT COL 57 
+         + LOAD MQ   TWO
+         + R ADD     TRSTLOC      IF INST NUMBER < 10 PRINT IT
+         + SUB       D10          WITH LEN=1, IF >= 10 USE LEN=2
+         + TR +      PMC10
+         + LOAD MQ   ONE
+PMC10    + STORE MQ  PMC11
+         + LOAD MQ   TRSTLOC
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0058         AT COL 58 
+PMC11    + STOP      0002         LEN=1 OR 2
+PMC12    + NOOP      0000
+
+         + R ADD     *
+         + TR        PRINTCRD
+         + TR        PMCLOOP    
+
+
+PRTMCEX  + TR        /   /        RETURN TO CALLER
+
+           ORG       EVEN
+
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0            FACTN=ADDR (0, 2, 4, ..) FACTREG=' ', 'T', 'V', 'N'
+D2N        DEF       0            S1N/S2N=INDEX (IF <0), BLANK (IF =0), CONST (IF >0)
+NINST      DEF       0            D1N/D2N=HALF-WORD SIZE OF EACH DIMENSION
+NINCR      DEF       0                D1N=-1 IF MATRIX/VECTOR WITH CONSTANT SUBSCRIPTS
+TINST      RES       200          MACHINE CODE: 1ST HALF-WORD OPCODE + REGION/LOCATION INTO STEP (FOR TRANSFERS)
+                                                2ND HALF-WORD ADDR INTO REGION
+
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+N          DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+RELNUM0    DEF       0            REL NUM ORIGIN
+DUMMY      DEF       0            
+
+                                  TABLES (SHOULD BE AT EVEN LOCATION)
+
+MAXNINST   DEF       100          MAX NUMBER OF MACHINE CODE INSTRUTIONS PER STEP
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D3         DEF       3
+D4         DEF       4
+D5         DEF       5
+D6         DEF       6
+D10        DEF       10
+D11        DEF       11
+D12        DEF       12
+D26        DEF       26
+D28        DEF       28
+D30        DEF       30
+D32        DEF       32
+D34        DEF       34
+D35        DEF       35
+D38        DEF       38
+D43        DEF       43
+D45        DEF       45
+D200       DEF       200
+D1000      DEF       1000
+
+QRPREV     DEF       0            VALUE OF QR (Q OF RESULT) OF PREVIOUS STEP
+QRPREV0    DEF       0            SAVED VALUE OF QRPREV
+QROP       DEF       0            Q RESULTING OF STEP OPERATION, PRIOR TO APPLY SHIFT TO MATCH DESIRED QR ON THIS STEP
+MC.TABLE   DEF       0            ADDRESS TO MACHINE CODE GENERATION TABLE TO USE 
+SHIFT1     DEF       0            SHIFT NEEDED BEFOR OPERATION TO ALIGN OPERANDS ACC AND FACTOR
+TRANSFER   DEF       0            STEPN NUMBER THE MC INSTR HAS TO TRANSFER TO 
+TRSTLOC    DEF       0            LOCATION INTO STEPN NUMBER THE MC INSTR HAS TO TRANSFER TO 
+PARAM0     DEF       0            PARAMETER FOR MC GENERATION
+PARAM1     DEF       0            PARAMETER FOR MC GENERATION
+PARAM2     DEF       0            PARAMETER FOR MC GENERATION
+MC         DEF       0            MACHINE CODE INSTR TO GENERATE FROM MC TABLE
+MC.OP      DEF       0            MC OPCODE GENERATED
+MC.REG     DEF       0            REGION REFERENCED BY MC OPCODE GENERATED
+MC.ADDR    DEF       0            MC ADDR GENERATED. BOTH WILL BE STORED IN TINST TABLE IN COMPCAT CODE RECORD
+PRTMCNUM   DEF       0            NEXT INSTR TO PRINT WITH PRTMC
+FACTNEG    DEF       0            =1 IF FACTOR HAS CLUE=- OR CLUE=N   
+OP2        DEF       0            TEMP
+
+                                  TEXT
+
+ERROVINS   TXT       "TOO MANY INSTR IN THIS STEP",0
+ERREQR0S   TXT       "QR OF EXP CANNOT BE LESS THAT ONE",0    QR ON EXP STEP MIST BE >= 1
+
+MSGSTART   TXT       "OPERATION EXPANSION",0
+MSGSTAR2   TXT       "QPV QF  QOP QR",0
+
+                                  REL ASSEMBLY REGION INDEXS
+
+REG.A      DEF       0            ABSOLUTE A 0000
+REG.I      DEF       1            INSTRUCTIONS CODE I 0000
+REG.V      DEF       2            VARIABLES V 0000
+REG.T      DEF       3            TEMPORARY T 0000
+REG.N      DEF       4            NUMBER N 0000
+REG.S      DEF       7            SYMBOL S 0000
+
+TREGMNE    TXT       '  A'
+           TXT       '  I'
+           TXT       '  V'
+           TXT       '  T'
+           TXT       '  N'
+           TXT       '  P'        PERISHABLE STORAGE (=LIB LOCAL VARS/CONSTANTS)
+           TXT       '  #'        UNUSED
+           TXT       '  S'
+
+TMNE       TXT       'H  '        STOP/HALT
+           TXT       'T  '        TRANSFER
+           TXT       'TF '        TRANSFER ON OVERLOF
+           TXT       'TP '        TRANSFER ON PLUS
+           TXT       'TZ '        TRANSFER ON ZERO
+           TXT       'S  '        SUBTRACT
+           TXT       'RS '        RESET AND SUBTRACT
+           TXT       'SV '        SUBTRACT ABSOLUTE VALUE
+           TXT       'N  '        NO OPERATION
+           TXT       'A  '        ADD
+           TXT       'RA '        RESET AND ADD
+           TXT       'AV '        ADD ABSOLUTE VALUE
+           TXT       'ST '        STORE
+           TXT       'SA '        STORE ADDRESS
+           TXT       'SM '        STORE MQ
+           TXT       'LM '        LOAD MQ
+           TXT       'M  '        MULTIPLY
+           TXT       'MR '        MULTIPLY AND ROUND
+           TXT       'D  '        DIVIDE
+           TXT       'R  '        ROUND
+           TXT       'LL '        LONG LEFT SHIFT
+           TXT       'LR '        LONG RIGHT SHIFT
+           TXT       'AL '        ACCUMULATOR LEFT SHIFT
+           TXT       'AR '        ACCUMULATOR RIGHT SHIFT
+           TXT       'RD '        READ
+           TXT       'RB '        READ BACKWARDs
+           TXT       'W  '        WRITE
+           TXT       'WE '        WRITE END OF FILE
+           TXT       'RW '        REWIND TAPE
+           TXT       'SD '        SET DRUM DDR
+           TXT       'SE '        SENSE
+           TXT       'C  '        COPY
+
+FNSIN      TXT       'SI$'        TRASCENDENT FUNCTION LIBRARY ROUTINES
+FNCOS      TXT       'CO$'
+FNARCT     TXT       'AT$'
+FNSQRT     TXT       'SQ$'
+FNLOG      TXT       'LO$'
+FNEXP      TXT       'EX$' 
+FNREAD     TXT       'RD$'        READ LIBRARY ROUTINE
+FNLIST     TXT       'LS$'        LIST LIBRARY ROUTINE
+
+OPDIVRES   EQU        D38
+OPMULT     EQU        D4
+
+T0         EQU       1001         T 0000  temporal location 0 
+ANN        EQU       1002         A nnnn  where nnnn is the value of SHIFT1 var
+A35        EQU       1003         A 0035  
+CC.FACT    EQU       1004         compact code factor: to be replaced by V 0005 (variable), T 0010 (result of a step) or N 0012 (a number)
+N0         EQU       1005         N 0000  will point to contant zero
+P1         EQU       1006         A nnnn  where nnnn is the value of PARAM1 var
+P2         EQU       1007         A nnnn  where nnnn is the value of PARAM2 var
+STAR       EQU       1008         * will be filled with final own instruction location 
+STAR+2     EQU       1009         *+2 will be filled with final own instruction location + 2
+STAR+3     EQU       1010         *+3 will be filled with final own instruction location + 3
+SYMB       EQU       1011         transfer to symbol given in TRANSFER var
+INN        EQU       1012         transfer to location n (1..199) into stepN given in var TRANSFER = stepN, TRSTLOC = location in step machine code
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEIN     EQU       0257         INPUT PACT COMPACT CODE FROM TAPE 2 
+TAPEOUT    EQU       0258         OUTPUT TO TAPE 3 (UPDATED PACT COMPACT CODE)
+
+
+

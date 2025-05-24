@@ -104,71 +104,18 @@ DEBTAB              dev_debug[] = {
 };
 
 
-uint16          ascii_to_hol[128] = {
-    /* Control                              */
-    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,    /*0-37*/
-    /*Control*/
-    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
-    /*Control*/
-    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
-    /*Control*/
-    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
-    /*  sp      !      "      #      $      %      &      ' */
-    /* none   Y28    78     T28    Y38    T48    XT     48  */
-    0x000, 0x600, 0x006, 0x282, 0x442, 0x222, 0xA00, 0x022,     /* 40 - 77 */
-    /*   (      )      *      +      ,      -      .      / */
-    /* T48    X48    Y48    X      T38    T      X38    T1  */
-    0x222, 0x822, 0x422, 0x800, 0x242, 0x400, 0x842, 0x300,
-    /*   0      1      2      3      4      5      6      7 */
-    /* T      1      2      3      4      5      6      7   */
-    0x200, 0x100, 0x080, 0x040, 0x020, 0x010, 0x008, 0x004,
-    /*   8      9      :      ;      <      =      >      ? */
-    /* 8      9      58     Y68    X68    38     68     X28 */
-    0x002, 0x001, 0x012, 0x40A, 0x80A, 0x042, 0x00A, 0x882,
-    /*   @      A      B      C      D      E      F      G */
-    /*  82    X1     X2     X3     X4     X5     X6     X7  */
-    0x022, 0x900, 0x880, 0x840, 0x820, 0x810, 0x808, 0x804,     /* 100 - 137 */
-    /*   H      I      J      K      L      M      N      O */
-    /* X8     X9     Y1     Y2     Y3     Y4     Y5     Y6  */
-    0x802, 0x801, 0x500, 0x480, 0x440, 0x420, 0x410, 0x408,
-    /*   P      Q      R      S      T      U      V      W */
-    /* Y7     Y8     Y9     T2     T3     T4     T5     T6  */
-    0x404, 0x402, 0x401, 0x280, 0x240, 0x220, 0x210, 0x208,
-    /*   X      Y      Z      [      \      ]      ^      _ */
-    /* T7     T8     T9     X58    X68    T58    T78     28 */
-    0x204, 0x202, 0x201, 0x812, 0x20A, 0x412, 0x406, 0x082,
-    /*   `      a      b      c      d      e      f      g */
-    0x212, 0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,     /* 140 - 177 */
-    /*   h      i      j      k      l      m      n      o */
-    0xA02, 0xA01, 0xD00, 0xC80, 0xC40, 0xC20, 0xC10, 0xC08,
-    /*   p      q      r      s      t      u      v      w */
-    0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
-    /*   x      y      z      {      |      }      ~    del */
-    /*                     Y78     X78    78     79         */
-    0x604, 0x602, 0x601, 0x406, 0x806, 0x006, 0x005,0xf000
-};
-
-uint16   sim_ascii_to_hol(char c)
+uint16   ascii_to_hol(char c)
 {
-    return ascii_to_hol[c & 127];
+    return sim_ascii_to_hol2(cdr_unit, c); 
 }
 
-char     sim_hol_to_ascii(uint16 hol)
+char     hol_to_ascii(uint16 hol)
 {
     int c;
     hol = hol & 0x0fff; // ignore extra high bits, if any
-    if (hol == 0xa00) return '?'; // +0
-    if (hol == 0x600) return '!'; // -0
-    for (c=31;c<127;c++) {
-        if (ascii_to_hol[c] == hol) {
-            // take in consideration the aliases between hol and ascii to return 
-            // char as for 026 FORT charset
-            // hol = 0x022   -> 8-4   punches -> "-" or "'" or "@".   Must be "-"
-            // hol = 0x222   -> 0-8-4 punches -> "(" or "%".          Must be "("  
-            if (c == '%') {c = '(';} else
-                if (c == '@') {c = '-';} else
-                    if (c == '\'') {c = '-';};
-            return c;
+    for (c=32; c<128; c++) {
+        if (ascii_to_hol(c) == hol) {
+            return c; 
         }
     }
     return ' ';
@@ -192,7 +139,7 @@ void echo_cardimage(DEVICE * dptr, uint16 * image, int EchoLevel, char * msg, ch
     SkipCols = cdr_skip_cols();
 
     for (i=0; i<80; i++) {
-        cbuf[i] = c = sim_hol_to_ascii(image[i]);
+        cbuf[i] = c = hol_to_ascii(image[i]);
         if (cardtext) cardtext[i] = c;
     }
     cbuf[80] = 0; // terminate string
@@ -201,10 +148,10 @@ void echo_cardimage(DEVICE * dptr, uint16 * image, int EchoLevel, char * msg, ch
     if (EchoLevel > 0) {  
         if ((msg) && (msg[0]) && (EchoLevel > 1)) {
             cbuf[65]=0; // shorten to fit in line
-            sim_printf("%s: %s\n", msg, cbuf);
+            sim_printf("%s: %s\r\n", msg, cbuf);
         } else {
             cbuf[79]=0; // no msg -> shorten 1 to avoid extra cr
-            sim_printf("%s\n", cbuf);
+            sim_printf("%s\r\n", cbuf);
         }
     }
 
@@ -249,22 +196,22 @@ void echo_cardimage(DEVICE * dptr, uint16 * image, int EchoLevel, char * msg, ch
         cbuf[i++]=0;
         if (EchoLevel==2) {
             // if Echo = 2 -> print card image as octal in console
-            sim_printf(" Row %c %s %s %06o %06o %06o %06o\n", 
+            sim_printf(" Row %c %s %s %06o %06o %06o %06o\r\n", 
                 crow[row], (row==11) ? "octal":"     ", (row==11) ? " /":"| ",
                 w[0], w[1], w[2], w[3]);
         } else if (EchoLevel==3) {
             // if Echo = 3 -> print card image as octal+binary in console
             cbuf[38]=0;
-            sim_printf("Row %c: %06o %06o %06o %06o %s %s \n", 
+            sim_printf("Row %c: %06o %06o %06o %06o %s %s \r\n", 
                 crow[row], 
                 w[0], w[1], w[2], w[3], (row==11) ? " /":"| ", cbuf);
         } else {
             // if Echo = 0 ->  print full card image only in debug log
-            sim_debug(DEBUG_DETAIL, dptr, "Row %c octal: %06o %06o %06o %06o %s %s%s%s\n", 
+            sim_debug(DEBUG_DETAIL, dptr, "Row %c octal: %06o %06o %06o %06o %s %s%s%s \n", 
                 crow[row], w[0], w[1], w[2], w[3], (row==11) ? " /":"| ", cbuf1, cbuf, cbuf2);
         }
     }
-    if (EchoLevel>=2) sim_printf(" \n");
+    if (EchoLevel>=2) sim_printf(" \r\n");
 
 }
 
@@ -320,10 +267,24 @@ int sLinToInt(int nlin, char * slin,  int n, int len, int octal)
     return nn; 
 }
 
+// load/dump DRUM to file
+t_stat sim_load_drum(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
+{
+    t_stat r; 
+    if (flag != 0) {
+        // dump drum to file
+        r = sim_fwrite(DRUM, sizeof(DRUM), 1, fileref);
+    } else {
+        // load drum from file
+        r = sim_fread(DRUM, sizeof(DRUM), 1, fileref);
+    }
+    return r;
+}
+
 t_stat sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
     int lo_addr, hi_addr, addr, nlin, i, blank, n;
-    int octal, alpha, digits; 
+    int octal, alpha, digits, compact, only_symbols; 
     t_value d; 
     t_stat r; 
     char c_svrem; 
@@ -331,58 +292,115 @@ t_stat sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
     char slin[1024];
     char c;
 
+    const char *ext; 
+    const char *trim; 
+
     if (*cptr != 0) return SCPE_ARG;
+
+    ext=strrchr(fnam, '.'); // get last dot of filename
+    if ((ext) && (0==sim_strncasecmp(ext, ".DRM", 4))) { 
+        // if filename has .DRM extension, load/dump to drum
+        return sim_load_drum(fileref, cptr, fnam, flag); 
+    }
+
     if (flag != 0) return sim_messagef (SCPE_NOFNC, "Command Not Implemented\n");
 
-    memset(CRT_Symbolic_Buffer, 0, sizeof(CRT_Symbolic_Buffer));            // clear symbolic info
+    if (sim_switches & SWMASK ('S')) {
+        // load -s file 
+        // will load ONLY symbolic info, without cleaning any one already present
+        // will NOT load any program in mem
+        only_symbols = 1; 
+    } else {
+        memset(CRT_Symbolic_Buffer, 0, sizeof(CRT_Symbolic_Buffer));  // clear symbolic info
+        only_symbols = 0; 
+    }
 
     octal=0; // defaults to decimal numbers
+    compact=0; // default to normal mode
     lo_addr=hi_addr=-1; 
     addr=0; nlin=0; // init lowest/highest addr loaded
+    r = 0; 
     while (fgets (slin, sizeof(slin)-1, fileref)) {
         nlin++; 
-        // set lines to 30 chars len minimum
-        i=strlen(slin);
-        if (i<30) {
-            while (i<30) slin[i++]=' '; // pad with spaces
-            slin[i]=0;                  // new end of line
+        i=strlen(slin); 
+        if (i<128) {
+            while (i<128) slin[i++]=' '; // pad with spaces
+            slin[i]=0;                  // new end of string
         }
-        // remove non printable chars
-        i=strlen(slin);
-        for (i=0;i<(int) strlen(slin);i++) {
+        // remove non printable chars, set trim to point to first non space char
+        n=strlen(slin);
+        trim = 0; 
+        for (i=0;i<n;i++) {
             if (slin[i] < 32) slin[i]=' ';
+            if ((trim==0) && (slin[i] > ' ')) trim=slin+i;
         }
+        if (trim==0) trim=slin; 
+        // trim right spaces after col 35
+        i=strlen(slin); 
+        while (i>35) { if (slin[--i]==' ') slin[i]=0; else break; } 
 
         // extract program info. Line format:
         // 0         1         2         3
         // 01234567890123456789012345678901234567890
         // OCT | DEC
         // NNNN S OPNAME   OP ADDR    Remarks...(max 79 chars)
-        // 7777 + store mq 10 7777    instruction
-        // 7777 + store mq    7777    instruction
-        // 7777 + store mq 10 [  ]    instruction
-        // 7777 + store mq    [  ]    instruction
+        // 7777 + store mq 10 7777    instruction this is the normal mode
+        // 7777 + store mq    7777    instruction the input file is quite verbose
+        // 7777 + store mq 10 [  ]    instruction and easy to read. It mimics original
+        // 7777 + store mq    [  ]    instruction IBM coding sheets 
         // 7777 +          10 7777    instruction
         // 7777            10 [  ]    instruction
         // 7777 - 123456              half word  
         // 7777   123456789012        full word
-        // check if blank line
+
+        // 01234567890123456789012345678901234567890
+        //         OCT | DEC
+        //         NNNN OP ADDR COMMENTS
+        //           66- 6   76 comment this is the compact mode. Just has the
+        //         1234+12 1234 comment minimun data needed to load a prog
+        //          123+123456  comment 
+        //            3+     6  comment 
+        //         END
+
         blank=1; alpha=0; digits=0;
+        if (compact) memcpy(slin+0, slin+8, strlen(slin));
+        if (sim_strncasecmp(slin, "END",  3) == 0) break;
         if (sim_strncasecmp(slin, "NNNN ",  5) == 0) {
             // if line start with NNNN ... ignore it
+            compact=0; // set normal mode
+        } else if (sim_strncasecmp(slin, "        NNNN ",  13) == 0) {
+            // if line start with NNNN ... ignore it
+            compact=1; // set compact mode
         } else if (slin[0] == ';') {
             // if line start with ";" ... ignore it
-        } else if (sim_strncasecmp(slin, "OCT",  3) == 0) {
+        } else if (sim_strncasecmp(trim, "OCT",  3) == 0) {
             // if line start with OCT ... use octal numbers 
             octal=1;
-        } else if (sim_strncasecmp(slin, "DEC",  3) == 0) {
+        } else if (sim_strncasecmp(trim, "DEC",  3) == 0) {
             // if line start with DEC ... use decimal numbers
             octal=0;
-        } else for (i=0;i<23;i++) {
+        } else if (compact==1) for (i=0;i<12;i++) {
             c=slin[i];
             if (c<32) break;
             c=toupper(c);
-            if ((octal) && (i<23) && ((c=='8') || (c=='9'))) {
+            if ((octal) && ((c=='8') || (c=='9'))) {
+                sim_printf("line %d: %s\n", nlin, slin); 
+                sim_printf("Invalid octal digit %c at pos %d\n", c, i+9);
+                break;
+            }
+            if ((c=='+') || (c=='-')) blank=0;
+            if ((c>='0') && (c<='9')) blank=0; 
+            if ((c!=' ') && (c!='+') && (c!='-') && ((c<'0') || (c>'9'))) {
+                blank=1; 
+                sim_printf("line %d: %s\n", nlin, slin); 
+                sim_printf("invalid char '%c' (code %d) at pos %d\n", (c<32) ? 32:c, c, i+9);
+                break;
+            } 
+        } else if (compact==0) for (i=0;i<23;i++) {
+            c=slin[i];
+            if (c<32) break;
+            c=toupper(c);
+            if ((octal) && ((c=='8') || (c=='9'))) {
                 sim_printf("line %d: %s\n", nlin, slin); 
                 sim_printf("Invalid octal digit %c at pos %d\n", c, i+1);
                 break;
@@ -426,30 +444,80 @@ t_stat sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             sim_printf("Cannot store at address %d\n", addr);
             continue; 
         }
+        // keep track of lo nd hi addr loaded with data
         if ((lo_addr == -1) || (lo_addr > addr)) lo_addr = addr;  
         if ((hi_addr == -1) || (hi_addr < addr)) hi_addr   = addr;  
-        // safety. Put an end of line before remarks
-        c_svrem=slin[26]; 
-        slin[26]=0; 
+        // clear symbolic info
+        memset(&CRT_Symbolic_Buffer[addr * 80], 0, 80); 
         // get data to load at this addr
-        r = parse_sym(&slin[5], addr, NULL, &d, 
-            (alpha ? SWMASK('M'): (digits>6) ? SWMASK('F') : 0) | (octal ?  SWMASK('O'):0));
-        slin[26]=c_svrem; // restore
+        if (compact) {
+           digits=6; // compact mode only handles half-words
+           r=0; 
+           if ((slin[6]>32) && (slin[7]==32)) {
+               // is an instruction: Opcode + address
+               n=sLinToInt(nlin, slin,  5, 2, octal); // opcode
+               d=sLinToInt(nlin, slin,  8, 4, octal); // address
+               if ((n<0) || (n>=32)) {
+                  sim_printf("Invalid OP. Should be in range 0..31. Cannot store at address %d\n", addr);
+                  r=1; 
+                  break; 
+               }
+               if ((d<0) || (d>=4096)) {
+                  sim_printf("Invalid ADDR. Should be in range 0..4095. Cannot store at address %d\n", addr);
+                  r=1; 
+                  break; 
+               }
+               d=n*4096 + d; // compose
+           } else {
+               // is a 18 bits half word
+               d=sLinToInt(nlin, slin,  5, 6, octal); // address
+               if ((d>=262144) || (d<0)) {
+                  sim_printf("Invalid HALF-WORD. Should be in range 0..262143. Cannot store at address %d\n", addr);
+                  r=1; 
+                  break; 
+               }
+           }
+           if (slin[4]=='-') {
+               d = d | (1 << 17); // set sign bit on 
+           }
+           // store symbolic info
+           while (i>0) { if (slin[--i]==' ') slin[i]=0; else break; } // trim all rigth spaces 
+           sim_strlcpy(&CRT_Symbolic_Buffer[addr * 80], &slin[compact?13:27], 79);
+        } else {
+           // safety. Put an end of line before remarks
+           c_svrem=slin[26]; 
+           slin[26]=0; 
+           r = parse_sym(&slin[5], addr, NULL, &d, 
+               (alpha ? SWMASK('M'): (digits>6) ? SWMASK('F') : 0) | (octal ?  SWMASK('O'):0));
+           if (r) {
+              d=0;
+           } else {
+              slin[26]=c_svrem; // restore
+              if ((slin[5]=='-') && (d==0) && (digits <= 6)) {
+                  // storing -0 minus half-word
+                  d = (1 << 17); // set sign bit on 
+              }
+              // store symbolic info
+              i=strlen(slin);
+              while ((i>0) && (slin[--i]=' ')) slin[i]=0; // trim right spaces
+              sim_strlcpy(&CRT_Symbolic_Buffer[addr * 80], &slin[27], 79);
+           }
+        }
         if (r) {
             sim_printf("line %d: %s\n", nlin, slin); 
             sim_printf("Invalid instruction\n");
             continue; 
         }
-        // store word
-        if ((alpha==0) && (digits>6)) {
-            WriteAddr(-addr, d, NULL);
+        if (only_symbols) {
+            // we are storing only symbolic info, do not stpre anything in mem
         } else {
-            WriteAddr(addr, d, NULL);
+           // regular load: store word
+           if ((alpha==0) && (digits>6)) {
+               WriteAddr(-addr, d, NULL);
+           } else {
+               WriteAddr(addr, d, NULL);
+           }
         }
-        // store symbolic info
-        memset(&CRT_Symbolic_Buffer[addr * 80], 0, 80); // clear
-        sim_strlcpy(&CRT_Symbolic_Buffer[addr * 80], &slin[27], 79);
-
     }
     if (lo_addr < 0) {
         sim_printf("Nothing loaded. No program found into %s \n", fnam);
@@ -652,6 +720,10 @@ t_stat parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int3
     d = 0;
     if (sw & SWMASK('M')) {
 
+        if ((*cptr=='0') && (*(cptr+1)==0)) {
+            return SCPE_ARG; // probing "-M 0" from SCP to figure out dfltinc
+        }
+
         neg = 0; 
         if (hword==0) return sim_messagef (SCPE_ARG, "Instruction can only be stored on a halfword\n");
 
@@ -711,7 +783,7 @@ t_stat parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int3
                 opaddr=(int) d;
             }
         }
-        if (opaddr >> 12) return sim_messagef (STOP_UUO, "Operation address has ore than 12 bits\n"); 
+        if (opaddr >> 12) return sim_messagef (STOP_UUO, "Operation address has more than 12 bits\n"); 
 
         // set instr: sign (1 bit) + opcode (5 bits) + address (12 bits): total 18 bits 
         d = (opcode << 12) + opaddr; 
@@ -729,7 +801,7 @@ t_stat parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int3
             }
         } else {
             // 18 bits halfword signed constant, either decimal or octal. Allow embebbend spaces
-            if ((d > 0777777) || (d < -(0777777))) {
+            if ((d > 0377777) || (d < -(0377777))) {
                 return sim_messagef (SCPE_ARG, "Number does not fit in a halfword\n");
             }
             if (d<0) {
@@ -755,6 +827,7 @@ struct {
 } csw_btn_def[] = {
     // buttons
     {100, "Load"},
+    {110, "Enter MQ"},
     {120, "Printer Carriage"}, 
     // switches
     {  1, "AutomaticManual"},     
@@ -819,6 +892,7 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
 
     if (id == 100) {
         // press "Load"
+        DisconnectIO();
         ClearInterlocks();
         if (Console_Sw_LoadSelector==0) {
             // load from card
@@ -850,6 +924,10 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
         NCYCLE=0;
         r=run_cmd(RU_GO, cptr);
         return r; 
+    } else if (id == 110) {
+        // press "Enter MQ"
+        // sets left half-word of MQ
+        MQ = ((t_int64) Console_Sw_MQ_Entry) << 18; 
     } else if (id == 120) {
         // press "Printer Carriage"
         // print an empty line
@@ -958,7 +1036,7 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
 
    carddeck [-q] <operation> <parameters...>
 
-                        allowed operations are join, list, print, punch, sort, ident
+                        allowed operations are join, list, print, punch, add, sort, ident
 
                         default format for card files is AUTO, this allow to intermix source decks
                         with different formats. To set the format for carddeck operations use
@@ -1038,7 +1116,7 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
                         sort ascending or descending based on data in cards from column
                         col1 up to col2, both columns included (first column of card is column 1)
 
-   carddeck punch       create (punch) a new single card in specied file. 
+   carddeck punch       create (punch) a card(s) in specied file. 
 
                         carddeck punch <file> text|oct|dec <data>
 
@@ -1079,7 +1157,8 @@ t_stat set_csw_btn_cmd(int32 flag, CONST char *cptr)
 
                         carddeck punch <file> bincards <n>
 
-                           punch n binary cards with memroy contents starting at location 0.
+                           create a deck with n binary cards with memory contents starting at 
+                           location 0. Format of card file created is BINARY.
                            Each card holds 24 fullwords
 
 switches:            if present must be just after carddeck and before deck operation
@@ -1385,7 +1464,7 @@ static t_stat deck_print_cmd(CONST char *cptr, char cMode)
         nCards = 0;
     } else {
         cptr = get_glyph (cptr, gbuf, 0);                       // get next param
-        nCards = (int) get_uint (gbuf, 10, MAX_CARDS_IN_READ_STAKER_HOPPER, &r);
+        nCards = (int) get_uint (gbuf, 10, MAX_CARDS_IN_READ_STACKER_HOPPER, &r);
         if (r != SCPE_OK) return sim_messagef (SCPE_ARG, "Invalid count value\n");
         if (nCards == 0) return sim_messagef (SCPE_ARG, "Count cannot be zero\n");
         fn[0]=0;
@@ -1399,16 +1478,16 @@ static t_stat deck_print_cmd(CONST char *cptr, char cMode)
     } else {
         // get last nCards cards, so
         // first card to echo is count ones before last one
-        nh = MAX_CARDS_IN_READ_STAKER_HOPPER + ReadStakerLast - (nCards-1);                 
-        nh = nh % MAX_CARDS_IN_READ_STAKER_HOPPER;
+        nh = MAX_CARDS_IN_READ_STACKER_HOPPER + ReadStackerLast - (nCards-1);                 
+        nh = nh % MAX_CARDS_IN_READ_STACKER_HOPPER;
         nc=0; 
         while(nc<nCards) {
             // copy card form read hopper buf to deck image
-            if (!add_to_deck(&ReadStaker[nh * 80], &DeckImage)) {
+            if (!add_to_deck(&ReadStacker[nh * 80], &DeckImage)) {
                 return SCPE_IERR;
             }
             // get previous read card
-            nh = (nh + 1) % MAX_CARDS_IN_READ_STAKER_HOPPER;
+            nh = (nh + 1) % MAX_CARDS_IN_READ_STACKER_HOPPER;
             nc++;
         }
     }
@@ -1425,17 +1504,20 @@ static t_stat deck_print_cmd(CONST char *cptr, char cMode)
     return SCPE_OK;
 }
 
-// carddeck punch <file> text|oct|dec <data> [ at <col> ]
-// carddeck punch <file> bincards <n>
-static t_stat deck_punch_cmd(CONST char *cptr)
+// carddeck punch <file> text|oct|dec <data> [ at <col> ]   <-- when bStack=0
+// carddeck punch <file> bincards <n>                       <-- when bStack=0
+// carddeck add   <file> text|oct|dec <data> [ at <col> ]   <-- when bStack=1
+// carddeck add   <file> deck <file>                        <-- when bStack=1
+static t_stat deck_punch_cmd(CONST char *cptr, int bStack)
 {
     char fnDest[4*CBUFSIZE];
+    char fnSrc[4*CBUFSIZE];
     char gbuf[4*CBUFSIZE];
     char cMode = '?'; 
     uint16 image[80];
     t_int64 CardImage[26];
     t_int64 d; 
-    int i,n,octal, col, nCards, nc, loc;
+    int i,n,octal, col, nCards, nc, loc, bAddCardFlag;
     char c; 
     char ident[90]; 
     t_stat r;
@@ -1447,18 +1529,27 @@ static t_stat deck_punch_cmd(CONST char *cptr)
 
     while (sim_isspace (*cptr)) cptr++;                     // trim leading spc 
     cptr = get_glyph (cptr, gbuf, 0);                       // get next param
+    if (strcmp(gbuf, "DECK") == 0) cMode='F'; else 
     if (strcmp(gbuf, "TEXT") == 0) cMode='T'; else
     if (strcmp(gbuf, "OCT") == 0)  cMode='O'; else
     if (strcmp(gbuf, "DEC") == 0)  cMode='D'; else 
     if (strcmp(gbuf, "BINCARDS") == 0)  cMode='B'; else 
     return sim_messagef (SCPE_ARG, "Unknown format %s. Must be TEXT, OCT, or DEC\n", gbuf);
 
-    deck_init(&DeckImage);
+    if (bStack) {
+       // bStack = 1 -> Add cards to destination deck (i.e. stack cards on existing deck)
+       r = deck_load(fnDest, &DeckImage);
+       if (r != SCPE_OK) return sim_messagef (r, "Cannot read source deck (%s)\n", fnDest);
+    } else {
+       // bStack = 0 -> create new empty destination deck 
+       deck_init(&DeckImage);
+    }
     nCards=1; 
+    bAddCardFlag = 0; // flag to signal a card image should be added to destination deck
 
     n=0;
     if (cMode == 'T') {
-        // text
+        // prepare text card image
         while (sim_isspace (*cptr)) cptr++;                // trim leading spc 
         cptr = get_glyph_quoted (cptr, gbuf, 0);           // get text to punch
         if (gbuf[0] == '"') memcpy(&gbuf[0], &gbuf[1], sizeof(gbuf)-1); // remove leading quote
@@ -1490,10 +1581,28 @@ static t_stat deck_punch_cmd(CONST char *cptr)
             if (c==0) break; 
             c=toupper(c);
             if (col+i > 80) break; 
-            image[col-1+i]=sim_ascii_to_hol(c);
+            // back on 1950's there was several character sets depending on equipement submodel
+            // IBM 026-H     +-0123456789ABCDEFGHIJKLMNOPQR/STUVWXYZ ='    .)    $*    ,(   
+            // IBM 026-A     &-0123456789ABCDEFGHIJKLMNOPQR/STUVWXYZ #@    .¤    $*    ,%   
+            // IBM 711       +-0123456789ABCDEFGHIJKLMNOPQR/STUVWXYZ +-    .¤    $*    ,%   !?
+            if (c == '&') c='+'; // convert any input '&' char (as printed on card by IBM 026-A for Y(12) punch) 
+                                 // to '+' to be read as Y(12) by IBM 711
+            image[col-1+i]=ascii_to_hol(c);
         }
+        bAddCardFlag = 1; 
+    } else if (cMode == 'F') {
+        // add file to destination deck
+    
+        while (sim_isspace (*cptr)) cptr++;                 // trim leading spc 
+        cptr = get_glyph_quoted (cptr, fnSrc, 0);           // get next param: filename of deck to add (to stack)
+        if (fnSrc[0] == 0) return sim_messagef (SCPE_ARG, "Missing source filename\n");
+
+        // read source deck
+        r = deck_load(fnSrc, &DeckImage);
+        if (r != SCPE_OK) return sim_messagef (r, "Cannot read source deck (%s)\n", fnSrc);
+    
     } else if (cMode == 'B') {
-        // bin cards
+        // add to destination deck n cards that contains the memory dump starting at location zero
         cptr = get_glyph (cptr, gbuf, 0);                       // get ident column
         nCards = (int) get_uint (gbuf, 10, 85, &r);
         if (r != SCPE_OK) return r;
@@ -1519,7 +1628,6 @@ static t_stat deck_punch_cmd(CONST char *cptr)
                 if (!add_to_deck(image, &DeckImage)) {
                     // Location mode has already loaded deckimage. Here we load 
                     // deckimage for text, dec, oct modes
-                    deck_free(&DeckImage);
                     return sim_messagef (SCPE_IERR, "Error creating card \n");
                 }
                 // if all requested cards are generated, exit loop
@@ -1528,7 +1636,7 @@ static t_stat deck_punch_cmd(CONST char *cptr)
             }
         }
     } else {
-        // octal or decimal
+        // prepare octal or decimal card image
         memset(CardImage, 0, sizeof(CardImage));
         octal=(cMode='O') ? 1:0;
         n=0;
@@ -1557,12 +1665,12 @@ static t_stat deck_punch_cmd(CONST char *cptr)
         }
         // fill binary card uint16 image[80] from t_int64 CardImage[24] words 
         PrepareCardImage(image, CardImage, n >> 1, cdr_skip_cols());
+        bAddCardFlag = 1; 
     } 
 
-    if ((cMode != 'B') && (!add_to_deck(image, &DeckImage))) {
+    if ((bAddCardFlag) && (!add_to_deck(image, &DeckImage))) {
         // Bincard mode has already loaded deckimage. Here we load 
         // deckimage for text, dec, oct modes
-        deck_free(&DeckImage);
         return sim_messagef (SCPE_IERR, "Error creating card \n");
     }
 
@@ -1647,7 +1755,7 @@ static t_stat deck_sort_cmd(CONST char *cptr)
             // get columns to sort
             for (i=col1; i<=col2; i++) {
                 h=DeckImage.p[n * 80 + i-1];
-                c=sim_hol_to_ascii(h);
+                c=hol_to_ascii(h);
                 c=sim_toupper(c);
                 line[i-col1] = c; 
             }
@@ -1674,7 +1782,7 @@ static t_stat deck_sort_cmd(CONST char *cptr)
         // check if columns to sort are blank
         IsBlank=1; 
         for (i=col1; i<=col2; i++) {
-            c=sim_hol_to_ascii(image[i]);
+            c=hol_to_ascii(image[i]);
             if (c!=' ') {IsBlank=0; break; }
         }
         // discard blank cards on sorted columns
@@ -1794,7 +1902,7 @@ static t_stat deck_ident_cmd(CONST char *cptr)
             c = ident[i]; 
             c = toupper(c); 
             if (col+i > 80) continue; 
-            image[col-1+i]=sim_ascii_to_hol(c);
+            image[col-1+i]=ascii_to_hol(c);
         }
         // set card count if any
         if (col1>0) {
@@ -1803,7 +1911,7 @@ static t_stat deck_ident_cmd(CONST char *cptr)
                 c = gbuf[7-i]; 
                 if (col2-i < 1 ) continue; 
                 if (col2-i > 80) continue; 
-                image[col2-1-i]=sim_ascii_to_hol(c);
+                image[col2-1-i]=ascii_to_hol(c);
             }
         }
         // add card to destination deck
@@ -1846,7 +1954,10 @@ static t_stat deck_cmd(int32 arg, CONST char *buf)
         return deck_print_cmd(cptr, 'E');
     }
     if (strcmp(gbuf, "PUNCH") == 0) {
-        return deck_punch_cmd(cptr);
+        return deck_punch_cmd(cptr, 0); // PUNCH creates a new output deck
+    }
+    if (strcmp(gbuf, "ADD") == 0) {
+        return deck_punch_cmd(cptr, 1); // ADD stacks cards to existing output deck (appends cards in destination file) 
     }
     if (strcmp(gbuf, "SORT") == 0) {
         return deck_sort_cmd(cptr);

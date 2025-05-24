@@ -1,0 +1,603 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 24 DUP EXPANSION ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRTSTR      PRINT ALFANUMERIC TEXT STRING, ZERO TERMINATED
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:WRTAPE      WRITE MAGNETIC TAPE
+              
+                                  PURPOSE:
+                                  - READ NON-DUPLICATED REGIONS FROM INPUT TAPE
+                                    WHEN A DUP INSTR IS FOUND, REPLACE IT BY 
+                                    THE DUPLICATED REGION STEPS LOCATED IN SECOND
+                                    INPUT TAPE 
+                                  - DESAMBIGUATE PACT INST
+                                  - WRITE RESULT (IE WITH DUP INSTR EXPANDED) TO 
+                                    OUTPUT TAPE
+ 
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "EXPAND DUP INSTR"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + R ADD     ZERO
+         + STORE     NREGIONS     TOTAL NUMBER OF REGIONS IN PACT PROGRAM
+         + STORE     STEPCNT      TOTAL NUMBER OF STEPS IN PACT PROGRAM
+         + STORE     PVOP         PREVIOUS PACT OPERATION
+
+         + REWIND    TAPEOUT      REWIND TAPE OUT (PACT COMPACT CODE)
+         + REWIND    TAPEIN       REWIND TAPE IN WITH NON-DUPLICATED REGIONS
+         + REWIND    TAPEIND      REWIND TAPE IN WITH DUPLICATED REGIONS
+
+         + R ADD     ZERO
+         + STORE     LEVEL        DUP LEVEL. 0=MAIN PROGRAM, 1=AT DUP PROG, 2=AT DUP DUP PROG
+         + STORE     OFSTEPN      OFFSET FOR STEPN
+         + STORE     OFACTN       OFFSET TEMP VARS (AT "EQ RESULT OF STEP")
+         
+         + R ADD     STATEAD0     ACC=START LOCATION OF STATE TABLE
+STATEAD0 + NOOP      STATE        
+         + STORE A   STATEAD      INIT STATEAD VAR (=ADD WHERE TO SAVE CURRENT STATE BEFOR PROCESSING DUP INSTR)
+
+READREG  + R ADD     NREGIONS     INCR NUMBER OF REGIONS PROCESSED
+         + ADD       ONE
+         + STORE     NREGIONS
+
+         + R ADD     ZERO
+         + STORE     PVOP         INIT PREVIOUS PACT OPERATION
+
+READSTEP + R ADD     LEVEL        IF LEVEL=0 THEN ... 
+         + TR 0      RDNODUP      ... TR TO READ STEPS FROM NON-DUPLICATED REGIONS INPUT TAPE
+
+         + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM DUPLICATED REGIONS TAPE
+         + TR        RDTAPE
+         + STOP      TAPEIND
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     ERREOFD      ERROR: UNEXPECTED END OF FILE IN DUP REGIONS TAPE
+         + TR        RDDONE
+
+RDNODUP  + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+         
+         + R ADD     REGION       SAVE THE NON-DUPLICATED REGION NAME THAT WILL RECEIVE
+         + STORE     NDUPREG      STEPS FROM DUPLICATED REGION
+         
+RDDONE   + NOOP      0000
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     OP
+         + SUB       OPDUP
+         + TR 0      CHKDUP       OP="DUP REGION" -> TR TO PROCESS INSTR
+
+         + R ADD     *
+         + TR        DESAMB       DES-AMBIGUATE PACT INSTRUCTIONS
+
+         + R ADD     STEPN        ADD OFFSET FOR STEPN
+         + ADD       OFSTEPN
+         + STORE     STEPN
+         + R ADD     NDUPREG      SET NON DUPLICATED REGION NAME
+         + STORE     REGION
+
+         + R ADD     OP
+         + SUB       OPTR
+         + TR +      CHKTR1
+         + TR        NOTR         OP < OPTR -> NOT A TRANSFER OP
+CHKTR1   + R ADD     OP
+         + SUB       OPSET
+         + TR +      NOTR         OP >= SET -> NOT A TRANSFER OP
+
+         + R ADD     FACTN        HERE, OP IS A TRANSFER INSTR. CHECK IF FACTOR IS BLANK
+         + TR 0      NOTR         IF FACTOR IS BLANK -> TEST INSTR WITHOUT DESTINATION STEP -> NO TRANSFER OP
+         + TR +      CHKTR2
+         + TR        NOTR         IF FACTOR < 0 -> FACTOR IS ALFA -> NOT A DESTINATIOn STEP -> No TRANSFER OP
+CHKTR2   + R ADD     FACTN        FACTN=TRANSFER DESTINATION STEPN
+         + ADD       OFSTEPN      ADD OFFSET FOR STEPN
+         + STORE     FACTN
+NOTR     + NOOP      0000
+         
+         + R ADD     FACTREG      ADD OFFSET FOR TEMP VAR IN EQ RESULT OF STEP
+         + SUB       D32          BASE48 'T'
+         + TR 0      EQROFS       TR IF RESULT OF STEP
+         + TR        ENDROFS
+EQROFS   + R ADD     FACTN
+         + ADD       OFACTN
+         + STORE     FACTN
+ENDROFS  + NOOP      0000
+
+         + R ADD     STEPCNT      INCR STEP COUNT FOR PROGRAM
+         + ADD       ONE
+         + STORE     STEPCNT      
+         + SUB       D4094
+         + TR +      ERRTOOBI     ERROR: REGION TOO BIG
+
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT 
+         + STOP      TAPEOUT      TAPE WHERE TO WRITE
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      CCLEN        LEN
+
+         + R ADD     LEVEL        IF LEVEL=0 THEN ... 
+         + TR 0      ENDLOG1A     ... TR TO PRINT STEPS FROM NON-DUPLICATED REGIONS INPUT TAPE
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1A     TR IF NO LOG SELECTED
+         + R ADD     *            PRINT 
+         + TR        PRTSTR
+         + STOP      MSGEXPND     "DUP EXPANDED"
+         + STOP      0040         AT COL 40
+
+ENDLOG1A + NOOP      0000 
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+         + R ADD     *            PRINT STEP JUST PROCESSED
+         + TR        PRINTCRD
+ENDLOG1  + NOOP      0000 
+                                  PROCESS NEXT STEP
+         + TR        READSTEP
+
+ERREOFD  + STOP      1111         ERROR: UNEXPECTED END OF FILE IN DUP REGIONS TAPE
+
+ERRTOOBI + R ADD     *
+         + TR        ERROR
+         + STOP      ERRTOOBG     ERROR: REGION TOO BIG
+
+
+DESAMB   + ADD       TWO          DES-AMBIGUATE PACT INSTRUCTIONS
+         + STORE A   DSEXIT
+
+         + R ADD     OP           IS OP 'CALL ?
+         + SUB       OPCALL
+         + TR 0      DS1          
+         + TR        DS2          NO, CONTINUE
+DS1      + R ADD     STEPN        CHECK CALL IS FIRST INST OP REGION (IE STEPN=1)
+         + SUB       ONE
+         + TR 0      NODS         TES, CALL IS FIRST INST OP REGION -> CONTINUE
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRBADCA     ERROR: MISPLACED CALL INSTR. MUST BE THE FIRST INST OF REGION
+
+DS2      + R ADD     OP           IS OP 'RES ?
+         + SUB       OPRES
+         + TR 0      DSOPRES      YES, TR TO DESAMBIGUATE
+         + R ADD     OP           IS OP 'ID ?
+         + SUB       OPID       
+         + TR 0      DSOPID       YES, TR TO DESAMBIGUATE
+         + R ADD     OP           IS OP 'FOR ?
+         + SUB       OPFOR      
+         + TR 0      DSOPFOR      YES, TR TO DESAMBIGUATE
+         + R ADD     OP           IS OP 'HALT ?
+         + SUB       OPHALT      
+         + TR 0      DSOPHALT     YES, TR TO CHECK IF FOLLOWS A ID FOR LIST
+
+NODS     + R ADD     OP           IF NO DISAMBIGUATION, UPDATE PREVIOUS OP
+         + STORE     PVOP
+         + TR        DSOPOK
+
+DSOPRES  + R ADD     PVOP         PREVIOUS OP WAS 'MULT ? 
+         + SUB       OPMULT
+         + TR 0      DSOPRESM     YES, TR TO DESAMBIGUATE
+         + R ADD     PVOP         WAS 'DIV ? 
+         + SUB       OPDIV
+         + TR 0      DSOPRESD     YES, TR TO DESAMBIGUATE
+         + TR        NODS         TR -> NO NEED TO DESAMBIGUATE
+
+DSOPRESM + R ADD     OPRESM
+         + STORE     OP           SET NEW OP
+         + TR        DSOPOK
+DSOPRESD + R ADD     OPRESD
+         + STORE     OP           SET NEW OP
+         + TR        DSOPOK
+
+DSOPID   + R ADD     PVOP         PREVIOUS OP WAS 'LIST ?
+         + SUB       OPLIST
+         + TR 0      DSOPIDLI     YES, TR TO DESAMBIGUATE
+         + R ADD     PVOP
+         + SUB       OPLIB        WAS LIB?
+         + TR 0      DSOPIDDO     YES, TR TO DESAMBIGUATE
+         + R ADD     PVOP
+         + SUB       OPDO         WAS DO?
+         + TR 0      DSOPIDDO     YES, TR TO DESAMBIGUATE
+         + R ADD     PVOP
+         + SUB       OPCALL       WAS CALL?
+         + TR 0      DSOPIDCA     YES, TR TO DESAMBIGUATE
+         + TR        DSOPNOK      TR TO MISPLACED ID
+
+DSOPIDLI + R ADD     OPIDLIST     
+         + STORE     OP           SET NEW OP
+         + TR        DSOPOK
+DSOPIDDO + R ADD     OPIDDO
+         + STORE     OP           SET NEW OP
+         + TR        DSOPOK
+DSOPIDCA + R ADD     OPIDCALL
+         + STORE     OP           SET NEW OP
+         + TR        DSOPOK
+
+DSOPHALT + R ADD     PVOP         CHECK IF HALT FOLLOWS A ID FOR LIST
+         + SUB       OPLIST
+         + TR 0      DSOPHA1
+         + TR        NODS         TR -> NO NEED TO DESAMBIGUATE
+
+DSOPHA1  + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRHAFLI     ERROR: HALT CANNOT FOLLOW AN ID FOR LIST
+
+DSOPFOR  + R ADD     PVOP         PREVIOUS OP WAS 'LIB ?
+         + SUB       OPLIB        WAS LIB?
+         + TR 0      DSOPFORD     YES, TR TO DESAMBIGUATE
+         + R ADD     PVOP
+         + SUB       OPDO         WAS DO?
+         + TR 0      DSOPFORD     YES, TR TO DESAMBIGUATE
+         + R ADD     PVOP
+         + SUB       OPCALL       WAS CALL?
+         + TR 0      DSOPFORC     YES, TR TO DESAMBIGUATE
+
+DSOPNOK  + R ADD     *            ERROR: MISPLACED ID
+         + TR        ERROR
+         + STOP      ERRBADID
+
+DSOPFORD + R ADD     OPFORDO
+         + STORE     OP           SET NEW OP
+         + TR        DSOPOK
+DSOPFORC + R ADD     OPFORCAL
+         + STORE     OP           SET NEW OP
+
+DSOPOK   + NOOP      0000
+DSEXIT   + TR        /   /
+
+
+CHKDUP   + R ADD     LEVEL        "DUP REGION" INSTR PROCESSING
+         + SUB       MAXLVLS
+         + TR 0      ERROVDUP     ERROR: TOO MANY NESTED DUP
+
+         + R ADD     LEVEL
+         + ADD       ONE
+         + STORE     LEVEL
+         
+         + R ADD     STATEAD      SAVE CURRENT STATE ON STATE TABLE
+         + STORE A   SVST1
+         + ADD       ONE
+         + STORE A   SVST2
+         + ADD       ONE
+         + STORE A   SVST3
+         + ADD       ONE
+         + STORE A   SVST4
+         + ADD       ONE
+         + STORE     STATEAD
+         + R ADD     REGION
+SVST1    + STORE     /   /        SAVE TO STATE TABLE
+         + R ADD     STEPN
+SVST2    + STORE     /   /        SAVE TO STATE TABLE
+         + R ADD     OFSTEPN      OFFSET FOR STEPN
+SVST3    + STORE     /   /        SAVE TO STATE TABLE
+         + R ADD     OFACTN       OFFSET TEMP VARS 
+SVST4    + STORE     /   /        SAVE TO STATE TABLE
+
+         + R ADD     STEPN
+         + SUB       ONE          MINUS 1 BECAUSE DUP INSTR IS REPLACED BY FIRST INST OF DUP REGION
+         + ADD       OFSTEPN
+         + STORE     OFSTEPN      OFFSET FOR STEPN
+         + R ADD     FACTN
+         + STORE     OFACTN       OFFSET TEMP VARS 
+
+         + R ADD     FACT         SAVE THE NAME OF THE REGION TO BE DUPLICATED.
+         + STORE     DUPREG       WILL SEARCH DUPREG REGION IN DUPLICATED REGIONS INPUT TAPE
+         + R ADD     ONE          WILL START DUPLICATING FROM 1ST STEPN 
+         + STORE     DUPSTEPN     
+
+DSEARCH  + REWIND    TAPEIND      REWIND TAPE IN WITH DUPLICATED REGIONS TO START A NEW REGION SEARCH
+
+DSRCH0   + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM DUPLICATED REGIONS TAPE
+         + TR        RDTAPE
+         + STOP      TAPEIND
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     ERREOFD      ERROR: UNEXPECTED END OF FILE IN DUP REGIONS TAPE
+                                  NOTE: THE EXISTENCE OF DUP REGION HAS ALREADY BEEN TESTED, SO THIS EOF SHOULD NEVER OCCURS
+
+         + R ADD     REGION       IF THIS IS NOT THE REGION WE ARE SEARCHING, TR TO CONTINUE READING THE TAPE
+         + SUB       DUPREG
+         + TR 0      DUPFND1
+         + TR        DSRCH0       DESIRED DUPLICATED REGION NOT FOUND YET, KEEP SEARCHING
+DUPFND1  + R ADD     OP
+         + TR 0      DUPFND2      IF HIT END OF DUPLICATED REGION, PROCEED AS IF STEP WAS FOUND (WE ARE RETURNING TO STEP FOLLWING LAST ONE OF DUP REGION)
+         + R ADD     STEPN
+         + SUB       DUPSTEPN     IF CURRENT STEPN >= THE SEARCHE FOR -> WE ARE PLACED AT DESIRED CC
+         + TR +      DUPFND2
+         + TR        DSRCH0       DESIRED STEP NOT FOUND YET, KEEP SEARCHING
+DUPFND2  + TR        RDDONE       DUP REGION FOUND -> TR TO PROCESS THE STEP
+
+EORNDUP  + R ADD     *            SAVE EOR STEP TO TAPE
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT 
+         + STOP      TAPEOUT      TAPE WHERE TO WRITE
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      CCLEN        LEN
+
+         + TR        READREG      PROCEED WITH NEXT NON-DUPLICATED REGION
+
+EOR      + NOOP      0000         END OF REGION  
+
+         + R ADD     LEVEL        IF LEVEL=0 THE THIS IS A REGULAR END OF REGION FOR
+         + TR 0      EORNDUP      NON-DUPLICATED REGION -> TR TO SAVE EOR RECORD TO TAPE OUT
+
+         + SUB       ONE          THIS IS THE END OF REGION FOR THE BEING INSERTED DUPLICATED REGION
+         + STORE     LEVEL        DECR LEVEL, RESTORE STATE 
+
+         + R ADD     STATEAD      RESTORE STATE FROM STATE TABLE
+         + SUB       D4
+         + STORE A   STATEAD
+         + STORE A   RST1
+         + ADD       ONE
+         + STORE A   RST2
+         + ADD       ONE
+         + STORE A   RST3
+         + ADD       ONE
+         + STORE A   RST4
+         + ADD       ONE
+         + SUB       D4
+RST1     + R ADD     /   /        READ FROM STATE TABLE
+         + STORE     REGION
+RST2     + R ADD     /   /        READ FROM STATE TABLE
+         + STORE     STEPN
+RST3     + R ADD     /   /        READ FROM STATE TABLE
+         + STORE     OFSTEPN      OFFSET FOR STEPN
+RST4     + R ADD     /   /        READ FROM STATE TABLE
+         + STORE     OFACTN       OFFSET TEMP VARS 
+
+         + R ADD     LEVEL        IF LEVEL=0 RETURN TO PROCESSING NON-DUPLI REGIONS
+         + TR 0      READSTEP
+
+         + R ADD     REGION       GET THE NAME OF THE DUPLICATED REGION TO BE RESUMEND
+         + STORE     DUPREG       WILL LOOK FOR THIS REGION IN DUPLICATED REGIONS INPUT TAPE
+         + R ADD     STEPN        GET THE STEPN FROM WICH THE DUPLICATION WILL RESUME
+         + ADD       ONE          STEPN WAS POINTING TO DUP INST. INCR TP SELECT INST JUST AFTER DUP
+         + STORE     DUPSTEPN     
+         + TR        DSEARCH      RESUME THE DUPLICATION OF REGION
+         
+EOF      + NOOP      0000         END OF FILE
+
+         + WRITE EF  TAPEOUT      WRITE EOF IN TAPE OUT (COMPACT CODE)
+
+         + R ADD     NREGIONS     DECR NREGIONS, AS LAST EOF COUNTS AS A REGION
+         + SUB       ONE
+         + STORE     NREGIONS
+
+                                  IF SW6 ON THEN 
+                                  PRINT NUMBER OF DUPLICATED REGION SAVED IN TAPE 
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGDONE      "REGIONS"
+         + STOP      0210         INT AT COL 10
+         + STOP      NREGIONS     TOTAL NUMBER OF REGIONS 
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTEPS     "STEPS"
+         + STOP      0210         INT AT COL 10
+         + STOP      STEPCNT      TOTAL NUMBER OF STEPS
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+ENDLOG1B + NOOP      0000
+
+         + REWIND    TAPEOUT      REWIND TAPE OUT (PACT COMPACT CODE)
+         + REWIND    TAPEIN       REWIND TAPE IN WITH NON-DUPLICATED REGIONS
+         + REWIND    TAPEIND      REWIND TAPE IN WITH DUPLICATED REGIONS
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE
+
+         + STOP      READSTEP     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING NEXT SOURCE CODE STEP 
+
+
+           ORG       EVEN
+
+                                  COMPACT CODE RECORD
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0            IF OP CALLS IN A RESULT OF STEP -> FACTN=TEMP ADDR (2, 4, ..)
+D2N        DEF       0                                               FACTREG='T'
+NINST      DEF       0      
+NINCR      DEF       0
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+DUMMY      DEF       0            (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+                                  TABLES (SHOULD AT EVEN LOCATION)
+
+MAXLVLS    DEF       10           MAX 10 NESTED DUP LEVELS
+STATEAD    DEF       0            ADDR OF CURRENT POSITION ON STATE TABLE
+STATE      RES       40           STATE TO BE SAVED ON EACH LEVEL CHANGE (=4 HALF WORDS * 10 LEVELS)
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+D5         DEF       5
+D6         DEF       6
+D11        DEF       11
+D16        DEF       16
+D18        DEF       18
+D20        DEF       20
+D22        DEF       22
+D23        DEF       23
+D24        DEF       24
+D25        DEF       25
+D26        DEF       26
+D32        DEF       32
+D36        DEF       36
+D37        DEF       37
+D38        DEF       38
+D39        DEF       39
+D40        DEF       40
+D41        DEF       41
+D42        DEF       42
+D43        DEF       43
+D4094      DEF       4094
+
+LEVEL      DEF       0            CURRENT DUP NESTING LEVEL
+NREGIONS   DEF       0            NUMBER OF REGION BEING PROCESSED
+STEPCNT    DEF       0            TOTAL NUMBER OF STEPS IN PACT PROGRAM
+OFSTEPN    DEF       0            OFFSET FOR STEPN
+OFACTN     DEF       0            OFFSET TEMP VARS (AT "EQ RESULT OF STEP")
+DUPREG     DEF       0            DUPLICATED REGION TO SEARCH IN DUPLICATED TAPE
+DUPSTEPN   DEF       0            STEPN IN DUPLICATED REGION FOUND WHERE TO START
+NDUPREG    DEF       0            NON-DUPLICATED REGION THAT RECEIVES THE STEPS FROM DUP REGION
+PVOP       DEF       0            PREVIOUS PACT OPERATION
+
+                                  TEXT
+
+ERROVDUP   TXT       "TOO MANY NESTED DUP REGIONS",0
+ERRBADID   TXT       "MISPLACED ID OR FOR",0                    ID CAN ONLY FOLLOW LIST/CALL/DO/LIB, FOR CAN ONLY FOLLOW CALL/DO/LIB
+ERRBADCA   TXT       "MISPACED CALL",0                          ERROR: CALL MUST BE THE FIRST INST OF REGION
+ERRTOOBG   TXT       "REGION TOO BIG",0                         REGION STEPS > 4090 
+ERRHAFLI   TXT       "HALT CANNOT FOLLOW ID FOR LIST",0         ERROR: HALT CANNOT FOLLOW AN ID FOR LIST
+
+MSGSTART   TXT       "DUP INSTR EXPANSION",0
+MSGDONE    TXT       "REGIONS",0
+MSGSTEPS   TXT       "STEPS",0
+MSGEXPND   TXT       "DUP EXPANDED",0
+
+OPDUP      EQU       D22          DUP
+OPMULT     EQU       D4           MULT
+OPDIV      EQU       D5           DIV
+OPRES      EQU       D6           DES
+OPTR       EQU       D11          TR
+OPHALT     EQU       D16          HALT
+OPSET      EQU       D18          SET
+OPDO       EQU       D20          DO
+OPLIB      EQU       D23          LIB
+OPCALL     EQU       D26          CALL
+OPID       EQU       D24          ID 
+OPFOR      EQU       D25          FOR
+OPLIST     EQU       D36          LIST
+OPRESM     EQU       D37          RES for MULT
+OPRESD     EQU       D38          RES for DIV
+OPIDLIST   EQU       D39          ID for LIST
+OPIDDO     EQU       D40          ID for DO/LIB
+OPIDCALL   EQU       D41          ID for CALL
+OPFORDO    EQU       D42          FOR for DO/LIB
+OPFORCAL   EQU       D43          FOR for CALL
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEIN     EQU       0257         INPUT NON-DUPLICATED REGIONS FROM TAPE 2
+TAPEOUT    EQU       0258         OUTPUT (EXPANDED DUP REGIONS) PACT COMPACT CODE TO TAPE 3
+TAPEIND    EQU       0259         INPUT DUPLICATED REGIONS FROM TAPE 4
+

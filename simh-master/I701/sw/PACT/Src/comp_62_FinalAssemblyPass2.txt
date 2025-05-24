@@ -1,0 +1,302 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 62 FINAL ASSEMBLY PASS 2 ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:PRTCHR      PRINT CHR
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:WRTAPE      WRITE MAGNETIC TAPE
+           HEAD      USE:EQTBL       STORE VALUE INTO TABLE
+           HEAD      USE:READTBL     TAKE VALUE FROM TABLE
+              
+                                  PURPOSE:
+                                  - FOR EACH REGION
+                                     - READ STEPS REFERENCED FOR THIS REGION FROM TAPE 
+                                     - CALCULATE RELATIVE LOCATION FOR EACH REFERENCED
+                                     - SAVE TO TAPE THE STEP LOCATIONS TO ALLOW REFERENCES TO BE RESOLVED 
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+BADREF   + STOP      1111         INTERNAL COMPILER ERROR
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "FINAL ASSEMBLY PASS 2"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     MAXNINST     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TINST        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEOUTR     REWIND TAPE OUT WITH RESOLVED REFERENCES TABLE
+         + REWIND    TAPEINR      REWIND TAPE IN WITH REFERENCES TABLE
+
+READREG  + R ADD     *            
+         + TR        RDTAPE       READ MAGNETIC TAPE (REFERENCES TABLE)
+         + STOP      TAPEINR
+         + STOP      MAXNREFS     READ MAXREFS (1 HW) + NREFS (1 HW)
+         + TR OV     NOMORE       NO MORE REFERENCES DATA 
+
+         + R ADD     *            
+         + TR        RDTAPE       READ MAGNETIC TAPE (REFERENCES TABLE)
+         + STOP      TAPEINR
+         + STOP      TSTEPREF
+
+         + R ADD     ZERO
+         + STORE     IREF         INIT REFERENCES FOR THIS REGION
+         + STORE     IRELADDR     I RELATIVE LOCATION OF THIS STEP
+
+NEXTREF  + R ADD     IREF
+         + SUB       NREFS
+         + TR 0      NOMORE 
+         + R ADD     IREF
+         + ADD       ONE
+         + STORE     IREF
+
+         + R ADD     *            READ FROM TREF TABLES
+         + TR        READTBL
+         + STOP      TSTEPREF
+         + STOP      IREF     
+         + STOP      REF1         = TREFADDR[IREF] 
+         + TR        REFOK
+
+NOMORE   + R ADD     ZERO         SEt TO ZERO AS THERE ARE NO MORE REFERENCES TO RESOLVE
+         + STORE     REF1         
+REFOK    + NOOP      0000
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     IRELADDR     I RELATIVE LOCATION OF THIS STEP
+         + STORE     IREL0
+         + ADD       NINST        NUMBER OF INST IN THIS STEP
+         + STORE     IRELADDR     I REL FOR NEXT STEP
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+
+         + LOAD MQ   IREL0        I RELATIVE LOCATION OF THIS STEP
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0004         LEN=4
+         + STOP      0041         COL 41
+
+         + LOAD MQ   D21          'I'
+         + R ADD     *
+         + TR        PRTCHR
+         + STOP      0040         COL 40
+
+         + R ADD     *            PRINT STEP JUST PROCESSED
+         + TR        PRINTCRD
+
+ENDLOG1  + NOOP      0000 
+
+         + R ADD     REF1
+         + TR 0      NEXT         CONTINUE READING STEPS IF THERE ARE NO MORE REFERENCES TO SATISFY
+         + SUB       STEPN        IS THIS STEP REFERENCED?
+         + TR 0      CHKREF       TR IF YES
+         + TR +      NEXT         STEPN NOT ARRIVED YET TO REF1. TR TO CONTINUE READING STEPS
+         + TR        BADREF       INTERNAL COMPILER ERROR: THERE IS A REFERENCE TO VAL1 STEP, BUT THIS STEP DOES NOT EXISTS
+
+CHKREF   + R ADD     *            SAVE THE IREL ADDRESS FOR THE REFERENCED STEP         
+         + TR        EQTBL        THIS RESOVES THE STEP REFERENCE
+         + STOP      TSTEPLOC
+         + STOP      IREF
+         + STOP      IREL0        TREFADDR[IREF] = IREL0
+
+         + TR        NEXTREF      SELECT NEXT REFERENCE TO SATISFY
+
+NEXT     + NOOP      0000 
+                                  PROCESS NEXT STEP
+         + TR        READSTEP
+
+
+EOR      + NOOP      0000         END OF REGION  
+
+         + R ADD     NREFS        NUMBER OF HALF-WORDS TO SAVE ON TAPE
+         + ADD       ONE          
+         + L RIGHT   0019         MAKE IT EVEN ((NREFS + 1) AND OCT 7776) 
+         + A LEFT    0019
+         + STORE     N
+         + SUB       ONE          IF =0 SET =2 TO AVOID SAVING EMPTY RECORDS ON TAPE
+         + TR +      SVREFS
+         + R ADD     TWO
+         + STORE     N
+
+SVREFS   + R ADD     *            
+         + TR        WRTAPE       WRITE MAGNETIC TAPE (REFERENCES TABLE)
+         + STOP      TAPEOUTR
+         + STOP      NREFS        BUF TO WRITE TO TAPE
+         + STOP      TWO          NUM OF HALF-WORDS TO SAVE (MUST BE EVEN)
+
+         + R ADD     *            
+         + TR        WRTAPE       WRITE MAGNETIC TAPE (REFERENCES TABLE)
+         + STOP      TAPEOUTR
+         + STOP      TSTEPREF     BUF TO WRITE TO TAPE
+         + STOP      N            NUM OF HALF-WORDS TO SAVE (MUST BE EVEN)
+
+         + R ADD     *            
+         + TR        WRTAPE       WRITE MAGNETIC TAPE (REFERENCES TABLE)
+         + STOP      TAPEOUTR
+         + STOP      TSTEPLOC     BUF TO WRITE TO TAPE
+         + STOP      N            NUM OF HALF-WORDS TO SAVE (MUST BE EVEN)
+
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF FILE
+
+         + WRITE EF  TAPEOUTR     WRITE EOF IN TAPE OUT (COMPACT CODE)
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEOUTR     REWIND TAPE OUT WITH RESOLVED REFERENCES TABLE
+         + REWIND    TAPEINR      REWIND TAPE IN WITH REFERENCES TABLE
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+           ORG       EVEN
+
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0            FACTN=ADDR (0, 2, 4, ..) FACTREG=' ', 'T', 'V', 'N'
+D2N        DEF       0            S1N/S2N=INDEX (IF <0), BLANK (IF =0), CONST (IF >0)
+NINST      DEF       0            D1N/D2N=HALF-WORD SIZE OF EACH DIMENSION
+NINCR      DEF       0
+TINST      RES       200          MACHINE CODE: 1ST HALF-WORD OPCODE + REGION/LOCATION INTO STEP (FOR TRANSFERS)
+                                                2ND HALF-WORD ADDR INTO REGION/DESTINATION STEPN (FOR TRANSFERS)
+
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+N          DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+                                  TABLES (SHOULD BE AT EVEN LOCATION)
+
+MAXNREFS   DEF       400          MAX 400 STEPN REFERENCES CAN DE DEFINED IN ONE REGION
+NREFS      DEF       0            NUMBER OF ENTRIES IN TSTEPREF TABLE
+TSTEPREF   RES       400          LOCAL STEP REFERENCES TABLE: STEPN REFERENCED BY A TR STEPN MC INSTR IN CURRENT REGION
+TSTEPLOC   RES       400          LOCATION OF STEP REFERENCED TABLE: LOCATION ON I-REGION OF EACH STEPN REFERENCED 
+
+MAXNINST   DEF       100          MAX NUMBER OF MACHINE CODE INSTRUTIONS PER STEP
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+D21        DEF       21
+
+IREL0      DEF       0            REL ADDRESS USED BY CURRENT STEP
+IRELADDR   DEF       0            I RELATIVE LOCATION OF STEP
+IREF       DEF       0            CURRENT REFERENCE IN TSTEPREF/TSTEPLOC BEING RESOLVED
+REF1       DEF       0            CURRENT REFERENCE TO RESOLVE
+
+                                  TEXT
+
+MSGSTART   TXT       "FINAL ASSEMBLY PASS 2",0
+
+                                  REL ASSEMBLY REGION INDEXS
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEOUTR   EQU       0257         OUTPUT TO TAPE 2 (REFERENCES RESOLVED)
+TAPEIN     EQU       0258         INPUT PACT COMPACT CODE FROM TAPE 3 
+TAPEINR    EQU       0259         INPUT FROM TAPE 4 (STEPN REFERENCES TO RESOLVE)
+
+

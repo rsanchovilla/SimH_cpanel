@@ -1,0 +1,306 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:WRIBREL         WRITE DATA INTO A BINARY REL CARD IMAGE
+                                         WRITE THE CARD IMAGE IF NEEDED 
+
+                                         PARAMS: 
+                                             CARDTYPE: -00 / -01 -> ADD HALFWORD TO REL CARD
+                                             CARDSYMB: TOP SYMBOL ON BINARY CARD
+                                             CARDLOC : REL LOCATION OF DATA BEING ADDED
+                                             DATATYPE: =0 -> NEXT PARAM IS HALF WORD TO ADD TO BIN CARD, FOLLOWED BY INDEX TAG 0..7
+                                             NUM     : HALF WORD TO ADD TO BIN CARD (WITH SIGN)
+                                             REG     : REGION INDEX TAG 0..7
+
+                                         PARAMS: 
+                                             CARDTYPE: -00 / -01 -> ADD HALFWORD TO REL CARD
+                                             CARDSYMB: TOP SYMBOL ON BINARY CARD
+                                             CARDLOC : REL LOCATION OF DATA BEING ADDED
+                                             DATATYPE: =1 -> NEXT PARAM IS FULL WORD TO ADD TO BIN CARD. INDEX USED IS 0
+                                             DATA1   : LEFT HALF WORD TO ADD TO BIN CARD (WITH SIGN)
+                                             DATA2   : RIGHT HALF WORD TO ADD TO BIN CARD
+
+                                         PARAMS: 
+                                             CARDCODE: +02 -> SET WRITE CARD ROUTINE TO BE CALLED WHEN FLUSHING THE REL BINARY CARD 
+                                             WRTCRD  : THE WRITE ROUTINE ADDRESS
+
+                                             RETURNS IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN BY WRITE ROUTINE  
+              
+                                         PARAMS: 
+                                             CARDCODE: +01 -> FLUSH (WRITE) CURRENT CARD 
+
+
+
+
+                                  REL BINARY CARD LAYOUT. CODE = -00 (MC INSTR) / -01 (CONTROL CARD)
+
+                                   / ........ [CODE][ORIGIN    ] [TOP SYMBOL      ] ............[      CHECK SUM       ].
+                                  |  ........ [REGION INDICES                     ] [COUNT           ] .................. 
+                                  |  ........ [0=ABS, 1=I-REG, 2=VAR, 3=TEMP, 4=NUM, 5=PERISHABLE, 7=SYMBOL             ]
+                                  |  ........ ........^......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+
+
+
+           HEAD      USE:CLMEM           CLEAR MEMORY STORAGE
+           HEAD      USE:CHKSUM          CALCULATE CARD CHECKSUM
+
+WRIBREL  + ADD       TWO          CHECK IF CURRENT CARD IN MEMORY IS TYPE/SYMBOL GIVEN AS PARAM, 
+         + STORE A   CHKP1        LOC OF DATA TO ADD IS IN SEQUENCE WITH PREVIOUS ONES, AND CARD HAS ROOM FOR DATA.
+         + ADD       ONE          IF NOT, FLUSH CURRENT CARD AND CREATE A NEW ONE, THEN PLACE THE DATA.
+         + STORE A   CHKP2        WHEN FLUSHING THE CARD, CALL WRITE ROUTINE DEFINED
+         + ADD       ONE
+         + STORE A   CHKP3
+         + ADD       ONE
+         + STORE A   CHKP4
+         + ADD       ONE
+         + STORE A   CHKP5
+         + ADD       ONE
+         + STORE A   CHKP6
+         + ADD       ONE
+         + STORE A   CHKEXIT
+
+CHKP1    + R ADD     /   /
+         + STORE     CRDTY        PARAM: BIN CARD TYPE REQUITED: -01 -> CONTROL CARD, -00 -> MC INSTR CARD, 
+CHKP2    + R ADD     /   /                                       +01 -> FLUSH CURRENT CARD (NO MORE PARAMS)
+         + STORE A   CHKP2A                                      +02 -> SET WRITE CARD ROUTINE TO BE CALLED IN NEXT PARAM 
+CHKP2A   + R ADD     /   /                                              RETURNS IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN
+         + STORE     CRDSY        
+CHKP3    + R ADD     /   /
+         + STORE A   CHKP3A
+CHKP3A   + R ADD     /   /
+         + STORE     CRDLOC       PARAM: LOCATION 0..4095 
+CHKP4    + R ADD     /   /
+         + STORE     CRDDATY      PARAM: DATA TYPE: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+CHKP5    + R ADD     /   /                          =1 -> DATA1/DATA2=FULL WORD TO STORE
+         + STORE A   CHKP5A
+CHKP5A   + R ADD     /   /
+         + STORE     CRDDATA      PARAM: DATA 
+CHKP6    + R ADD     /   /        
+         + STORE A   CHKP6A
+CHKP6A   + R ADD     /   /
+         + STORE     CRDDATA2     PARAM: DATA2 (RIGHT HALF-WORD / INDEX TAG)
+
+         + R ADD     CRDTY        
+         + SUB       ONE
+         + TR 0      CHKFLSHR     IF CRDTY=1 -> JUST FLUSH THE CURRENT CARD AND RETURN
+         + SUB       ONE
+         + TR 0      CHKWR        IF CRDTY=2 -> SET WRITE CARD ROUTINE TO BE CALLED WHEN FLUSHING THE CURRENT CARD AND RETURN
+
+         + R ADD     BINCRD44     CODE + ORIGIN IN CARD IN MEMORY. 
+         + STORE A   CRDORG
+         + TR +      CHKNEWC      IF >=0 -> CREATE A FRESH NEW CARD 
+         + A RIGHT   0012         GET CODE ON CURRENT CARD BEING BUILD IE MEM
+         + A RIGHT   0018         CLEAR RIGHT ACC HALF-WORD
+         + A LEFT    0018
+         + SUB       CRDTY
+         + TR 0      CHK1         SAME TYPE, TR TO CONTINUE
+         + TR        CHKFLSH      NOT SAME TYPE, TR TO FLUSH CURRENT CARD 
+CHK1     + R ADD     BINCRD45     CURRENT CARD SYMBOL
+         + SUB       CRDSY
+         + TR 0      CHK2         SAME TOP SYMBOL, TR TO CONTINUE
+         + TR        CHKFLSH      NOT SAME SYMBOL, TR TO FLUSH CURRENT CARD 
+CHK2     + R ADD     BINCRD42     COUNT IN CARD
+         + SUB       D36
+         + TR 0      CHKFLSH      CARD FULL, TR TO FLUSH CURRENT CARD 
+         + R ADD     CRDORG
+         + ADD       BINCRD42     ACC=ORIGIN + COUNT = NEXT CONSECUTIVE REL LOCATION ON BIN CARD
+         + SUB       CRDLOC       
+         + TR 0      CHKADD       IF ORIGIN+COUNT=LOC -> ADD DATA TO CURRENT CARD IN MEMORY, AT NEXT CONSECUTIVE LOCATION LOC
+         + TR +      CHKFLSH      IF ORIGIN+COUNT>LOC -> LOC IS LESS THAN LAST LOC ADDED -> TR TO FLUSH AND START A NEW CARD AT NEW LOC
+
+         + R ADD     CRDLOC
+         + SUB       CRDORG       ACC=LOC - ORIGIN = POSITION IN CARD 
+         + STORE     CRDN
+         + SUB       D36          
+         + TR +      CHKFLSH      IF POSITION IN CARD >= 36 -> LOC DOES NOT FIT IN CURRENT CARD -> TR TO FLUSH
+         + R ADD     CRDN         ELSE -> POSITION IN CARD < 36 -> LOC FITS IN CURRENT CARD
+         + STORE     BINCRD42     ADJUST COUNT
+         + TR        CHKADD       TR TO ADD DATA TO CURRENT CARD IN MEMORY
+
+CHKFLSH  + R ADD     *            
+         + TR        FLUSHCRD 
+
+CHKNEWC  + R ADD     *            NEW CARD: CLEAR CARD BUFFER IN MEM
+         + TR        CLMEM        BINCARD
+         + STOP      BINCARD
+         + STOP      D48
+
+         + R ADD     CRDTY        CODE   = -01 / -00 
+         + A LEFT    0012         PLACE AS OP
+         + SUB       CRDLOC       ORIGIN = CURRENT LOC
+         + STORE     BINCRD44     STORE CODE + ORIGIN IN CARD IN MEMORY. 
+         + STORE A   CRDORG
+         
+         + R ADD     CRDSY        SYMBOL 
+         + STORE     BINCRD45     CURRENT CARD SYMBOL
+
+CHKADD   + R ADD     CRDLOC       COMPUTE WHERE TO STORE THE DATA
+         + SUB       CRDORG       ADDR = BINCRD ADDRESS + (LOC - ORIGIN)
+         + ADD       BINCRDAD 
+         + STORE A   CHKSTO1
+
+         + R ADD     CRDDATA      STORE DATA
+CHKSTO1  + STORE     /   /
+
+         + R ADD     CRDDATY      PARAM: DATA TYPE: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+         + TR 0      CHKIDX                         =1 -> DATA1/DATA2=FULL WORD TO STORE
+
+         + R ADD     CHKSTO1      STORE A FULL WORD
+         + ADD       ONE       
+         + STORE A   CHKSTO2
+
+         + R ADD     CRDDATA2     STORE DATA2
+CHKSTO2  + STORE     /   /
+
+         + R ADD     BINCRD42     COUNT IN CARD
+         + ADD       TWO
+         + STORE     BINCRD42     
+         + TR        CHKEXIT
+
+CHKIDX   + R ADD     CRDDATA2     STORE DATA HALF-WORD + DATA2 INDEX
+         + TR 0      CHK20
+
+         + R ADD     CRDLOC       COMPUTE WHERE TO STORE THE DATA
+         + SUB       CRDORG       IN INDICES BLOCK
+         + STORE     CRDN
+
+         + R ADD     BINCRDAD     SET START OD INICES ADDR
+         + ADD       D36
+         + STORE A   CHKSTO3A
+         + STORE A   CHKSTO3B
+
+         + R ADD     ZERO
+         - STORE     DATA
+         - STORE     SUM
+
+CHK10    + R ADD     CRDN         INDICES ADDR += (LOC - ORIGIN) DIV 6
+         + SUB       D6
+         + TR +      CHK11
+         + TR        CHK12
+CHK11    + STORE     CRDN
+         + R ADD     CHKSTO3A
+         + ADD       ONE
+         + STORE A   CHKSTO3A
+         + STORE A   CHKSTO3B
+         + TR        CHK10
+
+CHK12    + R ADD     CRDN         SHIFT = (N+1)*3
+         + ADD       CRDN
+         + ADD       CRDN
+         + ADD       D3
+         + STORE A   CHKSHF
+         
+CHKSTO3A + R ADD     /   /
+         + STORE     DATA2
+         + R ADD     CRDDATA2     SHIFT RIGHT AND STORE AT INDICES ADDR
+CHKSHF   + A RIGHT   /   /
+         - ADD       DATA
+         - STORE     SUM
+         + R ADD     SUM2
+CHKSTO3B + STORE     /   /
+    
+CHK20    + R ADD     BINCRD42     COUNT IN CARD
+         + ADD       ONE
+         + STORE     BINCRD42     
+CHKEXIT  + TR        /   /
+  
+CHKFLSHR + R ADD     *            JUST FLUSH CURRENT CARD AND RETURN
+         + TR        FLUSHCRD
+         
+         + R ADD     *            CLEAR CARD BUFFER IN MEM
+         + TR        CLMEM        BINCARD
+         + STOP      BINCARD
+         + STOP      D48
+         
+         + R ADD     CHKP2        SECOND PARAM HAS THE RETURN ADDR
+         + STORE A   FLSHEX       
+FLSHEX   + TR        /   /        RETURN TO CALLER
+
+CHKWR    + R ADD     CHKP2A       SECOND PARAM HAS THE ADDR OF BIN CARD WRITE ROUTINE TO BE CALLED BY FLUSH (INSTEAD THE TOP SYMBOL)
+         + STORE A   WRCRD
+         + R ADD     CHKP3        THIRD PARAM HAS THE RETURN ADDR 
+         + STORE A   CHKWREX
+
+         + R ADD     *            CLEAR CARD BUFFER IN MEM
+         + TR        CLMEM        BINCARD
+         + STOP      BINCARD
+         + STOP      D48
+     
+         + R ADD     BINCRDAD     RETURN IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN BY WRITE ROUTINE  
+CHKWREX  + TR        /   /        RETURN TO CALLER
+BINCRDAD + STOP      BINCARD      SOURCE ADDR
+  
+FLUSHCRD + ADD       TWO          PUNCH PACT CARD IN CARD BUFFER
+         + STORE A   FLUSHEX
+         
+         + R ADD     BINCRD42     GET COUNT
+         + TR 0      FLUSHEX      IF =0 -> THE CARD IS EMPTY -> EXIT WITHOUT PUNCHING
+                                  
+         + R ADD     *
+         + TR        CHKSUM       COMPUTE CHECKSUM OF CARD ...
+         + STOP      BINCARD      
+         - STORE     BINCRD46     ... AND STORE IT AT LOCATION 46 AND 47
+
+         + R ADD     *
+WRCRD    + TR        /   /        CALL WRITE CARD ROUTINE
+         
+         + R ADD     ZERO
+         + STORE     BINCRD42     CLEAR COUNT 
+
+FLUSHEX  + TR        /   /
+
+
+           ORG       EVEN
+
+BINCARD    RES       42           BUFFER FOR PACT RELATIVE BINARY CARD INSTR 
+BINCRD42   DEF       0            COUNT OF INSTR IN CARD
+           DEF       0
+BINCRD44   DEF       0            CODE + ORIGIN IN CARD
+BINCRD45   DEF       0            SYMBOL 
+BINCRD46   DEF       0            CHECKSUM
+           DEF       0            BINCARD TAKES 48 HALF-WORDS IN TOTAL
+
+DATA       DEF       0            
+DATA2      DEF       0
+SUM        DEF       0            
+SUM2       DEF       0
+
+
+CRDTY      DEF       0            BIN CARD TYPE REQUITED: -01 -> CONTROL CARD, -00 -> MC INSTR CARD
+CRDSY      DEF       0            BIN CARD SYMBOL REQUITED
+CRDLOC     DEF       0            LOCATION 0..4095 
+CRDDATY    DEF       0            DATA TYPE: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+CRDORG     DEF       0
+CRDN       DEF       0
+CRDDATA    DEF       0
+CRDDATA2   DEF       0
+
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D3         DEF       3
+D6         DEF       6
+D36        DEF       36
+D48        DEF       48
+

@@ -1,0 +1,302 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:DECOTREL          DECODE TEXT RELATIVE ASSEMBLER CARD 
+                                           IN CARD IMAGE BUFFER ADDR 0000..0047
+                                           RETURNS 
+                                              ACC = +/- MC.OP  MC.ADDR | MC.FORMAT
+                                              MQ  =   + MC.REG MC.LOC 
+
+                                           PRINT ERROR ON PRINTER IF SOMETHING GOES WRONG DECODING
+                                                            
+                                             1         2         3         4         5         6         7 
+                                    123456789012345678901234567890123456789012345678901234567890123456789012
+                                     nnnn +RA V nnnn COMMENT  THIS CARD IMAGE -> MC.FORMAT=1
+                                   MC.LOC ^^  ^ ^       
+                                    MC.SGN||  | |MC.ADDR
+                                      MC.OP|  |MC.REG (A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+
+                                             1         2         3         4         5         6         7 
+                                    123456789012345678901234567890123456789012345678901234567890123456789012
+                                     nnnn +nnnnnn    COMMENT  THIS CARD IMAGE -> MC.FORMAT=2
+                                   MC.LOC ^^  
+                                    MC.SGN||NUM = MC.OP << 12 + MC.ADDR
+
+           HEAD      USE:RDINT           READ DECIMAL INTEGER FROM CARD BUFFER
+           HEAD      USE:RDALF           READ PACKED ALFANUMERIC VALUE FROM CARD BUFFER
+           HEAD      USE:RDCHR           READ BASE48 CHAR FROM CARD BUFFER
+           HEAD      USE:PRTNLINE        PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD        PRINT CARD BUFFER
+             
+
+DECOTREL + ADD       TWO          DECODE TEXT RELATIVE ASSEMBLER CARD
+         + STORE A   EXIT         RETURN ADDR
+
+         + R ADD     *           
+         + TR        RDINT        READ RELATIVE LOCATION
+         + STOP      0004         LEN=4 CHARS
+         + STOP      0002         STARTING AT COL 2
+         + STORE     MC.LOC       STORE INTEGER
+
+         + A RIGHT   0030         SHIFT 30=A RIGHT 0012 + A RIGHT 0018
+         + TR 0      DECO1        TR IF CHECK MC.LOC < 4096
+
+EGT4K    + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRGT4K      ERROR: LOCATION/ADDRESS > 4095
+
+DECO1    + R ADD     *           
+         + TR        RDCHR        READ SIGN '+' OR '-'
+         + STOP      0007         AT COL 7
+         + STORE     MC.SGN       STORE BASE48 CHAR. 
+
+         + SUB       D11          '-'
+         + TR 0      DECO2
+         + SUB       ONE          WAS =12 -> '+'        
+         + TR 0      DECO2
+         
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRBADSG     ERROR: BAD SIGN. SHOULD BE '+' OR '-'
+
+DECO2    + R ADD     *
+         + TR        RDCHR        READ 1 CHARS 
+         + STOP      0008         AT COL 8 (=1ST CHAR OF OPCODE)
+         + STORE     CHAR
+
+         + TR 0      EOPNF        1ST CHAR OF OP IS BLANK -> TR TO BAD OP ERROR
+         + SUB       D11
+         + TR +      MCMNE        1ST CHAR OF OP IS NOT NUMERIC -> TR TO GET OPCODE MNEMONIC       
+
+                                  HERE 1ST CHAR OF OP IS NUMERIC -> GET THE NUMBER
+         + R ADD     *            
+         + TR        RDINT        READ NUMBER         NOTE: NO SIGN IS READ HERE. BUT IF NUM READ >= 131072 (=octal 400000)
+         + STOP      0006         LEN=6 DIGITS              RETURNED NUM WILL BE NEGATIVE
+         + STOP      0008         STARTING AT COL 8
+         + STORE     NUM          STORE INTEGER.   
+
+         + TR +      DECO3        TR IF NUM >= 0
+
+                                  NORMALIZE NUM (MAKES IT POSITIVE, MAKE MC.SGN '-')
+
+         + R ADD     D11          BASE48 CODE FOR '-' IS 11
+         + STORE     MC.SGN       SGN='-' -> SET SIGN NEGATIVE
+         + R ADD     ZERO
+         + ADD AB    NUM
+         + STORE     NUM          MAKE NUM POSITIVE 0..131071
+
+DECO3    + R ADD     ZERO
+         + STORE     MC.REG       REGION='A'=0
+
+         + R ADD     TWO
+         + STORE     MC.FMT       =2 -> SET AS REL TEXT NUMBER 
+
+         + TR        DECODEOK     DECODE DONE, TR TO RETURN DECODED INSTR
+
+MCMNE    + R ADD     *
+         + TR        RDALF        READ 3 CHARS IN MQ
+         + STOP      0008         AT COL 8..10
+         + STORE MQ  OP           GET OPCODE MNEMONIC (E.G: "RA ")       
+
+         + R ADD     ZERO         CONVERT MNEMOMIC
+         + STORE     MC.OP        TO OPERATION CODE 0..31
+         + R ADD     TMNEAD
+         + STORE A   RDOPMNE
+
+RDOPMNE  + R ADD     /   /
+         + SUB       OP
+         + TR 0      MC2          TR IF MNEMONIC FOUND
+         + R ADD     MC.OP
+         + ADD       ONE
+         + STORE     MC.OP
+         + SUB       D32           
+         + TR 0      MC1          MNE NOT FOUND, TEST EXTRA EX INSTR
+         + R ADD     RDOPMNE  
+         + ADD       ONE
+         + STORE A   RDOPMNE  
+         + TR        RDOPMNE  
+
+TMNEAD   + STOP      TMNE
+
+MC1      + R ADD     OP
+         + SUB       MNEEX        TEST FOR EXTRA OPCODE "EX"
+         + TR 0      MCEX         TR IF IS "EX" OPCODE 
+
+EOPNF    + R ADD     *            
+         + TR        ERROR
+         + STOP      ERROPNF      ERROR: UNKNOWN OPCODE MNEMONIC ON INSTR CARD
+
+MCEX     + R ADD     D11          MAKE SURE SIGN IS MINUS
+         + STORE     MC.SGN
+         + R ADD     D13
+         + STORE     MC.OP        =MC INSTR OPCODE -> 13
+
+MC2      + R ADD     *           
+         + TR        RDCHR        READ ADDRESS REGION A I V T N P # S
+         + STOP      0011         AT COL 11
+         + STORE     CHAR         STORE BASE48 CHAR. 
+
+         + R ADD     ZERO         CONVERT REGION CHAR
+         + STORE     MC.REG       TO REGION CODE 0..7
+         + R ADD     TREGMNAD     (A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+         + STORE A   RDREGMNE
+
+RDREGMNE + R ADD     /   /        REG MNENONIC IS ALFA, SO NEGATIVE.  
+         + ADD       CHAR         USE ADD INSTEAD OF SUB TO COMPARE 
+         + TR 0      MC4          TR IF MNEMONIC FOUND
+         + R ADD     MC.REG
+         + ADD       ONE
+         + STORE     MC.REG
+         + SUB       D8
+         + TR 0      MC3          REG NAME NOT FOUND
+         + R ADD     RDREGMNE 
+         + ADD       ONE
+         + STORE A   RDREGMNE 
+         + TR        RDREGMNE 
+
+TREGMNAD + STOP      TREGMNE
+
+MC3      + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRREGNF     ERROR: UNKNOWN ADDRESS REGION ON INSTR CARD
+
+MC4      + R ADD     *           
+         + TR        RDINT        READ INSTR ADDRESS
+         + STOP      0004         LEN=4 DIGITS
+         + STOP      0013         STARTING AT COL 13
+         + STORE     MC.ADDR      STORE INTEGER
+
+         + A RIGHT   0030         SHIFT 30=A RIGHT 0012 + A RIGHT 0018
+         + TR 0      MC5          TR ERROR IF ADDR < 4096
+         + TR        EGT4K        TR ERROR IF ADDR > 4095
+
+MC5      + R ADD     ONE
+         + STORE     MC.FMT       =1 -> SET AS REL TEXT INSTR 
+
+         + R ADD     MC.OP        IS 0..31
+         + A LEFT    0012
+         + ADD       MC.ADDR      IS 0..4095
+         + STORE     NUM 
+
+                                  RETURNS     ACC = +/- MC.OP  MC.ADDR | MC.FORMAT
+                                              MQ  =   + MC.REG MC.LOC 
+
+DECODEOK + R ADD     MC.REG       IS REGION A=0, I=1, V=2, T=3, N=4, P=5, S=7
+         + A LEFT    0012
+         + ADD       MC.LOC       IS 0..4095
+         + STORE     MC.LOC       SAVE
+
+         + R ADD     MC.SGN       IS 11 ('-') OR 12 ('+')
+         + SUB       D12
+         + L RIGHT   0000         IF MC.SGN = '-' THEN MQ IS SET TO NEGATIVE
+
+         + R ADD     MC.FMT       IS 1..2 
+         + A RIGHT   0018         PLACE MC.FORMAT IN RIGHT HALF WORD OF ACC
+         + ADD       NUM
+         + L LEFT    0000         COPY SIGN FROM MQ TO ACC 
+
+         + LOAD MQ   MC.LOC
+
+EXIT     + TR        /   /
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE
+
+         + STOP      ERRCONT      IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING 
+
+ERRCONT  + R ADD     ZERO
+         + LOAD MQ   ZERO
+         + TR        EXIT
+
+
+TREGMNE    TXT       '  A'        MC.REG=0
+           TXT       '  I'              =1
+           TXT       '  V'              =2
+           TXT       '  T'              =3
+           TXT       '  N'              =4
+           TXT       '  P'              =5   PERISHABLE STORAGE (=LIB TEMP VARS)
+           TXT       '  #'        UNUSED
+           TXT       '  S'              =7
+
+TMNE       TXT       'H  '        STOP/HALT
+           TXT       'T  '        TRANSFER
+           TXT       'TF '        TRANSFER ON OVERLOF
+           TXT       'TP '        TRANSFER ON PLUS
+           TXT       'TZ '        TRANSFER ON ZERO
+           TXT       'S  '        SUBTRACT
+           TXT       'RS '        RESET AND SUBTRACT
+           TXT       'SV '        SUBTRACT ABSOLUTE VALUE
+           TXT       'N  '        NO OPERATION
+           TXT       'A  '        ADD
+           TXT       'RA '        RESET AND ADD
+           TXT       'AV '        ADD ABSOLUTE VALUE
+           TXT       'ST '        STORE
+           TXT       'SA '        STORE ADDRESS
+           TXT       'SM '        STORE MQ
+           TXT       'LM '        LOAD MQ
+           TXT       'M  '        MULTIPLY
+           TXT       'MR '        MULTIPLY AND ROUND
+           TXT       'D  '        DIVIDE
+           TXT       'R  '        ROUND
+           TXT       'LL '        LONG LEFT SHIFT
+           TXT       'LR '        LONG RIGHT SHIFT
+           TXT       'AL '        ACCUMULATOR LEFT SHIFT
+           TXT       'AR '        ACCUMULATOR RIGHT SHIFT
+           TXT       'RD '        READ
+           TXT       'RB '        READ BACKWARDs
+           TXT       'W  '        WRITE
+           TXT       'WE '        WRITE END OF FILE
+           TXT       'RW '        REWIND TAPE
+           TXT       'SD '        SET DRUM ADDR
+           TXT       'SE '        SENSE
+           TXT       'C  '        COPY
+MNEEX      TXT       'EX '        EXTRACT - late added opcode, with operation code = -13
+
+ERRGT4K    TXT       "BAD LOC/ADDR",0              ERROR: LOCATION/ADDRESS > 4095
+ERRBADSG   TXT       "BAD SIGN",0                  ERROR: BAD SIGN. SHOULD BE '+' OR '-'
+ERROPNF    TXT       "BAD OPCODE",0                ERROR: UNKNOWN OPCODE MNEMONIC ON INSTR CARD
+ERRREGNF   TXT       "BAD MC REG",0                ERROR: UNKNOWN ADDRESS REGION ON INSTR CARD
+
+                                  VARS/CONST HALF-WORD
+
+MC.LOC     DEF       0            
+MC.SGN     DEF       0            =1 -> '+', =-1 -> '-'
+MC.OP      DEF       0            0..31 (NO SIGN)
+MC.REG     DEF       0            A=0, I=1, V=2, T=3, N=4, P=5, S=7
+MC.ADDR    DEF       0            0..4095
+MC.FMT     DEF       0            =1 -> TEXT FORMAT, MC INSTR, =2 -> TEXT FORMAT, NUM
+
+NUM        DEF       0            0..131071 (NO SIGN) 
+CHAR       DEF       0
+OP         DEF       0
+
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D8         DEF       8
+D11        DEF       11
+D12        DEF       12
+D13        DEF       13
+D32        DEF       32
+
+

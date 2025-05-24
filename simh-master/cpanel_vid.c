@@ -148,7 +148,7 @@ int cpvid_init(int ncp, const char *title, int xp, int yp, void *dptr,
     return ncp;
 }
 
-// close cpanle window of given short_name. If ncp=-1, then close all windows
+// close cpanel window of given short_name. If ncp=-1, then close all windows
 void cpvid_close(int ncp)
 {
     if (vid_active==0) return; // video system not active
@@ -160,6 +160,17 @@ void cpvid_close(int ncp)
        cpvid[ncp].surface = NULL;
        cpvid[ncp].vptr_cp = NULL;
     }
+}
+
+// open a single cpanel windows named ncd. 
+// At least another panel should be visible (so DF file has been parsed)
+void cpvid_open(int ncp)
+{
+    extern void ControlPanel_init(DEVICE *dptr, int ncp); 
+
+    if (vid_active==0) return; // video system not active
+    if (cpvid[ncp].vptr_cp) return; // already visible
+    ControlPanel_init(&cp_dev, ncp); 
 }
 
 // check refresh 

@@ -1,0 +1,1490 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 33 COMPUTE VAR LOCATION ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:CLRBUF      CLEAR CARD BUFFER 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:PRTALF      PRINT PACKED ALFANUMERIC TEXT STRING
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:PRTCHR      PRINT BASE48 CHAR 
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+
+
+                                  PURPOSE:    
+                                  - READ VARIABLE HASH TABLE FROM DRUM
+                                  - COMPUTE RELADDR FIELD IN EACH
+                                    VARIABLE RECORD ACCORDING TO CONSTRAINTS
+                                    USE DRUM 0131 AS MEMORY MAP
+                                  - UPDATE VARIABLE RECORDS IN DRUM 0128 AND 0129
+                                  - SAVE IN
+                                       DRUM 0130, ADDR 0000     RELNUM0      REL NUM ORIGIN
+                                                       0001     NVARS        NUMBER OF VARS DEFINED
+                                                       0002     V.EXT        EXTENSION (=SIZE IN HALF WORDS) OF VARIABLE REGION (IS EVEN)
+
+SRCHVAR  + ADD       TWO          SEARCH VAR 
+         + STORE A   SRCHP1       PARAMS: ADDR OF VAR NAME TO SEARCH
+         + ADD       ONE
+         + STORE A   SRCHP2
+         + ADD       ONE
+         + STORE A   SRCHP3
+         + ADD       ONE
+         + STORE A   SRCHVAEX     RETURN INDEX POS IN ACC
+                                  0=NOT FOUND, =1 -> ON FIRST VAR SLOT IN DRUM
+                                  POS IN DRUM: (POS-1)*8 OM DRUM 0128 AND 0129
+
+SRCHP1   + R ADD     /   /        GET ADDR OF NAME     
+         + STORE A   SRCHN0   
+         + STORE A   SRCHP1A
+SRCHP1A  + R ADD     /   /
+         + STORE     FNDVAR      
+SRCHP2   + R ADD     /   /        GET ADDR OF NAME1
+         + STORE A   SRCHN1
+         + STORE A   SRCHP2A
+SRCHP2A  + R ADD     /   /
+         + STORE     FNDVAR1
+SRCHP3   + R ADD     /   /        GET ADDR OF NAME2
+         + STORE A   SRCHN2
+         + STORE A   SRCHP3A
+SRCHP3A  + R ADD     /   /
+         + STORE     FNDVAR2
+
+         + R ADD     *            GET THE HASH OF VAR BEING SEARCHED
+         + TR        GETHASH
+         + ADD       HASHAD       ADD HASH TABLE ADDR
+         + STORE A   SRCHHA1
+SRCHHA1  + R ADD     /   /        GET HASH[HASH VARNAME] -> VAR NUMBER
+         + TR 0      SRCHNFND     =0 -> VAR NOT IN HASH TABLE -> VAR NOT EXISTS
+         + STORE     N
+         + SUB       ONE
+         + A LEFT    0003         ADDR IN DRUM = 8*(NVAR -1)
+         + STORE A   SRCHDRAD
+         + R ADD     ONE
+         + STORE     HASHFLAG     -> USING HASH VALUE
+         + TR        SRCHTEST     TEST IF VAR FOUND USING HASH 
+
+SRCHLOOP + R ADD     N
+         + SUB       NVARS
+         + TR 0      SRCHNFND
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+
+SRCHTEST + R ADD     *
+         + TR        RWDRUM       READ VAR FROM DRUM
+         + READ      0128         DRUM INSTR
+SRCHDRAD + STOP      /   /        DRUM ADDR 
+         + STOP      FNDVAR
+         + STOP      0004         GET 4 HALF-WORD. ONLY 3 ARE NEEDED (THE NAME), BUT NUMER OF HW WORDS READ SHOULD BE EVEN
+
+         + R ADD     FNDVAR
+SRCHN0   + SUB       /   /
+         + TR 0      SRCHV1
+         + TR        NXTSRCH
+SRCHV1   + R ADD     FNDVAR1
+SRCHN1   + SUB       /   /
+         + TR 0      SRCHV2
+         + TR        NXTSRCH
+SRCHV2   + R ADD     FNDVAR2
+SRCHN2   + SUB       /   /
+         + TR 0      SRCHFND      VAR FOUND
+
+NXTSRCH  + R ADD     HASHFLAG     VAR NOT FOUND, SEARCH NEXT
+         + TR 0      NXTSRCH2
+         + R ADD     ZERO
+         + STORE     HASHFLAG     VAR NOT FOUND USING HASH, START A SEQUENTIAL SEARCH
+         + STORE     N
+         + STORE A   SRCHDRAD
+         + TR        SRCHLOOP 
+
+NXTSRCH2 + R ADD     SRCHDRAD
+         + ADD       D8
+         + STORE A   SRCHDRAD
+         + TR        SRCHLOOP
+
+SRCHFND  + R ADD     N
+         + TR        SRCHVAEX
+         
+SRCHNFND + R ADD     ZERO
+SRCHVAEX + TR        /   /
+
+GETHASH  + ADD       TWO          CALC HASH VALUE (0..198) FOR VARIABLE NAME FNDVAR, FNDVAR1, FNDVAR2
+         + STORE A   GETHAEX      RETURN HASH IN ACC
+
+         + R ADD     ZERO
+         + ADD AB    FNDVAR
+         + ADD AB    FNDVAR1
+         + ADD AB    FNDVAR2
+
+         + L RIGHT   0035         MQ=ABS(VARIABLE FULL NAME)
+         + DIV       D199         DIV BY 199, ACC=REMINDER
+GETHAEX  + TR        /   /
+HASHAD   + STOP      HASH         HASH TABLE ADDRESS
+
+
+SRCHSUCC + ADD       TWO          SEARCH FOR SUC/IMS OF VAR 
+         + STORE A   SCHSP1       PARAMS: ADDR OF VAR NAME TO SEARCH
+         + ADD       ONE
+         + STORE A   SCHSP2
+         + ADD       ONE
+         + STORE A   SCHSP3
+         + ADD       ONE
+         + STORE A   SCHSVAEX     RETURN INDEX POS IN ACC
+                                  0=NOT FOUND, =1 -> ON FIRST VAR SLOT IN DRUM
+         + R ADD     ZERO         POS IN DRUM: (POS-1)*8 ON DRUM 0128 AND 0129
+         + STORE     N
+         + STORE A   SCHSDRAD     POINTS TO CONSTR NAME
+
+SCHSP1   + R ADD     /   /        GET ADDR OF NAME     
+         + STORE A   SCHSN0   
+SCHSP2   + R ADD     /   /        GET ADDR OF NAME1
+         + STORE A   SCHSN1
+SCHSP3   + R ADD     /   /        GET ADDR OF NAME2
+         + STORE A   SCHSN2
+
+SCHSLOOP + R ADD     N
+         + SUB       NVARS        
+         + TR 0      SCHSNFND
+
+         + R ADD     *
+         + TR        RWDRUM       READ VAR RECORD FROM DRUM
+         + READ      0129         DRUM INSTR
+SCHSDRAD + STOP      /   /        DRUM ADDR 
+         + STOP      FNDVAR       -> FNDVAR=CONSTR, FNDVAR1=CONSTR1, FNDVAR2=CONSTR2, FNDCTYPE=CTYPE
+         + STOP      0004         GET 4 HALF-WORD
+
+         + R ADD     FNDVAR       IS THE CONSTAINT NAME
+SCHSN0   + SUB       /   /        CHECK IF CONSTAINT NAME (IN FNDBAR1) READ FROM DRUM
+         + TR 0      SCHSV1       IS SAME AS VAR TO SEARCH PASSED AS PARAM
+         + TR        NXTSCHS
+SCHSV1   + R ADD     FNDVAR1
+SCHSN1   + SUB       /   /
+         + TR 0      SCHSV2
+         + TR        NXTSCHS
+SCHSV2   + R ADD     FNDVAR2
+SCHSN2   + SUB       /   /
+         + TR 0      SCHSV3
+         + TR        NXTSCHS
+SCHSV3   + R ADD     FNDCTYPE     IF CTYPE=3 (=SUC)
+         + SUB       D3           THEN
+         + TR 0      SCHSFND      VAR FOUND
+         + R ADD     FNDCTYPE     IF CTYPE=2 (=IMS)
+         + SUB       TWO          THEN
+         + TR 0      SCHSFND      VAR FOUND
+         + TR        NXTSCHS
+
+NXTSCHS  + R ADD     SCHSDRAD
+         + ADD       D8
+         + STORE A   SCHSDRAD
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+         + TR        SCHSLOOP
+
+SCHSFND  + R ADD     N
+         + ADD       ONE
+         + TR        SCHSVAEX
+         
+SCHSNFND + R ADD     ZERO
+SCHSVAEX + TR        /   /
+
+
+SETVAR   + LOAD MQ   WR128        SAVE VAR RECORD TO DRUM
+         + TR        GVPARAM  
+
+RD128    + READ      0128
+WR128    + WRITE     0128
+
+GETVAR   + LOAD MQ   RD128        READ VAR RECORD FROM DRUM
+GVPARAM  + ADD       TWO          RECORDS STARTS AT 1
+         + STORE A   GVP1         
+         + ADD       ONE
+         + STORE A   GVEXIT
+
+         + STORE MQ  DROP1
+         + R ADD     DROP1
+         + ADD       ONE
+         + STORE     DROP2
+
+GVP1     + R ADD     /   /        GET ADDR OF INDEX VAR
+         + STORE A   GVP1A
+GVP1A    + R ADD     /   /        GET INDEX VALUE 1..MAXVARS       
+         + SUB       ONE          ADDRESS IN DRUM = (IVAR-1)*8 
+         + A LEFT    0003      
+         + STORE A   DRADDR1
+         + STORE A   DRADDR2
+         
+         + R ADD     *
+         + TR        RWDRUM       WRITE VAR RECORD TO DRUM
+DROP1    + READ      0128         DRUM INSTR
+DRADDR1  + STOP      /   /        DRUM ADDR 
+         + STOP      VARNAME      ADDR OF START OF FIRST HALF OF VAR RECORD
+         + STOP      0008         8 HALF WORDS
+
+         + R ADD     *
+         + TR        RWDRUM       WRITE VAR RECORD TO DRUM
+DROP2    + READ      0129         DRUM INSTR
+DRADDR2  + STOP      /   /        DRUM ADDR 
+         + STOP      CONSTR       ADDR OF START OF SECOND HALF OF VAR RECORD
+         + STOP      0008         8 HALF WORDS
+
+GVEXIT   + TR        /   /
+
+
+INIT     + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "COMPUTE VAR LOCATION"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     VTYPE        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     Q            NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     D1           NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     D2           NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     MAXNVARS     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DATA2        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + R ADD     *            
+         + TR        RWDRUM       READ VARIABLE NAMES HASH TABLE FROM DRUM
+         + READ      0128         DRUM INSTR
+         + STOP      3800         DRUM ADDR 
+         + STOP      HASH         ADDR OF DATA TO SAVE
+         + STOP      0200         200 HALF WORDS
+
+         + R ADD     *            COMPUTE NVARS READING TABLE
+         + TR        SETNVARS     STORED IN DRUM
+
+         + R ADD     *            POPULATE PHASE FIELD IN ALL VARIABLE 
+         + TR        SETPHA       RECORDS, COMPUTE MAXPHASE
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG2A     TR IF NO LOG SELECTED
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGPASS1     "VAR PASS1"
+         + STOP      0006
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGHDV       "...NUM NAME..... PH SIZE  LOC  LEN"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+
+ENDLOG2A + NOOP      0000
+
+         + R ADD     *            SCAN PHASES FROM MAXPASE DOWN TO 1
+         + TR        SETSIZE      ON EACH PHASE, FOLLOW CONSTRAINTS TO POPULATE SIZE FIELD
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG2B     TR IF NO LOG SELECTED
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGPASS2     "VAR PASS2"
+         + STOP      0006
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGHDV       "...NUM NAME..... PH SIZE  LOC  LEN"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+ENDLOG2B + NOOP      0000
+
+         + R ADD     *            SET LOC ADDR FOR VARS ON PHASE 1  
+         + TR        SETLOCP1     WITHOUT OVERLAPPING
+
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG2C     TR IF NO LOG SELECTED
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGPASS3     "VAR PASS3"
+         + STOP      0006
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGHDV       "...NUM NAME..... PH SIZE  LOC  LEN"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+ENDLOG2C + NOOP      0000
+
+         + R ADD     *            SET FLAG TO RELADDR VALUE
+         + TR        SETFLAG      SET V.EXT VALUE
+
+         + R ADD     *            SCAN PHASES FROM PHASE 1 TO MAXPHASE 
+         + TR        SETSIZE2     ON EACH PHASE, PROPAGATE RELADDR TO FOLLOWING PHASES
+
+         + TR        DONE
+
+
+SETNVARS + ADD       TWO          COMPUTE NVARS READING TABLE
+         + STORE A   SETNVEX      STORED IN DRUM
+
+         + R ADD     *
+         + TR        RWDRUM       READ RELNUM0 AND NVARS FROM DRUM
+         + READ      0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         + STOP      0002         2 HALF WORDS
+
+SETNVEX  + TR        /   /        RETURN TO CALLER
+
+
+                                  POPULATE PHASE FIELD IN 
+                                  ALL VARIABLE RECORDS
+                                  COMPUTE MAXPHASE
+
+SETPHA   + ADD       TWO
+         + STORE A   SETPHAEX
+
+         + R ADD     ONE
+         + STORE     MAXPHASE     MAX PHASE DEFINED IN VARS
+
+         + R ADD     NVARS        INIT LOOP ON VARS
+         + ADD       ONE          ADD ONE BECAUSE IVAR IS DECR ON START OF ITERATION
+         + STORE     IVAR
+
+PHLOOP   + R ADD     IVAR
+         + SUB       ONE
+         + STORE     IVAR
+SETPHAEX + TR 0      /   /        EXIT LOOP, RETURN TO CALLER
+
+         + R ADD     IVAR         CURRENT MAIN LOOP VAR
+         + STORE     NVAR         INIT VAR SUB-CHAIN 
+      
+         + R ADD     *
+         + TR        FOLLOWCO     FOLLOW SUB-CHAIN, IN: NVAR, OUT: PHA
+
+         + R ADD     *            GET VAR RECORD
+         + TR        GETVAR
+         + STOP      IVAR
+         
+         + R ADD     PHA
+         + STORE     PHASE        UPDATE PHASE FIELD
+      
+         + R ADD     *            SAVE BACK VAR RECORD
+         + TR        SETVAR
+         + STOP      IVAR
+
+         + R ADD     MAXPHASE     IF (PHA > MAXPHASE) THEN
+         + SUB       PHA             MAXPHASE=PHA
+         + TR +      PHL1 
+         + R ADD     PHA          KEEPS TRACK OF MAX PHASE VALUE = 
+         + STORE     MAXPHASE     MAX VAR SUB-CHAIN LENGHT
+PHL1     + NOOP      0000
+
+         + TR        PHLOOP
+
+FOLLOWCO + ADD       TWO          FOLLOW THE VAR CONSTRAINT CHAIN TO COMPUTE PHASE LEVEL
+         + STORE A   FOLLOWEX     IN: NVAR, OUT: PHA
+         + R ADD     ONE          
+         + STORE     PHA          
+
+FCOLOOP  + R ADD     *            GET VAR RECORD
+         + TR        GETVAR
+         + STOP      NVAR
+
+         + R ADD     FLAG         IF THE VAR ALREADY VISITED IN THIS SUB-CHAIN
+         + SUB       IVAR         THEN THERE IS A CONSTARINT LOOP -> TR TO ERROR
+         + TR 0      FCO5
+
+         + R ADD     CONSTR       IF CONSTRAIN NAME ID BLANK THEN 
+FOLLOWEX + TR 0      /   /        IS END OF SUB-CHAIN -> RETURN TO CALLER
+
+         + R ADD     IVAR         SET FLAG FIELD AS VISITED WITH START OF 
+         + STORE     FLAG         SUB-CHAIN VAR NUMBER, TO DETECT CONSTRAINT LOOPS
+      
+         + R ADD     *            SAVE BACK VAR RECORD
+         + TR        SETVAR
+         + STOP      NVAR
+         
+         + R ADD     CTYPE        CONSTRAINT VAR TYPE. 0=NONE, 1=SYN, 2=IMS, 3=SUC, 9=REL
+         + SUB       ONE          SYN CONSTRAINT INCREASES PHASE COUNT 
+         + TR 0      FCO1         ERROR IF MORE THAN 10 PHASES (IE VAR SUB-CHAIN
+         + TR        FCO3         IS MORE THAN 10 VARS LONG) 
+FCO1     + R ADD     PHA
+         + ADD       ONE
+         + STORE     PHA
+         + SUB       D10
+         + TR 0      FCO2
+         + TR        FCO3
+FCO2     + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRPHAOV     ERROR: MORE THAN 10 PHASES (NVAR)
+FCO3     + NOOP      0000
+
+         + R ADD     *
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      CONSTR       SEARCH CONSTAINT VAR       
+         + STOP      CONSTR1       
+         + STOP      CONSTR2
+         + STORE A   NVAR
+
+         + R ADD     NVAR
+         + TR 0      FCO4         IF NOT FOUND ERROR
+         + TR        FCOLOOP 
+FCO4     + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRCONSF     ERROR: CONSTRAINT NOT FOUND (FNDVAR)
+
+FCO5     + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRCONSL     ERROR: CONSTRAINT LOOP (NVAR)
+
+
+                                  SCAN PHASES FROM MAXPHASE DOWN TO 1
+                                  ON EACH PHASE, FOLLOW CONSTARINTS TO POPULATE SIZE FIELD
+
+SETSIZE  + ADD       TWO
+         + STORE A   SETSZEX
+
+         + R ADD     MAXPHASE     PHA = MAX PHASE + 1
+         + ADD       ONE
+         + STORE     PHA
+
+SCANPHA  + R ADD     PHA          DECR PHA
+         + SUB       ONE          IF PHA=0 THEN TR TO SCANDONE
+         + STORE     PHA
+         + TR 0      SCANDONE
+
+         + R ADD     ZERO         INIT TO SCAN SUB-CHAINS THAT STARTS 
+         + STORE     NVAR         AT PHA PHASE
+                                  Compute each var Size = half words needed for each var to accomodate its own length
+                                  Size = space needed by sub-chain variables (SYN constraints) + space needed for successor variables (SUC/IMS)
+SCANVAR  + R ADD     NVAR
+         + SUB       NVARS        NVARS=NVARS+1
+         + TR 0      SCANPHA      IF NVAR > NVARS THEN TR SCAN PHASE
+         + R ADD     NVAR         because end of var table -> all vars at this phase level scanned -> proceed with "Phase-1"
+         + ADD       ONE          
+         + STORE     NVAR
+
+         + R ADD     *            GET VAR RECORD. WILL CHECK IF WE SHOULD
+         + TR        GETVAR       COMPUTE THIS VAR
+         + STOP      NVAR
+                                  CHECK IF VAR SHOULD BE COMPUTED
+         + R ADD     PHASE        IF VAR[NVAR].PHASE <> PHA THEN TR TO SCANVAR
+         + SUB       PHA          THE VAR IS NOT AT DESIRED SCANNED PHASE -> TR TO TRY WITH NEXT VAR
+         + TR 0      SCV1         IF PHASE>1 WILL COMPUTE VAR WITH SYN CONSTRAINT 
+         + TR        SCANVAR      IF PHASE=1 WILL COMPUTE VAR WITH NO CONSTRAINT/REL CONSTRAINT
+SCV1     + R ADD     PHA          
+         + SUB       ONE
+         + TR 0      SCV2
+         + R ADD     CTYPE        HERE SCANNED PHASE > 1         
+         + SUB       ONE          IF CTYPE=1 (SYN) CONTINUE TO COMPUTE
+         + TR 0      SCV3         IF CTYPE<>1 TR TO SCANVAR TO TRY WITH NEXT VAR 
+         + TR        SCANVAR
+SCV2     + R ADD     CTYPE        HERE SCANNED PHASE = 1         
+         + TR 0      SCV3         IF CTYPE=0 (NO CONSTRAINT) CONTINUE TO COMPUTE      
+         + SUB       D9           IF CTYPE=9 (REL CONSTRAINT) CONTINUE TO COMPUTE      
+         + TR 0      SCV3         IF CTYPE<>0 AND <>9 TR TO SCANVAR TO TRY WITH NEXT VAR 
+         + TR        SCANVAR
+SCV3     + NOOP      0000
+                                  print var about to be processed
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG4A     TR IF NO LOG SELECTED
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      NVAR
+         + STOP      0508         ALF AT COL 8
+         + STOP      VARNAME
+         + STOP      0511         ALF AT COL 11
+         + STOP      VARNAM1
+         + STOP      0514         ALF AT COL 14
+         + STOP      VARNAM2
+         + STOP      0214         INT AT COL 14
+         + STOP      PHASE
+         + STOP      0229         INT AT COL 29
+         + STOP      LEN
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+ENDLOG4A + NOOP      0000
+
+                                  nVar points to var to compute.
+                                  As phases are going from highest to lowest, we do not have to cope with subchains
+                                  get the constraining var
+         + R ADD     PHA
+         + SUB       ONE
+         + TR 0      SCV4         TR IF PHASE=1
+
+         + R ADD     *            IF PHASE > 1 LOCATE PREV VAR IN CHAIN
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      CONSTR       SEARCH CONSTRAINING VAR       
+         + STOP      CONSTR1       
+         + STOP      CONSTR2
+         + TR        SCV5
+SCV4     + R ADD     ZERO         IF PHASE = 1 THEN THERE IS NO PREV VAR IN CHAIN, SO NPREV=0
+SCV5     + STORE     NPREV
+
+                                  prepare loc and hi to follow the possible successors of nVar
+
+         + R ADD     LEN
+         + STORE     LOC          first free addr after var (starting at addr zero)
+         + R ADD     SIZE 
+         + STORE     HI           LOC = VAR[NVAR].LEN 
+         + SUB       LOC          HI  = VAR[NVAR].SIZE
+         + TR +      SCV4B        IF HI<LOC THEN HI=LOC
+         + R ADD     LOC
+         + STORE     HI   
+SCV4B    + NOOP      0000
+
+SCANSUC  + R ADD     *            LOCATE SUCCESSOR (SUC/IMS) VARIABLE
+         + TR        SRCHSUCC
+         + STOP      VARNAME      
+         + STOP      VARNAM1
+         + STOP      VARNAM2      
+         + STORE A   N            if n=0 -> no SUC/IMS, >0 the successor/inmediate successor var
+         + TR 0      NOSUC        TR IF NO SUCCESSOR TO FOLLOW
+
+         + R ADD     *            GET SUC/IMS VAR RECORD
+         + TR        GETVAR
+         + STOP      N
+
+         + R ADD     CTYPE
+         + SUB       D3
+         + TR 0      SCV10        TR IF CONSTRAINT IS SUC
+                                  IMS - inmediate succeed
+         + R ADD     LOC          
+         + STORE     RELADDR      VAR[N].RELADDR = LOC
+         + R ADD     *            SAVE VAR RECORD
+         + TR        SETVAR
+         + STOP      N
+
+         + R ADD     LOC          LOC = LOC + VAR[N].LEN 
+         + ADD       LEN
+         + STORE     LOC
+
+         + R ADD     LEN          HI2 = LOC + MAX(LEN, SIZE) 
+         + SUB       SIZE         IF HI2 > HI THEN HI = HI2
+         + TR +      SCV6
+         + R ADD     SIZE
+         + TR        SCV7
+SCV6     + R ADD     LEN
+SCV7     + ADD       LOC
+         + STORE     HI2
+         + SUB       HI
+         + TR +      SCV8
+         + TR        SCV9
+SCV8     + R ADD     HI2
+         + STORE     HI
+SCV9     + TR        SCV20
+                                  SUC - succeed
+SCV10    + R ADD     LOC          IF LOC < HI THEN LOC = HI
+         + SUB       HI
+         + TR +      SCV11
+         + R ADD     HI
+         + STORE     LOC
+                        
+SCV11    + R ADD     LOC          
+         + STORE     RELADDR      VAR[N].RELADDR = LOC
+         + R ADD     *            SAVE VAR RECORD
+         + TR        SETVAR
+         + STOP      N
+ 
+         + R ADD     LOC          LOC = LOC + VAR[N].LEN 
+         + ADD       LEN
+         + STORE     LOC
+
+         + R ADD     LEN          HI2 = HI + MAX(LEN, SIZE) 
+         + SUB       SIZE         
+         + TR +      SCV16
+         + R ADD     SIZE
+         + TR        SCV17
+SCV16    + R ADD     LEN
+SCV17    + ADD       HI
+         + STORE     HI
+         + TR        SCV20
+
+SCV20    + R ADD     HI           IF HI < LOC THEN HI = LOC
+         + SUB       LOC
+         + TR +      SCV21
+         + R ADD     LOC
+         + STORE     HI
+SCV21    + TR        SCANSUC  
+
+NOSUC    + R ADD     *            update Size for nVar. This size covers successors's size
+         + TR        GETVAR
+         + STOP      NVAR        
+
+         + R ADD     HI           
+         + STORE     SIZE         VAR[NVAR].SIZE = HI
+
+         + R ADD     *            SAVE VAR RECORD
+         + TR        SETVAR
+         + STOP      NVAR        
+                                  update constrain's nPrev var Size to reflect total size of nVar
+         + R ADD     NPREV
+         + TR 0      SCV30
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NPREV
+
+         + R ADD     HI           
+         + ADD       SIZE
+         + STORE     SIZE         VAR[NPREV].SIZE = VAR[NPREV].SIZE + HI      (HI=VAR[NVAR].SIZE)
+
+         + R ADD     *            SAVE VAR RECORD
+         + TR        SETVAR
+         + STOP      NPREV
+
+SCV30    + TR        SCANVAR
+
+SCANDONE + NOOP      0000
+SETSZEX  + TR        /   /        RETURN TO CALLER
+
+
+                                  SET RELADDR LOCATION FOR VARS ON PHASE 1  
+                                  WITHOUT OVERLAPPING
+SETLOCP1 + ADD       TWO
+         + STORE A   SLP1EX
+
+         + R ADD     *            INIT MEM IMAGE IN DRUM 0131 
+         + TR        SMEMUSE      
+         + STOP      ZERO         LOC=0000         
+         + STOP      D4094        SIZE=4094
+         + STOP      ZERO         SET VALUE ZERO 
+
+         + R ADD     NVARS
+         + ADD       ONE
+         + STORE     N
+
+         + R ADD     ZERO
+         + STORE     LSTSIZE      INIT LAST PROCESSED VAR SIZE
+
+SLP1LOOP + R ADD     N
+         + SUB       ONE          
+         + STORE     N
+         + TR 0      SLP1LOEN
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      N
+                                  IF CTYPE = 9 (REL) THEN FLAG = 1   SIGNALS RELADDR VALUE ALREADY ASSIGNED
+         + R ADD     CTYPE                           ELSE FLAG = 0   SIGNALS SHOULD COMPUTE RELADDR VALUE 
+         + SUB       D9
+         + TR 0      SLP1A        TR AS RELADDR VALUE ALREADY ASSIGNED
+
+         + R ADD     ZERO         SET SHOULD COMPUTE RELADDR VALUE 
+         + STORE     FLAG
+         + TR        SLP1Z
+
+SLP1A    + R ADD     ONE          RELADDR VALUE ALREADY ASSIGNED -> SIGNAL ITS MEM USAGE
+         + STORE     FLAG
+
+         + R ADD     *            SET IN MEM IMAGE LOCATIONS USED BY VAR
+         + TR        SMEMUSE      
+         + STOP      RELADDR      LOC=CURRENT RELADDR LOCATION
+         + STOP      SIZE         SIZE=CURRENT VAR SIZE
+         + STOP      N            SET VALUE = THE VARIABLE NUMBER
+
+
+SLP1Z    + R ADD     *            SAVE BACK THE FLAG FIELD VALUE    
+         + TR        SETVAR
+         + STOP      N
+         + TR        SLP1LOOP 
+SLP1LOEN + NOOP      0000
+                                  Assign Loc addr for Phase 1 without overlapping
+         + R ADD     ZERO
+         + STORE     NVAR
+
+SLP1SCAN + R ADD     NVAR
+         + SUB       NVARS
+SLP1EX   + TR 0      /   /        RETURN TO CALLER
+         + R ADD     NVAR
+         + ADD       ONE
+         + STORE     NVAR         
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+
+         + R ADD     PHASE        IF PHASE <> 1 THEN PROCEED WITH NEXT VAR
+         + SUB       ONE          WE WILL ONLY HANDLE PHASE 1 VARS
+         + TR 0      SLP1B
+         + TR        SLP1SCAN
+SLP1B    + R ADD     FLAG
+         + SUB       ONE
+         + TR 0      SLP1SCAN     IF FLAG = 1 -> RELADDR VALUE ALREADY ASSIGNED -> PROCEED WITH NEXT VAR
+         + R ADD     CTYPE
+         + SUB       TWO
+         + TR 0      SLP1SCAN     IF CTYPE = 2 (IMS) -> VAR IS A SUCCESSOR OF ANOTHER PHASE 1 VAR -> SKIP THIS VAR -> PROCEED WITH NEXT VAR
+         + R ADD     CTYPE
+         + SUB       D3
+         + TR 0      SLP1SCAN     IF CTYPE = 3 (SUC) -> VAR IS A SUCCESSOR OF ANOTHER PHASE 1 VAR -> SKIP THIS VAR -> PROCEED WITH NEXT VAR
+
+                                  print var about to be processed
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG4B     TR IF NO LOG SELECTED
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      NVAR
+         + STOP      0508         ALF AT COL 8
+         + STOP      VARNAME
+         + STOP      0511         ALF AT COL 11
+         + STOP      VARNAM1
+         + STOP      0514         ALF AT COL 14
+         + STOP      VARNAM2
+         + STOP      0214         INT AT COL 14
+         + STOP      PHASE
+         + STOP      0219         INT AT COL 19
+         + STOP      SIZE
+         + STOP      0229         INT AT COL 29
+         + STOP      LEN
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+ENDLOG4B + NOOP      0000
+
+                                  WILL PROCESS THE CURRENT NVAR VARIABLE
+                                  NOW SCAN FOR POSSIBLE OVERLAPPING WITH ANOTHER VAR
+
+         + R ADD     SIZE
+         + STORE     HI           HI  = VAR[NVAR].SIZE
+         + SUB       LSTSIZE      IF CURRENT NVAR HAS SAME SIZE AS LAST VAR PROCESSED
+         + TR 0      SLP1SCOV     TR TO KEEP LOC VALUE TO START OVERLAPPING SCAN JUST AFTER LAST VAR 
+
+         + R ADD     ZERO         IF CURRENT NVAR HAS NOT SAME SIZE AS LAST VAR PROCESSED
+         + STORE     LOC          THEN SET LOC=0 TO START SCAN FOR OVERLAPPING FROM START OF VAR REGION 
+
+SLP1SCOV + R ADD     *            SCAN MEM IMAGE IN DRUM 0131 TO GET MEMORY USAGE IN LOCATIONS LOC (SIZE)
+         + TR        GMEMUSE      RETURN FIRST VALUE NON-ZERO (=NVAR STORED AT THIS LOCATION) 
+         + STOP      LOC          ZERO IF MEM IS UN-USED
+         + STOP      HI
+         + TR 0      SLP1NOV      VAR NOT OVERLAPS ANY OTHER -> TR TO END OF OVERLAP CHECK 
+
+         + STORE     N            N IS THE ALREADY EXISTING OVERLAPPED VAR
+
+         + R ADD     *            YES, VAR[NVAR] OVERLAPS WITH VAR[N]
+         + TR        GETVAR       
+         + STOP      N
+
+         + R ADD     RELADDR      = VAR[N].RELADDR
+         + ADD       SIZE         = VAR[N].SIZE
+         + STORE     LOC          LOC = NEW POSSIBLE VAR[NVAR].RELADDR VAR[N].RELADDR + VAR[N].SIZE
+                                      = 1ST FREE LOCATION AFTER OVERLAPPED VAR[N]
+
+         + R ADD     LOC          IF NEW LOC DOES NOT FIT IN MEM
+         + ADD       HI           THEN TR TO ERROR
+         + SUB       D4094
+         + TR +      EVNOMEM  
+
+         + TR        SLP1SCOV     SCAN FOR OVERLAP AGAIN
+
+SLP1NOV  + R ADD     *            VAR[NVAR] DOES NOT OVERLAPS ANY OTHER DEFINED VAR -> KEEP ADDR, MARK AS DEFINED
+         + TR        GETVAR       
+         + STOP      NVAR
+
+         + R ADD     ONE
+         + STORE     FLAG         VAR[NVAR].FLAG = 1
+         + R ADD     LOC
+         + STORE     RELADDR      VAR[NVAR].RELADDR = LOC = 1ST FREE LOCATION NOT OVERLAPPING ANYONE
+         + R ADD     SIZE
+         + STORE     LSTSIZE      SAVE VAR SIZE AS LAST PROCESSED VAR SIZE
+         + ADD       LOC
+         + STORE     LOC          LOC NOW POINT TO 1ST LOC AFTER NVAR
+
+         + R ADD     *
+         + TR        SETVAR
+         + STOP      NVAR
+
+         + R ADD     *            SET MEM IMAGE IN DRUM 0131 TO SIGNAL VAR PLACED AT RELADDR
+         + TR        SMEMUSE      
+         + STOP      RELADDR      LOCATION OF VAR
+         + STOP      SIZE         
+         + STOP      NVAR         NUMBER OF VAR AT THIS LOCATION
+
+         + TR        SLP1SCAN 
+
+SMEMUSE  + ADD       TWO         USE DRUM 0131 AS MEMORY MAP. EACH WORD HAS THE VARS NUMBER THAT USES IT
+         + STORE A   SMEMP1      SMEMUSE -> SETS THE GIVE VALUE IN LOCATION/SIZE GIVEN AS PARAM 
+         + ADD       ONE         PARAMS: SMLOC -> LOCATION (SHOULD BE EVEN)
+         + STORE A   SMEMP2              SMSIZE -> NUMBER OF HALF-WORDS (SHOULD BE EVEN)
+         + ADD       ONE                 SMVAL -> VALUE TO STORE
+         + STORE A   SMEMP3
+         + ADD       ONE
+         + STORE A   SMEMEX      
+
+SMEMP1   + R ADD     /   /       GET VAR LOCATION
+         + STORE A   SMEMP1A
+SMEMP1A  + R ADD     /   /
+         + STORE A   SMLOC
+SMEMP2   + R ADD     /   /       GET ADDR THAT CONTAINS VAR SIZE
+         + STORE A   SMEMP2A     
+SMEMP2A  + R ADD     /   /       DERREFERENCE
+         + STORE     NVARSIZE    VAR SIZE
+SMEMP3   + R ADD     /   /       GET ADDR THAT CONTAINS VALUE TO STORE IN DRUM
+         + STORE A   SMEMP3A
+SMEMP3A  + R ADD     /   /
+         - STORE     DATA
+
+         + WRITE     0131
+SMLOC    + SET DR    /   /
+SMLOOP   + R ADD     NVARSIZE   
+         + TR 0      SMLOOPE
+         + SUB       TWO
+         + STORE     NVARSIZE   
+         - COPY      DATA
+         + TR        SMLOOP
+SMLOOPE  + WRITE     2052         INSURE THAT MQ NOT IN USE                  
+
+SMEMEX   + TR        /   /
+
+GMEMUSE  + ADD       TWO         USE DRUM 0131 AS MEMORY MAP. EACH WORD HAS THE VARS NUMBER THAt USES IT
+         + STORE A   GMEMP1      GMEMUSE -> GETS NVAR THAT USES LOCATION/SIZE GIVEN AS PARAM 
+         + ADD       ONE         PARAMS: SMLOC -> LOCATION (SHOULD BE EVEN)
+         + STORE A   GMEMP2              SMSIZE -> NUMBER OF HALF-WORDS (SHOULD BE EVEN)
+         + ADD       ONE                 RETURN FIRST VALUE NON-ZERO (=NVAR STORED AT THIS LOCATION) 
+         + STORE A   GMEMEX                     ZERO IF MEM IS UN-USED
+
+GMEMP1   + R ADD     /   /       GET VAR LOCATION
+         + STORE A   GMEMP1A
+GMEMP1A  + R ADD     /   /
+         + STORE A   GMLOC
+GMEMP2   + R ADD     /   /       GET ADDR THAT CONTAINS VAR SIZE
+         + STORE A   GMEMP2A     
+GMEMP2A  + R ADD     /   /       DERREFERENCE
+         + STORE     NVARSIZE    VAR SIZE
+
+         + READ      0131
+GMLOC    + SET DR    /   /
+GMLOOP   + R ADD     NVARSIZE   
+         + TR 0      GMLOOPE
+         + SUB       TWO
+         + STORE     NVARSIZE   
+         - COPY      DATA
+         + R ADD     DATA
+         + TR 0      GMLOOP       IF ACC <> 0 -> ACC=NVAR THAT USES THIS LOCATION -> EXIT
+
+GMLOOPE  + WRITE     2052         INSURE THAT MQ NOT IN USE                  
+
+GMEMEX   + TR        /   /
+
+
+                                  SET FLAG TO RELADDR VALUE
+                                  SET V.EXT VALUE
+SETFLAG  + ADD       TWO
+         + STORE A   SETFLGEX
+
+         + R ADD     ZERO
+         + STORE     V.EXT        INIT VAR REGION SIZE
+
+         + R ADD     NVARS
+         + ADD       ONE
+         + STORE     NVAR
+
+SFLGLOOP + R ADD     NVAR
+         + SUB       ONE
+         + STORE     NVAR
+SETFLGEX + TR 0      /   /        RETURN TO CALLER
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+   
+         + R ADD     ZERO
+         + STORE     FLAG         VARS[N].FLAG=0
+
+         + R ADD     PHASE        IF VARS[N].PHASE = 1 THEN 
+         + SUB       ONE
+         + TR 0      SFLG1
+         + TR        SFLG9
+
+SFLG1    + R ADD     RELADDR      VARS[N].FLAG = VARS[N].RELADDR
+         + STORE     FLAG
+         + ADD       SIZE
+         + STORE     HI           HI = VARS[N].RELADDR + VARS[N].SIZE = NEXT FREE ADDRESS
+ 
+         + R ADD     V.EXT        IF HI > V.EXT THEN V.EXT = HI
+         + SUB       HI           THIS IS THE SZIE FOR VARS REGION
+         + TR +      SFLG9
+         + R ADD     HI
+         + STORE     V.EXT
+
+         + R ADD     D4094        IF V.EXT > 4094 THEN ERROR VARIABLES OVERFLOWS HI-SPEED STORAGE
+         + SUB       V.EXT
+         + TR +      SFLG9
+
+EVNOMEM  + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRSTOOV     ERROR: VARIABLES OVERFLOWS HI-SPEED STORAGE
+
+SFLG9    + R ADD     *            
+         + TR        SETVAR
+         + STOP      NVAR
+         + TR        SFLGLOOP 
+
+
+
+                                  SCAN PHASES FROM PHASE 1 TO MAXPHASE 
+                                  ON EACH PHASE, PROPAGATE RELADDR TO FOLLOWING PHASES
+
+SETSIZE2 + ADD       TWO
+         + STORE A   SETSZ2EX
+
+         + R ADD     ZERO         PHA = 0
+         + STORE     PHA
+
+SCANPHA2 + R ADD     PHA          INCR PHA
+         + SUB       MAXPHASE
+         + TR 0      SCANDON2
+         + R ADD     PHA
+         + ADD       ONE          IF PHA=0 THEN TR TO SCANDON2
+         + STORE     PHA
+
+         + R ADD     ZERO         INIT TO SCAN SUB-CHAINS THAT STARTS 
+         + STORE     NVAR         AT PHA PHASE
+                                  Compute each var Size = half words needed for each var to accomodate its own length
+                                  Size = space needed by sub-chain variables (SYN constraints) + space needed for successor variables (SUC/IMS)
+SCANVAR2 + R ADD     NVAR
+         + SUB       NVARS        NVARS=NVARS+1
+         + TR 0      SCANPHA2     IF NVAR > NVARS THEN TR SCAN PHASE
+         + R ADD     NVAR         because end of var table -> all vars at this phase level scanned -> proceed with "Phase-1"
+         + ADD       ONE          
+         + STORE     NVAR
+
+         + R ADD     *            GET VAR RECORD. WILL CHECK IF WE SHOULD
+         + TR        GETVAR       COMPUTE THIS VAR
+         + STOP      NVAR
+
+         + R ADD     PHASE        CHECK IF VAR SHOULD BE COMPUTED
+         + SUB       PHA          IF VAR[NVAR].PHASE <> PHA THEN TR TO SCANVAR2
+         + TR 0      SCVB1        THE VAR IS NOT AT DESIRED SCANNED PHASE -> TR TO TRY WITH NEXT VAR
+         + TR        SCANVAR2
+                                  
+SCVB1    + R ADD     PHASE        IF PHASE=1 WILL COMPUTE VAR WITH NO CONSTRAINT/SYN/REL CONSTRAINT
+         + SUB       ONE          IF PHASE>1 WILL COMPUTE VAR WITH SYN CONSTRAINT 
+         + TR 0      SCVB2        
+
+         + R ADD     CTYPE        HERE SCANNED PHASE > 1         
+         + SUB       ONE          IF CTYPE=1 (SYN) CONTINUE TO COMPUTE
+         + TR 0      SCVB3        IF CTYPE<>1 TR TO SCANVAR2 TO TRY WITH NEXT VAR 
+         + TR        SCANVAR2
+
+SCVB2    + R ADD     CTYPE        HERE SCANNED PHASE = 1         
+         + TR 0      SCVB3        IF CTYPE=0 (NO CONSTRAINT) CONTINUE TO COMPUTE      
+         + SUB       D9           IF CTYPE=9 (REL CONSTRAINT) CONTINUE TO COMPUTE      
+         + TR 0      SCVB3        IF CTYPE<>0 AND <>9 TR TO SCANVAR2 TO TRY WITH NEXT VAR 
+         + TR        SCANVAR2
+SCVB3    + NOOP      0000
+
+                                  print var about to be processed
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG4C     TR IF NO LOG SELECTED
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      NVAR
+         + STOP      0508         ALF AT COL 8
+         + STOP      VARNAME
+         + STOP      0511         ALF AT COL 11
+         + STOP      VARNAM1
+         + STOP      0514         ALF AT COL 14
+         + STOP      VARNAM2
+         + STOP      0214         INT AT COL 14
+         + STOP      PHASE
+         + STOP      0219         INT AT COL 19
+         + STOP      SIZE
+         + STOP      0224         INT AT COL 24
+         + STOP      RELADDR
+         + STOP      0229         INT AT COL 29
+         + STOP      LEN
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+ENDLOG4C + NOOP      0000
+
+                                  nVar points to var to compute.
+                                  get the constraining var
+         + R ADD     PHA
+         + SUB       ONE
+         + TR 0      SCVB4        TR IF PHASE=1
+
+         + R ADD     *            IF PHASE > 1 LOCATE PREV VAR IN CHAIN
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      CONSTR       SEARCH CONSTRAINING VAR       
+         + STOP      CONSTR1       
+         + STOP      CONSTR2
+         + STORE A   NPREV
+         
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NPREV
+         
+         + R ADD     FLAG         LOC = VAR[NPREV].FLAG   current RelAddr taken from constraint
+         + STORE     LOC
+         
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+         
+         + R ADD     LOC          VAR[NVAR].RELADDR = LOC
+         + STORE     RELADDR      VAR[NVAR].FLAG = VAR[NVAR].RELADDR
+         + STORE     FLAG
+         + R ADD     SIZE
+         + STORE     NVARSIZE     NVARSIZE = VAR[NVAR].SIZE
+
+         + R ADD     *            
+         + TR        SETVAR
+         + STOP      NVAR
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NPREV
+         
+         + R ADD     LOC          VAR[NPREV].FLAG = LOC + VAR[NVAR].SIZE
+         + ADD       NVARSIZE
+         + STORE     FLAG
+
+         + R ADD     *            
+         + TR        SETVAR
+         + STOP      NPREV
+
+         + R ADD     *            RESTORE NVAR         
+         + TR        GETVAR
+         + STOP      NVAR
+
+         + TR        SCANSUC2
+         
+SCVB4    + R ADD     ZERO         IF PHASE = 1 THEN THERE IS NO PREV VAR IN CHAIN, SO NPREV=0
+         + STORE A   NPREV
+         + R ADD     FLAG         LOC = VAR[NVAR].FLAG 
+         + STORE     LOC
+                                  prepare loc to follow the possible sub-chain of nVar
+
+SCANSUC2 + R ADD     *            scan for SUC/IMS of name (successors of current var nVar)
+         + TR        SRCHSUCC
+         + STOP      VARNAME      
+         + STOP      VARNAM1
+         + STOP      VARNAM2      
+         + STORE A   N            if n=0 -> no SUC/IMS, >0 the successor/inmediate successor var
+         + TR 0      NOSUC2       TR IF NO SUCCESSOR TO FOLLOW
+
+         + R ADD     *            GET SUC/IMS VAR RECORD
+         + TR        GETVAR
+         + STOP      N
+
+         + R ADD     RELADDR      VAR[N].RELADDR = LOC + VAR[N].RELADDR
+         + ADD       LOC
+         + STORE     RELADDR
+         + STORE     FLAG         VAR[N].FLAG = VAR[N].RELADDR
+
+         + R ADD     *            
+         + TR        SETVAR
+         + STOP      N
+
+         + TR        SCANSUC2
+NOSUC2   + TR        SCANVAR2
+
+SCANDON2 + NOOP      0000
+SETSZ2EX + TR        /   /        RETURN TO CALLER
+
+
+
+                                  LIST VARS. NOTE THAT 1ST AND LAST ADDRESSES ARE IN DECIMAL
+                                  ALSO VALUES IN S1 AND S2 ARE DECIMAL
+
+LISTVARS + ADD       TWO
+         + STORE A   LISTEX
+
+         + SENSE     0521         SHEET EJECTION -> NEW PAGE FOR VARIABLES LISTING
+                                  NOTE: ON PACT PRINTER PANEL, THE FOLLOWING SENSE-IN ARE WIRED
+                                  SENSE 0519 -> PRINT BLANK LINE
+                                  SENSE 0520 -> PRINT TWO BLANK LINES
+                                  SENSE 0520 -> SHEET EJECTION (IE NEW PAGE)
+
+         + R ADD     *
+         + TR        PRTNLINE
+         + STOP      0000         PRINT BLANK LINE
+
+         + R ADD     *
+         + TR        PRTNLINE
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGHDLV1     "TAG  REL.LOC. VARIABLE              CONSTRAINT"
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGHDLV2     "    1ST  LAST FACT.  S1    S2   Q   FACT.  S1    S2  TYPE LOC."
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     ZERO
+         + STORE     N
+
+LVLOOP   + R ADD     N
+         + SUB       NVARS
+         + TR 0      LVLOEND      TR TO LOOP END
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      N
+
+         + LOAD MQ   D31          'S'
+         + R ADD     VTYPE
+         + SUB       ONE
+         + TR 0      LV0
+         + LOAD MQ   D34          'V'
+         + SUB       ONE
+         + TR 0      LV0
+         + LOAD MQ   D25          'M'
+LV0      + STORE MQ  CHAR         TAG CHAR
+
+                                  TAG  REL.LOC. VARIABLE              CONSTRAINT"
+                                      1ST  LAST FACT.  S1    S2   Q   FACT.  S1    S2  TYPE LOC."
+                                    X NNNN NNNN AAA  NNNN    NN  NN   AAA   AAA   AAA  AAA NNNN
+                                  1234567890123456789012345678901234567890123456789012345678901234567890
+                                           1         2         3         4         5         6         7
+                                   
+         + R ADD     *            CLEAR CARD BUFFER
+         + TR        CLRBUF 
+
+         + LOAD MQ   CHAR
+         + R ADD     *            PRINT TAG (CHAR)
+         + TR        PRTCHR
+         + STOP      0003         COLUMN 
+
+         + LOAD MQ   RELADDR
+         + R ADD     *            PRINT REL 1ST (INTEGER)
+         + TR        PRTINT
+         + STOP      0004         LEN
+         + STOP      0005         COLUMN 
+
+         + R ADD     LEN
+         + SUB       TWO
+         + TR 0      LVPR1        TR IS SCALAR (NO NEED TO PRINT LOC LAST)
+         + R ADD     RELADDR
+         + ADD       LEN
+         + SUB       TWO
+         + STORE     LOC2
+        
+         + LOAD MQ   LOC2
+         + R ADD     *            PRINT LOC LAST (INTEGER)
+         + TR        PRTINT
+         + STOP      0004         LEN
+         + STOP      0010         COLUMN 
+LVPR1    + NOOP      0000
+
+         + R ADD     VTYPE        VAR TYPE. 1=SCALAR, 2=VECTOR, 3=MATRIX
+         + SUB       ONE
+         + TR 0      LVPRSC       TR TO PRINT SCALAR VAR NAME
+         + SUB       ONE
+         + TR 0      LVPRVE       TR TO PRINT VECTOR
+
+         + LOAD MQ   VARNAME      PRINT MATRIX VAR NAME
+         + R ADD     *            CANNOT HAVE DEFINITIVE SUBSCRIPTS
+         + TR        PRTALF
+         + STOP      0015         COLUMN 
+
+         + R ADD     D2
+         + A LEFT    0001
+         + L RIGHT   0035         UNDER "S1" LABEL, THE PRINTED VALUE FOR MATRIX IS IN FACT D1=2*dimension 2
+         + R ADD     *            THIS IS THE VALUE THAT WILL BE USED ON "ID" STATEMENTS WHEN SENDING THE DIMENSION 
+         + TR        PRTINT
+         + STOP      0004         LEN
+         + STOP      0020         COLUMN 
+
+         + LOAD MQ   TWO          UNDER "S2" LABEL, THE PRINTED VALUE IS IN FACT D2. ON A MATRIX, THIS IS ALLWAYS 2
+         + R ADD     *            THIS IS THE VALUE THAT WILL BE USED ON "ID" STATEMENTS WHEN SENDING THE DIMENSION 
+         + TR        PRTINT
+         + STOP      0002         LEN
+         + STOP      0028         COLUMN 
+         + TR        LVPRQ
+
+LVPRSC   + LOAD MQ   VARNAME      PRINT SCALAR VAR NAME
+         + R ADD     *            CAN HAVE 2 DEFINITIVE SUBSCRIPTS
+         + TR        PRTALF
+         + STOP      0015         COLUMN 
+         + LOAD MQ   VARNAM1
+         + R ADD     *     
+         + TR        PRTALF
+         + STOP      0021         COLUMN 
+         + LOAD MQ   VARNAM2
+         + R ADD     *     
+         + TR        PRTALF
+         + STOP      0027         COLUMN 
+         + TR        LVPRQ
+
+LVPRVE   + LOAD MQ   VARNAME      PRINT VECTOR VAR NAME
+         + R ADD     *            CAN HAVE 1 DEFINITIVE SUBSCRIPT
+         + TR        PRTALF
+         + STOP      0015         COLUMN 
+         + LOAD MQ   VARNAM1
+         + R ADD     *     
+         + TR        PRTALF
+         + STOP      0021         COLUMN 
+
+         + LOAD MQ   TWO          UNDER "S2" LABEL, THE PRINTED VALUE IS IN FACT D1. ON A VECTOR, THIS IS ALLWAYS 2
+         + R ADD     *            THIS IS THE VALUE THAT WILL BE USED ON "ID" STATEMENTS WHEN SENDING THE DIMENSION 
+         + TR        PRTINT
+         + STOP      0002         LEN
+         + STOP      0028         COLUMN 
+
+LVPRQ    + LOAD MQ   Q
+         + R ADD     *     
+         + TR        PRTINT
+         + STOP      0002         LEN
+         + STOP      0032         COLUMN 
+
+         + R ADD     CTYPE        CONSTRAINT VAR TYPE. 0=NONE, 1=SYN, 2=IMS, 3=SUC, 9=REL
+         + TR 0      LVPREND
+         
+         + LOAD MQ   CONSTR       PRINT SCALAR VAR NAME
+         + R ADD     *            CAN HAVE 2 DEFINITIVE SUBSCRIPTS
+         + TR        PRTALF
+         + STOP      0037         COLUMN 
+         + LOAD MQ   CONSTR1
+         + R ADD     *     
+         + TR        PRTALF
+         + STOP      0043         COLUMN 
+         + LOAD MQ   CONSTR2
+         + R ADD     *     
+         + TR        PRTALF
+         + STOP      0049         COLUMN 
+
+         + R ADD     CTYPE        CONSTRAINT VAR TYPE. 0=NONE, 1=SYN, 2=IMS, 3=SUC, 9=REL
+         + SUB       D9
+         + TR 0      LVREL        TR IF CONSTRAINT IS REL
+         + R ADD     CTYPE
+         + SUB       ONE
+         + ADD       CTYTXTAD
+         + STORE A   LVCONS
+LVCONS   + LOAD MQ   /   /
+LVCONS2  + R ADD     *            PRINT CONSTRAINT TYPE 
+         + TR        PRTALF
+         + STOP      0054         COLUMN 
+         + TR        LVPREND
+CTYTXTAD + STOP      ALFSYN
+
+LVREL    + LOAD MQ   RELADDR
+         + R ADD     *            PRINT LOC (INTEGER)
+         + TR        PRTINT
+         + STOP      0004         LEN
+         + STOP      0058         COLUMN 
+         
+         + LOAD MQ   ALFREL
+         + TR        LVCONS2
+
+LVPREND  + R ADD     *            PRINT CARD BUFFER
+         + TR        PRINTCRD
+
+         + TR        LVLOOP
+
+LVLOEND  + R ADD     RELNUM0
+         + TR 0      LISTEX       NO "NUM nnnn" CONSTRAINT SET -> VAR LISTING TERMINATED
+
+         + R ADD     *            IF "NUM nnnn" CONSTRAINT SET -> PRINT IT AT END OF VAR LIST
+         + TR        PRTNLINE     
+         + STOP      0154         STRINGZ AT COL 54
+         + STOP      MSGNUM       'NUM'
+         + STOP      0256         INT AT COL 56
+         + STOP      RELNUM0      REL LOCATION OF START OF NUMBERS
+         + STOP      0000         END OF LINE. 
+
+LISTEX   + TR        /   /        RETURN TO CALLER
+
+
+
+
+                                  NO MORE VARS
+
+                                  IF SW6 ON THEN 
+                                  PRINT VARS DEFINED 
+
+DONE     + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGVEXT      "VAR EXT"
+         + STOP      0215         INT AT COL 15
+         + STOP      V.EXT        HI REL ADDR OF VARS
+         + STOP      0006
+
+ENDLOG1B + NOOP      0000
+
+         + R ADD     *
+         + TR        LISTVARS     LIST PACT PROGRAM VARIABLES
+
+         + R ADD     *
+         + TR        RWDRUM       WRITE RELNUM0, NVARS AND V.EXT TO DRUM
+         + WRITE     0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         + STOP      0004         4 HALF WORDS
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT CURRENT VAR POINTED BY NVAR
+         + TR        GETVAR
+         + STOP      NVAR
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGVAR       "VAR "
+         + STOP      0201         INT AT COL 1
+         + STOP      NVAR
+         + STOP      0508         ALF AT COL 8
+         + STOP      VARNAME
+         + STOP      0511         ALF AT COL 11
+         + STOP      VARNAM1
+         + STOP      0514         ALF AT COL 14
+         + STOP      VARNAM2
+
+
+         + STOP      0000
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE. PRINT ALLWAYS
+
+ERRLOOP  + STOP      ERRLOOP      VARIABLE ERROR ARE NT RESTARTABLE
+
+           ORG       EVEN
+
+                                  VARIABLE RECORD - 16 HALF WORD
+
+                                  VARNAME..D2 ARE STORED IN DRUM 0128 
+                                  CONSTR..SIZE ARE STORED IN DRUM 0129
+
+VARNAME    DEF       0            VARIABLE NAME
+VARNAM1    DEF       0            
+VARNAM2    DEF       0            
+VTYPE      DEF       0            VAR TYPE. 1=SCALAR, 2=VECTOR, 3=MATRIX
+LEN        DEF       0            HALF-WORD USED BY VARS
+Q          DEF       0
+D1         DEF       0            DIMENSIONS
+D2         DEF       0
+CONSTR     DEF       0            CONSTRAINT VAR NAME
+CONSTR1    DEF       0
+CONSTR2    DEF       0
+CTYPE      DEF       0            CONSTRAINT VAR TYPE. 0=NONE, 1=SYN, 2=IMS, 3=SUC, 9=REL
+RELADDR    DEF       0            RELATIVE ADDR IN VAR POOL
+PHASE      DEF       0
+FLAG       DEF       0
+SIZE       DEF       0            NUM OF HALF-WORDS NEEDED TO ACCOMODATE LEN USED BY SUB-CHAINS VARIABLES
+
+                                  TABLES (SHOULD AT EVEN LOCATION)
+
+RELNUM0    DEF       0            REL NUM ORIGIN
+NVARS      DEF       0            NUMBER OF VARS DEFINED
+V.EXT      DEF       0            EXTENSION (=SIZE IN HALF WORDS) OF VARIABLE REGION (IS EVEN)
+DUMMY      DEF       0            DUMMY VAR TO KEEP FNDVAR AT EVEN LOCATION
+
+FNDVAR     DEF       0            TEMP ON VAR SEARCH (SHOULD BE AT EVEN ADDR)
+FNDVAR1    DEF       0            TEMP ON VAR SEARCH
+FNDVAR2    DEF       0            TEMP ON VAR SEARCH
+FNDCTYPE   DEF       0            TEMP ON VAR SEARCH
+
+HASH       RES       200          VARIABLES NAMES HASH TABLE (199 ENTRIES)
+
+DATA       DEF       0
+DATA2      DEF       0
+
+MAXNVARS   DEF       341          MAX VARIABLES THAT CAN DE DEFINED IN ONE PROGRAM 
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D3         DEF       3
+D8         DEF       8
+D9         DEF       9
+D10        DEF       10
+D25        DEF       25
+D31        DEF       31
+D34        DEF       34
+D199       DEF       199
+D4094      DEF       4094
+
+MAXPHASE   DEF       0            MAX NUMBER OF PHASES DEFINED
+LOC        DEF       0
+LOC2       DEF       0
+HI         DEF       0
+HI2        DEF       0
+PHA        DEF       0            CURRENT PHASE BEING SCANNED
+NPREV      DEF       0            
+IVAR       DEF       0            INDEX ON VARS NUMBER
+NVAR       DEF       0            INDEX ON VARS NUMBER
+N          DEF       0            TEMP
+NVARSIZE   DEF       0            TEMP
+CHAR       DEF       0            TEMP
+HASHFLAG   DEF       0
+LSTSIZE    DEF       0            LAST PROCESSED VAR SIZE
+
+                                  TEXT
+
+ERRPHAOV   TXT       "MORE THAN 10 PHASES",0       NVAR IS THE OFFENDING VAR
+ERRCONSF   TXT       "CONSTRAINT NOT FOUND",0
+ERRCONSL   TXT       "CONSTRAINT LOOP",0 
+ERRSTOOV   TXT       "VARIABLES OVERFLOWS HI-SPEED STORAGE",0
+
+MSGSTART   TXT       "COMPUTE VARS LOCATION",0
+MSGPASS1   TXT       "VAR PASS1",0
+MSGPASS2   TXT       "VAR PASS2",0
+MSGPASS3   TXT       "VAR PASS3",0
+MSGHDV     TXT       "   NUM NAME      PH SIZE  LOC  LEN",0
+MSGVEXT    TXT       "VAR EXT",0
+MSGVAR     TXT       "VAR",0
+
+MSGHDLV1   TXT       "TAG  REL.LOC. VARIABLE              CONSTRAINT",0                                                         
+MSGHDLV2   TXT       "    1ST  LAST FACT.  S1    S2   Q   FACT.  S1    S2  TYPE LOC.",0
+MSGNUM     TXT       "NUM",0
+
+ALFSYN     TXT       'SYN'
+           TXT       'IMS'
+           TXT       'SUC'
+ALFREL     TXT       'REL'
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE

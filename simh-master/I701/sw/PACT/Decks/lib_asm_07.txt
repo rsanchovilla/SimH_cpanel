@@ -1,0 +1,90 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0    86
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF     0  SINFN
+;  
+         0000 +SA I 0068 SINFN    + STORE A   EXIT         SAVE ACC
+         0001 +RA I 0068          + R ADD     EXIT         RESTORE ACC
+         0002 +A  I 0071          + ADD       TWO          
+         0003 +SA I 0007          + STORE A   P1           PARM: Q OF ARGUMENT (GIVEN IN MQ). 
+         0004 +A  I 0070          + ADD       ONE
+         0005 +SA I 0068          + STORE A   EXIT
+         0006 -SM I 0078          - STORE MQ  ANGLE        ANGLE (IN RADIANS)
+         0007 +RA A 0000    P1    + R ADD     /   /        GET Q OF ARGUMENT. CAN BE NEGATIVE
+         0008 +S  I 0072          + SUB       D4
+         0009 +TZ I 0019          + TR 0      NORM         =0 -> NO NEED TO SHIFT ANGLE VALUE
+         0010 +TP I 0015          + TR +      LF           >0 -> SHIFT LEFT
+         0011 +SA I 0013          + STORE A   RT1          <0 -> SHIFT RIGHT
+         0012 -RA I 0078          - R ADD     ANGLE
+         0013 +AR A 0000    RT1   + A RIGHT   /   /
+         0014 +T  I 0018          + TR        ANG
+         0015 +SA I 0017    LF    + STORE A   LF1
+         0016 -RA I 0078          - R ADD     ANGLE
+         0017 +AL A 0000    LF1   + A LEFT    /   /
+         0018 -ST I 0078    ANG   - STORE     ANGLE        NOW ANGLE IS SET WITH Q=4 -> -916gr..+916gr
+         0019 -RA I 0078    NORM  - R ADD     ANGLE        NORMALIZE ANGLE: TO FIT IN RANGE -PI..+PI
+         0020 -LR A 0035          - L RIGHT   0035         ACC=0, MQ=ANGLE
+         0021 -D  I 0074          - DIV       TWOPI        ACC CONTAINS THE REMAINDER (MODULO 2PI AT Q=4)
+         0022 -ST I 0078          - STORE     ANGLE
+         0023 -S  I 0076          - SUB       PI
+         0024 +TP I 0030          + TR +      NORM1        TR IF ANGLE > +PI -> MUST ADJUST
+         0025 -RA I 0078          - R ADD     ANGLE
+         0026 -A  I 0076          - ADD       PI
+         0027 +TP I 0032          + TR +      NORM2        TR IF ANGLE > -PI -> IN RANGE
+         0028 -A  I 0076          - ADD       PI           ANGLE IS IN RANGE -2PI..-PI. ADD 2PI TO PLACE THE ANGLE IN RANGE 0..PI
+         0029 +T  I 0031          + TR        NORM1B         
+         0030 -S  I 0076    NORM1 - SUB       PI           SUB 2PI TO PLACE THE ANGLE IN RANGE -PI..0
+         0031 -ST I 0078   NORM1B - STORE     ANGLE        
+         0032 -RA I 0076    NORM2 - R ADD     PI           NORMALIZE ANGLE TO RANGE -PI/2..+PI/2
+         0033 +AR A 0001          + A RIGHT   0001         ACC=PI/2
+         0034 -S  I 0078          - SUB       ANGLE        
+         0035 -TP I 0038          - TR +      NORM2A       IF ANGLE < PI/2 TR TO CONTINUE RANGE CHECK
+         0036 -RA I 0076          - R ADD     PI           ANGLE > PI/2 -> MUST ADJUST -> ANGLE = PI - ANGLE  
+         0037 +T  I 0042          + TR        NORM5
+         0038 -S  I 0076   NORM2A - SUB       PI
+         0039 -TP I 0041          - TR +      NORM3        IF ANGLE < -PI/2 -> MUST ADJUST 
+         0040 -T  I 0044          - TR        DO.SIN       TR AS ANGLE IN RANGE -PI/2..PI/2
+         0041 -RS I 0076    NORM3 - R SUB     PI           HERE ANGLE < -PI/2 -> ANGLE = -PI - ANGLE
+         0042 -S  I 0078    NORM5 - SUB       ANGLE 
+         0043 -ST I 0078          - STORE     ANGLE        
+         0044 +RA I 0078 DO.SIN   + R ADD     XX           COMPUTE SIN(XX=ANGLE) WITH Q=4
+         0045 +ST I 0082          + STORE     RES          XX MUST BE < 2 (ELSE DIV CHECK) -> THIS IS WHY WE NORMALIZE TO -PI/2..+PI/2
+         0046 +ST I 0080          + STORE     TERM
+         0047 +RA I 0073          + R ADD     ONEQ4
+         0048 +ST I 0084          + STORE     N            N=1
+         0049 +RA I 0084 LOOP     + R ADD     N            COMPUTE: TERM = - (TERM * XX * XX) / ((N+1) * (N+2))
+         0050 +A  I 0073          + ADD       ONEQ4
+         0051 +ST I 0085          + STORE     NN
+         0052 +A  I 0073          + ADD       ONEQ4
+         0053 +ST I 0084          + STORE     N
+         0054 +RS I 0080          + R SUB     TERM
+         0055 +LM I 0069          + LOAD MQ   ZERO
+         0056 +D  I 0085          + DIV       NN           MQ= TERM/(N+1) AT Q=QTERM-QNN = 4-4=0
+         0057 -M  I 0078          - MPY       XX           NO NEED TO LOAD MQ WITH VALUE. ALREADY SET BY DIV ABOVE. QRES=0+QXX=4. RESULT IN ACC
+         0058 +LM I 0069          + LOAD MQ   ZERO
+         0059 +D  I 0084          + DIV       N            MQ= TERM/(N+2) AT Q=QACC-QN = 4-4=0
+         0060 -M  I 0078          - MPY       XX           NO NEED TO LOAD MQ WITH VALUE. ALREADY SET BY DIV ABOVE. QRES=0+QXX=4. RESULT IN ACC
+         0061 -ST I 0080          - STORE     TERM         AT Q=4
+         0062 +TZ I 0066          + TR 0      LOOPE
+         0063 +A  I 0082          + ADD       RES
+         0064 +ST I 0082          + STORE     RES          RESULT = RESULT + TERM
+         0065 +T  I 0049          + TR        LOOP
+         0066 +RA I 0082 LOOPE    + R ADD     RES          PUT THE RESULT IN ACC (Q=4)
+         0067 +AL A 0003          + A LEFT    0003         SO RESULT IS Q=1
+         0068 +T  A 0000 EXIT     + TR        /   /        RETURN TO CALLER
+         0069 +000000    ZERO       DEF       0
+         0070 +000001    ONE        DEF       1
+         0071 +000002    TWO        DEF       2
+         0072 +000004    D4         DEF       4
+         0073 +008192    ONEQ4      DEF       *20000       ONE REPRESENTED WITH Q=4 -> 0001 0...
+         0074 +051471    TWOPI      DEF       *144417      VALUE OF 2xPI AT Q=4     
+         0075 -092800               DEF       *665200            
+         0076 +025735    PI         DEF       *062207      VALUE OF PI AT Q=4     
+         0077 -111936               DEF       *732500             
+         0078 +000000    ANGLE      RES       2
+         0080 +000000    TERM       RES       2
+         0082 +000000    RES        RES       2
+         0084 +000000    N          RES       1
+         0085 +000000    NN         RES       1

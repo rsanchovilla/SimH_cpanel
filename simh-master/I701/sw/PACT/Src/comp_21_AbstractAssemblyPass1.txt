@@ -1,0 +1,516 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 21 ABSTRACT ASSEMBLY PASS 1 ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRTSTR      PRINT ALFANUMERIC TEXT STRING, ZERO TERMINATED
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:WRTAPE      WRITE MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:CLMEM       CLEAR MEMORY STORAGE
+           HEAD      USE:SRCHTBL     SEARCH TABLE
+           HEAD      USE:EQTBL       STORE VALUE INTO TABLE
+           HEAD      USE:READTBL     TAKE VALUE FROM TABLE
+              
+                                  PURPOSE:
+
+                                  - READ FROM DRUM 0128, ADDR 0000
+                                       MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW)
+                                       + TRISDUP (100 HW) 
+                                  - READ FROM DRUM 0128, ADDR 0402
+                                       TREXSIZE (100 HW) + TREXTMP (100 HW)
+                                  - FOR EACH REGION, 
+                                     - READ STEP REFERENCES FROM TAPE FOR THIS REGION
+                                     - READ COMPACT CODE STEPS FOR THIS REGION, TO 
+                                       COMPUTE CONSECUTIVE STEPN VALUE FOR EACH STEP               
+                                       TAKING INTO ACCOUNT
+                                          ROOM IN STEPN NUMBERS NEED BY DUP'ED REGIONS
+                                          EXTRA STEP NEEDED TO SAVE THE RESULT OF STEP
+                                          EXTRA STEP NEEDED BY CALL INSTR AT BEGGINNING
+                                            OF NON DUPLICATED REGIONS (SIGNAL A CALL INSTR
+                                            NEEDS TO BE ADDED)
+                                     - UPDATE STEP REFERENCES TO SET ITS MATCHING STEPN/TEMP 
+                                       VAR NUMBER
+                                     - SAVE UPDATED (RESOLVED) STEP REFERENCES TO TAPE
+                                  - SAVE TO DRUM 0128, ADDR 0202
+                                       TRNEEDCA (100 HW) 
+
+SRCHREG  + ADD       TWO          SEARCH REGION IN TREGIONS. TR TO ERROR IF NOT FOUND 
+         + STORE A   SRCHREX      RETURN IN ACC THE ENTRY IN TREGIONS FOUND
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TREGIONS     ... TREGIONS TABLE
+         + STOP      NREGIONS     ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NREGIONS 
+         + STOP      FACT         ... THE VALUE TO FIND 
+
+         + TR 0      SREGNFER
+SRCHREX  + TR        /   /
+
+SREGNFER + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRREGNF     ERROR: REGION DO NOT EXISTS
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "ABSTRACT ASSEMBLY PASS 1"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     *
+         + TR        RWDRUM       READ TREGIONS ARRAY FROM DRUM
+         + READ      0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNREGS     ADDR OF START OF TABLES
+         + STOP      0202         MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW)
+                                  + TRISDUP (100 HW) 
+         + R ADD     *
+         + TR        RWDRUM       READ TREGIONS ARRAY FROM DRUM
+         + READ      0128         DRUM INSTR
+         + STOP      0402         DRUM ADDR 
+         + STOP      TREXSIZE     ADDR OF START OF TABLES
+         + STOP      0200         LEN=TREXSIZE (100 HW) + TREXTMP (100 HW)
+
+         + R ADD     *            CLEAR TABLE
+         + TR        CLMEM        
+         + STOP      TRNEEDCA   
+         + STOP      MAXNREGS
+
+         + R ADD     *            CLEAR TABLE
+         + TR        CLMEM        TREFSN
+         + STOP      TREFSN
+         + STOP      MAXNREFS
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + R ADD     ZERO
+         + STORE     IREG         REGION NUMBER BEING PROCESSED
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEINR      REWIND TAPE IN WITH STEP REFERENCES 
+         + REWIND    TAPEOUTR     REWIND TAPE OUT WITH STEP REFERENCES UPDATED
+
+READREG  + R ADD     ZERO         INIT READ REGION
+         + STORE     STEPCNT      STEP* COUNT FOR REGION
+         + STORE     TMPN         CURRENT TEMP VARS FOR RESULT OF STEP IN THIS REGION 
+
+         + R ADD     IREG         SELECT NEXT REGION
+         + ADD       ONE
+         + STORE     IREG
+
+TREFSAD  + NOOP      TREFS        INIT TREFAD POINTER TO WALT THRU
+         + R ADD     TREFSAD      TREFS TABLE
+         + STORE A   RDREF
+
+         + R ADD     *       
+         + TR        RDTAPE       READ MAGNETIC TAPE (READ REFERENCES TABLE TREFS)
+         + STOP      TAPEINR
+         + STOP      MAXNREFS     BUF TO READ FROM TAPE: MAXNREFS (1HW) + NREFS (1HW) + TREFS
+         + TR OV     EOFREFS      TR IF END OF FILE
+
+         + R ADD     *            CLEAR TABLE
+         + TR        CLMEM        TREFSN
+         + STOP      TREFSN
+         + STOP      MAXNREFS
+
+         + TR        READSTEP     PROCEED WITH FIRST STEP OF REGION
+
+EOFREFS  + R ADD     ZERO
+         + STORE     TREFS        SIGNAL NO REFERENCES ON TAPE
+         
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     STEPCNT      COMPUTE STEPN FOR CURRENT STEP
+         + ADD       ONE
+         + STORE     STEPCNT      VALUE OF STEPN FOR CURRENT STEP
+         + SUB       ONE
+         + TR 0      STEP1        TR IF THIS IS THE FIRST STEP OF REGION
+
+RDREF    + R ADD     /   /
+         + STORE     REF          GET NEXT REFERENCE TO CHECK
+         + TR 0      ENDREF       =0 -> NO MORE REFERENCES TO RESOLVE
+
+         + R ADD     ZERO
+         + ADD AB    REF
+         + SUB       STEP
+         + TR 0      FNDREF       TR IF HIT A REFERENCED STEP
+         + TR +      ENDREF       ABS(REF) > STEP -> NOT ARRIVED YET TO REFERENCES STEP -> CONTINUE
+                                  ABS(REF) < STEP -> THE REFERENCED STEP DOES NOT EXISTS -> REFERENCE UNRESOLVED -> SKIP THE REF
+NXTREF   + R ADD     RDREF        ADVANCE TO NEXT REFERENCE
+         + ADD       ONE
+         + STORE A   RDREF       
+         + TR        RDREF
+
+FNDREF   + R ADD     REF
+         + TR +      TRREF        IF REFERENCE FOUND IS >0 -> STEP IS THE DESTINATION OF A TRANSFER
+                                  
+         + R ADD     TMPN         CURRENT STEP IS REFERENCED AS "RESULT OF STEP". SO 
+         + ADD       ONE          MUST SAVE THE CURRENT STEP IN ONE TEMP VAR
+         + STORE     TMPN         (SIGNAL IT INCREMENTING NUM OF TEMP VARS USED)
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1A     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTSTR
+         + STOP      MSGRESTP     "RSLT OF STEP"
+         + STOP      0040         COL 40
+         + LOAD MQ   TMPN
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0003         3-DIGITS NUMS          
+         + STOP      0053         COL 53
+ENDLOG1A + NOOP      0000
+
+         + R ADD     STEPCNT      ALSO A "EQ TEMP VAR" INSTR WILL BE INSERTED
+         + ADD       ONE          INCR STEPN TO REFLECT THIS 
+         + STORE     STEPCNT      
+
+         + R ADD     QR           IF THE RESULT OF STEP IS CALLED-IN ELSEWHERE
+         + TR 0      ERRNOQR1     IT CANNOT HAVE ITS QR TO ZERO
+
+         + A LEFT    0010         SHIFT TO PACK QR IN BITS 17-10, WITH SGN (BIT 18)
+         + TR +      PKQ1         AND         TMPN In BITS 0-9, NO SIGN         
+         + SUB       TMPN         THE PACKED VALUE IS STORED IN MQ
+         + TR        PKQ2
+PKQ1     + ADD       TMPN
+PKQ2     + L RIGHT   0035         MQ=ACC         
+         + TR        UPDTREF      TR TO UPDATE REF WITH MQ VALUE TO UNPACK IT WHEN CALLING-IN THE RESULT OF STEP
+
+ERRNOQR1 + R ADD     *
+         + TR        ERROR
+         + STOP      ERRNOQR      ERROR: QR CANNOT BE BLANK IN A STEP CALLED-IN AS RESULT OF STEP
+
+TRREF    + NOOP      0000         STEPN IS DESTINATION OF A TRANSFER. 
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG2A     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTSTR
+         + STOP      MSGTRDST     "TR DEST"
+         + STOP      0040         COL 40
+ENDLOG2A + NOOP      0000
+         + LOAD MQ   STEPCNT      UPDATE REFERENCE WITH STEPN  
+
+UPDTREF  + R ADD     RDREF        SAVE THE VALUE OF REFERENCE RESOLUTION 
+         + ADD       MAXNREFS
+         + STORE A   WRREFN
+WRREFN   + STORE MQ  /   /       
+         + TR        NXTREF       DONE, TR TO SELECT AND PROCESS NEXT REF
+ 
+ENDREF   + NOOP      0000         END OF REFERENCE RESOLUTION
+
+         + R ADD     OP
+         + SUB       OPDUP
+         + TR 0      CHKDUP       OP="DUP REGION" -> TR TO INCR STEPN, TMPN WITH SIZE OF REGION
+
+NEXT     + NOOP      0000         CONTINUE WITH NEXT STEP RECORD
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+         + R ADD     *            PRINT STEP JUST PROCESSED
+         + TR        PRINTCRD
+ENDLOG1  + NOOP      0000 
+                                  PROCESS NEXT STEP
+
+         + TR        READSTEP
+
+STEP1    + R ADD     OP           CHECK FIRST STEP OF REGION. IF IT IS
+         + SUB       OPCALL       CALL -> CONTINUE AS A REGION CAN START WITH CALL INSTR
+         + TR 0      RDREF        
+
+         + R ADD     *            HERE REGION DOES NOT STARTS WITH CALL
+         + TR        READTBL
+         + STOP      TRISDUP      ... VAL=TRISDUP[IREG] =1 IF CURRENT REGION IS TO BE DUPLICATED
+         + STOP      IREG
+         + STOP      VAL
+
+         + R ADD     VAL          IF VAL=0 -> THIS REGIONS IS NOT DUPLICATED -> SHOULD START WITH CALL INSTR
+         + TR 0      STEP1A       TR TO COUNT THE MISSING (WILL BE ADDED LATE) CALL INSTR
+         + TR        RDREF        IF VAL=1 -> THIS REGIONS IS DUPLICATED -> PROCEED AS NO NEED TO ADD EXTRA CALL INSTR 
+
+STEP1A   + R ADD     STEPCNT      INCR STEPN COUNT TO LEAVE ROOM FOR CALL INSTR TO BE ADDED LATER
+         + ADD       ONE
+         + STORE     STEPCNT
+
+         + R ADD     ONE          SIGNAL THIS REGION NEEDS A CALL INSTR AS FIRST
+         + STORE     VAL          STEP OF REGION.  
+         + R ADD     *            
+         + TR        EQTBL
+         + STOP      TRNEEDCA     ... TRNEEDCA[IREG]=VAL -> TRNEEDCA[IREG]=1
+         + STOP      IREG         
+         + STOP      VAL
+
+         + TR        RDREF        AND PROCEED
+
+CHKDUP   + R ADD     *            SEARCH REGION STATED IN FACTOR VAR = THE DUPLICATED REGION NAME
+         + TR        SRCHREG      ERROR IF REGION DO NOT EXISTS IN TREGS TABLE
+                                  RETURN IN ACC ENTRY FOUND (1..MAXNREGS)
+         + STORE A   IREGDUP      STORE THE DUPLICATED REGION INDEX NUMBER
+
+         + R ADD     *            
+         + TR        READTBL
+         + STOP      TREXSIZE     ... VAL=TREXSIZE[IREGDUP] GET CURRENT EXTENDED SIZE FOR DUPLICATED REGION
+         + STOP      IREGDUP
+         + STOP      VAL
+         
+         + TR 0      NEXT         IF EXTENDED SIZE=0 -> REGION NOT RESOLVED -> JUST IGNORE THE DUP INSTR
+ 
+         + SUB       ONE
+         + ADD       STEPCNT      THE FINAL (EXPANDED) SIZE OF REGION TO BE DUPLICATED HERE IS FULLY KNOW. ADD IT
+         + STORE     STEPCNT      TO THE SIZE OF CURRENT REGION
+
+         + R ADD     *            
+         + TR        READTBL
+         + STOP      TREXTMP      ... VAL=TREXSIZE[IREGDUP] GET CURRENT EXTENDED SIZE FOR DUPLICATED REGION
+         + STOP      IREGDUP
+         + STOP      VAL
+         + ADD       TMPN         ADD THE NUMBER OF TEMP VARS NEEDED BY DUPLICATED REGION TO THE TOTAL FOR CURRENT REGION
+         + STORE     TMPN
+         + TR        NEXT         TR TO NEXT TO CONTINUE PROCESSING STEPS 
+
+
+EOR      + NOOP      0000         END OF REGION  
+         
+                                  IF SW6 ON THEN 
+                                  PRINT NUMBER OF REFERENCES IN THIS REGION
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGNREFS     "REFERENCES"
+         + STOP      0210         INT AT COL 10
+         + STOP      NREFS        NUMBER OF REFERENCES IN REGION
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     NREFS        SAVE UPDATED (RESOLVED) REFERENCE LIST
+         + ADD       ONE          NUMBER OF FULL-WORDS TO SAVE ON TAPE
+         + L RIGHT   0019         ((NREFS + 1) AND OCT 7776) + 2
+         + A LEFT    0019
+         + ADD       TWO
+         + STORE     VAL
+
+         + R ADD     TREFAD1      SAVE TO TAPE TREFSN, THEN TREFS
+         + ADD       MAXNREFS
+         + STORE A   TREFAD2
+
+         + R ADD     *            
+         + TR        WRTAPE       WRITE MAGNETIC TAPE (REFERENCES TABLE)
+         + STOP      TAPEOUTR
+TREFAD2  + STOP      /   /        BUF TO WRITE TO TAPE: DUMMY (2HW) + TREFSN
+         + STOP      VAL          LEN
+
+         + R ADD     *            
+         + TR        WRTAPE       WRITE MAGNETIC TAPE (REFERENCES TABLE)
+         + STOP      TAPEOUTR
+TREFAD1  + STOP      MAXNREFS     BUF TO WRITE TO TAPE: MAXNREFS (1HW) + NREFS (1HW) + TREFS
+         + STOP      VAL          LEN
+
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF FILE
+
+         + WRITE EF  TAPEOUTR     WRITE EOF IN TAPE OUT (STEP REFERENCES)
+
+                                  NO MORE STEPS. IF SW6 ON THEN 
+                                  PRINT AN END OF PROCESSING MESSAGE
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGDONE      "END OF PASS"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+ENDLOG1B + NOOP      0000
+
+         + R ADD     *
+         + TR        RWDRUM       READ TREGIONS ARRAY FROM DRUM
+         + WRITE     0128         DRUM INSTR
+         + STOP      0202         DRUM ADDR 
+         + STOP      TRNEEDCA     ADDR OF START OF TABLES
+         + STOP      0100         LEN=TRNEEDCA (100 HW)
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEINR      REWIND TAPE IN WITH STEP REFERENCES 
+         + REWIND    TAPEOUTR     REWIND TAPE OUT WITH STEP REFERENCES UPDATED
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE
+
+         + STOP      READSTEP     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING NEXT SOURCE CODE STEP 
+
+
+           ORG       EVEN
+
+                                  COMPACT CODE RECORD
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0
+S2N        DEF       0
+D1N        DEF       0
+D2N        DEF       0
+NINST      DEF       0
+NINCR      DEF       0
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+VAL        DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+                                  TABLES (SHOULD AT EVEN LOCATION)
+
+MAXNREGS   DEF       100          MAX 100 REGIONS CAN DE DEFINED IN ONE PROGRAM 
+NREGIONS   DEF       0            NUMBER OF REGIONS DEFINED
+TREGIONS   RES       100          EACH ENTRY IN TABLE IS 1 HALF-WORD. HAS THE NAME (ALFA) OF REGION
+TRISDUP    RES       100          =1 IF THIS REGION IS REFERENCED IN A DUP INSTR ELSEWHERE (IE THIS REGION IS DUPLICATED)
+TRNEEDCA   RES       100          =1 IF REGION NEEDS A CALL INSTR AS FIRST STEP
+TREXSIZE   RES       100          EXPANDED NUMBER OF STEPS OF REGION (NOT COUNTING EOR)
+TREXTMP    RES       100          EXPANDED NUMBER OF NEEDED TEMP VARS IN REGION (=NUM OF STEPS REFERENCED AS RESULT OF STEP)
+                                  EXPANDED VALUE = VALUE OF THE REGION + VALUE OF EACH DUP'ED REGION INCLUDED
+
+MAXNREFS   DEF       400          MAX 400 STEPS REFERENCES CAN DE DEFINED IN ONE REGION
+NREFS      DEF       0            NUMBER OF ENTRIES IN TREFS TABLE
+TREFS      RES       400          EACH ENTRY IN TABLE IS THE STEP REFERNECED
+TREFSN     RES       400          THE CORRESPONDING STEPN/TEMP VAR NUMBER
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+D22        DEF       22
+D26        DEF       26
+
+REF        DEF       0            REFERENCED STEP
+IREG       DEF       0            REGION NUMBER BEING PROCESSED (INDEX IN TREGIONS, IREG=1 -> FIRST ENTRY IN TREGIONS TABLE)
+IREGDUP    DEF       0
+TMPN       DEF       0            NUMBER OF TEMP VARS USED
+STEPCNT    DEF       0            STEP COUNTER TO SET STEPN
+
+                                  TEXT
+
+ERRREGNF   TXT       "REGION NOT FOUND",0
+ERRNOQR    TXT       "RESULT OF STEP SHOULD HAVE QR SET",0       ERROR: QR CANNOT BE BLANK IN A STEP CALLED-IN AS RESULT OF STEP
+
+MSGSTART   TXT       "ABSTRACT ASSEMBLY PASS 1",0
+MSGNREFS   TXT       "REFERENCES",0
+MSGDONE    TXT       "END OF PASS",0
+MSGRESTP   TXT       "RSLT OF STEP",0
+MSGTRDST   TXT       "TR DEST",0
+
+
+OPDUP      EQU       D22          DUP
+OPCALL     EQU       D26          CALL
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEIN     EQU       0257         INPUT FROM TAPE 2 (PACT COMPACT CODE)
+TAPEINR    EQU       0258         INPUT STEP REFERENCES TO TAPE 3
+TAPEOUTR   EQU       0259         OUTPUT UPDATED (RESOLVED) STEP REFERENCES TO TAPE 4
+

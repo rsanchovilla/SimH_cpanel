@@ -98,7 +98,10 @@ extern "C" {
 #define MODE_026        (0x10 << UNIT_V_CARD_MODE)
 #define MODE_029        (0x20 << UNIT_V_CARD_MODE)
 #define MODE_DEC29      (0x30 << UNIT_V_CARD_MODE)
+#define MODE_026A       (0x40 << UNIT_V_CARD_MODE)
 #define MODE_CHAR       (0x70 << UNIT_V_CARD_MODE)
+/* RSV: skip cards "; comment" in deck text input file */
+#define SKIPCOMMENTCARD (0x80 << UNIT_V_CARD_MODE)
 
 
 /* Card Reader Return Status code */
@@ -113,6 +116,8 @@ typedef int t_cdstat;
      /* Read next card into image row 12,11,10,1-9 */
      /* Return SCPE_EOF if end file detected. */
 t_cdstat sim_read_card(UNIT * uptr, uint16 image[80]);
+t_cdstat sim_peek_card(UNIT * uptr, int pos, uint16 image[80]); 
+uint16 sim_ascii_to_hol2(UNIT * uptr, char c); 
      /* Punch card from image row 12,11,10,1-9 */
 t_cdstat sim_punch_card(UNIT * uptr, uint16 image[80]);
      /* Check if next card to be read is EOF */

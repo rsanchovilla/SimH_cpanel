@@ -1,0 +1,215 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 64 SCAN LIBRARY ROUTINES, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:SRCHTBL     SEARCH TABLE
+           HEAD      USE:EQTBL       STORE VALUE INTO TABLE
+              
+                                  PURPOSE:
+
+                                  - READ GLOBAL SYMBOL TABLE (TSYMBREF) FROM DRUM 
+                                       DRUM 0128, ADDR 0000     MAXNSYMB     MAX 600 SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+                                                       0001     NSYMBS       NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+                                                       0002     TSYMBREF     GLOBAL SYMBOL TABLE: ALFA VALUE (NEGATIVE) OF SYMBOLS REFERENCED BY A TR SYMBOL MC INSTR IN ALL PROGRAM
+                                                       0602     TSYMBEXT     EXTENSION (=SIZE) FOR DEFINED SYMBOLS (=REGIONS). 
+                                                                             -1 IF SYMBOL IS USED BUT NOT DEFINED (=LIBRARY ROUTINES CALLED)
+                                  - SCAN LIBRARY DIRECTORY, FOR EACH LIBRARY ROUTINE, 
+                                       - CHECK IF IT RESOLVES A PENDING SYMBOL 
+                                       - IF SO, 
+                                           - TSYMBEXT ENTRY FOR ROUTINE = 01 NNNN WHERE NNNN IS THE EXTENSION
+                                           - COMPUTE HI VALUE FOR P-REGION 
+                                  - SAVE GLOBAL SYMBOL TABLE (TSYMBREF) BACK TO DRUM (NOW CONTAINS ALL THE USED (CALLED IN) SYMBOLS)
+                                       DRUM 0130, ADDR 0006     P.EXT        EXTENSION (IS EVEN) OF PERISHABLE REGION (TEMP VAR) USED ON ALL LIBRARY ROUTINE
+                                                       0007     IL.EXT       TOTAL STORAGE NEEDED BY ALL LIBRARIES TO BE ADDED TO MAIN PROG (EXCLUDING PERISHABLE STORAGE)
+                                       DRUM 0128, ADDR 0000     MAXNSYMB     MAX (600) SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+                                                       0001     NSYMBS       NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+                                                       0002     TSYMBREF     GLOBAL SYMBOL TABLE: ALFA VALUE OF SYMBOLS REFERENCED. 
+                                                       0602     TSYMBEXT     EXTENSION FOR DEFINED SYMBOLS. 
+                                                                             -1 IF SYMBOL NOT RESOLVED 
+                                                                             00 NNNN = SIZE OF REGION 
+                                                                             01 NNNN = SIZE OF LIB ROUTINE 
+
+                                  - NOTE: THE LIB DIRECTORY RECORD FORMAT IS DEFINED IN "01 CREATE LIB" AND USED IN "64 SCAN LIB" 
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "SCAN LIBRARIES"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGHDR       " LIB   SIZE  PRSH"
+         + STOP      0006         END OF LINE. 
+
+         + R ADD     ZERO
+         + STORE     P.EXT        EXTENSION (IS EVEN) OF PERISHABLE REGION (TEMP VAR) USED BY ALL ON LIBRARY ROUTINE
+         + STORE     IL.EXT       TOTAL STORAGE NEEDED BY ALL LIBRARIES TO BE ADDED TO MAIN PROG (EXCLUDING PERISHABLE STORAGE)
+
+         + R ADD     LDLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + R ADD     *
+         + TR        RWDRUM       READ TSYMBREF TABLE (SYMBOLS USED BY ALL REGIONS) FROM DRUM 
+         + READ      0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNSYMB     ADDR OF START OF TABLES
+         + STOP      1202         MAXNSYMB (1 HALF-WORD) + NSYMBS (1 HW) 
+                                  + TSYMBREF (600 HW) + TSYMBEXT (600 HW)
+
+READLIB  + R ADD     *            READ LIBRARY DIRECTORY FROM TAPE
+         + TR        RDTAPE       
+         + STOP      TAPELDIR
+         + STOP      LIBDIR       BUF TO WRITE TO TAPE
+
+         + R ADD     LDTYPE         
+         + SUB       D999         999 SIGNAL END OF LIB DIR 
+         + TR 0      LIBSDONE     IF =0 -> NO MORE LIBRARY ROUTINE TO SCAN
+
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TSYMBREF     ... GLOBAL SYMBOL TABLE
+         + STOP      NSYMBS       ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NSYMBS
+         + STOP      LDLIBNAM     ... THE VALUE TO FIND 
+         
+         + STORE     ISYMB
+         + TR 0      READLIB      ROUTINE IN LIBRARY IS NOT REFERENCED IN PACT PROG SYMBOL LIST -> TR TO 
+                                  TRY WITH NEXT ROUTINE IN LIBRARY
+
+         + R ADD     ONE          STORE IN SYMBOL TABLE THE EXTENSION OF LIBRARY ROUTINE
+         + A LEFT    0012         ADD '01 << 12' TO SIGNAL IS A TAPE LIB 
+         + ADD       LD.I.EXT     
+         + STORE     VAL 
+
+         + R ADD     *            STORE IN TABLE
+         + TR        EQTBL
+         + STOP      TSYMBEXT     GLOBAL SYMBOL TABLE
+         + STOP      ISYMB
+         + STOP      VAL          TSYMEXT[ISYMB] = 01 << 12 + LIB EXTENSION
+
+         + R ADD     P.EXT        KEEP THE BIGGEST VALUE OF PERISHABLE STORAGE EXTENSION NEEDED BY LIBS. THEY ALL SHARE
+         + SUB       LD.P.EXT     THE PRESIHABLE POOL, SO P.EXT=MAX(P.EXT, LD.P.EXT OF EACH ADDED LIB ROUTINE)
+         + TR +      RL01
+         + R ADD     LD.P.EXT
+         + STORE     P.EXT
+RL01     + NOOP      0000
+
+         + R ADD     LD.I.EXT     ADD STORAGE NEEDED BY LIBRARY (EXCLUDING PERISHABLE STORAGE) TO
+         + ADD       IL.EXT       THE TOTAL AMMOUNT OF STORAGE NEEDED
+         + STORE     IL.EXT
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1A     TR IF NO LOG SELECTED
+                                  
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0401         CHAR AT COL 1
+         + STOP      D45          '/'
+         + STOP      0502         ALFA TXT
+         + STOP      LDLIBNAM     LIB ROUTINE TO BE ADDED TO PACT PROGRAM
+         + STOP      0405         CHAR AT COL 5
+         + STOP      D45          '/'
+         + STOP      0208         INT AT COL 8
+         + STOP      LD.I.EXT     SIZE OF INSTR REGION (ROUTINE CODE)
+         + STOP      0214         INT AT COL 14
+         + STOP      LD.P.EXT     SIZE OF PERISHABLE REGION (TEMP VARS NEEDED BY LIB ROUTINE)
+         + STOP      0000         END OF LINE. 
+         
+ENDLOG1A + NOOP      0000 
+
+         + TR        READLIB      ROUTINE IN LIBRARY ADDED TO SYMBOL TABLE -> TR TO 
+                                  TRY WITH NEXT ROUTINE IN LIBRARY
+         
+LIBSDONE + R ADD     *
+         + TR        RWDRUM       WRITE TSYMBREF TABLE (SYMBOLS USED BY ALL REGIONS) BACK TO DRUM 
+         + WRITE     0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNSYMB     ADDR OF START OF TABLES
+         + STOP      1202         MAXNSYMB (1 HALF-WORD) + NSYMBS (1 HW) 
+                                  + TSYMBREF (600 HW) + TSYMBEXT (600 HW)
+         + R ADD     *
+         + TR        RWDRUM       SAVE P.EXT AND IL.EXT TO DRUM 
+         + WRITE     0130         DRUM INSTR
+         + STOP      0006         DRUM ADDR 
+         + STOP      P.EXT        
+         + STOP      0002         P.EXT (1 HALF-WORD) + IL.EXT (1 HW)
+
+         + REWIND    0259         REWINDED ON NEXT STAGE 
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+ 
+           ORG       EVEN
+
+                                  LIBRARY DIRECTORY RECORD. 
+
+LDTYPE     DEF       0            TYPE OF RECORD: 100=REGULAR RECORD. 999=END OF LIB DIRECTORY
+LDLIBNAM   DEF       0            LIBRARY ROUTINE NAME (BASE48 ALFA, NEGATIVE VALUE). 
+LD.P.EXT   DEF       0            EXTENSION (IS EVEN) OF PERISHABLE REGION (TEMP VAR) USED ON LIBRARY ROUTINE
+LD.I.EXT   DEF       0            EXTENSION (IS EVEN) OF INSTR REGION OF LIBRARY ROUTINE
+
+LIBDIR     EQU       LDTYPE       LOCATION OF LIBRARY DIRECTORY RECORD START
+LDLEN      DEF       4            LENGH OF LIBRARY DIRECTORY RECORD 
+VAL        DEF       0
+
+
+MAXNSYMB   DEF       600          MAX (600) SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+NSYMBS     DEF       0            NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+TSYMBREF   RES       600          GLOBAL SYMBOL TABLE: ALFA VALUE OF SYMBOLS REFERENCED. <0 IF NOT RESOLVED, >0 IF RESOLVED
+TSYMBEXT   RES       600          EXTENSION (=SIZE) FOR DEFINED SYMBOLS
+                                            -1 IF SYMBOL NOT RESOLVED 
+                                            00 NNNN = SIZE OF REGION 
+                                            01 NNNN = SIZE OF LIB ROUTINE 
+
+
+P.EXT      DEF       0            EXTENSION (IS EVEN) OF PERISHABLE REGION (TEMP VAR) USED ON ALL LIBRARY ROUTINE
+IL.EXT     DEF       0            TOTAL STORAGE NEEDED BY ALL LIBRARIES TO BE ADDED TO MAIN PROG (EXCLUDING PERISHABLE STORAGE)
+
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+ONE        DEF       1
+D45        DEF       45
+D999       DEF       999
+
+ISYMB      DEF       0            TEMP
+
+                                  TEXT
+
+MSGSTART   TXT       "SCAN LIBRARIES",0
+MSGHDR     TXT       " LIB     SIZE  PRSH",0
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPELDIR   EQU       0256         COMPILER PROGRAM TAPE 1 (HAS THE LIBRARY DIRECTORY)
+
+
+
+
+

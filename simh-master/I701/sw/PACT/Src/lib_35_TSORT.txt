@@ -1,0 +1,92 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:SORTTBL         SORT TABLE
+
+                                  PARAMS: TBL: LOCATION OF TABLE 
+                                          LEN: LOCATION OF LEN=NUMBER OF HALF-WORDS OF TABLE TO SORT
+                                               (=0 -> TABLE EMPTY, =1 -> TABLE HAS ONE ENTRY)
+                                               SORT ABSOLUTE VALUES, IN ASCENDING ORDER
+
+SORTTBL  + ADD       TWO 
+         + STORE A   P1           PARM: ADDR OF TABLE
+         + ADD       ONE          
+         + STORE A   P2           PARM: LEN OF TABLE
+         + ADD       ONE          
+         + STORE A   EXIT
+
+P1       + R ADD     /   /        GET ADDR OF TABLE
+         + STORE A   TBL
+        
+P2       + R ADD     /   /        GET ADDR OF LEN OF TABLE
+         + STORE A   P2A
+P2A      + R ADD     /   /        DERREFERENCE -> ACC=LEN
+         + STORE     N
+         + TR 0      EXIT         EXIT, NO MORE ENTRIES IN TABLE TO SORT
+
+LOOP     + R ADD     N            
+         + SUB       ONE          
+EXIT     + TR 0      /   /        EXIT, NO MORE ENTRIES TO SORT -> EXIT
+         + STORE     N
+         + STORE     I
+                                  GET MAX VALUE OF TABLE TBL[0..I], AT LOCATION MAXAD
+         + R ADD     ZERO
+         + STORE     MAXAD        NO MAX VALUE YET
+         
+LOOPM1   + R ADD     I
+         + ADD       TBL          TABLE BASE ADDR
+         + STORE A   RDTBL
+RDTBL    + LOAD MQ   /   /        MQ=TBL[I]
+         + R ADD     MAXAD        IS MAXAD (ADDR OF MAX VALUE) SET?
+         + TR 0      SORTM1       NO -> JUST SAVE MAXAD=LOCATION OF TBL[I] AND MAX=TBL[I]
+         + STORE MQ  VAL          YES -> COMPARE MAX VALUE WITH TBL[I]
+         + R ADD     ZERO
+         + ADD AB    MAX          IF ABS(VAL) < ABS(MAX) THEN ...          
+         + SUB AB    VAL
+         + TR +      SORTM2       ... TR TO PROCEED WITH NEXT I
+SORTM1   + STORE MQ  MAX          SAVE MAXAD, MAX
+         + R ADD     RDTBL        
+         + STORE A   MAXAD     
+SORTM2   + R ADD     I            PROCEED WITH NEXT I
+         + TR 0      SORTM3
+         + SUB       ONE
+         + STORE     I
+         + TR        LOOPM1
+         
+SORTM3   + R ADD     N            EXCHANGE TBL[N] <-> MAXAD (TBL ENTRY WITH MAX ABS VALUE)
+         + ADD       TBL          SO TBL[N] NOW HAS THE MAX VALUE
+         + STORE A   SWAPN1
+         + STORE A   SWAPN2
+         + R ADD     MAXAD
+         + STORE A   SWAPM1
+         + STORE A   SWAPM2
+SWAPN1   + R ADD     /   /
+SWAPM1   + LOAD MQ   /   /         
+SWAPN2   + STORE MQ  /   /
+SWAPM2   + STORE     /   /         
+     
+         + TR        LOOP
+
+
+N        + STOP      0000
+I        + STOP      0000
+TBL      + STOP      0000
+VAL      + STOP      0000
+MAX      + STOP      0000
+MAXAD    + STOP      0000
+
+ZERO     + STOP      0000
+ONE      + STOP      0001         constant 1
+TWO      + STOP      0002         constant 2
+
+

@@ -3069,8 +3069,8 @@ while (vid_active) {
                             break;
 #if defined(CPANEL)
                         case SDL_WINDOWEVENT_CLOSE:
-                            if (vptr->vid_quit_callback) { vptr->vid_quit_callback(); break; } 
-                            if (vid_quit_callback) vid_quit_callback (); 
+                            if (vptr->vid_quit_callback) { vptr->vid_quit_callback(vptr); break; } 
+                            if (vid_quit_callback) vid_quit_callback (vptr); 
                             break;
 #endif
                         default:
@@ -3200,10 +3200,10 @@ while (vid_active) {
             case SDL_QUIT:
                 sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vptr0->vid_dev, "vid_thread() - QUIT Event - %s\n", vid_quit_callback ? "Signaled" : "Ignored");
 #if defined(CPANEL)
-                if (vptr->vid_quit_callback) { vptr->vid_quit_callback(); break; } 
+                if (vptr->vid_quit_callback) { vptr->vid_quit_callback(vptr); break; } 
 #endif
                 if (vid_quit_callback)
-                    vid_quit_callback ();
+                    vid_quit_callback (vptr);
                 break;
 
             default:
@@ -3820,12 +3820,24 @@ void vid_SetWindowSizeAndPos_event (VID_DISPLAY * vptr)
             SDL_ShowWindow(vptr->vid_window);
         }
     }
+
+    if (tooltip.visible) {
+        if ((WindowSizeAndPos.Mode==1) ||      // Set windows position
+            (WindowSizeAndPos.Mode==2) ||      // calc new windows size
+            (WindowSizeAndPos.Mode==3) ||      // set position relative to current pos
+            (WindowSizeAndPos.Mode==5) ||      // raise window
+            (WindowSizeAndPos.Mode==6)) {      // Hide/Minimize/Show window
+            // if tooltip visible, request hiding it because cpanel window has been 
+            // moved or resized
+            tooltip.hide_requested=1; 
+        } else if (WindowSizeAndPos.Mode==4) { // set windows title
+            // no need request hiding a visible tooltip just because cpanel window 
+            // title has changed
+        }
+    }        
+
     WindowSizeAndPos.InProgress = 0;
     WindowSizeAndPos.Mode=0;
-
-    // if tooltip visible, request hiding it because cpanel window has been 
-    // moved or resized
-    if (tooltip.visible) tooltip.hide_requested=1; 
 }
 
 // Mode: 0=none, 

@@ -1,0 +1,615 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 31 READ VAR CARDS ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:CLRBUF      CLEAR CARD BUFFER 
+           HEAD      USE:READCRD     READ CARD (READ CARD BUFFER FROM CARD PUNCH DEVICE)
+           HEAD      USE:RDINT       READ DECIMAL INTEGER FROM CARD BUFFER
+           HEAD      USE:RDALF       READ PACKED ALFANUMERIC VALUE FROM CARD BUFFER
+           HEAD      USE:RDCHR       READ BASE48 CHAR FROM CARD BUFFER
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:CLMEM       CLEAR MEMORY STORAGE
+
+
+                                  PURPOSE:
+                                  - READS PACT VARIABLES CARDS
+                                  - DECODE THEM TO FILL VARIABLE RECORD 
+                                  - SAVE VARIABLE RECORDS TO DRUM
+                                  - SAVE VARIABLE HASH TABLE TO DRUM
+
+SRCHVAR  + ADD       TWO          SEARCH VAR 
+         + STORE A   SRCHP1       PARAMS: ADDR OF VAR NAME TO SEARCH
+         + ADD       ONE
+         + STORE A   SRCHP2
+         + ADD       ONE
+         + STORE A   SRCHP3
+         + ADD       ONE
+         + STORE A   SRCHVAEX     RETURN INDEX POS IN ACC
+                                  0=NOT FOUND, =1 -> ON FIRST VAR SLOT IN DRUM
+                                  POS IN DRUM: (POS-1)*8 OM DRUM 0128 AND 0129
+
+SRCHP1   + R ADD     /   /        GET ADDR OF NAME     
+         + STORE A   SRCHN0   
+         + STORE A   SRCHP1A
+SRCHP1A  + R ADD     /   /
+         + STORE     FNDVAR      
+SRCHP2   + R ADD     /   /        GET ADDR OF NAME1
+         + STORE A   SRCHN1
+         + STORE A   SRCHP2A
+SRCHP2A  + R ADD     /   /
+         + STORE     FNDVAR1
+SRCHP3   + R ADD     /   /        GET ADDR OF NAME2
+         + STORE A   SRCHN2
+         + STORE A   SRCHP3A
+SRCHP3A  + R ADD     /   /
+         + STORE     FNDVAR2
+
+         + R ADD     *            GET THE HASH OF VAR BEING SEARCHED
+         + TR        GETHASH
+         + ADD       HASHAD       ADD HASH TABLE ADDR
+         + STORE A   SRCHHA1
+SRCHHA1  + R ADD     /   /        GET HASH[HASH VARNAME] -> VAR NUMBER
+         + TR 0      SRCHNFND     =0 -> VAR NOT IN HASH TABLE -> VAR NOT EXISTS
+         + STORE     N
+         + SUB       ONE
+         + A LEFT    0003         ADDR IN DRUM = 8*(NVAR -1)
+         + STORE A   SRCHDRAD
+         + R ADD     ONE
+         + STORE     HASHFLAG     -> USING HASH VALUE
+         + TR        SRCHTEST     TEST IF VAR FOUND USING HASH 
+
+SRCHLOOP + R ADD     N
+         + SUB       NVARS
+         + TR 0      SRCHNFND
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+
+SRCHTEST + R ADD     *
+         + TR        RWDRUM       READ VAR FROM DRUM
+         + READ      0128         DRUM INSTR
+SRCHDRAD + STOP      /   /        DRUM ADDR 
+         + STOP      FNDVAR
+         + STOP      0004         GET 4 HALF-WORD. ONLY 3 ARE NEEDED (THE NAME), BUT NUMER OF HW WORDS READ SHOULD BE EVEN
+
+         + R ADD     FNDVAR
+SRCHN0   + SUB       /   /
+         + TR 0      SRCHV1
+         + TR        NXTSRCH
+SRCHV1   + R ADD     FNDVAR1
+SRCHN1   + SUB       /   /
+         + TR 0      SRCHV2
+         + TR        NXTSRCH
+SRCHV2   + R ADD     FNDVAR2
+SRCHN2   + SUB       /   /
+         + TR 0      SRCHFND      VAR FOUND
+
+NXTSRCH  + R ADD     HASHFLAG     VAR NOT FOUND, SEARCH NEXT
+         + TR 0      NXTSRCH2
+         + R ADD     ZERO
+         + STORE     HASHFLAG     VAR NOT FOUND USING HASH, START A SEQUENTIAL SEARCH
+         + STORE     N
+         + STORE A   SRCHDRAD
+         + TR        SRCHLOOP 
+
+NXTSRCH2 + R ADD     SRCHDRAD
+         + ADD       D8
+         + STORE A   SRCHDRAD
+         + TR        SRCHLOOP
+
+SRCHFND  + R ADD     N
+         + TR        SRCHVAEX
+         
+SRCHNFND + R ADD     ZERO
+SRCHVAEX + TR        /   /
+
+GETHASH  + ADD       TWO          CALC HASH VALUE (0..198) FOR VARIABLE NAME FNDVAR, FNDVAR1, FNDVAR2
+         + STORE A   GETHAEX      RETURN HASH IN ACC
+
+         + R ADD     ZERO
+         + ADD AB    FNDVAR
+         + ADD AB    FNDVAR1
+         + ADD AB    FNDVAR2
+
+         + L RIGHT   0035         MQ=ABS(VARIABLE FULL NAME)
+         + DIV       D199         DIV BY 199, ACC=REMINDER
+GETHAEX  + TR        /   /
+HASHAD   + STOP      HASH         HASH TABLE ADDRESS
+
+
+RDALNUM  + ADD       TWO          READ 3 CHARS. RETURN ACC=0..999 IF IT IS A NUMERIC VALUE
+         + STORE A   RDALN1       OR RETURN ACC=ALFA 3-CHAR PACKED STRING (IT IS NEGATIVE)
+         + ADD       ONE
+         + STORE A   RDALNEX
+RDALN1   + R ADD     /   /        READ PARAM: THE START COL
+         + STORE     COL
+
+         + R ADD     *           
+         + TR        RDALF        READ 3 CHARS (CAN BE ALFA OR NUM)
+COL      + STOP      0000         STARTING AT COL GIVEN AS PARAM
+         + TR +      RDALNEX      IF ACC>=0 THEN TR BECAUSE IT IS A NUMERIC VALUE
+         + R ADD     ZERO         ACC WAS <0: READ AN ALFA VALUE
+         + L LEFT    0035         ACC=THE ALFA VALUE OF FACTOR FROM MQ
+RDALNEX  + TR        /   /
+
+
+INIT     + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "READ VARS"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     ZERO
+         + STORE     NCARDS       TOTAL NUMBER OF PACT SOURCE CODE CARDS PROCESSED
+         + STORE     LAST         FLAG FOR LAST CARD
+         + STORE     RELNUM0      REL NUM ORIGIN
+
+         + R ADD     *            CLEAR HASH TABLE
+         + TR        CLMEM        
+         + STOP      HASH
+         + STOP      D200
+
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+READCARD + R ADD     *            READ PACT USER PROGRAM VARIABLES SOURCE CODE CARD
+         + TR        READCRD
+         + TR OV     ERRUEOD      ERROR: UNEXPECTED END OF DECK (LASt CARD SHOULD BE MARKED WITH Y(12) ON COL 72
+
+
+         + R ADD     NCARDS
+         + ADD       ONE
+         + STORE     NCARDS
+                        
+                                  READ VARIABLE PACT CARD
+          
+                                           1         2         3
+                                  123456789012345678901234567890123456
+                                  VAR[1][2]+QQ D1 D2FAC[1][2]TYP LOC[NOTES                             
+
+
+         + R ADD     *           
+         + TR        RDALF        READ REGION 
+         + STOP      0001         STARTING AT COL 1         
+         + STORE MQ  VARNAME      STORE ALFA 
+
+         + R ADD     *           
+         + TR        RDALNUM      READ S1 (ALFA OR NUM)
+         + STOP      0004         AT COL 4
+         + STORE     VARNAM1      (ALFA IF <0, NUM IF>0, BLANK/0 IF =0) 
+
+         + R ADD     *           
+         + TR        RDALNUM      READ S2 (ALFA OR NUM)
+         + STOP      0007         AT COL 7
+         + STORE     VARNAM2      (ALFA IF <0, NUM IF>0, BLANK/0 IF =0) 
+
+         + R ADD     *           
+         + TR        RDINT        READ Q OF VARIABLE
+         + STOP      0003         LEN=3 CHARS
+         + STOP      0010         STARTING AT COL 10
+         + STORE     Q            STORE INTEGER
+
+         + R ADD     *           
+         + TR        RDINT        READ STEP
+D3       + STOP      0003         LEN=3 CHARS
+         + STOP      0013         STARTING AT COL 13
+         + STORE     D1           STORE INTEGER
+
+         + R ADD     *           
+         + TR        RDINT        READ STEP
+         + STOP      0003         LEN=3 CHARS
+         + STOP      0016         STARTING AT COL 16
+         + STORE     D2           STORE INTEGER
+
+         + R ADD     *           
+         + TR        RDALF        READ CONSTRAINT
+         + STOP      0019         STARTING AT COL 19         
+         + STORE MQ  CONSTR       STORE ALFA 
+
+         + R ADD     *           
+         + TR        RDALF        READ CONSTRAINT 
+         + STOP      0022         STARTING AT COL 22
+         + STORE MQ  CONSTR1      STORE ALFA 
+
+         + R ADD     *           
+         + TR        RDALF        READ CONSTRAINT
+         + STOP      0025         STARTING AT COL 25
+         + STORE MQ  CONSTR2      STORE ALFA 
+
+         + R ADD     *           
+         + TR        RDALF        READ CONSTRAINT TYPE
+         + STOP      0028         STARTING AT COL 28
+         + STORE MQ  CTYPE        STORE ALFA 
+
+         + R ADD     *           
+         + TR        RDINT        READ REL LOC OF VAR
+         + STOP      0004         LEN=4 CHARS
+         + STOP      0031         STARTING AT COL 31
+         + STORE     LOC          STORE INTEGER
+
+         + R ADD     *            CHECK Y(12) ON COL 72 ON CARD BUFFER
+         + TR        RDCHR        READ CHAR
+         + STOP      0072         AT COL 72
+         + STORE     CHAR         STORE BASE48 CHAR
+               
+         + R ADD     D12
+         + SUB       CHAR
+         + TR 0      LASTCRD      IF PUNCHED, THIS IS LAST CARD
+         + TR        NOTLAST
+LASTCRD  + R ADD     ONE
+         + STORE     LAST         LAST=1 TO SIGNAL THIS IS LAST CARD OF PACT SOURCE PROGRAM DECK
+NOTLAST  + NOOP      0000
+
+         + R ADD     CTYPE        IS CONSTAINT TYPE = 'NUM'?
+         + SUB       ALFNUM
+         + TR 0      RNUM1        YES, TR RNUM1
+         + TR        RNUM9
+RNUM1    + R ADD     RELNUM0      GET CURRENT REL NUM ORIGIN (=BASE ADDR FOR NUM CONSTANT IN PROGRAM)
+         + TR 0      RNUM2        IS ALREADY SET? TR IF NOT SET YET
+         + R ADD     *            YES -> ERROR
+         + TR        ERROR
+         + STOP      ERRRNUM0     ERROR: REL NUM ORIGIN ALREADY SET
+RNUM2    + R ADD     LOC          GET VALUE IN LOC FIELD
+         + STORE     RELNUM0      STORE AS NEW REL NUM ORIGIN
+         + L RIGHT   0019         IS EVEN?
+         + R ADD     ZERO
+         + L LEFT    0001
+         + TR 0      RNUM9        IF =0 THEN IS RELNUM0 IS EVEN -> TR END OF PROCESSING
+         + R ADD     *            YES -> ERROR
+         + TR        ERROR
+         + STOP      ERRRNNE      ERROR: REL NUM ORIGIN NOT EVEN
+RNUM9    + NOOP      0000         END OF PROCESSING NUM CONSTRAINT
+
+         + R ADD     VARNAME      IF VAR IS BLANK AND LAST Y(12) PUNCH IS SET
+         + TR 0      BLKVA1       THEN TERMINATE READING
+         + TR        BLKVA9       ELSE ERROR BLANK VAR NAME
+BLKVA1   + R ADD     LAST
+         + TR 0      BLKVA2
+         + TR        NEXT  
+BLKVA2   + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOVAR     ERROR: BLANK VAR NAME
+BLKVA9   + NOOP      0000         END OF PROCESSING BLANK VAR 
+
+         + R ADD     D1           IF D1 < 1 THEN D1=1
+         + SUB       ONE
+         + TR +      D1A
+         + R ADD     ONE
+         + STORE     D1
+D1A      + NOOP      0000
+         + R ADD     D2           IF D2 < 1 THEN D2=1
+         + SUB       ONE
+         + TR +      D2A
+         + R ADD     ONE
+         + STORE     D2
+D2A      + NOOP      0000
+
+         + R ADD     ONE          VARIABLES CAN HAVE UP TO 2 DEFINITIVE (=THAT DEFINES) INDEX (SUBSCRIPTS)
+         + SUB       D1           THIS MEANS THAT VAR NAME CAN HAVE UP TO 9 ALFA CHARS "VAR S1 S2"
+         + TR 0      D1B          IF A DIMENSION IS DEFINED (>1), NO DEFINITIVE SUBSCRIPT ALLOWED
+         + R ADD     ZERO         -> IF D1 > 1 THEN VARNAM1=0
+         + STORE     VARNAM1
+D1B      + NOOP      0000  
+         + R ADD     ONE          
+         + SUB       D2           -> IF D2 > 1 THEN VARNAM2=0. CLEAR AS THERE IS A DIMENSION -> INDEX IS 
+         + TR 0      D2B          INDUCTIVE, NOT DEFINITIVE
+         + R ADD     ZERO         
+         + STORE     VARNAM2
+D2B      + NOOP      0000  
+         + R ADD     VARNAM2      IF (S1 = 0) AND (S2 <> 0) THEN ERROR
+         + TR 0      D3B
+         + R ADD     VARNAM1
+         + TR 0      D3A
+         + TR        D3B
+D3A      + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRBADID     ERROR: S2 CANNOT BE DEFINITIVE INDEX IF S1 IS INDUCTIVE INDEX
+D3B      + NOOP      0000  
+
+         + R ADD     *
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      VARNAME
+         + STOP      VARNAM1
+         + STOP      VARNAM2
+
+         + TR 0      D4A          TR IF VAR NOT DEFINED
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRREDEF     ERROR: VAR ALREADY DEFINED
+
+ADDVAROV + R ADD     *            
+         + TR        ERROR
+         + STOP      ERROVVAR     TOO MANY VARS DEFINED
+
+D4A      + R ADD     NVARS        INCR NUM OF VARS DEFINED
+         + ADD       ONE
+         + STORE     NVARS
+         + SUB       MAXNVARS
+         + TR +      ADDVAROV     ERROR IF > TABLE SIZE
+
+                                  COMPUTE VAR LEN AND TYPE
+         + R ADD     D1
+         + SUB       ONE          IF (D1 = 1) AND (D2 > 1) THEN 
+         + TR 0      D5A             D1=D2
+         + TR        D5B             D2=1
+D5A      + R ADD     D2              ON VECTORS, THE DIMENSIOn OF VECTOR SHOULD BE SET IN D1
+         + SUB       ONE
+         + TR 0      D5B
+         + R ADD     D2
+         + STORE     D1
+         + R ADD     ONE
+         + STORE     D2 
+D5B      + NOOP      0000  
+         
+         + LOAD MQ   ONE          SET TYPE OF VAR: 1=SCALAR, 2=VECTOR, 3=MATRIX
+         + R ADD     D1
+         + ADD       D2
+         + SUB       TWO
+         + TR 0      D5C          IF=0 -> D1=1 AND D2=1 -> VAR IS A SCALAR
+         + LOAD MQ   TWO          SET TYPE OF VAR: 1=SCALAR, 2=VECTOR, 3=MATRIX
+         + R ADD     D2           
+         + SUB       ONE
+         + TR 0      D5C          IF=0 -> D1>1 AND D2=1 -> VAR IS A VECTOR
+         + LOAD MQ   D3           SET TYPE OF VAR: 1=SCALAR, 2=VECTOR, 3=MATRIX
+D5C      + STORE MQ  VTYPE
+
+         + LOAD MQ   D1           LEN = 2 * D1 * D2
+         + MPY       D2
+         + A LEFT    0018
+         + STORE     LEN
+                                  GET CONSTRAINTS
+         + R ADD     ZERO
+         + STORE     RELADDR
+         + STORE     PHASE
+         + STORE     FLAG
+         + STORE     SIZE
+
+         + LOAD MQ   D9           CHECK IF CONSTRAINT = 'REL'
+         + R ADD     CTYPE
+         + SUB       ALFREL
+         + TR 0      D6A          YES! -> TR
+         + TR        D6B
+D6A      + R ADD     LOC          RELADDR = LOC STATED IN CARD 
+         + STORE     RELADDR
+         + TR        D6C
+D6B      + LOAD MQ   D3           CHECK IF CONSTRAINT = 'SUC'
+         + R ADD     CTYPE
+         + SUB       ALFSUC
+         + TR 0      D6C
+         + LOAD MQ   TWO          CHECK IF CONSTRAINT = 'IMS'
+         + R ADD     CTYPE
+         + SUB       ALFIMS
+         + TR 0      D6C
+         + LOAD MQ   ONE          CHECK IF CONSTRAINT = 'SYN'
+         + R ADD     CTYPE
+         + SUB       ALFSYN
+         + TR 0      D6C
+         + LOAD MQ   ZERO         CHECK IF CONSTRAINT = '  '
+         + R ADD     CTYPE
+         + TR 0      D6C
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRINVCO     ERROR: INVALID CONSTRAINT FOR VAR
+D6C      + STORE MQ  CTYPE        CONSTRAINT TYPE. 0=NONE, 1=SYN, 2=IMS, 3=SUC, 9=REL
+
+         + R ADD     CTYPE        IF (CTYPE=0 NONE) OR (CTYPE=9 REL) THEN TR CHECK NO CONSTRAINT VAR
+         + TR 0      D7A       
+         + SUB       D9
+         + TR 0      D7A       
+         + R ADD     CONSTR       CTYPE=1,2 OR 3 -> NEEDS A CONSTRAINT VAR -> ERROR IF CONSTR IS BLANK
+         + TR 0      D7B
+         + TR        D7C
+D7B      + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOCO      ERROR: MISSING CONSTRAINT FOR VAR (NEEDED IF CONSTRAINT TYPE IS SYN, IMS OR SUC)
+D7A      + R ADD     CONSTR       CTYPE=0 OR 9 -> NO CONSTRAINT VAR ALLOWED -> ERROR IF CONSTR IS NOT BLANK
+         + TR 0      D7C
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNACO      ERROR: NO CONSTRAINT VAR ALLOWED (IF NO CONSTRAINT TYPE, OR TYPE IS REL)
+D7C      + NOOP      0000
+                                  SAVE VAR TO DRUM 
+         + R ADD     NVARS
+         + SUB       ONE          ADDRESS IN DRUM = (NVARS-1)*8 
+         + A LEFT    0003      
+         + STORE A   DRADDR1
+         + STORE A   DRADDR2
+         
+         + R ADD     *
+         + TR        RWDRUM       WRITE VAR RECORD TO DRUM
+         + WRITE     0128         DRUM INSTR
+DRADDR1  + STOP      /   /        DRUM ADDR 
+         + STOP      VARNAME      ADDR OF START OF FIRST HALF OF VAR RECORD
+         + STOP      0008         8 HALF WORDS
+
+         + R ADD     *
+         + TR        RWDRUM       WRITE VAR RECORD TO DRUM
+         + WRITE     0129         DRUM INSTR
+DRADDR2  + STOP      /   /        DRUM ADDR 
+         + STOP      CONSTR       ADDR OF START OF SECOND HALF OF VAR RECORD
+         + STOP      0008         8 HALF WORDS
+
+         + R ADD     ZERO
+         + ADD AB    VARNAME
+         + ADD AB    VARNAM1
+         + ADD AB    VARNAM2
+
+         + L RIGHT   0035         MQ=ABS(VARIABLE FULL NAME)
+         + DIV       D199         DIV BY 199, ACC=REMINDER
+
+         + ADD       HASHAD       ADD HASH TABLE ADDR
+         + STORE A   SETHA1
+         + R ADD     NVARS
+SETHA1   + STORE     /   /        SET HASH[HASH VARNAME] = VAR NUMBER
+
+                                  PROCESS NEXT CARD
+
+                                  IF SW6 ON THEN 
+                                  PRINT TOTAL NUMBER OF PACT SOURCE CODE CARDS 
+NEXT     + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1C     TR IF NO LOG SELECTED
+
+         + R ADD     *            PRINT CARD JUST PROCESSED
+         + TR        PRINTCRD
+
+ENDLOG1C + R ADD     LAST
+         + TR 0      READCARD     IF NOT LAST CARD, TR TO PROCESS NEXT ONE
+
+                                  NO MORE CARDS.       
+
+         + R ADD     *            
+         + TR        RWDRUM       WRITE VARIABLE NAMES HASH TABLE TO DRUM
+         + WRITE     0128         DRUM INSTR
+         + STOP      3800         DRUM ADDR 
+         + STOP      HASH         ADDR OF DATA TO SAVE
+         + STOP      0200         200 HALF WORDS
+
+         + R ADD     *
+         + TR        RWDRUM       WRITE RELNUM0 AND NVARS TO DRUM
+         + WRITE     0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         + STOP      0002         2 HALF WORDS
+
+                                  IF SW6 ON THEN 
+                                  PRINT TOTAL NUMBER OF PACT SOURCE CODE CARDS 
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGDONE      "CARDS"
+         + STOP      0210         INT AT COL 10
+         + STOP      NCARDS       NUMBER OF PACT SOURCE CODE CARDS PROCESSED
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+ENDLOG1B + NOOP      0000
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+ERRUEOD  + R ADD     *            CLEAR CARD BUFFER AS NO CARD HAS BEEN READ
+         + TR        CLRBUF
+
+         + R ADD     *
+         + TR        ERROR
+         + STOP      ERRUEODS     ERROR: UNEXPECTED END OF DECK (LASt CARD SHOULD BE MARKED WITH Y(12) ON COL 72
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE. PRINT ALLWAYS
+
+         + STOP      READCARD     IF USER PRESS STARTS, PROGRAM RESUMES READING NEXT SOURCE CODE CARD 
+
+           ORG       EVEN
+
+                                  VARIABLE RECORD - 16 HALF WORD
+
+VARNAME    DEF       0            VARIABLE NAME
+VARNAM1    DEF       0            
+VARNAM2    DEF       0            
+VTYPE      DEF       0            VAR TYPE. 1=SCALAR, 2=VECTOR, 3=MATRIX
+LEN        DEF       0            HALF-WORD USED BY VARS
+Q          DEF       0
+D1         DEF       0            DIMENSIONS
+D2         DEF       0
+CONSTR     DEF       0            CONSTRAINT VAR NAME
+CONSTR1    DEF       0
+CONSTR2    DEF       0
+CTYPE      DEF       0            CONSTRAINT VAR TYPE. 0=NONE, 1=SYN, 2=IMS, 3=SUC, 9=REL
+RELADDR    DEF       0            RELATIVE ADDR IN VAR POOL
+PHASE      DEF       0
+FLAG       DEF       0
+SIZE       DEF       0            NUM OF HALF-WORDS NEEDED TO ACCOMODATE LEN USED BY SUB-CHAINS VARIABLES
+
+                                  TABLES (SHOULD AT EVEN LOCATION)
+
+RELNUM0    DEF       0            REL NUM ORIGIN
+NVARS      DEF       0            NUMBER OF VARS DEFINED
+
+FNDVAR     DEF       0            TEMP ON VAR SEARCH (SHOULD BE AT EVEN ADDR)
+FNDVAR1    DEF       0            TEMP ON VAR SEARCH
+FNDVAR2    DEF       0            TEMP ON VAR SEARCH
+DUMMY      DEF       0            NEEDED AS RWDRUM NEED EVEN NUMBER OF HALF-WORDS
+
+HASH       RES       200          VARIABLES NAMES HASH TABLE (199 ENTRIES)
+
+MAXNVARS   DEF       341          MAX VARIABLES THAT CAN DE DEFINED IN ONE PROGRAM 
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D8         DEF       8
+D9         DEF       9
+D12        DEF       12
+D199       DEF       199
+D200       DEF       200
+
+NCARDS     DEF       0            NUMBER OF INPUT CARDS PROCESSED
+LAST       DEF       0            FLAG FOR LAST CARD
+LOC        DEF       0
+N          DEF       0            TEMP
+CHAR       DEF       0            TEMP
+HASHFLAG   DEF       0
+
+                                  TEXT
+
+ERRUEODS   TXT       "UNEXPECTED END OF DECK",0          ERROR: UNEXPECTED END OF DECK (LASt CARD SHOULD BE MARKED WITH Y(12) ON COL 72
+ERRRNUM0   TXT       "REL NUM ORIGIN ALREADY SET",0
+ERRRNNE    TXT       "REL NUM ORIGIN NOT EVEN",0
+ERRNOVAR   TXT       "BLANK VAR NAME",0
+ERRBADID   TXT       "S2 CANNOT BE DEFINITIVE INDEX IF S1 IS INDUCTIVE INDEX",0
+ERRREDEF   TXT       "VAR ALREADY DEFINED",0
+ERROVVAR   TXT       "TOO MANY VARS DEFINED",0
+ERRINVCO   TXT       "INVALID CONSTRAINT FOR VAR",0
+ERRNOCO    TXT       "MISSING CONSTRAINT FOR VAR",0      NEEDED IF CONSTRAINT TYPE IS SYN, IMS OR SUC
+ERRNACO    TXT       "NO CONSTRAINT VAR ALLOWED",0       IF NO CONSTRAINT TYPE, OR TYPE IS REL
+
+MSGSTART   TXT       "READ VAR CARDS",0
+MSGDONE    TXT       "CARDS",0
+
+ALFNUM     TXT       'NUM'
+ALFREL     TXT       'REL'
+ALFSUC     TXT       'SUC'
+ALFIMS     TXT       'IMS'
+ALFSYN     TXT       'SYN'
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+
+
+

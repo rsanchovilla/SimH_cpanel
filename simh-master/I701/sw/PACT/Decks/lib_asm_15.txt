@@ -1,0 +1,177 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0   169
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF     0  RDINT
+; SY   1  DEF    11  RDBMP
+;  
+         0000 +LM I 0000 RDINT    + LOAD MQ   *
+         0001 +T  I 0020          + TR        RDCHRS
+         0002 +RA I 0157          + R ADD     SGN          APPLY SGN FLAG TO NUM
+         0003 +TP I 0008          + TR +      RDINT3
+         0004 -RS I 0148          - R SUB     NUM
+         0005 -LR A 0035          - L RIGHT   0035         MQ=ACC=-NUM
+         0006 +RS I 0149          + R SUB     NUM2         ACC=-NUM2
+         0007 +T  I 0145          + TR        EXIT
+         0008 +RA I 0149 RDINT3   + R ADD     NUM2         GET NUMBER IN LEFT HALF WORD OF ACC (17 BITS)
+         0009 -LM I 0148          - LOAD MQ   NUM          AND THE FULL 35 BIT VALUE IN MQ
+         0010 +T  I 0145          + TR        EXIT
+         0011 +LM I 0011 RDBMP    + LOAD MQ   *
+         0012 +T  I 0020          + TR        RDCHRS
+         0013 -LM I 0152          - LOAD MQ   BITMAP       SIGN IS BIT36 OF BITMAP
+         0014 +RA I 0158          + R ADD     ISNUM
+         0015 +TZ I 0018          + TR 0      RDBMP3       TR IF CHARS READ ARE NOT AN UNSIGNED NUMBER (HAS NON 0..9 CHARS, OR DOUBLE PUNCH)
+         0016 +RA I 0149          + R ADD     NUM2         RETURN POSITIVE NUMBER 0..999 IN LEFT HALF-WORD OF ACC
+         0017 +T  I 0145          + TR        EXIT
+         0018 +RS I 0161 RDBMP3   + R SUB     ONE          ALFA CHARS READ, RETURN ACC=-1
+         0019 +T  I 0145          + TR        EXIT
+         0020 +A  I 0162 RDCHRS   + ADD       TWO          READ LEN CHARS FROM CARD BUFFER, STARTING AT COL
+         0021 +SA I 0037          + STORE A   RDIP1        STORE ADDR OF FIRST PARAM (LEN)
+         0022 +A  I 0161          + ADD       ONE
+         0023 +SA I 0039          + STORE A   RDIP2        STORE ADDR OF SECOND PARAM (COL)
+         0024 +A  I 0161          + ADD       ONE
+         0025 +SA I 0145          + STORE A   EXIT         RETURN TO MAIN PROG CALLER
+         0026 +SM I 0156          + STORE MQ  N            RDCHRS SETS THE FOLLOWING VARIABLES
+         0027 +RA I 0156          + R ADD     N               ISNUM=0 IF ANY CHAR IS NOT 0..9 OR HAS Y(12) X(11) PUNCH
+         0028 +A  I 0162          + ADD       TWO             NUM READ NUMBER UNTIL LEN OR '.'
+         0029 +SA I 0127          + STORE A   RET             BITMAP: 12 BITS FOR EACH ONE OF 3-LAST CHARS
+         0030 +TF I 0031          + TR OV     CLOV         CLEAR OV JUST IN CASE
+         0031 +RA I 0146 CLOV     + R ADD     ZERO         READ A SIGNED INT OF LEN DIGITS
+         0032 -ST I 0148          - STORE     NUM          NUM=0
+         0033 +ST I 0157          + STORE     SGN          SGN FLAG=0 (WILL BE +1 OR -1)
+         0034 -ST I 0152          - STORE     BITMAP       BITMAP (UP TO 3 CHARS, 12 BITS EACH)
+         0035 +RA I 0161          + R ADD     ONE
+         0036 +ST I 0158          + STORE     ISNUM        ISNUM=1 -> ALL READ CHARS ARE UNSIGNED 0..9 DIGITS (BLANK IS INTERPRETED AS ZERO)
+         0037 +RA A 0000   RDIP1  + R ADD     /   /        GET LEN: NUMBER OF DIGITS TO READ (1..10)
+         0038 +ST I 0155          + STORE     LEN
+         0039 +RA A 0000   RDIP2  + R ADD     /   /        GET COLUMN PARAM 1..72
+         0040 +TP I 0043          + TR +      RDIP4
+         0041 +SA I 0042          + STORE A   RDIP3        COL<0 -> INTERPRET COL AS LOC(COL) = ADDR OF COL VAR
+         0042 +RA A 0000   RDIP3  + R ADD     /   /        READ VAR COL PASED AS PARAM
+         0043 +TZ I 0145   RDIP4  + TR 0      EXIT         COL=0 -> EXIT
+         0044 +TP I 0046          + TR +      RDIP5
+         0045 +T  I 0145          + TR        EXIT         COL<0 -> EXIT
+         0046 +S  I 0161   RDIP5  + SUB       ONE          
+         0047 +ST I 0154          + STORE     COL          COL IS 0..71
+         0048 +RA I 0154 NXTDIG   + R ADD     COL
+         0049 +ST I 0156          + STORE     N
+         0050 +S  I 0166          + SUB       D36
+         0051 +TP I 0055          + TR +      GDIG0        IF COL >=36 CARD BUF ADDR = 0002
+         0052 +RA I 0146          + R ADD     ZERO
+         0053 +SA I 0068          + STORE A   ROWRD          
+         0054 +T  I 0060          + TR        GDIG1
+         0055 +ST I 0156    GDIG0 + STORE     N            NOW N=0..35 
+         0056 +S  I 0166          + SUB       D36
+         0057 +TP I 0127          + TR +      RET          IF COL >= 72 THEN RETURN TO CALLER
+         0058 +RA I 0162          + R ADD     TWO
+         0059 +SA I 0068          + STORE A   ROWRD        SET BUF BASE ADDR
+         0060 +RA I 0165    GDIG1 + R ADD     D35
+         0061 +S  I 0156          + SUB       N
+         0062 +SA I 0072          + STORE A   ROWSHF       SET SHIFTING
+         0063 +RA I 0164          + R ADD     D9           SCAN CARD STARTING AT ROWAD
+         0064 +ST I 0156          + STORE     N            N = 9..0 -> THE DECIMAL NUMBER IF PUNCH IN ROW
+         0065 +RA I 0161          + R ADD     ONE
+         0066 +ST I 0160          + STORE     MASK         MASK=1 -> THE MASK TO SET CHAR BITMAP
+         0067 +ST I 0159          + STORE     NOPCH        FLAG. INIT TO 1, BECOMES 0 ON READING FIRST PUNCH. ALLOWS TO IDENTIFY IS THE COLUMN HAS TWO OR MORE PUNCHES
+         0068 -RA A 0000 ROWRD    - R ADD     /   /        GET ROW WORD
+         0069 -LR A 0001          - L RIGHT   0001         SHIFT RIGHT TO MAKE ROOM FOR EXTRA BIT SIGN
+         0070 +TP I 0072          + TR +      ROWSHF
+         0071 +S  I 0168          + SUB       D200KOCT     REPLICATE SIGN BIT ON EXTRA BIT 
+         0072 -LR A 0000 ROWSHF   - L RIGHT   /   /        SHIFT ROW WORD. SCANNED BIT IS PLACED AS MSB OF MQ
+         0073 -RA I 0146          - R ADD     ZERO
+         0074 -LL A 0001          - L LEFT    0001         ACC=MSB OF MQ BIT
+         0075 +TZ I 0096          + TR 0      NXTROW       IF =0 THEN TR AS ROW IS NOT PUNCHED
+         0076 +RA I 0159          + R ADD     NOPCH        NOPCH=1 IF NO PUNCH ON COLUMN FOUND YET    
+         0077 +TZ I 0080          + TR 0      NOT09        NOPCH IS 0 -> COLUMN WITH DOBLE PUNCH -> NOT AN UNSIGNED NUMBER 0..9 
+         0078 +RA I 0156          + R ADD     N            IF N >= 0 THEN TR TO NUM=NUM+N
+         0079 +TP I 0083          + TR +      SETN         ELSE, SET ISNUM=0 AS NUM HAS SIGN OR ALFA CHARS
+         0080 +RA I 0146 NOT09    + R ADD     ZERO
+         0081 +ST I 0158          + STORE     ISNUM
+         0082 +T  I 0086          + TR        SETCHR
+         0083 +AR A 0018 SETN     + A RIGHT   0018         NUM = NUM + N
+         0084 -A  I 0148          - ADD       NUM
+         0085 -ST I 0148          - STORE     NUM
+         0086 +RA I 0152 SETCHR   + R ADD     BITMAP       BITMAP CAN BE NEGATIVE IF BIT36 IS SET
+         0087 +TP I 0090          + TR +      SETCHR1
+         0088 +RS I 0160          + R SUB     MASK         ADD MASK TO BITMAP
+         0089 +T  I 0091          + TR        SETCHR2  
+         0090 +RA I 0160 SETCHR1  + R ADD     MASK         ADD MASK TO BITMAP
+         0091 +AR A 0018 SETCHR2  + A RIGHT   0018
+         0092 -A  I 0152          - ADD       BITMAP
+         0093 -ST I 0152          - STORE     BITMAP
+         0094 +RA I 0146          + R ADD     ZERO
+         0095 +ST I 0159          + STORE     NOPCH
+         0096 +RA I 0160 NXTROW   + R ADD     MASK
+         0097 +S  I 0167          + SUB       D2048
+         0098 +TZ I 0119          + TR 0      NXTCOL       ALL ROWS SCANNED. PROCEED WITH NEXT COL
+         0099 +RA I 0068          + R ADD     ROWRD        SELECT NEXT ROW
+         0100 +S  I 0163          + SUB       D4
+         0101 +SA I 0068          + STORE A   ROWRD 
+         0102 +RA I 0156          + R ADD     N            DECR NUM REPRESENTED BY HOLE IN ROW
+         0103 +S  I 0161          + SUB       ONE
+         0104 +ST I 0156          + STORE     N
+         0105 +RA I 0160          + R ADD     MASK         SHIFT LEFT ONE BIT
+         0106 +AL A 0001          + A LEFT    0001          
+         0107 +ST I 0160          + STORE     MASK
+         0108 +T  I 0068          + TR        ROWRD        PROCEED WITH NEW ROW
+         0109 -RA I 0152 GETSGN   - R ADD     BITMAP
+         0110 +LR A 0011          + L RIGHT   0011         SHR 11 SO X(11) BIT IS THE MSB OF MQ
+         0111 +RA I 0146          + R ADD     ZERO
+         0112 +LL A 0001          + L LEFT    0001
+         0113 +TZ I 0116          + TR 0      GETSGN2
+         0114 +RS I 0161          + R SUB     ONE          X(11) BIT SET -> SGN=-1
+         0115 +T  I 0117          + TR        GETSGN3
+         0116 +RA I 0161 GETSGN2  + R ADD     ONE          X(11) BIT NOT SET -> SGN=1
+         0117 +ST I 0157 GETSGN3  + STORE     SGN
+         0118 +T  I 0121          + TR        NXTCOL2
+         0119 +RA I 0157 NXTCOL   + R ADD     SGN          IF SGN FLAG NOT SET, TR TO GET THE SIGN ON DIGIT, IF ANY
+         0120 +TZ I 0109          + TR 0      GETSGN       
+         0121 +RA I 0154 NXTCOL2  + R ADD     COL          DECR COL
+         0122 +A  I 0161          + ADD       ONE
+         0123 +ST I 0154          + STORE     COL
+         0124 +RA I 0155          + R ADD     LEN          DECR LEN
+         0125 +S  I 0161          + SUB       ONE
+         0126 +ST I 0155          + STORE     LEN 
+         0127 +TZ A 0000 RET      + TR 0      /   /        IF LEN=0 PROCEED TO RDINT/RDALF POST-PROCESSING
+         0128 -LM I 0148          - LOAD MQ   NUM          MULT NUM X 10
+         0129 -M  I 0150          - MPY       NUM10        
+         0130 -SM I 0148          - STORE MQ  NUM
+         0131 -RA I 0152          - R ADD     BITMAP       SHIFT LEFT BITMAP 12 BITS
+         0132 -AL A 0012          - A LEFT    0012
+         0133 -ST I 0152          - STORE     BITMAP    
+         0134 +TF I 0136          + TR OV     NXTCOL3      IF OVERLOW, STORE BIT36 AS SIGN 
+         0135 +T  I 0048          + TR        NXTDIG       PROCEED WITH NEXT DIGIT ON NEXT COLUMN
+         0136 +RA I 0146 NXTCOL3  + R ADD     ZERO         MAKE BITMAP NEGATIVE -> BIT36 SET
+         0137 -SV I 0152          - SUB AB    BITMAP
+         0138 -ST I 0152          - STORE     BITMAP    
+         0139 +TZ I 0141          + TR 0      NXTCOL4      IF -BITMAP IS ZERO -> TR TO DEVELOP -0
+         0140 +T  I 0048          + TR        NXTDIG       PROCEED WITH NEXT DIGIT ON NEXT COLUMN
+         0141 +RS I 0161 NXTCOL4  + R SUB     ONE          TO DEVELP -0, FIRTS SET ACC=-1, THEN
+         0142 +AL A 0018          + A LEFT    18           SHIFT OUT ALL BITS. SIGN IS THE ONLY BIT THAT WILL REMAIN
+         0143 -ST I 0152          - STORE     BITMAP    
+         0144 +TF I 0048          + TR OV     NXTDIG       TR OV CLEARS OVERFLOWS 
+         0145 +T  A 0000 EXIT     + TR        /   /        RETURN TO CALLER 
+         0146 +000000    ZERO       DEF       0            
+         0147 +000000               DEF       0            
+         0148 +000000    NUM        DEF       0            
+         0149 +000000    NUM2       DEF       0            
+         0150 +000000    NUM10      DEF       0
+         0151 +000010               DEF       10
+         0152 +000000    BITMAP     DEF       0            
+         0153 +000000               DEF       0            
+         0154 +000000    COL        DEF       0
+         0155 +000000    LEN        DEF       0
+         0156 +000000    N          DEF       0
+         0157 +000000    SGN        DEF       0
+         0158 +000000    ISNUM      DEF       0
+         0159 +000000    NOPCH      DEF       0
+         0160 +000000    MASK       DEF       0
+         0161 +000001    ONE        DEF       1
+         0162 +000002    TWO        DEF       2
+         0163 +000004    D4         DEF       4
+         0164 +000009    D9         DEF       9
+         0165 +000035    D35        DEF       35
+         0166 +000036    D36        DEF       36
+         0167 +002048    D2048      DEF       2048
+         0168 +065536    D200KOCT   DEF       *200000 

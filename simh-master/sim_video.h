@@ -199,7 +199,7 @@ t_stat vid_open (DEVICE *dptr, const char *title, uint32 width, uint32 height, i
                                                             /* code responsible for cursor display in video) */
 #define SIM_VID_IGNORE_VBAR         2                       /* ignore video buffer aspect ratio */
 #define SIM_VID_RESIZABLE           4                       /* video screen is resizable */
-typedef void (*VID_QUIT_CALLBACK)(void);
+typedef void (*VID_QUIT_CALLBACK)(VID_DISPLAY *vptr);
 t_stat vid_register_quit_callback (VID_QUIT_CALLBACK callback);
 typedef void (*VID_GAMEPAD_CALLBACK)(int, int, int);
 t_stat vid_register_gamepad_motion_callback (VID_GAMEPAD_CALLBACK);

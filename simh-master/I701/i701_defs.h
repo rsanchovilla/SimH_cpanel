@@ -27,15 +27,16 @@
 
 #define STOP_PROG       1               /* Check STOP */
 #define STOP_IOERROR    2               /* host OS - i/o error */
-#define STOP_UUO        4               /* unknown opcode */
-#define STOP_DIVBYZERO  5               /* Division by zero */
-#define STOP_DIVCHECK   6               /* Division check */
-#define STOP_COPYCHECK  7               /* Copy check */
-#define STOP_TAPECHECK  8               /* Copy check */
+#define STOP_UUO        3               /* unknown opcode */
+#define STOP_DIVBYZERO  4               /* Division by zero */
+#define STOP_DIVCHECK   5               /* Division check */
+#define STOP_COPYCHECK  6               /* Copy check */
+#define STOP_TAPECHECK  7               /* Copy check */
 
 /* Memory */
 extern t_int64          CRT[2048];
 extern char             CRT_Symbolic_Buffer[4096 * 80];
+extern t_int64          DRUM[4*2048];
 
 #define OPTION_FAST             (1 << (UNIT_V_UF + 5))
 #define OPTION_STEP_HALFCYCLE   (1 << (UNIT_V_UF + 7))  
@@ -46,6 +47,7 @@ extern int WriteAddr(int addr, t_int64 d, char * msg);
 extern int ReadAddr(int addr, t_int64 * d, char * msg);
 extern void crt_reset(void);  // clears CRT memory, symbolic mem, and set V=0
 extern void ClearInterlocks(void);
+extern void DisconnectIO(void);
 extern void SetIOADDR(int opaddr, int opcode);
 extern void GetIOADDR(int * ioaddr, int * ioop);
 
@@ -77,8 +79,8 @@ extern DEBTAB dev_debug[];
 extern DEVICE       cp_dev;
 #endif
 
-#define MAX_CARDS_IN_DECK  10000            // max number of cards in deck for carddeck internal command
-#define MAX_CARDS_IN_READ_STAKER_HOPPER 10  // max number of cards in card reader take 
+#define MAX_CARDS_IN_DECK  10000             // max number of cards in deck for carddeck internal command
+#define MAX_CARDS_IN_READ_STACKER_HOPPER 10  // max number of cards in card reader take 
 
 extern void         dr_cmd(int, int, int);
 
@@ -86,8 +88,8 @@ extern DIB          cdr_dib;
 extern DEVICE       cdr_dev;
 extern uint32       cdr_cmd(UNIT *, uint16, uint16);
 extern UNIT         cdr_unit[1];
-extern uint16       ReadStaker[MAX_CARDS_IN_READ_STAKER_HOPPER * 80];
-extern int          ReadStakerLast;
+extern uint16       ReadStacker[MAX_CARDS_IN_READ_STACKER_HOPPER * 80];
+extern int          ReadStackerLast;
 
 extern DIB          cdp_dib;
 extern DEVICE       cdp_dev;
@@ -138,8 +140,8 @@ mtinforec mt_info[4];
 extern char    digits_ascii[31];
 extern char    mem_to_ascii[101];
 extern int     ascii_to_NN(int ch);
-extern uint16  sim_ascii_to_hol(char c);
-extern char    sim_hol_to_ascii(uint16 hol);
+extern uint16  ascii_to_hol(char c);
+extern char    hol_to_ascii(uint16 hol);
 extern void    echo_cardimage(DEVICE * dptr, uint16 * image, int EchoLevel, char * msg, char * cardtext);
 extern void    PrepareCardImage(uint16 * image, t_int64 * CardImage, int index, int SkipCols);
 
@@ -148,7 +150,7 @@ extern DEVICE       lp_dev;
 extern uint32       lp_cmd(UNIT *, uint16, uint16);
 extern UNIT         lp_unit[1];
 
-#define LPT_COLUMNS        80   // colums in printout   
+#define LPT_COLUMNS        80    // colums in printout   
 #define lptPrintOutMAX     20    // last lptPrintOutMAX lines printed will be saved on circular buffer lptPrintOut
 extern void lpt_printline(UNIT * uptr, char * line, int bNoEcho);
 
@@ -156,7 +158,9 @@ extern void lpt_printline(UNIT * uptr, char * line, int bNoEcho);
 #define WIRING_NAA_SpeedEx  1    // Morth American Aviation Assembler
 #define WIRING_NR9003       2    // Symbolic Assembler
 #define WIRING_SO2          3    // SO2 - Regional Assembler - RAL
-#define WIRING_PACT         4 
+#define WIRING_PACT         4    // PACT Compiler run time 
+
+#define PCH_CARDS_MAX   10000    // max number of cards that can ve browsed in Punched Card View Panel
 
 /* Generic devices common to all */
 extern DEVICE      cpu_dev;

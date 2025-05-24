@@ -1,0 +1,90 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:LNFN             LOG PACT instruction (it is natural log)
+                                          Return value with Q=6
+                                          computing procedure:
+                                          LN(XX)=LN(X+1)= x - x^2/2 + x^3/3 - ...
+                                          acurate for XX=0..2 (ie X=-1..1)
+
+LNFN     - STORE MQ  XX           SAVE FUNCTION ARGUMENT
+         + ADD       TWO
+         + STORE A   LNP1
+         + ADD       ONE
+         + STORE A   LNEX         RETURN TO CALLER         
+
+LNP1     + R ADD     /   /        GET Q OF ARGUMENT -35..+35
+         + STORE     Q
+                                  NORMALIZE ARG XX TO Q=6 
+         + SUB       D6
+         + TR +      SHL          IF Q>6 -> TR TO SHIFT ARG LEFT
+
+         + STORE A   SHR1
+         - R ADD     XX
+SHR1     + A RIGHT   /   /        SHIFT XX SO ITS Q IS NOW Q=6
+         + TR        SHL2
+
+SHL      + STORE A   SHL1
+         - R ADD     XX
+SHL1     + A LEFT    /   /        SHIFT XX SO ITS Q IS NOW Q=6
+SHL2     - STORE     XX
+                                  HERE XX HAS Q=6. NOW CALC XX=XX-1
+         + SUB       ONEQ6
+         - STORE     XX
+         - STORE     TERM         TERM=XX
+         - STORE     RES          RESULT=XX
+         + R ADD     TWOQ6
+         + STORE     N            N=2
+
+LOOP     - R SUB     XX           COMPUTE: TERM=-TERM * XX
+         + L RIGHT   0035         MQ=-XX
+         - MPY       TERM
+         + L LEFT    0006         ACC=-XX * TERM AT Q=6
+         - STORE     TERM
+
+         + R ADD     ONEQ6        COMPUTE: 1/N 
+         + LOAD MQ   ZERO
+         + DIV       N            MQ=1/N AT Q=0
+                                  COMPUTE: RES = RES + TERM/N
+         - MPY       TERM         NO NEED TO LOAD MQ WITH VALUE. ALREADY SET BY DIV ABOVE
+         - ADD       RES          NO NEED TO SHIFT RESULT OF MULT: TERM IS Q=6, 1/N IS Q=0
+         - STORE     RES          SO MULT QR=QA+QB=0+6=6
+
+         + R ADD     N
+         + ADD       ONEQ6
+         + STORE     N
+         + SUB       D16Q6
+         + TR 0      LOOPE
+         + TR        LOOP
+
+LOOPE    + R ADD     RES          PUT THE RESULT IN ACC
+LNEX     + TR        /   /        RETURN TO CALLER         
+                                
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D6         DEF       6
+ONEQ6      DEF       *4000
+TWOQ6      DEF       *10000
+D16Q6      DEF       *100000
+
+           ORG       EVEN 
+ 
+XX         RES       2
+TERM       RES       2
+RES        RES       2
+
+N          RES       1
+Q          RES       1
+            
+

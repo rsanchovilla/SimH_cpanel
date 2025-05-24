@@ -1,0 +1,418 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:PRTALF          PRINT PACKED ALFANUMERIC TEXT STRING
+
+                                  PRINT 3 PACKED BASE48 ALFANUMERIC CHARS STRING
+                                  FROM MQ REGISTER (IN LEFT HALF-WORD)
+                                  PARAMS: COL: COLUMN TO START AT (1..72)
+                                               IF < 0 IT IS INTERPRETEAD AS ADDR OF COL
+                                               SO PACT PARAMETER 
+                                                  "ID 3" -> PRINTS AT COL 3
+                                                  "ID N" -> PRINTS AT COL GIVEN BY VAR N 
+                                                            (N SHOULD DE INTEGER, IE Q=17)
+
+                                  HIGH BITS OF MQ ARE THE LEFTMOST CHAR.
+                                  MQ =- (((C1 * 48) + C2)*48 + C3) at Q=17 <- left half word
+                                  BY CONVENTION, PACKED ALFA VALUES ARE NEGATIVE
+
+           HEAD      DEF:PRTSTR          PRINT ALFANUMERIC TEXT STRING, ZERO TERMINATED
+
+                                  PRINT A STRING OF HALF-WORDS, EACH ONE WITH 3 PACKED 
+                                  BASE48 ALFANUMERIC CHARS STRING, +0 TERMINATED (-0 WILL PRINT
+                                  3 BLANKS, BUT WILL NOT TERMINATE THE STRING)
+                                  PARAMS: STR: LOCATION OF STRING TO PRINT
+                                          COL: COLUMN TO USE (1..72). SAME BEHAVIOUR AS COL IN PRA
+
+           HEAD      DEF:PRTCHR          PRINT BASE48 CHAR 
+
+                                  PRINT CHAR FROM MQ REGISTER (IN LEFT HALF-WORD)
+                                  VALUE INTERPRETED AS ONE BASE48 ALFANUMERIC CHAR
+                                  PARAMS: COL: COLUMN TO USE (1..72). SAME BEHAVIOUR AS COL IN PRA
+                                  
+           HEAD      DEF:PRTINT          PRINT DECIMAL INTEGER 
+
+                                  PRINT SIGNED INTEGER FROM MQ REGISTER (IN LEFT HALF-WORD)
+                                  NUMBER IS 17 BITS PLUS SIGN: -131072..131072
+                                  PARAMS: LEN: PRINT NUMBER (INCLUDING '-' IF ANY) RIGHT
+                                               JUSTIFIED IN A LEN COLUMNS FIELD. 
+                                               NON SIGNIFICANT LEFT ZEROES PRINTED AS BLANK. 
+                                               IF LEN COLUMNS NOT ENOUGHT PRINTING CONTINUES TO THE LEFT.
+                                          COL: COLUMN TO USE (1..72). SAME BEHAVIOUR AS COL IN PRA
+                                  
+           HEAD      DEF:PRTOCT          PRINT OCTIONARY VALUE
+
+                                  PRINT UNSIGNED OCTIONARY VALUE FROM MQ REGISTER (IN LEFT HALF-WORD)
+                                  NUMBER IS 18 BITs: 000000..477777 
+                                  PARAMS: LEN: PRINT VALUE OF EXACTLY LEN DIGITS (1..6)
+                                               LEN RIGHTMOST DIGITS ARE PRINTED
+                                          COL: COLUMN TO USE (1..72). SAME BEHAVIOUR AS COL IN PRA
+
+           HEAD      USE:BMPAD          RETURNS ADDRESS OF BASE48 BITMAP
+
+
+
+PRTPARM2 + ADD       TWO          GET 2 PARAMS: LEN AND COL (EITHER VALUE OR VAR ADDR)
+         + STORE A   PRTPRMEX
+         + R ADD     PRTP1
+         + ADD       TWO          PRINT PACKED TEXT FROM FULL-WORD VALUE IN MQ REGISTER 
+         + STORE A   PRTP1        STORE ADDR OF FIRST PARAM (LEN)
+         + ADD       ONE
+         + STORE A   PRTP2        STORE ADDR OF SECOND PARAM (COL)
+         + ADD       ONE
+         + STORE A   EXIT
+         - STORE MQ  NUM          SAVE VALUE TO PRINT PARAM MQ (NUM IS ALIASED TO TXT)
+
+  PRTP1  + R ADD     /   /        GET LEN: NUMBER OF CHARS TO PRINT (1..6)
+         + STORE     LEN
+  PRTP2  + R ADD     /   /        GET COLUMN PARAM 1..72
+         + TR +      PRTP4
+         + STORE A   PRTP3        COL<0 -> INTERPRET COL AS LOC(COL) = ADDR OF COL VAR
+  PRTP3  + R ADD     /   /        READ VAR COL PASED AS PARAM
+  PRTP4  + TR 0      EXIT         COL=0 -> EXIT
+         + TR +      PRTP5
+         + TR        EXIT         COL<0 -> EXIT
+  PRTP5  + STORE     COL
+PRTPRMEX + TR        /   /        RETURN TO CALLER
+
+
+
+
+PRTSTR   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+         + R ADD     *            FOR PRINT STRINGZ FROM MEM
+         + TR        PRTPARM2
+
+         + STORE     COLSZ
+         + R ADD     LEN          LEN IS IN FACT THE LOCATION WHERE THE STRING STARTS
+         + STORE A   STRZAD
+         + R ADD     EXIT
+         + STORE A   STRZEX
+
+STRZAD   + R ADD     /   /        GET HALF-WORD WITH NEXT 3 CHARS TO PRINT
+         + TR 0      STRZEX       IF +0 -> END OF STRING (-0 DOES NOT TERMINATES THE STRING)
+         
+         + L RIGHT   0035         MQ=3-CHARS TO PRINT
+         + R ADD     *            
+         + TR        PRTALF       PRINT 3 CHARS
+COLSZ    + STOP      0000         COL 
+
+STRZ1    + R ADD     STRZAD       INCR STRING ADDRESS
+         + ADD       ONE
+         + STORE A   STRZAD
+
+         + R ADD     COLSZ        INCR COLUMN
+         + ADD       D3
+         + STORE A   COLSZ
+
+         + TR        STRZAD
+
+STRZEX   + TR +      /   /        IF ZERO -> END OF STRING
+         + TR        STRZ1
+
+
+PRTALF   + ADD       TWO          PRINT 3-PACKED CHARS IN MQ REGISTER 
+         + STORE MQ  TXT          SAVE TEXT TO PRINT (IN LEFT HALF WORD)
+         + STORE A   PRTAP2       STORE ADDR OF PARAM (COL)
+         + ADD       ONE
+         + STORE A   EXIT
+  PRTAP2 + R ADD     /   /        GET COLUMN NUMBER PARAM 1..72
+         + TR +      PRTAP4
+         + STORE A   PRTAP3       COL<0 -> INTERPRET COL AS L(COL) = ADDR OF COL VAR
+  PRTAP3 + R ADD     /   /        READ VAR COL PASED AS PARAM
+  PRTAP4 + STORE     COL
+
+         + R ADD     D3
+         + STORE     LEN
+
+PRT1     + R ADD     ZERO         UNPACK LEFTMOST CHAR 
+         + ADD AB    TXT          GET TEXT DISCARD SIGN
+         + L RIGHT   0035         MQ=Acc
+         + R ADD     ZERO
+         + DIV       D48X48
+         + STORE     TXT          remainder=char to print, mq=c2 * 48 + c3 in right half-word
+         + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW BIT SET
+         + L LEFT    0018         put c2 and c3 in left half-word of MQ to be saved in CHAR half word
+         + STORE MQ  CHAR         CHAR TO PRINT
+         + R ADD     CHAR 
+         + TR 0      NXTCHR       IF BLANK PROCEED TO NEXT COL
+         + L RIGHT   0035         MQ=CHAR TO PRINT
+
+         + R ADD     *            PRINT CHAR
+         + TR        PRTCHR
+COL      + STOP      0000         COL: COLUMN NUMBER TO PRINT (1..72)
+
+NXTCHR   + R ADD     LEN          DECR LEN COUNT
+         + SUB       ONE
+         + STORE     LEN
+         + TR 0      EXIT         IF NO MORE CHARS TO PRINT EXIT
+
+         + R ADD     COL          INCR COL POSITION
+         + ADD       ONE
+         + STORE     COL
+         + SUB       D72          IF COL > 72 RETURN TO CALLER
+         + TR 0      GNXTCHR      ELSE PROCEED WITH NEXT CHAR
+         + TR +      EXIT
+
+GNXTCHR  + R ADD     ZERO         GET NEXT CHAR 
+         + LOAD MQ   TXT
+         + MPY       D48
+         + A LEFT    0017         GET RESULT IN LEFT HALF-WORD OF ACC
+         + STORE     TXT
+         + TR        PRT1         PROCEED TO PRINT CHAR
+        
+EXIT     + TR        /   /        RETURN TO CALLER
+
+
+
+
+
+PRTOCT   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+         + R ADD     *            FOR PRINT OCTIONARY VALUE
+         + TR        PRTPARM2
+
+         + R ADD     LEN          LEN = OCTAL DIGITS TO PRINT
+         + ADD       COL
+         + SUB       ONE
+         + STORE     COLN         COL POINTS TO LEAST SIGNIFICANT DIGIT
+         
+PRTIOCG  + R ADD     NUM          GENERATE OCTINARY DIGIT
+         + LOAD MQ   ZERO         CLEAR MQ
+         + L RIGHT   0021         3 LSB BITS OF LEFT HALF-WORD OF ACC TO MQ
+         + A LEFT    0018         BACK TO LEFT HALF OF ACC (BIT SHIFTED RIGHT 3 BIT)
+         + STORE     NUM          SAVE BACK NUM WITH RIGHTMOST OCTIONARY DIGIY EXTRACTED (NUM'=NUM/8)
+         + R ADD     ZERO
+         + L LEFT    0021         LEFT HALF-WORD OF ACC IS NOW RIGHTMOST OCTINARY DIGIT EXTRACTED FROM NUM 
+         + TR 0      PRTIOZ       TR IF THIS DIGIT IS ZERO TO PRINT A '0' (BASE48 CODE = 10) INSTEAD OF A BLANK (BASE48 CODE = 0)
+         + L RIGHT   0035         PUT DIGIT 1..9 TO PRINT IN MQ
+
+PRTOCTD  + R ADD     *            PRINT OCTINARY DIGIT
+         + TR        PRTCHR
+COLN     + STOP      0000
+
+         + R ADD     COLN        DECR COL NUMBER TO PRINT NEXT DIGIT
+         + SUB       ONE
+         + STORE     COLN
+
+         + R ADD     LEN          DECR COL NUMBER TO PRINT NEXT DIGIT
+         + SUB       ONE
+         + TR 0      EXIT         PRINTED LEN OCTINARY DIGITS -> EXIT
+         + STORE     LEN
+
+         + R ADD     NUM          IF NUM < 0, ADD SIGN BIT TO LEFTMOST DIGIT
+         + TR +      PRTIOCG
+         + R ADD     OCT04K       
+         + SUB       NUM
+         + STORE     NUM
+         + TR        PRTIOCG
+
+  PRTIOZ + LOAD MQ   D10          ACC=BASE48 CODE FOR '0'
+         + TR        PRTOCTD      TR TO PRINT IT
+
+
+
+PRTINT   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+         + R ADD     *            FOR PRINT OCTIONARY VALUE
+         + TR        PRTPARM2
+
+         + R ADD     COL          PRINT DECIMAL NUMBER. VALUE OF LEN = DIGITS TO PRINT, NOT INCLUDING SIGN
+         + ADD       LEN
+         + SUB       ONE          
+         + STORE     COLNI        COL POINTS TO END OF NUMBER
+         + R ADD     ZERO
+         + STORE     SGN          SIGN IS POSITIVE
+         + R ADD     NUM
+         + TR +      PRTINTG
+         + R SUB     NUM          NUM IS NEGATIVE. CONVERT TO POSITIVE
+         + STORE     NUM          AND SET SGN=1
+         + R ADD     ONE
+         + STORE     SGN          
+         
+PRTINTG  + R ADD     NUM          GENERATE DECIMAL DIGIT
+         + L RIGHT   0035         MQ=Acc
+         + R ADD     ZERO
+         + DIV       D10
+         + TR 0      PRTINZ
+PRTINTG2 + STORE     CHAR         acc=remainder=digit to print, mq=num/10
+         + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW BIT SET
+         + L LEFT    0018         digit in left half-word of MQ to be saved in CHAR half word
+         + STORE MQ  NUM 
+         + LOAD MQ   CHAR 
+
+PRTINTD  + R ADD     *            PRINT DECIMAL DIGIT
+         + TR        PRTCHR
+COLNI    + STOP      0000
+
+         + R ADD     COLNI        DECR COL NUMBER TO PRINT NEXT DIGIT
+         + SUB       ONE
+         + STORE     COLNI
+
+         + R ADD     NUM          DO NOT CARE ABOUT LEN, JUST CHECK IF NUM=0 
+         + TR 0      PRTINS       (SO NO MORE DIGITS REMAINS TO BE PRINTED)
+         + TR        PRTINTG      NUM NOT FINISHED, PROCEED WITH NEXT DIGIT
+
+PRTINS   + R ADD     SGN
+         + TR 0      EXIT         NO SIGN -> NUM FINISHED
+         + R ADD     ZERO
+         + STORE     SGN          CLEAR SGN FLAG
+         + LOAD MQ   D11          BASE48 CODE FOR '-' (MINUS) CHAR
+         + TR        PRTINTD      GO TO PRINT IT
+
+  PRTINZ + R ADD     D10          ACC=BASE48 CODE FOR '0'
+         + TR        PRTINTG2     TR TO PRINT IT
+
+
+
+
+
+
+PRTCHR   + ADD       TWO          PRINT CHAR IN MQ REGISTER 
+         + STORE MQ  CHAR         SAVE CHAR TO PRINT (IN LEFT HALF WORD)
+         + STORE A   PRTCP2       STORE ADDR OF PARAM (COL)
+         + ADD       ONE
+         + STORE A   PRTCEX
+         + TR OV     PRTCP2       CLEAR OV JUST IN CASE
+
+  PRTCP2 + R ADD     /   /        GET COLUMN NUMBER PARAM 1..72
+         + TR +      PRTCP4
+         + STORE A   PRTCP3       COL<0 -> INTERPRET COL AS L(COL) = ADDR OF COL VAR
+  PRTCP3 + R ADD     /   /        READ VAR COL PASED AS PARAM
+  PRTCP4 + SUB       ONE
+         + STORE     N            N=COL-1 -> IN RANGE 0..71
+         + TR +      PRTSA        IF N >= 0 PROCEED WITH BASE BUFFER ADDR CALCULATION
+         + TR        PRTCEX       IF N<0 EXIT
+
+   PRTSA + R ADD     ZERO         CARD BUFFER USES LOCATION 0..47
+         + STORE A   PRTROWAD     DETERMINE ADDRESS OF LOWER ROW TO PRINT
+         + R ADD     N
+         + SUB       D36
+         + TR +      PRTC0
+         + TR        PRTC1
+   PRTC0 + STORE     N            COL NOW 0..35 
+         + SUB       D36
+         + TR +      PRTCEX       IF COL >= 36 (IE COL PASSED AS PARAM > 72) THEN EXIT
+         + R ADD     PRTROWAD
+         + ADD       TWO
+         + STORE A   PRTROWAD     SET BASE BUFFER ADDR 
+
+   PRTC1 + R ADD     ONE          DETERMINE MASKCOL WITH MASK TO SET IN CARD BUFFER
+         + L RIGHT   53           SET RIGHTMOST BIT OF MQ TO 1 (SHIFT 35+18=53)
+         + R ADD     D35
+         + SUB       N
+         + STORE A   PRTC2
+         + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW
+   PRTC2 + L LEFT    /   /        SHIFT MQ LEFT N PLACES
+         + TR 0      PRTC3        IF ACC STILL ZERO -> MASKCOL VALID
+         + R SUB     ONE          ACC NOT ZERO -> SHOULD GENERATE -0 TO SET SIGN BIT ON
+         + L RIGHT   0072         NOW MQ = -0 -> LEFTMOST BIT OF MQ SET
+   PRTC3 - STORE MQ  MASKCOL
+         
+         + R ADD     ZERO         READ THE BITMAP OF CHAR 
+         + ADD AB    CHAR         DISCARD SIGN OF CHAR, IF ANY
+         + STORE     CHAR
+         + SUB       D48
+         + TR +      PRTCEX       IF CHAR >= 48 EXIT
+
+         + R ADD     BITMAPAD     IF ADDR OF BASE48 BITMAP NOT COMPUTED
+         + TR 0      GETBMP1      TR TO LOAD IT
+ GETBMP2 + ADD       CHAR         READ THE BITMAP OF CHAR 
+         + STORE A   PRTC4        INDICATES THE BITS TO SET IN SELECTED 
+   PRTC4 + R ADD     /   /        COLUMN OF CARD BUFFER 
+         + STORE     BITS
+
+         + R SUB     ONE
+         + STORE     N            SET TO -1
+        
+   LOOP1 + R ADD     N            CURRENT ROW (STARTS AT ZERO) = OFFSET ON PRTROWAD     
+         + ADD       ONE
+         + STORE     N
+
+         + R ADD     BITS         EXTRACT RIGHTMOST BIT OF LEFT HALF OF ACC TO MQ
+         + TR 0      PRTCEX       NO MORE BITS -> EXIT
+         + L RIGHT   0019         LSB BIT OF LEFT HALF-WORD OF ACC TO MQ
+         + A LEFT    0018         BACK TO LEFT HALF OF ACC (BIT SHIFTED RIGHT 1 BIT)
+         + STORE     BITS         SAVE BACK BITS. LSB HAS BEEN EXTACTED, CONTENTS SHIFTED RIGHT ONE PLACE
+         + R ADD     ZERO
+         + L LEFT    0001         PUT EXTACTED BIT BACK INTO ACC
+         + TR 0      LOOP1        NO BIT 
+
+         + R ADD     N            READ THE ROW N AT CARD BUFFER 
+         + A LEFT    0002         MULT N BY 4 AS THERE ARE 4 HALF WORDS PER ROW
+         + ADD       PRTROWAD     
+         + STORE A   PRTROWR
+         + STORE A   PRTROWW
+ PRTROWR - R ADD     /   /        
+         - STORE     ROW          CURRENT CONTENTS OF ROW
+
+         - R ADD     MASKCOL      "OR" MASKCOL IN SELECTED ROW
+         + TR +      PRTW2
+
+         - R ADD     ROW 
+         + TR 0      PRTW1         
+         + R ADD     ZERO         MASKCOL IS MINUS ZERO AND ROW IS NOT-EMPTY (EITHER POSITIVE OR NEGATIVE) -> SET ROW AS NEGATIVE
+         - SUB AB    ROW 
+         + TR        PRTROWW
+
+   PRTW1 - R ADD     MASKCOL      MASKCOL IS MINUS ZERO AND ROW IS EMPTY -> SET ROW = MASKCOL = MINUS ZERO
+         + TR        PRTROWW
+
+   PRTW2 - R ADD     ROW          
+         + TR +      PRTW3              
+         - SUB       MASKCOL      MASKCOL IS POSITIVE AND ROW IS NEGATIVE -> SUB MASKCOL FROM ROW
+         + TR        PRTROWW
+
+   PRTW3 - ADD       MASKCOL      MASKCOL IS POSITIVE AND ROW IS POSITIVE OR EMPTY -> ADD MASKCOL TO ROW         
+
+ PRTROWW - STORE     /   /        ROW UPDTATE
+         + TR        LOOP1        PROCEED TO NEXT ROW
+
+PRTCEX   + TR        /   /
+
+GETBMP1  + R ADD     *
+         + TR        BMPAD        GET BASE48 CHARS BITMAP ADDRESS
+         + STORE     BITMAPAD     
+         + TR        GETBMP2      RETURN
+
+           ORG       EVEN
+
+ZERO       DEF       0            
+           DEF       0            
+MASKCOL    DEF       0
+           DEF       0
+ROW        DEF       0
+           DEF       0
+NUM        DEF       0
+           DEF       0
+
+BITMAPAD   DEF       0
+SGN        DEF       0
+LEN        DEF       0
+CHAR       DEF       0
+TXT        DEF       0
+
+PRTROWAD   DEF       0
+N          DEF       0
+BITS       DEF       0
+
+
+ONE        DEF       1
+TWO        DEF       2
+D3         DEF       3
+D10        DEF       10
+D11        DEF       11
+D35        DEF       35
+D36        DEF       36
+D48        DEF       48
+D72        DEF       72
+D48X48     DEF       2304
+OCT04K     DEF       *040000      BIT SIGN ON 5TH OCTINARY DIGIT
+

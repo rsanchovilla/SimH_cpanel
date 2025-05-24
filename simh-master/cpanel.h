@@ -121,6 +121,7 @@ extern int GetCArrayCId(int CArrayId, int n);
 #define CINFO_NITEMS     6
 #define CINFO_NCP        7
 #define CINFO_NOSCALE    8
+#define CINFO_NAME       9
 extern int GetControlInfo(int Id, int mode); 
 // manage dynamic states
 extern uint32 * GetControlSurface(int CId, int State, int * ww, int * hh);
@@ -143,6 +144,7 @@ extern char * IsOptionParam;
 extern void RemoveOption(char * Name);
 // others
 extern int cpanel_scale(int ncp, int Scale); // get/set control panel scale
+extern void cpanel_title(int ncp, char * title); // set control panel title
 extern int cpanel_visible(int ncp); // return 1 if control panel has its window open
 extern int DoClickEvent(int CId); 
 extern void AllControlRedrawNeeded(int ncp); // mark all controls for refresh

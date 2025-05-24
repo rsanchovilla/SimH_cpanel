@@ -1,0 +1,1382 @@
+        DEC
+        NNNN OP ADDR COMMENTS
+          92+10   92 INIT     + R ADD     *            
+          93+ 1   57          + TR        PRTNLINE     
+          94+ 0  101          + STOP      0101         STRINGZ AT COL 1
+          95+ 0 1661          + STOP      MSGSTART     "PUNCH LOADER AND CONTROL CARDS"
+          96+ 0    6          + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+          97+10  425          + R ADD     NVARS        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+          98+10  435          + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+          99+10 1042          + R ADD     TSYMBEXT     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         100+10  100          + R ADD     *            TO CONSTRUCT REGION ORIGIN TABLE/CARDS
+         101+ 1   61          + TR        RWDRUM       READ TSYMBREF TABLE (SYMBOLS USED BY ALL REGIONS) FROM DRUM 
+         102+24  128          + READ      0128         DRUM INSTR
+         103+ 0    0          + STOP      0000         DRUM ADDR 
+         104+ 0  440          + STOP      MAXNSYMB     ADDR OF START OF TABLES
+         105+ 0 1202          + STOP      1202         MAXNSYMB (1 HALF-WORD) + NSYMBS (1 HW) 
+         106+10  106          + R ADD     *            TO CONSTRUCT REGION ORIGIN INITIAL CARDS
+         107+ 1   61          + TR        RWDRUM       READ RELNUM0, NVARS, HIVRELAD, HINRELAD, HITRELAD, HIIRELAD, HIPRELAD AND HISIZE
+         108+24  130          + READ      0130         DRUM INSTR
+         109+ 0    0          + STOP      0000         DRUM ADDR 
+         110+ 0  424          + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         111+ 0    8          + STOP      0008         8 HALF WORDS
+         112+10  112          + R ADD     *            TO CONSTRUCT REGION ORIGIN INITIAL CARDS
+         113+ 1   61          + TR        RWDRUM       READ MAXNNUMS, NNUMS. KEEP TNUMPOOL IN DRUM
+         114+24  130          + READ      0130         DRUM INSTR
+         115+ 0   16          + STOP      0016         DRUM ADDR 
+         116+ 0  436          + STOP      MAXNNUMS     ADDR OF DATA TO SAVE
+         117+ 0    2          + STOP      0002         MAXNNUMS (1 HALF-WORD) + NNUMS (1 HW) 
+         118+28  259          + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE) TO BE USED 
+         119+10  119          + R ADD     *            SET WRITE CARD ROUTINE TO BE CALLED WHEN FLUSHING THE REL BINARY CARD 
+         120+ 1   65          + TR        WRIBREL      RETURNS IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN BY WRITE ROUTINE  
+         121+ 0    2          + STOP      0002         +02 -> SET WRITE CARD ROUTINE
+         122+ 0  145          + STOP      PCHCRD       THE WRITE ROUTINE ADDRESS
+         123+13  149          + STORE A   LBINCRD      SAVE ADDR OF BINCARD BUFFER TO BE WRITTEN, RETURNED IN ACC
+         124+10  124          + R ADD     *            PUNCH PACT RELATIVE BINARY LOADER
+         125+ 1  151          + TR        PCHBLOAD     
+         126+10  126          + R ADD     *            PUNCH CONTROL CARDS 
+         127+ 1  172          + TR        PCHCCARD
+         128+10  128          + R ADD     *            PUNCH NUMBER CONSTANTS CARDS (REGION N)
+         129+ 1  292          + TR        PCHNUMS
+         130+10  130          + R ADD     *
+         131+ 1  336          + TR        PRTFREE      PRINT FREE MEM STORAGE
+         132+10  132          + R ADD     *            FLUSH ANY PENDING BINARY CARD  
+         133+ 1   65          + TR        WRIBREL
+         134+ 0    1          + STOP      0001         +01 -> FLUSH LAST CARD
+         135+10  135          + R ADD     *
+         136+ 1   61          + TR        RWDRUM       SAVE ROTBLAD, INIREG AND LR.EXT TO DRUM 
+         137+26  130          + WRITE     0130         DRUM INSTR
+         138+ 0    8          + STOP      0008         DRUM ADDR 
+         139+ 0  432          + STOP      ROTBLAD        
+         140+ 0    4          + STOP      0004         ROTBLAD (1 HALF-WORD) + INIREG (1 HW) + LR.EXT (1 HW)
+         141+10  141          + R ADD     *
+         142+ 1   55          + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         143+ 0  256          + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+         144+ 0 4095          + STOP      4095
+         145+ 9 1650 PCHCRD   + ADD       TWO          PUNCH A BINARY REL CARD        
+         146+13  150          + STORE A   PCHCRDEX
+         147+10  147          + R ADD     *
+         148+ 1   67          + TR        WRITECR2     PUNCH THE CARD
+         149+ 0    0 LBINCRD  + STOP      /   /        ADDR OF BINCARD BUFFER TO BE WRITTEN 
+         150+ 1    0 PCHCRDEX + TR        /   /         
+         151+ 9 1650 PCHBLOAD + ADD       TWO          
+         152+13  171          + STORE A   PCHBLOEX
+         153+10  153 PCHLLOOP + R ADD     *            READ LOADER CARDS IMAGES FROM TAPE
+         154+ 1   59          + TR        RDTAPE
+         155+ 0  256          + STOP      TAPELDR
+         156+ 0    0          + STOP      0000         BUF TO READ IN FROM TAPE
+         157+ 2  171          + TR OV     PCHBLOEX     TR IF END OF FILE
+         158+10  158          + R ADD     *
+         159+ 1   53          + TR        WRITECRD     PUNCH LOADER CARD
+         160+10    1          + R ADD     0001         GET TTTT FROM CONTROL WORD OF CARD
+         161+ 4  153          + TR 0      PCHLLOOP     IF =0 -> NOT THE LAST CARD -> READ NEXT CARD
+         162+ 5 1659          + SUB       D4094 
+         163+ 3  153          + TR +      PCHLLOOP     IF >= 4094 -> NOT A "00 TTTT" CONTROL WORD -> READ NEXT CARD
+         164+10 1659          + R ADD     D4094        4094 - TTTT = LOADER SIZE
+         165+ 5    1          + SUB       0001         
+         166+ 9 1649          + ADD       ONE
+         167+23   19          + A RIGHT   0019
+         168+22   19          + A LEFT    0019
+         169+12 1647          + STORE     LDRSIZE    
+         170+ 2  171          + TR OV     PCHBLOEX     CL OV
+         171+ 1    0 PCHBLOEX + TR        /   /        RETURN TO CALLER
+         172+ 9 1650 PCHCCARD + ADD       TWO          PUNCH CONTROL CARDS 
+         173+13  291          + STORE A   PCHCCEX         
+         174+10 1654          + R ADD     D6           
+         175+ 9  430          + ADD       P.EXT        ABS LOCATION OF RO TABLE = MAX( 6 + PERISHABLE STORAGE NEEDED, 48)     
+         176+12 1642          + STORE     N
+         177+ 5 1658          + SUB       D48
+         178+ 3  181          + TR +      PCHCC1
+         179+10 1658          + R ADD     D48
+         180+12 1642          + STORE     N
+         181+10 1642 PCHCC1   + R ADD     N
+         182+12  432          + STORE     ROTBLAD      ABS LOCATION OF REGION ORIGIN TABLE
+         183+ 9 1655          + ADD       D14          ABS LOCATION OF INITAL REGION = ABS LOCATION OF RO TABLE + 14 + (NUM SYMBOLS * 2)
+         184+ 9  441          + ADD       NSYMBS
+         185+ 9  441          + ADD       NSYMBS
+         186+12  433          + STORE     INIREG       ABS LOCATION OF 1ST REGION OF PACT PROGRAM (1ST ONE TO BE EXECUTED)
+         187+10 1648          + R ADD     ZERO
+         188+12  434          + STORE     LR.EXT       SPACE RESERVED FOR LOADER
+         189+10  426          + R ADD     V.EXT        IF V.EXT+T.EXT < LOADER SIZE  -> MAKE T.EXT = LOADER SIZE SO 
+         190+ 9  428          + ADD       T.EXT        VARS REGION NOT OVERLAPS WITH LOADER
+         191+ 5 1647          + SUB       LDRSIZE      
+         192+ 3  196          + TR +      PRTCC2
+         193+10 1647          + R ADD     LDRSIZE
+         194+ 5  428          + SUB       T.EXT
+         195+12  434          + STORE     LR.EXT       SPACE RESERVED FOR LOADER
+         196+ 8    0 PRTCC2   + NOOP      0000      
+         197+10 1659          + R ADD     D4094        COMPUTE FREE STORAGE AVAILABLE ON RUN-TIME
+         198+ 5  433          + SUB       INIREG       PERISHABLE (P-EXT) REG WILL NOT SUBSTRACTED AS 
+         199+ 5  426          + SUB       V.EXT        IT IS IS ALREADY INCLUDED IN INIREG COMPUTATION. 
+         200+ 5  428          + SUB       T.EXT
+         201+ 5  427          + SUB       N.EXT
+         202+ 5  429          + SUB       I.EXT
+         203+ 5  431          + SUB       IL.EXT
+         204+ 5  434          + SUB       LR.EXT
+         205+12 1646          + STORE     FREEMEM      AVAILABLE STORAGE
+         206+10  206          + R ADD     *            CLEAR DEFAULT CARD IMAGE BUF AT 0000..0047
+         207+ 1   51          + TR        CLRBUF       WE USE THIS BUFFER TO BUILD INITIAL CONTROL CARD
+         208+10  432          + R ADD     ROTBLAD
+         209+12    3          + STORE     0003         [0003]= ROTBLAD
+         210+10 1650          + R ADD     TWO
+         211+12    4          + STORE     0004         [0004]= 2 | V.EXT
+         212+10  426          + R ADD     V.EXT
+         213+ 9  434          + ADD       LR.EXT       ADD RESERVED SPACE FOR LOADER TO PREVENT VARS LOC BEING OVER LOADER
+         214+ 9 1660          + ADD       OP1
+         215+12    5          + STORE     0005
+         216+10 1651          + R ADD     D3
+         217+12    6          + STORE     0006         [0006]= 3 | T.EXT
+         218+10  428          + R ADD     T.EXT
+         219+ 9 1660          + ADD       OP1
+         220+12    7          + STORE     0007
+         221+10 1652          + R ADD     D4
+         222+12    8          + STORE     0008         [0008]= 4 | N.EXT
+         223+10  427          + R ADD     N.EXT
+         224+ 9 1660          + ADD       OP1
+         225+12    9          + STORE     0009
+         226+10 1653          + R ADD     D5
+         227+12   10          + STORE     0010         [0010]= 5 | P.EXT
+         228+10 1654          + R ADD     D6           ABS LOC 6 = START OF PERISHABE REGION
+         229+12   11          + STORE     0011
+         230+10  442          + R ADD     TSYMBREF     BASE48 ALFA NAME OF 1ST REGION OF PROGRAM
+         231+12   14          + STORE     0014
+         232+10  433          + R ADD     INIREG
+         233+12   15          + STORE     0015         [0014]= 1ST REGION ALFA | INIREG
+         234+10 1656          + R ADD     D16
+         235+12   42          + STORE     0042         COUNT=16
+         236+ 6 1660          + R SUB     OP1
+         237+12   44          + STORE     0044         CARD CODE = -01 -> CONTROL CARD (IS THE INITIAL CONTROL CARD)
+         238+10  149          + R ADD     LBINCRD      GET ADDR OF BIN CARD BUFFER
+         239+13  243          + STORE A   LBINCRD1
+         240+10  240          + R ADD     *            COPY 0000..0047 CARD IMAGE BUFFER TO BIN CARD BUFFER 
+         241+ 1   63          + TR        MEMCOPY
+         242+ 0    0          + STOP      0000         DEFAULT CARD BUFFER IMAGE
+         243+ 0    0 LBINCRD1 + STOP      /   /        ADDR OF BINCARD BUFFER TO BE WRITTEN 
+         244+ 0 1658          + STOP      D48          LEN
+         245+10 1656          + R ADD     D16          WILL POPULATE CONTROL CARD WITH TSYMBREF STARTING AT CARD LOC 0016
+         246+12 1643          + STORE     LOC          (CARD LOC 000..0015 USED FOR REG.V, REG.N, ETC)
+         247+10 1649          + R ADD     ONE          1ST REGION (=1ST SYMBOL) ALREADY SET, SO N STARTS IN 1 (INSTEAD OF 0)
+         248+12 1642          + STORE     N
+         249+10  287          + R ADD     TSYMBAD
+         250+ 9 1642          + ADD       N
+         251+13  255          + STORE A   SYNAME
+         252+10 1642 PCHCCLOO + R ADD     N
+         253+ 5  441          + SUB       NSYMBS
+         254+ 4  288          + TR 0      PCHCCEND     EXIT LOOP, ALL SYMBOLS PUNCHED IN CONTROL CARD 
+         255+10    0 SYNAME   + R ADD     /   /        GET SYMBOL NAME (EITHER A PACT REGION OR A LIBRARY ROUTINE)
+         256+12 1644          + STORE     SY
+         257+10  255          + R ADD     SYNAME
+         258+ 9  440          + ADD       MAXNSYMB
+         259+13  260          + STORE A   SYEXT
+         260+10    0 SYEXT    + R ADD     /   /        GET SYMBOL EXTENSION
+         261+ 3  264          + TR +      PCHCCLO1
+         262+10 1648          + R ADD     ZERO         IF EXTENSION < 0 -> SYMBOL NOT DEF -> STORE ZERO AS RIGHT HALF WORD
+         263+ 1  268          + TR        PCHCCLO2
+         264+21   30 PCHCCLO1 + L RIGHT   0030         30 = 12 + 18
+         265+10 1648          + R ADD     ZERO
+         266+20   30          + L LEFT    0030
+         267+ 9 1660          + ADD       OP1          EXT = (OP=01) << 12 + SYMBOL EXTENSION 
+         268+12 1645 PCHCCLO2 + STORE     EXT         
+         269+10  269          + R ADD     *            ADD TO REL BINARY CARD  (THIS ROUTINE CALL PCHCRD WHEN NEEDED)
+         270+ 1   65          + TR        WRIBREL
+         271- 0    1          - STOP      0001         PARAM: BIN CARD TYPE REQUITED: -01 -> CONTROL CARD, 
+         272+ 0    0          + STOP      0000         PARAM: TOP SYMBOL FOR INITIAL CONTROL CARD = 0
+         273+ 0 1643          + STOP      LOC          PARAM: LOCATION 16 .. 16 + (NSYMBS-1) * 2
+         274+ 0    1          + STOP      0001         PARAM: =1 -> NEXT PARAM IS A FULL WORD TO ADD TO BIN CARD (INDEX = 0)
+         275+ 0 1644          + STOP      SY           PARAM: LEFT HALF WORD = BASE48 SYMBOL ALFA NAME 
+         276+ 0 1645          + STOP      EXT          PARAM: RIGHT HALF WORD = (OP=01) << 12 + SYMBOL EXTENSION 
+         277+10 1642          + R ADD     N
+         278+ 9 1649          + ADD       ONE
+         279+12 1642          + STORE     N
+         280+10  255          + R ADD     SYNAME
+         281+ 9 1649          + ADD       ONE
+         282+13  255          + STORE A   SYNAME
+         283+10 1643          + R ADD     LOC
+         284+ 9 1650          + ADD       TWO
+         285+12 1643          + STORE     LOC
+         286+ 1  252          + TR        PCHCCLOO
+         287+ 0  442 TSYMBAD  + STOP      TSYMBREF         
+         288+10  288 PCHCCEND + R ADD     *            FLUSH ANY PENDING BINARY CARD 
+         289+ 1   65          + TR        WRIBREL
+         290+ 0    1          + STOP      0001         +01 -> FLUSH CURRENT CARD
+         291+ 1    0 PCHCCEX  + TR        /   /        RETURN TO CALLER
+         292+ 9 1650 PCHNUMS  + ADD       TWO          PUNCH NUMBER CONSTANTS CARDS (REGION N)
+         293+13  335          + STORE A   PCHNUMEX
+         294+10  424          + R ADD     RELNUM0      WHERE NUMBERS STARTS IN NUMBER POOL (USUALLY = 0)
+         295+12 1643          + STORE     LOC
+         296+10  296          + R ADD     *            WRITE NUMBER IN BINARY REL CARD 
+         297+ 1   65          + TR        WRIBREL
+         298- 0    0          - STOP      0000         PARAM: BIN CARD TYPE REQUITED: -00 -> INSTR CARD, 
+         299+ 0 1652          + STOP      D4           PARAM: BIN CARD SYMBOL REQUITED
+         300+ 0 1643          + STOP      LOC          PARAM: LOCATION 0..4095 
+         301+ 0    1          + STOP      0001         PARAM: =1 -> NEXT PARAM IS A FULL WORD TO ADD TO BIN CARD (INDEX = 0)
+         302+ 0 1648          + STOP      ZERO         PARAM: LEFT HALF WORD = BASE48 SYMBOL ALFA NAME 
+         303+ 0 1648          + STOP      ZERO         PARAM: RIGHT HALF WORD = (OP=01) << 12 + SYMBOL EXTENSION 
+         304+10 1648          + R ADD     ZERO
+         305+12 1642          + STORE     N
+         306+10 1657          + R ADD     D18          TNUMPOOL STARTS AT ADDR 0018 ON DRUM 0130 
+         307+13  312          + STORE A   RDNUM
+         308+10 1642 PCHNULOO + R ADD     N
+         309+ 5  437          + SUB       NNUMS
+         310+ 4  332          + TR 0      PCHNUEND     TR IF ALL NUMBERS PUNCHED
+         311+24  130          + READ      0130
+         312+29    0 RDNUM    + SET DR    /   /
+         313-31  438          - COPY      NUM          GET NUMBER N FROM POOL
+         314+10  312          + R ADD     RDNUM        INCR ADDR IN POOL
+         315+ 9 1650          + ADD       TWO
+         316+13  312          + STORE A   RDNUM
+         317+10 1643          + R ADD     LOC          PRE-INCREMENT LOC, SO 1ST ENTRY In NUMBER POOL (N=0) GOES
+         318+ 9 1650          + ADD       TWO          TO LOC=0002. LOC=0000 CONATAINS CONSTANT ZERO
+         319+12 1643          + STORE     LOC
+         320+10  320          + R ADD     *            WRITE NUMBER IN BINARY REL CARD 
+         321+ 1   65          + TR        WRIBREL
+         322- 0    0          - STOP      0000         PARAM: BIN CARD TYPE REQUITED: -00 -> INSTR CARD, 
+         323+ 0 1652          + STOP      D4           PARAM: BIN CARD SYMBOL REQUITED
+         324+ 0 1643          + STOP      LOC          PARAM: LOCATION 0..4095 
+         325+ 0    1          + STOP      0001         PARAM: =1 -> NEXT PARAM IS A FULL WORD TO ADD TO BIN CARD (INDEX = 0)
+         326+ 0  438          + STOP      NUM          PARAM: LEFT HALF WORD = BASE48 SYMBOL ALFA NAME 
+         327+ 0  439          + STOP      NUM2         PARAM: RIGHT HALF WORD = (OP=01) << 12 + SYMBOL EXTENSION 
+         328+10 1642          + R ADD     N
+         329+ 9 1649          + ADD       ONE
+         330+12 1642          + STORE     N
+         331+ 1  308          + TR        PCHNULOO
+         332+10  332 PCHNUEND + R ADD     *            FLUSH ANY PENDING BINARY CARD 
+         333+ 1   65          + TR        WRIBREL
+         334+ 0    1          + STOP      0001         +01 -> FLUSH CURRENT CARD
+         335+ 1    0 PCHNUMEX + TR        /   /        RETURN TO CALLER
+         336+ 9 1650 PRTFREE  + ADD       TWO          PRINT MEM USAGE AND FREE MEM 
+         337+13  422          + STORE A   PRTFREEX
+         338+30   74          + SENSE     0074         SENSE SWITCH 6
+         339+ 1  341          + TR        CHKFREE      TR IF NO LOG SELECTED (SW6 OFF) -> TR JUST TO CHECK FREE MEM
+         340+ 1  344          + TR        PRMEMUSE     TR IF LOG SELECTED (SW6 ON) -> TR TO PRINT MEMORY USAGE AND THEN CHECK FREE MEM
+         341+ 6 1646 CHKFREE  + R SUB     FREEMEM      JUST CHECK FREEMEM > 0
+         342+ 3  416          + TR +      ERRNOMEM     TR IF FREEMEM <= 0 TO PRINT MEMORY OVERFLOW ERROR
+         343+ 1  422          + TR        PRTFREEX     IF FREEMEM > 0 EXIT WITHOUT ANY LOG PRINTING
+         344+10  344 PRMEMUSE + R ADD     *            
+         345+ 1   57          + TR        PRTNLINE     
+         346+ 0  201          + STOP      0201         INT AT COL 1
+         347+ 0  432          + STOP      ROTBLAD      ABS LOCATION OF REGION ORIGIN TABLE
+         348+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         349+ 0 1672          + STOP      MSGROTBL     "RO TBL      ABS LOC"
+         350+ 0    0          + STOP      0000         END OF LINE. 
+         351+10  351          + R ADD     *            
+         352+ 1   57          + TR        PRTNLINE     
+         353+ 0  201          + STOP      0201         INT AT COL 1
+         354+ 0  433          + STOP      INIREG       ABS LOCATION OF 1ST REGION OF PACT PRG
+         355+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         356+ 0 1680          + STOP      MSGINIR      "PRG START   ABS LOC"
+         357+ 0    0          + STOP      0000         END OF LINE. 
+         358+10  358          + R ADD     *            
+         359+ 1   57          + TR        PRTNLINE     
+         360+ 0  201          + STOP      0201         INT AT COL 1
+         361+ 0  426          + STOP      V.EXT        EXTENSION OF VARIABLES REGION
+         362+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         363+ 0 1688          + STOP      MSGVEXT      "VAR REGION  EXTENSION"
+         364+ 0    0          + STOP      0000         END OF LINE. 
+         365+10  365          + R ADD     *            
+         366+ 1   57          + TR        PRTNLINE     
+         367+ 0  201          + STOP      0201         INT AT COL 1
+         368+ 0  428          + STOP      T.EXT        EXTENSION OF TEMP STORAGE REGION
+         369+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         370+ 0 1696          + STOP      MSGTEXT      "TEMP REGION EXTENSION"
+         371+ 0    0          + STOP      0000         END OF LINE. 
+         372+10  372          + R ADD     *            
+         373+ 1   57          + TR        PRTNLINE     
+         374+ 0  201          + STOP      0201         INT AT COL 1
+         375+ 0  427          + STOP      N.EXT        EXTENSION OF NUM REGION
+         376+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         377+ 0 1704          + STOP      MSGNEXT      "NUM REGION  EXTENSION"
+         378+ 0    0          + STOP      0000         END OF LINE. 
+         379+10  379          + R ADD     *            
+         380+ 1   57          + TR        PRTNLINE     
+         381+ 0  201          + STOP      0201         INT AT COL 1
+         382+ 0  430          + STOP      P.EXT        EXTENSION OF PERISHABLE STORAGE REGION
+         383+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         384+ 0 1712          + STOP      MSGPEXT      "PERISHABLE  EXTENSION"
+         385+ 0    0          + STOP      0000         END OF LINE. 
+         386+10  386          + R ADD     *            
+         387+ 1   57          + TR        PRTNLINE     
+         388+ 0  201          + STOP      0201         INT AT COL 1
+         389+ 0  429          + STOP      I.EXT        EXTENSION OF PACT PROGRAM INSTR CODE (ALL REGIONS)
+         390+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         391+ 0 1720          + STOP      MSGIEXT      "PACT PROG   EXTENSION"
+         392+ 0    0          + STOP      0000         END OF LINE. 
+         393+10  393          + R ADD     *            
+         394+ 1   57          + TR        PRTNLINE     
+         395+ 0  201          + STOP      0201         INT AT COL 1
+         396+ 0  431          + STOP      IL.EXT       EXTENSION OF ALL CALLED-IN LIBRARY ROUTINES INSTR CODE 
+         397+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         398+ 0 1728          + STOP      MSGJEXT      "ALL LIBS    EXTENSION"
+         399+ 0    0          + STOP      0000         END OF LINE. 
+         400+10  400          + R ADD     *            
+         401+ 1   57          + TR        PRTNLINE     
+         402+ 0  201          + STOP      0201         INT AT COL 1
+         403+ 0  434          + STOP      LR.EXT       SPACE RESERVED FOR LOADER
+         404+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         405+ 0 1736          + STOP      MSGLDRE      "RESERVED FOR LOADER"
+         406+ 0    0          + STOP      0000         END OF LINE. 
+         407+10  407          + R ADD     *
+         408+ 1   57          + TR        PRTNLINE     
+         409+ 0  201          + STOP      0201         INT AT COL 1
+         410+ 0 1646          + STOP      FREEMEM      NUMBER OF FREE HALF-WORDS AVAILABLE IN MEM IN RUN-TIME
+         411+ 0  108          + STOP      0108         STRINGZ AT COL 8
+         412+ 0 1744          + STOP      MSGFREE      "AVAILABLE STORAGE"
+         413+ 0    0          + STOP      0000         END OF LINE.               
+         414+10 1646          + R ADD     FREEMEM      CHECK NO MEM OVERFLOW
+         415+ 3  422          + TR +      PRTFREEX
+         416+10  416 ERRNOMEM + R ADD     *
+         417+ 1   57          + TR        PRTNLINE     
+         418+ 0  101          + STOP      0101         STRINGZ AT COL 1
+         419+ 0 1751          + STOP      MSGMEMOV     "STORAGE OVERFLOW"
+         420+ 0    0          + STOP      0000         END OF LINE. PRINT ALLWAYS
+         421+ 0  422          + STOP      PRTFREEX     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING 
+         422+ 1    0 PRTFREEX + TR        /   /        RETURN TO CALLER
+         423+     0             ORG       EVEN
+         424+     0  RELNUM0    DEF       0            LOCATION OF 1ST NUM IN POOL              <- set by stage 31 Read Var Cards
+         425+     0  NVARS      DEF       0            NUMBER OF VARS DEFINED                   <- set by stage 33 Compute Var loc
+         426+     0  V.EXT      DEF       0            EXTENSION OF VARIABLE REGION (IS EVEN)   <- set by stage 33 Compute Var loc
+         427+     0  N.EXT      DEF       0            EXTENSION OF NUMBER REGION (IS EVEN)     <- set by stage 34 Storage Assign
+         428+     0  T.EXT      DEF       0            EXTENSION OF TEMP VARS REGION (IS EVEN)  <- set by stage 63 final assembly pass 3
+         429+     0  I.EXT      DEF       0            EXTENSION OF TOTAL INSTR OF PROGRAM      <- set by stage 63 final assembly pass 3
+         430+     0  P.EXT      DEF       0            EXTENSION (IS EVEN) OF PERISHABLE REGION <- set by stage 64 Scan Library
+         431+     0  IL.EXT     DEF       0            TOTAL STORAGE NEEDED BY ALL LIBRARIES    <- set by stage 64 Scan Library
+         432+     0  ROTBLAD    DEF       0            ABS LOCATION OF REGION ORIGIN TABLE      <- set by stage 65 Punch loader
+         433+     0  INIREG     DEF       0            ABS LOCATION OF 1ST REGION OF PACT PRG   <- set by stage 65 Punch loader
+         434+     0  LR.EXT     DEF       0            SPACE RESERVED FOR LOADER                <- set by stage 65 Punch loader
+         435+     0  DUMMY      DEF       0
+         436+   512  MAXNNUMS   DEF       512          MAX NUMBER OF NUMBERS THAT CAN BE DEFINED
+         437+     0  NNUMS      DEF       0            NUMBER OF NUMBERS IN NUMBER POOL
+         438+     0  NUM        DEF       0
+         439+     0  NUM2       DEF       0
+         440+   600  MAXNSYMB   DEF       600          MAX (600) SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+         441+     0  NSYMBS     DEF       0            NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+         442+     0  TSYMBREF   RES       600          GLOBAL SYMBOL TABLE: ALFA VALUE OF SYMBOLS REFERENCED. <0 IF NOT RESOLVED, >0 IF RESOLVED
+        1042+     0  TSYMBEXT   RES       600          EXTENSION (=SIZE) FOR DEFINED SYMBOLS
+        1642+     0  N          DEF       0
+        1643+     0  LOC        DEF       0
+        1644+     0  SY         DEF       0
+        1645+     0  EXT        DEF       0
+        1646+     0  FREEMEM    DEF       0
+        1647+     0  LDRSIZE    DEF       0            SIZE OF REL BINARY LOADER IN HALFWORDS 
+        1648+     0  ZERO       DEF       0
+        1649+     1  ONE        DEF       1
+        1650+     2  TWO        DEF       2
+        1651+     3  D3         DEF       3
+        1652+     4  D4         DEF       4
+        1653+     5  D5         DEF       5
+        1654+     6  D6         DEF       6
+        1655+    14  D14        DEF       14
+        1656+    16  D16        DEF       16
+        1657+    18  D18        DEF       18
+        1658+    48  D48        DEF       48
+        1659+  4094  D4094      DEF       4094
+        1660+  4096  OP1        DEF       *010000
+        1661- 66122  MSGSTART   TXT       "PUNCH LOADER AND CONTROL CARDS",0
+        1662- 35520  
+        1663- 56605  
+        1664- 37710  
+        1665-   650  
+        1666- 36879  
+        1667- 63488  
+        1668- 70440  
+        1669-   733  
+        1670- 69919  
+        1671+     0  
+        1672- 70416  MSGROTBL   TXT       "RO TBL      ABS LOC",0
+        1673- 74424  
+        1674-     0  
+        1675-     0  
+        1676- 30655  
+        1677-  1179  
+        1678- 34560  
+        1679+     0  
+        1680- 65971  MSGINIR    TXT       "PRG START   ABS LOC",0
+        1681-  1520  
+        1682- 31424  
+        1683-     0  
+        1684- 30655  
+        1685-  1179  
+        1686- 34560  
+        1687+     0  
+        1688- 78990  MSGVEXT    TXT       "VAR REGION  EXTENSION",0
+        1689-  1457  
+        1690- 44811  
+        1691- 59904  
+        1692- 40928  
+        1693- 40447  
+        1694- 49706  
+        1695+     0  
+        1696- 74569  MSGTEXT    TXT       "TEMP REGION EXTENSION",0
+        1697- 64542  
+        1698- 40101  
+        1699- 63456  
+        1700- 40928  
+        1701- 40447  
+        1702- 49706  
+        1703+     0  
+        1704- 61513  MSGNEXT    TXT       "NUM REGION  EXTENSION",0
+        1705-  1457  
+        1706- 44811  
+        1707- 59904  
+        1708- 40928  
+        1709- 40447  
+        1710- 49706  
+        1711+     0  
+        1712- 65358  MSGPEXT    TXT       "PERISHABLE  EXTENSION",0
+        1713- 49892  
+        1714- 30648  
+        1715- 39168  
+        1716- 40928  
+        1717- 40447  
+        1718- 49706  
+        1719+     0  
+        1720- 65151  MSGIEXT    TXT       "PACT PROG   EXTENSION",0
+        1721- 73756  
+        1722- 70435  
+        1723-     0  
+        1724- 40928  
+        1725- 40447  
+        1726- 49706  
+        1727+     0  
+        1728- 31128  MSGJEXT    TXT       "ALL LIBS    EXTENSION",0
+        1729-  1173  
+        1730- 33744  
+        1731-     0  
+        1732- 40928  
+        1733- 40447  
+        1734- 49706  
+        1735+     0  
+        1736- 69967  MSGLDRE    TXT       "RESERVED FOR LOADER",0
+        1737- 40642  
+        1738- 39936  
+        1739- 42798  
+        1740-  1179  
+        1741- 30737  
+        1742- 69120  
+        1743+     0  
+        1744- 31597  MSGFREE    TXT       "AVAILABLE STORAGE",0
+        1745- 49549  
+        1746- 33425  
+        1747-  1520  
+        1748- 63661  
+        1749- 44592  
+        1750+     0  
+        1751- 72987  MSGMEMOV   TXT       "STORAGE OVERFLOW",0
+        1752- 69763  
+        1753- 39195  
+        1754- 79182  
+        1755- 42651  
+        1756- 80640  
+        1757+     0  
+        1758+15 1772 CLRBUF   + LOAD MQ   IOCL
+        1759+14 1777          + STORE MQ  BUFIO
+        1760+15 1798          + LOAD MQ   IOSTORE         
+        1761+ 1 1769          + TR        INIT2
+        1762+15 1794 READCRD  + LOAD MQ   IORDCRD
+        1763+ 1 1767          + TR        INIT1
+        1764+15 1796 WRITECRD + LOAD MQ   IOWRCRD
+        1765+ 1 1767          + TR        INIT1
+        1766+15 1797 PRINTCRD + LOAD MQ   IOPRCRD
+        1767+14 1777 INIT1    + STORE MQ  BUFIO
+        1768+15 1795          + LOAD MQ   IOCOPY         
+        1769+14 1778 INIT2    + STORE MQ  BUFROW
+        1770+ 9 1804          + ADD       TWO          
+        1771+13 1793          + STORE A   EXIT
+        1772+10 1800 IOCL     + R ADD     ZERO         RESET TO INITIAL COPY LOOP ADDRESS     
+        1773+13 1778          + STORE A   BUFROW       FOR BUFFER
+        1774+10 1778          + R ADD     BUFROW       X .*echo Print
+        1775+ 5 1805          + SUB       D48          X 
+        1776+12 1802          + STORE     ENDLP        X LOOP END VALUE
+        1777- 0    0   BUFIO  - STOP      /   /        READ OR WRITE
+        1778-31    0   BUFROW - COPY      /   /        COPY WORD TO/FROM PRINTER/CARDREADER
+        1779+ 1 1783          + TR        BUFOK2       NORMAL PROCESSING 
+        1780+ 1 1790          + TR        EODECK       FOR COPY READING END OF REG (=END OF DECK BEING READ)
+        1781+ 6 1804          + R SUB     TWO          END OF FILE -> NO CARD TO READ -> STOP with Acc=-2
+        1782+ 0 1777          + STOP      BUFIO        ON PRESSING START RETRY CARD READ
+        1783+10 1778   BUFOK2 + R ADD     BUFROW       X
+        1784+ 5 1804          + SUB       TWO          INCR BUF ADDR
+        1785+13 1778          + STORE A   BUFROW       X
+        1786+ 5 1802          + SUB       ENDLP        CHECK FOR END
+        1787+ 4 1792          + TR 0      ENDIO
+        1788+10 1800          + R ADD     ZERO         CLEAR ACC IN CASE WE ARE CLEANING THE BUFFER
+        1789+ 1 1778          + TR        BUFROW
+        1790+10 1803 EODECK   + R ADD     ONE          SET OV FLAG TO SIGNAL END OF DECK CONDITION
+        1791+22   36          + A LEFT    36
+        1792+26 2052 ENDIO    + WRITE     2052         END OF I/O: INSURE THAT MQ NOT IN USE            
+        1793+ 1    0 EXIT     + TR        /   /
+        1794+24 2048 IORDCRD  + READ      2048         PREPARE TO READ FROM CARD READER
+        1795-31    0 IOCOPY   - COPY      /   /   
+        1796+26 1024 IOWRCRD  + WRITE     1024         PREPARE TO PUNCH CARD 
+        1797+26  512 IOPRCRD  + WRITE     0512         PREPARE WRITE PRTBUF ON PRINTER
+        1798-12    0 IOSTORE  - STORE     /   /        CLEAR BUFFER
+        1799+     0             ORG       EVEN           
+        1800+     0  ZERO       DEF       0            
+        1801+     0             DEF       0            
+        1802+     0  ENDLP      DEF       0            LOOP END VALUE
+        1803+     1  ONE        DEF       1
+        1804+     2  TWO        DEF       2
+        1805+    48  D48        DEF       48
+        1806+ 9 2077 PRTPARM2 + ADD       TWO          GET 2 PARAMS: LEN AND COL (EITHER VALUE OR VAR ADDR)
+        1807+13 1826          + STORE A   PRTPRMEX
+        1808+10 1816          + R ADD     PRTP1
+        1809+ 9 2077          + ADD       TWO          PRINT PACKED TEXT FROM FULL-WORD VALUE IN MQ REGISTER 
+        1810+13 1816          + STORE A   PRTP1        STORE ADDR OF FIRST PARAM (LEN)
+        1811+ 9 2076          + ADD       ONE
+        1812+13 1818          + STORE A   PRTP2        STORE ADDR OF SECOND PARAM (COL)
+        1813+ 9 2076          + ADD       ONE
+        1814+13 1893          + STORE A   EXIT
+        1815-14 2066          - STORE MQ  NUM          SAVE VALUE TO PRINT PARAM MQ (NUM IS ALIASED TO TXT)
+        1816+10    0   PRTP1  + R ADD     /   /        GET LEN: NUMBER OF CHARS TO PRINT (1..6)
+        1817+12 2070          + STORE     LEN
+        1818+10    0   PRTP2  + R ADD     /   /        GET COLUMN PARAM 1..72
+        1819+ 3 1822          + TR +      PRTP4
+        1820+13 1821          + STORE A   PRTP3        COL<0 -> INTERPRET COL AS LOC(COL) = ADDR OF COL VAR
+        1821+10    0   PRTP3  + R ADD     /   /        READ VAR COL PASED AS PARAM
+        1822+ 4 1893   PRTP4  + TR 0      EXIT         COL=0 -> EXIT
+        1823+ 3 1825          + TR +      PRTP5
+        1824+ 1 1893          + TR        EXIT         COL<0 -> EXIT
+        1825+12 1876   PRTP5  + STORE     COL
+        1826+ 1    0 PRTPRMEX + TR        /   /        RETURN TO CALLER
+        1827+13 1816 PRTSTR   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+        1828+10 1828          + R ADD     *            FOR PRINT STRINGZ FROM MEM
+        1829+ 1 1806          + TR        PRTPARM2
+        1830+12 1840          + STORE     COLSZ
+        1831+10 2070          + R ADD     LEN          LEN IS IN FACT THE LOCATION WHERE THE STRING STARTS
+        1832+13 1835          + STORE A   STRZAD
+        1833+10 1893          + R ADD     EXIT
+        1834+13 1848          + STORE A   STRZEX
+        1835+10    0 STRZAD   + R ADD     /   /        GET HALF-WORD WITH NEXT 3 CHARS TO PRINT
+        1836+ 4 1848          + TR 0      STRZEX       IF +0 -> END OF STRING (-0 DOES NOT TERMINATES THE STRING)
+        1837+21   35          + L RIGHT   0035         MQ=3-CHARS TO PRINT
+        1838+10 1838          + R ADD     *            
+        1839+ 1 1850          + TR        PRTALF       PRINT 3 CHARS
+        1840+ 0    0 COLSZ    + STOP      0000         COL 
+        1841+10 1835 STRZ1    + R ADD     STRZAD       INCR STRING ADDRESS
+        1842+ 9 2076          + ADD       ONE
+        1843+13 1835          + STORE A   STRZAD
+        1844+10 1840          + R ADD     COLSZ        INCR COLUMN
+        1845+ 9 2078          + ADD       D3
+        1846+13 1840          + STORE A   COLSZ
+        1847+ 1 1835          + TR        STRZAD
+        1848+ 3    0 STRZEX   + TR +      /   /        IF ZERO -> END OF STRING
+        1849+ 1 1841          + TR        STRZ1
+        1850+ 9 2077 PRTALF   + ADD       TWO          PRINT 3-PACKED CHARS IN MQ REGISTER 
+        1851+14 2072          + STORE MQ  TXT          SAVE TEXT TO PRINT (IN LEFT HALF WORD)
+        1852+13 1855          + STORE A   PRTAP2       STORE ADDR OF PARAM (COL)
+        1853+ 9 2076          + ADD       ONE
+        1854+13 1893          + STORE A   EXIT
+        1855+10    0   PRTAP2 + R ADD     /   /        GET COLUMN NUMBER PARAM 1..72
+        1856+ 3 1859          + TR +      PRTAP4
+        1857+13 1858          + STORE A   PRTAP3       COL<0 -> INTERPRET COL AS L(COL) = ADDR OF COL VAR
+        1858+10    0   PRTAP3 + R ADD     /   /        READ VAR COL PASED AS PARAM
+        1859+12 1876   PRTAP4 + STORE     COL
+        1860+10 2078          + R ADD     D3
+        1861+12 2070          + STORE     LEN
+        1862+10 2060 PRT1     + R ADD     ZERO         UNPACK LEFTMOST CHAR 
+        1863+11 2072          + ADD AB    TXT          GET TEXT DISCARD SIGN
+        1864+21   35          + L RIGHT   0035         MQ=Acc
+        1865+10 2060          + R ADD     ZERO
+        1866+18 2085          + DIV       D48X48
+        1867+12 2072          + STORE     TXT          remainder=char to print, mq=c2 * 48 + c3 in right half-word
+        1868+10 2060          + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW BIT SET
+        1869+20   18          + L LEFT    0018         put c2 and c3 in left half-word of MQ to be saved in CHAR half word
+        1870+14 2071          + STORE MQ  CHAR         CHAR TO PRINT
+        1871+10 2071          + R ADD     CHAR 
+        1872+ 4 1877          + TR 0      NXTCHR       IF BLANK PROCEED TO NEXT COL
+        1873+21   35          + L RIGHT   0035         MQ=CHAR TO PRINT
+        1874+10 1874          + R ADD     *            PRINT CHAR
+        1875+ 1 1970          + TR        PRTCHR
+        1876+ 0    0 COL      + STOP      0000         COL: COLUMN NUMBER TO PRINT (1..72)
+        1877+10 2070 NXTCHR   + R ADD     LEN          DECR LEN COUNT
+        1878+ 5 2076          + SUB       ONE
+        1879+12 2070          + STORE     LEN
+        1880+ 4 1893          + TR 0      EXIT         IF NO MORE CHARS TO PRINT EXIT
+        1881+10 1876          + R ADD     COL          INCR COL POSITION
+        1882+ 9 2076          + ADD       ONE
+        1883+12 1876          + STORE     COL
+        1884+ 5 2084          + SUB       D72          IF COL > 72 RETURN TO CALLER
+        1885+ 4 1887          + TR 0      GNXTCHR      ELSE PROCEED WITH NEXT CHAR
+        1886+ 3 1893          + TR +      EXIT
+        1887+10 2060 GNXTCHR  + R ADD     ZERO         GET NEXT CHAR 
+        1888+15 2072          + LOAD MQ   TXT
+        1889+16 2083          + MPY       D48
+        1890+22   17          + A LEFT    0017         GET RESULT IN LEFT HALF-WORD OF ACC
+        1891+12 2072          + STORE     TXT
+        1892+ 1 1862          + TR        PRT1         PROCEED TO PRINT CHAR
+        1893+ 1    0 EXIT     + TR        /   /        RETURN TO CALLER
+        1894+13 1816 PRTOCT   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+        1895+10 1895          + R ADD     *            FOR PRINT OCTIONARY VALUE
+        1896+ 1 1806          + TR        PRTPARM2
+        1897+10 2070          + R ADD     LEN          LEN = OCTAL DIGITS TO PRINT
+        1898+ 9 1876          + ADD       COL
+        1899+ 5 2076          + SUB       ONE
+        1900+12 1912          + STORE     COLN         COL POINTS TO LEAST SIGNIFICANT DIGIT
+        1901+10 2066 PRTIOCG  + R ADD     NUM          GENERATE OCTINARY DIGIT
+        1902+15 2060          + LOAD MQ   ZERO         CLEAR MQ
+        1903+21   21          + L RIGHT   0021         3 LSB BITS OF LEFT HALF-WORD OF ACC TO MQ
+        1904+22   18          + A LEFT    0018         BACK TO LEFT HALF OF ACC (BIT SHIFTED RIGHT 3 BIT)
+        1905+12 2066          + STORE     NUM          SAVE BACK NUM WITH RIGHTMOST OCTIONARY DIGIY EXTRACTED (NUM'=NUM/8)
+        1906+10 2060          + R ADD     ZERO
+        1907+20   21          + L LEFT    0021         LEFT HALF-WORD OF ACC IS NOW RIGHTMOST OCTINARY DIGIT EXTRACTED FROM NUM 
+        1908+ 4 1926          + TR 0      PRTIOZ       TR IF THIS DIGIT IS ZERO TO PRINT A '0' (BASE48 CODE = 10) INSTEAD OF A BLANK (BASE48 CODE = 0)
+        1909+21   35          + L RIGHT   0035         PUT DIGIT 1..9 TO PRINT IN MQ
+        1910+10 1910 PRTOCTD  + R ADD     *            PRINT OCTINARY DIGIT
+        1911+ 1 1970          + TR        PRTCHR
+        1912+ 0    0 COLN     + STOP      0000
+        1913+10 1912          + R ADD     COLN        DECR COL NUMBER TO PRINT NEXT DIGIT
+        1914+ 5 2076          + SUB       ONE
+        1915+12 1912          + STORE     COLN
+        1916+10 2070          + R ADD     LEN          DECR COL NUMBER TO PRINT NEXT DIGIT
+        1917+ 5 2076          + SUB       ONE
+        1918+ 4 1893          + TR 0      EXIT         PRINTED LEN OCTINARY DIGITS -> EXIT
+        1919+12 2070          + STORE     LEN
+        1920+10 2066          + R ADD     NUM          IF NUM < 0, ADD SIGN BIT TO LEFTMOST DIGIT
+        1921+ 3 1901          + TR +      PRTIOCG
+        1922+10 2086          + R ADD     OCT04K       
+        1923+ 5 2066          + SUB       NUM
+        1924+12 2066          + STORE     NUM
+        1925+ 1 1901          + TR        PRTIOCG
+        1926+15 2079   PRTIOZ + LOAD MQ   D10          ACC=BASE48 CODE FOR '0'
+        1927+ 1 1910          + TR        PRTOCTD      TR TO PRINT IT
+        1928+13 1816 PRTINT   + STORE A   PRTP1        PARSE PRINT PARAMS LEN AND COL
+        1929+10 1929          + R ADD     *            FOR PRINT OCTIONARY VALUE
+        1930+ 1 1806          + TR        PRTPARM2
+        1931+10 1876          + R ADD     COL          PRINT DECIMAL NUMBER. VALUE OF LEN = DIGITS TO PRINT, NOT INCLUDING SIGN
+        1932+ 9 2070          + ADD       LEN
+        1933+ 5 2076          + SUB       ONE          
+        1934+12 1955          + STORE     COLNI        COL POINTS TO END OF NUMBER
+        1935+10 2060          + R ADD     ZERO
+        1936+12 2069          + STORE     SGN          SIGN IS POSITIVE
+        1937+10 2066          + R ADD     NUM
+        1938+ 3 1943          + TR +      PRTINTG
+        1939+ 6 2066          + R SUB     NUM          NUM IS NEGATIVE. CONVERT TO POSITIVE
+        1940+12 2066          + STORE     NUM          AND SET SGN=1
+        1941+10 2076          + R ADD     ONE
+        1942+12 2069          + STORE     SGN          
+        1943+10 2066 PRTINTG  + R ADD     NUM          GENERATE DECIMAL DIGIT
+        1944+21   35          + L RIGHT   0035         MQ=Acc
+        1945+10 2060          + R ADD     ZERO
+        1946+18 2079          + DIV       D10
+        1947+ 4 1968          + TR 0      PRTINZ
+        1948+12 2071 PRTINTG2 + STORE     CHAR         acc=remainder=digit to print, mq=num/10
+        1949+10 2060          + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW BIT SET
+        1950+20   18          + L LEFT    0018         digit in left half-word of MQ to be saved in CHAR half word
+        1951+14 2066          + STORE MQ  NUM 
+        1952+15 2071          + LOAD MQ   CHAR 
+        1953+10 1953 PRTINTD  + R ADD     *            PRINT DECIMAL DIGIT
+        1954+ 1 1970          + TR        PRTCHR
+        1955+ 0    0 COLNI    + STOP      0000
+        1956+10 1955          + R ADD     COLNI        DECR COL NUMBER TO PRINT NEXT DIGIT
+        1957+ 5 2076          + SUB       ONE
+        1958+12 1955          + STORE     COLNI
+        1959+10 2066          + R ADD     NUM          DO NOT CARE ABOUT LEN, JUST CHECK IF NUM=0 
+        1960+ 4 1962          + TR 0      PRTINS       (SO NO MORE DIGITS REMAINS TO BE PRINTED)
+        1961+ 1 1943          + TR        PRTINTG      NUM NOT FINISHED, PROCEED WITH NEXT DIGIT
+        1962+10 2069 PRTINS   + R ADD     SGN
+        1963+ 4 1893          + TR 0      EXIT         NO SIGN -> NUM FINISHED
+        1964+10 2060          + R ADD     ZERO
+        1965+12 2069          + STORE     SGN          CLEAR SGN FLAG
+        1966+15 2080          + LOAD MQ   D11          BASE48 CODE FOR '-' (MINUS) CHAR
+        1967+ 1 1953          + TR        PRTINTD      GO TO PRINT IT
+        1968+10 2079   PRTINZ + R ADD     D10          ACC=BASE48 CODE FOR '0'
+        1969+ 1 1948          + TR        PRTINTG2     TR TO PRINT IT
+        1970+ 9 2077 PRTCHR   + ADD       TWO          PRINT CHAR IN MQ REGISTER 
+        1971+14 2071          + STORE MQ  CHAR         SAVE CHAR TO PRINT (IN LEFT HALF WORD)
+        1972+13 1976          + STORE A   PRTCP2       STORE ADDR OF PARAM (COL)
+        1973+ 9 2076          + ADD       ONE
+        1974+13 2054          + STORE A   PRTCEX
+        1975+ 2 1976          + TR OV     PRTCP2       CLEAR OV JUST IN CASE
+        1976+10    0   PRTCP2 + R ADD     /   /        GET COLUMN NUMBER PARAM 1..72
+        1977+ 3 1980          + TR +      PRTCP4
+        1978+13 1979          + STORE A   PRTCP3       COL<0 -> INTERPRET COL AS L(COL) = ADDR OF COL VAR
+        1979+10    0   PRTCP3 + R ADD     /   /        READ VAR COL PASED AS PARAM
+        1980+ 5 2076   PRTCP4 + SUB       ONE
+        1981+12 2074          + STORE     N            N=COL-1 -> IN RANGE 0..71
+        1982+ 3 1984          + TR +      PRTSA        IF N >= 0 PROCEED WITH BASE BUFFER ADDR CALCULATION
+        1983+ 1 2054          + TR        PRTCEX       IF N<0 EXIT
+        1984+10 2060    PRTSA + R ADD     ZERO         CARD BUFFER USES LOCATION 0..47
+        1985+13 2073          + STORE A   PRTROWAD     DETERMINE ADDRESS OF LOWER ROW TO PRINT
+        1986+10 2074          + R ADD     N
+        1987+ 5 2082          + SUB       D36
+        1988+ 3 1990          + TR +      PRTC0
+        1989+ 1 1996          + TR        PRTC1
+        1990+12 2074    PRTC0 + STORE     N            COL NOW 0..35 
+        1991+ 5 2082          + SUB       D36
+        1992+ 3 2054          + TR +      PRTCEX       IF COL >= 36 (IE COL PASSED AS PARAM > 72) THEN EXIT
+        1993+10 2073          + R ADD     PRTROWAD
+        1994+ 9 2077          + ADD       TWO
+        1995+13 2073          + STORE A   PRTROWAD     SET BASE BUFFER ADDR 
+        1996+10 2076    PRTC1 + R ADD     ONE          DETERMINE MASKCOL WITH MASK TO SET IN CARD BUFFER
+        1997+21   53          + L RIGHT   53           SET RIGHTMOST BIT OF MQ TO 1 (SHIFT 35+18=53)
+        1998+10 2081          + R ADD     D35
+        1999+ 5 2074          + SUB       N
+        2000+13 2002          + STORE A   PRTC2
+        2001+10 2060          + R ADD     ZERO         CLEAR ACC TO AVOID OVERFLOW
+        2002+20    0    PRTC2 + L LEFT    /   /        SHIFT MQ LEFT N PLACES
+        2003+ 4 2006          + TR 0      PRTC3        IF ACC STILL ZERO -> MASKCOL VALID
+        2004+ 6 2076          + R SUB     ONE          ACC NOT ZERO -> SHOULD GENERATE -0 TO SET SIGN BIT ON
+        2005+21   72          + L RIGHT   0072         NOW MQ = -0 -> LEFTMOST BIT OF MQ SET
+        2006-14 2062    PRTC3 - STORE MQ  MASKCOL
+        2007+10 2060          + R ADD     ZERO         READ THE BITMAP OF CHAR 
+        2008+11 2071          + ADD AB    CHAR         DISCARD SIGN OF CHAR, IF ANY
+        2009+12 2071          + STORE     CHAR
+        2010+ 5 2083          + SUB       D48
+        2011+ 3 2054          + TR +      PRTCEX       IF CHAR >= 48 EXIT
+        2012+10 2068          + R ADD     BITMAPAD     IF ADDR OF BASE48 BITMAP NOT COMPUTED
+        2013+ 4 2055          + TR 0      GETBMP1      TR TO LOAD IT
+        2014+ 9 2071  GETBMP2 + ADD       CHAR         READ THE BITMAP OF CHAR 
+        2015+13 2016          + STORE A   PRTC4        INDICATES THE BITS TO SET IN SELECTED 
+        2016+10    0    PRTC4 + R ADD     /   /        COLUMN OF CARD BUFFER 
+        2017+12 2075          + STORE     BITS
+        2018+ 6 2076          + R SUB     ONE
+        2019+12 2074          + STORE     N            SET TO -1
+        2020+10 2074    LOOP1 + R ADD     N            CURRENT ROW (STARTS AT ZERO) = OFFSET ON PRTROWAD     
+        2021+ 9 2076          + ADD       ONE
+        2022+12 2074          + STORE     N
+        2023+10 2075          + R ADD     BITS         EXTRACT RIGHTMOST BIT OF LEFT HALF OF ACC TO MQ
+        2024+ 4 2054          + TR 0      PRTCEX       NO MORE BITS -> EXIT
+        2025+21   19          + L RIGHT   0019         LSB BIT OF LEFT HALF-WORD OF ACC TO MQ
+        2026+22   18          + A LEFT    0018         BACK TO LEFT HALF OF ACC (BIT SHIFTED RIGHT 1 BIT)
+        2027+12 2075          + STORE     BITS         SAVE BACK BITS. LSB HAS BEEN EXTACTED, CONTENTS SHIFTED RIGHT ONE PLACE
+        2028+10 2060          + R ADD     ZERO
+        2029+20    1          + L LEFT    0001         PUT EXTACTED BIT BACK INTO ACC
+        2030+ 4 2020          + TR 0      LOOP1        NO BIT 
+        2031+10 2074          + R ADD     N            READ THE ROW N AT CARD BUFFER 
+        2032+22    2          + A LEFT    0002         MULT N BY 4 AS THERE ARE 4 HALF WORDS PER ROW
+        2033+ 9 2073          + ADD       PRTROWAD     
+        2034+13 2036          + STORE A   PRTROWR
+        2035+13 2052          + STORE A   PRTROWW
+        2036-10    0  PRTROWR - R ADD     /   /        
+        2037-12 2064          - STORE     ROW          CURRENT CONTENTS OF ROW
+        2038-10 2062          - R ADD     MASKCOL      "OR" MASKCOL IN SELECTED ROW
+        2039+ 3 2047          + TR +      PRTW2
+        2040-10 2064          - R ADD     ROW 
+        2041+ 4 2045          + TR 0      PRTW1         
+        2042+10 2060          + R ADD     ZERO         MASKCOL IS MINUS ZERO AND ROW IS NOT-EMPTY (EITHER POSITIVE OR NEGATIVE) -> SET ROW AS NEGATIVE
+        2043- 7 2064          - SUB AB    ROW 
+        2044+ 1 2052          + TR        PRTROWW
+        2045-10 2062    PRTW1 - R ADD     MASKCOL      MASKCOL IS MINUS ZERO AND ROW IS EMPTY -> SET ROW = MASKCOL = MINUS ZERO
+        2046+ 1 2052          + TR        PRTROWW
+        2047-10 2064    PRTW2 - R ADD     ROW          
+        2048+ 3 2051          + TR +      PRTW3              
+        2049- 5 2062          - SUB       MASKCOL      MASKCOL IS POSITIVE AND ROW IS NEGATIVE -> SUB MASKCOL FROM ROW
+        2050+ 1 2052          + TR        PRTROWW
+        2051- 9 2062    PRTW3 - ADD       MASKCOL      MASKCOL IS POSITIVE AND ROW IS POSITIVE OR EMPTY -> ADD MASKCOL TO ROW         
+        2052-12    0  PRTROWW - STORE     /   /        ROW UPDTATE
+        2053+ 1 2020          + TR        LOOP1        PROCEED TO NEXT ROW
+        2054+ 1    0 PRTCEX   + TR        /   /
+        2055+10 2055 GETBMP1  + R ADD     *
+        2056+ 1   89          + TR        BMPAD        GET BASE48 CHARS BITMAP ADDRESS
+        2057+12 2068          + STORE     BITMAPAD     
+        2058+ 1 2014          + TR        GETBMP2      RETURN
+        2059+     0             ORG       EVEN
+        2060+     0  ZERO       DEF       0            
+        2061+     0             DEF       0            
+        2062+     0  MASKCOL    DEF       0
+        2063+     0             DEF       0
+        2064+     0  ROW        DEF       0
+        2065+     0             DEF       0
+        2066+     0  NUM        DEF       0
+        2067+     0             DEF       0
+        2068+     0  BITMAPAD   DEF       0
+        2069+     0  SGN        DEF       0
+        2070+     0  LEN        DEF       0
+        2071+     0  CHAR       DEF       0
+        2072+     0  TXT        DEF       0
+        2073+     0  PRTROWAD   DEF       0
+        2074+     0  N          DEF       0
+        2075+     0  BITS       DEF       0
+        2076+     1  ONE        DEF       1
+        2077+     2  TWO        DEF       2
+        2078+     3  D3         DEF       3
+        2079+    10  D10        DEF       10
+        2080+    11  D11        DEF       11
+        2081+    35  D35        DEF       35
+        2082+    36  D36        DEF       36
+        2083+    48  D48        DEF       48
+        2084+    72  D72        DEF       72
+        2085+  2304  D48X48     DEF       2304
+        2086+ 16384  OCT04K     DEF       *040000      BIT SIGN ON 5TH OCTINARY DIGIT
+        2088+ 9 2163 PRTNLINE + ADD       TWO          PRINT A NEW LINE OF DATA
+        2089+12 2166          + STORE     PARAM        SAVE PARAM LIST ADDR
+        2090+10 2090          + R ADD     *            CLEAR CARD BUFFER
+        2091+ 1   51          + TR        CLRBUF 
+        2092+10 2166 GPARAM   + R ADD     PARAM        GET PARAM PAIR FMT/DATA
+        2093+13 2098          + STORE A   P1
+        2094+ 9 2162          + ADD       ONE
+        2095+13 2102          + STORE A   P2
+        2096+ 9 2162          + ADD       ONE
+        2097+12 2166          + STORE     PARAM
+        2098+10    0 P1       + R ADD     /   /
+        2099+12 2168          + STORE     FMT
+        2100+ 3 2102          + TR +      P2           IF FMT < 0 THEM SKIP THIS PAIR FMT/DATA
+        2101+ 1 2092          + TR        GPARAM
+        2102+10    0 P2       + R ADD     /   /
+        2103+12 2128          + STORE     DATALOC      GET DATA ADDRESS PASED AS PARAM
+        2104+13 2105          + STORE A   P2A
+        2105+10    0 P2A      + R ADD     /   /
+        2106+12 2167          + STORE     DATA         GET EFFECTIVE DATA
+        2107+10 2161          + R ADD     ZERO
+        2108+15 2168          + LOAD MQ   FMT
+        2109+18 2165          + DIV       D100         ACC=REMAINDER=COL NUMBER, MQ=QUOTIEN=TYPE OF DATA
+        2110+12 2169          + STORE     COL
+        2111+10 2161          + R ADD     ZERO
+        2112+20   18          + L LEFT    0018
+        2113+14 2168          + STORE MQ  FMT
+        2114+15 2167          + LOAD MQ   DATA
+        2115+10 2119          + R ADD     TYPETRAD
+        2116+ 9 2168          + ADD       FMT
+        2117+13 2118          + STORE A   TYPETR
+        2118+ 1    0 TYPETR   + TR        /   /        TR SELECTED ROUTINE
+        2119+ 0 2120 TYPETRAD + STOP      TYPETRT      TYPE TRANSFER TABLE ADDRESS
+        2120+ 1 2149 TYPETRT  + TR        EOL          FMT=0..6 (IE <100) -> END OF PARAM LIST -> END OF LINE 
+        2121+ 1 2126          + TR        TYSTR        FMT=1 -> PRINT A STRINGZ
+        2122+ 1 2131          + TR        TYINT        FMT=2 -> PRINT AN INT
+        2123+ 1 2136          + TR        TYOCT        FMT=3 -> PRINT AN OCT
+        2124+ 1 2141          + TR        TYCHR        FMT=4 -> PRINT A CHAR
+        2125+ 1 2145          + TR        TYALF        FMT=5 -> PRINT A 3-CHR PACKED ALFA STRING
+        2126+10 2126 TYSTR    + R ADD     *            PRINT STRINGZ
+        2127+ 1   75          + TR        PRTSTR
+        2128+ 0    0 DATALOC  + STOP      /   /
+        2129- 0 2169          - STOP      COL          COLUMN WHERE TXT STARTS
+        2130+ 1 2092          + TR        GPARAM
+        2131+10 2131 TYINT    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+        2132+ 1   79          + TR        PRTINT
+        2133+ 0    6          + STOP      0006         UP TO 6 DECIMAL DIGITS 
+        2134- 0 2169          - STOP      COL          COLUMN WHERE TXT STARTS
+        2135+ 1 2092          + TR        GPARAM
+        2136+10 2136 TYOCT    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+        2137+ 1   81          + TR        PRTOCT
+        2138+ 0    6          + STOP      0006         UP TO 6 DECIMAL DIGITS 
+        2139- 0 2169          - STOP      COL          COLUMN WHERE TXT STARTS
+        2140+ 1 2092          + TR        GPARAM
+        2141+10 2141 TYCHR    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+        2142+ 1   77          + TR        PRTCHR
+        2143- 0 2169          - STOP      COL          COLUMN WHERE TXT STARTS
+        2144+ 1 2092          + TR        GPARAM
+        2145+10 2145 TYALF    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+        2146+ 1   73          + TR        PRTALF
+        2147- 0 2169          - STOP      COL          COLUMN WHERE TXT STARTS
+        2148+ 1 2092          + TR        GPARAM
+        2149+10 2169 EOL      + R ADD     COL          SEND CARD BUFFER TO PRINTER AND RETURN TO CALLER
+        2150+ 4 2155          + TR 0      DOPRINT      =0 -> PRINT ALLWAYS (NO SENSE SW CHECK)
+        2151+ 9 2164          + ADD       D68          =1..6 -> SENSE 69..74 = OPERATOR'S PANEL SENSE SWITCH 1..6
+        2152+13 2153          + STORE A   CHKSW
+        2153+30    0 CHKSW    + SENSE     /   /         
+        2154+ 1 2157          + TR        RETURN       SW NOT AT ON POSITION
+        2155+10 2155 DOPRINT  + R ADD     *            PRINT CARD BUFFER
+        2156+ 1   69          + TR        PRINTCRD
+        2157+10 2166 RETURN   + R ADD     PARAM        PARAM-1 IS THE RETURN ADDR      
+        2158+ 5 2162          + SUB       ONE
+        2159+13 2160          + STORE A   EXIT
+        2160+ 1    0 EXIT     + TR        /   /        RETURN TO CALLER
+        2161+ 0    0 ZERO     + STOP      0000
+        2162+ 0    1 ONE      + STOP      0001
+        2163+ 0    2 TWO      + STOP      0002
+        2164+ 0   68 D68      + STOP      0068
+        2165+ 0  100 D100     + STOP      100
+        2166+ 0    0 PARAM    + STOP      0000
+        2167+ 0    0 DATA     + STOP      0000
+        2168+ 0    0 FMT      + STOP      0000
+        2169+ 0    0 COL      + STOP      0000
+        2170+ 9 2184 BMPAD    + ADD       TWO
+        2171+13 2173          + STORE A   EXIT
+        2172+10 2174          + R ADD     BITMAPAD
+        2173+ 1    0 EXIT     + TR        /   /
+        2174+ 0 2176 BITMAPAD + STOP      BITMAP
+        2175+     0             ORG       EVEN
+        2176+     0  BITMAP     DEF       0              <blank>     0     <none>
+        2177+   256             DEF       256               1        1       1        256          =  256   
+        2178+   128             DEF       128               2        2       2        128          =  128   
+        2179+    64             DEF       64                3        3       3         64          =   64   
+        2180+    32             DEF       32                4        4       4         32          =   32   
+        2181+    16             DEF       16                5        5       5         16          =   16   
+        2182+     8             DEF       8                 6        6       6          8          =    8   
+        2183+     4             DEF       4                 7        7       7          4          =    4   
+        2184+     2  TWO        DEF       2                 8        8       8          2          =    2   
+        2185+     1             DEF       1                 9        9       9          1          =    1   
+        2186+   512             DEF       512               0       10       0        512          =  512   
+        2187+  1024             DEF       1024              -       11       X       1024          = 1024   
+        2188+  2048             DEF       2048              +       12       Y       2048          = 2048   
+        2189+  2304             DEF       2304              A       13      Y-1        256+2048    = 2304   
+        2190+  2176             DEF       2176              B       14      Y-2        128+2048    = 2176   
+        2191+  2112             DEF       2112              C       15      Y-3         64+2048    = 2112   
+        2192+  2080             DEF       2080              D       16      Y-4         32+2048    = 2080   
+        2193+  2064             DEF       2064              E       17      Y-5         16+2048    = 2064   
+        2194+  2056             DEF       2056              F       18      Y-6          8+2048    = 2056   
+        2195+  2052             DEF       2052              G       19      Y-7          4+2048    = 2052   
+        2196+  2050             DEF       2050              H       20      Y-8          2+2048    = 2050   
+        2197+  2049             DEF       2049              I       21      Y-9          1+2048    = 2049   
+        2198+  1280             DEF       1280              J       22      X-1        256+1024    = 1280   
+        2199+  1152             DEF       1152              K       23      X-2        128+1024    = 1152   
+        2200+  1088             DEF       1088              L       24      X-3         64+1024    = 1088   
+        2201+  1056             DEF       1056              M       25      X-4         32+1024    = 1056   
+        2202+  1040             DEF       1040              N       26      X-5         16+1024    = 1040   
+        2203+  1032             DEF       1032              O       27      X-6          8+1024    = 1032   
+        2204+  1028             DEF       1028              P       28      X-7          4+1024    = 1028   
+        2205+  1026             DEF       1026              Q       29      X-8          2+1024    = 1026   
+        2206+  1025             DEF       1025              R       30      X-9          1+1024    = 1025   
+        2207+   640             DEF       640               S       31      0-2        128+512     = 640    
+        2208+   576             DEF       576               T       32      0-3         64+512     = 576    
+        2209+   544             DEF       544               U       33      0-4         32+512     = 544    
+        2210+   528             DEF       528               V       34      0-5         16+512     = 528    
+        2211+   520             DEF       520               W       35      0-6          8+512     = 520    
+        2212+   516             DEF       516               X       36      0-7          4+512     = 516    
+        2213+   514             DEF       514               Y       37      0-8          2+512     = 514    
+        2214+   513             DEF       513               Z       38      0-9          1+512     = 513    
+        2215+   578             DEF       578               ,       39      8-3-0        2+64+512  = 578    
+        2216+   546             DEF       546               %       40      8-4-0        2+32+512  = 546    
+        2217+  1090             DEF       1090              $       41      8-3-X        2+64+1024 = 1090   
+        2218+  1058             DEF       1058              *       42      8-4-X        2+32+1024 = 1058   
+        2219+  2114             DEF       2114              .       43      8-3-Y        2+64+2048 = 2114   
+        2220+  2082             DEF       2082              #       44      8-4-Y        2+32+2048 = 2082   
+        2221+   768             DEF       768               /       45      0-1          512+256   = 768    
+        2222+    66             DEF       66                +       46      8-3          2+64      = 66     
+        2223+    34             DEF       34                -       47      8-4          2+32      = 34    This is the non-minus-sign separator
+        2224+ 9 2243 WRITECR2 + ADD       TWO          WRITE CARD (SEND CARD BUFFER TO CARD PUNCH DEVICE)
+        2225+13 2228          + STORE A   WRP1         PARAM: ADDRESS OF BUFFER TO SEND TO PUNCH (MUST BE EVEN)
+        2226+ 9 2242          + ADD       ONE
+        2227+13 2239          + STORE A   EXIT         USE A WRITE-COPY LOOP TO PUNCH GIVEN CARD BUFFER AS PARAM 
+        2228+10    0 WRP1     + R ADD     /   /
+        2229+13 2234          + STORE A   BUFROW
+        2230+26 1024          + WRITE     1024         PREPARE TO PUNCH CARD 
+        2231+10 2234          + R ADD     BUFROW        
+        2232+ 5 2244          + SUB       D48           
+        2233+12 2241          + STORE     ENDLP        LOOP END VALUE
+        2234-31    0   BUFROW - COPY      /   /        COPY WORD TO CARDPUNCH
+        2235+10 2234          + R ADD     BUFROW       
+        2236+ 5 2243          + SUB       TWO          INCR BUF ADDR
+        2237+13 2234          + STORE A   BUFROW       
+        2238+ 5 2241          + SUB       ENDLP        CHECK FOR END
+        2239+ 4    0 EXIT     + TR 0      /   /        RETURN TO CALLER
+        2240+ 1 2234          + TR        BUFROW
+        2241+     0  ENDLP      DEF       0            LOOP END VALUE
+        2242+     1  ONE        DEF       1
+        2243+     2  TWO        DEF       2
+        2244+    48  D48        DEF       48
+        2246+ 9 2270 CLMEM    + ADD       TWO 
+        2247+13 2252          + STORE A   P1           PARM: ADDR 
+        2248+ 9 2269          + ADD       ONE          
+        2249+13 2254          + STORE A   P2           PARM: LOCATION OF LEN=NUMBER OF HALF-WORDS TO CLEAR 
+        2250+ 9 2269          + ADD       ONE          
+        2251+13 2260          + STORE A   EXIT
+        2252+10    0 P1       + R ADD     /   /        GET ADDR TO CLEAR
+        2253+13 2263          + STORE A   MEM
+        2254+10    0 P2       + R ADD     /   /        GET LEN ADDR
+        2255+13 2256          + STORE A   P2A
+        2256+10    0 P2A      + R ADD     /   /        GET LEN 
+        2257+12 2271          + STORE     LEN
+        2258+15 2268          + LOAD MQ   ZERO
+        2259+10 2271 LOOP     + R ADD     LEN
+        2260+ 4    0 EXIT     + TR 0      /   /
+        2261+ 5 2269          + SUB       ONE
+        2262+12 2271          + STORE     LEN
+        2263+14    0 MEM      + STORE MQ  /   /        
+        2264+10 2263          + R ADD     MEM
+        2265+ 9 2269          + ADD       ONE
+        2266+13 2263          + STORE A   MEM
+        2267+ 1 2259          + TR        LOOP
+        2268+ 0    0 ZERO     + STOP      0000
+        2269+ 0    1 ONE      + STOP      0001         constant 1
+        2270+ 0    2 TWO      + STOP      0002         constant 2
+        2271+ 0    0 LEN      + STOP      0000
+        2272+ 9 2304 MEMCOPY  + ADD       TWO 
+        2273+13 2280          + STORE A   P1           PARM: SRCADDR 
+        2274+ 9 2303          + ADD       ONE          
+        2275+13 2282          + STORE A   P2           PARM: DESTADDR
+        2276+ 9 2303          + ADD       ONE          
+        2277+13 2284          + STORE A   P3           PARM: LEN: LOCATION OF LEN=NUMBER OF HALF-WORDS TO CLEAR
+        2278+ 9 2303          + ADD       ONE          
+        2279+13 2290          + STORE A   EXIT
+        2280+10    0 P1       + R ADD     /   /        GET SOURCE ADDR 
+        2281+13 2293          + STORE A   MEMS
+        2282+10    0 P2       + R ADD     /   /        GET DESTINATION ADDR 
+        2283+13 2294          + STORE A   MEMD
+        2284+10    0 P3       + R ADD     /   /        GET LEN ADDR
+        2285+13 2286          + STORE A   P3A
+        2286+10    0 P3A      + R ADD     /   /        GET LEN           
+        2287+12 2305          + STORE     LEN
+        2288+15 2302          + LOAD MQ   ZERO
+        2289+10 2305 LOOP     + R ADD     LEN
+        2290+ 4    0 EXIT     + TR 0      /   /
+        2291+ 5 2303          + SUB       ONE
+        2292+12 2305          + STORE     LEN
+        2293+10    0 MEMS     + R ADD     /   /        
+        2294+12    0 MEMD     + STORE     /   /        
+        2295+10 2293          + R ADD     MEMS
+        2296+ 9 2303          + ADD       ONE
+        2297+13 2293          + STORE A   MEMS
+        2298+10 2294          + R ADD     MEMD
+        2299+ 9 2303          + ADD       ONE
+        2300+13 2294          + STORE A   MEMD
+        2301+ 1 2289          + TR        LOOP
+        2302+ 0    0 ZERO     + STOP      0000
+        2303+ 0    1 ONE      + STOP      0001         constant 1
+        2304+ 0    2 TWO      + STOP      0002         constant 2
+        2305+ 0    0 LEN      + STOP      0000
+        2306+ 9 2379 RWDRUM   + ADD       TWO 
+        2307+13 2316          + STORE A   PDR1         PARM1: DRUM INSTR: READ/WRITE 0128  0129  0130  0131
+        2308+ 9 2378          + ADD       ONE          
+        2309+13 2318          + STORE A   PDR2         PARM2: DRUM ADDRESS (0..4094)
+        2310+ 9 2378          + ADD       ONE          
+        2311+13 2320          + STORE A   PDR3         PARM3: BUF START ADDRESS
+        2312+ 9 2378          + ADD       ONE          
+        2313+13 2322          + STORE A   PDR4         PARM4: LEN: NUMBER OF HALF-WORDS (MUST BE EVEN)
+        2314+ 9 2378          + ADD       ONE          
+        2315+13 2376          + STORE A   EXIT               
+        2316+10    0 PDR1     + R ADD     /   /        GET DRUM INSTR
+        2317+12 2324          + STORE     DRIO
+        2318+10    0 PDR2     + R ADD     /   /        GET DRUM ADDR
+        2319+13 2325          + STORE A   DRADDR
+        2320+10    0 PDR3     + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+        2321+13 2363          + STORE A   RWCOPY    
+        2322+10    0 PDR4     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+        2323+12 2380          + STORE     LEN
+        2324+ 0    0 DRIO     + STOP      /   /        INSTR: READ/WRITE 0128  0129  0130  0131
+        2325+29    0 DRADDR   + SET DR    /   /
+        2326+ 1 2359          + TR        LOOP
+        2327+ 9 2379 RDTAPE   + ADD       TWO 
+        2328+13 2335          + STORE A   PR1          PARM1: TAPE ADDRESS
+        2329+ 9 2378          + ADD       ONE          
+        2330+13 2337          + STORE A   PR2          PARM2: BUF START ADDRESS
+        2331+ 9 2378          + ADD       ONE          
+        2332+13 2376          + STORE A   EXIT
+        2333+ 2 2334          + TR OV     CLOV1        CLEAR OV THAT MAY HAVE BEEN SET
+        2334+ 8    0    CLOV1 + NOOP      0000
+        2335+10    0 PR1      + R ADD     /   /        GET TAPE ADDR
+        2336+13 2339          + STORE A   RTAPAD       TAPE UNITS: 0256  0257  0258  0259
+        2337+10    0 PR2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+        2338+13 2363          + STORE A   RWCOPY    
+        2339+24    0 RTAPAD   + READ      /   /
+        2340+10 2377          + R ADD     ZERO
+        2341+ 1 2361          + TR        LOOP1
+        2342+ 9 2379 WRTAPE   + ADD       TWO 
+        2343+13 2350          + STORE A   PW1          PARM1: TAPE ADDRESS
+        2344+ 9 2378          + ADD       ONE          
+        2345+13 2352          + STORE A   PW2          PARM2: BUF START ADDRESS
+        2346+ 9 2378          + ADD       ONE          
+        2347+13 2354          + STORE A   PW3          PARM3: BUF LEN
+        2348+ 9 2378          + ADD       ONE          
+        2349+13 2376          + STORE A   EXIT
+        2350+10    0 PW1      + R ADD     /   /        GET TAPE ADDR
+        2351+13 2358          + STORE A   WTAPAD       TAPE UNITS: 0256  0257  0258  0259
+        2352+10    0 PW2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+        2353+13 2363          + STORE A   RWCOPY    
+        2354+10    0 PW3      + R ADD     /   /        GET ADDR OF LEN 
+        2355+13 2356          + STORE A   PW3A
+        2356+10    0 PW3A     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+        2357+12 2380          + STORE     LEN
+        2358+26    0 WTAPAD   + WRITE     /   /        PREPARE TO WRITE ON TAPE
+        2359+10 2380 LOOP     + R ADD     LEN
+        2360+ 4 2375          + TR 0      RWOK
+        2361+ 5 2379 LOOP1    + SUB       TWO
+        2362+12 2380          + STORE     LEN
+        2363-31    0 RWCOPY   - COPY      /   /        WRITE BUFFER TO TAPE
+        2364+ 1 2367          + TR        GO 
+        2365+ 1 2371          + TR        EOF          END OF FILE
+        2366+ 1 2373          + TR        EOR          END OF RECORD
+        2367+10 2363 GO       + R ADD     RWCOPY
+        2368+ 5 2379          + SUB       TWO
+        2369+13 2363          + STORE A   RWCOPY
+        2370+ 1 2359          + TR        LOOP
+        2371+10 2378 EOF      + R ADD     ONE          SET OV FLAG TO SIGNAL END OF FILE CONDITION
+        2372+22   36          + A LEFT    36
+        2373+ 6 2380 EOR      + R SUB     LEN          RETURN NUMBER OF HALF-WORDS READ
+        2374+ 5 2379          + SUB       TWO
+        2375+26 2052 RWOK     + WRITE     2052         INSURE THAT MQ NOT IN USE            
+        2376+ 1    0 EXIT     + TR        /   /        RETURN TO CALLER
+        2377+ 0    0 ZERO     + STOP      0000
+        2378+ 0    1 ONE      + STOP      0001         
+        2379+ 0    2 TWO      + STOP      0002         
+        2380+     0  LEN        RES       1
+        2382+ 9 2397 CHAIN    + ADD       TWO
+        2383+13 2384          + STORE A   CHP1
+        2384+10    0 CHP1     + R ADD     /   /        GET TAPE NUMBER
+        2385+13 2392          + STORE A   TAPELOAD
+        2386+30   70          + SENSE     0070         SENSE SWITCH 2                                  
+        2387+ 1 2391 CONTAD   + TR        ENDSTOP      (ON POSITION MAKES SENSE OPCODE TO SKIP NEXT INSTR)
+        2388+10 2387          + R ADD     CONTAD       IF SW2 IS ON, A +STOP 4095 IS EXECUTED.  
+        2389+12 4095          + STORE     4095         IF THEN USER PRESS START, EXECUTION WILL BE RESUMED 
+        2390+ 0 4095          + STOP      4095         AND CHAINED PROGRAM WILL BE LOADED AND EXECUTED
+        2391+ 8    0 ENDSTOP  + NOOP      0000
+        2392+24    0 TAPELOAD + READ      0000         
+        2393-31    0 TL0      - COPY      0000         READ 1ST WORD OF SELF-LOADER FROM TAPE
+        2394+ 1    0          + TR        0000         TR TO SELF-LOADER
+        2395+ 0 2221          + STOP      2221         ERROR LOADING: UNEXPECTED END OF FILE
+        2396+ 0 2222          + STOP      2222         ERROR LOADING: UNEXPECTED END OF RECORD 
+        2397+ 0    2 TWO      + STOP      0002         ERROR LOADING: UNEXPECTED END OF FILE
+        2398+ 9 2430 CHKSUM   + ADD       TWO          CALC CHEKSUM 
+        2399+13 2402          + STORE A   CKP1
+        2400+ 9 2429          + ADD       ONE
+        2401+13 2423          + STORE A   CHKSUMEX     RETURN ADDR
+        2402+10    0 CKP1     + R ADD     /   /        GET CARD IMAGE ADDRESS
+        2403+13 2409          + STORE A   RDDATA
+        2404+ 9 2431          + ADD       D46
+        2405+13 2420          + STORE A   RDEND
+        2406+10 2428          + R ADD     ZERO
+        2407-12 2426          - STORE     SUM
+        2408-12 2424          - STORE     DATA
+        2409+10    0 RDDATA   + R ADD     /   /
+        2410+12 2425          + STORE     DATA2
+        2411-10 2424          - R ADD     DATA
+        2412- 9 2426          - ADD       SUM
+        2413-12 2426          - STORE     SUM
+        2414+10 2409          + R ADD     RDDATA
+        2415+ 9 2429          + ADD       ONE
+        2416+13 2409          + STORE A   RDDATA
+        2417+ 5 2420          + SUB       RDEND
+        2418+ 4 2421          + TR 0      CHKSUM2
+        2419+ 1 2409          + TR        RDDATA
+        2420+10    0 RDEND    + R ADD     0000         
+        2421-10 2426 CHKSUM2  - R ADD     SUM
+        2422- 9 2426          - ADD       SUM          ADD TWICE -> CHKSUM IS DOUBLED -> CHKSUM IS SHIFTED TO LEFT ONE BIT -> RIGHTMOST BIT IS ZERO
+        2423+ 1    0 CHKSUMEX + TR        /   /
+        2424+     0  DATA       DEF       0            CHECKSUM CALCULATION WORDS
+        2425+     0  DATA2      DEF       0
+        2426+     0  SUM        DEF       0            
+        2427+     0             DEF       0
+        2428+     0  ZERO       DEF       0
+        2429+     1  ONE        DEF       1
+        2430+     2  TWO        DEF       2
+        2431+    46  D46        DEF       46
+        2432+ 9 2664 WRIBREL  + ADD       TWO          CHECK IF CURRENT CARD IN MEMORY IS TYPE/SYMBOL GIVEN AS PARAM, 
+        2433+13 2446          + STORE A   CHKP1        LOC OF DATA TO ADD IS IN SEQUENCE WITH PREVIOUS ONES, AND CARD HAS ROOM FOR DATA.
+        2434+ 9 2663          + ADD       ONE          IF NOT, FLUSH CURRENT CARD AND CREATE A NEW ONE, THEN PLACE THE DATA.
+        2435+13 2448          + STORE A   CHKP2        WHEN FLUSHING THE CARD, CALL WRITE ROUTINE DEFINED
+        2436+ 9 2663          + ADD       ONE
+        2437+13 2452          + STORE A   CHKP3
+        2438+ 9 2663          + ADD       ONE
+        2439+13 2456          + STORE A   CHKP4
+        2440+ 9 2663          + ADD       ONE
+        2441+13 2458          + STORE A   CHKP5
+        2442+ 9 2663          + ADD       ONE
+        2443+13 2462          + STORE A   CHKP6
+        2444+ 9 2663          + ADD       ONE
+        2445+13 2568          + STORE A   CHKEXIT
+        2446+10    0 CHKP1    + R ADD     /   /
+        2447+12 2654          + STORE     CRDTY        PARAM: BIN CARD TYPE REQUITED: -01 -> CONTROL CARD, -00 -> MC INSTR CARD, 
+        2448+10    0 CHKP2    + R ADD     /   /                                       +01 -> FLUSH CURRENT CARD (NO MORE PARAMS)
+        2449+13 2450          + STORE A   CHKP2A                                      +02 -> SET WRITE CARD ROUTINE TO BE CALLED IN NEXT PARAM 
+        2450+10    0 CHKP2A   + R ADD     /   /                                              RETURNS IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN
+        2451+12 2655          + STORE     CRDSY        
+        2452+10    0 CHKP3    + R ADD     /   /
+        2453+13 2454          + STORE A   CHKP3A
+        2454+10    0 CHKP3A   + R ADD     /   /
+        2455+12 2656          + STORE     CRDLOC       PARAM: LOCATION 0..4095 
+        2456+10    0 CHKP4    + R ADD     /   /
+        2457+12 2657          + STORE     CRDDATY      PARAM: DATA TYPE: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+        2458+10    0 CHKP5    + R ADD     /   /                          =1 -> DATA1/DATA2=FULL WORD TO STORE
+        2459+13 2460          + STORE A   CHKP5A
+        2460+10    0 CHKP5A   + R ADD     /   /
+        2461+12 2660          + STORE     CRDDATA      PARAM: DATA 
+        2462+10    0 CHKP6    + R ADD     /   /        
+        2463+13 2464          + STORE A   CHKP6A
+        2464+10    0 CHKP6A   + R ADD     /   /
+        2465+12 2661          + STORE     CRDDATA2     PARAM: DATA2 (RIGHT HALF-WORD / INDEX TAG)
+        2466+10 2654          + R ADD     CRDTY        
+        2467+ 5 2663          + SUB       ONE
+        2468+ 4 2569          + TR 0      CHKFLSHR     IF CRDTY=1 -> JUST FLUSH THE CURRENT CARD AND RETURN
+        2469+ 5 2663          + SUB       ONE
+        2470+ 4 2578          + TR 0      CHKWR        IF CRDTY=2 -> SET WRITE CARD ROUTINE TO BE CALLED WHEN FLUSHING THE CURRENT CARD AND RETURN
+        2471+10 2646          + R ADD     BINCRD44     CODE + ORIGIN IN CARD IN MEMORY. 
+        2472+13 2658          + STORE A   CRDORG
+        2473+ 3 2502          + TR +      CHKNEWC      IF >=0 -> CREATE A FRESH NEW CARD 
+        2474+23   12          + A RIGHT   0012         GET CODE ON CURRENT CARD BEING BUILD IE MEM
+        2475+23   18          + A RIGHT   0018         CLEAR RIGHT ACC HALF-WORD
+        2476+22   18          + A LEFT    0018
+        2477+ 5 2654          + SUB       CRDTY
+        2478+ 4 2480          + TR 0      CHK1         SAME TYPE, TR TO CONTINUE
+        2479+ 1 2500          + TR        CHKFLSH      NOT SAME TYPE, TR TO FLUSH CURRENT CARD 
+        2480+10 2647 CHK1     + R ADD     BINCRD45     CURRENT CARD SYMBOL
+        2481+ 5 2655          + SUB       CRDSY
+        2482+ 4 2484          + TR 0      CHK2         SAME TOP SYMBOL, TR TO CONTINUE
+        2483+ 1 2500          + TR        CHKFLSH      NOT SAME SYMBOL, TR TO FLUSH CURRENT CARD 
+        2484+10 2644 CHK2     + R ADD     BINCRD42     COUNT IN CARD
+        2485+ 5 2667          + SUB       D36
+        2486+ 4 2500          + TR 0      CHKFLSH      CARD FULL, TR TO FLUSH CURRENT CARD 
+        2487+10 2658          + R ADD     CRDORG
+        2488+ 9 2644          + ADD       BINCRD42     ACC=ORIGIN + COUNT = NEXT CONSECUTIVE REL LOCATION ON BIN CARD
+        2489+ 5 2656          + SUB       CRDLOC       
+        2490+ 4 2513          + TR 0      CHKADD       IF ORIGIN+COUNT=LOC -> ADD DATA TO CURRENT CARD IN MEMORY, AT NEXT CONSECUTIVE LOCATION LOC
+        2491+ 3 2500          + TR +      CHKFLSH      IF ORIGIN+COUNT>LOC -> LOC IS LESS THAN LAST LOC ADDED -> TR TO FLUSH AND START A NEW CARD AT NEW LOC
+        2492+10 2656          + R ADD     CRDLOC
+        2493+ 5 2658          + SUB       CRDORG       ACC=LOC - ORIGIN = POSITION IN CARD 
+        2494+12 2659          + STORE     CRDN
+        2495+ 5 2667          + SUB       D36          
+        2496+ 3 2500          + TR +      CHKFLSH      IF POSITION IN CARD >= 36 -> LOC DOES NOT FIT IN CURRENT CARD -> TR TO FLUSH
+        2497+10 2659          + R ADD     CRDN         ELSE -> POSITION IN CARD < 36 -> LOC FITS IN CURRENT CARD
+        2498+12 2644          + STORE     BINCRD42     ADJUST COUNT
+        2499+ 1 2513          + TR        CHKADD       TR TO ADD DATA TO CURRENT CARD IN MEMORY
+        2500+10 2500 CHKFLSH  + R ADD     *            
+        2501+ 1 2589          + TR        FLUSHCRD 
+        2502+10 2502 CHKNEWC  + R ADD     *            NEW CARD: CLEAR CARD BUFFER IN MEM
+        2503+ 1   85          + TR        CLMEM        BINCARD
+        2504+ 0 2602          + STOP      BINCARD
+        2505+ 0 2668          + STOP      D48
+        2506+10 2654          + R ADD     CRDTY        CODE   = -01 / -00 
+        2507+22   12          + A LEFT    0012         PLACE AS OP
+        2508+ 5 2656          + SUB       CRDLOC       ORIGIN = CURRENT LOC
+        2509+12 2646          + STORE     BINCRD44     STORE CODE + ORIGIN IN CARD IN MEMORY. 
+        2510+13 2658          + STORE A   CRDORG
+        2511+10 2655          + R ADD     CRDSY        SYMBOL 
+        2512+12 2647          + STORE     BINCRD45     CURRENT CARD SYMBOL
+        2513+10 2656 CHKADD   + R ADD     CRDLOC       COMPUTE WHERE TO STORE THE DATA
+        2514+ 5 2658          + SUB       CRDORG       ADDR = BINCRD ADDRESS + (LOC - ORIGIN)
+        2515+ 9 2588          + ADD       BINCRDAD 
+        2516+13 2518          + STORE A   CHKSTO1
+        2517+10 2660          + R ADD     CRDDATA      STORE DATA
+        2518+12    0 CHKSTO1  + STORE     /   /
+        2519+10 2657          + R ADD     CRDDATY      PARAM: DATA TYPE: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+        2520+ 4 2530          + TR 0      CHKIDX                         =1 -> DATA1/DATA2=FULL WORD TO STORE
+        2521+10 2518          + R ADD     CHKSTO1      STORE A FULL WORD
+        2522+ 9 2663          + ADD       ONE       
+        2523+13 2525          + STORE A   CHKSTO2
+        2524+10 2661          + R ADD     CRDDATA2     STORE DATA2
+        2525+12    0 CHKSTO2  + STORE     /   /
+        2526+10 2644          + R ADD     BINCRD42     COUNT IN CARD
+        2527+ 9 2664          + ADD       TWO
+        2528+12 2644          + STORE     BINCRD42     
+        2529+ 1 2568          + TR        CHKEXIT
+        2530+10 2661 CHKIDX   + R ADD     CRDDATA2     STORE DATA HALF-WORD + DATA2 INDEX
+        2531+ 4 2565          + TR 0      CHK20
+        2532+10 2656          + R ADD     CRDLOC       COMPUTE WHERE TO STORE THE DATA
+        2533+ 5 2658          + SUB       CRDORG       IN INDICES BLOCK
+        2534+12 2659          + STORE     CRDN
+        2535+10 2588          + R ADD     BINCRDAD     SET START OD INICES ADDR
+        2536+ 9 2667          + ADD       D36
+        2537+13 2557          + STORE A   CHKSTO3A
+        2538+13 2564          + STORE A   CHKSTO3B
+        2539+10 2662          + R ADD     ZERO
+        2540-12 2650          - STORE     DATA
+        2541-12 2652          - STORE     SUM
+        2542+10 2659 CHK10    + R ADD     CRDN         INDICES ADDR += (LOC - ORIGIN) DIV 6
+        2543+ 5 2666          + SUB       D6
+        2544+ 3 2546          + TR +      CHK11
+        2545+ 1 2552          + TR        CHK12
+        2546+12 2659 CHK11    + STORE     CRDN
+        2547+10 2557          + R ADD     CHKSTO3A
+        2548+ 9 2663          + ADD       ONE
+        2549+13 2557          + STORE A   CHKSTO3A
+        2550+13 2564          + STORE A   CHKSTO3B
+        2551+ 1 2542          + TR        CHK10
+        2552+10 2659 CHK12    + R ADD     CRDN         SHIFT = (N+1)*3
+        2553+ 9 2659          + ADD       CRDN
+        2554+ 9 2659          + ADD       CRDN
+        2555+ 9 2665          + ADD       D3
+        2556+13 2560          + STORE A   CHKSHF
+        2557+10    0 CHKSTO3A + R ADD     /   /
+        2558+12 2651          + STORE     DATA2
+        2559+10 2661          + R ADD     CRDDATA2     SHIFT RIGHT AND STORE AT INDICES ADDR
+        2560+23    0 CHKSHF   + A RIGHT   /   /
+        2561- 9 2650          - ADD       DATA
+        2562-12 2652          - STORE     SUM
+        2563+10 2653          + R ADD     SUM2
+        2564+12    0 CHKSTO3B + STORE     /   /
+        2565+10 2644 CHK20    + R ADD     BINCRD42     COUNT IN CARD
+        2566+ 9 2663          + ADD       ONE
+        2567+12 2644          + STORE     BINCRD42     
+        2568+ 1    0 CHKEXIT  + TR        /   /
+        2569+10 2569 CHKFLSHR + R ADD     *            JUST FLUSH CURRENT CARD AND RETURN
+        2570+ 1 2589          + TR        FLUSHCRD
+        2571+10 2571          + R ADD     *            CLEAR CARD BUFFER IN MEM
+        2572+ 1   85          + TR        CLMEM        BINCARD
+        2573+ 0 2602          + STOP      BINCARD
+        2574+ 0 2668          + STOP      D48
+        2575+10 2448          + R ADD     CHKP2        SECOND PARAM HAS THE RETURN ADDR
+        2576+13 2577          + STORE A   FLSHEX       
+        2577+ 1    0 FLSHEX   + TR        /   /        RETURN TO CALLER
+        2578+10 2450 CHKWR    + R ADD     CHKP2A       SECOND PARAM HAS THE ADDR OF BIN CARD WRITE ROUTINE TO BE CALLED BY FLUSH (INSTEAD THE TOP SYMBOL)
+        2579+13 2598          + STORE A   WRCRD
+        2580+10 2452          + R ADD     CHKP3        THIRD PARAM HAS THE RETURN ADDR 
+        2581+13 2587          + STORE A   CHKWREX
+        2582+10 2582          + R ADD     *            CLEAR CARD BUFFER IN MEM
+        2583+ 1   85          + TR        CLMEM        BINCARD
+        2584+ 0 2602          + STOP      BINCARD
+        2585+ 0 2668          + STOP      D48
+        2586+10 2588          + R ADD     BINCRDAD     RETURN IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN BY WRITE ROUTINE  
+        2587+ 1    0 CHKWREX  + TR        /   /        RETURN TO CALLER
+        2588+ 0 2602 BINCRDAD + STOP      BINCARD      SOURCE ADDR
+        2589+ 9 2664 FLUSHCRD + ADD       TWO          PUNCH PACT CARD IN CARD BUFFER
+        2590+13 2601          + STORE A   FLUSHEX
+        2591+10 2644          + R ADD     BINCRD42     GET COUNT
+        2592+ 4 2601          + TR 0      FLUSHEX      IF =0 -> THE CARD IS EMPTY -> EXIT WITHOUT PUNCHING
+        2593+10 2593          + R ADD     *
+        2594+ 1   87          + TR        CHKSUM       COMPUTE CHECKSUM OF CARD ...
+        2595+ 0 2602          + STOP      BINCARD      
+        2596-12 2648          - STORE     BINCRD46     ... AND STORE IT AT LOCATION 46 AND 47
+        2597+10 2597          + R ADD     *
+        2598+ 1    0 WRCRD    + TR        /   /        CALL WRITE CARD ROUTINE
+        2599+10 2662          + R ADD     ZERO
+        2600+12 2644          + STORE     BINCRD42     CLEAR COUNT 
+        2601+ 1    0 FLUSHEX  + TR        /   /
+        2602+     0  BINCARD    RES       42           BUFFER FOR PACT RELATIVE BINARY CARD INSTR 
+        2644+     0  BINCRD42   DEF       0            COUNT OF INSTR IN CARD
+        2645+     0             DEF       0
+        2646+     0  BINCRD44   DEF       0            CODE + ORIGIN IN CARD
+        2647+     0  BINCRD45   DEF       0            SYMBOL 
+        2648+     0  BINCRD46   DEF       0            CHECKSUM
+        2649+     0             DEF       0            BINCARD TAKES 48 HALF-WORDS IN TOTAL
+        2650+     0  DATA       DEF       0            
+        2651+     0  DATA2      DEF       0
+        2652+     0  SUM        DEF       0            
+        2653+     0  SUM2       DEF       0
+        2654+     0  CRDTY      DEF       0            BIN CARD TYPE REQUITED: -01 -> CONTROL CARD, -00 -> MC INSTR CARD
+        2655+     0  CRDSY      DEF       0            BIN CARD SYMBOL REQUITED
+        2656+     0  CRDLOC     DEF       0            LOCATION 0..4095 
+        2657+     0  CRDDATY    DEF       0            DATA TYPE: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+        2658+     0  CRDORG     DEF       0
+        2659+     0  CRDN       DEF       0
+        2660+     0  CRDDATA    DEF       0
+        2661+     0  CRDDATA2   DEF       0
+        2662+     0  ZERO       DEF       0
+        2663+     1  ONE        DEF       1
+        2664+     2  TWO        DEF       2
+        2665+     3  D3         DEF       3
+        2666+     6  D6         DEF       6
+        2667+    36  D36        DEF       36
+        2668+    48  D48        DEF       48
+          48-     0  ROUTINE INIT
+          49+ 1   92 ENTRY POINT
+          50-     0  ROUTINE CLRBUF
+          51+ 1 1758 ENTRY POINT
+          52-     0  ROUTINE WRITECRD
+          53+ 1 1764 ENTRY POINT
+          54-     0  ROUTINE CHAIN
+          55+ 1 2382 ENTRY POINT
+          56-     0  ROUTINE PRTNLINE
+          57+ 1 2088 ENTRY POINT
+          58-     0  ROUTINE RDTAPE
+          59+ 1 2327 ENTRY POINT
+          60-     0  ROUTINE RWDRUM
+          61+ 1 2306 ENTRY POINT
+          62-     0  ROUTINE MEMCOPY
+          63+ 1 2272 ENTRY POINT
+          64-     0  ROUTINE WRIBREL
+          65+ 1 2432 ENTRY POINT
+          66-     0  ROUTINE WRITECR2
+          67+ 1 2224 ENTRY POINT
+          68-     0  ROUTINE PRINTCRD
+          69+ 1 1766 ENTRY POINT
+          70-     0  ROUTINE READCRD
+          71+ 1 1762 ENTRY POINT
+          72-     0  ROUTINE PRTALF
+          73+ 1 1850 ENTRY POINT
+          74-     0  ROUTINE PRTSTR
+          75+ 1 1827 ENTRY POINT
+          76-     0  ROUTINE PRTCHR
+          77+ 1 1970 ENTRY POINT
+          78-     0  ROUTINE PRTINT
+          79+ 1 1928 ENTRY POINT
+          80-     0  ROUTINE PRTOCT
+          81+ 1 1894 ENTRY POINT
+          82-     0  ROUTINE WRTAPE
+          83+ 1 2342 ENTRY POINT
+          84-     0  ROUTINE CLMEM
+          85+ 1 2246 ENTRY POINT
+          86-     0  ROUTINE CHKSUM
+          87+ 1 2398 ENTRY POINT
+          88-     0  ROUTINE BMPAD
+          89+ 1 2170 ENTRY POINT
+        4094+    48  REGION ORIGIN TABLE LOCATION
+        4095+    92  INITIAL REGION
+           0+ 1   92          + TR        INIT         PROGRAM START

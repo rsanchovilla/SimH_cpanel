@@ -1,0 +1,434 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 13 COMPUTE FINAL REGION LENGHT ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRTSTR      PRINT ALFANUMERIC TEXT STRING, ZERO TERMINATED
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:CLMEM       CLEAR MEMORY STORAGE
+           HEAD      USE:SRCHTBL     SEARCH TABLE
+           HEAD      USE:EQTBL       STORE VALUE INTO TABLE
+           HEAD      USE:READTBL     TAKE VALUE FROM TABLE
+              
+                                  PURPOSE:
+                                  - READ FROM DRUM 0128, ADDR 0000: 
+                                       MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW)
+                                       + TRISDUP (100 HW) + TRSIZE  (100 HW) + TREQTMP (100 HW)
+                                  - COMPUTE FINAL SIZE OF EACH REGION, CONSIDERING
+                                    DUP INSTRUCTIONS
+                                       DOES MANY PASSES ON SOURCE CODE TAPE
+                                       UNTIL THE SIZE OF EACH REGION IS COMPUTED, TAKING
+                                       INTO ACCOUNT THE SUB-DUP REGION SIZE. DETECTS LOOPS
+                                       IN DUP'ED REGIONS
+                                  - SAVE TO DRUM 0128, ADDR 0000
+                                       MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW)
+                                       + TRISDUP (100 HW) + TRSIZE  (100 HW) + TREQTMP (100 HW)
+                                       + TREXSIZE (100 HW) + TREXTMP (100 HW)
+
+SRCHREG  + ADD       TWO          SEARCH REGION IN TREGIONS. TR TO ERROR IF NOT FOUND 
+         + STORE A   SRCHREX      RETURN IN ACC THE ENTRY IN TREGIONS FOUND
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TREGIONS     ... TREGIONS TABLE
+         + STOP      NREGIONS     ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NREGIONS 
+         + STOP      FACT         ... THE VALUE TO FIND 
+
+         + TR 0      SREGNFER
+SRCHREX  + TR        /   /
+
+SREGNFER + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRREGNF     ERROR: REGION DO NOT EXISTS
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "COMPUTE FINAL REGION LENGTH"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     *
+         + TR        RWDRUM       READ TREGIONS ARRAY FROM DRUM
+         + READ      0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNREGS     ADDR OF START OF TABLES
+         + STOP      0402         MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW)
+                                  + TRISDUP (100 HW) + TRSIZE  (100 HW) + TREQTMP (100 HW)
+
+         + R ADD     *            CLEAR TABLE
+         + TR        CLMEM        TREXSIZE, TREXTMP
+         + STOP      TREXSIZE
+         + STOP      D200         = MAXNREGS * 2
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TRISDUP      NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + R ADD     ZERO
+         + STORE     PASS         INIT PASS COUNT
+         + STORE     DUPLOOP      INIT DUP LOOP ERROR FLAG (=0 -> NO LOOP)
+
+READPASS + R ADD     PASS         INCR PASS NUMBER
+         + ADD       ONE
+         + STORE     PASS
+
+         + R ADD     ZERO
+         + STORE     NPENDING     NUMBER OF PENDING TO COMPUTE REGIONS=0
+         + STORE     NCOMP        NUMBER OF COMPUTED REGIONS=0
+         + STORE     IREG         REGION NUMBER BEING PROCESSED
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+
+READREG  + R ADD     ZERO         INIT READ REGION
+         + STORE     STEPCNT      STEP COUNT FOR REGION
+         + STORE     EQTMPCNT     TEMP VARS NEEDED FOR RESULT OF STEP IN THIS REGION 
+
+         + R ADD     IREG         SELECT NEXT REGION
+         + ADD       ONE
+         + STORE     IREG
+         
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     OP
+         + SUB       OPDUP
+         + TR 0      CHKDUP       OP="DUP REGION" -> TR TO CHECK REGION EXISTS, MARK REGION AS DUPLICATED
+
+NEXT     + NOOP      0000         CONTINUE WITH NEXT STEP RECORD
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+         + R ADD     *            PRINT STEP JUST PROCESSED
+         + TR        PRINTCRD
+ENDLOG1  + NOOP      0000 
+                                  PROCESS NEXT STEP
+
+         + TR        READSTEP
+
+CHKDUP   + R ADD     STEPCNT
+         + TR +      CHKDUP1      STEP COUNT IS VALID, TR TO PROCEED
+         + TR        NEXT         THE STEP COUNT OF THIS REGION IS NO VALID, TR TO NEXT TO SKIP STEPS 
+
+CHKDUNOK + R ADD     DUPLOOP      CHECK FLAG INDICATING INVALID REGION ARE IN FACT UNRESOLVABLE DUP LOOPS.
+         + TR 0      CHKNOK2      NO DUP LOOP, JUST THE STEP COUNT OF THIS REGION IS NO VALID YET, TR TO INVALIDATE 
+         
+         + R ADD     *            THE DUPLICATED REGION IS UNRESOLVABLE BECAUSE IT FORMS A DUP-LOOP. SIGNAL THE ERROR
+         + TR        ERROR        TE DUP INSTR WILL BE IGNORED, SO NO NEED TO INVALIDATE STEPCNT
+         + STOP      ERRDUPLO     ERROR: LOOP IN DUP REGIONS 
+
+CHKNOK2  + R SUB     ONE          INVALIDATE SIZE OF THIS REGION BY SETTING STEPCNT=-1
+         + STORE     STEPCNT
+         + TR        NEXT         THE STEP COUNT OF THIS REGION IS NO VALID, TR TO NEXT TO SKIP STEPS 
+
+CHKDUP1  + R ADD     *            SEARCH REGION STATED IN FACTOR VAR = THE DUPLICATED REGION NAME
+         + TR        SRCHREG      ERROR IF REGION DO NOT EXISTS IN TREGS TABLE
+                                  RETURN IN ACC ENTRY FOUND (1..MAXNREGS)
+         + STORE A   IREGDUP      STORE THE DUPLICATED REGION INDEX NUMBER
+
+         + R ADD     *            
+         + TR        READTBL
+         + STOP      TREXSIZE     ... VAL=TREXSIZE[IREGDUP] GET CURRENT EXTENDED SIZE FOR DUPLICATED REGION
+         + STOP      IREGDUP
+         + STOP      VAL
+         
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1A     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTSTR
+         + STOP      MSGSTP       "STEPS" = NUMBER OF STEPS OF DUPLICATED REGION   
+         + STOP      0040         COL 40
+         + LOAD MQ   VAL
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0004         4-DIGITS NUM
+         + STOP      0045         COL 45
+ENDLOG1A + NOOP      0000
+
+         + R ADD     VAL
+         + TR 0      CHKDUNOK     THE FINAL (EXPANDED) SIZE OF REGION TO BE DUPLICATED HERE IS NOT KNOW YET -> TR TO INVALIDATE THE COUNT ON THIS REGION
+         
+         + ADD       STEPCNT      THE FINAL (EXPANDED) SIZE OF REGION TO BE DUPLICATED HERE IS FULLY KNOW. ADD IT
+         + SUB       ONE          TO THE SIZE OF CURRENT REGION. MUST SUBSTRACT ONE BECAUSE THE DUP INSTR IS REPLACED
+         + STORE     STEPCNT      WITH FIRST INSTR OF DUPLICATED REGION
+
+         + R ADD     *            
+         + TR        READTBL
+         + STOP      TREXTMP      ... VAL=TREXTMP[IREGDUP] GET CURRENT NUM OF TEMP VARS FOR DUPLICATED REGION
+         + STOP      IREGDUP
+         + STOP      VAL
+         + ADD       EQTMPCNT     ADD THE NUMBER OF TEMP VARS NEEDED BY DUPLICATED REGION TO THE TOTAL FOR CURRENT REGION
+         + STORE     EQTMPCNT
+         + TR        NEXT         TR TO NEXT TO CONTINUE PROCESSING STEPS 
+
+
+EOR      + NOOP      0000         END OF REGION  
+         
+         + R ADD     STEPCNT
+         + TR +      EOR1         TR IF STEP COUNT FOR THIS REGION IS VALID
+
+         + R ADD     NPENDING     STEP COUNT NOT VALID YET -> INCR THE NUMBER
+         + ADD       ONE          OF PENDING REGIONS. WILL NEED ANOTHER PASS TO RESOLVE THIS REGION
+         + STORE     NPENDING
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOR1     + R ADD     *            STEP COUNT IS VALID. CHECK IF MUST UPDATE TABLE
+         + TR        READTBL
+         + STOP      TREXSIZE     ... VAL=TREXSIZE[IREG] GET EXTENDED SIZE FOR CURRENT REGION
+         + STOP      IREG
+         + STOP      VAL
+         + TR 0      EOR2         SIZE OF THIS REGION NOT VALID YET -> PROCEED TO UPATE THE REGION WITH STEPCOUNT
+         + TR        READREG      THIS REGION ALREADY COMPUTED -> PROCEED WITH NEXT REGION
+         
+EOR2     + R ADD     *            
+         + TR        READTBL
+         + STOP      TRSIZE       ... VAL=TRSIZE[IREG] GET SIZE FOR CURRENT REGION
+         + STOP      IREG
+         + STOP      VAL
+
+         + ADD       STEPCNT      VAL=STEPCOUNT+VAL    ADD STEP COUNT OF INCLUDED REGIONS
+         + STORE     VAL
+
+         + R ADD     *            SAVE STEP COUNT FOR REGION
+         + TR        EQTBL
+         + STOP      TREXSIZE     ... TREXSIZE[IREG]=VAL -> TREXSIZE[IREG]=TRSIZE[IREG] + STEPCNT
+         + STOP      IREG         
+         + STOP      VAL
+
+         + R ADD     *            
+         + TR        READTBL
+         + STOP      TREQTMP      ... VAL=TREQTMP[IREG] GET NUMBER OF TEMP VARS NEEDE IN CURRENT REGION
+         + STOP      IREG
+         + STOP      VAL
+
+         + ADD       EQTMPCNT     VAL=EQ TEMP COUNT+VAL
+         + STORE     VAL
+
+         + R ADD     *            SAVE COUNT FOR REGION
+         + TR        EQTBL
+         + STOP      TREXTMP      ... TREXTMP[IREG]=VAL -> TREXTMP[IREG]=TREQTMP[IREG] + EQTMPCNT
+         + STOP      IREG         
+         + STOP      VAL
+
+         + R ADD     NCOMP        INCR THE NUMBER OF COMPUTED REGIONS
+         + ADD       ONE
+         + STORE     NCOMP
+
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF FILE
+
+                                  NO MORE STEPS. IF SW6 ON THEN 
+                                  PRINT THE NUMBER OF PASS JUST FINISHED
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGDONE      "END OF PASS"
+         + STOP      0210         INT AT COL 10
+         + STOP      PASS         CURRENT NUMBER OF PASS 
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+ENDLOG1B + NOOP      0000
+
+         + R ADD     NPENDING     GET NUMBER OF REGIONS PENDING TO BE RESOLVED
+         + TR 0      EOPROC       IF NONE, TR TO END OF PROCESSING
+
+         + R ADD     NCOMP        GET NUMBER OF REGIONS COMPUTED IN THIS PASS
+         + SUB       ONE          IF SOME COMPUTED, TR TO START A NEW PASS TO APPLY 
+         + TR +      READPASS     THE NEW COMPUTED REGIONS TO UNRESOLVED YET REGIONS
+
+         + R ADD     ONE          HERE, THE PASS JUST DONE WAS NOT ABLE TO COMPUTE THE PENDING REGIONS
+         + STORE     DUPLOOP      THIS IS BECAUSE THERE IS AN UNRESOLVABLE LOOP IN THE DUP'ES REGIONS
+         + TR +      READPASS     SET DUPLOOP=1 AND DO A LAST PASS SIGNALING THE OFFENING DUP TO USER
+                                  IF USER PRESS START TO IGNORE THE ERROR, THE DUP INST WILL BE IGNORED,
+                                  SO NO LOOP WILL BE PRODUCED, SO THE COMPILATION CAN CONTINUE
+
+
+EOPROC   + NOOP      0000         END OF PROCESSING. SAVE FINAL SIZE OF REGIONS TO DRUM
+
+         + R ADD     *
+         + TR        RWDRUM       SAVE NREGIONS, TREGIONS, TRISDUP, TRSIZE AND TREQTMP TO DRUM
+         + WRITE     0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNREGS     ADDR OF START OF TABLES
+         + STOP      0602         MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW)
+                                  + TRISDUP (100 HW) + TRSIZE  (100 HW) + TREQTMP (100 HW)
+                                  + TREXSIZE (100 HW) + TREXTMP (100 HW)
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE
+
+         + STOP      READSTEP     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING NEXT SOURCE CODE STEP 
+
+           ORG       EVEN
+
+                                  COMPACT CODE RECORD
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0
+S2N        DEF       0
+D1N        DEF       0
+D2N        DEF       0
+NINST      DEF       0
+NINCR      DEF       0
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+VAL        DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+                                  TABLES (SHOULD AT EVEN LOCATION)
+
+MAXNREGS   DEF       100          MAX 100 REGIONS CAN DE DEFINED IN ONE PROGRAM 
+NREGIONS   DEF       0            NUMBER OF REGIONS DEFINED
+TREGIONS   RES       100          EACH ENTRY IN TABLE IS 1 HALF-WORD. HAS THE NAME (ALFA) OF REGION
+TRISDUP    RES       100          =1 IF THIS REGION IS REFERENCED IN A DUP INSTR ELSEWHERE (IE THIS REGION IS DUPLICATED)
+TRSIZE     RES       100          NUMBER OF STEPS OF REGION (NOT COUNTING EOR)
+TREQTMP    RES       100          NUMBER OF NEEDED TEMP VARS IN REGION (=NUM OF STEPS REFERENCED AS RESULT OF STEP)
+TREXSIZE   RES       100          EXPANDED NUMBER OF STEPS OF REGION (NOT COUNTING EOR)
+TREXTMP    RES       100          EXPANDED NUMBER OF NEEDED TEMP VARS IN REGION (=NUM OF STEPS REFERENCED AS RESULT OF STEP)
+                                  EXPANDED VALUE = VALUE OF THE REGION + VALUE OF EACH DUP'ED REGION INCLUDED
+
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+D22        DEF       22
+D200       DEF       200
+
+IREG       DEF       0            REGION NUMBER BEING PROCESSED (INDEX IN TREGIONS, IREG=1 -> FIRST ENTRY IN TREGIONS TABLE)
+IREGDUP    DEF       0
+STEPCNT    DEF       0            STEP COUNT: TOTAL NUMBER OF STEPS IN REGION (NOT COUNTING EOR RECORD)
+EQTMPCNT   DEF       0            COUNT OF DIFFERENT STEPS REFERENCED AS "RESULT OF STEP" 
+PASS       DEF       0            NUMBER OF CURRENT PASS
+DUPLOOP    DEF       0            =1 IF HIT A DUP REGION LOOP 
+NPENDING   DEF       0            NUMBER OF PENDING TO COMPUTE REGIONS=0
+NCOMP      DEF       0            NUMBER OF COMPUTED REGIONS=0
+
+                                  TEXT
+
+ERRREGNF   TXT       "REGION NOT FOUND",0
+ERRDUPLO   TXT       "LOOP IN DUP REGIONS",0
+
+MSGSTART   TXT       "COMPUTE FINAL REGION SIZE",0
+MSGDONE    TXT       "END OF PASS",0
+MSGSTP     TXT       "STEPS",0
+
+OPDUP      EQU       D22          DUP
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEIN     EQU       0257         INPUT FROM TAPE 2 (PACT COMPACT CODE)
+
+

@@ -1,6 +1,6 @@
 /* cpanel.c: simulator control panel simulation
 
-   Copyright (c) 2017-2022, Roberto Sancho
+   Copyright (c) 2017-2025, Roberto Sancho
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -39,6 +39,7 @@
                         other visual devices while cpu is stopped). New function DrawText_surface to draw text
                         on any surface
   Mar/23        RSV     Defined NCP_SURFACE constant as parameter for CopyControlImage
+  Mar/25        RSV     Define CanBeClosed for DF, allow cpanels to be opened/closed programatically
 
    These simulator commands controls the control panel
 
@@ -239,7 +240,7 @@ MTAB cp_mod[] = {
 
 DEVICE cp_dev = {
     "CPANEL", &cp_unit, NULL /* cp_reg */, cp_mod,      // unit needed to attach the definition file
-    1, 10, 31, 1, 8, 8,                                 //??? what are these numbers ???
+    1, 10, 31, 1, 8, 8,                                 
     NULL, NULL, &cp_reset,
     NULL, &cp_attach, &cp_dettach,
     NULL /* &cp_dib */, DEV_DEBUG, 0, sim_cp_debug,     /* unit allways enabled */
@@ -1284,6 +1285,7 @@ process_tag:
                 // ControlPanelShortName=name                name of panel to use at "set cpanel select=short_name"
                 // ControlPanelShortName=name,TextInput      set the panel for text input (to scale only allowed ^+ and ^-. + and - are regular keys
                 //                            AlphaNumInput  set the panel for text input (but allow scale with + - ^Y ^+ and ^-. + and - are also returned as regular keys when used to scale)
+                //                            CanBeClosed    the panel can be closed and reopened, without closing the whole emulator
                 if (cpvid[ncp].short_name[0]) { 
                     DF_ERR("control panel name redefinition"); 
                     break;
@@ -1294,6 +1296,7 @@ process_tag:
                 if (Name2[0]) {
                     if (cmpstr(Name2, "TEXTINPUT", 32)) cpvid[ncp].bTextInput=1; else
                     if (cmpstr(Name2, "ALPHANUMINPUT", 32)) cpvid[ncp].bTextInput=2; 
+                    if (cmpstr(Name2, "CANBECLOSED", 32)) cpvid[ncp].bCanBeClosed=1; 
                 }
                 break;
             case CPDF_TAG_LOAD_IMG:
@@ -2169,6 +2172,15 @@ void ControlPanel_Bind(CP_TYPE *cp_type, UNIT *uptr, DEVICE *dptr)
 	cpanel_on = 0;
 }
 
+void set_env_var(char *var)
+{
+    int32 sv; 
+    sv=sim_switches; // save current global sin switches
+    sim_switches=0;  // set to none
+    sim_set_environment (0, var); 
+    sim_switches=sv; // restore
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////
 // Control Panel API
 // functions to be called from simulator xxx_cpanel.c 
@@ -2191,6 +2203,7 @@ int GetControlInfo(int Id, int mode)
         case CINFO_NITEMS: return CP.CArray[Id-CARRAY_START].Items; 
         case CINFO_NCP: return CP.Control[Id].ncp; 
         case CINFO_NOSCALE: return CP.Control[Id].NoScale; 
+        case CINFO_NAME: return ((int) (CP.Control[Id].Name)); 
     }
     fprintf(stderr, "GetControlInfo %d not defined on control %d\n", Id, mode);
     return -1; 
@@ -2824,7 +2837,7 @@ int refresh_during_fgets_thread_routine (void *arg)
 // issue fgets (will read user input from console). fgets function will return when user press <cr>
 // a thread is issued to refresh the cpanel while fgets is waiting for user input
 // if a button/key/switch on cpanel generates a SCP command, then fgets is cancelled, and the SCP
-// command is returnes as if it was types by user
+// command is returned as if it was types by user
 char * cpanel_fgets_threaded(const char *prompt, char *cptr, int32 size, FILE *stream)
 {
     char * cptr2; 
@@ -2876,10 +2889,19 @@ void AllControlRedrawNeeded(int ncp)
 }
 
 
-static void cp_quit_callback (void)
+static void cp_quit_callback (VID_DISPLAY * vptr_cp)
 {
+    int ncp; 
     // note: quit callback is executed on sim_video thread, not in main emulator thread
     // should not use sim_debug (is not thread safe) 
+
+    // if the panel being closed is allowed to be closed, just close this window without 
+    // requesting SimH exit
+    ncp = find_cpvid_by_vptr(vptr_cp); 
+    if ((ncp >= 0) && (cpvid[ncp].bCanBeClosed)) {
+       cpanel_stop_flag = 100 + ncp; // request cpvid_close(ncp)
+       return; 
+    }
     cpanel_stop_flag = 4; // request exit simh
 }
 
@@ -2991,7 +3013,7 @@ void DoActionPrintFreeControls(void)
     sim_printf("   Num Windows defined : %d (Max %d) used %d%%\n", cpvid_count, MAX_CPVID_WINDOWS, 100*cpvid_count/MAX_CPVID_WINDOWS);
     for(n=0; n<cpvid_count; n++) {
         sim_printf("      cpvid[%d] LongName='%s', ShortName='%s'\n", n, cpvid[n].long_name, cpvid[n].short_name);
-        sim_printf("                width=%d, height=%d, vptr %s\n", cpvid[n].xpixels, cpvid[n].ypixels, (cpvid[n].vptr_cp == NULL) ? "Not crated":"Created");
+        sim_printf("                width=%d, height=%d, vptr %s\n", cpvid[n].xpixels, cpvid[n].ypixels, (cpvid[n].vptr_cp == NULL) ? "Not Created":"Created");
     }
 }
 
@@ -3157,8 +3179,23 @@ int cpanel_visible(int ncp)
     return 1; 
 }
 
+// set/change the control panel window title
+void cpanel_title(int ncp, char * title)
+{
+    int Scale; 
+    char buf[256]; 
+
+    if (ncp<0) return; 
+    if (cpvid[ncp].vptr_cp == NULL) return; // no GUI window 
+    Scale = vid_GetWindowSizeAndPos(cpvid[ncp].vptr_cp, 'S'); 
+    // set title
+    strcpy_s(cpvid[ncp].long_name, 128, title);
+    sprintf(buf, "%s (Scale %d%%)", cpvid[ncp].long_name, Scale);
+    vid_set_title(cpvid[ncp].vptr_cp, buf);
+}
+
 // get/set control panel current scale for entry ncp in cpvid array
-// if scale >0 then set GUI scale (100 -> full size, 50% -> half size) (returns -1 on error)
+// if scale >0 then set GUI scale (100 -> full size, 50 -> half size) (returns -1 on error)
 // if scale =0 then returns current scale of window
 int cpanel_scale(int ncp, int Scale)
 {
@@ -3208,6 +3245,7 @@ int CheckHotKeys(int c)
 // returns 0 if no clickable control at PosX/PosY. 
 // returns 1 if there is one clickable control at PosX/PosY. 
 // if called with KeyPress_KeyRelease = 0 -> just returns 0/1 but does not call OnClick event
+//                                    = -1 -> returns 0/1 but only if coords PosX/Y over a IsDropFileTarget control
 int ProcessClickEventAtXY(int ncp, int PosX, int PosY, int KeyPress_KeyRelease) 
 {
     int i,j,X,Y,W,H, CId0, CId, bClickbleControlAtPosXY;
@@ -3225,6 +3263,7 @@ int ProcessClickEventAtXY(int ncp, int PosX, int PosY, int KeyPress_KeyRelease)
     // determine the control/array clicked top (this is the last one)
     for(i=0;i<CP.ControlItems;i++) {
         if (ncp!=CP.Control[i].ncp) continue; 
+        if ((KeyPress_KeyRelease<0) && (CP.Control[i].IsDropFileTarget==0)) continue; // looking for dropzones, but control is no dropzone
         X = CP.Control[i].X;    // get control boundaries
         Y = CP.Control[i].Y;
         W = CP.Control[i].W;
@@ -3373,6 +3412,7 @@ void ControlPanel_Refresh(void)
         if ((MaxH == 0) || (MaxH > H)) MaxH = H; 
         bShouldUpdateRect=0;
         // copy control pixels to GUI surface
+        if (surface==0) continue;  // safety
         for (iy=Y;iy<Y+MaxH;iy++) {
             if (iy < 0) {iy=-1; continue; }
             if (iy >= ypixels) break;
@@ -3381,7 +3421,8 @@ void ControlPanel_Refresh(void)
             for (ix=0;ix<W;ix++) {
                 xx=ix + X; 
                 if (xx >= xpixels) break;
-                if ((p >= xpixels * ypixels) || (n >= CP.SurfaceItems)) break;
+                if (p >= xpixels * ypixels) break;
+                if ((n >= CP.SurfaceItems) && (nStates > 0)) break;
                 if (Mark==0) {                     // draw control on surface
                     if (nStates > 0) {
                         c = CP.surface[n];         // use pixel color if has one
@@ -3494,7 +3535,7 @@ void ControlPanel_Refresh(void)
     // check file droped
     if (DropFile_FileName[0]) {
         // call ProcessClickEventAtXY to get the control where file is dropped in        
-        ProcessClickEventAtXY(cpinput.DropFile.ncp, DropFile_x_pos, DropFile_y_pos, 0); 
+        ProcessClickEventAtXY(cpinput.DropFile.ncp, DropFile_x_pos, DropFile_y_pos, -1); 
         // if defined, call callback for Dropfiles
         if ((CP_Click.CId >= 0) && (CP.CP_DropFile != NULL)) CP.CP_DropFile(CP_Click.CId, DropFile_FileName);
         DropFile_FileName[0]=0; 
@@ -3575,7 +3616,7 @@ int Refresh_needed(void)
 
 t_stat ControlPanel_Refresh_CPU_Running(void)
 {
-    int n, cpanel_stop;        
+    int n, cpanel_stop, ncp;        
 
     n=Refresh_needed();
     if (n>0) {
@@ -3588,13 +3629,19 @@ t_stat ControlPanel_Refresh_CPU_Running(void)
     }
 
     // check if GUI window close has been requested by user
-    // cpanel_stop_flag = 1 -> Control-E (^E = WRU) pressed while GUI has focus or Halt Cpu Button pressed
-    //                  = 2 -> same, but keep interactive mode
-    //                  = 3 -> close GUI, but do not stop cpu
-    //                  = 4 -> close GUI, and execute Bye scp command
+    // cpanel_stop_flag = 1   -> Control-E (^E = WRU) pressed while GUI has focus or Halt Cpu Button pressed
+    //                  = 2   -> same, but keep interactive mode
+    //                  = 3   -> close GUI, but do not stop cpu
+    //                  = 4   -> close GUI, and execute Bye scp command
+    //                  = 1XX -> close GUI window, but continue simulation
     cpanel_stop = cpanel_stop_flag; // make a local copy and clear the flag
     cpanel_stop_flag = 0;        
 
+    if (cpanel_stop >= 100) { //  cpanel_stop_flag = 100 + ncp; -> request cpvid_close(ncp)
+       ncp = cpanel_stop - 100; 
+       cpvid_close(ncp);
+       return SCPE_OK;
+    }
     if (cpanel_stop >= 3) {
         ControlPanel_done();
         if (cpanel_stop == 4) {
@@ -3758,6 +3805,7 @@ t_stat cp_set_cpanel_on (UNIT *uptr, int32 value, CONST char *cptr, void *desc)
         cp_types, 
         &cp_unit, &cp_dev); 
 
+    set_env_var (cpanel_on ? "CPANEL_ON=1":"CPANEL_ON=0"); 
     return SCPE_OK;
 }
 
@@ -3876,21 +3924,18 @@ t_stat cp_set_param(UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 t_stat cp_reset (DEVICE *dptr)
 {
     static int first_time_init=0;
-    int32 sv; 
 
     if (first_time_init==0) {
         first_time_init=1; 
         // set the environment variable CPANEL to value 1
         // so .ini scripts can detect if cpanel is available
-        sv=sim_switches; 
-        sim_switches=0; 
-        sim_set_environment (0, "CPANEL=1"); 
-        sim_switches=sv; 
+        set_env_var ("CPANEL=1"); 
     }
 
     sim_debug (CP_CMDS, &cp_dev, "Control Panel Reset\n");
     if ((cpanel_on) && (CP.CP_Reset != NULL)) CP.CP_Reset();
 
+    set_env_var (cpanel_on ? "CPANEL_ON=1":"CPANEL_ON=0"); 
     return SCPE_OK;
 }
 

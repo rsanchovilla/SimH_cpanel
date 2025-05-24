@@ -1,0 +1,106 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+         
+
+                                  SELF-LOADING PROGRAM TO LOAD ABS BIN PROGRAM CARDS 
+                                  THE FORMAT USED IS SPEEDEX FORMAT 
+
+                                  WHEN RUNNING SELFLOAD, THESE ARE THE ERROR STOPS:
+                                     STOP 0006   ERROR LOADING CARDS: NO CARD, PLACE DECK ON READ HOPPER AND PRESS START
+                                     STOP 2223   ERROR LOADING CARDS: BAD CHECKSUM 
+
+
+                                  ABS BINARY CARD LAYOUT. 
+
+                                   / ........ [ABS MC INSTR    ] [ABS MC INSTR    ] [            CHECK SUM              ]
+                                  |  ........ .................. .................. .................. .................. 
+                                  |  ........ .................. .................. .................. .................. 
+                                  |  ........ ........^......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] 
+                                  |  ........ [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] 
+                                  |  ........ [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] 
+                                  |  ........ [ NN ][   AAAA   ] [ 00 ][   TTTT   ] [ABS MC INSTR    ] [ABS MC INSTR    ] 
+                                               -----------------------------------
+                                                          CONTROL WORD
+
+                                     1ST WORD FROM CARD: NNAAAA00TTTT WHERE 
+                                                            NN=NUMBER OF FULLWORDS IN CARD (01..22)
+                                                            AAAA=ADDR TO LOAD TO (AAAA > 0036)
+                                                            TTTT=LOCATION TO TRANSFER TO (=0 TO READ NEXT CARD)
+                                     LAST WORD FROM CARD IS THE CHECKSUM. NOTE THAT THIS CHKSUM IS COMPUTED
+                                     WITH DIFFERENT PROCEDURE AS THE ONE USED FOR PACT RELATIVE BIN CARDS)
+
+
+
+           OUTDEC
+           ORG       0
+
+SELFLOAD - COPY      0002         -+ LOAD THE WHOLE CARD IN MEM
+TTTT     + R ADD     0003          | AT ADDRESSES 0000..0047 (DEC)
+SLEND    + ADD       0000          |
+         - COPY      0004          |
+SLSUM    + STORE A   0003          |
+         + TR        0001         -+
+                                 
+SLRD     + READ      2048         START READING BINARY CARD 
+         - COPY      0000         STORE AT LOC 0000 CONTROL WORD NNAAAA|00TTTT WHERE 
+         + TR        SL10               NN=NUMBER OF FULLWORDS TO LOAD, AAAA=ADDR TO LOAD, TTTT=LOCATION TO TRANSFER TO
+         + STOP      0006         END OF FILE STOP: ERROR LOADING CARDS: NO CARD, PLACE DECK ON READ HOPPER AND PRESS START
+SL10     - R ADD     0000         GET CONTROL WORD
+         - STORE     SLSUM        INIT CHKSUM
+         + STORE A   SLCOPY       SET LOADING ADDRESS
+         + A RIGHT   0030         GET NUMBER OF WORDS TO LOAD
+         + A LEFT    0019         
+         + SUB       SLCOPY       
+         + STORE     SLEND        
+                                 
+SLCOPY   - COPY      /   /        READ DATA WORD FROM CARD
+         - L LEFT    0035         GET JUST READ WORD
+         - ADD       SLSUM        UPDATE CHECKSUM
+         - STORE     SLSUM              
+         + R ADD     SLCOPY       INCR DESTINATION ADDR
+         + SUB       TWO                
+         + STORE     SLCOPY              
+         + ADD       SLEND             
+         + TR +      SLCOPY       ELSE READ NEXT WORD FROM CARD
+                                 
+SL26     - COPY      SLEND        READ CHKSUM WORD FROM CARD (IS LAST WORD)
+         + TR        SL26         TR IF THIS IS NOT LAST WORD OF CARD
+         + NOOP      0000         CONSTANT
+         - R ADD     SLEND        GET THE CHECKSUM IN CARD
+         - SUB       SLSUM        TEST IF CHKSUM MATCHES
+         + TR 0      SLSUMOK      IF =0 -> CHKSUM MATCHES -> TR CARD LOADED OK
+         + STOP      2223         CHECKSUM ERROR STOP
+                                 
+SLSUMOK  + R ADD     TTTT         GET TRANSFER LOC 
+         + TR 0      SLRD         IF ZERO, GO TO READ NEXT CARD
+         + STORE A   SLTRA        ELSE SET TO TRANSFER TO TTTT 
+         + TR OV     SLTRA        CLEAR OV
+SLTRA    + TR        /   /        TRANSFER TO TTTT 
+         
+         + NOOP      SELFLOAD     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+TWO      + STOP      0002         
+
+         + STOP      0000         Loc 0040: Spare
+         + STOP      0000         Loc 0041: Spare
+         + STOP      0000         Loc 0042: Spare
+         + STOP      0000         Loc 0043: Spare
+         + STOP      0000         Loc 0044: Spare
+         + STOP      0000         Loc 0045: Spare
+         + STOP      0000         Loc 0046: Spare
+         + STOP      0001         Loc 0047: Spare
+
+           END
+
+
+
+

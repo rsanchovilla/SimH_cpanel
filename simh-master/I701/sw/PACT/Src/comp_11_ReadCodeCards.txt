@@ -1,0 +1,755 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 11 READ CODE CARDS ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:CLRBUF      CLEAR CARD BUFFER 
+           HEAD      USE:READCRD     READ CARD (READ CARD BUFFER FROM CARD PUNCH DEVICE)
+           HEAD      USE:RDINT       READ DECIMAL INTEGER FROM CARD BUFFER
+           HEAD      USE:RDALF       READ PACKED ALFANUMERIC VALUE FROM CARD BUFFER
+           HEAD      USE:RDCHR       READ BASE48 CHAR FROM CARD BUFFER
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRTALF      PRINT PACKED ALFANUMERIC TEXT STRING
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:WRTAPE      WRITE MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:SRCHTBL     SEARCH TABLE
+           HEAD      USE:EQTBL       STORE VALUE INTO TABLE
+
+
+                                  PURPOSE:
+                                  - READS PACT SOURCE CODE CARDS
+                                  - DECODE THEM AND POPULATE COMPACT CODE RECORD
+                                  - SAVE COMPACT CODE RECORD TO TAPEOUT
+                                  - SAVE IN DRUM 0128, ADDR 0000: 
+                                       MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW) 
+
+
+RDALNUM  + ADD       TWO          READ 3 CHARS. RETURN ACC=0..999 IF IT IS A NUMERIC VALUE
+         + STORE A   RDALN1       OR RETURN ACC=ALFA 3-CHAR PACKED STRING (IT IS NEGATIVE)
+         + ADD       ONE
+         + STORE A   RDALNEX
+RDALN1   + R ADD     /   /        READ PARAM: THE START COL
+         + STORE     COL
+
+         + R ADD     *           
+         + TR        RDALF        READ 3 CHARS (CAN BE ALFA OR NUM)
+COL      + STOP      0000         STARTING AT COL GIVEN AS PARAM
+         + TR +      RDALNEX      IF ACC>=0 THEN TR BECAUSE IT IS A NUMERIC VALUE
+         + R ADD     ZERO         ACC WAS <0: READ AN ALFA VALUE
+         + L LEFT    0035         ACC=THE ALFA VALUE OF FACTOR FROM MQ
+RDALNEX  + TR        /   /
+
+ADDEOR   + ADD       TWO          ADD END OF REGION (EOR) RECORD TO TAPEOUT TO FINISH LAST REGION
+         + STORE A   ADDEOREX     EOR RECORD IS A COMPACT CODE EMPTY (ZEROED)
+         + R ADD     TPOUTAD
+         + STORE A   AETAP
+         + R ADD     CCLEN
+         + STORE     N
+AETAP    + WRITE     /   /        PREPARE TO WRITE ON TAPE
+AELOOP   - COPY      ZERO         WRITE ZERO TO TAPE
+         + R ADD     N
+         + SUB       TWO
+         + STORE     N
+         + TR 0      AELOOPE
+         + TR        AELOOP
+AELOOPE  + WRITE     2052         INSURE THAT MQ NOT IN USE            
+ADDEOREX + TR        /   /
+
+
+ADDREG   + ADD       TWO          ADD REGION TO LIST OF REGIONS
+         + STORE A   ADDREGEX     ERROR IF ALREADY IN LIST
+
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TREGIONS     ... TREGIONS TABLE 
+         + STOP      NREGIONS     ... SEARCH RANGE (SEARCH FROM 1..LEN)
+         + STOP      REGION       ... THE VALUE TO FIND 
+
+         + TR 0      ADDREG1      IF REGION NOT FOUND, TR TO ADD IT 
+         + R ADD     *            IF REGION FOUND -> ERROR
+         + TR        ERROR
+         + STOP      ERRREGAE     ERROR: REGION ALREADY EXITS
+
+ADDREGOV + R ADD     *            
+         + TR        ERROR
+         + STOP      ERROVREG     TOO MANY REGIONS DEFINED
+
+ADDREG1  + R ADD     NREGIONS     INCR NUM OF REGIONS DEFINED
+         + ADD       ONE
+         + STORE     NREGIONS     
+         + SUB       MAXNREGS
+         + TR +      ADDREGOV     ERROR IF > TABLE SIZE
+
+         + R ADD     *
+         + TR        EQTBL
+         + STOP      TREGIONS     ... TREGION[NREGIONS]=PVREG
+         + STOP      NREGIONS     
+         + STOP      REGION
+  
+ADDREGEX + TR        /   /
+
+
+
+INIT     + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "READ CARDS"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     ZERO
+         + STORE     NCARDS       TOTAL NUMBER OF PACT SOURCE CODE CARDS PROCESSED
+         + STORE     LAST         FLAG FOR LAST CARD
+         + STORE     NREGIONS     NUMBER OF REGIONS
+         + STORE     PVREG        PREVIOUS REGION
+         + STORE     PVSTEP       PREVIOUS STEP
+
+         + REWIND    TAPEOUT      REWIND TAPE OUT (PACT COMPACT CODE)
+
+READCARD + R ADD     *            READ PACT USER PROGRAM SOURCE CODE CARD
+         + TR        READCRD
+         + TR OV     ERRUEOD      ERROR: UNEXPECTED END OF DECK (LAST CARD SHOULD BE MARKED WITH Y(12) ON COL 72
+
+         + R ADD     NCARDS
+         + ADD       ONE
+         + STORE     NCARDS
+                        
+         + R ADD     D48          SKIP BLANK CARDS
+         + STORE     N            RSV: The manual does not state what to do on blank cards
+RD0      + R ADD     N                 but we implement to be ignored to ease the
+         + TR 0      READCARD          PACT source code readability
+         + SUB       D4
+         + STORE     N
+         + STORE A   RD1
+RD1      - R ADD     /   /
+         + TR 0      RD0
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR      
+
+                                  READ PACT CARD
+          
+                                           1         2         3
+                                  123456789012345678901234567890123456
+                                  [R][ST][OP][FAC][S1[S2[Q+[NUMBER   ]
+
+         + R ADD     *           
+         + TR        RDALF        READ REGION 
+ONE      + STOP      0001         STARTING AT COL 1         
+         + STORE MQ  REGION       STORE ALFA 
+
+         + R ADD     *           
+         + TR        RDINT        READ STEP
+D4       + STOP      0004         LEN=4 CHARS
+         + STOP      0004         STARTING AT COL 4
+         + STORE     STEP         STORE INTEGER
+
+         + R ADD     *           
+         + TR        RDALF        READ OPERATION (READ ONLY 3 CHARS, IGNORE 4TH ONE)
+         + STOP      0008         STARTING AT COL 8         
+         + STORE MQ  OP           STORE ALFA 
+
+         + R ADD     *           
+         + TR        RDCHR        READ CLUE CHAR
+         + STOP      0012         AT COL 12
+         + STORE     CLUE         STORE BASE48 CHAR
+
+         + R ADD     *           
+         + TR        RDALNUM      READ FACTOR (ALFA OR NUM)
+         + STOP      0013         AT COL 13
+         + STORE     FACT         (ALFA IF <0, NUM IF>0, BLANK IF =0) 
+
+         + R ADD     *           
+         + TR        RDCHR        READ 4TH FACTOR CHAR
+         + STOP      0016         AT COL 16
+         + STORE     FACT4        STORE BASE48 CHAR
+
+         + R ADD     *           
+         + TR        RDALNUM      READ S1 (ALFA OR NUM)
+         + STOP      0017         AT COL 17
+         + STORE     S1           (ALFA IF <0, NUM IF>0, BLANK/0 IF =0) 
+
+         + R ADD     *           
+         + TR        RDALNUM      READ S2 (ALFA OR NUM)
+         + STOP      0020         AT COL 20
+         + STORE     S2           (ALFA IF <0, NUM IF>0, BLANK/0 IF =0) 
+
+         + R ADD     *           
+         + TR        RDINT        READ Q OF RESULT VALUE
+TWO      + STOP      0002         LEN=2 CHARS
+         + STOP      0023         STARTING AT COL 23
+         + STORE     QR           STORE INTEGER
+
+         + R ADD     *           
+         + TR        RDCHR        READ NUMBER SIGN CHAR
+         + STOP      0025         AT COL 25
+         + STORE     NUMSGN       STORE BASE48 CHAR
+ 
+                                  READ THE NUMBER, IF ANY
+
+         + R ADD     ZERO         
+         - STORE     NUM
+         - STORE     NUMDECPT     DECIMAL POINT DIVIDENT
+         + STORE     QF           Q OF FACTOR
+
+         + R ADD     D26          COLUMN WHERE NUMBER STARTS
+         + SUB       ONE
+         + STORE     DIGCOL     
+NLOOP1   + R ADD     DIGCOL
+         + ADD       ONE
+         + STORE     DIGCOL     
+         + SUB       D36
+         + TR 0      NLOOPEND     ALL DIGITS PROCESSED
+
+         + R ADD     *           
+         + TR        RDCHR        READ NUMBER CHAR
+DIGCOL   + STOP      0000
+         + STORE     CHAR         STORE BASE48 CHAR
+         + TR 0      NLOOPEND     BLANK CHAR -> ALL DIGITS PROCESSED
+         
+         + SUB       D10
+         + TR 0      DIG0         BASE48 CODE=10 -> CHAR='0'
+         + TR +      DIGA
+         + TR        DIG9         BASE48 CODE=1..9 -> CHAR='1'..'9'
+DIGA     + SUB       D33     
+         + TR 0      DIGPT        BASE48 CODE=43 -> CHAR='.'
+
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRBADN      ERROR: CHAR IN NUMBER IS NOT 0..9 OR DECIMAL POINT
+
+DIG0     + R ADD     ZERO
+         + STORE     CHAR
+DIG9     - LOAD MQ   NUM          MULT NUM X 10
+         - MPY       NUM10        
+         - STORE MQ  NUM
+         + R ADD     CHAR         NUM = NUM + CHAR
+         + A RIGHT   0018
+         - ADD       NUM
+         - STORE     NUM
+
+         - R ADD     NUMDECPT     
+         + TR 0      NLOOP1
+         
+         - LOAD MQ   NUMDECPT     MULT NUMDECPT X 10
+         - MPY       NUM10        
+         - STORE MQ  NUMDECPT
+
+         + TR        NLOOP1
+         
+DIGPT    + R ADD     ONE          FOUND DECIMAL POINT
+         + A RIGHT   0018         NUMDECPT=1
+         - STORE     NUMDECPT     
+         + TR        NLOOP1
+
+NLOOPEND + LOAD MQ   ZERO
+         - R ADD     NUMDECPT     IF NO DECIMAL POINT, THE NUMBER IS CONSIDERED 
+         + TR 0      NUMISINT     TO BE AN INTEGER (Q=17). 
+
+         - LOAD MQ   NUM
+         - DIV       NUMDECPT     ACC=REMAINDER, MQ=INT PART OF VALUE
+         - STORE     FRAC         
+         - STORE MQ  NUM          INTEGER PART OF VALUE
+         - R ADD     FRAC
+         + LOAD MQ   ZERO         FRAC IS > NUMDECPT, SO NO PROBLEM ON DIVISION         
+         - DIV       NUMDECPT     
+         - STORE MQ  FRAC         FRACTIONAL PART OF VALUE
+
+         + R ADD     ZERO
+         - ADD AB    NUM
+         - STORE     NUM
+         + TR 0      ISZ1
+         + TR        NORM0        NUMBER NOT ZERO
+ISZ1     - R ADD     FRAC
+         + TR 0      NONUM        NUMBER IS ZERO
+         
+NORM0    + R ADD     D35          INIT Q=35
+NORM1    + STORE     QF
+         - R ADD     NUM          ACC,MQ PAIR CONTAINS THE FULL NUMBER
+         - L LEFT    0001         NORMALIZE NUM
+         + TR OV     SETSGN       ALREADY NORMALIZED, PROCEED TO SET THE SIGN
+         - STORE     NUM          
+         + R ADD     QF
+         + SUB       ONE
+         + TR        NORM1
+
+NUMISINT - R ADD     NUM          NUMBER IS INT. CHECK IF IT FITS IN LEFT-HALF WORD
+         + TR 0      NONUM
+         + A RIGHT   0018         IF NOT, ERROR INTEGER TOO BIG
+         + TR 0      NUMISI1
+
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRTOOBG     ERROR: INTEGER TOO BIG, OVERFLOWS Q=17. ADD A DECIMAL POINT SO IT CAN BE NORMALIZED TO THE NEEDED Q
+
+NONUM    + R ADD     ZERO
+         + STORE     QF
+         + R ADD     NUMSGN       NO NUMBER. CHECK ALSO THERE IS NO SIGN
+         + TR 0      NUMOK
+         + TR        ERRSGN
+
+NUMISI1  - R ADD     NUM          PUT NUMBER IN LEFT-HALF WORD, SET Q=17
+         + A LEFT    0018
+         - STORE     NUM
+         + R ADD     D17
+         + STORE     QF        
+
+SETSGN   + R ADD     ZERO         IF NUMBER SET -> IGNORE FACTOR
+         + STORE     FACT
+   
+         + R ADD     NUMSGN       BASE48 CHAR
+         + TR 0      NUMOK        BLANK -> POSITIVE NUMBER
+         + SUB       D11          IS '-' ?
+         + TR 0      NUMNEG       YES, CHANGE NUM SIGN
+         + SUB       ONE          IS '+'?
+         + TR 0      NUMOK        YES, POSITIVE NUMBER
+
+ERRSGN   + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRBADS      ERROR: SIGN FOR NUMBER IS NOT BLANK/+/-
+
+NUMNEG   - R SUB     NUM
+         - STORE     NUM
+NUMOK    + NOOP      0000
+        
+                                 GET OP CODE 
+
+         + R ADD     D36         SCAN ALFA VALUES OP TABLE
+         + STORE     N 
+         + R ADD     OPTBLEAD    SCAN STARTING AT END OF TABLE 
+         + STORE A   OPTBLR
+OPTBLR   + R ADD     /   /       READ OP TABLE MNEMONIC
+         + SUB       OP          
+         + TR 0      OPFOUND
+         + R ADD     N
+         + SUB       ONE
+         + STORE     N
+         + TR 0      OPNOTFND
+         + R ADD     OPTBLR
+         + SUB       ONE
+         + STORE A   OPTBLR
+         + TR        OPTBLR
+OPTBLEAD + STOP      OPTBLE       LOC OF END OF OPERATION TABLE
+ 
+OPNOTFND + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRBADOP     ERROR: BAD OPERATION
+
+OPFOUND  + R ADD     N
+         + STORE     OP           REPLACE OP ALFA VALUE WITH ITS OP NUMBER
+
+         + R ADD     *            CHECK Y(12) ON COL 72 ON CARD BUFFER
+         + TR        RDCHR        READ CHAR
+         + STOP      0072         AT COL 72
+         + STORE     CHAR         STORE BASE48 CHAR
+               
+         + R ADD     D12
+         + SUB       CHAR
+         + TR 0      LASTCRD      IF PUNCHED, THIS IS LAST CARD
+         + TR        NOTLAST
+LASTCRD  + R ADD     ONE
+         + STORE     LAST         LAST=1 TO SIGNAL THIS IS LAST CARD OF PACT SOURCE PROGRAM DECK
+NOTLAST  + NOOP      0000
+                                  PROCESS REGION
+         + R ADD     REGION
+         + TR 0      USEPVREG     IF REGION BLANK IN CARD THEN TR TO USE THE PREVIOUS REGION
+         + SUB       PVREG
+         + TR 0      REGOK        TR IF NO REGION CHANGE (USING SAME REGION AS PREVIOUS STEP)
+         + TR        NEWREG       TR TO HANDLE READING CARDS FOR A NEW REGION
+
+NOREG    + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOREG     ERROR: BLANK REGION, BUT NO PREVIOUS REGION DEFINED
+
+USEPVREG + R ADD     PVREG
+         + STORE     REGION
+         + LOAD MQ   REGION       PUT REGION IN CARD BUFFER
+         + R ADD     *
+         + TR        PRTALF
+         + STOP      0001         PUT REGION IN COL 1
+         + TR        REGOK
+
+NEWREG   + R ADD     ZERO         A NEW REGION STARTS
+         + STORE     PVSTEP       INIT PREVIOUS STEP
+         + R ADD     PVREG        IF PREVIOUS REG <> 0 THEN CALL ADDEOR TO ADD
+         + TR 0      ADDNEWRG     AN END OF REGION RECORD TO TAPEOUT. 
+         + R ADD     *
+         + TR        ADDEOR       ADD END OF REGION RECORD TO TAPEOUT
+ADDNEWRG + R ADD     *
+         + TR        ADDREG       ADD NEW REGION TO LIST OF REGIONS
+
+REGOK    + R ADD     REGION       FINAL CHECK TO GUARANTEE REGION DEFINED
+         + TR 0      NOREG
+         + STORE     PVREG
+                                  CHECK STEP NUMBER
+         + R ADD     STEP
+         + SUB       ONE
+         + TR +      STEPOK1      
+
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRBADST     ERROR: STEP IS ZERO, BLANK OR NON NUMERIC
+
+STSEQER  + R ADD     *            ERROR: BAD STEP SEQUENCE
+         + TR        ERROR
+         + STOP      ERRSTSEQ
+
+STEPOK1  + R ADD     PVSTEP 
+         + SUB       STEP
+         + TR +      STSEQER      TR TO ERROR IF STEP <= PREVIOUS STEP  
+         + R ADD     STEP 
+         + STORE     PVSTEP
+
+                                  PROCESS FACTOR
+         + R ADD     OP
+         + SUB       OPTR
+         + TR +      FACTA1
+         + TR        FACT0        OP < OPTR -> FACTOR FOR ARITHMETIC INSTR
+FACTA1   + R ADD     OP
+         + SUB       OPSET
+         + TR +      FACT0        OP >= SET -> FACTOR FOR FUNCTION INSTR
+
+         + R ADD     CLUE         HERE, OP IS A TRANSFER INSTR, FACTOR IS THE DESTINATION STEP NUMBER
+         + TR 0      FACTSTEP     GET FACT AS DESTINATION STEP NUMBER
+
+ERRNCLUE + R ADD     *            ERROR: CLUE MUST BE BLANK ON TRANSFERS/ON BLANK FACTOR
+         + TR        ERROR
+         + STOP      ERRNOCLU
+
+FACT0    + R ADD     FACT         HERE IS FACTOR FOR ARITH INSTR
+         + TR 0      FACT0BLK     IF FACTOR IS BLANK TR TO CHECK IF 4TH CHAR OF FACTOR IS BLANK
+         + TR +      FACT1        FACTOR > 0 -> IT IS AN INTEGER NUM/A STEP NUMBER MAYBE WITH CLUE
+         + TR        FACTOK2      FACTOR < 0 -> FACTOR IS ALFA MAYBE WITH CLUE -> LEAVE ITS CURRENT VALUE
+
+FACT0BLK + R ADD     FACT4
+         + TR 0      FACTOK1      IF FACT4=0 AND FACTOR = 0 -> FACTOR IS BLANK -> LEAVE ITS CURRENT VALUE, NO CLUE ALLOWED
+         + TR +      FACT1        IF FACT4>0 -> FACTOR IS AN INTEGER NUM/A STEP NUMBER MAYBE WITH CLUE
+         + TR        ERRFACT4     FACT=0 BUT FACT4 IS CHAR -> ERROR, FACT 4TH CHAR CANNOT BE ALFA
+
+FACT1    + R ADD     CLUE         
+         + TR 0      FACTNUM      BLANK CLUE -> FACTOR IS AN INTEGER POSITIVE NUMBER
+         + SUB       D11
+         + TR 0      FACTNUM      CLUE = '-' -> FACTOR IS A NEGATIVE INTEGER NUMBER
+         + SUB       D15
+         + TR 0      FACTSTEP     CLUE = 'N' -> FACTOR IS MINUS RESULT OF STEP 
+         + SUB       D4
+         + TR 0      FACTSTEP     CLUE = 'R' -> FACTOR IS RESULT OF STEP 
+         
+         + R ADD     *            ERROR: INVALID CLUE. SHOULD BE - R N
+         + TR        ERROR
+         + STOP      ERRCLUE
+
+FACTNUM  + R ADD     FACT
+         - STORE     NUM
+         + R ADD     D17
+         + STORE     QF
+         + R ADD     ZERO
+         + STORE     FACT
+         + TR        FACTOK2
+
+FACTSTEP + R ADD     FACT4        4TH FACTOR CHAR
+         + TR 0      FACTOK0B     =0 -> IS BLANK -> INTERPRETED AS ZERO
+         + R ADD     D10 
+         + SUB       FACT4        
+         + TR 0      FACTOK0A     ='0' (BASE48 VALUE=10) -> CONVERT TO BINARY ZERO
+         + TR +      FACTOK0B     =1..9 -> 4TH FACTOR CHAR IS A DIGIT
+   
+ERRFACT4 + R ADD     *            ERROR: 4TH FACTOR CHAR IS NOT A DIGIT '0'..'9'/BLANK
+         + TR        ERROR
+         + STOP      ERRBADF4
+
+FACTOK0A + STORE     FACT4
+FACTOK0B + R ADD     FACT         FACTOR IS A STEP NUMBER. 
+         - STORE     FRAC         COMPUTE FACTOR'=FACTOR X 10 + 4TH FACTOR CHAR
+         - LOAD MQ   FRAC         USE FRAC AS SCRATCHPAD FULL-WORD 
+         - MPY       NUM10        FRAC = FACT X 10
+         - STORE MQ  FRAC         FACT' = FRAC + FACT4 
+         + R ADD     FRAC         FACT = 1..9999
+         + ADD       FACT4
+         + STORE     FACT 
+         + TR        FACTOK2
+         
+FACTOK1  + R ADD     CLUE         CHECK NO CLUE
+         + TR 0      FACTOK2
+         + TR        ERRNCLUE     TR TO ERROR IF CLUE
+
+FACTOK2  + NOOP      0000         FACT < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+                                  FACT = 0 -> BLANK FACTOR (MAYBE THERE IS A VALUE SET IN NUM)
+                                  FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+
+         + R ADD     OP           IF OP=TAKE, AND QR IS BLANK
+         + SUB       OPTAKE       THEN USE AS QR THE QF VALUE (MAY HAVE BEEN SET BY FACTOR/NUMBER)
+         + TR 0      FACTOK3A
+         + TR        FACTOK
+FACTOK3A + R ADD     QR
+         + TR 0      FACTOK3B
+         + TR        FACTOK
+FACTOK3B + R ADD     QF
+         + STORE     QR
+
+FACTOK   + NOOP      0000
+                                  COPY PACT SOURCE CODE TO COMPACT CODE RECORD
+
+         + R ADD     ZERO         COPY LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 TO PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC1    - R ADD     /   /
+CPCC     - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+         + TR 0      CPCC2
+         + TR        CPCC1 
+CPCCE    - R ADD     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY TO 
+
+                                  SAVE COMPACT CODE RECORD IN TAPE
+
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT (PACT COMPACT CODE)
+TPOUTAD  + STOP      TAPEOUT
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      CCLEN        LEN
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+ENDLOG1  + NOOP      0000 
+
+                                  PROCESS NEXT CARD
+
+         + R ADD     LAST
+         + TR 0      READCARD
+                                  NO MORE CARDS. 
+
+         + R ADD     *
+         + TR        ADDEOR       ADD END OF REGION RECORD TO TAPEOUT TO FINISH LAST REGION
+         
+         + R ADD     *
+         + TR        RWDRUM       SAVE TREGIONS ARRAY IN DRUM
+         + WRITE     0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNREGS     ADDR OF START OF TABLES
+         + STOP      0102         MAXNREGS (1 HALF-WORD) + NREGIONS (1 HW) + TREGIONS (100 HW)
+
+         + WRITE EF  TAPEOUT      WRITE EOF IN TAPE OUT (COMPACT CODE)
+
+                                  IF SW6 ON THEN 
+                                  PRINT TOTAL NUMBER OF PACT SOURCE CODE CARDS 
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGDONE      "CARDS"
+         + STOP      0210         INT AT COL 10
+         + STOP      NCARDS       NUMBER OF PACT SOURCE CODE CARDS PROCESSED
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+ENDLOG1B + NOOP      0000
+
+         + REWIND    TAPEOUT      OUTPUT TO TAPE 1 (PACT COMPACT CODE)
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+ERRUEOD  + R ADD     *            CLEAR CARD BUFFER AS NO CARD HAS BEEN READ
+         + TR        CLRBUF
+
+         + R ADD     *
+         + TR        ERROR
+         + STOP      ERRUEODS     ERROR: UNEXPECTED END OF DECK (LAST CARD SHOULD BE MARKED WITH Y(12) ON COL 72
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE. PRINT ALLWAYS
+
+         + STOP      READCARD     IF USER PRESS STARTS, PROGRAM RESUMES READING NEXT SOURCE CODE CARD 
+
+           ORG       EVEN
+
+                                  COMPACT CODE RECORD
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0
+S2N        DEF       0
+D1N        DEF       0
+D2N        DEF       0
+NINST      DEF       0
+NINCR      DEF       0
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START 
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+N          DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+                                  TABLES (SHOULD AT EVEN LOCATION)
+
+MAXNREGS   DEF       100          MAX 100 REGIONS CAN DE DEFINED IN ONE PROGRAM 
+NREGIONS   DEF       0            NUMBER OF REGIONS DEFINED
+TREGIONS   RES       100          EACH ENTRY IN TABLE IS 1 HALF-WORD. HAS THE NAME (ALFA) OF REGION
+
+
+NUM10      DEF       0            
+           DEF       10
+NUMDECPT   DEF       0            
+           DEF       0
+FRAC       DEF       0            
+           DEF       0
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+D10        DEF       10
+D11        DEF       11
+D12        DEF       12
+D15        DEF       15
+D17        DEF       17
+D18        DEF       18
+D26        DEF       26
+D33        DEF       33
+D35        DEF       35
+D36        DEF       36
+D48        DEF       48
+
+FACT4      DEF       0            
+CHAR       DEF       0            
+NUMSGN     DEF       0            
+
+NCARDS     DEF       0            TOTAL NUMBER OF PACT SOURCE CODE CARDS PROCESSED
+LAST       DEF       0            FLAG FOR LAST CARD
+PVREG      DEF       0            PREVIOUS REGION
+PVSTEP     DEF       0            PREVIOUS STEP
+
+                                  TEXT
+
+ERRUEODS   TXT       "UNEXPECTED END OF DECK",0    ERROR: UNEXPECTED END OF DECK (LASt CARD SHOULD BE MARKED WITH Y(12) ON COL 72
+ERRBADN    TXT       "BAD NUMBER",0                CHAR IN NUMBER IS NOT 0..9 OR DECIMAL POINT
+ERRBADS    TXT       "BAD NUMBER SIGN",0           SIGN FOR NUMBER IS NOT BLANK/+/-
+ERRBADOP   TXT       "BAD OPERATION",0             UNKNOWN PACT OPERATION
+ERRNOREG   TXT       "NO REGION",0                 BLANK REGION, BUT NO PREVIOUS REGION DEFINED
+ERRREGAE   TXT       "REGION ALREADY EXITS",0  
+ERROVREG   TXT       "TOO MANY REGIONS DEFINED",0
+ERRBADST   TXT       "BLANK OR NON NUMERIC STEP",0
+ERRBADF4   TXT       "4TH FACTOR CHAR NO NUMERIC",0
+ERRSTSEQ   TXT       "BAD STEP SEQUENCE",0         CURRENT STEP NUMBER IS NOT > PREVIOUS ONE
+ERRCLUE    TXT       "INVALID CLUE",0              INVALID CLUE. SHOULD BE - R N
+ERRNOCLU   TXT       "CLUE MUST BE BLANK",0        TRANSFER OPERATIONS DOES NOT ALLOWS ANY CLUE
+ERRTOOBG   TXT       "INT TOO BIG",0               INTEGER IN NUMBER FIELD TOO BIG FOR Q=17. ADD A DECIMAL POINT SO IT CAN BE NORMALIZED TO THE NEEDED Q
+
+MSGSTART   TXT       "READ CARDS",0
+MSGDONE    TXT       "CARDS READ",0
+
+           TXT       '   '        OP=1   TAKE OPERATION
+           TXT       '+  '        OP=2
+           TXT       '-  '        OP=3
+           TXT       'X  '        OP=4
+           TXT       '/  '        OP=5
+           TXT       'RES'        OP=6
+           TXT       'EQ '        OP=7
+           TXT       '+AB'        OP=8   +ABS
+           TXT       '-AB'        OP=9   -ABS
+           TXT       'ABS'        OP=10
+           TXT       'T  '        OP=11
+           TXT       'TZ '        OP=12
+           TXT       'TP '        OP=13
+           TXT       'TN '        OP=14
+           TXT       'TF '        OP=15
+           TXT       'HAL'        OP=16  HALT
+           TXT       'TES'        OP=17  TEST
+           TXT       'SET'        OP=18
+           TXT       'USE'        OP=19
+           TXT       'DO '        OP=20
+           TXT       'EXI'        OP=21  EXIT
+           TXT       'DUP'        OP=22
+           TXT       'LIB'        OP=23
+           TXT       'ID '        OP=24
+           TXT       'FOR'        OP=25
+           TXT       'CAL'        OP=26  CALL
+           TXT       'SIN'        OP=27
+           TXT       'COS'        OP=28
+           TXT       'ARC'        OP=29  ARCT
+           TXT       'SQR'        OP=30  SQRT
+           TXT       'LOG'        OP=31
+           TXT       'EXP'        OP=32
+           TXT       'SE '        OP=33
+           TXT       'CL '        OP=34
+           TXT       'REA'        OP=35  READ
+OPTBLE     TXT       'LIS'        OP=36  LIST
+
+OPTAKE     EQU       ONE          TAKE
+OPTR       EQU       D11          TR
+OPSET      EQU       D18          SET
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEOUT    EQU       0257         OUTPUT TO TAPE 1 (PACT COMPACT CODE)
+
+

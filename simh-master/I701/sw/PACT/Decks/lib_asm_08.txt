@@ -1,0 +1,94 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0    90
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF     0  COSFN
+;  
+         0000 +SA I 0072 COSFN    + STORE A   EXIT         SAVE ACC
+         0001 +RA I 0072          + R ADD     EXIT         RESTORE ACC
+         0002 +A  I 0075          + ADD       TWO          
+         0003 +SA I 0007          + STORE A   P1           PARM: Q OF ARGUMENT (GIVEN IN MQ). 
+         0004 +A  I 0074          + ADD       ONE
+         0005 +SA I 0072          + STORE A   EXIT
+         0006 -SM I 0082          - STORE MQ  ANGLE        ANGLE (IN RADIANS)
+         0007 +RA A 0000    P1    + R ADD     /   /        GET Q OF ARGUMENT. CAN BE NEGATIVE
+         0008 +S  I 0076          + SUB       D4
+         0009 +TZ I 0019          + TR 0      NORM         =0 -> NO NEED TO SHIFT ANGLE VALUE
+         0010 +TP I 0015          + TR +      LF           >0 -> SHIFT LEFT
+         0011 +SA I 0013          + STORE A   RT1          <0 -> SHIFT RIGHT
+         0012 -RA I 0082          - R ADD     ANGLE
+         0013 +AR A 0000    RT1   + A RIGHT   /   /
+         0014 +T  I 0018          + TR        ANG
+         0015 +SA I 0017    LF    + STORE A   LF1
+         0016 -RA I 0082          - R ADD     ANGLE
+         0017 +AL A 0000    LF1   + A LEFT    /   /
+         0018 -ST I 0082    ANG   - STORE     ANGLE        NOW ANGLE IS SET WITH Q=4 -> -916gr..+916gr
+         0019 -RA I 0080    NORM  - R ADD     PI
+         0020 -AR A 0001          - A RIGHT   0001         ACC=PI/2
+         0021 -A  I 0082          - ADD       ANGLE        ACC=ANGLE + PI/2
+         0022 -ST I 0082          - STORE     ANGLE        COS(X)=SIN(X+PI/2)
+         0023 -RA I 0082          - R ADD     ANGLE        NORMALIZE ANGLE: TO FIT IN RANGE -PI..+PI
+         0024 -LR A 0035          - L RIGHT   0035         ACC=0, MQ=ANGLE
+         0025 -D  I 0078          - DIV       TWOPI        ACC CONTAINS THE REMAINDER (MODULO 2PI AT Q=4)
+         0026 -ST I 0082          - STORE     ANGLE
+         0027 -S  I 0080          - SUB       PI
+         0028 +TP I 0034          + TR +      NORM1        TR IF ANGLE > +PI -> MUST ADJUST
+         0029 -RA I 0082          - R ADD     ANGLE
+         0030 -A  I 0080          - ADD       PI
+         0031 +TP I 0036          + TR +      NORM2        TR IF ANGLE > -PI -> IN RANGE
+         0032 -A  I 0080          - ADD       PI           ANGLE IS IN RANGE -2PI..-PI. ADD 2PI TO PLACE THE ANGLE IN RANGE 0..PI
+         0033 +T  I 0035          + TR        NORM1B         
+         0034 -S  I 0080    NORM1 - SUB       PI           SUB 2PI TO PLACE THE ANGLE IN RANGE -PI..0
+         0035 -ST I 0082   NORM1B - STORE     ANGLE        
+         0036 -RA I 0080    NORM2 - R ADD     PI           NORMALIZE ANGLE TO RANGE -PI/2..+PI/2
+         0037 +AR A 0001          + A RIGHT   0001         ACC=PI/2
+         0038 -S  I 0082          - SUB       ANGLE        
+         0039 -TP I 0042          - TR +      NORM2A       IF ANGLE < PI/2 TR TO CONTINUE RANGE CHECK
+         0040 -RA I 0080          - R ADD     PI           ANGLE > PI/2 -> MUST ADJUST -> ANGLE = PI - ANGLE  
+         0041 +T  I 0046          + TR        NORM5
+         0042 -S  I 0080   NORM2A - SUB       PI
+         0043 -TP I 0045          - TR +      NORM3        IF ANGLE < -PI/2 -> MUST ADJUST 
+         0044 -T  I 0048          - TR        DO.SIN       TR AS ANGLE IN RANGE -PI/2..PI/2
+         0045 -RS I 0080    NORM3 - R SUB     PI           HERE ANGLE < -PI/2 -> ANGLE = -PI - ANGLE
+         0046 -S  I 0082    NORM5 - SUB       ANGLE 
+         0047 -ST I 0082          - STORE     ANGLE        
+         0048 +RA I 0082 DO.SIN   + R ADD     XX           COMPUTE SIN(XX=ANGLE) WITH Q=4
+         0049 +ST I 0086          + STORE     RES          XX MUST BE < 2 (ELSE DIV CHECK) -> THIS IS WHY WE NORMALIZE TO -PI/2..+PI/2
+         0050 +ST I 0084          + STORE     TERM
+         0051 +RA I 0077          + R ADD     ONEQ4
+         0052 +ST I 0088          + STORE     N            N=1
+         0053 +RA I 0088 LOOP     + R ADD     N            COMPUTE: TERM = - (TERM * XX * XX) / ((N+1) * (N+2))
+         0054 +A  I 0077          + ADD       ONEQ4
+         0055 +ST I 0089          + STORE     NN
+         0056 +A  I 0077          + ADD       ONEQ4
+         0057 +ST I 0088          + STORE     N
+         0058 +RS I 0084          + R SUB     TERM
+         0059 +LM I 0073          + LOAD MQ   ZERO
+         0060 +D  I 0089          + DIV       NN           MQ= TERM/(N+1) AT Q=QTERM-QNN = 4-4=0
+         0061 -M  I 0082          - MPY       XX           NO NEED TO LOAD MQ WITH VALUE. ALREADY SET BY DIV ABOVE. QRES=0+QXX=4. RESULT IN ACC
+         0062 +LM I 0073          + LOAD MQ   ZERO
+         0063 +D  I 0088          + DIV       N            MQ= TERM/(N+2) AT Q=QACC-QN = 4-4=0
+         0064 -M  I 0082          - MPY       XX           NO NEED TO LOAD MQ WITH VALUE. ALREADY SET BY DIV ABOVE. QRES=0+QXX=4. RESULT IN ACC
+         0065 -ST I 0084          - STORE     TERM         AT Q=4
+         0066 +TZ I 0070          + TR 0      LOOPE
+         0067 +A  I 0086          + ADD       RES
+         0068 +ST I 0086          + STORE     RES          RESULT = RESULT + TERM
+         0069 +T  I 0053          + TR        LOOP
+         0070 +RA I 0086 LOOPE    + R ADD     RES          PUT THE RESULT IN ACC (Q=4)
+         0071 +AL A 0003          + A LEFT    0003         SO RESULT IS Q=1
+         0072 +T  A 0000 EXIT     + TR        /   /        RETURN TO CALLER
+         0073 +000000    ZERO       DEF       0
+         0074 +000001    ONE        DEF       1
+         0075 +000002    TWO        DEF       2
+         0076 +000004    D4         DEF       4
+         0077 +008192    ONEQ4      DEF       *20000       ONE REPRESENTED WITH Q=4 -> 0001 0...
+         0078 +051471    TWOPI      DEF       *144417      VALUE OF 2xPI AT Q=4     
+         0079 -092800               DEF       *665200            
+         0080 +025735    PI         DEF       *062207      VALUE OF PI AT Q=4     
+         0081 -111936               DEF       *732500             
+         0082 +000000    ANGLE      RES       2
+         0084 +000000    TERM       RES       2
+         0086 +000000    RES        RES       2
+         0088 +000000    N          RES       1
+         0089 +000000    NN         RES       1

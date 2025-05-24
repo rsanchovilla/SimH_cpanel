@@ -1,0 +1,221 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:DECOTNNN          DECODE TEXT ABSOLUTE ASSEMBLER CARD NNNN INITIATOR
+                                           RETURNS ACC=1 IF COL 1 HAS AN 'N'
+                                                   ELSE RETURNS ZERO
+
+
+           HEAD      DEF:DECOTABS          DECODE TEXT ABSOLUTE ASSEMBLER CARD 
+                                           IN CARD IMAGE BUFFER ADDR 0000..0047
+                                           RETURNS 
+                                              ACC = +/- MC.OP  MC.ADDR | MC.FORMAT
+                                              MQ  =   + 00      MC.LOC 
+                                              OV=1 IF BLANK LINE (SIGN IF BLANK)
+
+                                           PRINT ERROR ON PRINTER IF SOMETHING GOES WRONG DECODING
+                                                            
+                                             1         2         3         4         5         6         7 
+                                    123456789012345678901234567890123456789012345678901234567890123456789012
+                                    nnnn+nn nnnn COMMENT       THIS CARD IMAGE -> MC.FORMAT=1
+                                  MC.LOC^^  ^       
+                                  MC.SGN||  |MC.ADDR
+                                    MC.OP|  
+
+                                             1         2         3         4         5         6         7 
+                                    123456789012345678901234567890123456789012345678901234567890123456789012
+                                    nnnn+nnnnnn  COMMENT       THIS CARD IMAGE -> MC.FORMAT=2
+                                  MC.LOC^^  
+                                  MC.SGN||NUM = MC.OP << 12 + MC.ADDR
+
+           HEAD      USE:RDINT           READ DECIMAL INTEGER FROM CARD BUFFER
+           HEAD      USE:RDCHR           READ BASE48 CHAR FROM CARD BUFFER
+           HEAD      USE:PRTNLINE        PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD        PRINT CARD BUFFER
+             
+
+DECOTNNN + ADD       TWO          DECODE TEXT RELATIVE ASSEMBLER CARD
+         + STORE A   EXIT         RETURN ADDR
+
+         + R ADD     *
+         + TR        RDCHR        READ 1 CHAR
+         + STOP      0001         AT COL 1 
+         
+         + SUB       D26          'N'
+         + TR 0      DECON        IF CHAR = 'N' TR DECON
+         + R ADD     ZERO
+         + TR        EXIT
+
+DECON    + R ADD     ONE
+         + TR        EXIT
+
+DECOTABS + ADD       TWO          DECODE TEXT RELATIVE ASSEMBLER CARD
+         + STORE A   EXIT         RETURN ADDR
+
+         + TR OV     DECO0        CLEAR OV
+DECO0    + R ADD     *           
+         + TR        RDCHR        READ SIGN '+' OR '-'
+         + STOP      0005         AT COL 5
+         + STORE     MC.SGN       STORE BASE48 CHAR. 
+         + TR 0      DECOBLNK     SIGN IS ' ' -> BLANK LINE
+
+         + R ADD     *           
+         + TR        RDINT        READ RELATIVE LOCATION
+         + STOP      0004         LEN=4 CHARS
+         + STOP      0001         STARTING AT COL 1
+         + STORE     MC.LOC       STORE INTEGER
+
+         + A RIGHT   0030         SHIFT 30=A RIGHT 0012 + A RIGHT 0018
+         + TR 0      DECO1        TR IF CHECK MC.LOC < 4096
+
+EGT4K    + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRGT4K      ERROR: LOCATION/ADDRESS > 4095
+
+DECOBLNK + R ADD     ONE          SIGN IS ' ' -> BLANK LINE
+         + A LEFT    0019         SET OV=1
+         + TR        EXIT
+
+DECO1    + R ADD     MC.SGN       
+         + SUB       D11          '-'
+         + TR 0      DECO2
+         + SUB       ONE          WAS =12 -> '+'        
+         + TR 0      DECO2
+         
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRBADSG     ERROR: BAD SIGN. SHOULD BE '+' OR '-'
+
+DECO2    + R ADD     *
+         + TR        RDCHR        READ 1 CHAR 
+         + STOP      0008         AT COL 8 (=1ST CHAR AFTER OPCODE)
+         + STORE     CHAR8
+
+         + R ADD     *
+         + TR        RDCHR        READ 1 CHAR
+         + STOP      0007         AT COL 7 (=LAST CHAR OF OPCODE)
+         + STORE     CHAR7
+
+         + R ADD     CHAR8
+         + TR 0      DECO2A
+         + TR        DECONUM      IF CHAR IN COL 8 NOT EMPTY -> IS A NUMBER FOR SURE -> TR TO PROCESS AS NUMBER
+DECO2A   + R ADD     CHAR7
+         + TR 0      DECONUM      COL 8 EMPTY. IF CHAR IN COL 7 ALSO EMPTY -> IS A NUMBER FOR SURE -> TR TO PROCESS AS NUMBER
+         + TR        DECOMC
+
+                                  GET THE NUMBER
+DECONUM  + R ADD     *            
+         + TR        RDINT        READ NUMBER         NOTE: NO SIGN IS READ HERE. BUT IF NUM READ >= 131072 (=octal 400000)
+         + STOP      0006         LEN=6 DIGITS              RETURNED NUM WILL BE NEGATIVE
+         + STOP      0006         STARTING AT COL 6
+         + STORE     NUM          STORE INTEGER.   
+
+         + TR +      DECO3        TR IF NUM >= 0
+
+                                  NORMALIZE NUM (MAKES IT POSITIVE, MAKE MC.SGN '-')
+
+         + R ADD     D11          BASE48 CODE FOR '-' IS 11
+         + STORE     MC.SGN       SGN='-' -> SET SIGN NEGATIVE
+         + R ADD     ZERO
+         + ADD AB    NUM
+         + STORE     NUM          MAKE NUM POSITIVE 0..131071
+
+DECO3    + R ADD     TWO
+         + STORE     MC.FMT       =2 -> SET AS REL TEXT NUMBER 
+
+         + TR        DECODEOK     DECODE DONE, TR TO RETURN DECODED INSTR
+
+
+DECOMC   + R ADD     *           
+         + TR        RDINT        READ OPCODE
+         + STOP      0002         LEN=2 DIGITS
+         + STOP      0006         STARTING AT COL 6
+         + STORE     MC.OP        STORE INTEGER
+
+         + R ADD     *           
+         + TR        RDINT        READ INSTR ADDRESS
+         + STOP      0004         LEN=4 DIGITS
+         + STOP      0009         STARTING AT COL 9
+         + STORE     MC.ADDR      STORE INTEGER
+
+         + A RIGHT   0030         SHIFT 30=A RIGHT 0012 + A RIGHT 0018
+         + TR 0      MC5          TR ERROR IF ADDR < 4096
+         + TR        EGT4K        TR ERROR IF ADDR > 4095
+
+MC5      + R ADD     ONE
+         + STORE     MC.FMT       =1 -> SET AS REL TEXT INSTR 
+
+         + R ADD     MC.OP        IS 0..31
+         + A LEFT    0012
+         + ADD       MC.ADDR      IS 0..4095
+         + STORE     NUM 
+
+                                  RETURNS     ACC = +/- MC.OP  MC.ADDR | MC.FORMAT
+                                              MQ  =   + MC.REG MC.LOC 
+
+DECODEOK + R ADD     MC.SGN       IS 11 ('-') OR 12 ('+')
+         + SUB       D12
+         + L RIGHT   0000         IF MC.SGN = '-' THEN MQ IS SET TO NEGATIVE
+
+         + R ADD     MC.FMT       IS 1..2 
+         + A RIGHT   0018         PLACE MC.FORMAT IN RIGHT HALF WORD OF ACC
+         + ADD       NUM
+         + L LEFT    0000         COPY SIGN FROM MQ TO ACC 
+
+         + LOAD MQ   MC.LOC
+
+EXIT     + TR        /   /
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE
+
+         + STOP      ERRCONT      IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING 
+
+ERRCONT  + R ADD     ZERO
+         + LOAD MQ   ZERO
+         + TR        EXIT
+
+
+
+ERRGT4K    TXT       "BAD LOC/ADDR",0              ERROR: LOCATION/ADDRESS > 4095
+ERRBADSG   TXT       "BAD SIGN",0                  ERROR: BAD SIGN. SHOULD BE '+' OR '-'
+
+                                  VARS/CONST HALF-WORD
+
+MC.LOC     DEF       0            
+MC.SGN     DEF       0            =1 -> '+', =-1 -> '-'
+MC.OP      DEF       0            0..31 (NO SIGN)
+MC.ADDR    DEF       0            0..4095
+MC.FMT     DEF       0            =1 -> TEXT FORMAT, MC INSTR, =2 -> TEXT FORMAT, NUM
+
+NUM        DEF       0            0..131071 (NO SIGN) 
+CHAR7      DEF       0
+CHAR8      DEF       0
+
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D11        DEF       11
+D12        DEF       12
+D26        DEF       26
+

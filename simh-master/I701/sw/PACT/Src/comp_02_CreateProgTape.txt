@@ -1,0 +1,475 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STANDALONE PROG CREATE LIBRARY TAPES, PACT COMPILER 
+           HEAD      USE:READCRD     READ CARD (READ CARD BUFFER FROM CARD PUNCH DEVICE)
+           HEAD      USE:RDINT       READ DECIMAL INTEGER FROM CARD BUFFER
+           HEAD      USE:RDCHR       READ BASE48 CHAR FROM CARD BUFFER
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:WRTAPE      WRITE TO MAGNETIC TAPE
+           HEAD      USE:WRITECR2    WRITE CARD (SEND CARD BUFFER TO CARD PUNCH DEVICE)
+           HEAD      USE:DECOTABS    DECODE TEXT ABSOLUTE ASSEMBLER CARD 
+           HEAD      USE:DECOTNNN    DECODE TEXT ABSOLUTE ASSEMBLER CARD NNNN INITIATOR
+           HEAD      USE:WRIBABS     WRITE DATA INTO A BINARY ABSOLUTE CARD IMAGE (UP TO 44 MC INST PER CARD)
+           HEAD      USE:MEMCOPY     COPY MEMORY STORAGE FROM ONE ADDR TO ANOTHER
+              
+                                  PURPOSE:
+                                  - STANDALONE PROGRAM TO GENERATE PACT COMPILER TAPE
+                                  - READS CONTROL CARDS WITH ACTION TO PERFORM
+
+                                              1
+                                     123456789012 <-- COLUMNS IN CONTROL CARD
+
+                                     1            read Self-Loader (SL) card in ABS text format. 
+                                     2 1234 5678  write in 1234 device a SL card (to load ABS bin prog from 5678 device). 
+                                     3 1234       read program deck in ABS text format, write in 1234 device as ABS bin prog
+                                     4 1234 5678  write in 1234 device records read from device 5678 (until eof)
+
+
+
+                                  RSV: We do not have any info on how compiler is built in tape and how 
+                                       stages are loaded and executed. This is a solution that works
+                                       and uses SpeedEx card formats on tapes that -at least- is same era
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "GENERATE PROG"
+         + STOP      0000         END OF LINE. 
+
+START    + TR        READCC 
+READCC   + R ADD     *            READ CONTROL CARD
+         + TR        READCRD
+         + TR OV     EOF
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+
+         + R ADD     *
+         + TR        RDCHR        READ 1 CHAR
+         + STOP      0001         AT COL 1 
+          
+         + TR 0      READCC       SKIP  "             comments" 
+         + SUB       ONE
+         + TR 0      ACTION1      TR TO "1            read SL card in ABS text format"
+         + SUB       ONE
+         + TR 0      ACTION2      TR TO "2 1234 5678  write in 1234 device a SL card (to load ABS bin prog from 5678 device). "
+         + SUB       ONE
+         + TR 0      ACTION3      TR TO "3 1234       read program deck in ABS text format, write in 1234 device as ABS bin prog"
+         + SUB       ONE
+         + TR 0      ACTION4      TR TO "4 1234 5678  write in 1234 device records read from device 5678 (until eof) "
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      EBADCC       "INVALID CC"        invalid control card
+         + STOP      0000         END OF LINE.         
+         + STOP      READCC       STOP IF INVALID CONTROL CARD. PRESS START TO RESUME
+
+EOF      + R ADD     START
+         + STORE     4095
+
+         + STOP      4095         SUCCESSFULL TERMINATION. ADD NEW CONTROL CARDS IN CARD READER AND PRESS START TO PROCEED
+
+
+ACTION1  + R ADD     ZERO         "1            read SL card in ABS text format"
+         + STORE     NCARDS       READ FROM CARD READER AN ABS TEXT PROGRAM LOCATIONS 0..47, TO FORM A 
+                                  SELF-LOADER CARD IMAGE. THIS IMAGE IS STORED IN DRUM 0128
+A1RDNNN  + R ADD     *
+         + TR        READCRD
+         + TR OV     A1WR         END OF INPUT DECK -> TR TO STORE BUF IN DRUM
+         
+         + R ADD     *            DECODE TEXT ABSOLUTE ASSEMBLER CARD NNNN INITIATOR
+         + TR        DECOTNNN     RETURNS ACC=1 IF COL 1 HAS AN 'N', ELSE ACC=0
+
+         + TR 0      A1RDNNN      SKIP CARDS UNTIL INITIATOR 'NNNN' IS READ
+
+A1RD     + R ADD     *            READ TEXT BINARY SOURCE CODE CARD 
+         + TR        READCRD      CARDS SHOULD HAVE LOCATION 0000..0047 
+                                  
+         + TR OV     A1WR         END OF INPUT DECK -> TR TO STORE BUF IN DRUM
+         + R ADD     0044
+         + TR +      A1DECO
+         + TR        A1WR         IF Y(12) IN COL 1 PUNCHED -> END OF INPUT -> TR TO STORE BUF IN DRUM
+
+A1DECO   + R ADD     *            DECODE TEXT ABSOLUTE ASSEMBLER CARD 
+         + TR        DECOTABS     RETURNS    ACC = +/- MC.OP  MC.ADDR | MC.FORMAT (1=MC INSTR, 2=NUMBER)
+                                             MQ  =   + 00      MC.LOC 
+         + TR OV     A1RD         IF OV=1 -> BLANK LINE -> TR TO READ NEXT CARD
+
+         + STORE     MCINST       SAVE MC INSTR DECODED                  
+         + STORE MQ  LOC
+
+         + R ADD     NCARDS       ONLY COUNTS PROGRAM MC INSTR CARDS
+         + ADD       ONE          
+         + STORE     NCARDS
+         
+         + R ADD     LOC           STORE MC INSTR IN BUFFER
+         + ADD       BUFAD         BUF[LOC]=MCINST
+         + STORE A   A1STO
+         + R ADD     MCINST
+A1STO    + STORE     /   /
+         
+         + TR        A1RD 
+
+A1WR     + R ADD     *            
+         + TR        RWDRUM       WRITE BUF IN DRUM
+         + WRITE     0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+BUFAD    + STOP      BUF          BUF=SELF-LOADER CARD IMAGE
+         + STOP      48           LEN 
+
+         + TR        READCC       TR TO PROCESS NEXT CONTROL CARD
+
+ACTION2  + R ADD     ZERO         "2 1234 5678  write in 1234 device a SL card (to load ABS bin prog from 5678 device)"
+         + STORE     NCARDS       
+         + STORE     VAL          
+
+         + R ADD     *           
+         + TR        RDINT        READ STEP
+         + STOP      0004         LEN=4 CHARS
+         + STOP      0003         STARTING AT COL 3
+         + STORE     IODEV1       
+
+         + R ADD     *           
+         + TR        RDINT        READ STEP
+         + STOP      0004         LEN=4 CHARS
+         + STOP      0008         STARTING AT COL 8
+         + STORE     IODEV2       
+
+         + R ADD     *            
+         + TR        RWDRUM       READ BUF FROM DRUM
+         + READ      0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      BUF          BUF=SELF-LOADER CARD IMAGE
+         + STOP      48           LEN 
+
+                                  LOCATE INSTR "+ READ 2048" IN SELF-LOADING CARD  
+         + R ADD     BUFAD        REPLACE "2048" BY IODEV2 VALUE
+         + STORE A   A2RD
+         + R ADD     A2RD
+         + ADD       D48
+         + STORE     A2RDLEND
+
+A2RD     + R ADD     /   /        GET THE MC INSTR
+         + STORE A   VAL          
+         + R ADD     VAL
+         + SUB       D2048        MC.ADDR = 2048?
+         + TR 0      A2RDFND      TR IF SO
+         + TR        A2RDNXT      ELSE, TRY WITH NEXT INSTR
+
+A2RDFND  + R ADD     A2RD         REPLACE "2048" BY IODEV2 VALUE
+         + STORE A   A2STO        
+         + R ADD     IODEV2
+A2STO    + STORE A   /   /
+         + TR        A2RDEND      TR TO EXIT LOOP
+
+A2RDLEND + STOP      0000         END OF LOOP VALUE
+
+A2RDNXT  + R ADD     A2RD         
+         + ADD       ONE
+         + STORE A   A2RD
+         + SUB       A2RDLEND 
+         + TR 0      A2RDEND      IF LOOP TERMINATED, EXIT LOOP
+         + TR        A2RD         ELSE, TRY WITH NEXT INSTR
+
+A2RDEND  + R ADD     *            WRITE BUF ON IODEV1
+         + TR        WRIODEV1     
+         + STOP      BUF
+         + STOP      D48          LEN=48
+
+         + TR        READCC       TR TO PROCESS NEXT CONTROL CARD
+
+WRIODEV1 + ADD       TWO          WRITE BUF TO IODEV1 (CAN BE 1024 PUNCH, 0256..0259 TAPE)
+         + STORE A   WRIOP1       PARAM: BUF ADDR
+         + ADD       ONE          PARAM: LEN
+         + STORE A   WRIOP2
+         + ADD       ONE
+         + STORE A   WRIODEX1
+
+WRIOP1   + R ADD     /   /        GET BUF ADDR
+         + STORE A   WRIOPBU1
+         + STORE A   WRIOPBU2
+WRIOP2   + R ADD     /   /        GET ADDR WHERE LEN IS STORED
+         + STORE A   WRIOP2A
+WRIOP2A  + R ADD     /   /        GET LEN
+         + STORE     WRLEN
+
+         + R ADD     IODEV1
+         + SUB       D1024
+         + TR 0      WRIOPCH
+
+         + R ADD     IODEV1
+         + STORE A   TPOUTAD           
+
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE 
+TPOUTAD  + STOP      /   /        TAPE TO WRITE TO
+WRIOPBU1 + STOP      /   /        BUF TO WRITE TO TAPE
+         + STOP      WRLEN        LEN
+         + TR        WRIODEX1 
+
+WRLEN    + STOP      0000
+
+WRIOPCH  + R ADD     *
+         + TR        WRITECR2 
+WRIOPBU2 + STOP      /   /
+
+WRIODEX1 + TR        /   /
+
+
+ACTION3  + R ADD     ZERO         "3 1234       read program deck in ABS text format, write in 1234 device as ABS bin prog"
+
+         + STORE     NCARDS       
+         + STORE     NABSBIN      NUMBER OF ABS BIN CARDS GENERATED
+         + STORE     TTTT         START ADDRESS OF ABS PROG
+                                  
+         + R ADD     *           
+         + TR        RDINT        READ STEP
+         + STOP      0004         LEN=4 CHARS
+         + STOP      0003         STARTING AT COL 3
+         + STORE     IODEV1       
+
+         + R ADD     *            SET WRITE CARD ROUTINE TO BE CALLED WHEN FLUSHING THE ABS BINARY CARD 
+         + TR        WRIBABS      RETURNS IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN BY WRITE ROUTINE  
+         + STOP      0002         +02 -> SET WRITE CARD ROUTINE
+         + STOP      WRTCRDA3     THE WRITE ROUTINE ADDRESS
+         + STORE A   LBINCRD      SAVE ADDR OF ABS BIN CARD BUFFER TO BE WRITTEN, RETURNED IN ACC
+                                  
+                                  
+A3RDNNN  + R ADD     *
+         + TR        READCRD
+
+         + TR OV     A3WR         END OF INPUT DECK -> TR TO STORE BUF IN IODEV1
+         
+         + R ADD     *            DECODE TEXT ABSOLUTE ASSEMBLER CARD NNNN INITIATOR
+         + TR        DECOTNNN     RETURNS ACC=1 IF COL 1 HAS AN 'N', ELSE ACC=0
+
+         + TR 0      A3RDNNN      SKIP CARDS UNTIL INITIATOR 'NNNN' IS READ
+
+A3RD     + R ADD     *            READ TEXT BINARY SOURCE CODE CARD 
+         + TR        READCRD      CARDS SHOULD HAVE LOCATION 0000..0047 
+                                  THERE MUST BE AN INSTR "+ READ 2048" 
+
+         + TR OV     A3WR         END OF INPUT DECK -> TR TO STORE BUF IN DRUM
+         + R ADD     0044
+         + TR +      A3DECO
+         + TR        A3WR         IF Y(12) IN COL 1 PUNCHED -> END OF INPUT -> TR TO STORE BUF IN DRUM
+
+A3DECO   + R ADD     *            DECODE TEXT ABSOLUTE ASSEMBLER CARD 
+         + TR        DECOTABS     RETURNS    ACC = +/- MC.OP  MC.ADDR | MC.FORMAT (1=MC INSTR, 2=NUMBER)
+                                             MQ  =   + 00      MC.LOC 
+         + TR OV     A3RD         IF OV=1 -> BLANK LINE -> TR TO READ NEXT CARD
+
+         + STORE     MCINST       SAVE MC INSTR DECODED                  
+         + STORE MQ  LOC
+         
+         + R ADD     LOC
+         + TR 0      A3LOC0
+         
+         + R ADD     D47          IF LOC < 48 -> IGNORE THE CARD
+         + SUB       LOC
+         + TR +      A3RD
+         + R ADD     LOC          IF LOC >= 4094 -> IGNORE THE CARD
+         + SUB       D4094
+         + TR +      A3RD
+         
+         + R ADD     TTTT         SET TTTT IF NEEDED
+         + TR 0      A3T1
+         + TR        A3T2
+A3T1     + R ADD     LOC
+         + STORE     TTTT         PROG ENTRY POINT (= TRANSFER ADDR = TTTT) IS LOCATION OF ITS FIRST ABS TEXT SOURCE CODE CARD
+A3T2     + NOOP      0000
+
+         + R ADD     NCARDS       ONLY COUNTS PROGRAM MC INSTR CARDS
+         + ADD       ONE          
+         + STORE     NCARDS
+         
+         + R ADD     *            ADD TO ABS BINARY CARD  (THIS ROUTINE CALL WRTCRD WHEN NEEDED)
+         + TR        WRIBABS
+         - STOP      0000         PARAM: -00 -> ADD HALFWORD TO CARD IMAGE
+         + STOP      LOC          PARAM: ABS LOCATION OF DATA BEING ADDED (0..4095)
+         + STOP      MCINST       PARAM: HALF WORD TO ADD TO BIN CARD (WITH SIGN)
+         + STOP      D44          PARAM: MAX NUM OF HALF-WORDS PER CARD (02..44. MUST BE EVEN)
+
+         + TR        A3RD 
+
+A3LOC0   + R ADD     MCINST       IF LOC = 0 AND INSTR = TRANSFER (OPCODE 01) THEN
+         + A RIGHT   0030         SET THE DESTINATION OF TRANSFER AS TTTT VALUE
+         + A LEFT    0018
+         + SUB       ONE
+         + TR 0      A3LOC0A      IF OP = 1 -> IS A "TR" INSTR -> CONTINUE
+         + TR        A3RD         AS OP IS <> 1 -> NOT "TR" INSTR -> IGNORE THE CARD BECAUSE LOC < 48 AND PROCEED WITH NEXT CARD
+A3LOC0A  + R ADD     MCINST
+         + STORE A   TTTT         SET THE DESTINATION OF TRANSFER AS TTTT VALUE
+         + TR        A3RD         PROCEED WITH NEXT CARD
+
+A3WR     + R ADD     *             
+         + TR        WRIBABS
+         - STOP      01           -01 -> SET TTTT (TRANSFER ADDR) ON CONTROL WORD OF CURRENT CARD
+         + STOP      TTTT         TRANSFER ADDRESS
+
+         + R ADD     *            FLUSH ANY PENDING BINARY CARD  
+         + TR        WRIBABS
+         + STOP      0001         +01 -> FLUSH LAST CARD
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0103         STRINGZ AT COL 3
+         + STOP      MSGBGEN      "BIN CARDS GEN"
+         + STOP      0215         INT AT COL 15
+         + STOP      NABSBIN      NUMBER OF ABS BIN CARDS GENERATED
+         + STOP      0000         END OF LINE. 
+
+         + TR        READCC       TR TO PROCESS NEXT CONTROL CARD
+
+WRTCRDA3 + ADD       TWO          WRITE ROUTINE CALLED FROM WRIBABS
+         + STORE A   WRTCRXA3
+
+         + R ADD     NABSBIN      ONLY COUNTS PROGRAM MC INSTR CARDS
+         + ADD       ONE          
+         + STORE     NABSBIN
+
+         + R ADD     *            WRITE ON IODEV1
+         + TR        WRIODEV1     
+LBINCRD  + STOP      /   /        ADDR OF ABS BIN CARD IMAGE
+         + STOP      D48          LEN=48
+
+WRTCRXA3 + TR        /   /
+
+ACTION4  + R ADD     ZERO         "4 1234 5678  write in 1234 device records read from device 5678 (until eof)"
+         + STORE     NRECS        Copy records from device 5678 to device 1234
+                                  read from dev 5678 until End-Of-File
+                                  write to dev 1234, but does not add End-Of-File
+                                  records can be up to 400 half-words long
+         + R ADD     *           
+         + TR        RDINT        READ STEP
+         + STOP      0004         LEN=4 CHARS
+         + STOP      0003         STARTING AT COL 3
+         + STORE     IODEV1       
+
+         + R ADD     *           
+         + TR        RDINT        READ STEP
+         + STOP      0004         LEN=4 CHARS
+         + STOP      0008         STARTING AT COL 8
+         + STORE     IODEV2       
+
+A4READ   + R ADD     *
+         + TR        RDIODEV2
+         + STOP      BUF          BUF WITH DATA READ FROM TAPE/CARD READER
+         + STOP      LEN          NUM OF HALF-WORDS READ
+
+         + TR OV     A4EOF        END OF FILE -> END OF PROGRAM
+
+         + R ADD     *
+         + TR        WRIODEV1     
+         + STOP      BUF          BUF TO WRITE TO TAPE/CARD PUNCH
+         + STOP      LEN
+
+         + R ADD     NRECS
+         + ADD       ONE
+         + STORE     NRECS
+
+         + TR        A4READ
+  
+A4EOF    + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0103         STRINGZ AT COL 3
+         + STOP      MSGRECP      "RECS COPIED"
+         + STOP      0215         INT AT COL 15
+         + STOP      NRECS        NUMBER OF RECORDS COPIED 
+         + STOP      0000         END OF LINE. 
+
+         + TR        READCC       TR TO PROCESS NEXT CONTROL CARD
+
+RDIODEV2 + ADD       TWO          READ BUF FROM IODEV2 (CAN BE 2048 READER, 0256..0259 TAPE)
+         + STORE A   RDIOP1       PARAM: BUF ADDR
+         + ADD       ONE          PARAM: LEN ADDR
+         + STORE A   RDIOP2
+         + ADD       ONE
+         + STORE A   RDIODEX4
+
+RDIOP1   + R ADD     /   /        GET BUF ADDR
+         + STORE A   RDIOPBU1
+         + STORE A   RDIOPBU2
+RDIOP2   + R ADD     /   /        GET ADDR WHERE LEN IS STORED
+         + STORE A   RDIOPLE1
+         + STORE A   RDIOPLE2
+
+         + R ADD     IODEV2
+         + SUB       D2048
+         + TR 0      RDIOCDR
+
+         + R ADD     IODEV2
+         + STORE A   TPINAD           
+
+         + R ADD     *
+         + TR        RDTAPE       READ MAGNETIC TAPE 
+TPINAD   + STOP      /   /        TAPE TO READ FROM
+RDIOPBU1 + STOP      /   /        BUF TO READ 
+RDIOPLE1 + STORE     /   /        SAVE LEN READ
+         + TR        RDIODEX4
+
+RDIOCDR  + R ADD     *
+         + TR        READCRD
+
+         + R ADD     *            COPY CARD IMAGE TO BUFFER
+         + TR        MEMCOPY
+         + STOP      0000
+RDIOPBU2 + STOP      /   /        BUF TO READ 
+         + STOP      D48
+
+         + R ADD     D48
+RDIOPLE2 + STORE     /   /        LEN=48
+
+RDIODEX4 + TR        /   /
+
+
+
+           ORG       EVEN
+
+BUF        RES       400
+NCARDS     RES       1
+VAL        RES       1
+IODEV1     RES       1
+IODEV2     RES       1
+LOC        RES       1
+TTTT       RES       1            START ADDRESS OF ABS PROG
+MCINST     RES       1
+NABSBIN    RES       1            NUMBER OF ABS BIN CARDS GENERATED
+NRECS      RES       1            NUMBER OF RECORDS COPIED 
+LEN        RES       1
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D44        DEF       44
+D48        DEF       48
+D47        DEF       47
+D1024      DEF       1024
+D2048      DEF       2048
+D4094      DEF       4094
+
+                                  TEXT
+
+MSGSTART   TXT       "GENERATE PROG",0
+MSGBGEN    TXT       "BIN CARDS GEN",0
+MSGRECP    TXT       "RECS COPIED",0
+
+EBADCC     TXT       "INVALID CC",0                ERROR: INVALID CONTROL CARD
+

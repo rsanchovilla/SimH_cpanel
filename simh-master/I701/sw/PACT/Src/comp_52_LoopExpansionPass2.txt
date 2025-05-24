@@ -1,0 +1,2139 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 52 LOOP EXPANSION PASS 2 ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:CLRBUF      CLEAR CARD BUFFER 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:PRTALF      PRINT PACKED ALFANUMERIC TEXT STRING
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:PRTCHR      PRINT BASE48 CHAR 
+           HEAD      USE:RDBTAPE      READ BACKWARD FROM MAGNETIC TAPE BACKWARDS A GIVEN LEN 
+           HEAD      USE:WRTAPE      WRITE MAGNETIC TAPE
+           HEAD      USE:EQTBL       STORE VALUE INTO TABLE
+           HEAD      USE:EQTBL2      STORE VALUES IN TABLE
+           HEAD      USE:READTBL     TAKE VALUE FROM TABLE
+           HEAD      USE:READTBL2    TAKE VALUES FROM TABLE
+           HEAD      USE:SRCHTBL     SEARCH TABLE
+           HEAD      USE:CLMEM       CLEAR MEMORY STORAGE
+           HEAD      USE:MEMCOPY     COPY MEMORY STORAGE FROM ONE ADDR TO ANOTHER
+              
+                                  PURPOSE:
+                                  - SCAN SOURCE CODE TO EXPAND USE/SET INSTR, 
+                                    READING TAPE BACKWARD
+                                  - FOR EACH REGION, READ FROM TAPE TIDX AND TPAR
+                                  - FOR EACH PACT INSTRUCTION, 
+                                    - IF IT REFERENCES A MATRIX/VECTOR -> POPULATE TREF TABLES 
+                                      (BUT DOES NOT GENERATE MC CODE)
+                                    - IF IT IS TEST -> UPDATE TIDX TABLES 
+                                      (BUT DOES NOT GENERATE MC CODE)
+                                    - IF IT IS USE/SET -> USE TIDX AND TREF, POPULATE TLOCONST TABLE 
+                                      EXPAND THIS INSTR (GENERATE MC CODE)
+                                  - SAVE UPDATED COMPACT CODE TO TAPE
+                                  - PACT INSTRUCTIONS NOT EXPANDED: 
+                                       CALL/ID/FOR
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "OPERATION EXPANSION"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TPARSTEP     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TIDXSETN     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TREFIDX1     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TREFIDX2     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TREFSTEP     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TREFINCR     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TREFADDR     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TREFOP       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     TREFD1       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     *            CLEAR GENERATED MACHINE CODE INSTR ON CC RECORD
+         + TR        CLMEM        
+TINSTAD  + STOP      TINST      
+         + STOP      D200         TINST (200 HALF-WORDS) = 2 * MAXNINST (MAX NUMBER OF MACHINE CODE INSTRUTIONS PER STEP)
+
+         + R ADD     ZERO
+         + STORE     NREGIONS     NUMBER OF REGIONS PROCESSED
+         + STORE     NIDXS        INIT NUMBER OF INDEXES IN THIS REGION
+         + STORE     NPARAMS      INIT NUMBER OF PARAMS DEFINED
+
+         + REWIND    TAPEOUT      WILL READ INPUT TAPES IN BACKWARD DIRECTION FROM ITS CURRENT 
+                                  POSITION-> DO NOT REWIND THEM. 
+                                  
+                                  READ A NEW PACT REGION
+READREG  + R ADD     ZERO
+         + STORE     NREFS        INIT NUMBER OF REFERENCES. NIDXS AND NPARAMS ARE INIT IN BORP
+         + STORE     NLOCONST     NUM OF ENTRIES IN LOOP CONSTANT POOL OF REGION 
+         + STORE     SVNINST      SO WE CAN PRINT A LOG OF CC THAT GET GENERATED MC INSTR
+         + STORE     REGCSTEP     STEPN WHERE THE REG.C SITS
+         + STORE     PRGSTEPN     FIRST STEPN OF PROGRAM AFTER INITIAL CALL/ID/FOR (IE STEP-1 IS CALL/ID/FOR INSTR) 
+         + STORE     STEPN        CLEAR STEPN. WILL BE USED TO IDENTIFY START OF REGION
+         + STORE     NFORIDX      NUMBER OF INDEX IN "FOR I A B" INSTR BELOW A "DO/LIB" INSTR
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDCC         READING BACKWARD
+         + TR OV     BOT          TR IF BEGINING OF TAPE -> ALL REGIONS PROCESSED
+
+         + R ADD     OP           OP=0 -> END OF REGION RECORD READ. AS WE ARE READING BACKWARD
+         + TR 0      BORP         THIS MEANS BEGIN OF REGION PROCESSING -> TR TO READ TIDX AND TPAR TABLES FROM TAPE
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     NINST        SAVE CURRENT NUMBER OF MC INSTR IN THE COMPACT CODE RECORD
+         + STORE     SVNINST      SO WE CAN PRINT A LOG OF CC THAT GET GENERATED MC INSTR
+
+
+         + R ADD     OP           JUMP TABLE TO HANDLE EACH TYPE OF PACT OPERATION
+         + ADD       OPTBL
+         + STORE A   OPTBLTR
+OPTBLTR  + TR        /   /
+OPTBL    + STOP      *
+         + TR        CHECKREF     OP=1   TAKE   FACTOR CANNOT BE BLANK 
+         + TR        CHECKREF     OP=2   ADD    ALLOWS BLANK FACTOR 
+         + TR        CHECKREF     OP=3   SUB    ALLOWS BLANK FACTOR 
+         + TR        CHECKREF     OP=4   MUL    ALLOWS BLANK FACTOR
+         + TR        CHECKREF     OP=5   DIV    FACTOR CANNOT BE BLANK 
+         + TR        NEXT         OP=6   RES    NO FACTOR
+         + TR        CHECKREF     OP=7   EQ     NEEDS VARIABLE AS FACTOR
+         + TR        CHECKREF     OP=8   +ABS   ALLOWS BLANK FACTOR
+         + TR        CHECKREF     OP=9   -ABS   ALLOWS BLANK FACTOR
+         + TR        CHECKREF     OP=10  ABS    FACTOR CANNOT BE BLANK 
+         + TR        NEXT         OP=11  T      FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=12  TZ     FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=13  TP     FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=14  TN     FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=15  TF     FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=16  HALT   FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        TEST         OP=17  TEST   
+         + TR        USESET       OP=18  SET    
+         + TR        USESET       OP=19  USE    
+         + TR        CLNFORIX     OP=20  DO     CLEAR INDEX DEFINED BY FOR INST BELOW
+         + TR        NEXT         OP=21  EXIT
+         + TR        BADOP        OP=22  DUP    SHOULD NOT BE PRESENT. IT IS ALREADY PROCESSED
+         + TR        CLNFORIX     OP=23  LIB    CLEAR INDEX DEFINED BY FOR INST BELOW
+         + TR        BADOP        OP=24  ID     SHOULD NOT BE PRESENT. IT IS DESAMBIGUATED
+         + TR        BADOP        OP=25  FOR    SHOULD NOT BE PRESENT. IT IS DESAMBIGUATED
+         + TR        NEXT         OP=26  CALL   WILL BE PROCESSED IN PASS2
+         + TR        CHECKREF     OP=27  SIN    ALLOWS BLANK FACTOR
+         + TR        CHECKREF     OP=28  COS    ALLOWS BLANK FACTOR
+         + TR        CHECKREF     OP=29  ARCT   ALLOWS BLANK FACTOR
+         + TR        CHECKREF     OP=30  SQRT   ALLOWS BLANK FACTOR
+         + TR        CHECKREF     OP=31  LOG    ALLOWS BLANK FACTOR
+         + TR        CHECKREF     OP=32  EXP    ALLOWS BLANK FACTOR
+         + TR        NEXT         OP=33  SE
+         + TR        CHECKREF     OP=34  CL     NEEDS VARIABLE AS FACTOR
+         + TR        NEXT         OP=35  READ
+         + TR        NEXT         OP=36  LIST
+         + TR        NEXT         OP=37  RES for MULT
+         + TR        NEXT         OP=38  RES for DIV
+         + TR        CHECKREF     OP=39  ID for LIST         FACTOR CANNOT BE BLANK 
+         + TR        IDDO         OP=40  ID for DO/LIB       ONLY APPLIES INDEX IF IT IS ACTIVE
+         + TR        NEXT         OP=41  ID for CALL         
+         + TR        FORDO        OP=42  FOR for DO/LIB      
+         + TR        NEXT         OP=43  FOR for CALL        
+         + TR        LDNCONST     OP=44  OPNCONST            LOADS LOOP CONSTANTS POOL FROM TINST
+
+BADOP    + STOP      1111         COMPILER ERROR
+
+NEXT     + NOOP      0000         CONTINUE 
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+
+         + R ADD     OP
+         + TR 0      ENDLOG1      DO LOG FOR OP=0 EOR 
+         
+         + R ADD     *            PRINT STEP JUST PROCESSED
+         + TR        PRINTCRD
+         
+         + R ADD     OP           IF WE ARE AT LOOP CONSTANT STEP -> DO NOT PRINT MC INSTR GENERATED
+         + SUB       OPNCONST     IN POOL. WILL BE PRINTED AFTER PROCESSING FIRST INST OF REGION
+         + TR 0      ENDLOG1  
+
+         + R ADD     NINST        IF NUMBER OF MC INSTR IN THE COMPACT CODE RECORD HAS CHANGED
+         + SUB       SVNINST      -> CC GOT GENERATED MC INSTR -> PRINT MC INSTR GENERATED
+         + TR 0      ENDLOG1
+         
+         + R ADD     *
+         + TR        PRTMC        PRINT TINST TABLE WITH MC INSTRUCTIONS GENERATED FOR THIS STEP
+ENDLOG1  + NOOP      0000 
+
+         + R ADD     OP           IF OP=SET/USE/TEST, UPDATE TINST TO CONVERT REG.C USAGE IN MC INSTR
+         + SUB       OPSET        TO THE ACTUAL REGCSTEP WHERE THE LOOP CONSTANT POOL IS
+         + TR 0      SETREGC1    
+         + R ADD     OP
+         + SUB       OPUSE
+         + TR 0      SETREGC1
+         + R ADD     OP
+         + SUB       OPTEST
+         + TR 0      SETREGC1
+         + TR        SETREGC2
+SETREGC1 + R ADD     *
+         + TR        SETREGCI
+SETREGC2 + NOOP      0000
+
+         + R ADD     *            WRITE COMPACT CODE ON TAPEOUT
+         + TR        WRCC         
+
+         + R ADD     STEPN        CHECK IF WE JUST HAVE WRITTEN TO TAPE
+         + SUB       PRGSTEPN     FIRST STEPN OF PROGRAM AFTER INITIAL CALL/ID/FOR (IE STEP-1 IS CALL/ID/FOR INSTR)
+         + TR 0      EOP1         IF SO, NOW CALL EOPP TO WRITE COMPACT STEP OP=100 WITH UP-TO-DATE TLOCONST TABLE
+         + TR        EOP2         NEXT CC THAT WILL BE WRITEN ARE ID/FOR/CALL THAT DEFINES THE PARAM OF THE REGION
+EOP1     + R ADD     *
+         + TR        EOPP
+EOP2     + NOOP      0000
+                                  PROCESS NEXT STEP 
+         + TR        READSTEP     
+
+                                  TAPE IN    
+                                  | STEP 1 | STEP 2 | ... | STEP N | OP=0 EOR | STEP 1 | ... | STEP N | OP=0 EOR | EOF |
+                                                                                       <--- READ BACKWARD DIRECTION <---
+
+                                  TAPE OUT   
+                                  ---> WRITE FORWARD DIRECTION --->
+                                  | OP=0 EOR | OP=101 | STEP N | ... | STEP D | OP=100 | STEP C | ... | STEP 1 | OP=0 EOR | ...
+                                               TPAR                             TLOCONST 
+                                                        ^-PACT PROGRAM INSTR-^           ^- ID/FOR -^   ^CALL^
+                                                           
+BORP     + NOOP      0000         BEGIN OF REGION PROCESSING 
+
+         + R ADD     *
+         + TR        WRCC         WE ARE READIN INPUT TAPE BACKWARD, SO THE FIRST CC RECORD
+                                  WE READ IF END-OF-REGION. JUST SAVE IT TO OUTPUT TAPE. THE
+                                  TLOCONST TABLE WILL BE DUMPED TO TAPE FOLLOWING FIRST STEP
+                                  OF REGION (ON EORP LABEL).
+
+         + R ADD     ZERO        
+         + STORE     NIDXS        INIT NUMBER OF INDEXES IN THIS REGION
+         + STORE     NPARAMS      INIT NUMBER OF PARAMS DEFINED
+
+         + R ADD     *            READ FROM TAPEINR THE TABLES TPAR, TIDX 
+         + TR        RDEORTBL     POPULATED IN PASS 1 TO BE USED BY PASS 2
+
+         + R ADD     *            WRITE TO TAPEOUT AS OP=101 THE TABLE TPAR JUST READ FROM TAPEINR
+         + TR        WRPARCC      WILL BE THE NEEDED BY NEXT PASS 
+
+         + R ADD     NREGIONS     NUMBER OF REGIONS PROCESSED
+         + ADD       ONE
+         + STORE     NREGIONS     
+
+         + TR        READREG      PROCESS NEXT REGION
+
+EOPP     + ADD       TWO          END OF PROG PROCESSING 
+         + STORE A   EOPPEX
+
+         + R ADD     *            WRITE IN TAPEOUT AS OP=100 THE TABLE TLOCONST (LOOP CONSTANTS POOL)
+         + TR        WRNCONST     THIS RECORD WILL BE PLACED BETWEED FIRST PACT PROGRAM  STEP AND LAST PACT ID/FOR/CALL STEP
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG2      TR IF NO LOG SELECTED
+
+         + R ADD     *            PRINT TINST TABLE WITH MC INSTRUCTIONS GENERATED 
+         + TR        PRTMC        IN LOOP CONSTANT POOL
+ENDLOG2  + NOOP      0000 
+
+         + R ADD     ZERO
+         + STORE     STEPN        MAKE SURE STEPN IS CLEARED
+EOPPEX   + TR        /   /
+
+BOT      + NOOP      0000         BEGIN OF INPUT TAPE
+
+         + WRITE EF  TAPEOUT      WRITE EOF IN TAPE OUT (COMPACT CODE)
+
+                                  NO MORE STEPS. IF SW6 ON THEN 
+                                  PRINT NUMBER OF REGIONS
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGDONE      "REGIONS"
+         + STOP      0210         INT AT COL 10
+         + STOP      NREGIONS     NUMBER OF REGIONS PROCESSED
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+ENDLOG1B + NOOP      0000
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+
+
+RDCC     + ADD       TWO          READ COMPACT CODE FROM TAPE WITH LEADING RECORD
+         + STORE A   RDCCEXIT     TO ALLOW READING BACKWARDS. 
+         
+         + TR OV     RDCC0        CLEAR OV FLAG (=CLEAR EOF CONDITION FROM ANY 
+RDCC0    + NOOP      0000         PREVIOUS TAPE READ)
+
+         + R ADD     *            READ LEADING IDENTIFICATION RECORD
+         + TR        RDBTAPE      (MC CODE GENERATED STEPN + NINST)
+         + STOP      TAPEIN       SO TAPE CAN BE READ BACKWARDS ON PASS 2
+         + STOP      DATA         BUF TO READ FROM TAPE
+         + STOP      TWO          LEN
+         
+         + R ADD     DATA
+         + STORE     STEPN
+         + R ADD     DATA2
+         + STORE     NINST
+         
+         + R ADD     CCLEN        COMPUTE CC RECOD SIZE BASED ON 
+         + ADD       NINST        MC INSTRUCTIONS GENERATED SO FAR
+         + ADD       NINST
+         + STORE     N
+
+         + R ADD     *
+         + TR        RDBTAPE      READ MAGNETIC TAPE TAPEIN (COMPACT CODE)
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      N            LEN
+
+RDCCEXIT + TR        /   /         
+
+WRCC     + ADD       TWO          WRITE COMPACT CODE ON TAPE. AS NEXT COMPILER STAGE (CALL EXPANSION PASS1)
+         + STORE A   WRCCEXIT     WILL READ THIS TAPE FORWARD, THERE IS NO NEED TO ADD THE TRAILING IDENTIFICATION RECORD
+         
+         + R ADD     CCLEN        SAVE MC INSTRUCTIONS GENERATED SO FAR
+         + ADD       NINST        ADD NINST TWICE AS EACH MC INSTR USES TWO HALF-WORDS
+         + ADD       NINST
+         + STORE     N
+
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT (PACT COMPACT CODE)
+         + STOP      TAPEOUT
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      N            LEN
+
+WRCCEXIT + TR        /   /         
+
+WRNCONST + ADD       TWO          ADD LOOP CONSTANTS POOL AS TINST ON CC RECORD                           
+         + STORE A   WRNCONEX
+
+         + R ADD     *            CLEAR CC RECORD
+         + TR        CLMEM        
+         + STOP      CCODE        
+         + STOP      D244         = CCLEN + 2 * MAXNINST   
+
+         + R ADD     NLOCONST     COPY LOOP CONSTANTS POOL AS TINST  
+         + STORE     NINST
+         + A LEFT    0001
+         + STORE     LEN
+
+         + R ADD     *            
+         + TR        MEMCOPY
+         + STOP      TLOCONST   
+         + STOP      TINST      
+         + STOP      LEN
+
+         + R ADD     D100         SET RECORD OP IDENTIFICATION
+         + STORE     OP           WILL CONTAIN THE LOOP CONSTANTS AS MC INSTR
+         + R ADD     REGCSTEP     THIS IS THE STEPN WHERE THE REG.C SITS
+         + STORE     STEPN
+
+         + R ADD     *            WRITE COMPACT CODE ON TAPEOUT
+         + TR        WRCC         NO LOG
+
+WRNCONEX + TR        /   /
+
+WRPARCC  + ADD       TWO          WRITE TO TAPEOUT TABLE TPAR
+         + STORE A   WRPAREX
+
+         + R ADD     *            CLEAR CC RECORD
+         + TR        CLMEM        
+         + STOP      CCODE        
+         + STOP      D244         = CCLEN + 2 * MAXNINST   
+
+SVPA1    + NOOP      MAXNPAR      FIRST VAR OF TABLES TO SAVE TO TAPE
+SVPA2    + NOOP      MAXNIDXS     VAR JUST AFTER TABLES, NOT TO SAVE 
+         + R ADD     SVPA2
+         + SUB       SVPA1        SAVE TPAR TABLE ( 2 + 5*34 HALF WORDS )
+         + STORE     N            = 172 HALF-WORDS
+
+         + R ADD     N            COPY AS TINST  
+         + STORE     LEN
+         + A RIGHT   0001
+         + STORE     NINST
+
+         + R ADD     *            
+         + TR        MEMCOPY
+         + STOP      MAXNPAR
+         + STOP      TINST      
+         + STOP      LEN
+
+         + R ADD     D101         SET RECORD OP IDENTIFICATION
+         + STORE     OP           WILL CONTAIN THE LOOP CONSTANTS AS MC INSTR
+         + R ADD     TWO          
+         + STORE     STEPN
+
+         + R ADD     *            WRITE COMPACT CODE ON TAPEOUT
+         + TR        WRCC         NO LOG
+
+WRPAREX  + TR        /   /
+
+RDEORTBL + ADD       TWO          READ FROM TAPEINR THE TABLES POPULATED IN PASS 1
+         + STORE A   RDEORTEX     TO BE USED BY PASS 2
+                                  
+RDTA1    + NOOP      MAXNPAR      FIRST VAR OF TABLES TO READ FROM TAPE
+RDTA2    + NOOP      MAXNREFS     VAR JUST AFTER TABLES, NOT TO READ
+         + R ADD     RDTA2
+         + SUB       RDTA1        READ AT ONCE TPAR TABLES ( 2 + 5*34 HALF WORDS )
+         + STORE     N            AND TIDX TABLES ( 2 + 4*34 HALF WORDS )
+                                  TOTAL LEN TO READ FROm TAPE = 310 HALF WORDS
+         + R ADD     *
+         + TR        RDBTAPE      READ BACKWARDS
+         + STOP      TAPEINR     
+         + STOP      MAXNPAR      BUF TO READ FROM TAPE
+         + STOP      N            LEN
+
+RDEORTEX + TR        /   /
+
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE
+
+         + STOP      READSTEP     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING NEXT SOURCE CODE STEP 
+
+
+LDNCONST + R ADD     NINST        THIS COMPACT CODE RECORD HOLDS THE LOOP CONSTANTS POOL IN TINST 
+         + STORE     NLOCONST     COPY IT TO TLOCONST TABLE
+         + A LEFT    0001
+         + STORE     LEN
+
+         + R ADD     *            
+         + TR        MEMCOPY
+         + STOP      TINST      
+         + STOP      TLOCONST   
+         + STOP      LEN
+
+         + R ADD     STEPN        SET THE STEP FOR REG.C
+         + STORE     REGCSTEP
+         + R ADD     FACTN
+         + STORE     PRGSTEPN     FIRST STEPN OF PROGRAM AFTER INITIAL CALL/ID/FOR (IE STEP-1 IS CALL/ID/FOR INSTR) 
+
+         + TR        NEXT
+
+                                  CODE GENERATION ROUTINES
+
+                                  PACT OP=18 SET   ALL THESE OPERATIONS NEEDS AN INDEX AND A VALUE
+                                       OP=19 USE
+                                       
+                                          OP       FACT                    S1     S2
+                                  SYNTAX: USE|SET  BLANK                   INDEX  INDEX|ALFAVAR|NUM
+                                  IF S2 IS A VARIABLE, ASSIGN ITS ADDRESS TO FACTORN
+                                  HERE, S1 IS AN INDEX (SHOULD BE ALFA VALUE <0)
+                                        S2 IS AN INDEX (ALFA VALUE <0)
+                                           OR  A VAR   (ALFA VALUE <0) -> IN THIS CASE -> FACTN=ADDR OF VAR, FACTREG='V'
+                                           OR  A NUMBER (>0)
+
+                                                   FACT                    S1     S2
+                                                   BLANK                   INDEX  INDEX|ALFAVAR|NUM
+                                           FACT    0               
+                                           S1                              <0
+                                           S2                                     <0    <0      nnn
+                                           FACTN                                  0     Vnn     0
+
+
+USESET   + R ADD     *            SET VARIABLES FOR INDEX USED IN TEST
+         + TR        TSETN                      
+
+         + R ADD     *            GENERATE MC INSTS TO SET START OF LOOP INDEX VALUE
+         + TR        TSETLOOP
+
+         + R ADD     *            GENERATE INST TO SET VECTOR/MATRIX REFERENCES THAT USES NIDX
+         + TR        TMATVEC 
+
+         + TR        NEXT         SAVE GENERATED CODE, THEN PROCEED WITH NEXT INSTR
+
+TSETN    + ADD       TWO          SET VARIABLE NIDX = THE INDEX USED IN "SET" OR "USE" INSTR
+         + STORE A   TSETEX                    ECONSTIX =ENTRY IN LOOP CONSTANT POOL FOR INDEX VALUE 
+                                               IDXTYPE  =0 IF INDEX IS "ADDRESS INDEX" TYPE,         
+                                                        =1 IF INDEX IS "COUNT INDEX" TYPE,           
+         + R ADD     *                         
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TIDXNAME     ... INDEX NAME TABLE
+         + STOP      NIDXS        ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NIDXS
+         + STOP      S1N          ... THE VALUE TO FIND 
+         
+         + TR 0      BADOP        INDEX NOT DEFINED MUST HAVE BEEN DETECTED ON PREVIOUS PASS
+         + STORE     NIDX
+                                   
+         + R ADD     *            READ FROM TIDX TABLES
+         + TR        READTBL2
+         + STOP      TIDXLOC      
+         + STOP      MAXNIDXS
+         + STOP      NIDX
+         + STOP      ECONSTIX     = TIDXLOC [NIDX] 
+         + STOP      IDXTYPE      = TIDXTYPE[NIDX] 
+         + STOP      0000
+
+TSETEX   + TR        /   /
+
+TSETLOOP + ADD       TWO          GENERATE MC INSTS TO SET START OF LOOP INDEX VALUE
+         + STORE A   TSETLOEX
+
+         + R SUB     ONE          INIT TO -1 TO SIGNAL NOT USED  
+         + STORE     ECSTART      = ADDR IN REG C OF START OF LOOP VALUE
+
+         + R ADD     *            AN INDEX IS SEARCHED IN PARAMETERS TABLE BY ITS NAME
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TPARNAME     ... PARAMETERS NAME TABLE
+         + STOP      NPARAMS      ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NPARAMS
+         + STOP      S1N          ... THE VALUE TO FIND 
+
+         + TR 0      TE2          =0 -> NO PARAM MATCHES THE INDEX NAME USED IN "SET/USE" INSTR
+         + STORE     NPAR
+
+         + R ADD     *            READ FROM TPARAMS TABLES
+         + TR        READTBL
+         + STOP      TPARTYPE
+         + STOP      NPAR
+         + STOP      PTYPE        = TPARTYPE[NPAR] 
+
+         + R ADD     PTYPE        GET PARAM TYPE
+         + ADD       TWO          =-2 FOR "FOR I A B INDEX LOOP START/END"?
+         + TR 0      TE1          YES -> TR
+         + TR        TE2          NOT AN INDEX LOOP START/END -> CONTINUE
+
+TE1      + R ADD     *            READ FROM TPARAMS TABLES
+         + TR        READTBL
+         + STOP      TPARFACT     AS TYPE=-2 (PARAM IS INDEX LOOP START/END), FACT=ENTRY IN LOOP CONSTANTS POOL THAT CONTAINS THE START OF LOOP VALUE
+         + STOP      NPAR
+         + STOP      ECSTART      = TPARFACT[NPAR] = ADDR IN REGION C OF START OF LOOP VALUE
+
+TE2      + R ADD     ONE
+         + STORE     USEECIX      =1 -> INDEX START VALUE IS COMPUTED ON RUN TIME AND STORED IN 
+                                        LOOP CONSTANT POOL AT ENTRY ECONSTIX
+                                  =0 -> INDEX START VALUE IS COMPUTABLE ON COMPILE TIME AND STORED S2N
+
+         + R ADD     IDXTYPE      =0 IF INDEX IS "ADDRESS TYPE", =1 IF INDEX IS "COUNT TYPE", 
+         + TR 0      TEADDR       TR AS INDEX IS ADDRESS TYPE 
+         + TR        TECOUNT      TR AS INDEX IS COUNT TYPE
+
+TEADDR   + NOOP      0000         HERE START OF LOOP IS A VALUE FOR COUNT INDEX (ECONSTIX). 
+                                  START OF LOOP VALUE CAN BE 
+                                  - A VALUE PASSED AS PARAM (ECSTART BEING >= 0)
+                                  - A COMPILE TIME CONSTANT VALUE (S2N BEING >0) 
+                                  - A VARIABLE (FACTREG='V')
+                                  - ANOTHER INDEX
+         + R ADD     ECSTART
+         + TR +      TEEPARAM     TR AS LOOP START VALUE IS A PARAM
+         + R ADD     S2N
+         + TR +      TADCONST     TR AS LOOP START VALUE IS A CONSTANT
+         + R ADD     FACTREG
+         + SUB       D34          'V'
+         + TR 0      TEVAR        TR AS LOOP START IS A VARIABLE
+         + TR        TEINDEX      TR AS LOOP START VALUE IS ANOTHER INDEX
+
+TADCONST + NOOP      0000         INDEX IS "ADDRESS TYPE" AND LOOP START IS COMPUTABLE AT
+                                  COMPILE TIME -> NO NEED TO USE LOOP CONSTANT POOL AT ENTRY ECONSTIX
+         + R ADD     ZERO
+         + STORE     USEECIX      =1 -> INDEX START VALUE IS COMPUTED ON RUN TIME AND STORED IN 
+                                        LOOP CONSTANT POOL AT ENTRY ECONSTIX
+                                  =0 -> INDEX START VALUE IS COMPUTABLE ON COMPILE TIME AND STORED S2N
+         + TR        TSETLOEX     ADDRESS INDEX DO NOT NEED TO SET THE INDEX VARIABLE
+
+TECOUNT  + NOOP      0000         HERE START OF LOOP IS A VALUE FOR COUNT INDEX (ECONSTIX). 
+                                  START OF LOOP VALUE CAN BE 
+                                  - A VALUE PASSED AS PARAM (ECSTART BEING >= 0)
+                                  - A COMPILE TIME CONSTANT VALUE (S2N BEING >0) 
+                                  - A VARIABLE (FACTREG='V')
+                                  - ANOTHER INDEX
+         + R ADD     ECSTART
+         + TR +      TEEPARAM     TR AS LOOP START VALUE IS A PARAM
+         + R ADD     S2N
+         + TR +      TECONST      TR AS LOOP START VALUE IS A CONSTANT
+         + R ADD     FACTREG
+         + SUB       D34          'V'
+         + TR 0      TEVAR        TR AS LOOP START IS A VARIABLE
+         + TR        TEINDEX      TR AS LOOP START VALUE IS ANOTHER INDEX
+
+TEEPARAM + NOOP      0000         LOOP START VALUE PASSED AS PARAM (ECSTART=nnnn) IN "FOR I A B" INSTR 
+
+         + R ADD     ECSTART      GET THE LOOP POOL ENTRY THAT HAS THE LOOP START VALUE PASSED AS PARAM
+         + TR        TE11
+
+TEVAR    + NOOP      0000         LOOP END IS A VARIABLE (FACTN=nnnn, FACTREG='V')
+
+         + R ADD     *            GENERATE THE INSTRUCTIONS FOR ACC=START OF LOOP VALUE
+         + TR        GENINST     
+         + R ADD     CC.FACT      '+RA V nnnn'   is start of loop value 
+         + STOP      0000         END OF INSTR TABLE
+
+         + R ADD     NINST        SAVE IN NINCR THE LOCATION INTO STEPN OF MC INSTR THAT ACCESS THE LOOP START
+         + STORE     NINCR        VARIABLE, SO IT CAN BE REPLACED LATER IF THIS VARIABLE IS A PARAM BY REFERENCE
+
+         + TR        TESTOIDX     TR TO GENERATE INSTR TO TEST FOR START LOOP 
+
+TEINDEX  + NOOP      0000         LOOP START VALUE IS ANOTHER INDEX (S2N)
+
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TIDXNAME     ... INDEX NAME TABLE
+         + STOP      NIDXS        ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NIDXS
+         + STOP      S2N          ... THE VALUE TO FIND 
+        
+         + TR 0      ERRNDIX2     ERROR: START OF LOOP INDEX NOT DEFINED (SHOULD BE DEFINED WITH SET OR USE)
+         + STORE     NIDX2
+
+         + R ADD     *            READ FROM TIDX TABLES
+         + TR        READTBL
+         + STOP      TIDXLOC      READ THE ENTRY IN LOOP CONSTANT POOL THAT CONTAINS INDEX VALUE
+         + STOP      NIDX2
+         + STOP      ECONST       = TIDXLOC [NIDX2] 
+
+         + TR        TE12
+
+TECONST  + NOOP      0000         LOOP START VALUE IS A COMPILE TIME CONSTANT VALUE (S2N=nnnn)  IN "SET/USE I B" INSTR
+         + R ADD     *
+         + TR        ADDCONST     ADD CONSTANT TO LOOP CONSTANT POOL 
+         + STOP      REG.A        '+H  A nnnn' -> CONSTANT VALUE = CONTENTS OF LOOP END VALUE VAR S2N
+         + STOP      S2N
+TE11     + STORE     ECONST       SAVE THE ENTRY IN POOL THAT CONTAINS THE CREATED LOOP END VALUE (0000=FIRST ENTRY)
+
+TE12     + R ADD     *            GENERATE THE INSTRUCTIONS FOR ACC=END OF LOOP VALUE
+         + TR        GENINST     
+         + R ADD     CNN          '+RA C econst'   is start of loop value 
+         + STOP      0000         END OF INSTR TABLE
+
+TESTOIDX + NOOP      0000         GENERATE INSTR TO TEST FOR END LOOP AND TR TO LOOP START
+
+         + R ADD     ECONSTIX     
+         + STORE     ECONST
+
+         + R ADD     *            GENERATE THE INSTRUCTIONS FOR TEST AND TR TO START OF LOOP
+         + TR        GENINST     
+         + STORE     CNN          '+ST C econst'   is current index value 
+         + STOP      0000         END OF INSTR TABLE
+
+TSETLOEX + TR        /   /
+
+
+TMATVEC  + ADD       TWO          GENERATE INST TO INCREMENT MATRIX/VECTORS REFERENCES THAT USES NIDX
+         + STORE A   TMATEX
+
+         + R ADD     ZERO         EXAMINE ALL REFERENCES TO MATRIX/VECTOR USING INDEX S1N
+         + STORE     NREF
+         + STORE     NLASTREF     LAST ADDR REFERENCE USED
+
+TMLOOP1  + R ADD     NREF
+         + SUB       NREFS
+         + TR 0      TMATEX       ALL REFERENCES PROCESSED -> EXIT
+         + R ADD     NREF
+         + ADD       ONE
+         + STORE     NREF
+
+         + R ADD     *            READ VALUES FROM TREF TABLES
+         + TR        READTBL2
+         + STOP      TREFNAME     
+         + STOP      MAXNREFS
+         + STOP      NREF
+         + STOP      RNAME        = TREFNAME[NREF]   REFERENCE NAME
+         + STOP      RIDX1        = TREFIDX1[NREF]   <0 -> INDEX1 NAME, =0 -> NO INDEX,  >0 -> CONSTANT, =*777777 -> NON ACTIVE INDEX
+         + STOP      RIDX2        = TREFIDX2[NREF]   <0 -> INDEX2 NAME, =0 -> NO INDEX,  >0 -> CONSTANT, =*777777 -> NON ACTIVE INDEX
+         + STOP      RSTEPN       = TREFSTPN[NREF]   STEPN OF INSTR WHERE THE REFERENCE IS MADE
+         + STOP      RINCRN       = TREFINCN[NREF]   INCRN OF REFERENCE IN THIS STEP
+         + STOP      VAL          = TREFOP[NREF]   
+         + STOP      RADDR        = TREFADDR[NREF]   ADDRESS OF VARIABLE/MATRIX Vnnnn
+         + STOP      0000
+         
+         + R ADD     RNAME        IF NAME=0 -> REFERENCE ALREADY PROCESSED. SKIP IT
+         + TR 0      TMLOOP1      
+
+         + R ADD     RIDX1
+         + SUB       S1N
+         + TR 0      TM2          TR IF REFERENCE IS USING SAME 1ST INDEX AS IN "TEST" INSTR 
+         + R ADD     RIDX2
+         + SUB       S1N
+         + TR 0      TM2          TR IF REFERENCE IS USING SAME 2ND INDEX AS IN "TEST" INSTR 
+         
+         + TR        TMLOOP1      TR TO TRY NEXT REFERENCE, AS THIS ONE IS NOT USING SAME INDEX AS IN "TEST" INSTR 
+
+TM2      + R ADD     RIDX1        CHECK IF INDEX=*777777/6. 
+         + SUB       O777K        IT IS A PLACEHOLDER IN "ID var i j" BELOW A "DO/LIB" INSTR
+         + TR 0      TM2A         IF SO, INTERPRET AS CONSTANT 1 FOR THE PURPOSE OF SETTING ITS ADDRESS
+         + R ADD     RIDX1
+         + SUB       O776K
+         + TR 0      TM2A
+         + TR        TM2B
+TM2A     + R ADD     ONE          
+         + STORE     RIDX1
+TM2B     + R ADD     RIDX2
+         + SUB       O777K
+         + TR 0      TM2C 
+         + R ADD     RIDX2
+         + SUB       O776K
+         + TR 0      TM2C 
+         + TR        TM2D 
+TM2C     + R ADD     ONE
+         + STORE     RIDX2
+TM2D     + TR OV     TM2E         CLEAR OV JUST IN CASE
+TM2E     + NOOP      0000
+
+         + R ADD     *            GENERATE MC CODE TO SET THE ADDR (AT RSTEPN/RINCRN) OF REFERENCE (RNAME)
+         + TR        GMATVEC      ACCORDING TO ITS INDEX VALUES (RIDX1, RIDX2)
+
+         + R ADD     *            
+         + TR        EQTBL
+         + STOP      TREFNAME     CLEAR THE NAME OF REFERENCE TO SIGNAL IT IS ALREADY PROCESSED -> BECOMES AN EMPTY ENTRY 
+         + STOP      NREF
+         + STOP      ZERO         TREFNAME[NREF] = 0
+
+         + R ADD     *            EXAMINE REMAINING REFERENCES. GENERATE '+SA ' INSTR TO SAVE THE 
+         + TR        SASAME       INCREMENTED ADDR ON REFERENCES TO SAME MATRIX WITH SAME INDEXES
+         + TR        TMLOOP1      NOW TRY WITH NEXT MATRIX
+         
+TMATEX   + TR        /   /
+
+
+
+GMATVEC  + ADD       TWO          GENERATE MC CODE TO INCR THE ADDR (AT RSTEN/RINCRN) OF REFERENCE (RNAME)         
+         + STORE A   GMVEXIT      ACCORDING TO ITS INDEX VALUES (RIDX1, RIDX2)
+                                  - IF RNAME IS A PARAM BY REFERENCE -> GET D1 PASSED AS PARAM (ELSE D1=TREFD1[NREF])
+                                  - INCR ADDR OF REF BY IDX1
+                                  - IF RIDX2=INDEX IN "TEST" INSTR -> INCR ADDR OF REF BY D2 (ALLWAYS =2)
+         + R ADD     *            A VARIABLE IS SEARCHED IN PARAMETERS TABLE BY ITS ADDRESS
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TPARNAME     ... CALL PARAMETERS NAME TABLE
+         + STOP      NPARAMS      ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NPARAMS
+         + STOP      RADDR        ... THE VALUE TO FIND 
+
+         + TR 0      TM5          IF NOT FOUND -> REFERENCED VECTOR/MATRIX IS NOT A PARAM -> USE STANDARD VALUE D1 
+         + STORE     NPAR         REFERENCED VECTOR/MATRIX IS PASSED AS PARAM -> SHOULD GET THE D1 VALUE ALSO PASSED AS PARAM
+
+         + R ADD     *            READ FROM TPARAMS TABLES
+         + TR        READTBL
+         + STOP      TPARLOC1     LOC1=ENTRY IN LOOP CONSTANT POOL THAT CONTAINS THE D1 VALUE PASSED AS PARAM
+         + STOP      NPAR
+         + STOP      ECONSTD1     = TPARLOC1[NPAR] ENTRY IN LOOP CONSTANT POOL THAT CONTAINS THE D1 PASSED AS PARAM
+
+         + R SUB     ONE          D1 IS NOT A COMPILE TIME KNOWN CONSTANT -> D1=-1
+         + STORE     D1
+         + TR        TM6
+
+TM5      + R ADD     *            READ FROM TREFS TABLES
+         + TR        READTBL2
+         + STOP      TREFADDR     READ RADDR/D1 VALUES OF VECTOR/MATRIX REFERENCED
+         + STOP      MAXNREFS
+         + STOP      NREF
+         + STOP      RADDR        = TREFADDR[NREF] = RADDR IS A COMPILE TIME CONSTANT
+         + STOP      D1           = TREFD1[NREF] = D1 IS A COMPILE TIME CONSTANT
+         + STOP      0000
+
+         + R ADD     *            
+         + TR        ADDCONST     ADD CONSTANT TO LOOP CONSTANT POOL 
+         + STOP      REG.A        '+H  A nnnn' -> CONSTANT VALUE GIVEN IN VAL VARIABLE =D1 OF REFERENCED MATRIX
+         + STOP      D1
+         + STORE     ECONSTD1     SAVE THE ENTRY IN POOL THAT CONTAINS THE CREATED D1 VALUE (1ST ENTRY = 0000)
+
+TM6      + NOOP      0000         HERE, D1 IS COMPILE-TIME CONTANT VALUE OF 1ST DIMENSION (IF IS >=0)
+                                        ECONSTD1 IS THE ENTRY IN LOOP CONSTANT POOL WITH RUN-TIME VALUE OF 1ST DIMENSION
+                                        S1N IS THE NAME IF INDEX BEING SET 
+                                        S2N IS COMPILE TIME CONSTANT VALUE FOR INDEX BEING SET (IF > 0)
+                                        ECONSTIX IS THE ENTRY FOR INDEX BEING SET (SET IN RUN-TIME)
+
+         + R ADD     RIDX1
+         + SUB       S1N
+         + TR 0      TM6A         TR IF REFERENCE RIDX1 = INDEX IN "SET/USE" INSTR 
+         + TR        TM6B         TR IF REFERENCE IS USING ITS OWN 1ST INDEX 
+
+TM6A     + R ADD     ECONSTIX     REFERENCE RIDX1 = 1ST INDEX IN "SET/USE" INSTR -> SET ...
+         + STORE     I1           I1=RUN-TIME VALUE OF INDEX1 (HAS THE VALUE C1 IN RUN-TIME IF INDEX SET TO A CONSTANT AS IN "SET I 2")
+         + R ADD     S2N
+         + STORE     C1           C1=COMPILE-TIME CONTANT VALUE OF INDEX1 (IF >0)
+         + TR        TM6D
+
+TM6B     + R ADD     RIDX1        REFERENCE IS USING ITS OWN 1ST INDEX 
+         + TR 0      BADOP        SHOULD NOT BE EMPTY
+         + TR +      TM6C         TR IF IS A COMPILE TIME CONSTANT
+         
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TIDXNAME     ... INDEX NAME TABLE
+         + STOP      NIDXS        ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NIDXS
+         + STOP      RIDX1        ... THE VALUE TO FIND 
+         
+         + TR 0      BADOP        REFERENCE'S INDEX1 SHOULD BE DEFINED
+         + STORE     N
+ 
+         + R ADD     *            READ FROM TIDX TABLES
+         + TR        READTBL
+         + STOP      TIDXLOC      READ THE ENTRY IN LOOP CONSTANT POOL THAT CONTAINS INDEX VALUE
+         + STOP      N
+         + STOP      ECONST       = TIDXLOC [REFERENCE INDEX1] 
+
+         + R ADD     ECONST
+         + STORE     I1           I1=RUN-TIME VALUE OF INDEX1 OF REFERENCE
+         + R SUB     ONE
+         + STORE     C1           C1=-1 BECAUSE NO COMPILE-TIME CONTANT VALUE OF INDEX1 
+         + TR        TM6D
+
+TM6C     + R ADD     RIDX1
+         + STORE     C1           COMPILE-TIME CONTANT VALUE OF INDEX1 (AS IS >0)
+
+         + R ADD     *
+         + TR        ADDCONST     ADD CONSTANT TO LOOP CONSTANT POOL 
+         + STOP      REG.A        '+H  A nnnn' -> CONSTANT VALUE = CONSTANT IN REFRENECE INDEX2
+         + STOP      C1
+         + STORE     I1           SAVE THE ENTRY IN POOL THAT CONTAINS THE CREATED CONST (0000=FIRST ENTRY)
+         
+TM6D     + NOOP      0000         HERE, C1 IS COMPILE-TIME CONTANT VALUE OF INDEX1 (IF IS >0)
+                                        I1 IS RUN-TIME VALUE OF INDEX1 (HAS THE VALUE C1 IN RUN-TIME IF INDEX SET TO A CONSTANT AS IN "SET I 2")
+         + R ADD     RIDX2
+         + TR 0      TM7V         TR IF REFERENCE IS A VECTOR
+         + SUB       S1N
+         + TR 0      TM7A         TR IF REFERENCE RIDX2 = INDEX IN "SET/USE" INSTR 
+         + TR        TM7B         TR IF REFERENCE IS USING ITS OWN 2ND INDEX 
+
+TM7A     + R ADD     ECONSTIX
+         + STORE     I2           RUN-TIME VALUE OF INDEX2 (HAS THE VALUE C2 IN RUN-TIME IF INDEX SET TO A CONSTANT AS IN "SET I 2")
+         + R ADD     S2N
+         + STORE     C2           C2=COMPILE-TIME CONTANT VALUE OF INDEX2 (IF >0)
+         + TR        TM7D
+
+TM7B     + R ADD     RIDX2        GET 2ND INDEX OF REFERENCE, 
+         + TR 0      BADOP        SHOULD NOT BE EMPTY
+         + TR +      TM7C         TR IF 2ND INDEX IN REFERENCE IS A CONSTANT
+         
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TIDXNAME     ... INDEX NAME TABLE
+         + STOP      NIDXS        ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NIDXS
+         + STOP      RIDX2        ... THE VALUE TO FIND 
+         
+         + TR 0      BADOP        REFERENCE'S INDEX2 SHOULD BE DEFINED
+         + STORE     N
+ 
+         + R ADD     *            READ FROM TIDX TABLES
+         + TR        READTBL
+         + STOP      TIDXLOC      READ THE ENTRY IN LOOP CONSTANT POOL THAT CONTAINS INDEX VALUE
+         + STOP      N
+         + STOP      ECONST       = TIDXLOC [REFERENCE INDEX2] 
+
+         + R ADD     ECONST
+         + STORE     I2           I2=RUN-TIME VALUE OF INDEX2 Of REFERENCE
+         + R SUB     ONE
+         + STORE     C2           C2=-1 BECAUSE NO COMPILE-TIME CONTANT VALUE OF INDEX2 
+         + TR        TM7D
+
+TM7V     + R SUB     ONE
+         + STORE     I2           REFERENCE IS A VECTOR -> NO SECOND INDEX -> I2=-1
+         + STORE     C2     
+         + TR        TM7D
+
+TM7C     + R ADD     RIDX2
+         + STORE     C2           COMPILE-TIME CONTANT VALUE OF INDEX2 (AS IS >0)
+
+         + R ADD     *
+         + TR        ADDCONST     ADD CONSTANT TO LOOP CONSTANT POOL 
+         + STOP      REG.A        '+H  A nnnn' -> CONSTANT VALUE = CONSTANT IN REFRENECE INDEX2
+         + STOP      C2
+         + STORE     I2           SAVE THE ENTRY IN POOL THAT CONTAINS THE CREATED CONST (0000=FIRST ENTRY)
+         
+TM7D     + NOOP      0000         HERE, C2 IS COMPILE-TIME CONTANT VALUE OF INDEX2 (IF IS >0)
+                                        I2 IS ENTRY IN LOOP CONSTANT POOL WITH RUN-TIME VALUE OF INDEX1 (HAS THE VALUE C2 IN RUN-TIME IF INDEX SET TO A CONSTANT AS IN "SET I 2")
+                                           IS <0 IF REF IS A VECTOR (NO 2ND INDEX)
+
+                                  GENERATE IN ACC THE ADDR OF REFERENCE ACCORDING TO 
+                                       C1 I1       -> 1ST INDEX (COMPUTABLE AT COMPILE TIME IF C1>=0)
+                                       D1 ECONSTD1 -> DIMENSION IF 1ST INDEX (COMPUTABLE AT COMPILE TIME IF D1>=0)
+                                       C2 I2       -> (IF I2>=0) 2ND INDEX (COMPUTABLE AT COMPILE TIME IF C2>=0)
+                                  
+         + R ADD     I2           CHECK IF 2ND INDEX IS TO BE USED
+         + TR +      TMM0         IF I2 >=0 -> USE 2ND INDEX -> TR 
+         
+                                  MC INSTR TO GENERATE ADDR FOR VECTOR
+                                  APPLY OPTIMIZATIONS IF C1>=0, D1=2, D1>=0
+           
+         + R ADD     D1
+         + TR +      TVM1         TR IF D1 DIMENSION IS A COMPILE TIME CONSTANT
+         + TR        TVMGEN       TR TO GENERAL FORM: D1 DIMENSION IS A PARAM NOT KNOW AT COMPILE TIME
+TVM1     + R ADD     C1           D1 DIMENSION IS KNOW AT COMPILE TIME, CHECK 1ST INDEX
+         + TR +      TVMEADDR     TR TO EFFECTIVE ADDRESS FORM: D1 AND 1ST INDEX ARE COMPILE TIME CONSTANTS
+         + R ADD     D1
+         + SUB       TWO
+         + TR 0      TVMX2        TR TO SHIFT GENERATED ADDRESS FORM: D1=2 AS COMPILE TIME CONSTANT
+         + TR        TVMGEN       ANY OTHER CASE: TR TO GENERAL FORM
+
+                                  EFFECTIVE ADDRESS FORM: D1 AND 1ST INDEX ARE COMPILE TIME CONSTANTS
+                                 
+                                  ra addconst(ref.addr + c1*2-2)
+
+TVMEADDR + R ADD     C1           COMPUTE THE EFFECTIVE ADDRESS
+         + A LEFT    0001
+         + SUB       TWO
+         + ADD       RADDR
+         + STORE     VAL          VAL=RADDR + C1 * 2 - 2
+         
+TVRA     + R ADD     *            '+RA  C addconst=VAL'
+         + TR        GPVADDR  
+         + STOP      0001         =1 -> generates '+ra v addr', =0 -> generates '+a v addr'
+         + STOP      VAL
+                  
+         + TR        GMVOK         
+                                  SHIFT GENERATED ADDRESS FORM: D1=2 AS COMPILE TIME CONSTANT
+                                  
+                                  ra addconst(ref.addr)
+                                  add i1
+                                  add i1
+                                  sub two
+                                  
+TVMX2    + R ADD     *            '+RA  C addconst=RADDR'
+         + TR        GPVADDR  
+         + STOP      0001         =1 -> generates '+ra v addr', =0 -> generates '+a v addr'
+         + STOP      RADDR
+
+         + R ADD     I1           ENTRY IN CONSTANT POOL THAT CONTAINS THE 1ST INDEX VALUE TO BE USED
+         + STORE     ECONST
+TVMD2    + R ADD     *            USE GENERAL FORM TO GENERATE ADDRESS FOR INDEX WITH DIMENSION=2
+         + TR        GENINST     
+         + ADD       CNN          '+A  C econst=I1'
+         + ADD       CNN          '+A  C econst=I1'
+         + SUB       C02          '+S  C econst=2'
+         + STOP      0000         END OF INSTR TABLE
+                  
+         + TR        GMVOK
+                                  GENERAL FORM: D1 DIMENSION IS A PARAM NOT KNOW AT COMPILE TIME
+
+                                  ra i1                                
+                                  sub one                                
+                                  mult d1                                
+                                  add addconst(ref.addr)
+
+TVMGEN   + R ADD     *            '+RA C econst=I1'
+         + TR        GI1XD1       '+S  C econst=1'
+                                  '-LR A 0035', '+M  C econst=ECONSTD1', '-AL A 0017'                                 
+
+         + R ADD     *            '+A  C addconst=RADDR'
+         + TR        GPVADDR  
+         + STOP      0000         =1 -> generates '+ra v addr', =0 -> generates '+a v addr'
+         + STOP      RADDR
+         
+         + TR        GMVOK
+         
+TMM0     + NOOP      0000         MC INSTR TO GENERATE ADDR FOR MATRIX
+                                  APPLY OPTIMIZATIONS IF C1>=0, D1>=0, C2>=0
+
+         + R ADD     D1
+         + TR +      TMM1         TR IF D1 DIMENSION IS A COMPILE TIME CONSTANT
+         + TR        TMMGEN       TR TO GENERAL FORM: D1 DIMENSION IS NOT KNOW AT COMPILE TIME
+TMM1     + R ADD     C1           D1 DIMENSION IS KNOWN AT COMPILE TIME CONSTANT, CHECK 1ST AND 2ND INDEX
+         + TR +      TMM2         TR IF C1 IS KNOWN AT COMPILE -> GENERATE EFFECTIVE ADDRESS
+         + R ADD     C2           1ST INDEX NOT KNOWN AT COMPILE TIME CONSTANT, CHECK 2ND INDEX
+         + TR +      TMXD1+C      TR TO MULT RUNTIME VALUE OF 1ST INDEX x D1 CONST + CONSTANT (AS 2ND INDEX KWON AT COMPILE TIME)
+         + TR        TMMGEN       TR TO GENERAL FORM: 1ST INDEX AND 2ND INDEX ARE NOT KNOW AT COMPILE TIME
+TMM2     + R ADD     C2           D1 AND 1ST INDEX ARE KNOW AT COMPILE TIME, CHECK 2ND INDEX
+         + TR +      TMMEADDR     TR TO EFFECTIVE ADDRESS FORM: D1, 1ST AND 2ND INDEX ARE COMPILE TIME CONSTANTS
+         + TR        TMMEA+O      TR TO EFFECTIVE ADDRESS PLUS OFFSET FORM: D1 AND 1ST INDEX ARE COMPILE TIME CONSTANT, JUST ADD 2ND INDEX RUNTIME GENERATED OFFSET
+
+                                  GENERAL FORM: D1 DIMENSION AND/OR 2ND INDEX ARE NOT KNOW AT COMPILE TIME
+
+                                  ra i1                
+                                  sub one                
+                                  mult d1                                                                                                     
+                                  add addconst(ref.addr)
+                                  add i2                                                                                                     
+                                  add i2                                    
+                                  sub two 
+                                                                                                                                        
+TMMGEN   + R ADD     *            '+RA C econst=I1'
+         + TR        GI1XD1       '+S  C econst=1'
+                                  '-LR A 0035', '+M  C econst=ECONSTD1', '-AL A 0017'
+
+         + R ADD     *            '+A  C addconst=RADDR'
+         + TR        GPVADDR  
+         + STOP      0000         =1 -> generates '+ra vaddr', =0 -> generates '+a vaddr'
+         + STOP      RADDR
+
+TMMD2    + R ADD     I2           ENTRY IN CONSTANT POOL THAT CONTAINS THE 2ND INDEX VALUE TO BE USED
+         + STORE     ECONST       
+         + TR        TVMD2        TR TO ADD THIS INDEX KNOWN AT RUN-TIME (IT HAS DIMENSION = 2)
+
+                                  MULT D1 PLUS CONST IF 2ND INDEX IS A COMPILE TIME CONSTANT
+
+                                  ra i1                
+                                  sub one                
+                                  mult d1                                                                                                     
+                                  add addconst(ref.addr + (c2-1)*2)
+                                                                                                                                        
+TMXD1+C  + R ADD     *            '+RA C econst=I1'
+         + TR        GI1XD1       '+S  C econst=1'
+                                  '-LR A 0035', '+M  C econst=ECONSTD1', '-AL A 0017'
+
+         + R ADD     C2           COMPUTE THE EFFECTIVE ADDRESS
+         + A LEFT    0001
+         + SUB       TWO
+         + ADD       RADDR
+         + STORE     VAL          VAL=RADDR + C2 * 2 - 2
+
+         + R ADD     *            '+A  C addconst=VAL'
+         + TR        GPVADDR  
+         + STOP      0000         =1 -> generates '+ra vaddr', =0 -> generates '+a vaddr'
+         + STOP      VAL
+ 
+         + TR        GMVOK
+
+        
+                                  EFFECTIVE ADDRESS PLUS OFFSET FORM: 
+                                  D1 AND 1ST INDEX ARE COMPILE TIME CONSTANT, JUST ADD 2ND INDEX
+
+                                  ra addconst(ref.addr + (c1-1)*d1)
+                                  add i2                                                                                                     
+                                  add i2
+                                  sub two    
+                                                                                                               
+TMMEA+O  + R ADD     C1           COMPUTE THE EFFECTIVE ADDRESS
+         + SUB       ONE
+         + L RIGHT   0035
+         + MPY       D1
+         + A LEFT    0017
+         + ADD       RADDR
+         + STORE     VAL          VAL=RADDR + (C1 - 1) * D1
+
+         + R ADD     *            '+RA  C addconst=VAL'
+         + TR        GPVADDR  
+         + STOP      0001         =1 -> generates '+ra vaddr', =0 -> generates '+a vaddr'
+         + STOP      VAL
+
+         + TR        TMMD2        TR TO ADD I2 THIS INDEX KNOWN AT RUN-TIME (IT HAS DIMENSION = 2)
+
+                                  EFFECTIVE ADDRESS FORM: D1, 1ST AND 2ND INDEX ARE COMPILE TIME CONSTANTS
+                                 
+                                  ra addconst(ref.addr + (c1-1)*d1 + (c2-1)*2)
+
+TMMEADDR + R ADD     C1           COMPUTE THE EFFECTIVE ADDRESS
+         + SUB       ONE
+         + L RIGHT   0035
+         + MPY       D1
+         + A LEFT    0017
+         + ADD       C2
+         + ADD       C2
+         + SUB       TWO
+         + ADD       RADDR
+         + STORE     VAL          VAL=RADDR + (C1 - 1) * D1 + C2 * 2 - 2
+         
+         + TR        TVRA         TR TO GENERATE '+RA add const=VAL'
+         
+         
+                                  ON PASS1, IF OP=40, IF INDEX NOT FOUND INSTEAD OF REPORTING AN ERROR
+                                  THE CC FIELD S1N/S2N IS SET TO *777776. 
+                                  
+                                  NOW IN PASS2 THIS UNDEFINED INDEX WILL BE TESTED AGAINST "FOR INDEX A B" INSTR. IF INDEX IN "ID VAR I J"
+                                  IS STILL NOT DEFINED THEN (NOW YES) RAISE A NOT DEFINED INDEX ERROR
+                                  
+                                  IDDO -> WILL TEST INDEX, ERROR IF NOT DEFINED IN "FOR Index"
+                                  FORDO -> DEFINE "FOR index" IF PRESENT
+                                  CLNFORIX -> CLEAR THE DEFINED Index
+                                  
+                                  AS TAPE IS READ BACKWARDS, FIRST WILL BE PROCESSED THE "FOR" INSTR (THAT 
+                                  CREATES THE INDEXS IF PRESENT), THEN "ID" INSTR (TEST INDEXS), AND FINALLY
+                                  "DO" OR "LIB" INSTR, THAT CLEARS THE INDEX TABLE
+
+IDDO     + R ADD     S1N          IF 1ST INDEX UNDEFINED?
+         + SUB       O776K
+         + TR 0      CKIDDO1
+         + TR        CKIDDO2
+CKIDDO1  + R ADD     *            YES, CHECK IF DEFINED
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TFORIDX      ... INDEX NAME TABLE
+         + STOP      NFORIDX      ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NIDXS
+         + STOP      S1           ... THE VALUE TO FIND 
+       
+         + TR 0      ERRNDIX1     TR TO ERROR IF 1ST INDEX IS NOT DEFINED BY A "FOR I A B" INSTR      
+
+CKIDDO2  + R ADD     S2N          IF 2ND INDEX UNDEFINED?
+         + SUB       O776K
+         + TR 0      CKIDDO3
+         + TR        CKIDDO4
+CKIDDO3  + R ADD     *            YES, CHECK IF DEFINED
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TFORIDX      ... INDEX NAME TABLE
+         + STOP      NFORIDX      ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NIDXS
+         + STOP      S2           ... THE VALUE TO FIND 
+       
+         + TR 0      ERRNDIX2     TR TO ERROR IF 2ND INDEX IS NOT DEFINED BY A "FOR I A B" INSTR      
+CKIDDO4  + NOOP      0000
+
+         + TR        CHECKREF
+
+FORDO    + R ADD     FACTREG     
+         + TR 0      FORDO1
+         + TR        NEXT         FOR IS 'V','T','N' -> "FOR var" -> NOT "FOR Index A B" -> CONTINUE
+FORDO1   + R ADD     FACT
+         + TR 0      NEXT         FACTOR IS BLANK -> "FOR <blank>" -> CONTINUE
+                                  HERE, INSTR IS "FOR I 3 4" -> PROCESS INDEX IN FACT (IS <0)
+         + R ADD     NFORIDX      CHECK IF TABLE OVERLOW
+         + SUB       MAXNFOI     
+         + TR 0      ERROVFOI     
+         + R ADD     NFORIDX      CREATE NEW ENTRY
+         + ADD       ONE
+         + STORE     NFORIDX      NUMBER OF INDEX IN "FOR I A B" 
+
+         + R ADD     *            
+         + TR        EQTBL        
+         + STOP      TFORIDX     
+         + STOP      NFORIDX
+         + STOP      FACT         TFORIDX[NFORIDX] = FACT
+
+         + TR        NEXT
+
+ERROVFOI + R ADD     *
+         + TR        ERROR
+         + STOP      ERROVFOS     ERROR: TOO MANY "FOR I A B" (MAX 20)
+
+                                  CLEAR "FOR I A B" INDEXES DEFINED AS PARAMS ON
+                                  DO/LIB CALL
+CLNFORIX + R ADD     ZERO
+         + STORE     NFORIDX
+         + TR        NEXT
+         
+         
+         
+         
+         
+GMVOK    + NOOP      0000         GENERATE THE INSTRUCTIONS TO SAVE COMPUTED VECTOR/MATRIX ADDRESS
+
+         + R ADD     RSTEPN       
+         + STORE     TRANSFER     INN = addr of stepN given in var TRANSFER = stepN of reference, TRSTLOC = location in reference stepn machine code
+         + R ADD     RINCRN       CNN = location in region loop constants pool
+         + STORE     TRSTLOC
+
+         + R ADD     *            
+         + TR        GENINST     
+         + STORE A   INN          '+SA I /  /'     store back the address of reference var incremented by D1 
+         + STOP      0000         END OF INSTR TABLE
+
+GMVEXIT  + TR        /   /
+   
+                                  GENERATE MC INSTR TO MULT I1 X D1: D1 DIMENSION AND 1ST INDEX ARE NOT KNOW AT COMPILE TIME
+
+                                  ra i1                
+                                  sub one                
+                                  mult d1                                                                                                        
+GI1XD1   + ADD       TWO          
+         + STORE A   GI1XD1EX     
+
+         + R ADD     I1           ENTRY IN CONSTANT POOL THAT CONTAINS THE 1ST INDEX VALUE TO BE USED
+         + STORE     ECONST
+         + R ADD     *            USE GENERAL FORM TO GENERATE ADDRESS FOR VECTORS
+         + TR        GENINST     
+         + R ADD     CNN          '+RA C econst=I1'
+         + SUB       C01          '+S  C econst=1'
+         + STOP      0000         END OF INSTR TABLE
+         
+         + R ADD     ECONSTD1
+         + STORE     ECONST
+         + R ADD     *            USE GENERAL FORM TO GENERATE ADDRESS FOR VECTORS
+         + TR        GENINST     
+         - L RIGHT   A35          '-LR A 0035'
+         + MPY       CNN          '+M  C econst=ECONSTD1'
+         + A LEFT    A17          '-AL A 0017'
+         + STOP      0000         END OF INSTR TABLE
+
+GI1XD1EX + TR        /   /   
+   
+                                  GENERATE MC INSTR TO ADD VAR ADDR CONSTANT (KNOW AT COMPILE TIME)
+
+                                  PARAM1: =1 -> generates '+ra vaddr', =0 -> generates '+a vaddr'
+                                  PARAM2: ADDR OF VAR THAT HAS THE VADDR
+   
+GPVADDR  + ADD       TWO
+         + STORE A   GPVAP1
+         + ADD       ONE
+         + STORE A   GPVAP2
+         + ADD       ONE
+         + STORE A   GPVAEX      
+         
+GPVAP1   + R ADD     /   /
+         + LOAD MQ   GPVADD
+         + TR 0      GPV1
+         + LOAD MQ   GPVRADD
+GPV1     + STORE MQ  GPV2
+
+GPVAP2   + R ADD     /   /        GET THE ADDR OF DATA
+         + STORE A   GPV3
+
+         + R ADD     *
+         + TR        ADDCONST     ADD CONSTANT REFERENCE ADDR V nnnn TO LOOP CONSTANT POOL 
+         + STOP      REG.V        '+H  V 0002' -> THE MC INST WITH ADDR TO STORE IN LOOP COSTANT POOL
+GPV3     + STOP      RADDR
+         + STORE     ECONST       SAVE THE ENTRY IN CONSTANTS POOL THAT CONTAINS THE CREATED VALUE
+         + R ADD     *            USE GENERAL FORM TO GENERATE ADDRESS FOR VECTORS
+         + TR        GENINST     
+GPV2     + ADD       CNN          '+A  C econst=RADDR' 
+         + STOP      0000         END OF INSTR TABLE
+         
+         + TR        GPVAEX
+   
+GPVRADD  + R ADD     CNN
+GPVADD   + ADD       CNN
+
+GPVAEX   + TR        /   /   
+   
+ERROVLOC + R ADD     *
+         + TR        ERROR
+         + STOP      ERROVLOS     ERROR: TOO MANY LOOP CONSTANTS IN POOL         
+                          
+                                  PACT OP=17 TEST   ALL THESE OPERATIONS NEEDS AN INDEX AND A VALUE
+
+                                          OP       FACT                    S1     S2
+                                  SYNTAX: TEST     DESTINATION-STEP|BLANK  INDEX  INDEX|ALFAVAR|NUM
+                                  IF S2 IS A VARIABLE, ASSIGN ITS ADDRESS TO FACTORN
+                                  HERE, S1 IS AN INDEX (SHOULD BE ALFA VALUE <0)
+                                        S2 IS AN INDEX (ALFA VALUE <0)
+                                           OR  A VAR   (ALFA VALUE <0) -> IN THIS CASE -> FACTN=ADDR OF VAR, FACTREG='V'
+                                           OR  A NUMBER (>0)
+                                  IF INSTR IS TEST, FACTOR CAN BE A DESTINATION STEPN
+
+                                                   FACT                    S1     S2
+                                                   DESTINATION-STEP|BLANK  INDEX  INDEX|ALFAVAR|NUM
+                                           FACT    >0               0
+                                           S1                              <0
+                                           S2                                     <0    <0      nnn
+                                           FACTN                                  0     Vnn     0
+
+
+TEST     + R ADD     S1N          GET INDEX NAME
+
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TIDXNAME     ... INDEX NAME TABLE
+         + STOP      NIDXS        ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NIDXS
+         + STOP      S1N          ... THE VALUE TO FIND 
+        
+         + TR 0      BADOP        INDEX NOT DEFINED MUST HAVE BEEN DETECTED ON PREVIOUS PASS
+         + STORE     NIDX
+         
+         + R ADD     *            SET INDEX TYPE AS SAVED IN QR VAR BY PREVIOUS PASS:
+         + TR        EQTBL            QR=0 IN CC RECORD TO SIGNAL INDEX IS "ADDRESS TYPE"
+         + STOP      TIDXTYPE         QR=1 IN CC RECORD TO SIGNAL INDEX IS "COUNT TYPE"
+         + STOP      NIDX
+         + STOP      QR           TIDXTYPE[NIDX] = QR 
+         
+         + TR        NEXT
+
+SASAME   + ADD       TWO          EXAMINE REMAINING REFERENCES. GENERATE '+SA ' INSTR TO SAVE THE 
+         + STORE A   SASAMEEX     ADDR ON ACC TO REFERENCES TO SAME VECTOR/MATRIX
+                                  WITH SAME INDEXES
+
+         + R ADD     NREF         EXAMINE REMAINING REFERENCES. 
+         + STORE     NREF2        
+
+SALOOP2  + R ADD     NREF2
+         + SUB       NREFS        GENERATE '+SA I /  /' MC INST FOR
+         + TR 0      SASAMEEX     ALL REFERENCES OF SAME VECTOR/MATRIX PROCESSED
+         + R ADD     NREF2
+         + ADD       ONE
+         + STORE     NREF2
+
+         + R ADD     *            READ SEVERAL VALUES FROM TREF TABLES
+         + TR        READTBL2
+         + STOP      TREFNAME     READ THE FIRST VARIABLE REFERENCE
+         + STOP      MAXNREFS
+         + STOP      NREF2
+         + STOP      R2NAME       = TREFNAME[NREF2]   REFERENCE NAME
+         + STOP      R2IDX1       = TREFIDX1[NREF2]   INDEX1 USED BY REFERENCE 
+         + STOP      R2IDX2       = TREFIDX2[NREF2]   INDEX2 USED BY REFERENCE 
+         + STOP      R2STEPN      = TREFSTPN[NREF2]   STEPN OF INSTR WHERE THE REFERENCE IS MADE
+         + STOP      R2INCRN      = TREFINCN[NREF2]   INCRN OF REFERENCE IN THIS STEP
+         + STOP      VAL          = TREFOP  [NREF2]   
+         + STOP      R2ADDR       = TREFADDR[NREF2]   ADDRESS OF VARIABLE/MATRIX Vnnnn
+         + STOP      0000
+         
+         + R ADD     R2NAME       CHECK IF REFERENCE ALREADY PROCESSED
+         + TR 0      SALOOP2      IF SO, TRY NEXT REFERENCE 
+         + R ADD     R2ADDR       CHECK IF SAME MATRIX/VECTOR 
+         + SUB       RADDR        IF NOT, TRY NEXT REFERENCE 
+         + TR 0      SA6A
+         + TR        SALOOP2
+SA6A     + R ADD     R2IDX1
+         + SUB       RIDX1
+         + TR 0      SA6B
+         + TR        SALOOP2
+SA6B     + R ADD     R2IDX2
+         + SUB       RIDX2
+         + TR 0      SA6C
+         + TR        SALOOP2
+SA6C     + NOOP      0000         HERE WE HAVE ANOTHER REFERENCE TO SAME VECTOR
+
+         + R ADD     R2STEPN       
+         + STORE     TRANSFER     INN = addr of stepN given in var TRANSFER = stepN of reference, TRSTLOC = location in reference stepn machine code
+         + R ADD     R2INCRN      CNN = location in region loop constants pool
+         + STORE     TRSTLOC
+
+         + R ADD     *            GENERATE THE INSTRUCTIONS TO INCREMENT THE SAME REFERENCED VECTOR ADDRESS 
+         + TR        GENINST     
+         + STORE A   INN          '+SA I /  /'     store back the address of reference var incremented by D1
+         + STOP      0000         END OF INSTR TABLE
+
+         + R ADD     *            
+         + TR        EQTBL
+         + STOP      TREFNAME     CLEAR THE NAME OF REFERENCE TO SIGNAL IT IS ALREADY PROCESSED -> BECOMES AN EMPTY ENTRY 
+         + STOP      NREF2
+         + STOP      ZERO         TREFNAME[NREF] = 0
+
+         + TR        SALOOP2
+SASAMEEX + TR        /   /
+
+
+                                  CHECK IF STEP IS A VECTOR/MATRIX USIGN INDEXES
+                                  IF SO, ADD TO REFERENCE TABLE TO GENERATE CODE IN "USE/TEST" INSTR
+                                  TO SET ITS ADDRESS. 
+
+                                          OP       FACT             S1                S2
+                                  SYNTAX:          VAR|NUM          INDEX|NUM|BLANK   INDEX|NUM|BLANK
+                                          FACT     <0   0            
+                                          FACTN    Vnn  0    
+                                          NUM      0   nnn                                        <-- if factor=num, cannot have indexes
+                                  ONE     S1/S2                     <0    nnn   0     
+                                  INDEX   S1N/S2N                   <0    >0    0      
+                                          D1N/D2N                    2     2    0     
+                                  TWO     S1/S2                     <0    nnn   0     <0    nnn   0     
+                                  INDEXS  S1N/S2N                   <0    >0    0     <0    >0    0      
+                                          D1N/D2N                  2*D2   2*D2  0      2     2    0     <-- D2 is VAR'S Dimension 2 in matrix
+                                          
+                                          D1N=-1 IF MATRIX/VECTOR WITH CONSTANT SUBSCRIPTS
+
+CHECKREF + R ADD     FACTREG
+         + SUB       D34          'V'
+         + TR 0      CK1
+         + TR        NEXT         STEP NOT USING A VARIABLE
+         
+CK1      + R ADD     S1N          IF S1N <0 (ALFA BASE48 INDEX NAME) -> STORE IN REFERENCES
+         + TR +      CK1A         IF S1N >=0 (NUMERIC CONSTANT/BLANK) -> IS NOT AN INDEX -> TR TO CHECK INDEX2
+         + TR        CK1B
+
+CK1A     + R ADD     S2N          IF S1N <0 (ALFA BASE48 INDEX NAME) -> STORE IN REFERENCES
+         + TR +      NEXT         IF S1N >=0 (NUMERIC CONSTANT/BLANK) -> IS NEITHER AN INDEX 
+                                  -> NOT USING INDEXES -> PROCEED TO NEXT INSTR
+
+CK1B     + R ADD     NREFS        CREATE A NEW REFERENCE ENTRY
+         + TR 0      CK1NEW       IF TABLE EMPTY -> TR TO CREATE A NEW ENTRY
+                                  SEARCH FOR EMPTY (NAME=0) ENTRIES
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TREFNAME     ... INDEX NAME TABLE
+         + STOP      NREFS        ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NIDXS
+         + STOP      ZERO         ... THE VALUE TO FIND 
+
+         + TR 0      CK1NEW       NO EMPTY ENTRY FOUND -> TR TO CREATE A NEW ONE
+         + STORE     NREF         EMPTY ENTRY FOUND -> TR TO USE IT
+         + TR        CK1NEW2
+
+CK1NEW   + R ADD     NREFS        CHECK IF TABLE OVERLOW
+         + SUB       MAXNREFS     
+         + TR 0      ERROVREF     
+         + R ADD     NREFS        CREATE NEW REF
+         + ADD       ONE
+         + STORE     NREFS
+         + STORE     NREF
+         
+CK1NEW2  + R ADD     NINCR        GET THE MC INSTR POINTED BY
+         + TR 0      BADOP        NINCR THAT REFERENCES THE 
+         + SUB       ONE          FACTOR VARIABLE
+         + A LEFT    0001
+         + ADD       TINSTAD
+         + STORE A   CK3C
+CK3C     - R ADD     /   /
+         - STORE     DATA         
+
+         + R ADD     *            STORE IN TABLES
+         + TR        EQTBL2
+         + STOP      TREFNAME     
+         + STOP      MAXNREFS
+         + STOP      NREF
+         + STOP      FACT         TREFNAME[NREF] = 
+         + STOP      S1N          TREFIDX1[NREF] <0 -> INDEX NAME, =0 -> NO INDEX,  >0 -> CONSTANT
+         + STOP      S2N          TREFIDX2[NREF] <0 -> INDEX NAME, =0 -> NO INDEX,  >0 -> CONSTANT 
+         + STOP      STEPN        TREFSTEP[NREF] = 
+         + STOP      NINCR        TREFINCR[NREF] = 
+         + STOP      DATA         TREFOP  [NREF] = 
+         + STOP      DATA2        TREFADDR[NREF] = 
+         + STOP      D1N          TREFD1  [NREF] = 
+         + STOP      0000
+
+         + TR        NEXT         
+
+
+SETREGCI + ADD       TWO          APPLY REGCSTEP VALUE TO UPDATE MC INSTR USING REG.C 
+         + STORE A   SETCIEX      TO THE ACTUAL REG.C STEPN WHERE THE LOOP CONSTANTS ARE STORED
+                                  '+OP C nnnn' IS CONVERTED TO '+OP I REGCSTEPN.mmmm'
+         + R ADD     ZERO      
+         + STORE     MC.REG
+         + STORE     N
+         + R ADD     TINSTAD
+         + STORE A   SRCIRD
+         + STORE A   SRCIWR
+         
+SRCILOOP + R ADD     N
+         + SUB       NINST
+         + TR 0      SETCIEX      NO MORE MC INSTR
+         + R ADD     N
+         + ADD       ONE         
+         + STORE     N
+SRCIRD   - R ADD     /   /        GET MC INSTR FROM TINST TABLE
+         - STORE     DATA
+         + R ADD     DATA         GET MC.OP + REGION (0..7)
+         + STORE A   MC.REG
+         + R ADD     MC.REG       IS REGION C?
+         + SUB       REG.C
+         + TR 0      SRCI1        TR IF SO
+         + TR        SRCINXT      NO REGION C -> TRY WITH NEXT INSTR
+         
+SRCI1    + R ADD     DATA2        IF MC.ADDR >=0 THEN MC.REG HOLDS THE REGION FOR MC.ADDR 
+         + ADD       ONE          IF MC.ADDR <0 THEN MC.REG VAR HOLDS THE LOCATION INTO STEPN REFERENCED BY MC.ADDR
+         + STORE     MC.REG       MC.ADDR HOLDS THE STEPN (WITH MINUS SIGN)
+         + R SUB     REGCSTEP     LOCATION INTO STEP = C0000 + 1
+         + STORE     MC.ADDR   
+         
+         + R ADD     MC.REG       COMPOSE THE MC INSTR TO SAVE IN TINST, REPLACING "REG.C ADDR" REFERENCE
+         + STORE A   DATA         WITH "REG.I STEPN.LOCATION" REFERENCE
+         + R ADD     MC.ADDR
+         + STORE     DATA2
+         
+         - R ADD     DATA         SAVE BACK TO TINST
+SRCIWR   - STORE     /   /
+
+SRCINXT  + R ADD     SRCIRD       SELECT NEXT MC INSTR
+         + SUB       TWO
+         + STORE A   SRCIRD
+         + STORE A   SRCIWR
+         + TR        SRCILOOP
+
+SETCIEX  + TR        /   /
+
+
+
+
+ERROVREF + R ADD     *
+         + TR        ERROR
+         + STOP      ERROVRFS     ERROR: TOO MANY REFERENCES TO MATRIX/VECTOR IN REGION (MAX 50)
+
+ERRNDIX1 + R ADD     *
+         + TR        ERROR
+         + STOP      ERRNDI1S     ERROR: 1ST INDEX NOT DEFINED (TO BE USED WITH VECTOR/MATRIX INDEX SHOULD BE DEFINED WITH USE/SET)
+
+ERRNDIX2 + R ADD     *
+         + TR        ERROR
+         + STOP      ERRNDI2S     ERROR: 2ND INDEX NOT DEFINED (TO BE USED WITH VECTOR/MATRIX INDEX SHOULD BE DEFINED WITH USE/SET)
+
+
+ADDCONST + ADD       TWO          ADD CONSTANT TO LOOP CONSTANT POOL 
+         + STORE A   ADDCP1       PARAMS: +OP    REG     <-- THE SIGNED OP AND REGION OF CONSTANT
+         + ADD       ONE                   00    ADDR        THE ADDR. IF =0 -> ALLWAYS STORE A NEW CONSTANT 
+         + STORE A   ADDCP2       RETURN IN ACC THE ENTRY OF ADDED CONST (FIRST ENTRY = 0000)
+         + ADD       ONE                           
+         + STORE A   ADDCONEX     SEARCH IF CONST ALREADY BEEN ADDED, IF SO RETURN ITS ENTRY
+                                  ELSE ADD IT
+
+ADDCP1   + R ADD     /   /        THE OP AND REGION PART OF CONSTANT
+         + STORE A   ADDCP1A      SAVE THE ADDR OF VAR THAT HOLD THE REGION NUMBER 0..7
+         + STORE     DATA         SAVE OP
+ADDCP1A  + R ADD     /   /        READ THE REGION NUM FROM VAR 
+         + STORE A   DATA         ADD TO OP. NOW OP= +/- OPCODE AND REGION 0..7
+
+         + R ADD     NLOCONST     GET NUMBER OF ENTRIES
+         + TR 0      AN1A         IF EMPTY, ADD 1ST ENTRY '+H A 0002'
+         + TR        AN1Z                       2ND ENTRY '+H A 0001'
+AN1A     + R ADD     TWO
+         + STORE     NLOCONST     
+         + A RIGHT   0018
+         - STORE     TLOCONST
+         + R ADD     ONE
+         + A RIGHT   0018
+         - STORE     TLOCONS2
+
+AN1Z     + R ADD     ZERO
+         + STORE     DATA2
+ADDCP2   + R ADD     /   /        THE ADDR OF VALUE TO STORE IN ADDR PART OF CONSTANT 
+         + TR 0      ADDNEW       IF ZERO -> JUST ADD A NEW ENTRY IN POOL
+         + STORE A   ADDCP2A
+ADDCP2A  + R ADD     /   /        THE VALUE TO STORE
+         + STORE     DATA2
+
+                                  SEARCH IF CONST ALREADY IN THE TABLE
+         + R ADD     TLOCONAD     ADDR OF START OF LOOP CONSTANT TABLE
+         + STORE A   ADDCLOOP 
+         + R ADD     NLOCONST 
+         + A LEFT    0001
+         + ADD       TLOCONAD
+         + STORE A   TLOCOEND     ADDR OF END OF LOOP CONSTANT TABLE
+
+ADDCLOOP - R ADD     /   /
+         - SUB       DATA
+         + TR 0      ADDFND       FOUND IN LOOP CONSTANT POOL
+
+         + R ADD     ADDCLOOP 
+         + SUB       TWO
+         + STORE A   ADDCLOOP 
+         + SUB       TLOCOEND
+         + TR 0      ADDNFND      NOT FOUND IN POOL -> JUST ADD A NEW ENTRY IN POOL
+         + TR        ADDCLOOP 
+
+ADDFND   + R SUB     ADDCLOOP     COMPUTE THE ENTRY NUMBER (FIRST ENTRY = 0000)
+         + SUB       TLOCONAD     
+         + STORE A   TLOCENT  
+         + R ADD     TLOCENT  
+         + A RIGHT   0001
+         + TR        ADDCONEX 
+
+ADDNEW   + R ADD     ZERO         NEW ENTRY IS INIT TO ZERO
+         - STORE     DATA
+
+ADDNFND  + R ADD     NLOCONST     ADD NEW ENTRY
+         + SUB       MAXNCONS
+         + TR 0      ERROVLOC     ERROR: TOO MANY LOOP CONSTANTS IN POOL
+
+         + R ADD     NLOCONST     ADD NEW ENTRY
+         + STORE     TLOCENT      THE ENTRY (0000=1ST ENTRY) FOR NEW CONSTANT CREATED IN POOL
+         + ADD       ONE
+         + STORE     NLOCONST     
+         + SUB       ONE
+         + A LEFT    0001
+         + ADD       TLOCONAD 
+         + STORE A   ADDENT
+         - R ADD     DATA
+ADDENT   - STORE     /   /
+         + R ADD     TLOCENT      RETURN THE ENTRY
+         + TR        ADDCONEX 
+
+TLOCONAD + STOP      TLOCONST
+TLOCOEND - R ADD     0000
+TLOCENT  + STOP      0000
+
+ADDCONEX + TR        /   /
+
+
+GENINST  + ADD       TWO          GENERATE MACHINE CODE (MC) INSTRUCTIONS
+         + STORE A   MC.TABLE     MC TABLE FOLLOWS CALL AS PARAMTERS (UNTIL -STOP 0000 INSTR)
+         + R ADD     *
+         + TR        GENTABLE
+         + R ADD     GEN1
+         + ADD       ONE
+
+         + STORE A   GENEXIT2      
+GENEXIT2 + TR        /   /
+
+
+GENTBOV  + R ADD     *
+         + TR        ERROR
+         + STOP      ERROVINS     ERROR: TOO MANY INSTR IN THIS STEP
+
+GENTABLE + ADD       TWO          GENERATE MACHINE CODE (MC) INSTRUCTIONS
+         + STORE A   GENEXIT      MC TABLE AT LOCATION IN MC.TABLE VAR
+                                  ADD THEM TO COMPACT CODE REGISTER 
+         + R ADD     MC.TABLE
+         + STORE A   GEN1
+
+GEN1     + R ADD     /   /        READ MACHINE CODE TABLE
+GENEXIT  + TR 0      /   /        =0 -> END OF MC.TABLE-> RETURN TO CALLER
+         + STORE     MC
+         + A RIGHT   0030         SAVE OPCODE ONLY
+         + A LEFT    0030         (WITH SIGN)
+         + STORE     MC.OP        IN MC.OP
+
+         + R ADD     NINST        INCR NUMBER OF MC INSTRUCTIONS IN CC TABLE
+         + ADD       ONE          ERROR IF > MAXIMUN ALLOWED
+         + STORE     NINST
+         + SUB       MAXNINST
+         + TR 0      GENTBOV      ERROR: TOO MANY INSTR IN THIS STEP
+
+         + R ADD     ZERO
+         + ADD AB    MC           EXTRACT ADDR PART OF MC 
+         + SUB AB    MC.OP        
+         + SUB       D1000
+         + TR +      GEN2
+         + STOP      1111         INVALID MC.TABLE
+GEN2     + ADD       ADTBL        USE THE TRANSFER TABLE TO PROCESS IT
+         + STORE A   ADTBLTR
+         + R ADD     ZERO
+         + ADD AB    MC.OP        ON ENTRY TO ROUTINE, ACC=ABS(MC.OP). SIGN IS IN MC VARIABLE
+ADTBLTR  + TR        /   /
+ADTBL    + STOP      *
+         + TR        GEN.FACT     factor to be replaced by V 0005 (variable), T 0010 (result of a step) or N 0012 (a number)
+         + TR        GEN.A35      A 0035  
+         + TR        GEN.A17      A 0017  
+         + TR        GEN.INN      transfer to location n (1..199) into stepN given in var TRANSFER = stepN, TRSTLOC = location in step machine code
+         + TR        GEN.CNN      C nnnn  where nnnn is the value of ECONST var
+         + TR        GEN.C01      C nnnn  where nnnn is the value ONE in LOOP CONSTANTS POOL
+         + TR        GEN.C02      C nnnn  where nnnn is the value TWO in LOOP CONSTANTS POOL
+
+
+GENADD   + R ADD     MC           ADD A GENERATED MC INSTR TO TINST TABLE
+         + TR +      GENADD1      TAKE THE SIGN OF MC AND PLACE IT IN MC.OP
+         + R SUB     MC.OP
+         + STORE     MC.OP
+GENADD1  + R ADD     NINST        ADD NINST TWICE AS EACH MC INSTR USES TWO HALF-WORDS
+         + ADD       NINST
+         + SUB       TWO          
+         + ADD       TINSTAD      TINSTAD=LOCATION OF TABLE WITH MC INSTRUCTIONS GENERATED FOR THE CURRENT STEP
+         + STORE A   GENADD2      TINST[ (INST- 1)*2 ] =MC instr op and region
+         + ADD       ONE
+         + STORE A   GENADD3      TINST[ (INST- 1)*2 ] =MC instr addr
+         + R ADD     MC.OP        
+GENADD2  + STORE     /   /        STORE GENERATED MC INSTRUCTION MC.OP (MC.OP CAN BE >0 OR <0)
+         + R ADD     MC.ADDR
+GENADD3  + STORE     /   /                                       MC.ADDR (CAN BE >0 OR <0 IF HOLDS A STEPN/LOCATION PAIR)
+
+         + R ADD     GEN1         PROCEED WITH NEXT MC INST N LIST
+         + ADD       ONE
+         + STORE A   GEN1
+         + TR        GEN1
+
+GEN.A35  + ADD       REG.A
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION A
+         + R ADD     D35
+         + STORE     MC.ADDR      MC.ADDR = 0035
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.A17  + ADD       REG.A
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION A
+         + R ADD     D17
+         + STORE     MC.ADDR      MC.ADDR = 0035
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.INN  + ADD       TRSTLOC      TRSTLOC=LOCATION INTO STEPN NUMBER THE MC INSTR HAS TO TRANSFER TO 
+         + STORE     MC.OP        MC.OP   = OPCODE + LOCATION INTO STEPN
+         + R SUB     TRANSFER     TRANSFER=STEPN NUMBER THE MC INSTR HAS TO TRANSFER TO 
+         + STORE     MC.ADDR      MC.ADDR = STEPN (WITH MINUS SIGN, TO SIGNAL ADDR POINTS TO STEPN/LOCATION IN THIS STEP PAIR)
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.CNN  + ADD       REG.C
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION C
+         + R ADD     ECONST
+         + STORE     MC.ADDR      MC.ADDR = ADDR IN REGION C
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.C01  + ADD       REG.C
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION C
+         + R ADD     *
+         + TR        ADDCONST     ADD CONSTANT TO LOOP CONSTANT POOL 
+         + STOP      REG.A        '+H  A 0001' -> CONSTANT VALUE 1
+         + STOP      ONE
+         + STORE     MC.ADDR      MC.ADDR = ADDR IN REGION C
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.C02  + ADD       REG.C
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION C
+         + R ADD     *
+         + TR        ADDCONST     ADD CONSTANT TO LOOP CONSTANT POOL 
+         + STOP      REG.A        '+H  A 0002' -> CONSTANT VALUE 2
+         + STOP      TWO
+         + STORE     MC.ADDR      MC.ADDR = ADDR IN REGION C
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+GEN.FACT + LOAD MQ   REG.V
+         + R ADD     FACTREG
+         + SUB       D34          'V'
+         + TR 0      GEN.FA1
+         + LOAD MQ   REG.N
+         + R ADD     FACTREG
+         + SUB       D26          'N'
+         + TR 0      GEN.FA1
+         + LOAD MQ   REG.T
+         + R ADD     FACTREG
+         + SUB       D32          'T'
+         + TR 0      GEN.FA1
+         + STOP      1111         INVALID FACT REGION
+GEN.FA1  + R ADD     ZERO
+         + L LEFT    0035         A=MQ
+         + ADD AB    MC.OP
+         + STORE     MC.OP        MC.OP   = OPCODE + REGION OF FACTOR (CAN BE V, N OR T)
+         + R ADD     FACTN
+         + STORE     MC.ADDR      MC.ADDR = FACTN
+         + R ADD     NINST   
+         + STORE     NINCR        NINCR= THE LOCATION OF FACTOR MC INSTRUCTION INTO THE STEP 
+         + TR        GENADD       TR TO ADD INSTR TO CC TABLES
+
+                            
+PRTMC    + ADD       TWO          PRINT TINST TABLE WITH MC INSTRUCTIONS GENERATED FOR THIS STEP
+         + STORE A   PRTMCEX
+         + R ADD     ZERO
+         + STORE     PRTMCNUM
+
+PMCLOOP  + R ADD     PRTMCNUM
+         + SUB       NINST
+         + TR 0      PRTMCEX      EXIT IF ALL NINST INSTRUCTIONS PRINTED
+         + R ADD     PRTMCNUM     INCR COUNT
+         + ADD       ONE
+         + STORE     PRTMCNUM     GET MC INSTR FROM TINST[ (PRTMCNUM-1)*2 ]
+         + ADD       PRTMCNUM
+         + SUB       TWO
+         + ADD       TINSTAD
+         + STORE A   PMCAD1
+         + ADD       ONE
+         + STORE A   PMCAD2
+         + R ADD     ZERO
+         + STORE     MC.REG       INIT REGION REFERENCED BY MC
+PMCAD1   + R ADD     /   /
+         + STORE A   MC.REG
+         + A RIGHT   0012
+         + STORE     MC.OP        MC.OP HAS NOW THE SIGNED OPCODE -31..31 
+
+PMCAD2   + R ADD     /   /
+         + STORE     MC.ADDR
+         + TR +      PMC3         IF MC.ADDR >=0 THEN MC.REG HOLDS THE REGION FOR MC.ADDR 
+         + R ADD     MC.REG       IF MC.ADDR <0 THEN MC.REG VAR HOLDS THE LOCATION INTO STEPN REFERENCED BY MC.ADDR
+         + STORE     TRSTLOC      LOCATION IN STEP GIVEN BY MC.ADDR
+         + R SUB     MC.ADDR      MAKES MC.ADDR POSITIVE. IT IS THE DESTINATION STEP
+         + STORE     MC.ADDR
+         + R ADD     REG.I
+         + STORE     MC.REG       SET REGION I -> MC.ADDR=THE STEPN, TRSTLOC=THE NINST REFERENCED IN THIS STEPN
+
+PMC3     + R ADD     *            START NEW LINE TO PRINT
+         + TR        CLRBUF
+
+         + R ADD     REGCSTEP     THIS IS THE STEPN WHERE THE REG.C SITS
+         + SUB       STEPN
+         + TR 0      PMC3C        TR TO PRINT REG "C NNNN" INSTEAD OF STEPN.MCNUM
+         + TR        PMC3Z
+
+PMC3C    + LOAD MQ   D15          PRINT 'C'
+         + R ADD     *
+         + TR        PRTCHR
+         + STOP      0039         AT COL 39
+         + R ADD     PRTMCNUM     INST NUMBER 1..99
+         + SUB       ONE          -1 -> IS THE ADDRESS IN REGION C
+         + L RIGHT   0035         ACC->MQ
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0040         AT COL 40 
+         + STOP      0004         LEN=4
+         + TR        PMC5SGN
+
+PMC3Z    + LOAD MQ   STEPN        PRINT STEPN
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0040         AT COL 40 
+         + STOP      0004         LEN=4
+         + LOAD MQ   D43          PRINT '.'
+         + R ADD     *
+         + TR        PRTCHR
+         + STOP      0044         AT COL 44 
+         + LOAD MQ   TWO
+         + R ADD     PRTMCNUM     IF INST NUMBER < 10 PRINT IT
+         + SUB       D10          WITH LEN=1, IF >= 10 USE LEN=2
+         + TR +      PMC4
+         + LOAD MQ   ONE
+PMC4     + STORE MQ  PMC5
+         + LOAD MQ   PRTMCNUM
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0045         AT COL 45 
+PMC5     + STOP      0002         LEN=1 OR 2
+
+PMC5SGN  + LOAD MQ   D12          '+'
+         + R ADD     MC.OP
+         + TR +      PMC6
+         + LOAD MQ   D11          '-'
+PMC6     + R ADD     *            PRINT OP SIGN
+         + TR        PRTCHR
+         + STOP      0048         AT COL 48
+
+         + R ADD     ZERO
+         + ADD AB    MC.OP
+         + ADD       TMNEAD
+         + STORE A   PMC7
+PMC7     + LOAD MQ   /   /
+         + R ADD     *            PRINT OP MNEMONIC
+         + TR        PRTALF
+         + STOP      0049         AT COL 49
+
+         + R ADD     MC.REG
+         + ADD       TREGMNEA     CHARS IN TREGMNE ARE TXT ALFA VALUES  
+         + STORE A   PMC8         THUS ARE NEGATIVE
+PMC8     + R SUB     /   /        CHANGE SIGN BEFORE STORING IT IN MQ
+         + L RIGHT   0035
+         + R ADD     *            PRINT REGION LETTER V I S T A N
+         + TR        PRTCHR
+         + STOP      0052         AT COL 52
+         
+         + R ADD     MC.REG       IF MC.REG='I' THEN ...
+         + SUB       REG.I        
+         + TR 0      PMC9         TR TO PRINT STEPN.LOCATION
+         + R ADD     MC.REG       IF MC.REG='S' THEN ...
+         + SUB       REG.S
+         + TR 0      PMC8B        TR TO PRINT ALFA SYMBOL TO TRANSFER TO
+         
+         + LOAD MQ   MC.ADDR      MC.REG IS 'V', 'T', 'A' OR 'N'
+         + R ADD     *            JUST PRINT THE INST ADDRESS
+         + TR        PRTINT
+         + STOP      0053         AT COL 53 
+         + STOP      0004         LEN=4
+         + TR        PMC12
+
+PMC8B    + LOAD MQ   D45          PRINT ALFA SYMBOL TO TRANSFER TO
+         + R ADD     *            '/'
+         + TR        PRTCHR
+         + STOP      0054         AT COL 54
+         + LOAD MQ   D45          '/'
+         + R ADD     *
+         + TR        PRTCHR
+         + STOP      0058         AT COL 58
+         + LOAD MQ   MC.ADDR      GET SYMBOL ALFA
+         + R ADD     *            
+         + TR        PRTALF
+         + STOP      0055         AT COL 55
+         + TR        PMC12
+
+TMNEAD   + STOP      TMNE
+TREGMNEA + STOP      TREGMNE
+
+PMC9     + LOAD MQ   MC.ADDR      PRINT STEPN.TRSTLOC 
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0053         AT COL 53 
+         + STOP      0004         LEN=4
+         + LOAD MQ   D43          PRINT '.'
+         + R ADD     *
+         + TR        PRTCHR
+         + STOP      0057         AT COL 57 
+         + LOAD MQ   TWO
+         + R ADD     TRSTLOC      IF INST NUMBER < 10 PRINT IT
+         + SUB       D10          WITH LEN=1, IF >= 10 USE LEN=2
+         + TR +      PMC10
+         + LOAD MQ   ONE
+PMC10    + STORE MQ  PMC11
+         + LOAD MQ   TRSTLOC
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0058         AT COL 58 
+PMC11    + STOP      0002         LEN=1 OR 2
+PMC12    + NOOP      0000
+
+         + R ADD     *
+         + TR        PRINTCRD
+         + TR        PMCLOOP    
+
+
+PRTMCEX  + TR        /   /        RETURN TO CALLER
+
+           ORG       EVEN
+
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0                 IF OP=TEST THEN IF QR=0->INDEX IN GENEATED INSTR IS INDEX IS "ADDRESS TYPE", =1->IS "COUNT TYPE" 
+FACTREG    DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0            FACTN=ADDR (0, 2, 4, ..) FACTREG=' ', 'T', 'V', 'N'
+D2N        DEF       0            S1N/S2N=INDEX (IF <0), BLANK (IF =0), CONST (IF >0), 
+NINST      DEF       0                   IF OP=40 -> =*777777 if non active index   
+NINCR      DEF       0                               =*777776 if non defined index  
+TINST      RES       200          D1N/D2N=HALF-WORD SIZE OF EACH DIMENSION. D1N=-1 IF MATRIX/VECTOR WITH CONSTANT SUBSCRIPTS  
+                                  MACHINE CODE: 1ST HALF-WORD OPCODE + REGION/LOCATION INTO STEP (FOR TRANSFERS)              
+                                                2ND HALF-WORD ADDR INTO REGION                                                
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+N          DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+MAXNINST   DEF       100          MAX NUMBER OF MACHINE CODE INSTRUTIONS PER STEP
+VAL        DEF       0            TEMP
+
+DATA       DEF       0            EVEN ALIGNED TEMP VAT
+DATA2      DEF       0
+
+                                  TABLES (SHOULD BE AT EVEN LOCATION)
+
+MAXNCONS   DEF       100          MAX NUMBER OF ENTRIES IN LOOP CONSTANT POOL OF REGION
+NLOCONST   DEF       0            NUM OF ENTRIES IN LOOP CONSTANT POOL OF REGION
+TLOCONST   RES       2
+TLOCONS2   RES       198          MACHINE CODE: 1ST HALF-WORD OPCODE + REGION
+                                                2ND HALF-WORD ADDR INTO REGION
+
+                                  TPAR TABLES AND TIDX TABLES MUST BE ONE NEXT TO THE OTHER
+                                  AS THEY ARE SAVE TO TAPE AT ONCE 
+                                                                    
+MAXNPAR    DEF       34           MAX (34) NUMBER OF CALL PARAMETERS
+NPARAMS    DEF        0           NUMBER OF PARAMS DEFINED
+TPARNAME   RES       34           PARAM NAME (ALFA BASE48 <0). >0 IF VARIABLE (IS THE ADDR). =4096 IF NUMBER
+TPARSTEP   RES       34           STEPN WHERE PARAM IS DEFINED
+TPARTYPE   RES       34           PARAM TYPE: 
+TPARFACT   RES       34           
+TPARLOC1   RES       34           PACT       TYPE  FACT   LOC1   NAME       DESCR
+
+                                  ID 3        -1   3             4096       CONSTANT. VALUE PASED AS PARAM IS STORED IN TEMP VAR
+                                  ID VAR       0   FACTN         FACTN      SCALAR VAR BY REF. FACT=FACTN OF VARIABLE ON CURRENT REGION
+                                  ID VECT I    1   FACTN  L(D1)  FACTN      VECTOR BY REF. FACT=FACTN OF VARIABLE. LOC1=ENTRY IN LOOP CONSTANTS POOL OF D1 VALUE PASED AS PARAM 
+                                  ID MAT  I J  2   FACTN  L(D1)  FACTN      MATRIX
+
+                                  FOR I A B   -2   L(A)   L(B)   ALFA (<0)  INDEX LOOP START/END: NAME=ALFA BASE48 (<0) WITH INDEX NAME, FACT=ENTRY IN LOOP CONSTANTS POOL OF LOOP START VALUE PASED AS PARAM, LOC1=LOOP END VALUE
+                                  FOR A B C   -3   FACTN         FACTN      SCALAR VARS BY VALUE. FACTN=FACTN OF VARIABLE A. GENERATES ONE ENTRY FOR A, ONE FOR B AND ONE FOR C
+                                  FOR 3 4 5   -1   3             4096       CONSTANT. VALUE PASED AS PARAM IS STORED IN TEMP VAR
+
+MAXNIDXS   DEF       34           MAX (34) INDEXS ACTIVE AT SAME TIME
+NIDXS      DEF       0            NUMBER OF INDEXES IN THIS REGION
+TIDXNAME   RES       34           NAME OF ACTIVE INDEX (ALFA <0). >0 IF ENTRY IS NO LONGER IN USE
+TIDXLOC    RES       34           = ENTRY IN LOOP CONSTANT POOL THAT HAS THE CURRENT INDEX VALUE
+TIDXTYPE   RES       34           = 0 -> "ADDRESS INDEX" TYPE, =1 -> "COUNT INDEX" TYPE
+TIDXSETN   RES       34           = 0 -> DEFINED INDEX, >0 -> ACTIVE INDEX = STEPN WHERE WHERE THE INDEX IS SET (USED TO COMPUTE START OF LOOP)
+                                     
+
+MAXNREFS   DEF       50           MAX (50) NUMBER OF VECTOR/MATRIX REFERENCES SIMULATEOUSLY ACTIVE AT A GIVEN MOMENT
+NREFS      DEF       0            NUMBER OF REFERENCES IN REGION
+TREFNAME   RES       50           NAME OF VECTOR/MATRIX. =0 IS ENTRY IS NOT USED       
+TREFIDX1   RES       50           NAME OF INDEX1. <0->INDEX NAME,=0->NO INDEX,>0->CONSTANT
+TREFIDX2   RES       50           NAME OF INDEX2. IF OP=40 -> =*777777 if non active index
+TREFSTEP   RES       50           STEPN WHERE THIS VECTOR/MATRIX IS USED               TINST 0:  ...                        
+TREFINCR   RES       50           INCRN ON PREVIOUS STEPN TO ACCESS THE VAR LOCATION   STEPN  :  ... VAR I  J                
+TREFOP     RES       50           THE OPCODE THAT APPLIES ON VECT/MATRIX                     2:  ...                         
+TREFADDR   RES       50           THE ADDR OF VECT/MATRIX (Vnnnn)                            4:  +RA V 0003  <-- INCR VALUE  
+TREFD1     RES       50           D1 VALUE IF REF IS A MATRIX                                    ^^^   ^^^^                  
+                                                                                                 OP    ADDR OF VAR          
+MAXNFOI    DEF       20           MAX NUMBER OF INDEX IN "FOR I A B" BELLOW A DO/LIB INSTR
+NFORIDX    DEF       0            NUMBER OF INDEX IN "FOR I A B" 
+TFORIDX    RES       20           INDEXS DEFINED BY "FOR I A B" 
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+D10        DEF       10
+D11        DEF       11
+D12        DEF       12
+D15        DEF       15
+D17        DEF       17
+D18        DEF       18
+D19        DEF       19
+D26        DEF       26
+D32        DEF       32
+D34        DEF       34
+D35        DEF       35
+D43        DEF       43
+D44        DEF       44
+D45        DEF       45
+D100       DEF       100
+D101       DEF       101
+D200       DEF       200
+D244       DEF       244
+D1000      DEF       1000
+O776K      DEF       *777776      OCTAL ALL ONES
+O777K      DEF       *777777      OCTAL ALL ONES
+
+NREGIONS   DEF       0            NUMBER OF REGIONS PROCESSED
+MC.TABLE   DEF       0            ADDRESS TO MACHINE CODE GENERATION TABLE TO USE 
+TRANSFER   DEF       0            STEPN NUMBER THE MC INSTR HAS TO TRANSFER TO 
+TRSTLOC    DEF       0            LOCATION INTO STEPN NUMBER THE MC INSTR HAS TO TRANSFER TO 
+MC         DEF       0            MACHINE CODE INSTR TO GENERATE FROM MC TABLE
+MC.OP      DEF       0            MC OPCODE GENERATED
+MC.REG     DEF       0            REGION REFERENCED BY MC OPCODE GENERATED
+MC.ADDR    DEF       0            MC ADDR GENERATED. BOTH WILL BE STORED IN TINST TABLE IN COMPCAT CODE RECORD
+PRTMCNUM   DEF       0            NEXT INSTR TO PRINT WITH PRTMC
+REGCSTEP   DEF       0            STEPN WHERE THE REG.C SITS
+PRGSTEPN   DEF       0            FIRST STEPN OF PROGRAM AFTER INITIAL CALL/ID/FOR (IE STEP-1 IS CALL/ID/FOR INSTR)
+
+NIDX       DEF       0            CURRENT INDEX NUMBER
+NIDX2      DEF       0            
+IDXTYPE    DEF       0            =0 -> INDEX IS "ADDRESS TYPE", =1 -> IS "COUNT INDEX"
+ECONSTIX   DEF       0            =0 IF INDEX IS "ADDRESS INDEX" TYPE, >0 IF INDEX IS "COUNT INDEX" TYPE, =ENTRY IN LOOP CONSTANT POOL FOR INDEX VALUE
+ECONST     DEF       0
+ECSTART    DEF       0            ADDR IN REG C OF START OF LOOP VALUE
+USEECIX    DEF       0            =1 -> INDEX START VALUE IS COMPUTED ON RUN TIME (STORED IN LOOP CONSTANT POOL AT ENTRY ECONSTIX)
+                                  =0 -> INDEX START VALUE IS COMPUTABLE ON COMPILE TIME AND STORED S2N
+D1         DEF       0            COMPILE-TIME COMPUTED D1 DIMENSION1 VALUE
+ECONSTD1   DEF       0            ENTRY IN LOOP CONSTANT POOL THAT CONTAINS THE D1 PASSED AS PARAM TO BE USED AT RUN-TIME
+C1         DEF       0            COMPILE-TIME COMPUTED 1ST CONSTANT VALUE
+I1         DEF       0            ENTRY IN LOOP CONSTANT POOL THAT CONTAINS THE 1ST INDEX TO BE USED AT RUN-TIME
+C2         DEF       0            COMPILE-TIME COMPUTED 2ND CONSTANT VALUE
+I2         DEF       0            ENTRY IN LOOP CONSTANT POOL THAT CONTAINS THE 2ND INDEX TO BE USED AT RUN-TIME
+
+NPAR       DEF       0            PARAM BEING EXAMINED
+NREF       DEF       0            CURRENT REFERENCE ENTRY. REFERENCES = STEPN OF INSTR THAT USES VARS WITH INDEX. 
+NREF2      DEF       0            THE ADDR OF VAR IN THSE STEPN SHOULD BE MODIFIED BY "TEST" INSTR
+NLASTREF   DEF       0            
+RNAME      DEF       0            REFERENCE NAME
+RIDX1      DEF       0            INDEX1 USED BY REFERENCE 
+RIDX2      DEF       0            INDEX2 USED BY REFERENCE 
+RSTEPN     DEF       0            STEPN OF INSTR WHERE THE REFERENCE IS MADE
+RINCRN     DEF       0            INCRN OF REFERENCE IN THIS STEP
+RADDR      DEF       0
+R2NAME     DEF       0            REFERENCE NAME
+R2IDX1     DEF       0            INDEX1 USED BY REFERENCE 
+R2IDX2     DEF       0            INDEX2 USED BY REFERENCE 
+R2STEPN    DEF       0            STEPN OF INSTR WHERE THE REFERENCE IS MADE
+R2INCRN    DEF       0            INCRN OF REFERENCE IN THIS STEP
+R2ADDR     DEF       0
+PTYPE      DEF       0            PARAMETER TYPE
+SVNINST    DEF       0            SAVE CURRENT NUMBER OF MC INSTR IN THE COMPACT CODE RECORD AT START OF STEP PROCESSING
+LEN        DEF       0
+
+                                  TEXT
+
+ERROVINS   TXT       "TOO MANY INSTR IN THIS STEP",0   ERROR: MAX 100
+ERROVLOS   TXT       "LOOP CONST OVERFLOW",0           ERROR: TOO MANY LOOP CONSTANTS IN POOL         
+ERROVRFS   TXT       "TOO MANY REFS",0                 ERROR: TOO MANY REFERENCES TO MATRIX/VECTOR IN REGION (MAX 50)
+ERRNDI1S   TXT       "1ST INDEX NOT DEF",0             ERROR: 1ST INDEX NOT DEFINED 
+ERRNDI2S   TXT       "2ND INDEX NOT DEF",0             ERROR: 2ND INDEX NOT DEFINED 
+ERROVFOS   TXT       "TOO MANY FOR INDEX",0            ERROR: TOO MANY "FOR I A B" (MAX 20)
+
+MSGSTART   TXT       "LOOP EXPANSION PASS 2",0
+MSGDONE    TXT       "REGIONS",0
+
+OPTEST     EQU       D17
+OPSET      EQU       D18
+OPUSE      EQU       D19
+OPNCONST   EQU       D44          CONSTANT LOOP POOL (CARD OP IS PRINTED AS "HALT")
+
+
+                                  REL ASSEMBLY REGION INDEXS
+
+REG.A      DEF       0            ABSOLUTE A 0000
+REG.I      DEF       1            INSTRUCTIONS CODE I 0000
+REG.V      DEF       2            VARIABLES V 0000
+REG.T      DEF       3            TEMPORARY T 0000
+REG.N      DEF       4            NUMBER N 0000
+REG.C      DEF       6            ENTRY IN LOOP CONSTANTS POOL C 0000
+REG.S      DEF       7            SYMBOL S 0000
+
+TREGMNE    TXT       '  A'
+           TXT       '  I'
+           TXT       '  V'
+           TXT       '  T'
+           TXT       '  N'
+           TXT       '  P'        PERISHABLE STORAGE (=LIB LOCAL VARS/CONSTANTS)
+           TXT       '  C'        LOOP CONSTANTS
+           TXT       '  S'
+
+TMNE       TXT       'H  '        STOP/HALT
+           TXT       'T  '        TRANSFER
+           TXT       'TF '        TRANSFER ON OVERLOF
+           TXT       'TP '        TRANSFER ON PLUS
+           TXT       'TZ '        TRANSFER ON ZERO
+           TXT       'S  '        SUBTRACT
+           TXT       'RS '        RESET AND SUBTRACT
+           TXT       'SV '        SUBTRACT ABSOLUTE VALUE
+           TXT       'N  '        NO OPERATION
+           TXT       'A  '        ADD
+           TXT       'RA '        RESET AND ADD
+           TXT       'AV '        ADD ABSOLUTE VALUE
+           TXT       'ST '        STORE
+           TXT       'SA '        STORE ADDRESS
+           TXT       'SM '        STORE MQ
+           TXT       'LM '        LOAD MQ
+           TXT       'M  '        MULTIPLY
+           TXT       'MR '        MULTIPLY AND ROUND
+           TXT       'D  '        DIVIDE
+           TXT       'R  '        ROUND
+           TXT       'LL '        LONG LEFT SHIFT
+           TXT       'LR '        LONG RIGHT SHIFT
+           TXT       'AL '        ACCUMULATOR LEFT SHIFT
+           TXT       'AR '        ACCUMULATOR RIGHT SHIFT
+           TXT       'RD '        READ
+           TXT       'RB '        READ BACKWARDs
+           TXT       'W  '        WRITE
+           TXT       'WE '        WRITE END OF FILE
+           TXT       'RW '        REWIND TAPE
+           TXT       'SD '        SET DRUM DDR
+           TXT       'SE '        SENSE
+           TXT       'C  '        COPY
+
+CC.FACT    EQU       1001         compact code factor: to be replaced by V 0005 (variable), T 0010 (result of a step) or N 0012 (a number)
+A35        EQU       1002         A 0035  
+A17        EQU       1003         A 0017
+INN        EQU       1004         transfer to location n (1..199) into stepN given in var TRANSFER = stepN, TRSTLOC = location in step machine code
+CNN        EQU       1005         C nnnn  where nnnn is the value of ECONST var. C is LOOP CONSTANT POOL on last stenp of region (0000=FIRST ENTRY)
+C01        EQU       1006         C nnnn  where nnnn is the value ONE in LOOP CONSTANTS POOL
+C02        EQU       1007         C nnnn  where nnnn is the value TWO in LOOP CONSTANTS POOL
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEIN     EQU       0257         INPUT PACT COMPACT CODE FROM TAPE 2 (READ TAPE IN BACKWARD DIRECTION)
+TAPEOUT    EQU       0258         OUTPUT TO TAPE 3 (UPDATED COMPACT CODE, STEPS WRITTEN IN DESCENDING ORDER)
+TAPEINR    EQU       0259         INPUT FROM TAPE 4 (PASS1 POPULATED TABLES FOR EACH REGION)
+
+
+

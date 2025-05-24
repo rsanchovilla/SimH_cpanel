@@ -1,0 +1,323 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:LIST             LIST PACT instruction implementation
+
+                                          THIS ROUTINE IS ORIGINAL PACT CODE RETRIEVED FROM
+                                          OCTAL BINARY DUMP FROM The Charles Babbage Institute Archives
+                                          Florence R. Anderson papers (CBI 101)   
+                                          Class notes for experienced programmers, 1955.
+
+LIST     + ADD       TWO          LIST PACT instruction
+         + STORE A   LSTVARP1     LIST 1ST PARAM: ADDRESS OF FULLWORD TO PRINT
+         + ADD       ONE
+         + STORE A   LSTQP2       LIST 2ND PARAM: ADDR OF Q VALUE
+                     
+L0INIT   + R ADD     D48
+L0B      - LOAD MQ   ALL1         MQ=ALL ONES (INCLUDING SIGN ALSO TO ONE -> NEGATIVE)
+L1       + SUB       PBENDAD      STORE ALL ONES AT ADRESSES
+         + STORE A   L1A          IN PRINT BUFFER
+L1A      - STORE MQ  /   /        
+         + SUB       TWO
+         + STORE A   L1B
+L1B      - STORE MQ  /   /
+         + ADD       PB46AD
+         + TR +      L1
+L2       - STORE     USELR        USELR=-0, ROWLR=0 -> USE LEFT FULLWORD FILLING PRINT BUFFER
+                     
+         + R ADD     MASKTAD      GET ADDR OF MASK TABLE
+         + STORE A   LDMASK
+         + R ADD     ROW0AD  
+         + ADD       ROWLR        =0 -> USE LEFT FULLWORD FILLING PRINT BUFFER, =2 -> OFFSET TO USE RIGHT FULLWORD
+         + STORE     SELROW0      SAVE SELECTED PRINT BUFFER ROW 0 LEFT/RIGHT FULLWORD ADDRESS 
+         + ADD       D4
+         + STORE A   L4A          SET ROW1 ADDRESS
+         + ADD       D4
+         + STORE A   L15A         SET ROW2 ADDRESS
+         + STORE A   L16A         SET ROW2 ADDRESS
+
+LDMASK   - LOAD MQ   /   /        GET MASK FROM TABLE: *777677 777777, *777777 767777, *777777 777776
+         - STORE MQ  MASK         
+         + R ADD     SHL0         ACC="L LEFT" INSTR
+         + STORE     SHL1         SET AS SHIFT LEFT AFTER MULT
+LSTQP2   + R ADD     /   /        GET Q OF VAR TO PRINT
+         + STORE     Q            Q OF VAR TO PRINT 
+         + STORE A   SHL1         SET Q AS SHIFT LEFT AFTER MULT
+LSTVARP1 + R ADD     /   /        GET ADDR OF VAR TO PRINT
+         + STORE A   VARAD        ADDR OF VAR TO PRINT
+         + L RIGHT   0030         KEEP AND OPCODE THAT COMES WITH ADDR
+         + TR 0      PRTVALUE     OPCODE=0 (IE INST IS "-H ADDR" OR "+H 0000") -> TR TO PRINT VALUE OF VAr AT GIVE ADDR IN PRINT BUFFER
+         + TR        PRINT        OPCODE <> 0 -> IT IS A MACHINE CODE INSTR -> NO MORE PRINTING -> TR PRINT TO SEND BUFFER TO PRINTER 
+                     
+PRTVALUE + TR OV     CLOV         CLEAR OVERFLOW FLAG
+CLOV     + R ADD     LSTQP2       SET LSTVARP1 TO READ NEXT LIST PARAMETER
+         + ADD       ONE
+         + STORE A   LSTVARP1     NOW LSTVARP1 POINTS TO NEXT CALLER PARAM PAIR "-H VARADDR / +H Q" 
+         + STORE A   L21A         SAVE THIS ADDR AS TO ALLOW EXIT TO IT FROM LIST ROUTINE
+         + STORE A   L21B         SAVE THIS ADDR AS TO ALLOW EXIT TO IT FROM LIST ROUTINE
+         + ADD       ONE
+         + STORE A   LSTQP2
+         + L LEFT    0000         GET BACK SIGN OF MQ=VAR ADDR INSTR
+         + TR +      NXTVALUE     IF >0 -> VAR ADDR IS "+H 0000" -> BLANK COLUMN -> TR TO PROCESS NEXT LIST VALUE
+VARAD    - LOAD MQ   /   /        GET VALUE TO PRINT (FROM VARAD = VAR OF ADDR TO PRINT PASSED AS PARAM TO LIST)
+         - STORE MQ  VAL          VALUE TO PRINT 
+
+         + R SUB     Q            Q OF VAR TO PRINT (TEMP VAR)
+         + TR +      QNEG         IF Q<0 THEN TR TO QNEG
+         + ADD       D34
+         + TR +      L8           IF Q<=34 THEN TR TO L8 (ACC=34-Q)
+                     
+                                  HERE, Q OF VALUE TO PRINT IS Q>34
+         + R ADD     Q            Q OF VAR TO PRINT 
+         + STORE A   SHL0
+         + R SUB     ONE
+         + STORE     TMP.09       
+         + A RIGHT   0019
+SHL0     + L LEFT    /   /        SHIFT ACCORTING TO Q OF VAR TO PRINT 
+         + ROUND     0511
+L4       + L RIGHT   0035
+         + TR +      L5
+         - R ADD     MASK         
+L4A      - EXTR      /   /        ROW1 
+
+L5       + R ADD     D11          PRINT DIGIT LOOP. MQ=VALUE TO PRINT
+L5B      + L RIGHT   0000         SET MQ SIGN=POSITIVE
+         + TR OV     L16
+L6       + STORE     DIGCNT       DIGITS TO PRINT COUNT       
+         + SUB       D11
+         + ADD       TMP.09       
+         + TR 0      L15
+         + R ADD     ZERO
+         - DIV       DEC10
+         + A LEFT    0020
+         + SUB       SELROW0      PRINT BUFFER ROW 0 LEFT/RIGHT FULLWORD AS BASE 
+         + STORE A   SELROW       THE ROW AT DIGIT N
+         - R ADD     MASK         
+SELROW   - EXTR      /   /        EXTRACT THE ROW AT DIGIT N ACCORDING TO MASK
+L7       + A LEFT    0001
+         - SUB       ZERO
+         + TR OV     L7A
+         + L LEFT    0000
+L7A      - STORE     MASK         
+         + R ADD     DIGCNT       DECR DIGITS TO PRINT COUNT       
+         + SUB       ONE
+         + TR +      L6           TR IF DIGIT COUNT >=0 TO PRINT NEXT DIGIT IN PRINT BUFFER
+         + TR        NXTVALUE     TR TO PROCESS NEXT VAR VALUE FORM LIST PARAM LIST
+                                  HERE, Q OF VALUE TO PRINT IS Q<=34
+L8       + ADD       ONE          (ACC=34-Q+1)
+         + L RIGHT   0053         HERE MQ=35-Q = BITS AFTER DECIMAL POINT
+         + MPY R     DM2
+         + A LEFT    0018
+L9       + STORE     TMP.09       
+         - LOAD MQ   VAL          VALUE TO PRINT 
+L10      + A LEFT    0001
+         + ADD       DECAD        DECIMAL UNITS TABLE ADDR: 1, 10, 100, ...
+         + STORE A   LMDEC
+LMDEC    - MPY       /   /
+SHL1     + L LEFT    /   /        SHIFT Q BITS AFTER MULT 
+         + ROUND     0515
+         + TR OV     L12
+         + TR        L4
+                     
+QNEG     + R ADD     Q            Q OF VAR TO PRINT (TEMP VAR)
+         + ADD       D4
+         + STORE A   SHL1
+         + TR +      L11
+         + SUB       L5B
+         + STORE     SHL1
+L11      + MPY       D10          MULT x10
+         + L RIGHT   0022
+         + R ADD     D11
+         + STORE     TMP.09       
+         + TR        L10
+L12      + R ADD     Q            Q OF VAR TO PRINT (TEMP VAR)
+         + TR +      L13
+         + SUB       L5B
+         + STORE     SHL1
+L13      + R ADD     TMP.09       
+         + SUB       ONE
+         + TR 0      L14
+         + TR        L9
+L14      + R SUB     ONE
+         + STORE     TMP.09       
+         - LOAD MQ   VAL          VALUE TO PRINT 
+         + A RIGHT   0019
+         + TR        SHL1
+L15      - R ADD     MASK         
+L15A     - EXTR      /   /
+         + TR        L7
+L16      - R ADD     MASK         
+         - SUB       ALL1
+         + L RIGHT   0035
+         + MPY       DM1
+         + L LEFT    0016
+         - ADD       ALL1
+L16A     - EXTR      /   /
+
+                                  PROCESS NEXT VAR VALUE FORM LIST PARAM LIST
+
+NXTVALUE + R SUB     LDMASK       SELECT NEXT MASK ENTRY IN MASK TABLE (THE ONE IN PREVIOUS FULLWORD)
+         + SUB       TWO
+         + STORE A   LDMASK
+         + ADD       L0B          IS ALL ONES?
+         + TR 0      EOW          IF = 0 -> YES -> ALREADY PRINTED 3 NUMBERS IN PRINTER BUFFER CURRENT FULLWORD -> TR TO SELECT RIGHT FULLWORD
+         + TR        LDMASK       TR TO PROCEED WITH NEXT VALUE TO PRINT AS IT FITS IN CURRENT BUFFER FULLWORD 
+                                  RSV: In original code, instead of "TR 0 EOW, TR LDMASK" there was only "TR + LDMASK"
+                                       This is buggy as it makes 4th value to print to disapears
+                                       fixed in May/25
+
+EOW      + R ADD     ROWLR        IF =0 -> WE ARE PRINTING LEFT FULLWORD -> START THE PRINTER
+         + TR 0      PRTINIT      TR TO START PRINTER
+
+PRINT    + R ADD     USELR        =0 -> PRINTING LEFT FULLWORD 
+         + TR +      L19
+         + WRITE     0512         START PRINTING
+L19      - R ADD     PRTBUF44     PUT DECIMAL POINT IN PRINT BUFFER BY SETTING 
+         - EXTR      PRTBUF24     Y(12) (PRTBUF44), ROW 3 (PRTBUF24) AND ROW 8 (PRTBUF4)
+         - EXTR      PRTBUF4      
+         - R ADD     PRTBUF46     
+         - EXTR      PRTBUF26     
+         - EXTR      PRTBUF6      
+         + R SUB     PRTBUFAD
+         + TR        L21
+L20      - R SUB     ALL1
+PRTLOOP1 - ADD       /   /
+         + TR OV     L22
+         - STORE     VAL          VALUE TO PRINT 
+         - COPY      VAL          VALUE TO PRINT 
+         - R SUB     ALL1
+PRTLOOP2 - ADD       /   /
+         + TR OV     L23
+         - STORE     VAL          VALUE TO PRINT 
+         - COPY      VAL          VALUE TO PRINT 
+         + R ADD     PRTLOOP2
+         + SUB       TWO
+L21      + STORE A   PRTLOOP1
+         + SUB       TWO
+         + STORE A   PRTLOOP2  
+         + ADD       PBENDAD
+         + TR +      L20
+L21B     + R ADD     /   /        GET NEXT VAR ADDR PARAM IN LIST ROUTINE CALL
+         + A LEFT    0005
+L21A     + TR OV     /   /        IF OPCODE <> 0 (IE ANY INSTR) -> END OF PARAM LIST -> TO TO EXECUTE IT
+         + TR        L0INIT
+
+L22      - R ADD     ALL1
+         + TR        PRTLOOP1
+L23      - R ADD     ALL1
+         + TR        PRTLOOP2  
+                     
+PRTINIT  + WRITE     0512           START PRINTING
+         - R ADD     TWOTWO
+         + TR        L2
+                     
+MASKTAD  + STOP      MASKTBL
+
+           ORG       EVEN
+                                    DECIMAL UNITS TABLE ADDR
+DEC1       DEF       0
+           DEF       1
+DEC10      DEF       0
+D10        DEF       10
+           DEF       0
+           DEF       100
+           DEF       0
+           DEF       1000
+           DEF       0
+           DEF       10000
+           DEF       0              IS 100.000
+           DEF       100000        
+           DEF       3              IS 1.000.000 = 10^6
+           DEF       -82496
+           DEF       38             IS 10.000.000 = 10^7
+           DEF       38528
+           DEF       381            IS 10^8
+           DEF       123136
+           DEF       3814           IS 10^9
+           DEF       -51712
+           DEF       38146          IS 10^10
+           DEF       -123904
+           DEF       38146          IS 10^10
+           DEF       -123904
+                     
+ALL1       DEF       *777777     ALL BITS TO ONE
+           DEF       *777777
+           DEF       *777777     PLACE NUMBER ON RIGHT SIDE OF SELECTED PRINT BUFFER FULLWORD (COLUMNS 25-36)
+           DEF       *777776
+           DEF       *777777     PLACE NUMBER ON CENTER OF SELECTED PRINT BUFFER FULLWORD (COLUMNS 13-24)
+           DEF       *767777
+MASKTBL    DEF       *777677     PLACE NUMBER ON LEFT SIDE OF SELECTED PRINT BUFFER FULLWORD (COLUMNS 1-12)
+           DEF       *777777
+TWOTWO     DEF       2
+           DEF       2
+                     
+D48      + STOP      0048
+PBENDAD  + ADD       PRTBUFED     ADDR OF END OF PRINT BUFFER (1ST ADDR FREE AFTER BUF)
+PB46AD   + ADD       PRTBUF46     ADDRESS OF LAST FULL WORD OF PRINT BUFFER 
+D34      + STOP      0034
+DM1        DEF       2340
+DM2        DEF       39308
+                     
+DECAD    + STOP      DEC1         DECIMAL UNITS TABLE ADDR
+                     
+D11      + STOP      0011
+ROW0AD   + STOP      PRTBUF36     ROW 0 ADDRESS IN PRINT BUFFER
+D4       + STOP      0004
+PRTBUFAD + STOP      PRTBUF
+         + STOP      0000         NOT USED
+ZERO     + STOP      0000
+ONE      + STOP      0001
+TWO      + STOP      0002
+
+           HEAD      TEMP         TEMPORAL ROUTINE VARIABLES
+       
+DIGCNT     RES       2            DIGITS TO PRINT COUNT
+Q          RES       1            Q OF VAR TO PRINT
+TMP.09     RES       1
+VAL        RES       2            VALUE TO PRINT 
+MASK       RES       2   
+USELR      RES       1            =0 -> USE LEFT FULLWORD FILLING PRINT BUFFER, =2 -> USE RIGHT FULLWORD
+ROWLR      RES       1            =0 -> USE LEFT FULLWORD FILLING PRINT BUFFER, =2 -> OFFSET On ADDR TO USE RIGHT FULLWORD
+           RES       1
+SELROW0    RES       1            PRINT BUFFER ROW 0 LEFT/RIGHT FULLWORD ADDR AS BASE FOR FILLING PRINT BUFFER
+
+
+PRTBUF     RES       2            PRINT BUFFER = CARD IMAGE FOR HOLTERING PRINTING (48 HALF WORDS)
+           RES       2            
+PRTBUF4    RES       2            ROW 8 LEFT
+PRTBUF6    RES       18           ROW 8 RIGHT
+PRTBUF24   RES       2            ROW 3 LEFT
+PRTBUF26   RES       10           ROw 3 RIGHT
+PRTBUF36   RES       8            ROW 0 
+PRTBUF44   RES       2            ROW Y(12) PLUS LEFT
+PRTBUF46   RES       2            ROW Y(12) PLUS RIGHT
+PRTBUFED   RES       2            1ST VAR AVAILABLE AFTER PRINT BUFFER
+
+
+
+                                  PRINT BUFFER:   
+
+                                                   left   right
+                                  row Y(12) plus   44 45  46 47  <- PRTBUF44, PRTBUF46
+                                  row X(11) minus  40 41  42 43
+                                  row 0            36 37  38 39  <- PRTBUF36
+                                      1            32 33  34 35
+                                      2            28 29  30 31
+                                      3            24 25  26 27  <- PRTBUF24, PRTBUF26
+                                      4            20 21  22 23
+                                      5            16 17  18 19
+                                      6            12 13  14 15
+                                      7             8  9  10 11
+                                      8             4  5   6  7  <- PRTBUF6, PRTBUF6
+                                      9             0  1   2  3  <- halfwrod offset starting at PRTBUF
+

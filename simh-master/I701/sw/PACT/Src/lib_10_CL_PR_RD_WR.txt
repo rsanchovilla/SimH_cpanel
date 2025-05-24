@@ -1,0 +1,85 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:CLRBUF          CLEAR CARD BUFFER 
+           HEAD      DEF:PRINTCRD        PRINT CARD BUFFER
+           HEAD      DEF:READCRD         READ CARD (READ CARD BUFFER FROM CARD PUNCH DEVICE)
+           HEAD      DEF:WRITECRD        WRITE CARD (SEND CARD BUFFER TO CARD PUNCH DEVICE)
+
+                                             OVERFLOW FLAG SET ON RETURN FROM READCRD IF END OF DECK 
+                                  EXAMPLE: CLB <- NAME TO CALL THE ROUTINE FROM PACT PROGRAM: "DO CLB"
+                                           CLRBUF <- CORRESPONDING ENTRY POINT IN ASSEMBLER PROGRAM
+              
+                                  
+CLRBUF   + LOAD MQ   IOCL
+         + STORE MQ  BUFIO
+         + LOAD MQ   IOSTORE         
+         + TR        INIT2
+
+READCRD  + LOAD MQ   IORDCRD
+         + TR        INIT1
+
+WRITECRD + LOAD MQ   IOWRCRD
+         + TR        INIT1
+
+PRINTCRD + LOAD MQ   IOPRCRD
+
+INIT1    + STORE MQ  BUFIO
+         + LOAD MQ   IOCOPY         
+INIT2    + STORE MQ  BUFROW
+         + ADD       TWO          
+         + STORE A   EXIT
+
+IOCL     + R ADD     ZERO         RESET TO INITIAL COPY LOOP ADDRESS     
+         + STORE A   BUFROW       FOR BUFFER
+         + R ADD     BUFROW       X .*echo Print
+         + SUB       D48          X 
+         + STORE     ENDLP        X LOOP END VALUE
+  BUFIO  - STOP      /   /        READ OR WRITE
+  BUFROW - COPY      /   /        COPY WORD TO/FROM PRINTER/CARDREADER
+         + TR        BUFOK2       NORMAL PROCESSING 
+         + TR        EODECK       FOR COPY READING END OF REG (=END OF DECK BEING READ)
+         + R SUB     TWO          END OF FILE -> NO CARD TO READ -> STOP with Acc=-2
+         + STOP      BUFIO        ON PRESSING START RETRY CARD READ
+  BUFOK2 + R ADD     BUFROW       X
+         + SUB       TWO          INCR BUF ADDR
+         + STORE A   BUFROW       X
+         + SUB       ENDLP        CHECK FOR END
+         + TR 0      ENDIO
+         + R ADD     ZERO         CLEAR ACC IN CASE WE ARE CLEANING THE BUFFER
+         + TR        BUFROW
+EODECK   + R ADD     ONE          SET OV FLAG TO SIGNAL END OF DECK CONDITION
+         + A LEFT    36
+ENDIO    + WRITE     2052         END OF I/O: INSURE THAT MQ NOT IN USE            
+EXIT     + TR        /   /
+
+IORDCRD  + READ      2048         PREPARE TO READ FROM CARD READER
+IOCOPY   - COPY      /   /   
+IOWRCRD  + WRITE     1024         PREPARE TO PUNCH CARD 
+                                  - COPY  /   /   
+IOPRCRD  + WRITE     0512         PREPARE WRITE PRTBUF ON PRINTER
+                                  - COPY  /   /   
+IOSTORE  - STORE     /   /        CLEAR BUFFER
+
+           ORG       EVEN           
+
+ZERO       DEF       0            
+           DEF       0            
+
+ENDLP      DEF       0            LOOP END VALUE
+
+ONE        DEF       1
+TWO        DEF       2
+D48        DEF       48
+
+

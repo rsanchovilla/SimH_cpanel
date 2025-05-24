@@ -1,0 +1,289 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:PRTNUM           PRINT FULL-WORD NUMBER
+
+                                  PRINT FULL-WORD NUMBER FROM MQ REGISTER 
+                                  PARAMS: Q OF NUMBER (-33..33)
+                                          NUMBER COLUMN TO PRINT (1..6)
+                                  IF Q>33 THEN THE PRINT "..." AS VALUE TOO BIG
+                                  PRINT 12 CHARS PER COLUMN. FIRST CHAR IS MINUS
+                                  OR BLANK IF POSITIVE. THEN 11 CHARS, INCLUDING
+                                  DECIMAL POINT.
+                                  DECIMAL POINT IS PLACED ACCORDING TO Q
+                                  INSIGNIFICANT ZEROES ON LEFT ARE SUPRESSED
+                                  
+PRTNUM   + ADD       TWO          PRINT FULL-WORD NUMBER FROM MQ REGISTER 
+         - STORE MQ  NUM          SAVE NUM TO DECODE FROM MQ
+         + STORE A   PRTP1        STORE ADDR OF FIRST PARAM (Q)
+         + ADD       ONE
+         + STORE A   PRTP2        STORE ADDR OF SECOND PARAM (COLN)
+         + ADD       ONE
+         + STORE A   PRTEX
+         + TR OV     CLOV         CLEAR OV JUST IN CASE
+
+CLOV     + R ADD     ZERO         HANDLE SIGN
+         + STORE     SGN          
+         + STORE     DIGIT1       
+         - R ADD     NUM
+         + TR +      PRTP0        TR IF NUM >= 0
+         - R SUB     NUM          NUM := - NUM -> MAKE NUM POSITIVE
+         - STORE     NUM
+         + R ADD     ONE          FLAG NUN IS NEGATIVE NUMBER
+         + STORE     SGN
+
+  PRTP0  + R ADD     MINUS0       SET COLUMN MASK TO BE PUT IN A CARD ROW
+         - STORE     MASKSGN      MASKSGN FOR SIGN
+         + R ADD     Q1           MASKCOL FOR DIGITS
+         - STORE     MASKCOL
+         + R ADD     ZERO         CARD BUFFER USES LOCATION 0..47
+         + STORE A   PRTROWAD     ADDRESS OF LOWER ROW TO PRINT
+  PRTP2  + R ADD     /   /        GET NUMBER COLUMN PARAM 1..6
+         + SUB       D4
+         + TR +      PRTCOL0
+         + ADD       D3
+         + TR        PRTCOL1B
+ PRTCOL0 + STORE     COLN         
+         + R ADD     PRTROWAD     IF COLUMN WAS 4,5 OR 6 THEN PRTROWAD=PRTROWAD+2
+         + ADD       TWO           TO SELECT RIGHT SIDE OF CARD
+         + STORE     PRTROWAD
+ PRTCOL1 + R ADD     COLN         SHIFT BOTH MASKS 12 COLUMNS RIGHT TO SELECT          
+PRTCOL1B + TR 0      PRTCOL2      DESIRED COLUMN TO START PRINTING THE NUMBER
+         + SUB       ONE
+         + STORE     COLN
+         - R ADD     MASKCOL
+         - A RIGHT   0012
+         - STORE     MASKCOL
+         - A LEFT    0001
+         - STORE     MASKSGN
+         + TR        PRTCOL1
+ PRTCOL2 - R ADD     MASKCOL
+         + A RIGHT   0010
+         - STORE     MASKCOLE     LAST VALID VALUE FOR MASKCOL
+
+         - LOAD MQ   NUM
+   PRTP1 + R ADD     /   /        GET FIRST PARAM (Q)
+         + STORE A   PRTQL
+         + STORE A   PRTQL2
+         + STORE     Q            
+         + SUB       ONE
+         + TR +      PRTQP        TR IF Q >= 1 (I.E. THERE IS AN INTEGER PART TO PRINT)
+         + R ADD     Q
+         + STORE A   PRTQR        HERE IF Q <= 0 (I.E. INTEGER PART IS ZERO)
+         + R ADD     ZERO
+   PRTQR - L RIGHT   /   /
+         - STORE     NUM          INTEGER PART IS ZERO
+         - STORE MQ  FRAC         STORE FRACTIONAL PART
+         + TR        PRTQ1
+
+   PRTQP + R ADD     ZERO         HERE IF Q >= 1 (I.E. THERE IS AN INTEGER PART TO PRINT)
+         - STORE     FRAC
+   PRTQL - L LEFT    /   /        SHIFT LEFT TO SEPARATE INTEGER PART (NUM)
+         - STORE     NUM          AND FRACTIONAL PART (FRAC) 
+         - STORE MQ  FRAC
+         - R ADD     NUM1
+  PRTQL2 - A LEFT    /   /
+         + TR 0      PRTOVR       NUMBER TOO BIG
+         - SUB       NUM1         DIGIT=BIGEST INTEGER PART POSSIBLE WITH GIVEN Q
+   PRTQ1 - STORE     DIGIT        IF (SAY) Q=3, THEN DIGIT=0..111 binary = 2^Q = 8. IF Q < 1 THEN DIGIT=0
+
+         - R ADD     NUM10        INIT NUM10K=10
+         - STORE     NUM10K       NUM10K = 10 UP TO 10.000.000.000 = 10^11 (11 SIGNIFICATIVE DIGITS NEEDED FOR 2^36-1)
+   PRTQ2 - R ADD     NUM10K       SET NUM10K TO BE ABLE TO PRINT NUM FOR GIVEN Q
+         - SUB       DIGIT
+         + TR +      PRTQ2B       TR BECAUSE NUM10K HAS BEEN SET TO THE NEEDED NUMBER OF 0'S TO PRINT NUM AT GIVEN Q
+         - LOAD MQ   NUM10K       NUM10K = NUM10K  * 10
+         - MPY       NUM10
+         - STORE MQ  NUM10K
+         + TR 0      PRTQ2
+         + TR        PRTOVR       Q NOT PRINTABLE. Q SHOULD BE 1..33
+  PRTQ2B - LOAD MQ   NUM10K       NUM10K = NUM10K  / 10
+         - MPY R     NUMD10
+         - STORE     NUM10K       NOW NUM10K=1 FOR Q=1..3, =10 FOR Q=4..6, =100000 FOR Q=17 AND SO ON
+         
+PRTSTART + R ADD     ZERO
+         + STORE     DIGIT        INIT DIGIT
+  PRTL0  - R ADD     NUM          SUBSTRACT NUM10K 
+         - SUB       NUM10K        UNTIL NUM IS NEGATIVE
+         + TR +      PRTL1
+         + TR        PRTL2          NUM BECOMES <0 -> EXIT LOOP: DIGIT HAS THE DESIRED VALUE
+  PRTL1  - STORE     NUM
+         + R ADD     DIGIT        INCR DIGIT COUNT
+         + ADD       ONE
+         + STORE     DIGIT
+         + TR        PRTL0
+
+  PRTL3  - R ADD     NUM2         DIGIT=0 AND 1ST SIGNIFICANT DIGIT NOT PRINTED, 
+         - SUB       NUM10K        IF NUM10K = 1 THEN THIS IS THE UNIT DIGIT, ...
+         + TR +      PRTL2S           SO KEEP 0 BECAUSE IT IS A SIGNIFICANT 0.   
+         + R ADD     MINUS1        ELSE SET DIGIT AS A SUPRESSED ZERO 
+         + STORE     DIGIT         
+         + TR        PRTDIG
+
+ PRTL2NS + R ADD     DIGIT        1ST SIGNIFICANT DIGIT NOT PRINTED, IS THIS DIGIT ZERO?
+         + TR 0      PRTL3           YES, TR TO DO MORE CHEKS
+  PRTL2S + R ADD     ONE          DIGIT NOT ZERO -> IT SO IT IS THE FIRST SIGNIFICANT DIGIT
+         + STORE A   DIGIT1        SET THE DIGIT1 FLAG
+         + TR        PRTDIG         CONTINUE TO PRINT IT
+
+  PRTL2  + R ADD     DIGIT1       HAS 1ST SIGNIFICANT DIGIT BEING PRINTED?
+         + TR 0      PRTL2NS        TR IF NOT 
+
+ PRTDIG  + R ADD     DIGIT
+         + TR +      PRTDN        TR IF PRINTABLE DIGIT 0..9
+         + TR        PRTDIG2      -1=SUPRESSED ZERO -> SKIP PRINTING
+   PRTDN + R ADD     D9           PRINT DIGIT IN CARD
+         + SUB       DIGIT      
+         + A LEFT    0002         x4
+         + ADD       PRTROWAD
+         + STORE A   PRTD1
+         + STORE A   PRTD2
+         - R ADD     MASKCOL
+   PRTD1 - ADD       /   /
+   PRTD2 - STORE     /   /
+
+ PRTDIG2 - R ADD     MASKCOL      INCR COLUMN 
+         - A RIGHT   0001
+         - STORE     MASKCOL
+         - LOAD MQ   NUM10K       DIVIDE NUM10K BY 10:
+         - MPY R     NUMD10        x ((2^35)/10), THEN KEEP ACC RESULT
+         - STORE     NUM10K         I.E. EQUVALENT TO DIVIDE BY 2^35 
+         - TR 0      PRTEND1         EXIT LOOP WHEN NUM10K=0 (IN FACT IS 0.1, .1 IS IN MQ)
+         + TR        PRTSTART
+
+  PRTOVR - R ADD     MASKCOL      OVERFLOW: PRINT 3 DOTS
+         - A RIGHT   0001
+         + ADD       MASKCOL
+         - A RIGHT   0001
+         + ADD       MASKCOL
+         + STORE     MASKCOL
+         + R ADD     ZERO
+         - STORE     FRAC
+         + TR        PRTDOT
+
+ PRTEND1 + R ADD     SGN          IF NUMBER POSITIVE, TR TO PRINT ITS FRACIONAL PART
+         + TR 0      PRTDOT
+         + R ADD     D40          IF NEGATIVE, PUNCH ON ROW X(11)          
+         + ADD       PRTROWAD      TO PRINT A '-' SIGN 
+         + STORE A   PRTD3          ROW ADDRESS=(11 - 1)*4 = 40
+         + STORE A   PRTD4
+   PRTD3 - R ADD     /   /
+         + TR +      PRTD3A       TR IF WORD IS +0 OR +000N000
+         + TR        PRTD3N       WORD IS -0 OR -000N000 -> IN ANY CASE SHOULD SUB MASK
+  PRTD3A + TR 0      PRTD3S       TR IF WORD IS +0 -> STORE MASK (MASK CAN BE -0) 
+         + TR        PRTD3P       WORD IS +000N000 -> ADD MASK
+  PRTD3N - SUB       MASKSGN
+         + TR        PRTD4
+  PRTD3S - R ADD     MASKSGN
+         + TR        PRTD4
+  PRTD3P - ADD       MASKSGN
+   PRTD4 - STORE     /   /
+
+  PRTDOT + R ADD     D4           ADD DECIMAL SEPARATOR DOT PUNCHING ROWS 8-3-Y
+         + ADD       PRTROWAD      AT END OF PRINTED NUMBER (THE INTEGER PART)
+ PRTDOT1 + STORE A   PRTD5             (9-8)*4 = 4
+         + STORE A   PRTD6             (9-3)*4 =24 = +20
+         + R ADD     PRTENDLP          (11)*4 = 44 = +20
+         + SUB       PRTD5
+         + TR +      PRTDOT2
+         - R ADD     MASKCOL           
+   PRTD5 - ADD       /   /
+   PRTD6 - STORE     /   /
+         + R ADD     PRTD5
+         + SUB       D20
+         + TR        PRTDOT1
+PRTENDLP - ADD       0048         PRINT LOOP END VALUE
+ PRTDOT2 - R ADD     MASKCOL           
+         - SUB       MASKCOLE     
+         + TR 0      PRTEX        NO ROOM TO PRINT FRAC PART 
+         
+         - R ADD     MASKCOL      ADVANCE 1 POS TO RIGHT TO PRINT
+         - A RIGHT   0001         FRAC PART OF NUMBER
+         - STORE     MASKCOL
+         
+ 
+ PRTFRAC - R ADD     FRAC 
+         + TR 0      PRTEX        NO FRAC PART TO PRINT
+
+         - LOAD MQ   FRAC         FRAC = FRAC * 10
+         - MPY       NUM10        DIGIT = INTEGER PART OF FRAC
+         - STORE MQ  FRAC         FRAC = FRACTIONAL PART OF FRAC
+         + A LEFT    18
+         + STORE     DIGIT
+
+         + R ADD     D9           PRINT DIGIT IN CARD
+         + SUB       DIGIT      
+         + A LEFT    0002         x4
+         + ADD       PRTROWAD
+         + STORE A   PRTD7
+         + STORE A   PRTD8
+         - R ADD     MASKCOL
+   PRTD7 - ADD       /   /
+   PRTD8 - STORE     /   /
+
+         - R ADD     MASKCOL           
+         - SUB       MASKCOLE     
+         + TR 0      PRTEX        NO MORE ROOM FOR FRAC PART DECIMALS
+ 
+         - R ADD     MASKCOL      INCR COLUMN 
+         - A RIGHT   0001
+         - STORE     MASKCOL
+         + TR        PRTFRAC      
+
+   PRTEX + TR        /   /        
+
+           ORG       EVEN
+
+ZERO       DEF       0            
+           DEF       0            
+NUM1       DEF       0
+           DEF       1
+NUM2       DEF       0
+           DEF       2
+NUM        DEF       0            NUMBER TO PRINT (INTEGER PART)
+           DEF       0            
+FRAC       DEF       0            NUMBER TO PRINT (FRACTIONAL PART)
+           DEF       0
+NUM10      DEF       0
+           DEF       10
+NUM10K     DEF       0
+           DEF       0
+NUMD10     DEF       *031463      = (2^35) / 10 = 3435973836 = OCTAL 031463 146314
+           DEF       *146314
+MASKCOL    DEF       0            MASK TO PRINT IN A CARD ROW 
+           DEF       0            EACH BIT MAPS TO PRINTER COLUMN (1..36)
+MASKSGN    DEF       0            MASK TO PRINT '-' SIGN OF NUMBER IN A CARD ROW 
+           DEF       0            EACH BIT MAPS TO PRINTER COLUMN (1..36)
+MASKCOLE   DEF       0            MASK TO PRINT IN A CARD ROW 
+           DEF       0            LAST VALID COLUMN OF NUMBER
+DIGIT      DEF       0            THE DIGIT TO PRINT. 0..9, -1=SUPRESSED ZERO
+           DEF       0
+DIGIT1     DEF       0            =1 IF PRINTED 1ST SIGNIFICAT DIGIT
+
+Q1         DEF       *200000      LEFTMOST BIT (AFTER SIGN) SET TO 1
+MINUS0     DEF       *400000      -0
+MINUS1     DEF       *400001      -1
+
+Q          DEF       0
+COLN       DEF       0
+SGN        DEF       0            =1 IF NUM TO PRINT IS NEGATIVE
+PRTROWAD   DEF       0            ADDR OF LOWER ROW OF CARD
+
+ONE        DEF       1
+TWO        DEF       2
+D3         DEF       3
+D4         DEF       4
+D9         DEF       9
+D20        DEF       20
+D40        DEF       40
+

@@ -1,0 +1,130 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:RDFTAPE          READ FORWARD FROM MAGNETIC TAPE A GIVEN LEN 
+
+                                  WILL READ AT MOST LEN WORDS, THEN SKIP UNTIL END OF RECORD
+                                  ON RETURN, ACC=TOTAL NUMBER OF HALF WORDS ON TAPE RECORD (MAY BE >LEN)
+                                             OVERFLOW FLAG SET IF END OF FILE ENCOUNTERED
+                                  PARAMS: TAPE: 0256  0257  0258  0259
+                                          BUF: LOCATION OF BUFFER WHERE TO STORE DATA READ FROM TAPE (MUST BE EVEN)
+                                          LEN: LOCATION OF LEN=MAX NUMBER OF HALF-WORDS TO READ (MUST BE EVEN)
+                            
+           HEAD      DEF:RDBTAPE          READ BACKWARD FROM MAGNETIC TAPE BACKWARDS A GIVEN LEN 
+
+                                  WILL READ BACKWARDS. IF RECORD ON TAPE HAS SAME LENGHT AS LEN, WILL STORE WORDS 
+                                  IN SAME ORDER AS IF IT WAS READ ON FORWARD DIRECTION
+                                  ON RETURN, ACC=TOTAL NUMBER OF HALF WORDS ON TAPE RECORD (MAY BE >LEN)
+                                             OVERFLOW FLAG SET IF END OF FILE ENCOUNTERED
+                                  PARAMS: TAPE: 0256  0257  0258  0259
+                                          BUF: LOCATION OF BUFFER WHERE TO STORE DATA READ FROM TAPE (MUST BE EVEN)
+                                          LEN: LOCATION OF LEN=MAX NUMBER OF HALF-WORDS TO READ (MUST BE EVEN)
+
+
+
+
+RDBTAPE  + STORE     DUMMY
+         + R ADD     RDBKW        SET THE TAPE I/O INSTRUCTION
+         + STORE     RTAPAD
+         + R ADD     ADD2         SET TO DECREMENT RWCOPY ADDRESS
+         + STORE     INCR         (INSTR IS -COPY -> NEGATIVE -> DECREMENT BY ADDING TWO)
+         + LOAD MQ   ONE          FLAG OF COMPUTE: ADD=ADD+LEN-2
+         + TR        READ
+
+RDFTAPE  + STORE     DUMMY
+         + R ADD     RDFWD        SET THE TAPE I/O INSTRUCTION
+         + STORE     RTAPAD
+         + R ADD     SUB2         SET TO INCREMENT RWCOPY ADDRESS
+         + STORE     INCR         (INSTR IS -COPY -> NEGATIVE -> INCREMENT BY SUBSTRACTING TWO)
+         + LOAD MQ   ZERO
+
+READ     + R ADD     DUMMY        PROCEED
+         + ADD       TWO 
+         + STORE A   PR1          PARM1: TAPE ADDRESS
+         + ADD       ONE          
+         + STORE A   PR2          PARM2: BUF START ADDRESS
+         + ADD       ONE          
+         + STORE A   PR3          PARM2: BUF LEN ADDRESS
+         + ADD       ONE          
+         + STORE A   EXIT
+
+PR1      + R ADD     /   /        GET TAPE ADDR
+         + STORE A   RTAPAD       TAPE UNITS: 0256  0257  0258  0259
+         + TR OV     PR2          CLEAR OVERFLOW FLAG
+PR2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+         + STORE A   RWCOPY    
+PR3      + R ADD     /   /        GET ADDR OF LEN 
+         + STORE A   PR3A
+PR3A     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+         + STORE     LEN
+           
+         + R ADD     ZERO
+         + L LEFT    0035         ACC=MQ
+         + TR 0      PR4          IF MQ=0 -> READ FWD -> TR TO PR4
+         + R ADD     RWCOPY       HERE READ BKW -> SET BUFFER START AT ADD+LEN-2
+         + SUB       LEN
+         + ADD       TWO
+         + STORE A   RWCOPY
+
+PR4      + R ADD     ZERO
+         + STORE     RECLEN
+
+RTAPAD   + STOP      /   /        WILL BE REPLACED BY RDFWD OR RDBKW
+
+LOOP     + R ADD     LEN
+         + TR 0      SKIP
+         + SUB       TWO
+         + STORE     LEN
+RWCOPY   - COPY      /   /        WRITE BUFFER TO TAPE
+         + TR        GO 
+         + TR        EOF          END OF FILE
+         + TR        EOR          END OF RECORD
+GO       + R ADD     RWCOPY
+INCR     + SUB       TWO
+         + STORE A   RWCOPY
+         + R ADD     RECLEN
+         + ADD       TWO
+         + STORE     RECLEN
+         + TR        LOOP
+
+SKIP     - COPY      DUMMY
+         + TR        GO2 
+         + TR        EOF          END OF FILE
+         + TR        EOR          END OF RECORD
+GO2      + R ADD     RECLEN
+         + ADD       TWO
+         + STORE     RECLEN
+         + TR        SKIP
+
+EOF      + R ADD     ONE          SET OV FLAG TO SIGNAL END OF FILE CONDITION
+         + A LEFT    36
+EOR      + R ADD     RECLEN       RETURN NUMBER OF HALF-WORDS IN TAPE RECORD
+         + WRITE     2052         INSURE THAT MQ NOT IN USE            
+EXIT     + TR        /   /        RETURN TO CALLER
+
+RDFWD    + READ      0000         TAPE I/O INSTRUCTIONS 
+RDBKW    + READ B    0000
+ADD2     + ADD       TWO
+SUB2     + SUB       TWO
+
+ZERO     + STOP      0000
+ONE      + STOP      0001         
+TWO      + STOP      0002         
+
+DUMMY      RES       1
+LEN        RES       1
+RECLEN     RES       1
+
+
+
+

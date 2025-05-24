@@ -77,9 +77,9 @@ int cdp_EchoLevel = 0; // echo card read to console. 0=no echo, 1=only text, 2=t
 
 // timing variables
 t_int64 cdp_timing_StartTickCount  = 0; // value of GlobalTickCount when card read cycle starts
-t_int64 cdp_timing_DisconTickCount = 0; // value of GlobalTickCount when card read disconnects if no data is provied with COPY opcode
 extern int IOTicks;                     // ticks needed to execute i/o operation
 extern int IOREMAIN;                    // cpu ticks ramaining to disconnect IO device
+extern int CpuSpeed_Acceleration;       // cpu speed multiplier
 
 
 // fill binary card uint16 image[80] from t_int64 CardImage[24] words 
@@ -134,12 +134,52 @@ void PrepareCardImage(uint16 * image, t_int64 * CardImage, int index, int SkipCo
 void WriteCards(UNIT * uptr)
 {
     uint16 image[80];
+    int SkipCols; 
 
     // fill binary card uint16 image[80] from t_int64 CardImage[24] words 
-    PrepareCardImage(image, cdp_CardImage, cdp_CardImage_index, cdr_skip_cols());
+    SkipCols = cdr_skip_cols(); 
+    PrepareCardImage(image, cdp_CardImage, cdp_CardImage_index, SkipCols);
+
+    if ((uptr->flags & UNIT_CARD_MODE) == MODE_BIN) {
+        // if cdp unit has been explicitelly set to binary format, 
+        // then put "BIN" in the identification columns if they are empty
+        int Idcol = (SkipCols == 0) ? 72 : (SkipCols == 8) ? 0 : -1; 
+        if ((Idcol >= 0) && (image[Idcol]+image[Idcol+1]+image[Idcol+2]==0)) {
+            // IdCol = column where the identification of card starts
+            image[Idcol++]=ascii_to_hol('B');
+            image[Idcol++]=ascii_to_hol('I');
+            image[Idcol++]=ascii_to_hol('N');
+        }
+    }
 
     sim_debug(DEBUG_CMD, &cdp_dev, "PUNCH CARD\n");
     echo_cardimage(&cdp_dev, image, cdp_EchoLevel, "Punched card", NULL);
+
+#if defined(CPANEL)
+    {
+        // if Punched Cards View Panel is showing last card in output stacker, 
+        // theb advance card selected to show new card just about to be punched
+        extern int pch_HopperToShow; 
+        extern int pch_nCardToShow;
+        extern int pch_RedrawNeeded; 
+        extern uint16 pchCards[PCH_CARDS_MAX][80]; 
+        int nTotal = sim_card_output_hopper_count(uptr); 
+        if (pch_HopperToShow==3) {
+            if (pch_nCardToShow==nTotal) pch_nCardToShow++; 
+            if (pch_nCardToShow >= PCH_CARDS_MAX) pch_nCardToShow = PCH_CARDS_MAX-1; 
+            pch_RedrawNeeded = 1; 
+        }
+        // save card about to be punched in pchCards buffer to allow be shown in card view panel
+        if (nTotal < PCH_CARDS_MAX) {
+           int i; 
+           for (i=0;i<80;i++) {
+               pchCards[nTotal][i]=image[i];
+           }
+        }
+    }
+#endif
+
+    // sim_punch_card() clears image array -> should be the last to be called
     sim_punch_card(uptr, image);
 
     nCardInPunchStacker = sim_card_output_hopper_count(uptr);
@@ -147,13 +187,14 @@ void WriteCards(UNIT * uptr)
         tm0CardInPunchStacker = sim_os_msec();  // this is the time stamp (in real word msec) when starts the animation of punched-card entering card-punch-stacker) 
     }
 
+
 }
 
 
 /* Card punch routine */
 uint32 cdp_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
 {
-    int n,msec; 
+    int msec; 
 
     IOTicks = 0; // duration of operation in Ticks
 
@@ -185,38 +226,36 @@ uint32 cdp_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
         // prepare a new punched card on card puncher
 
         // Timing calculation
+        // punch card cycle: 600 msec (100 cards per minute)
         // calc msec = time for card punch to finish current in progress cycle
         // calc nTick = number to ticks WRITE needs to be executed by cpu
-        // punch card cycle: 600 msec (100 cards per minute)
-        if (cdp_timing_DisconTickCount == 0) {
-            // =0 when exiting fast mode -> resync with global tick count
-            cdp_timing_StartTickCount = 0;
-        }
-        if ((cdp_timing_StartTickCount == 0) || ((msec = msec_elapsed(cdp_timing_StartTickCount, GlobalTicksCount)) > 600)) {
-            msec = -1; // card punch not in motion
-        }
-        if (msec == -1) {
+        msec = msec_elapsed(cdp_timing_StartTickCount, GlobalTicksCount);
+        if ((msec > 600) || (msec <= 0)) msec = -1; // card reader not in motion
+
+        if ((FAST) || (CpuSpeed_Acceleration<=0)) {
+            cdp_timing_StartTickCount = GlobalTicksCount;
+            IOTicks = 0; 
+            IOREMAIN = msec_to_ticks(100); 
+        } else if (msec == -1) {
             // card punch not in motion. Set start of motion as current tickcount
             cdp_timing_StartTickCount = GlobalTicksCount;
-            // first 9-left copy must be given before 400 msec counting after start of motion
-            cdp_timing_DisconTickCount = cdp_timing_StartTickCount + msec_to_ticks(400); 
             // time needed for WRITE to execute and start card punch motion: 330 msec
             IOTicks = msec_to_ticks(330); 
-            sim_debug(DEBUG_CMD, &cdp_dev, "PUNCH CARD: Start Card Motion\n");
+            // after this, first COPY instr must be given before 70 msec elapsed
+            IOREMAIN = IOTicks + msec_to_ticks(70); 
+            sim_debug(DEBUG_CMD, &cdr_dev, "WRITE CARD: Start Card Punch Motion\n");
         } else {
-            // card punch in motion. Wait to finish current cycle 
+            // card reader in motion. Wait to finish current cycle 
             msec = 600-msec; // time remaining for current cycle to end
             IOTicks = msec_to_ticks(msec); 
-            // card punch in motion. Next cycle is 600 msec after the previous one
-            cdp_timing_StartTickCount += msec_to_ticks(600); 
-            // first 9-left copy must be given before 95 msec counting after start of cycle
-            cdp_timing_DisconTickCount = cdp_timing_StartTickCount + msec_to_ticks(95); 
-            // time needed for WRITE to execute in continuous motion: 40 msec (educated guess)
-            IOTicks += msec_to_ticks(40); 
+            // card reader in motion. Next cycle is 600 msec after the previous one
+            cdp_timing_StartTickCount +=msec_to_ticks(600); 
+            // max time needed for WRITE to execute in continuous motion: 25 msec 
+            IOTicks += msec_to_ticks(25); 
+            // after this, first COPY instr must be given before 70 msec elapsed
+            IOREMAIN = IOTicks + msec_to_ticks(70); 
             sim_debug(DEBUG_CMD, &cdp_dev, "PUNCH CARD: Continuous Card Punch (wait %d msec to start card cycle\n", msec);
         }
-        // set the max time (in tick counts) to auto-disconnect device
-        IOREMAIN = (int) (cdp_timing_DisconTickCount - GlobalTicksCount + 10); 
 
         if (cdp_CardImage_index > 0) WriteCards(uptr); 
         cdp_CardImage_index=0;
@@ -229,29 +268,20 @@ uint32 cdp_cmd(UNIT * uptr, uint16 cmd, uint16 addr)
         cdp_CardImage[cdp_CardImage_index++] = MQ; 
 
         // Timing calculation
-        // calc msec = time remaining for card punch to accept next data from COPY
-        // calc nTick = number to ticks COPY needs to be executed by cpu
-        if (cdp_timing_DisconTickCount == 0) {
-            // =0 when exiting fast mode -> resync with global tick count
-            cdp_timing_DisconTickCount = GlobalTicksCount; 
-            cdp_timing_StartTickCount = 0;
-        }
-        msec = msec_elapsed(GlobalTicksCount, cdp_timing_DisconTickCount);
-        if ((n = (int) (cdp_timing_DisconTickCount - GlobalTicksCount)) <0) {
-            sim_debug(DEBUG_CMD, &cdp_dev, "COPY is %d Ticks (%d msec) too late. Card punch disconnected\n", -n, -msec);
-            return STOP_COPYCHECK;
+        if ((FAST) || (CpuSpeed_Acceleration<=0)) {
+            IOTicks = 0; 
         } else {
-            sim_debug(DEBUG_CMD, &cdp_dev, "COPY has been waiting for %d Ticks (%d msec)\n", n, msec);
+            IOTicks = IOREMAIN; // IOREMAIN is the number of ticks COPY should wait to have data ready 
+            msec = msec_elapsed(0, IOREMAIN);
         }
-        // wait for card punch to be able to accept COPY data
-        IOTicks = n; 
+        // calc time card reader will need to accept COPY data
         if (cdp_CardImage_index & 1) {
-            cdp_timing_DisconTickCount += usec_to_ticks(540); // right copy must be given within 540 microsec. 
+            IOREMAIN = IOTicks + usec_to_ticks(540); // right copy must be given within 540 microsec. 
+            IOREMAIN += 20; // add 20 ticks as margin
         } else {
-            cdp_timing_DisconTickCount += msec_to_ticks(31); // left copy must be given within 31 msec. 
+            IOREMAIN = IOTicks + msec_to_ticks(31); // left copy must be given within 31 msec. 
+            IOREMAIN += 120; // add 120 ticks as margin
         }
-        cdp_timing_DisconTickCount += 20; // add 20 ticks as margin
-        IOREMAIN = (int) (cdp_timing_DisconTickCount - GlobalTicksCount); 
 
         sim_debug(DEBUG_CMD, &cdp_dev, "Write word %d to Card Punch \n", cdp_CardImage_index);
         if (cdp_CardImage_index == 24) {
@@ -316,6 +346,19 @@ t_stat cdp_attach(UNIT * uptr, CONST char *file)
     memset(cdp_CardImage, 0, sizeof(cdp_CardImage));
     cdp_CardImage_index=-1; 
 
+#if defined(CPANEL)
+    {
+        // if Punched Cards View Panel showing output deck, invalidate selected card
+        extern int pch_HopperToShow; 
+        extern int pch_nCardToShow; 
+        extern int pch_RedrawNeeded; 
+        if (pch_HopperToShow==3) {
+            pch_nCardToShow=0; 
+            pch_RedrawNeeded = 1; 
+        }
+    }
+#endif
+
     return SCPE_OK;
 }
 
@@ -325,8 +368,20 @@ t_stat cdp_detach(UNIT * uptr)
     tm0CardInPunchStacker = 0;
     if (cdp_CardImage_index > 0) WriteCards(uptr); 
     cdp_CardImage_index=-1; 
- 
-    return sim_card_detach(uptr);
+
+#if defined(CPANEL)
+    {
+        // if Punched Cards View Panel showing output deck, invalidate selected card
+        extern int pch_HopperToShow; 
+        extern int pch_nCardToShow; 
+        extern int pch_RedrawNeeded; 
+        if (pch_HopperToShow==3) {
+            pch_nCardToShow=0; 
+            pch_RedrawNeeded = 1; 
+        }
+    }
+#endif
+     return sim_card_detach(uptr);
 }
 
 t_stat cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)

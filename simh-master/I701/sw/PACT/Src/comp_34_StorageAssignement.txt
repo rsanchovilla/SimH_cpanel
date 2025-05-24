@@ -1,0 +1,1163 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 34 STORAGE ASSIGNEMENT ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:PRTCHR      PRINT BASE48 CHAR 
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:WRTAPE      WRITE MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:CLMEM       CLEAR MEMORY STORAGE
+              
+                                  PURPOSE:
+                                  - READ VARIABLE HASH TABLE FROM DRUM
+                                  - SCAN SOURCE CODE. FOR EACH INTRUCTION CHECK IF 
+                                    VARIABLE IS USED. 
+                                  - POPULATE FACTN, FACTREG, S1N, S2N, D1N, D2N, QF
+                                  - SAVE UPDATED COMPACT CODE TO TAPE
+                                  - SAVE NUMBER POOL TO DRUM. DISCARD VAR RECORDS AT DRUM
+                                       DRUM 0130, ADDR 0000     RELNUM0      REL NUM ORIGIN
+                                                       0001     NVARS        NUMBER OF VARS DEFINED 
+                                                       0002     V.EXT        EXTENSION (=SIZE IN HALF WORDS) OF VARIABLE REGION (IS EVEN)
+                                                       0003     N.EXT        EXTENSION (=SIZE IN HALF WORDS) OF NUMBER REGION (IS EVEN)
+                                                       0016     MAXNNUMS     MAX NUMBER OF NUMBERS THAT CAN BE DEFINED (512)
+                                                       0017     NNUMS        NUMBER OF NUMBERS IN NUMBER POOL
+                                                       0018     TNUMPOOL     NUMBER POOL. EACH ENTRY IN TABLE IS 2 HALF-WORDS
+
+
+SRCHVAR  + ADD       TWO          SEARCH VAR 
+         + STORE A   SRCHP1       PARAMS: ADDR OF VAR NAME TO SEARCH
+         + ADD       ONE
+         + STORE A   SRCHP2
+         + ADD       ONE
+         + STORE A   SRCHP3
+         + ADD       ONE
+         + STORE A   SRCHVAEX     RETURN INDEX POS IN ACC
+                                  0=NOT FOUND, =1 -> ON FIRST VAR SLOT IN DRUM
+                                  POS IN DRUM: (POS-1)*8 OM DRUM 0128 AND 0129
+
+SRCHP1   + R ADD     /   /        GET ADDR OF NAME     
+         + STORE A   SRCHN0   
+         + STORE A   SRCHP1A
+SRCHP1A  + R ADD     /   /
+         + STORE     FNDVAR      
+SRCHP2   + R ADD     /   /        GET ADDR OF NAME1
+         + STORE A   SRCHN1
+         + STORE A   SRCHP2A
+SRCHP2A  + R ADD     /   /
+         + STORE     FNDVAR1
+SRCHP3   + R ADD     /   /        GET ADDR OF NAME2
+         + STORE A   SRCHN2
+         + STORE A   SRCHP3A
+SRCHP3A  + R ADD     /   /
+         + STORE     FNDVAR2
+
+         + R ADD     *            GET THE HASH OF VAR BEING SEARCHED
+         + TR        GETHASH
+         + ADD       HASHAD       ADD HASH TABLE ADDR
+         + STORE A   SRCHHA1
+SRCHHA1  + R ADD     /   /        GET HASH[HASH VARNAME] -> VAR NUMBER
+         + TR 0      SRCHNFND     =0 -> VAR NOT IN HASH TABLE -> VAR NOT EXISTS
+         + STORE     N
+         + SUB       ONE
+         + A LEFT    0003         ADDR IN DRUM = 8*(NVAR -1)
+         + STORE A   SRCHDRAD
+         + R ADD     ONE
+         + STORE     HASHFLAG     -> USING HASH VALUE
+         + TR        SRCHTEST     TEST IF VAR FOUND USING HASH 
+
+SRCHLOOP + R ADD     N
+         + SUB       NVARS
+         + TR 0      SRCHNFND
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+
+SRCHTEST + R ADD     *
+         + TR        RWDRUM       READ VAR FROM DRUM
+         + READ      0128         DRUM INSTR
+SRCHDRAD + STOP      /   /        DRUM ADDR 
+         + STOP      FNDVAR
+         + STOP      0004         GET 4 HALF-WORD. ONLY 3 ARE NEEDED (THE NAME), BUT NUMER OF HW WORDS READ SHOULD BE EVEN
+
+         + R ADD     FNDVAR
+SRCHN0   + SUB       /   /
+         + TR 0      SRCHV1
+         + TR        NXTSRCH
+SRCHV1   + R ADD     FNDVAR1
+SRCHN1   + SUB       /   /
+         + TR 0      SRCHV2
+         + TR        NXTSRCH
+SRCHV2   + R ADD     FNDVAR2
+SRCHN2   + SUB       /   /
+         + TR 0      SRCHFND      VAR FOUND
+
+NXTSRCH  + R ADD     HASHFLAG     VAR NOT FOUND, SEARCH NEXT
+         + TR 0      NXTSRCH2
+         + R ADD     ZERO
+         + STORE     HASHFLAG     VAR NOT FOUND USING HASH, START A SEQUENTIAL SEARCH
+         + STORE     N
+         + STORE A   SRCHDRAD
+         + TR        SRCHLOOP 
+
+NXTSRCH2 + R ADD     SRCHDRAD
+         + ADD       D8
+         + STORE A   SRCHDRAD
+         + TR        SRCHLOOP
+
+SRCHFND  + R ADD     N
+         + TR        SRCHVAEX
+         
+SRCHNFND + R ADD     ZERO
+SRCHVAEX + TR        /   /
+
+GETHASH  + ADD       TWO          CALC HASH VALUE (0..198) FOR VARIABLE NAME FNDVAR, FNDVAR1, FNDVAR2
+         + STORE A   GETHAEX      RETURN HASH IN ACC
+
+         + R ADD     ZERO
+         + ADD AB    FNDVAR
+         + ADD AB    FNDVAR1
+         + ADD AB    FNDVAR2
+
+         + L RIGHT   0035         MQ=ABS(VARIABLE FULL NAME)
+         + DIV       D199         DIV BY 199, ACC=REMINDER
+GETHAEX  + TR        /   /
+HASHAD   + STOP      HASH         HASH TABLE ADDRESS
+
+SETNVARS + ADD       TWO          COMPUTE NVARS READING TABLE
+         + STORE A   SETNVEX      STORED IN DRUM
+
+         + R ADD     *
+         + TR        RWDRUM       READ RELNUM0, NVARS AND V.EXT FROM DRUM
+         + READ      0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         + STOP      0004         4 HALF WORDS
+
+SETNVEX  + TR        /   /        RETURN TO CALLER
+
+
+GETVAR   + ADD       TWO          READ VAR RECORD FROM DRUM
+         + STORE A   GVP1         RECORDS STARTS AT 1
+         + ADD       ONE
+         + STORE A   GVEXIT
+
+GVP1     + R ADD     /   /        GET ADDR OF INDEX VAR
+         + STORE A   GVP1A
+GVP1A    + R ADD     /   /        GET INDEX VALUE 1..MAXVARS       
+         + SUB       ONE          ADDRESS IN DRUM = (IVAR-1)*8 
+         + A LEFT    0003      
+         + STORE A   DRADDR1
+         + STORE A   DRADDR2
+         
+         + R ADD     *
+         + TR        RWDRUM       WRITE VAR RECORD TO DRUM
+         + READ      0128         DRUM INSTR
+DRADDR1  + STOP      /   /        DRUM ADDR 
+         + STOP      VARNAME      ADDR OF START OF FIRST HALF OF VAR RECORD
+         + STOP      0008         8 HALF WORDS
+
+         + R ADD     *
+         + TR        RWDRUM       WRITE VAR RECORD TO DRUM
+         + READ      0129         DRUM INSTR
+DRADDR2  + STOP      /   /        DRUM ADDR 
+         + STOP      CONSTR       ADDR OF START OF SECOND HALF OF VAR RECORD
+         + STOP      0008         8 HALF WORDS
+
+GVEXIT   + TR        /   /
+
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "STORAGE ASSIGNEMENT"
+         + STOP      0139         STRINGZ AT COL 39
+         + STOP      MSGSTAR2     "REL LOC.  Q"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     *            CLEAR TABLES
+         + TR        CLMEM        TNUMPOOL
+         + STOP      TNUMPOOL
+         + STOP      D1024        = MAXNNUMS * 2
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+
+         + R ADD     ZERO         CLEAR VAR RECORD
+         + STORE     VARNAME    
+         + STORE     VARNAM1      NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     VARNAM2      NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     VTYPE        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     LEN          NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     Q          
+         + STORE     D1         
+         + STORE     D2         
+         + STORE     CONSTR       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     CONSTR1      NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     CONSTR2      NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     CTYPE        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     RELADDR    
+         + STORE     PHASE        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     FLAG         NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + STORE     SIZE         NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     V.EXT        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     MAXNVARS     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + R ADD     *            
+         + TR        RWDRUM       READ VARIABLE NAMES HASH TABLE FROM DRUM
+         + READ      0128         DRUM INSTR
+         + STOP      3800         DRUM ADDR 
+         + STOP      HASH         ADDR OF DATA TO SAVE
+         + STOP      0200         200 HALF WORDS
+
+         + R ADD     *            COMPUTE NVARS READING TABLE
+         + TR        SETNVARS     STORED IN DRUM
+
+         + R ADD     ZERO
+         + STORE     NNUMS        INIT NUMBER POOL
+         + STORE     N.EXT        SIZE OF NUMBER REGION
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEOUT      REWIND TAPE OUT WITH UPDATED PACT COMPACT CODE
+
+READREG  + NOOP      0000
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     FACTREG    
+         + SUB       D32          'T'
+         + TR 0      NEXT         IF TEMP VAR -> NO VAR ASSIGNMENT NEEDED -> CONTINUE TO NEXT STEP
+
+         + R ADD     OP           JUMP TABLE TO HANDLE THE FACTOR OF EACH TYPE OF PACT OPERATION
+         + ADD       OPTBLE
+         + STORE A   OPTBLETR
+OPTBLETR + TR        /   /
+OPTBLE   + STOP      *
+         + TR        FACTVAR3     OP=1   TAKE   FACTOR CANNOT BE BLANK 
+         + TR        FACTVAR      OP=2   ADD    ALLOWS BLANK FACTOR -> RSV: BEHAVES AS ACC=ACC+ACC
+         + TR        FACTVAR      OP=3   SUB    ALLOWS BLANK FACTOR -> RSV: BEHAVES AS ACC=-ACC
+         + TR        FACTVAR      OP=4   MUL    ALLOWS BLANK FACTOR -> RSV: BEHAVES AS ACC=ACC * ACC
+         + TR        FACTVAR3     OP=5   DIV    FACTOR CANNOT BE BLANK -> RSV: DIV UNIARY IS A NON-SENSE, EVEN IF STATED AS ALLOWED ON MANUAL
+         + TR        NOFACT       OP=6   RES    NO FACTOR ALLOWED
+         + TR        FACTVAR2     OP=7   EQ     NEEDS VARIABLE AS FACTOR
+         + TR        FACTVAR      OP=8   +ABS   ALLOWS BLANK FACTOR
+         + TR        FACTVAR      OP=9   -ABS   ALLOWS BLANK FACTOR
+         + TR        FACTVAR3     OP=10  ABS    FACTOR CANNOT BE BLANK 
+         + TR        NEXT         OP=11  T      FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=12  TZ     FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=13  TP     FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=14  TN     FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=15  TF     FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        NEXT         OP=16  HALT   FACTOR=DESTINATION STEP -> NO VARIABLE FACTOR TO PROCESS
+         + TR        INDEXVAR     OP=17  TEST   ALLOWS BLANK FACTOR
+         + TR        INDEXVAR     OP=18  SET
+         + TR        INDEXVAR     OP=19  USE
+         + TR        NEXT         OP=20  DO     FACTOR=REGION -> NO VARIABLE FACTOR TO PROCESS    
+         + TR        NOFACT       OP=21  EXIT   NO FACTOR ALLOWED
+         + TR        BADOP2       OP=22  DUP    SHOULD NOT BE PRESENT. IT IS ALREADY PROCESSED
+         + TR        NEXT         OP=23  LIB    FACTOR=REGION -> NO VARIABLE FACTOR TO PROCESS    
+         + TR        BADOP        OP=24  ID     SHOULD NOT BE PRESENT. IT IS DESAMBIGUATED
+         + TR        BADOP        OP=25  FOR    SHOULD NOT BE PRESENT. IT IS DESAMBIGUATED
+         + TR        NEXT         OP=26  CALL   IGNORE FACTOR
+         + TR        FACTVAR      OP=27  SIN    ALLOWS BLANK FACTOR
+         + TR        FACTVAR      OP=28  COS    ALLOWS BLANK FACTOR
+         + TR        FACTVAR      OP=29  ARCT   ALLOWS BLANK FACTOR
+         + TR        FACTVAR      OP=30  SQRT   ALLOWS BLANK FACTOR
+         + TR        FACTVAR      OP=31  LOG    ALLOWS BLANK FACTOR
+         + TR        FACTVAR      OP=32  EXP    ALLOWS BLANK FACTOR
+         + TR        S1INT        OP=33  SE     FACTOR IS BLANK, S1 IS INTEGER VALUE
+         + TR        FACTVAR2     OP=34  CL     NEEDS VARIABLE AS FACTOR
+         + TR        NOFACT       OP=35  READ   NO FACTOR ALLOWED
+         + TR        NOFACT       OP=36  LIST   NO FACTOR ALLOWED
+         + TR        NOFACT       OP=37  RES for MULT, NO FACTOR ALLOWED
+         + TR        NOFACT       OP=38  RES for DIV, NO FACTOR ALLOWED
+         + TR        FACTVAR      OP=39  ID for LIST         ALLOWS BLANK FACTOR
+         + TR        FACTVAR4     OP=40  ID for DO/LIB       FACTOR CAN BE INTEGER OR VAR, CAN BE BLANK, IF IS INTEGER DO NOT ADD IT TO NUMBER POOL
+         + TR        FACTVAR4     OP=41  ID for CALL         FACTOR CAN BE INTEGER OR VAR, CAN BE BLANK, IF IS INTEGER DO NOT ADD IT TO NUMBER POOL
+         + TR        FORFACT      OP=42  FOR for DO/LIB
+         + TR        FORFACT      OP=43  FOR for CALL
+
+BADOP    + STOP      1111         INTERNAL COMPILER ERROR: SHOULD NOT BE PRESENT. IT SHOULD HAVE BEEN DESAMBIGUATED
+BADOP2   + STOP      1111         INTERNAL COMPILER ERROR: SHOULD NOT BE PRESENT. IT IS ALREADY PROCESSED
+
+
+NEXT     + NOOP      0000         CONTINUE 
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1A     TR IF NO LOG SELECTED
+         + R ADD     FACTREG
+         + TR 0      ENDLOG1A     NO STORAGE ASSIGNED TO FACT
+         + LOAD MQ   FACTREG
+         + R ADD     *
+         + TR        PRTCHR       PRINT FACTREG AT COL 40
+         + STOP      0040
+         + LOAD MQ   FACTN
+         + R ADD     *
+         + TR        PRTINT       PRINT FACTN AT COL 40
+         + STOP      0006         LEN=6
+         + STOP      0040
+         + LOAD MQ   QF
+         + R ADD     *
+         + TR        PRTINT       PRINT FACTN AT COL 45
+         + STOP      0003         LEN=6
+         + STOP      0048
+
+ENDLOG1A + NOOP      0000
+                                  SAVE COMPACT CODE RECORD IN TAPE
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT (PACT COMPACT CODE)
+         + STOP      TAPEOUT
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      CCLEN        LEN
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+         + R ADD     *            PRINT STEP JUST PROCESSED
+         + TR        PRINTCRD
+ENDLOG1  + NOOP      0000 
+
+                                  PROCESS NEXT STEP
+         + TR        READSTEP
+
+
+
+NOFACT   + R ADD     FACT         CHECK THERE IS NO FACTOR IN RES, LIST, READ, CALL, EXIT INSTRUCTIONS
+         + TR 0      NF2          
+NF1      + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOFAC     ERROR: NO FACTOR ALLOWED ON THIS PACT INSTR
+NF2      - R ADD     NUM
+         + TR 0      NEXT         PROCEED TO NEXT STEP AS FACTOR IS BLANK ANS NUMBER IS ALSO BLANK
+         + TR        NF1
+
+S1INT    + R ADD     FACT         CHECK FACTOR IS BLANK, S1 IS INTEGER
+         + TR 0      S1A
+         + TR        NF1          TR TO ERROR NO FACTOR ALLOWED ON THIS PACT INSTR
+S1A      + R ADD     S1           CHECK THERE IS A >0 INTEGER NUMBER AS FACTOR IN SE (SENSE) INSTRUCTION
+         + TR 0      S1C          TR IF S1=0 (IE BLANK)
+         + TR +      NEXT         PROCEED TO NEXT STEP IF S1 IS INT NUMBER 
+S1C      + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOINT     ERROR: S1 MUST BE INTEGER
+
+                                  PROCESS USE/SET/TEST PACT INSTRUCTIONS
+                                          OP       FACT                    S1     S2
+                                  SYNTAX: TEST     DESTINATION-STEP|BLANK  INDEX  INDEX|ALFAVAR|NUM
+                                          USE|SET  BLANK                   INDEX  INDEX|ALFAVAR|NUM
+                                  IF S2 IS A VARIABLE, ASSIGN ITS ADDRESS TO FACTORN
+                                  HERE, S1 IS AN INDEX (SHOULD BE ALFA VALUE <0)
+                                        S2 IS AN INDEX (ALFA VALUE <0)
+                                           OR  A VAR   (ALFA VALUE <0) -> IN THIS CASE -> FACTN=ADDR OF VAR, FACTREG='V'
+                                           OR  A NUMBER (>0)
+                                  IF INSTR IS TEST, FACTOR CAN BE A DESTINATION STEPN
+
+                                                   FACT                    S1     S2
+                                                   DESTINATION-STEP|BLANK  INDEX  INDEX|ALFAVAR|NUM
+                                           FACT    >0               0
+                                           S1/S1N                          <0
+                                           S2/S2N                                 <0    <0      nnn
+                                           FACTN                                  0     Vnn     0
+                                                  
+
+INDEXVAR + R ADD     FACT         CHECK IF FACTOR HAS A VARIABLE (IE <0)
+         + TR +      IDX1         NO -> PROCEED        
+IDXERR   + R ADD     *            YES -> ERROR
+         + TR        ERROR
+         + STOP      ERRNOIDX     ERROR: USE/SET/TEST SYNTAX ERROR. SHOULD BE    [DESTINATION STEP]  ALFAINDEX  ALFAINDEX|ALFAVAR|NUM
+IDX1     - R ADD     NUM          CHECK IF THERE IS A NUMBER IN THE STEP
+         + TR 0      IDX2         NO -> PROCEED
+         + TR        IDXERR       YES -> TR TO ERROR
+IDX2     + R ADD     S1           CHECK IF S1 IS AN INDEX (SHOULD BE ALFA, IE <0)
+         + TR +      IDXERR       S1 NOT ALFA -> TR TO ERROR
+         + R ADD     S2           CHECK IF S2 IS NOT BLANK (SHOULD BE <>0)
+         + TR 0      IDXERR       S2 IS BLANK -> TR TO ERROR
+
+         + R ADD     S2
+         + TR +      IDX3         S2>0 -> S2 IS A NUMBER, PROCEED
+  
+         + R ADD     *            
+         + TR        SRCHVAR      S2<0 -> S2 IS A VAR OR INDEX -> SEARCH THE VAR. RETURN INDEX POS IN ACC
+         + STOP      S2
+         + STOP      ZERO
+         + STOP      ZERO
+         + STORE     NVAR
+
+         + TR 0      IDX3         IF S2 NOT FOUND AS A VAR -> S2 IS AN INDEX -> PROCEED LEAVING FACTN=0
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+
+         + R ADD     RELADDR      S2 IS A VAR -> FACTN=VAR ADDRESS, FACTREG='V'
+         + STORE     FACTN
+         + R ADD     D34          'V'
+         + STORE     FACTREG
+        
+IDX3     + R ADD     S1           PROPAGATE
+         + STORE     S1N
+         + R ADD     S2
+         + STORE     S2N
+
+         + TR        NEXT         
+
+
+                                  PROCESS FOR INSTRUCTION DO/LIB/CALL
+                                          OP       FACT                  S1              S2
+                                  SYNTAX: FOR      VAR|NUM|INDEX|BLANK   VAR|NUM|BLANK   VAR|NUM|BLANK
+                                          FACT     <0   0   <0   0         
+                                          FACTN    Vnn  0    0   0
+                                          NUM      0   nnn   0   0
+                                          S1/S2                          <0  nnn   0     <0  nnn   0
+                                          S1N/S2N                        nn   0    0      nn  0    0    <-- nn=Var addr
+
+FORFACT  + R ADD     FACT
+         + TR +      FOR3
+         + TR        FOR2         FACTOR IS ALFA -> FACTOR IS VAR OR INDEX
+
+S1NOVAR  + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRS1NOV     ERROR: S1 VARIABLE NOT FOUND
+
+S2NOVAR  + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRS2NOV     ERROR: S2 VARIABLE NOT FOUND
+
+S12NONUM + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRS12NN     ERROR: FOR INDEX USED: S1/S2 SHOULD BE A NUMBER
+
+FOR2     + R ADD     *            
+         + TR        SRCHVAR      SEARCH FACT AS VARIABLE (WITHOUT DEFINITIVE SUBSCRIPTS)
+         + STOP      FACT
+         + STOP      ZERO
+         + STOP      ZERO
+         + STORE     NVAR
+
+         + TR 0      FOR3         IF FACT NOT FOUND AS A VAR -> FACT IS AN INDEX -> PROCEED LEAVING FACTN=0
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+
+         + R ADD     RELADDR      FACT IS A VAR -> FACTN=VAR ADDRESS, FACTREG='V'
+         + STORE     FACTN
+         + R ADD     D34          'V'
+         + STORE     FACTREG
+        
+FOR3     + R ADD     S1           IF S1 IS BLANK/NUM (IE >0) -> PROCEED
+         + TR +      FOR4         
+       
+         + R ADD     FACTREG      HERE, S1 IS A VAR. IF INSTR IS
+         + TR 0      S12NONUM     FOR INDEX -> S1 SHOULD BE A VAR
+
+         + R ADD     *            
+         + TR        SRCHVAR      SEARCH S1 AS VARIABLE 
+         + STOP      S1
+         + STOP      ZERO
+         + STOP      ZERO
+         + STORE     NVAR
+
+         + TR 0      S1NOVAR      IF S1 NOT FOUND AS A VAR -> ERROR
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+
+         + R ADD     RELADDR      S1 IS A VAR -> S1N=VAR ADDRESS
+         + STORE     S1N
+
+FOR4     + R ADD     S2           IF S2 IS BLANK/NUM (IE >0) -> PROCEED
+         + TR +      NEXT
+
+         + R ADD     FACTREG      HERE, S1 IS A VAR. IF INSTR IS
+         + TR 0      S12NONUM     FOR INDEX -> S1 SHOULD BE A VAR
+
+         + R ADD     *            
+         + TR        SRCHVAR      SEARCH S1 AS VARIABLE 
+         + STOP      S2
+         + STOP      ZERO
+         + STOP      ZERO
+         + STORE     NVAR
+
+         + TR 0      S2NOVAR      IF S2 NOT FOUND AS A VAR -> ERROR
+
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+
+         + R ADD     RELADDR      S2 IS A VAR -> S1N=VAR ADDRESS
+         + STORE     S2N
+
+         + TR 0      NEXT         
+  
+                                  PROCESS FOR INSTRUCTION THAT USES REGULAR FACTOR
+                                          OP       FACT             S1                S2
+                                  SYNTAX:          VAR|NUM          INDEX|NUM|BLANK   INDEX|NUM|BLANK  <-- scalar, vector or matrix
+                                                   VAR1             VAR2              INDEX|NUM|BLANK  <-- scalar or vector (index info from S2 will be stored in S1N. S2N will be zero)
+                                                   VAR1             VAR2              VAR  <-- scalar (S1N and SN2 will be zero)
+                                          FACT     <0   0            
+                                          FACTN    Vnn  0    
+                                          NUM      0   nnn                                        <-- if factor=num, cannot have indexes
+                                  ONE     S1/S2                     <0    nnn   0     
+                                  INDEX   S1N/S2N                   <0    >0    0      
+                                          D1N/D2N                    2     2    0     
+                                  TWO     S1/S2                     <0    nnn   0     <0    nnn   0     
+                                  INDEXS  S1N/S2N                   <0    >0    0     <0    >0    0      
+                                          D1N/D2N                  2*D2   2*D2  0      2     2    0     <-- D2 is VAR'S Dimension 2 in matrix
+                                  ALSO SETS QF TO Q OF VAR
+
+
+FACTVAR  + NOOP      0000
+
+         + R ADD     FACT
+         + TR +      FACTNUM      TR IF FACT IS NOT A VARIABLE
+
+         + SUB       ALFTMP       '  $'
+         + TR 0      FACTTMP      ACCESSING A TEMP VAR
+
+         + R ADD     *
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      FACT
+         + STOP      S1
+         + STOP      S2
+         + TR 0      EQ1          TR IF VAR "FACT S1 S2" NOT FOUND -> WILL TRY WITH "FACT S1"
+
+         + STORE     NVAR
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+
+         + R ADD     ZERO         CLEAR S1 AND S2 AS THEY ARE DEFINITIVE INDEXES.
+         + STORE     S1           AS INDUCTIVE INDEXES THEY ARE NOT SET -> SET TO ZERO
+         + STORE     S1N
+         + STORE     S2
+         + STORE     S2N
+
+         + TR        EQ3          VAR FOUND. both indexes are definitive -> no inductive index possible
+
+VARNFND  + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRFANOV     ERROR: FACTOR VARIABLE NOT FOUND
+
+NOS1     + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOS1      ERROR: MISSING S1 INDEX
+
+NOS2     + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOS2      ERROR: MISSING S2 INDEX
+
+NAS1     + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNAS1      ERROR: S1 INDEX NOT ALLOWED
+
+NAS2     + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNAS2      ERROR: S2 INDEX NOT ALLOWED
+
+EQ1      + R ADD     *
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      FACT
+         + STOP      S1
+         + STOP      ZERO
+         + TR 0      EQ2          TR IF "FACT S1" NOT FOUND
+
+         + STORE     NVAR
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+                                  S1 index is definitive, S2 is inductive -> only one index possible (in S2) -> move it to S1N if exists
+         
+         + R ADD     ZERO         CLEAR S1 AS IT IS DEFINITIVE INDEX.
+         + STORE     S1           AS INDUCTIVE INDEX IT IS ARE NOT SET -> SET TO ZERO
+         + STORE     S1N
+
+         + R ADD     S2
+         + TR 0      EQ3          TR IF VAR FOUND, NO INDEX
+         + STORE     S1N          MOVE S2 TO S1 INDEX 
+         + STORE     S1
+         + R ADD     ZERO         AND CLEAR S2
+         + STORE     S2
+         + STORE     S2N
+         + TR        EQ3          VAR FOUND
+
+EQ2      + R ADD     *
+         + TR        SRCHVAR      SEARCH VAR. RETURN INDEX POS IN ACC
+         + STOP      FACT
+         + STOP      ZERO
+         + STOP      ZERO
+         + TR 0      VARNFND      TR IF VAR NOT FOUND
+
+         + STORE     NVAR
+         + R ADD     *            
+         + TR        GETVAR
+         + STOP      NVAR
+                                  S1 and S2 indexes are inductive if they exists
+EQ3      + R ADD     ZERO
+         + STORE     D1N          INIT D1N AND D2N
+         + STORE     D2N
+
+         + R ADD     S1
+         + TR 0      EQ3A
+         + TR        EQ3B
+EQ3A     + R ADD     S2
+         + TR 0      EQ4          TR AS S1=0 AND S2=0 -> NO INDEXES
+
+         + R ADD     S2           HERE S1=0 AND S2<>0 -> MOVE S2 TO S1 INDEX
+         + STORE     S1N         
+         + STORE     S1
+         + R ADD     ZERO         AND CLEAR S2
+         + STORE     S2
+         + STORE     S2N
+         + TR 0      EQ3C         TR AS S1<>0 AND S2=0 -> S1 INDEX SET
+
+EQ3B     + R ADD     S2           
+         + TR 0      EQ3C         TR AS S1<>0 AND S2=0 -> S1 INDEX SET
+
+         + R ADD     S1           HERE S1<>0 AND S2<>0 
+         + STORE     S1N          BOTH S1 AND S2 INDEXS SET
+         + R ADD     S2
+         + STORE     S2N
+         + R ADD     D2
+         + A LEFT    0001
+         + STORE     D1N          D1N= (D2 * 2)
+         + R ADD     TWO
+         + STORE     D2N          D2N=2
+         + TR        EQ4
+         
+EQ3C     + R ADD     S1           HERE S1<>0 AND S2=0 
+         + STORE     S1N          S1 INDEX SET
+         + R ADD     TWO
+         + STORE     D1N          D1N=2
+         + TR        EQ4
+
+EQ4      + R ADD     OP           IF OP=EQ AND QR SET -> CHECK QF=QR 
+         + SUB       OPEQ         
+         + TR 0      EQ4A
+         + TR        EQ4C
+EQ4A     + R ADD     QR
+         + TR 0      EQ4C         OP=EQ BUT QR NOT SET -> PROCEED
+         + SUB       Q
+         + TR 0      EQ4C         OP=EQ AND QR=Q OR VAR -> PROCEED
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERREQBQ      ERROR: IF QR SET ON "EQ FACT" INSTR, THE QR MUST MATCH THE Q OF VARIABLE
+
+EQ4C     + R ADD     D2           CHECK IF NUMBER OF SUBSCRITS MATCHES THE TYPE OF VAR
+         + SUB       ONE          SCALAR -> NO INDEX, VECTOR -> ONE INDEX, MATRIX -> 2 INDEXS
+         + TR 0      EQ5
+
+         + R ADD     S1N          D2>1 -> IS A MATRIX -> NEEDS S1 AND S2 INDEX
+         + TR 0      NOS1         TR TO ERROR IF MISSING INDEX S1 (S1N=0)
+         + R ADD     S2N          
+         + TR 0      NOS2         TR TO ERROR IF MISSING INDEX S2 (S2N=0)
+         + TR        EQ10
+
+EQ5      + R ADD     D1
+         + SUB       ONE
+         + TR 0      EQ6
+
+         + R ADD     S1N          D1>1 -> IS A VECTOR -> NEEDS S1 INDEX
+         + TR 0      NOS1         TR TO ERROR IF MISSING INDEX S1 (S1N=0)
+         + R ADD     S2N          
+         + TR 0      EQ10 
+         + TR        NAS2         TR TO ERROR: INDEX S2 NOT ALLOWED
+
+EQ6      + R ADD     S1N          D1=D2=1 -> IS A SCALAR -> NO INDEX ALLOWED
+         + TR 0      EQ7 
+         + TR        NAS1         TR TO ERROR: INDEX S1 NOT ALLOWED
+EQ7      + R ADD     S2N          
+         + TR 0      EQ10
+         + TR        NAS2         TR TO ERROR: INDEX S2 NOT ALLOWED
+
+                                  SET VARIABLE ADDRESS IN FACTN, FACTREG='V'
+
+EQ10     + R ADD     RELADDR      FACTN=VAR RELATIVE ADDR
+         + STORE     FACTN        
+         + R ADD     D34          'V'
+         + STORE     FACTREG
+         + R ADD     Q            QF (Q OF FACTOR)=Q (Q OF VARIABLE)
+         + STORE     QF
+
+                                  if indexes are constant -> calculate effective addr
+
+         + R ADD     S2N          
+         + TR 0      EQ11         TR IF NO INDEX S2
+         + TR +      EQ13         TR AS S2=NUMBER -> S2 IS CONSTANT
+         + TR        EQ20         TR AS S2=INDEX -> S2 NOT A CONSTANT
+
+EQ11     + R ADD     S1N          HERE, NO S2 INDEX (S2=0)
+         + TR 0      EQ20         TR IF NO INDEX S1
+         + TR +      EQ12         TR AS S1=NUMBER -> S1 IS CONSTANT
+         + TR        EQ20         TR AS S1=INDEX -> S1 NOT A CONSTANT
+
+EQ12     + R ADD     S1N          HERE S1 IS CONSTANT (S1>0) AND NO S2 INDEX (S2=0)
+         + SUB       ONE          FactorN = FactorN + (S1N-1) * 2
+         + A LEFT    0001         is effetive address of Vector[constant]
+         + ADD       FACTN
+         + STORE     FACTN        
+         + R ADD     ZERO         REMOVE S1N INDEX
+         + STORE     S1N
+         + R SUB     ONE          SET D1N=-1 TO SIGNAL IT IS A VECTOR WITH CONSTANT SUBSCRIPTS
+         + STORE     D1N
+         + TR        EQ20
+         
+EQ13     + R ADD     S1N          HERE, CONSTANT S2 INDEX (S2>0)
+         + TR 0      EQ20         TR IF NO INDEX S1
+         + TR +      EQ14         TR AS S1=NUMBER -> S1 IS CONSTANT
+         + TR        EQ20         TR AS S1=INDEX -> S1 NOT A CONSTANT
+
+EQ14     + R ADD     S1N          HERE S1 IS CONSTANT (S1>0) AND S2 IS CONSTANT (S2>0)
+         + SUB       ONE          FactorN = FactorN + (S1N-1) * D2 * 2 + (S2N-1) * 2
+         + L RIGHT   0035         ACC -> MQ
+         + MPY       D2           is effetive address of Matrix[constant, constant]
+         + A LEFT    0017         NOW ACC=MQ*D2*2 = (S1N-1) * D2 * 2
+         + A LEFT    0001
+         + ADD       S2N
+         + ADD       S2N
+         + SUB       TWO
+         + ADD       FACTN
+         + STORE     FACTN        
+         + R ADD     ZERO         REMOVE S1N AND S2N INDEX 
+         + STORE     S1N          
+         + STORE     S2N
+         + R SUB     ONE          SET D1N=-1 TO SIGNAL IT IS A MATRIX WITH CONSTANT SUBSCRIPTS
+         + STORE     D1N
+EQ20     + TR        NEXT
+
+
+FACTVAR2 + R ADD     FACT         AS FACTVAR, CHECKING FACTOR IS A VARIABLE
+         + TR 0      FV2E
+         + TR +      FV2E
+         + TR        FACTVAR      HERE FACTOR IS <0 -> IS ALFA -> IS A VARIABLE -> PROCEED         
+FV2E     + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOFV      ERROR: NEEDS VARIABLE AS FACTOR (CANNOT BE BLANK OR NUMBER)
+
+FACTVAR3 + R ADD     FACT         AS FACTVAR, CHECKING FACTOR IS NOT BLANK (SHOULD BE VAR OR NUMBER)
+         + TR 0      FV3
+         + TR +      FV3
+         + TR        FACTVAR      HERE FACTOR IS <0 -> IS ALFA -> IS A VARIABLE -> TR TO PROCESS IT
+FV3      - R ADD     NUM
+         + TR 0      FV3E
+         + TR        FACTVAR      HERE FACTOR IS NOT A VARIABLE AND NUMBER IS NOT BLANK -> TR TO PROCESS IT
+FV3E     + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOFBL     ERROR: FACTOR CANNOT BE BLANK (CAN BE VARIABLE OR NUMBER)
+
+
+FACTVAR4 - R ADD     NUM          AS FACTVAR3, CHECKING IF FACT IS INTEGER (TO NOT ADD IT TO NUMBER POOL)
+         + TR 0      FACTVAR      TR IF FACTOR IS NOT A NUMBER
+         + R ADD     QF           IF INTEGER NUM, JUST PROCEED TO NEXT STEP WITHOUT SETTING FACTN, FACTREG
+         + SUB       D17          AS IF FACTOR IS BLANK
+         + TR 0      NEXT
+
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOIN2     ERROR: FACT/NUMBER MUST BE INTEGER
+
+                                  If factor is '  $' -> get temp var given in S1
+                                  RSV: this behaviour is not stated by manual but seems a logical way
+                                       to retrieve the params constant passed to called Region
+                                       if S1=0 or Blank, instead of Temp var 0, the MQ value vill be retrieved into acc
+                                       the Q of value retrieved is given by Qr (=0 if blank)
+
+FACTTMP  + NOOP      0000         ACCESSING A TEMP VAR
+
+         + R ADD     S1  
+         + A LEFT    0001         
+         + TR +      FTMP1
+
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRS1NUM     ERROR: S1 SHOULD BE A NUMBER (OR BLANK)
+
+FTMP1    + STORE     FACTN        FACTN=S1 * 2, FACTREG='T'
+         + R ADD     D32          'T'
+         + STORE     FACTREG
+         + R ADD     QR           QF (Q OF FACTOR)=QR (Q OF STEP RESULT)
+         + STORE     QF
+         + TR        NEXT
+
+FACTBLA  + R ADD     CLUE
+         + TR 0      NEXT         NO CLUE -> FACT IS BLANK -> LEAVE ALL BLANK
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRCLUBL     ERROR: CANNOT HAVE A NON BLANK CLUE WITH BLANK FACTOR
+
+
+FACTNUM  - R ADD     NUM
+         + TR 0      FACTBLA      NUM IS BLANK -> FACTOR IS BLANK
+
+                                  SEARCH IF NUMBER ALREADY IN TNUMPOOL
+
+         + R ADD     ZERO         
+         + STORE     N
+         + R ADD     TNPOOLAD
+         + STORE A   TNPOOL1
+TNPOOLAD + NOOP      TNUMPOOL
+
+SRNULOOP + R ADD     N
+         + SUB       NNUMS
+         + TR 0      SRNUNFND
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+
+TNPOOL1  - R ADD     /   /
+         - SUB       NUM
+         + TR 0      SRNUFND      NUM FOUND IN NUMBER POOL
+
+         + R ADD     TNPOOL1  
+         + SUB       TWO
+         + STORE A   TNPOOL1  
+         + TR        SRNULOOP
+         
+                                  NUMBER NOT FOUND IN POOL
+                                  ADD NUMBER TO NUMBER POOL
+
+SRNUNFND + R ADD     NNUMS        INCR NUM OF NUMS DEFINED
+         + ADD       ONE
+         + STORE     NNUMS
+         + STORE     N
+         + SUB       MAXNNUMS
+         + TR +      ADDNUMOV     ERROR IF > TABLE SIZE
+
+         + R ADD     N            POS IN TABLE: (POS-1)*2 
+         + SUB       ONE
+         + A LEFT    0001      
+         + ADD       TNPOOLAD   
+         + STORE A   TNPOOL2
+
+         + R ADD     N            N.EXT=RELNUM0 + (NUM+1) * 2
+         + ADD       ONE
+         + A LEFT    0001
+         + ADD       RELNUM0
+         + STORE     N.EXT
+
+         - R ADD     NUM       
+TNPOOL2  - STORE     /   /        SAVE NUM IN TNUMPOOL
+
+                                  SAVE NUM ADDRESS IN FACTN  
+
+SRNUFND  + R ADD     N            FACTN=RELNUM0 + NUM * 2, FACTREG='N'
+         + A LEFT    0001
+         + ADD       RELNUM0
+         + STORE     FACTN
+         + R ADD     D26          'N'
+         + STORE     FACTREG
+         + TR        NEXT         PROCEED WITH NEXT STEP
+
+ADDNUMOV + R ADD     *            
+         + TR        ERROR
+         + STOP      ERROVNUM     TOO MANY NUMBERS DEFINED
+
+EOR      + NOOP      0000         END OF REGION  
+
+                                  SAVE END OF RECORD TO TAPE
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT (PACT COMPACT CODE)
+         + STOP      TAPEOUT
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      CCLEN        LEN
+
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF FILE
+
+         + R ADD     *
+         + TR        RWDRUM       WRITE RELNUM0, NVARS, V.EXT AND N.EXT TO DRUM
+         + WRITE     0130         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      RELNUM0      ADDR OF DATA TO SAVE
+         + STOP      0004         4 HALF WORDS
+         + R ADD     *
+         + TR        RWDRUM       SAVE NUMBER POOL TO DRUM (WITHOUT OVERWRITTING RELNUM0, ... DRUM ADDR 0)
+         + WRITE     0130         DRUM INSTR
+         + STOP      0016         DRUM ADDR 
+         + STOP      MAXNNUMS     ADDR OF START OF TABLES
+         + STOP      1026         MAXNNUMS (1 HALF-WORD) + NNUMS (1 HW) + TNUMPOOL (1024 HW)
+
+         + WRITE EF  TAPEOUT      WRITE EOF IN TAPE OUT (COMPACT CODE)
+
+                                  IF SW6 ON THEN 
+                                  PRINT AN END OF PROCESSING MESSAGE
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGNPOOL     "   NUM POOL CONTENTS"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     ZERO         PRINT THE NUMBER POOL
+         + STORE     N
+         + R ADD     TNPOOLAD
+         + STORE A   TNPOOL9
+
+TNPOOL9A + R ADD     N
+         + SUB       NNUMS
+         + TR 0      TNPOOL9B
+         + R ADD     N
+         + ADD       ONE
+         + STORE     N
+
+TNPOOL9  - R ADD     /   /
+         - STORE     NUM
+         + R ADD     TNPOOL9
+         + SUB       TWO
+         + STORE A   TNPOOL9
+         
+         + R ADD     N
+         + ADD       N
+         + ADD       RELNUM0
+         + STORE     NNUM
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0201         INT AT COL 1
+         + STOP      NNUM
+         + STOP      0308         OCT AT COL 8
+         + STOP      NUM
+         + STOP      0315         OCT AT COL 15
+         + STOP      NUM2
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+         + TR        TNPOOL9A
+
+TNPOOL9B + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGNEXT      "NUM EXT"
+         + STOP      0215         INT AT COL 15
+         + STOP      N.EXT        EXTENSION (=SIZE IN HALF WORDS) OF NUMBERS REGION (IS EVEN)
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+ENDLOG1B + NOOP      0000
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEOUT      REWIND TAPE OUT WITH UPDATED PACT COMPACT CODE
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE
+
+         + STOP      READSTEP     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING NEXT SOURCE CODE STEP 
+
+
+           ORG       EVEN
+
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+NUM2       DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0            FACTN=ADDR (0, 2, 4, ..) FACTREG=' ', 'T', 'V', 'N'
+D2N        DEF       0            S1N/S2N=INDEX (IF <0), BLANK (IF =0), CONST (IF >0)
+NINST      DEF       0            D1N/D2N=HALF-WORD SIZE OF EACH DIMENSION
+NINCR      DEF       0                    D1N=-1 IF MATRIX/VECTOR WITH CONSTANT SUBSCRIPTS
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+N          DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+VARNAME    DEF       0            VARIABLE NAME
+VARNAM1    DEF       0            
+VARNAM2    DEF       0            
+VTYPE      DEF       0            VAR TYPE. 1=SCALAR, 2=VECTOR, 3=MATRIX
+LEN        DEF       0            HALF-WORD USED BY VARS
+Q          DEF       0
+D1         DEF       0            DIMENSIONS
+D2         DEF       0
+CONSTR     DEF       0            CONSTRAINT VAR NAME
+CONSTR1    DEF       0
+CONSTR2    DEF       0
+CTYPE      DEF       0            CONSTRAINT VAR TYPE. 0=NONE, 1=SYN, 2=IMS, 3=SUC, 9=REL
+RELADDR    DEF       0            RELATIVE ADDR IN VAR POOL
+PHASE      DEF       0
+FLAG       DEF       0
+SIZE       DEF       0            NUM OF HALF-WORDS NEEDED TO ACCOMODATE LEN USED BY SUB-CHAINS VARIABLES
+
+                                  TABLES (SHOULD AT EVEN LOCATION)
+
+RELNUM0    DEF       0            REL NUM ORIGIN
+NVARS      DEF       0            NUMBER OF VARS DEFINED
+V.EXT      DEF       0            EXTENSION (=SIZE IN HALF WORDS) OF VARIABLE REGION (IS EVEN)
+N.EXT      DEF       0            EXTENSION (=SIZE IN HALF WORDS) OF NUMBERS REGION (IS EVEN)
+
+FNDVAR     DEF       0            TEMP ON VAR SEARCH (SHOULD BE AT EVEN ADDR)
+FNDVAR1    DEF       0            TEMP ON VAR SEARCH
+FNDVAR2    DEF       0            TEMP ON VAR SEARCH
+DUMMY      DEF       0            NEEDED AS RWDRUM NEED EVEN NUMBER OF HALF-WORDS
+
+HASH       RES       200          VARIABLES NAMES HASH TABLE (199 ENTRIES)
+
+MAXNNUMS   DEF       512          MAX NUMBER OF NUMBERS THAT CAN BE DEFINED
+NNUMS      DEF       0            NUMBER OF NUMBERS IN NUMBER POOL
+TNUMPOOL   RES       1024         EACH ENTRY IN TABLE IS 2 HALF-WORDS
+
+MAXNVARS   DEF       341          MAX VARIABLES THAT CAN DE DEFINED IN ONE PROGRAM 
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+D7         DEF       7
+D8         DEF       8
+D17        DEF       17
+D26        DEF       26
+D32        DEF       32
+D34        DEF       34
+D199       DEF       199
+D1024      DEF       1024
+
+NVAR       DEF       0            TEMP
+NNUM       DEF       0
+HASHFLAG   DEF       0
+
+                                  TEXT
+
+ERRNOFAC   TXT       "NO FACTOR ALLOWED ON THIS PACT INSTR",0
+ERRNOINT   TXT       "S1 MUST BE INTEGER",0
+ERRNOIN2   TXT       "MUST BE INTEGER",0
+ERRNOIDX   TXT       "USE/SET/TEST SYNTAX ERROR",0            SHOULD BE    [DESTINATION STEP]  ALFAINDEX  ALFAINDEX|ALFAVAR|NUM
+ERRS1NOV   TXT       "S1 VARIABLE NOT FOUND",0
+ERRS2NOV   TXT       "S2 VARIABLE NOT FOUND",0
+ERRS12NN   TXT       "S1/S2 SHOULD BE NUMBER",0               ERROR: FOR INDEX USED: S1/S2 SHOULD BE A NUMBER
+ERRFANOV   TXT       "FACTOR VARIABLE NOT FOUND",0
+ERRNOFV    TXT       "NEEDS VARIABLE AS FACTOR",0             (CANNOT BE BLANK OR NUMBER)
+ERRNOFBL   TXT       "FACTOR CANNOT BE BLANK",0               (CAN BE VARIABLE OR NUMBER)
+ERRS1NUM   TXT       "S1 SHOULD BE A NUMBER (OR BLANK)",0
+ERROVNUM   TXT       "TOO MANY NUMBERS DEFINED",0
+ERRNOS1    TXT       "MISSING S1 INDEX",0                     BECAUSE VAR IS A VECTOR/MATRIX
+ERRNOS2    TXT       "MISSING S2 INDEX",0                     BECAUSE VAR IS A MATRIX
+ERRNAS1    TXT       "S1 INDEX NOT ALLOWED",0
+ERRNAS2    TXT       "S2 INDEX NOT ALLOWED",0
+ERREQBQ    TXT       "QR DOES NOT MATCH Q OF VARIABLE",0      IF QR SET ON "EQ FACT" INSTR, THE QR MUST MATCH THE Q OF VARIABLE
+ERRCLUBL   TXT       "BAD CLUE",0                             CANNOT HAVE A NON BLANK CLUE WITH BLANK FACTOR
+
+MSGSTART   TXT       "STORAGE ASSIGNEMENT   QR",0
+MSGSTAR2   TXT       "REG REL   QF",0
+MSGNEXT    TXT       "NUM EXT",0
+MSGNPOOL   TXT       "   NUM POOL CONTENTS OCT",0
+
+ALFTMP     TXT       '  $'
+
+OPEQ       EQU       D7           EQ
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEOUT    EQU       0257         OUTPUT UPDATED PACT COMPACT CODE TO TAPE 2 
+TAPEIN     EQU       0258         INPUT FROM TAPE 3 (PACT COMPACT CODE)
+
+
+

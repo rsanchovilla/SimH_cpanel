@@ -1,0 +1,142 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:PRTNLINE        PRINT A NEW LINE OF DATA
+
+                                  CLEARS THE CURRENT CARD IMAGE BUFFER, 
+                                  BUILD A LINE IN IT BASED ON PARAMS, THEN SEND 
+                                  CARD IMAGE TO PRINTER
+
+                                  PARAMS: FMT: TYPE + COLUMN TO START AT (1..72), BEING
+                                               TYPE=0100 -> PRINT STRINGZ  E.G. FMT=219 MEANS
+                                                   =0200 -> PRINT INT6     PRINT AN INT AT
+                                                   =0300 -> PRINT OCT6     COLUMN 19. INT/OCT
+                                                   =0400 -> PRINT CHR      ARE PRINTED WITH 6 DIGITS
+                                                   =0500 -> PRINT ALF
+                                                   =000N -> END OF PARAM LIST. SEND TO PRINTER
+                                                            IF N=1..6, SEND TO PRINTER ONLY IF 
+                                                            SENSE SWITCH N IN CONTROL PANEL 
+                                                            IS AT ON POSITION. IF N=0 ALLWAYS
+                                                            SEND LINE TO PRINTER
+                                                    IF TYPE IS NEGATIVE, PRINTING IS SKIPPED
+                                          DATA: LOCATION OF DATA TO PRINT
+                                          ...
+
+           HEAD      USE:PRTALF          PRINT PACKED ALFANUMERIC TEXT STRING
+           HEAD      USE:PRTSTR          PRINT ALFANUMERIC TEXT STRING, ZERO TERMINATED
+           HEAD      USE:PRTCHR          PRINT BASE48 CHAR 
+           HEAD      USE:PRTINT          PRINT DECIMAL INTEGER 
+           HEAD      USE:PRTOCT          PRINT OCTIONARY VALUE
+           HEAD      USE:CLRBUF          CLEAR CARD BUFFER 
+           HEAD      USE:PRINTCRD        PRINT CARD BUFFER
+
+
+
+PRTNLINE + ADD       TWO          PRINT A NEW LINE OF DATA
+         + STORE     PARAM        SAVE PARAM LIST ADDR
+         
+         + R ADD     *            CLEAR CARD BUFFER
+         + TR        CLRBUF 
+
+GPARAM   + R ADD     PARAM        GET PARAM PAIR FMT/DATA
+         + STORE A   P1
+         + ADD       ONE
+         + STORE A   P2
+         + ADD       ONE
+         + STORE     PARAM
+P1       + R ADD     /   /
+         + STORE     FMT
+         + TR +      P2           IF FMT < 0 THEM SKIP THIS PAIR FMT/DATA
+         + TR        GPARAM
+P2       + R ADD     /   /
+         + STORE     DATALOC      GET DATA ADDRESS PASED AS PARAM
+         + STORE A   P2A
+P2A      + R ADD     /   /
+         + STORE     DATA         GET EFFECTIVE DATA
+
+         + R ADD     ZERO
+         + LOAD MQ   FMT
+         + DIV       D100         ACC=REMAINDER=COL NUMBER, MQ=QUOTIEN=TYPE OF DATA
+         + STORE     COL
+         + R ADD     ZERO
+         + L LEFT    0018
+         + STORE MQ  FMT
+
+         + LOAD MQ   DATA
+         + R ADD     TYPETRAD
+         + ADD       FMT
+         + STORE A   TYPETR
+TYPETR   + TR        /   /        TR SELECTED ROUTINE
+TYPETRAD + STOP      TYPETRT      TYPE TRANSFER TABLE ADDRESS
+TYPETRT  + TR        EOL          FMT=0..6 (IE <100) -> END OF PARAM LIST -> END OF LINE 
+         + TR        TYSTR        FMT=1 -> PRINT A STRINGZ
+         + TR        TYINT        FMT=2 -> PRINT AN INT
+         + TR        TYOCT        FMT=3 -> PRINT AN OCT
+         + TR        TYCHR        FMT=4 -> PRINT A CHAR
+         + TR        TYALF        FMT=5 -> PRINT A 3-CHR PACKED ALFA STRING
+
+TYSTR    + R ADD     *            PRINT STRINGZ
+         + TR        PRTSTR
+DATALOC  + STOP      /   /
+         - STOP      COL          COLUMN WHERE TXT STARTS
+         + TR        GPARAM
+
+
+TYINT    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+         + TR        PRTINT
+         + STOP      0006         UP TO 6 DECIMAL DIGITS 
+         - STOP      COL          COLUMN WHERE TXT STARTS
+         + TR        GPARAM
+
+TYOCT    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+         + TR        PRTOCT
+         + STOP      0006         UP TO 6 DECIMAL DIGITS 
+         - STOP      COL          COLUMN WHERE TXT STARTS
+         + TR        GPARAM
+
+TYCHR    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+         + TR        PRTCHR
+         - STOP      COL          COLUMN WHERE TXT STARTS
+         + TR        GPARAM
+
+TYALF    + R ADD     *            MQ ALREADY LOADED WITH DATA TO PRINT
+         + TR        PRTALF
+         - STOP      COL          COLUMN WHERE TXT STARTS
+         + TR        GPARAM
+
+EOL      + R ADD     COL          SEND CARD BUFFER TO PRINTER AND RETURN TO CALLER
+         + TR 0      DOPRINT      =0 -> PRINT ALLWAYS (NO SENSE SW CHECK)
+         + ADD       D68          =1..6 -> SENSE 69..74 = OPERATOR'S PANEL SENSE SWITCH 1..6
+         + STORE A   CHKSW
+CHKSW    + SENSE     /   /         
+         + TR        RETURN       SW NOT AT ON POSITION
+      
+DOPRINT  + R ADD     *            PRINT CARD BUFFER
+         + TR        PRINTCRD
+
+RETURN   + R ADD     PARAM        PARAM-1 IS THE RETURN ADDR      
+         + SUB       ONE
+         + STORE A   EXIT
+EXIT     + TR        /   /        RETURN TO CALLER
+         
+
+ZERO     + STOP      0000
+ONE      + STOP      0001
+TWO      + STOP      0002
+D68      + STOP      0068
+D100     + STOP      100
+
+PARAM    + STOP      0000
+DATA     + STOP      0000
+FMT      + STOP      0000
+COL      + STOP      0000

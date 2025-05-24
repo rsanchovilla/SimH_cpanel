@@ -1,0 +1,751 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 66 LIST AND PUNCH ENTRY POINT, PACT COMPILER 
+           HEAD      USE:CLRBUF      CLEAR CARD BUFFER 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:PRTALF      PRINT PACKED ALFANUMERIC TEXT STRING
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:PRTCHR      PRINT BASE48 CHAR 
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:SRCHTBL     SEARCH TABLE
+           HEAD      USE:MEMCOPY     COPY MEMORY STORAGE FROM ONE ADDR TO ANOTHER
+           HEAD      USE:WRIBREL     WRITE DATA INTO A BINARY REL CARD IMAGE
+           HEAD      USE:WRITECRD    WRITE CARD (SEND CARD BUFFER TO CARD PUNCH DEVICE)
+           HEAD      USE:WRITECR2    WRITE CARD (SEND CARD BUFFER TO CARD PUNCH DEVICE)
+              
+                                  PURPOSE:
+                                  - LIST COMPACT CODE GENERATED
+                                  - PUNCH PUNCH PACT BINARY REL CARDS FOR PACT PROGRAM CODE 
+                                  - PUNCH PUNCH PACT BINARY REL CARDS FOR LIBRAY ROUTINES USED
+                                  - PUNCH TRANSFER CARD
+                                  - LIST ANY NON RESOLVED SYMBOL
+                                  - NOTE: THE LIB CODE BIN FORMAT IS DEFINED IN "01 CREATE LIB" AND USED IN "66 LIST AND PUNCH"
+
+                                  RSV: The PACT doc says that "two blank cards must be inserted after PACT source code deck"  
+                                       There is no original doc on the format or purpose of these cards. 
+
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+PRTOCT4  + ADD       TWO          PRINT OCTIONARY VALUE IN MQ, 4 DIGITS, 
+         + STORE A   POCTP1       LEFTMOST ZEROES SUPRESSED
+         + ADD       ONE
+         + STORE A   PRTOCTEX
+
+POCTP1   + R ADD     /   /        PARAM: COL WHERE TO START
+         + ADD       D3
+         + STORE     COLN         COL POINTS TO LEAST SIGNIFICANT DIGIT
+         + STORE MQ  NUM
+         
+PRTIOCG  + R ADD     NUM          GENERATE OCTIONARY DIGIT
+         + A RIGHT   0003
+         + STORE     NUM          REMOVE RIGHTMOST 3 BITS FROM NUM
+         + SUB       NUM
+         + A LEFT    0003         ACC=RIGHTMOST 3 BITS
+         + TR 0      PRTIOZ       TR IF THIS DIGIT IS ZERO TO PRINT A '0' (BASE48 CODE = 10) INSTEAD OF A BLANK (BASE48 CODE = 0)
+         + L RIGHT   0035         PUT DIGIT 1..9 TO PRINT IN MQ
+
+PRTOCTD  + R ADD     *            PRINT OCTINARY DIGIT
+         + TR        PRTCHR
+COLN     + STOP      0000
+
+         + R ADD     COLN         DECR COL NUMBER TO PRINT NEXT DIGIT
+         + SUB       ONE
+         + STORE     COLN
+
+         + R ADD     NUM          
+PRTOCTEX + TR 0      /   /
+         + TR        PRTIOCG
+
+  PRTIOZ + LOAD MQ   D10          ACC=BASE48 CODE FOR '0'
+         + TR        PRTOCTD      TR TO PRINT IT
+
+PCHCRD   + ADD       TWO          PUNCH A BINARY REL CARD        
+         + STORE A   PCHCRDEX
+         
+         + R ADD     *
+         + TR        WRITECR2     PUNCH THE CARD
+LBINCRD  + STOP      /   /        ADDR OF BINCARD BUFFER TO BE WRITTEN 
+                 
+PCHCRDEX + TR        /   /         
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "LIST AND PUNCH"
+         + STOP      0006         END OF LINE. 
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     NUM2         NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     MAXNINST     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING              
+         + R ADD     TSYMBEXT     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING              
+         + R ADD     OPADDR       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING              
+         + R ADD     FORMAT       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING              
+         + R ADD     REGLOC       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING              
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING              
+         + R ADD     LCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING              
+         + R ADD     DUMMY2       NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING              
+         
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+
+         + R ADD     *            
+         + TR        RWDRUM       READ TSYMBREF TABLE (SYMBOLS USED BY ALL REGIONS) FROM DRUM 
+         + READ      0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNSYMB     ADDR OF START OF TABLES
+         + STOP      1202         MAXNSYMB (1 HALF-WORD) + NSYMBS (1 HW) 
+                                  + TSYMBREF (600 HW) + TSYMBEXT (600 HW)
+
+         + R ADD     *            SET WRITE CARD ROUTINE TO BE CALLED WHEN FLUSHING THE REL BINARY CARD 
+         + TR        WRIBREL      RETURNS IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN BY WRITE ROUTINE  
+         + STOP      0002         +02 -> SET WRITE CARD ROUTINE
+         + STOP      PCHCRD       THE WRITE ROUTINE ADDRESS
+         + STORE A   LBINCRD      SAVE ADDR OF BINCARD BUFFER TO BE WRITTEN, RETURNED IN ACC
+
+         + R ADD     *
+         + TR        PRTNLINE
+         + STOP      0000         PRINT BLANK LINE
+
+         + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGHDR1      "REGSTEPOP  CFACT S1 S2 Q    N   LOC OPTREL  OPTREL  OPTREL  OPTREL"
+         + STOP      0134         STRINGZ AT COL 34
+         + STOP      MSGHDR2     
+         + STOP      0000         END OF LINE. 
+
+READREG  + R ADD     ZERO
+         + STORE     IRELADDR     REL ADDRESS USED BY I REGION 
+
+         + SENSE     0521         SHEET EJECTION -> NEW PAGE FOR REGION LISTING
+                                  NOTE: ON PACT PRINTER PANEL, THE FOLLOWING SENSE-IN ARE WIRED
+                                  SENSE 0519 -> PRINT BLANK LINE
+                                  SENSE 0520 -> PRINT TWO BLANK LINES
+                                  SENSE 0520 -> SHEET EJECTION (IE NEW PAGE)
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     IRELADDR     I RELATIVE LOCATION STEP
+         + STORE     IREL0        I RELATIVE LOCATION OF THIS STEP
+         + ADD       NINST        NUMBER OF INST IN THIS STEP
+         + STORE     IRELADDR 
+         
+         + R ADD     *
+         + TR        MCPRTPCH     PRINT AND PUNCH MC INSTR FOR CURRENT STEP
+                                  
+         + TR        READSTEP     PROCEED WITH NEXT STEP
+
+EOR      + NOOP      0000         END OF REGION  
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF FILE
+         
+         + R ADD     *            FLUSH ANY PENDING BINARY CARD  
+         + TR        WRIBREL
+         + STOP      0001         +01 -> FLUSH LAST CARD
+         
+         + R ADD     *
+         + TR        LIBPCH       PUNCH MC INSTR FOR USED LIBRARIES 
+         
+         + R ADD     *
+         + TR        PCHXFER      PUNCH TRANSFER CARD 
+                 
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1Z     TR IF NO LOG SELECTED
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGECOMP     "END OF COMPILATION"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+ENDLOG1Z + NOOP      0000 
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0000         PRINT BLANK LINE
+
+                                  END OF COMPILATION. Do NOT REWIND TAPES. 
+         + STOP      4095         STOP FOR COMPILATION OK
+
+                                  PRINT AND PUNCH ALL MACHINE CODE INSTRUCTIONS FOR CURRENT STEP
+MCPRTPCH + ADD       TWO
+         + STORE A   PRTPCHEX
+
+         + R ADD     ZERO         PRINT INSTR GENERATED IN THIS STEP
+         + STORE     MCNUM
+         + STORE     MCCOL
+
+         + R ADD     ONE          SIGNAL TO ADD THE PACT SOURCE CODE AS A COMMENT
+         + STORE     MC.PACT      ON FIRST MC INSTR TXT CARD PUNCHED 
+
+MCLOOP   + R ADD     MCNUM
+         + SUB       NINST
+         + TR 0      MCLOEND      TR TO PROCESS NEXT STEP IF ALL NINST INSTRUCTIONS PRINTED
+         + R ADD     MCNUM        INCR COUNT
+         + ADD       ONE
+         + STORE     MCNUM        GET MC INSTR FROM TINST[ (PRTMCNUM-1)*2 ]
+         + ADD       MCNUM
+         + SUB       TWO
+         + ADD       TINSTAD
+         + STORE A   MCAD1
+         + ADD       ONE
+         + STORE A   MCAD2
+         + R ADD     ZERO
+         + STORE     MC.REG       INIT REGION REFERENCED BY MC
+MCAD1    + R ADD     /   /         
+         + STORE A   MC.REG
+         + A RIGHT   0012
+         + STORE     MC.OP        MC.OP HAS NOW THE SIGNED OPCODE -31..31 
+
+MCAD2    + R ADD     /   /
+         + STORE     MC.ADDR
+
+         + R ADD     IREL0        SET MC.LOC = THE RELATIVE LOCATION OF STEP 
+         + ADD       MCNUM        ADD THE NUMBER OF INSTR (-1 BECAUSE STARTS AT 1)
+         + SUB       ONE
+         + STORE     MC.LOC
+
+         + R ADD     MCCOL        PRINT LOC ONLY IF MCCOL=0
+         + TR 0      MCL2         IF MCCOL=0 -> TR TO PRINT LOC 
+         + R ADD     D3           
+         + SUB       MCCOL
+         + TR +      MCL3         IF MCCOL=1..3 -> TR TO PRINT MC INSTR
+         + R ADD     ZERO         IF MCCOL=4 -> LINE FULL -> PRINT IT AND BACK TO COL 0
+         + STORE     MCCOL
+
+         + R ADD     *            PRINT CURRENT LINE
+         + TR        PRINTCRD
+         + R ADD     *            START NEW LINE 
+         + TR        CLRBUF
+
+         + R ADD     OP           IF OP=44 OPNCONST -> WE ARE PRINTING LOOP CONSTANT POOL -> PRINT LOC ON START OF LINE
+         + SUB       OPNCONST     ELSE JUST PRINT TH MC INSTR
+         + TR 0      MCL2
+         + TR        MCL3         TR TO PRINT MC INSTR
+
+MCL2E    - R ADD     0048
+MCL2     + R ADD     ZERO         CLEAR COLUMNS 32..36
+         + STORE A   MCL2R
+         + STORE A   MCL2S
+
+MCL2R    - R ADD     /   /        RSV: On original complier, formating of instr is done via printer
+         + A RIGHT   0005              control panel, using whole printer's 120 columns. 
+         + A LEFT    0005              As simulated printer only shows 80 cols on cpanel, 
+MCL2S    - STORE     /   /             we format the output programmatically to squeeze the 
+         + R ADD     MCL2R             printed line to fit in 72 columns. We do not use printer
+         + SUB       D4                wiring to add extra separation spaces between the printed
+         + STORE A   MCL2R             instr to not mess up the printout of compiler debug messages 
+         + STORE A   MCL2S
+         + SUB       MCL2E
+         + TR 0      MCL2B
+         + TR        MCL2R
+         
+MCL2B    + LOAD MQ   MC.LOC       PRINT INSTR LOCATION AT COL 33..36
+         + R ADD     *
+         + TR        PRTOCT4
+         + STOP      0033         AT COL 33
+
+MCL3     + R ADD     *
+         + TR        PRTMC        PRINT MC INSTRUCTION
+MCCOL    + STOP      /   /        COLUM WHERE TO PRINT = MCCOL*9 + 37
+
+         + R ADD     *            
+         + TR        PCHMC        PUNCH MC INSTRUCTION
+
+         + R ADD     ZERO         SIGNAL TO NOT ADD ANYMORE THE PACT SOURCE CODE AS A COMMENT
+         + STORE     MC.PACT      ON FIRST MC INSTR TXT CARD PUNCHED 
+
+         + R ADD     MCCOL        
+         + ADD       ONE          
+         + STORE     MCCOL
+         + TR        MCLOOP
+
+TINSTAD  + STOP      TINST  
+
+MCLOEND  + R ADD     *            PRINT CURRENT LINE (LAST ONE)
+         + TR        PRINTCRD
+
+PRTPCHEX + TR        /   /
+
+                                  PRINT ONE MACHINE CODE INSTRUCTION
+                                  ALL VALUES ARE IN OCTAL
+                                  EXCEPT A nnnn -> nnnn IS DECIMAL
+                                  EXCEPT V nnnn -> nnnn IS DECIMAL
+
+PRTMC    + ADD       TWO          PRINT MC INSTRUCTION MC.LOC, MC.OP, REG, MC.ADDR
+         + STORE A   PRTMCP1      PARAM: COLUM WHERE TO PRINT 0..3
+         + ADD       ONE
+         + STORE A   PRTMCEX
+
+PRTMCP1  + R ADD     /   /        COLUM WHERE TO PRINT 0..3
+         + STORE     VAL
+         + A LEFT    0003         X 8
+         + ADD       VAL          
+         + ADD       D37          COLUM WHERE TO PRINT = MCCOL*9 + 37
+         + STORE A   PMCOLSGN     COL FOR SIGN
+         + ADD       ONE
+         + STORE A   PMCOLMNE     COL FOR MNEMONIC OPCODE
+         + ADD       D3
+         + STORE A   PMCOLREG     COL FOR REGION TAG
+         + ADD       ONE
+         + STORE A   PMCOLADR     COL FOR ADDRESS WHEN PRINTED IN OCTAL
+         + STORE A   PMCOLAD2     COL FOR ADDRESS WHEN PRINTED IN DECIMAL
+
+         + LOAD MQ   D12          '+'
+         + R ADD     MC.OP
+         + TR +      PMC6
+         + LOAD MQ   D11          '-'
+PMC6     + R ADD     *            PRINT OP SIGN
+         + TR        PRTCHR
+PMCOLSGN + STOP      /   /
+
+         + R ADD     ZERO
+         + ADD AB    MC.OP
+         + ADD       TMNEAD
+         + STORE A   PMC7
+PMC7     + LOAD MQ   /   /
+         + R ADD     *            PRINT OP MNEMONIC
+         + TR        PRTALF
+PMCOLMNE + STOP      /   /
+
+         + R ADD     MC.REG       REGION 0..7
+         + ADD       TREGMNEA     CHARS IN TREGMNE ARE TXT ALFA VALUES  
+         + STORE A   PMC8         THUS ARE NEGATIVE
+PMC8     + R SUB     /   /        CHANGE SIGN BEFORE STORING IT IN MQ
+         + L RIGHT   0035
+         + R ADD     *            PRINT REGION LETTER V I S T A N
+         + TR        PRTCHR
+PMCOLREG + STOP      /   /
+                  
+         + R ADD     MC.REG       IF REGION = A OR REGION = V THEN PRINT ADDR IN DECIMAL
+         + TR 0      PMDEC        ELSE PRINT REGION IN OCTAL 
+         + SUB       TWO         
+         + TR 0      PMDEC
+
+         + LOAD MQ   MC.ADDR      PRINT ADDRESS IN OCTAL ON REGIONS I S T N 
+         + R ADD     *
+         + TR        PRTOCT4
+PMCOLADR + STOP      /   /        COLUMN TO PRINT AT
+         + TR        PRTMCEX  
+
+PMDEC    + LOAD MQ   MC.ADDR      PRINT ADDRESS IN DECIMAL ON REGIONS A V
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0004         LEN=4
+PMCOLAD2 + STOP      /   /        COLUMN TO PRINT AT
+         + TR        PRTMCEX  
+
+PRTMCEX  + TR        /   /        RETURN TO CALLER
+
+
+TMNEAD   + STOP      TMNE
+TREGMNEA + STOP      TREGMNE
+
+         
+                                  MACHINE CODE (MC) INSTRUCTION CARD LAYOUT. CODE = -00 
+
+                                   / ........ [CODE][ORIGIN    ] [TOP SYMBOL      ] ............[      CHECK SUM       ].
+                                  |  ........ [REGION INDICES                     ] [COUNT           ] .................. 
+                                  |  ........ [0=ABS, 1=I-REG, 2=VAR, 3=TEMP, 4=NUM, 5=PERISHABLE, 7=SYMBOL             ]
+                                  |  ........ ........^......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+
+                                  TOP SYMBOL IS THE REGION NAME (NEGATIVE ALFA BASE48 VALUE)
+                                  
+
+PCHMC    + ADD       TWO          PUNCH INSTR
+         + STORE A   PCHMCEX
+         
+         + R ADD     MC.OP        PUNCH INSTR CARD
+         + A LEFT    0012
+         + STORE     VAL
+         + R ADD     MC.ADDR
+         + STORE A   VAL          VAL = LMC.OP << 12 | LMC.ADDR
+
+         + R ADD     *            ADD MC INSTR TO CURRENT REL BINARY CARD
+         + TR        WRIBREL      
+         - STOP      0000         PARAM: BIN CARD TYPE REQUITED: -00 -> INSTR CARD, 
+         + STORE     REGION       PARAM: BIN CARD SYMBOL REQUITED
+         + STORE     MC.LOC       PARAM: LOCATION 0..4095 
+         + STOP      0000         PARAM: =0 -> DATA1=DATA TO STORE, DATA2=INDEX TAG
+         + STORE     VAL          PARAM: DATA 
+         + STORE     MC.REG       PARAM: DATA2 RIGHT HALF-WORD 
+
+PCHMCEX  + TR        /   /
+       
+
+LIBPCH   + ADD       TWO          PUNCH BINARY REL CARDS FOR USED LIBRARIES 
+         + STORE A   LIBPCHEX 
+         
+         + R ADD     ZERO
+         + STORE     LIB          INIT NAME OF CURRENT LIB BEING PROCESSED
+         + STORE     LPCHFLG      LIB PUNCH FLAG: =1 -> SHOULD PUNCH CURRENT LIB, =0 -> SHOULD SKIP CURRENT LIB
+
+READLIB  + R ADD     *            READ LIBRARY FROM TAPE
+         + TR        RDTAPE       
+         + STOP      TAPEBIN
+         + STOP      LIBCODE      BUF TO WRITE TO TAPE
+
+         + R ADD     LTYPE         
+         + SUB       D999         999 SIGNAL END OF LIB 
+         + TR 0      LIBSDONE     IF =0 -> NO MORE LIBRARY ROUTINE TO SCAN
+
+         + R ADD     LLIBNAM      IF READING NEXT RECORD OF CURRENT LIB ROUTINE 
+         + SUB       LIB          THEN TR TO LIBOK TO PUNCH IT IF REQUERIED
+         + TR 0      LIBOK
+                                  NEW LIB ROUTINE FOUND. CHECK IF MUST BE PUNCHED
+                                 
+         + R ADD     LLIBNAM      NEW ROUTINE
+         + STORE     LIB          IS SET AS CURRENT ONE
+         + R ADD     ZERO         RESET LIB PUNCH FLAG
+         + STORE     LPCHFLG      LIB PUNCH FLAG: =1 -> SHOULD PUNCH CURRENT LIB, =0 -> SHOULD SKIP CURRENT LIB
+                                           
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TSYMBREF     ... GLOBAL SYMBOL TABLE
+         + STOP      NSYMBS       ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NSYMBS
+         + STOP      LLIBNAM      ... THE VALUE TO FIND 
+         
+         + TR 0      READLIB      ROUTINE IN LIBRARY IS NOT REFERENCED IN PACT PROG SYMBOL LIST -> TR TO 
+                                  TRY WITH NEXT ROUTINE IN LIBRARY
+
+         + R ADD     ONE          SET LIB PUNCH FLAG
+         + STORE     LPCHFLG      LIB PUNCH FLAG: =1 -> SHOULD PUNCH CURRENT LIB, =0 -> SHOULD SKIP CURRENT LIB
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0401         CHAR AT COL 1
+         + STOP      D45          '/'
+         + STOP      0502         ALFA TXT
+         + STOP      LLIBNAM      LIB ROUTINE TO BE ADDED TO PACT PROGRAM
+         + STOP      0405         CHAR AT COL 5
+         + STOP      D45          '/'
+         + STOP      0107         STRINGZ AT COL 7
+         + STOP      MSGPCHOK     "LIB ROUTINE PUNCHED"
+         + STOP      0006         END OF LINE. PRINT ONLY IF SW6 IS ON
+         
+LIBOK    + R ADD     LPCHFLG      LIB PUNCH FLAG: =1 -> SHOULD PUNCH CURRENT LIB, =0 -> SHOULD SKIP CURRENT LIB
+         + TR 0      READLIB      ROUTINE IN LIBRARY NOT TO BE PUNCHED -> TR TO TRY WITH NEXT RECORD IN LIBRARY
+         
+         + R ADD     *
+         + TR        WRITECR2     PUNCH THE CARD
+         + STOP      LSRC         ADDR OF CARD IMAGE BUFFER 
+         
+         + TR        READLIB      ROUTINE IN LIBRARY PUNCHED -> TR TO PROCEED WITH NEXT RECORD IN LIBRARY
+         
+LIBSDONE + R ADD     ZERO         SCAN TSYMBXET. IF = -1 -> CORRESPONDING TSYMBREF IS NOT RESOLVED
+         + STORE     N
+         + R ADD     TSYMBAD
+         + STORE A   SYNAME
+         
+SYLOOP   + R ADD     N
+         + SUB       NSYMBS
+         + TR 0      SYLOEND      EXIT LOOP, ALL SYMBOLS SCANNED
+
+SYNAME   + R ADD     /   /        GET SYMBOL NAME (EITHER A PACT REGION OR A LIBRARY ROUTINE)
+         + STORE     SY
+         + R ADD     SYNAME
+         + ADD       MAXNSYMB
+         + STORE A   SYEXT
+SYEXT    + R ADD     /   /        GET SYMBOL EXTENSION
+         + TR +      SYLOOP1      IF EXTENSION < 0 -> SYMBOL NOT RESOLVED -> PRINT A MESSAGE
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0401         CHAR AT COL 1
+         + STOP      D45          '/'
+         + STOP      0502         ALFA TXT
+         + STOP      SY           SYMBOL NOT RESOLVED
+         + STOP      0405         CHAR AT COL 5
+         + STOP      D45          '/'
+         + STOP      0107         STRINGZ AT COL 7
+         + STOP      MSGSYNOK     "ROUTINE NOT IN LIB"
+         + STOP      0000         END OF LINE. 
+         
+         + STOP      SYLOOP1      STOP BECAUSE ROUTINE NOT RESOLVED. PRESS START TO CONTINUE
+         
+SYLOOP1  + R ADD     N
+         + ADD       ONE
+         + STORE     N
+         + R ADD     SYNAME
+         + ADD       ONE
+         + STORE A   SYNAME
+         + TR        SYLOOP
+
+TSYMBAD  + STOP      TSYMBREF
+SYLOEND  + NOOP      0000
+
+LIBPCHEX + TR        /   /
+
+
+                                  ABSOLUTE MACHINE CODE (MC) INSTRUCTION CARD LAYOUT (THE TRANSFER CARD)
+
+                                   / ........ .................. .................. .................. .................. 
+                                  |  ........ .................. .................. .................. .................. 
+                                  |  ........ .................. .................. .................. .................. 
+                                  |  ........ ........^......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] 
+                                  |  ........ [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] [ABS MC INSTR    ] 
+
+PCHXFER  + ADD       TWO          PUNCH TRANSFER CARD 
+         + STORE A   PCHXFEX
+
+         + R ADD     *            NEW CARD: CLEAR CARD BUFFER 
+         + TR        CLRBUF
+
+         + R ADD     *            COPY XFER BINARY PROGRAM TO CARD BUFFER
+         + TR        MEMCOPY
+         + STOP      XFERBIN
+         + STOP      0000
+         + STOP      D5
+
+         + R ADD     *
+         + TR        WRITECRD     WRITE BINARY TRANSFER CARD
+
+PCHXFEX  + TR        /   /        PROCEED
+
+                                  XFER BINARY PROGRAM
+XFERBIN  + R ADD     4095         [4095]=ABS LOC OF 1ST REGION 
+         + STORE A   0003
+         + R ADD     0002         R ADD *
+         + TR        0000         TR    REGION
+         + STOP      0000         STOP  END OF COMPILED PROGRAM EXECUTION
+
+
+
+
+           ORG       EVEN
+
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+NUM2       DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0            FACTN=ADDR (0, 2, 4, ..) FACTREG=' ', 'T', 'V', 'N'
+D2N        DEF       0            S1N/S2N=INDEX (IF <0), BLANK (IF =0), CONST (IF >0)
+NINST      DEF       0            D1N/D2N=HALF-WORD SIZE OF EACH DIMENSION
+NINCR      DEF       0
+TINST      RES       200          MACHINE CODE: 1ST HALF-WORD OPCODE + REGION/LOCATION INTO STEP (FOR TRANSFERS)
+                                                2ND HALF-WORD ADDR INTO REGION/DESTINATION STEPN (FOR TRANSFERS)
+
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+MAXNINST   DEF       100          MAX NUMBER OF MACHINE CODE INSTRUTIONS PER STEP
+
+                                  LIBRARY CODE RECORD.
+
+LTYPE      DEF       0            TYPE OF RECORD: 100=REGULAR RECORD. 999=END OF LIB 
+LLIBNAM    DEF       0            LIBRARY ROUTINE NAME TO WITCH THIS RECORD BELONGS
+LSRC       RES       48           CARD IMAGE OF PACT REL ASSEMBLER CARD/REL BINARY CARD (24 FULL WORDS)
+OPADDR     DEF       0            = +/- MC.OP  MC.ADDR
+FORMAT     DEF       0            =0 -> BINARY FORMAT, =1 -> TEXT FORMAT (MC INSTR), =2 -> TEXT FORMAT (NUM), 
+REGLOC     DEF       0            = + MC.REG MC.LOC (REG A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+DUMMY      DEF       0            Spare
+
+LIBCODE    EQU       LTYPE        LOCATION OF LIBRARY CODE RECORD START
+
+LCLEN      DEF       54           LENGH OF LIBRARY CODE RECORD 
+DUMMY2     DEF       0            Spare
+
+                                  TABLES (SHOULD BE AT EVEN LOCATION)
+
+MAXNSYMB   DEF       600          MAX 600 SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+NSYMBS     DEF       0            NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+TSYMBREF   RES       600          GLOBAL SYMBOL TABLE: ALFA VALUE OF SYMBOLS REFERENCED. <0 IF NOT RESOLVED, >0 IF RESOLVED
+TSYMBEXT   RES       600          EXTENSION (=SIZE) FOR DEFINED SYMBOLS
+
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D3         DEF       3
+D4         DEF       4
+D5         DEF       5
+D10        DEF       10
+D11        DEF       11
+D12        DEF       12
+D37        DEF       37
+D44        DEF       44
+D45        DEF       45
+D999       DEF       999
+
+MC.PACT    DEF       0            =1 -> ADD PACT SOURCE CODE LINE AS COMMENT ON MC INSTR PUNCHED AS RELATIVE TEXT CARD
+MC.LOC     DEF       0            MC OPCODE RELATIVE LOCATION
+MC.OP      DEF       0            MC OPCODE GENERATED
+MC.REG     DEF       0            REGION REFERENCED BY MC OPCODE GENERATED
+MC.ADDR    DEF       0            MC ADDR GENERATED. BOTH WILL BE STORED IN TINST TABLE IN COMPCAT CODE RECORD
+MCNUM      DEF       0            NEXT INSTR TO PROCESS
+IRELADDR   DEF       0            I RELATIVE LOCATION OF STEP
+IREL0      DEF       0            I RELATIVE LOCATION OF THIS STEP
+VAL        DEF       0
+N          DEF       0
+SY         DEF       0
+LIB        DEF       0
+LPCHFLG    DEF       0            LIB PUNCH FLAG: =1 -> SHOULD PUNCH CURRENT LIB, =0 -> SHOULD SKIP CURRENT LIB
+
+                                  TEXT
+
+MSGSTART   TXT       "LIST AND PUNCH",0
+MSGHDR1    TXT       "REGSTEPOP  CFACT S1 S2 Q    N",0
+MSGHDR2    TXT       "LOC OP T REL OP T REL OP T REL OP T REL",0
+
+MSGPCHOK   TXT       "LIB ROUTINE PUNCHED",0
+MSGSYNOK   TXT       "ROUTINE NOT IN LIB",0
+MSGECOMP   TXT       "END OF COMPILATION",0
+
+OPNCONST   EQU       D44          CONSTANT LOOP POOL (CARD OP IS PRINTED AS "HALT")
+
+                                  REL ASSEMBLY REGION INDEXS
+
+TREGMNE    TXT       '  A'
+           TXT       '  I'
+           TXT       '  V'
+           TXT       '  T'
+           TXT       '  N'
+           TXT       '  P'        PERISHABLE STORAGE (=LIB LOCAL VARS)
+           TXT       '  #'        UNUSED
+           TXT       '  S'
+
+TMNE       TXT       'H  '        STOP/HALT
+           TXT       'T  '        TRANSFER
+           TXT       'TF '        TRANSFER ON OVERLOF
+           TXT       'TP '        TRANSFER ON PLUS
+           TXT       'TZ '        TRANSFER ON ZERO
+           TXT       'S  '        SUBTRACT
+           TXT       'RS '        RESET AND SUBTRACT
+           TXT       'SV '        SUBTRACT ABSOLUTE VALUE
+           TXT       'N  '        NO OPERATION
+           TXT       'A  '        ADD
+           TXT       'RA '        RESET AND ADD
+           TXT       'AV '        ADD ABSOLUTE VALUE
+           TXT       'ST '        STORE
+           TXT       'SA '        STORE ADDRESS
+           TXT       'SM '        STORE MQ
+           TXT       'LM '        LOAD MQ
+           TXT       'M  '        MULTIPLY
+           TXT       'MR '        MULTIPLY AND ROUND
+           TXT       'D  '        DIVIDE
+           TXT       'R  '        ROUND
+           TXT       'LL '        LONG LEFT SHIFT
+           TXT       'LR '        LONG RIGHT SHIFT
+           TXT       'AL '        ACCUMULATOR LEFT SHIFT
+           TXT       'AR '        ACCUMULATOR RIGHT SHIFT
+           TXT       'RD '        READ
+           TXT       'RB '        READ BACKWARDs
+           TXT       'W  '        WRITE
+           TXT       'WE '        WRITE END OF FILE
+           TXT       'RW '        REWIND TAPE
+           TXT       'SD '        SET DRUM DDR
+           TXT       'SE '        SENSE
+           TXT       'C  '        COPY
+                                  PACT Compiler does not generates EX (Extract) instruction
+                                  so there is no need to add it here. EX inst
+                                  can be used in libraries
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+TAPEBIN    EQU       0256         COMPILER PROGRAM TAPE 1 (HAS THE LIBRARY ROUTINES REL BIN CODE)
+TAPEIN     EQU       0259         PACT COMPILED COMPACT CODE 
+

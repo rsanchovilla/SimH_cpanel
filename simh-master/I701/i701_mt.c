@@ -381,6 +381,10 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 fast)
     }
     /* If tape has no file attached return error */
     if ((uptr->flags & UNIT_ATT) == 0) {
+        if (cmd==OP_REWIND) {
+            // rewind a non attached tape -> ignore command
+            return SCPE_OK;
+        }
         sim_debug(DEBUG_EXP, dptr, "Tape %d: opcode %02d attempted on tape without file attached\n", unit, cmd);
         return STOP_TAPECHECK;
     }
@@ -534,12 +538,14 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 fast)
     // Timing calculation
     // calc msec = time remaining for tape to accept command
     // calc nTick = number to ticks command needs to be executed by cpu
-    if ((mt_info[unit].ReadyTickCount == 0) || (GlobalTicksCount > mt_info[unit].ReadyTickCount)) {
+    if ((FAST) || (CpuSpeed_Acceleration<=0) ||
+        (mt_info[unit].ReadyTickCount == 0) || (GlobalTicksCount > mt_info[unit].ReadyTickCount)) {
         // =0 when exiting fast mode or tape disconnected -> resync with global tick count
         mt_info[unit].ReadyTickCount = GlobalTicksCount; 
         IOTicks = 0; 
     } else {
         IOTicks = (int) (mt_info[unit].ReadyTickCount - GlobalTicksCount);
+
         sim_debug(DEBUG_CMD, &mt_dev, "Tape command has been waiting for %d Ticks\n", IOTicks);
     }
     // next command must be given within this time. If given earlier, cpu waits

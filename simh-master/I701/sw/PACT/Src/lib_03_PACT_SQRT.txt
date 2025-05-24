@@ -1,0 +1,116 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:SQRTFN           SQRT PACT instruction 
+                                          Return value with Q=integer part ( (Q+1)/2 )
+                                          
+                                          computing procedure:
+                                          USING NEWTON METHOD: 
+                                           sqrt A ->  X[n+1]= 0.5 * (X[n] + A/X[n]) 
+                                                      starting with X[0]=A
+                                                      root is X[n] when X[n]-X[n+1]=0
+
+SQRTFN   - STORE MQ  XX           SAVE FUNCTION ARGUMENT
+         + ADD       TWO
+         + STORE A   SQRTP1
+         + ADD       ONE
+         + STORE A   SQRTEX       RETURN TO CALLER         
+
+SQRTP1   + R ADD     /   /        GET Q OF ARGUMENT -35..+35
+         + STORE     QA
+
+         - R ADD     XX
+         + TR 0      SQRTEX       EXIT AS SQRT(0) IS ZERO
+         + TR +      SQ1          IF ARGUMENT IS POSITIVE TR TO PROCEED
+         + TR        SQRTEX       IF ARGUMENT IS NEGATIVE EXIT RETURNING IT
+
+                                  INIT CURRENT ROOT GUESS
+SQ1      - STORE     ROOT
+         + R ADD     ZERO
+         + STORE     Q
+
+LOOP     - R ADD     ROOT
+         - STORE     PREV         SAVE PREVIOUS ROOT GUESS
+
+LOOPSHF  - R ADD     ROOT 
+         - SUB       XX
+         + TR 0      SQ2
+         + TR +      XX.LS.RT     IF XX < ROOT TR TO CALC TERM=XX/ROOT
+
+SQ2      - R ADD     XX           HERE XX > ROOT, SO DIVIDE XX BY 2 TO AVOID DIV CHECK
+         - A RIGHT   0001         AFTER DIVISION XX WILL BE SHIFTED BACK Q PLACES
+         - STORE     XX
+         + R ADD     Q            INCR NUM OF PLACES TO SHIFT BACK DIV RESULT
+         + ADD       ONE
+         + STORE     Q
+         + TR        LOOPSHF
+
+XX.LS.RT - R ADD     XX           COMPUTE: TERM=XX/ROOT
+         + LOAD MQ   ZERO
+         - DIV       ROOT         
+         - STORE MQ  TERM         MQ=XX/ROOT AT GIVEN Q         
+
+         + R ADD     QA
+         + SUB       Q
+         + STORE A   SHR2
+         - R ADD     TERM
+SHR2     + A RIGHT   /   /        NOW ACC=TERM=XX/ROOT AT Q=QA
+
+         - ADD       ROOT         COMPUTE: ROOT=(TERM + ROOT)/2
+         + A RIGHT   0001
+         - STORE     ROOT
+
+         - SUB       PREV         IF ROOT DOES NOT CHANGES FROM ITS PREVIOUS VALUE -> ROOT FOUND -> EXIT LOOP
+         + TR 0      LOOPE
+         + TR        LOOP
+
+LOOPE    + R ADD     QA           CALC Q OF RESULT:  QR=integer part ( (QA+1)/2 )
+         + ADD       ONE
+         + A RIGHT   0001
+         + STORE     QR  
+                                  NORMALIZE ROOT FROM QA TO Q=QR OF RESULT=integer part ( (Q+1)/2 )
+         + R ADD     QA
+         + SUB       QR
+         + TR +      SHL          IF Q>QR -> TR TO SHIFT ARG LEFT
+
+         + STORE A   SHR1
+         - R ADD     ROOT
+SHR1     + A RIGHT   /   /        SHIFT XX SO ITS Q IS NOW Q=QR
+         + TR        SQRTEX   
+
+SHL      + STORE A   SHL1
+         - R ADD     ROOT
+SHL1     + A LEFT    /   /        SHIFT XX SO ITS Q IS NOW QR
+
+SQRTEX   + TR        /   /        RETURN TO CALLER         
+                                
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+
+           ORG       EVEN
+
+XX         RES       2
+TERM       RES       2
+ROOT       RES       2
+PREV       RES       2
+
+QA         RES       1
+QR         RES       1
+Q          RES       1            
+
+
+
+
+
+

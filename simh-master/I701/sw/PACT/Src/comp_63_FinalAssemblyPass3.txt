@@ -1,0 +1,554 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STAGE 63 FINAL ASSEMBLY PASS 3, PACT COMPILER 
+           HEAD      USE:CHAIN       LOAD ABS PROGRAM RECORDS FROM TAPE, 
+           HEAD      USE:CLRBUF      CLEAR CARD BUFFER 
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:PRTALF      PRINT PACKED ALFANUMERIC TEXT STRING
+           HEAD      USE:PRTINT      PRINT DECIMAL INTEGER 
+           HEAD      USE:PRTCHR      PRINT BASE48 CHAR 
+           HEAD      USE:RDTAPE      READ MAGNETIC TAPE
+           HEAD      USE:WRTAPE      WRITE MAGNETIC TAPE
+           HEAD      USE:RWDRUM      READ FROM DRUM / WRITE TO DRUM
+           HEAD      USE:SRCHTBL     SEARCH TABLE
+           HEAD      USE:READTBL     TAKE VALUE FROM TABLE
+              
+                                  PURPOSE:
+                                  - READ GLOBAL SYMBOL TABLE (TSYMBREF) FROM DRUM 
+                                       DRUM 0128, ADDR 0000     MAXNSYMB     MAX 600 SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+                                                       0001     NSYMBS       NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+                                                       0002     TSYMBREF     GLOBAL SYMBOL TABLE: ALFA VALUE (NEGATIVE) OF SYMBOLS REFERENCED BY A TR SYMBOL MC INSTR IN ALL PROGRAM
+                                  - FOR EACH REGION
+                                     - FOR EACH STEP, FOR EACH INSTR OF STEP
+                                        - IF REG='S' IN INSTR, SET THE SYMBOL NUMBER REFERENCED
+                                          IN ADDR PART OT MC INSTRUCTION. 
+                                        - IF INSTR REFERENCES A STEPN, COMPUTE
+                                          THE DESTINATION ADDR USING STEPN LOCATIONS CALCULATED IN PASS2
+                                     - SAVE TO TAPE THE UPDATED COMPACT CODE 
+                                  - SAVE GLOBAL TSYMBOL TABLE TO DRUM 
+                                       DRUM 0130, ADDR 0004     T.EXT        EXTENSION (=SIZE IN HALF WORDS) OF TEMP VARS REGION (IS EVEN)
+                                                       0005     I.EXT        EXTENSION (=SIZE IN HALF WORDS) OF TOTAL INSTR OF PROGRAM
+
+LOADCC   + ADD       TWO          LOAD PACTSCR INTO CARD IMAGE SO 
+         + STORE A   CPCCEX       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     ZERO         COPY TO LEFT SIDE OF SOURCE CODE CARD IMAGE
+         + STORE A   CPCC1        AT 0..46 FROM PACTSCR
+         + R ADD     CPCC2
+         + STORE A   CPCC 
+CPCC     - R ADD     /   /
+CPCC1    - STORE     /   /
+         + R ADD     CPCC1
+         + SUB       TWO
+         + STORE A   CPCC1B
+         + R ADD     ZERO
+CPCC1B   - STORE     /   /
+         + R ADD     CPCC
+         + SUB       TWO
+         + STORE A   CPCC
+         + R ADD     CPCC1
+         + SUB       D4
+         + STORE A   CPCC1
+         + SUB       CPCCE
+CPCCEX   + TR 0      /   /        RETURN TO CALLER
+         + TR        CPCC
+CPCCE    - STORE     0048         LAST LOCATION TO COPY FROM 
+CPCC2    + NOOP      PACTSRC      PACTSRC = FIRST LOCATION TO COPY FROM
+
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "FINAL ASSEMBLY PASS 3"
+         + STOP      0006         END OF LINE. PRINT IF SWITCH 6 IS ON
+
+         + R ADD     ZERO         CLEAR CC RECORD
+         + STORE     REGION     
+         + STORE     STEP       
+         + STORE     OP         
+         + STORE     FACT       
+         + STORE     S1         
+         + STORE     S2         
+         + STORE     QR         
+         + STORE     QF         
+         - STORE     NUM        
+         + STORE     CLUE       
+         + STORE     STEPN      
+         + STORE     FACTN      
+         + STORE     FACTREG    
+         + STORE     S1N        
+         + STORE     S2N        
+         + STORE     D1N        
+         + STORE     D2N        
+         + STORE     NINST      
+         + STORE     NINCR 
+         + R ADD     CCLEN        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+         + R ADD     MAXNINST     NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + R ADD     ZERO
+         + STORE     I.EXT        EXTENSION (=SIZE IN HALF WORDS) OF TOTAL INSTR OF PROGRAM
+         + STORE     NSYMBS       NUMBER OF ENTRIES IN TSYMBOLS TABLE (SYMBOLS USED BY ALL REGIONS)
+
+         + R ADD     TWO          TEMp REGION HAS A MIN SIZE OF 2 TO HOLE T0 USED AS TEMP VAR FOR ARITHMETIC CALCS 
+         + STORE     T.EXT        EXTENSION (=SIZE IN HALF WORDS) OF TEMP VARS REGION (IS EVEN)
+
+         + R ADD     *
+         + TR        RWDRUM       READ TSYMBREF TABLE (SYMBOLS USED BY ALL REGIONS) FROM DRUM 
+         + READ      0128         DRUM INSTR
+         + STOP      0000         DRUM ADDR 
+         + STOP      MAXNSYMB     ADDR OF START OF TABLES
+         + STOP      0602         MAXNSYMB (1 HALF-WORD) + NSYMBS (1 HW) + TSYMBREF (600 HW) 
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEINR      REWIND TAPE IN (REFERENCES RESOLVED)
+         + REWIND    TAPEOUT      REWIND TAPE OUT WITH PACT COMPACT CODE WITH INSTR REFERENCES RESOLVED
+
+READREG  + R ADD     *            
+         + TR        RDTAPE       READ MAGNETIC TAPE (REFERENCES TABLE)
+         + STOP      TAPEINR
+         + STOP      MAXNREFS     READ MAXREFS (1 HW) + NREFS (1 HW)
+         + TR OV     RR3          NO MORE REFERENCES DATA 
+
+         + R ADD     *            
+         + TR        RDTAPE       READ MAGNETIC TAPE (STEPN REFERENCES FOR THIS REGION)
+         + STOP      TAPEINR
+         + STOP      TSTEPREF   
+
+         + R ADD     *            
+         + TR        RDTAPE       READ MAGNETIC TAPE 
+         + STOP      TAPEINR
+         + STOP      TSTEPLOC   
+
+RR3      + R ADD     ZERO
+         + STORE     IRELADDR     REL ADDRESS USED BY I REGION 
+
+READSTEP + R ADD     *            READ PACT USER PROGRAM SOURCE CODE FROM TAPE IN
+         + TR        RDTAPE
+         + STOP      TAPEIN
+         + STOP      CCODE        BUF TO READ IN FROM TAPE
+         + TR OV     EOF          TR IF END OF FILE
+
+         + R ADD     OP
+         + TR 0      EOR          TR IF END OF REGION
+
+         + R ADD     *            LOAD PACTSCR INTO CARD IMAGE SO 
+         + TR        LOADCC       CURRENT PACT SOURCE CODE CAN BE PRINTED
+
+         + R ADD     IRELADDR     I RELATIVE LOCATION STEP
+         + STORE     IREL0        I RELATIVE LOCATION OF THIS STEP
+         + ADD       NINST        NUMBER OF INST IN THIS STEP
+         + STORE     IRELADDR 
+         + R ADD     I.EXT        EXTENSION (=SIZE IN HALF WORDS) OF TOTAL INSTR OF PROGRAM
+         + ADD       NINST        NUMBER OF INST IN THIS STEP
+         + STORE     I.EXT     
+         
+         + R ADD     ZERO         CHECK INSTR GENERATED IN THIS STEP
+         + STORE     MCNUM
+
+MCLOOP   + R ADD     MCNUM
+         + SUB       NINST
+         + TR 0      NEXT         TR TO PROCESS NEXT STEP IF ALL NINST INSTRUCTIONS PRINTED
+         + R ADD     MCNUM        INCR COUNT
+         + ADD       ONE
+         + STORE     MCNUM        GET MC INSTR FROM TINST[ (PRTMCNUM-1)*2 ]
+         + ADD       MCNUM
+         + SUB       TWO
+         + ADD       TINSTAD
+         + STORE A   MCAD1
+         + STORE A   MCAD1B
+         + ADD       ONE
+         + STORE A   MCAD2
+         + STORE A   MCAD2B
+         + R ADD     ZERO
+         + STORE     MC.REG       INIT REGION REFERENCED BY MC
+MCAD1    + R ADD     /   /         
+         + STORE A   MC.REG
+         + A RIGHT   0012
+         + STORE     MC.OP        MC.OP HAS NOW THE SIGNED OPCODE -31..31 
+
+MCAD2    + R ADD     /   /
+         + STORE     MC.ADDR
+         + TR +      MC3          IF MC.ADDR >=0 THEN MC.REG HOLDS THE REGION FOR MC.ADDR 
+                                  IF MC.ADDR <0 THEN MC.REG VAR HOLDS THE LOCATION INTO STEPN REFERENCED BY MC.ADDR
+         + R SUB     MC.ADDR      LOCATION IN STEP GIVEN BY MC.ADDR. 
+         + STORE     TRSTEPN      MAKES MC.ADDR POSITIVE. IT IS THE DESTINATION STEP
+
+         + R ADD     *
+         + TR        SRCHTBL      SEARCH TABLE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TSTEPREF     ... REFERENCES TABLE
+         + STOP      NREFS        ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NREGIONS 
+         + STOP      TRSTEPN      ... THE VALUE TO FIND 
+
+         + TR 0      BADREF       COMPILER ERROR: STEPN REFERENCE NOT FOUND IN REFERENCE TABLE
+         + STORE     IREF
+
+         + R ADD     *            READ FIELDS FROM TREF TABLES
+         + TR        READTBL
+         + STOP      TSTEPLOC
+         + STOP      IREF     
+         + STOP      MC.ADDR      = TSTEPLOC[IREF] 
+
+         + R ADD     MC.ADDR      MC.ADDR HAS NOW THE RESOLVED IREL ADDR FOR DESTINATION STEPN
+         + ADD       MC.REG       ADD MC.REG THAT CONTAINS THE LOCATION INTO THE STEP
+         + SUB       ONE          MINUS ONE BECAUSE LOCATION INTO STEP STARTS AT 1
+         + STORE     MC.ADDR
+         + R ADD     REG.I
+         + STORE     MC.REG       SET REGION 'I'
+
+         + TR        MC5
+TINSTAD  + STOP      TINST      
+
+MC3      + R ADD     MC.REG
+         + SUB       REG.S
+         + TR 0      MC4          PROCESS A TR TO SYMBOL
+         + TR        MC5          
+
+MC4      + R SUB     MC.ADDR      MAKES MC.ADDR NEGATIVE. IT IS THE DESTINATION ALFA SYMBOL
+         + STORE     TRSYMBOL
+
+         + R ADD     *
+         + TR        SRCHTBL       SEARCH TABLE VALUE, RETURN ACC=FOUND ENTRY (=0 IF NOT FOUND)
+         + STOP      TSYMBREF     ... REFERENCES TABLE
+         + STOP      NSYMBS       ... SEARCH FROM HALF-WORD 1 UP TO (AND INCLUDING) NREFS 
+         + STOP      TRSYMBOL     ... THE VALUE TO FIND 
+
+         + TR 0      BADREF       COMPILER ERROR: SYMBOL REFERENCE NOT FOUND IN REFERENCE TABLE
+         + STORE     IREF         IREF IS THE SYMBOL NUMBER (=THE ENTRY IN TABLE)
+         + SUB       ONE
+         + A LEFT    0001         FOR IREF=1,2,3,... -> ADD=0000, 0002, 0004, ....
+         + STORE     MC.ADDR      STORE THE ADDR ON REGION TABLE FOR THIS SYMBOL 
+                  
+MC5      + R ADD     MC.OP        REPACK MC.OP AND MC.ADDR, AND STORE THEM BACK INTO TINST TABLE OF CC RECORD
+         + A LEFT    0012
+         + STORE     MC.OP        MC.OP HAS NOW THE SIGNED OPCODE -31..31 ON UPPER 6 BITS OG HALF WORD
+         + R ADD     MC.REG
+         + STORE A   MC.OP        ADD REG TO MC.OP (MC.OP KEEPS ITS SIGN)
+         + R ADD     MC.OP
+MCAD1B   + STORE     /   /         
+         + R ADD     MC.ADDR
+MCAD2B   + STORE     /   /
+
+         + R ADD     MC.REG       IF MC INSTR IS USING TEMP REGION
+         + SUB       REG.T        CHECK HI WATER TEMP ADDR USED
+         + TR 0      MCT1
+         + TR        MCT2
+MCT1     + R ADD     T.EXT        EXTENSION (=SIZE IN HALF WORDS) OF TEMP VARS REGION (IS EVEN)
+         + SUB       MC.ADDR
+         + SUB       TWO
+         + TR +      MCT2
+         + R ADD     MC.ADDR
+         + ADD       TWO
+         + STORE     T.EXT        EXTENSION (=SIZE IN HALF WORDS) OF TEMP VARS REGION (IS EVEN)
+MCT2     + NOOP      0000         
+
+         + TR        MCLOOP
+
+NEXT     + NOOP      0000         CONTINUE 
+
+                                  SAVE COMPACT CODE RECORD IN TAPE
+
+         + R ADD     CCLEN        SAVE MC INSTRUCTIONS GENERATED SO FAR
+         + ADD       NINST        ADD NINST TWICE AS EACH MC INSTR USES TWO HALF-WORDS
+         + ADD       NINST
+         + STORE     N
+
+         + R ADD     *
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT (PACT COMPACT CODE)
+         + STOP      TAPEOUT
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      N            LEN
+
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1      TR IF NO LOG SELECTED
+         + R ADD     *            PRINT STEP AND MC INSTR OF STEP
+         + TR        PRTMC    
+ENDLOG1  + NOOP      0000 
+
+                                  PROCESS NEXT STEP
+         + TR        READSTEP
+
+BADREF   + STOP      1111         INTERNAL COMPILER ERROR
+
+EOR      + NOOP      0000         END OF REGION  
+
+         + R ADD     *            WRITE IN TAPE THE EOR STEP
+         + TR        WRTAPE       WRITE MAGNETIC TAPE TAPEOUT (PACT COMPACT CODE)
+         + STOP      TAPEOUT
+         + STOP      CCODE        BUF TO WRITE TO TAPE
+         + STOP      CCLEN        LEN
+
+         + R ADD     I.EXT        MAKE I.EXT EVEN AT END OF REGION
+         + ADD       ONE
+         + A RIGHT   0019
+         + A LEFT    0019
+         + STORE     I.EXT
+
+         + TR        READREG      PROCEED WITH NEXT REGION
+
+EOF      + NOOP      0000         END OF FILE
+
+         + R ADD     *
+         + TR        RWDRUM       SAVE T.EXT AND I.EXT TO DRUM 
+         + WRITE     0130         DRUM INSTR
+         + STOP      0004         DRUM ADDR 
+         + STOP      T.EXT        
+         + STOP      0002         T.EXT (1 HALF-WORD) + I.EXT (1 HW)
+
+         + WRITE EF  TAPEOUT      WRITE EOF IN TAPE OUT (COMPACT CODE)
+
+                                  IF SW6 ON THEN 
+                                  PRINT LISt OF REFERENCED SYMBOLS 
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1B     TR IF NO LOG SELECTED
+         
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGNMCIN     "MC INSTR"
+         + STOP      0210         INT AT COL 10
+         + STOP      I.EXT        NUMBER OF MACHINE CODE INSTR GENERATED IN THE WHOLE PROG
+         + STOP      0000         END OF LINE
+
+ENDLOG1B + NOOP      0000
+
+         + REWIND    TAPEIN       REWIND TAPE IN (PACT COMPACT CODE)
+         + REWIND    TAPEINR      REWIND TAPE IN (REFERENCES RESOLVED)
+         + REWIND    TAPEOUT      REWIND TAPE OUT WITH PACT COMPACT CODE WITH INSTR REFERENCES RESOLVED
+
+                                  CHAIN TO NEXT COMPILER PHASE/STAGE
+         + R ADD     *
+         + TR        CHAIN        IF SW2 IS ON, A +STOP 4095 IS EXECUTED 
+         + STOP      PACTCOMP     CHAIN TO NEXT STAGE IN PACT COMPILER TAPE
+
+         + STOP      4095
+
+
+PRTMC    + ADD       TWO          PRINT TINST TABLE WITH MC INSTRUCTIONS GENERATED FOR THIS STEP
+         + STORE A   PRTMCEX
+         + R ADD     ZERO
+         + STORE     PRTMCNUM
+
+PMCLOOP  + R ADD     PRTMCNUM
+         + SUB       NINST
+         + TR 0      PRTMCEX      EXIT IF ALL NINST INSTRUCTIONS PRINTED
+         + R ADD     PRTMCNUM     INCR COUNT
+         + ADD       ONE
+         + STORE     PRTMCNUM     GET MC INSTR FROM TINST[ (PRTMCNUM-1)*2 ]
+         + ADD       PRTMCNUM
+         + SUB       TWO
+         + ADD       TINSTAD
+         + STORE A   PMCAD1
+         + ADD       ONE
+         + STORE A   PMCAD2
+         + R ADD     ZERO
+         + STORE     MC.REG       INIT REGION REFERENCED BY MC
+PMCAD1   + R ADD     /   /
+         + STORE A   MC.REG
+         + A RIGHT   0012
+         + STORE     MC.OP        MC.OP HAS NOW THE SIGNED OPCODE -31..31 
+
+PMCAD2   + R ADD     /   /
+         + STORE     MC.ADDR
+
+         + R ADD     IREL0        LOCATION FOR THIS STEP
+         + ADD       PRTMCNUM     ADD THE NUMBER OF INSTR (-1 BECAUSE STARTS AT 1)
+         + SUB       ONE
+         + L RIGHT   0035         MQ=ACC
+
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0041         AT COL 41 
+         + STOP      0004         LEN=4
+
+
+         + LOAD MQ   D12          '+'
+         + R ADD     MC.OP
+         + TR +      PMC6
+         + LOAD MQ   D11          '-'
+PMC6     + R ADD     *            PRINT OP SIGN
+         + TR        PRTCHR
+         + STOP      0046         AT COL 46
+
+         + R ADD     ZERO
+         + ADD AB    MC.OP
+         + ADD       TMNEAD
+         + STORE A   PMC7
+PMC7     + LOAD MQ   /   /
+         + R ADD     *            PRINT OP MNEMONIC
+         + TR        PRTALF
+         + STOP      0047         AT COL 47
+
+         + R ADD     MC.REG
+         + ADD       TREGMNEA     CHARS IN TREGMNE ARE TXT ALFA VALUES  
+         + STORE A   PMC8         THUS ARE NEGATIVE
+PMC8     + R SUB     /   /        CHANGE SIGN BEFORE STORING IT IN MQ
+         + L RIGHT   0035
+         + R ADD     *            PRINT REGION LETTER V I S T A N
+         + TR        PRTCHR
+         + STOP      0050         AT COL 50
+                  
+         + LOAD MQ   MC.ADDR
+         + R ADD     *
+         + TR        PRTINT
+         + STOP      0051         AT COL 51
+         + STOP      0004         LEN=4
+
+         + R ADD     *
+         + TR        PRINTCRD
+         + R ADD     *            START NEW LINE TO PRINT
+         + TR        CLRBUF
+
+         + TR        PMCLOOP    
+
+TMNEAD   + STOP      TMNE
+TREGMNEA + STOP      TREGMNE
+
+PRTMCEX  + TR        /   /        RETURN TO CALLER
+
+           ORG       EVEN
+
+PACTSRC    RES       24           CARD IMAGE OF PACT SOURCE CODE CARD (12 FULL WORDS)
+REGION     DEF       0
+STEP       DEF       0            REGION = ALFA (<0)
+OP         DEF       0            STEP   = INT (>0)
+FACT       DEF       0            OP     = 0..43    =0 MEANS END OF REGION
+S1         DEF       0            FACT   < 0 -> FACTOR IS AN ALFA SYMBOL (VAR, REGION, ...) 
+S2         DEF       0            FACT = 0 -> BLANK FACTOR
+QR         DEF       0            FACT = 0..9999 -> DESTINATION STEP FOR TRANSFER/RESULT OF STEP
+QF         DEF       0            CLUE = -, R OR N
+NUM        DEF       0            
+           DEF       0            S1/S2 = 0 -> BLANK, >0 -> INTEGER, <0 -> ALFA 
+CLUE       DEF       0
+STEPN      DEF       0            QR = +/- INTEGER OR BLANK. 
+FACTN      DEF       0            QF = SET IF THERE IS AN INTEGER FACTOR/NUMBER IN CARD
+FACTREG    DEF       0
+S1N        DEF       0            STEPN = SEQUENTIAL NUMBER OF STEP            
+S2N        DEF       0            IF OP IS TRANSFER -> FACTN=DESTINATION STEPN
+D1N        DEF       0            FACTN=ADDR (0, 2, 4, ..) FACTREG=' ', 'T', 'V', 'N'
+D2N        DEF       0            S1N/S2N=INDEX (IF <0), BLANK (IF =0), CONST (IF >0)
+NINST      DEF       0            D1N/D2N=HALF-WORD SIZE OF EACH DIMENSION
+NINCR      DEF       0
+TINST      RES       200          MACHINE CODE: 1ST HALF-WORD OPCODE + REGION/LOCATION INTO STEP (FOR TRANSFERS)
+                                                2ND HALF-WORD ADDR INTO REGION/DESTINATION STEPN (FOR TRANSFERS)
+
+
+CCODE      EQU       PACTSRC      LOCATION OF COMPACT CODE RECORD START
+CCLEN      DEF       0044         LENGTH OF COMPACT CODE RECORD 
+N          DEF       0            TEMP VAR (HERE TO MAKE TABLES START AT EVEN LOCATION)
+
+
+                                  TABLES (SHOULD BE AT EVEN LOCATION)
+MAXNREFS   DEF       400          MAX 400 STEPN REFERENCES CAN DE DEFINED IN ONE REGION
+NREFS      DEF       0            NUMBER OF ENTRIES IN TSTEPREF TABLE
+TSTEPREF   RES       400          LOCAL STEP REFERENCES TABLE: STEPN REFERENCED BY A TR STEPN MC INSTR IN CURRENT REGION
+TSTEPLOC   RES       400          LOCATION OF STEP REFERENCED TABLE: LOCATION ON I-REGION OF EACH STEPN REFERENCED 
+
+MAXNSYMB   DEF       600          MAX 600 SYMBOL (LIBRARIES/REGION) REFERENCES CAN DE DEFINED IN THE WHOLE PROGRAM
+NSYMBS     DEF       0            NUMBER OF ENTRIES IN TSYMBREF GLOBAL SYMBOL TABLE
+TSYMBREF   RES       600          GLOBAL SYMBOL TABLE: ALFA VALUE OF SYMBOLS REFERENCED. 
+
+T.EXT      DEF       0            EXTENSION (=SIZE IN HALF WORDS) OF TEMP VARS REGION (IS EVEN)
+I.EXT      DEF       0            EXTENSION (=SIZE IN HALF WORDS) OF TOTAL INSTR OF PROGRAM
+
+MAXNINST   DEF       100          MAX NUMBER OF MACHINE CODE INSTRUTIONS PER STEP
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+           DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+D11        DEF       11
+D12        DEF       12
+
+MC.OP      DEF       0            MC OPCODE GENERATED
+MC.REG     DEF       0            REGION REFERENCED BY MC OPCODE GENERATED
+MC.ADDR    DEF       0            MC ADDR GENERATED. BOTH WILL BE STORED IN TINST TABLE IN COMPCAT CODE RECORD
+MCNUM      DEF       0            NEXT INSTR TO PROCESS
+TRSTEPN    DEF       0            THE DESTINATION STEP
+TRSYMBOL   DEF       0            THE SYMBOL DEFINED
+IRELADDR   DEF       0            I RELATIVE LOCATION OF STEP
+IREL0      DEF       0            I RELATIVE LOCATION OF CURRENT STEP
+IREF       DEF       0            TEMP
+PRTMCNUM   DEF       0            NEXT INSTR TO PRINT WITH PRTMC
+
+                                  TEXT
+
+MSGSTART   TXT       "FINAL ASSEMBLY PASS 3",0
+MSGNMCIN   TXT       "MC INSTR",0
+
+                                  REL ASSEMBLY REGION INDEXS
+
+REG.I      DEF       1            INSTRUCTIONS CODE I 0000
+REG.T      DEF       3            TEMP VARS T 0000
+REG.S      DEF       7            SYMBOL S 0000
+
+TREGMNE    TXT       '  A'
+           TXT       '  I'
+           TXT       '  V'
+           TXT       '  T'
+           TXT       '  N'
+           TXT       '  P'        PERISHABLE STORAGE (=LIB LOCAL VARS/CONSTANTS)
+           TXT       '  #'        UNUSED
+           TXT       '  S'
+
+TMNE       TXT       'H  '        STOP/HALT
+           TXT       'T  '        TRANSFER
+           TXT       'TF '        TRANSFER ON OVERLOF
+           TXT       'TP '        TRANSFER ON PLUS
+           TXT       'TZ '        TRANSFER ON ZERO
+           TXT       'S  '        SUBTRACT
+           TXT       'RS '        RESET AND SUBTRACT
+           TXT       'SV '        SUBTRACT ABSOLUTE VALUE
+           TXT       'N  '        NO OPERATION
+           TXT       'A  '        ADD
+           TXT       'RA '        RESET AND ADD
+           TXT       'AV '        ADD ABSOLUTE VALUE
+           TXT       'ST '        STORE
+           TXT       'SA '        STORE ADDRESS
+           TXT       'SM '        STORE MQ
+           TXT       'LM '        LOAD MQ
+           TXT       'M  '        MULTIPLY
+           TXT       'MR '        MULTIPLY AND ROUND
+           TXT       'D  '        DIVIDE
+           TXT       'R  '        ROUND
+           TXT       'LL '        LONG LEFT SHIFT
+           TXT       'LR '        LONG RIGHT SHIFT
+           TXT       'AL '        ACCUMULATOR LEFT SHIFT
+           TXT       'AR '        ACCUMULATOR RIGHT SHIFT
+           TXT       'RD '        READ
+           TXT       'RB '        READ BACKWARDs
+           TXT       'W  '        WRITE
+           TXT       'WE '        WRITE END OF FILE
+           TXT       'RW '        REWIND TAPE
+           TXT       'SD '        SET DRUM DDR
+           TXT       'SE '        SENSE
+           TXT       'C  '        COPY
+
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   COMPILER PROGRAM
+                                  0257         MT1     TAPE 2   WORKING DATA/GENERATED COMPACT CODE 
+                                  0258         MT2     TAPE 3   WORKING DATA/GENERATED COMPACT CODE 
+                                  0259         MT3     TAPE 4   WORKING DATA/GENERATED COMPACT CODE 
+
+PACTCOMP   EQU       0256         PACT COMPILER TAPE
+TAPEINR    EQU       0257         INPUT FROM TAPE 2 (REFERENCES RESOLVED)
+TAPEIN     EQU       0258         INPUT PACT COMPACT CODE FROM TAPE 3
+TAPEOUT    EQU       0259         OUTPUT PACT COMPACT CODE WITH INSTR REFERENCES RESOLVED TO TAPE 4
+

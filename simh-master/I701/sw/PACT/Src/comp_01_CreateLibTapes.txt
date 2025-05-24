@@ -1,0 +1,579 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:INIT        STANDALONE PROG CREATE LIBRARY TAPES, PACT COMPILER 
+           HEAD      USE:READCRD     READ CARD (READ CARD BUFFER FROM CARD PUNCH DEVICE)
+           HEAD      USE:RDALF       READ PACKED ALFANUMERIC VALUE FROM CARD BUFFER
+           HEAD      USE:RDCHR       READ BASE48 CHAR FROM CARD BUFFER
+           HEAD      USE:PRTNLINE    PRINT A NEW LINE OF DATA
+           HEAD      USE:PRINTCRD    PRINT CARD BUFFER
+           HEAD      USE:CLMEM       CLEAR MEMORY STORAGE
+           HEAD      USE:MEMCOPY     COPY MEMORY STORAGE FROM ONE ADDR TO ANOTHER
+           HEAD      USE:WRTAPE      WRITE TO MAGNETIC TAPE
+           HEAD      USE:WRIBREL     WRITE DATA INTO A BINARY REL CARD IMAGE
+           HEAD      USE:DECOTREL    DECODE TEXT RELATIVE ASSEMBLER CARD 
+              
+                                  PURPOSE:
+                                  - STANDALONE PROGRAM TO GENERATE THE STANDARD COMPILER LIBRARY TAPES
+                                  - READ CARDS FOR LIBRARY ROUTINES AS PACT TEXT RELATIVE
+                                    BLANK IN 2ND COLUMN TERMINATES THE LIB
+                                    'R' IN 2ND COLUMN SIGNALS THE START OF PACT ROUTINE LIBRARY
+                                    DECODE CARDS AS TEXT RELATIVE 
+                                    IF CARD USES REGION 'S' -> ERROR (LIBRARY ROUTINES CANNOT CALL ANY OTHER ROUTINE)
+                                                        'T' -> CONVERT TO REGION 'P' (PERISHABLE STORAGE = TEMP STORAGE FOR LIBS)
+                                    LIB DIR HOLDS HI VALUE FOR I-REGION AND P-REGION OF ROUTINE
+                                  - THREE TAPES ARE GENERATED:
+                                          TAPELDIR   EQU       0257         LIBRARY DIRECTORY
+                                          TAPEBIN    EQU       0258         COMPILER LIBRARY ROUTINE CODE, AS REL BINARY RECORDS
+                                          TAPETXT    EQU       0259         COMPILER LIBRARY ROUTINE CODE, AS REL TEXT RECORDS
+                                  - NOTE: THE LIB DIRECTORY RECORD FORMAT IS DEFINED IN "01 CREATE LIB" AND USED IN "64 SCAN LIB" 
+                                  - NOTE: THE LIB CODE BIN FORMAT IS DEFINED IN "01 CREATE LIB" AND USED IN "66 LIST AND PUNCH"
+                                  - NOTE: THE LIB CODE TEXT FORMAT IS DEFINED IN "01 CREATE LIB" AND USED IN "YYY"
+
+
+                                  RSV: In PACT doc there are very few mentions on how libraries works or are generated. Just
+                                       the fact that they exists and are used.
+                                       The doc also says that "two blank cards must be inserted after PACT source code deck"  
+                                       We makes the assumption that the first blank card is a placeholder to add routin(es)
+                                       to the program on compile time. 
+                                       There is no original doc on the format of these cards. 
+
+INIT     + R ADD     *            
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGSTART     "GENERATE LIBRARY"
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     ZERO
+         + STORE     NCARDS       TOTAL NUMBER OF PACT SOURCE CODE CARDS PROCESSED
+         + STORE     NLIBS        TOTAL NUMBER OF LIBRARIES ROUTINES GENERATED ON TAPE 
+         + STORE     LIB          CURRENT LIBRARY ROUTINE NAME
+
+         + R ADD     DUMMY        NOT NEEDED. THIS INSTR IS JUST TO AVOID A "NOT REFERENCED" WARNING ON ASSEMBLING     
+
+         + REWIND    TAPELDIR     REWIND TAPE OUT (LIBRARY DIRECTORY)
+         + REWIND    TAPEBIN      REWIND TAPE OUT (LIBRARY ROUTINES CODE, AS REL BINARY RECORDS)
+         + REWIND    TAPETXT      REWIND TAPE OUT (LIBRARY ROUTINES CODE, AS REL TEXT RECORDS)
+         
+         + R ADD     *            SET WRITE CARD ROUTINE TO BE CALLED WHEN FLUSHING THE REL BINARY CARD 
+         + TR        WRIBREL      RETURNS IN ACC THE ADDR OF BINCARD BUFFER TO BE WRITTEN BY WRITE ROUTINE  
+         + STOP      0002         +02 -> SET WRITE CARD ROUTINE
+         + STOP      WRTCRD       THE WRITE ROUTINE ADDRESS
+         + STORE A   LBINCRD      SAVE ADDR OF BINCARD BUFFER TO BE WRITTEN, RETURNED IN ACC
+
+READCARD + R ADD     *            READ PACT USER PROGRAM SOURCE CODE CARD
+         + TR        READCRD
+         + TR OV     EOF          -> END OF LIBRARIES ROUTINES DECK
+
+         + R ADD     NCARDS
+         + ADD       ONE
+         + STORE     NCARDS
+
+         + R ADD     *           
+         + TR        RDCHR        READ CARD TYPE CHAR
+         + STOP      0002         AT COL 2
+         + STORE     CHAR         STORE BASE48 CHAR
+
+         + R ADD     CHAR         IF CHAR IN COLUMN 2 IS ...
+         + SUB       D30          ... IS 'R' ...
+         + TR 0      LIBCARD      THEN TR AS IT IS A LIBRARY ROUTINE START CARD. THIS CARD GIVES THE NAME OF ROUTINE  FOR PACT
+
+                                  IF SW6 ON THEN 
+                                  PRINT INPUT LIBRARY DECK 
+         + SENSE     0074         SENSE SWITCH 6
+         + TR        ENDLOG1A     TR IF NO LOG SELECTED
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST READ
+         + TR        PRINTCRD
+ENDLOG1A + NOOP      0000
+
+         + R ADD     CHAR         IF CHAR IN COLUMN 2 IS ...
+         + TR 0      EOF          ... -> END OF LIBRARIES ROUTINES DECK
+         + SUB       D11
+         + TR +      EBADCT       TR TO ERROR IF 1ST COL CHAR IS NOT A NUMBER 0..9 (BASE48 CODE FOR '0' IS 10)
+         + TR        INSTCARD     ELSE IT IS AN INSTRUCTION/DATA CARD FOR CURRENT LIBRARY ROUTINE
+
+EBADCT   + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRBADCT     ERROR: BAD CARD TYPE. SHOULD BE 'NNNN' OR 'R' 
+
+ENOLIB   + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOLIB     ERROR: NO LIBRARY ROUTINES LOADED ON TAPES
+
+EOF      + NOOP      0000         END OF INPUT CARD DECK
+
+         + R ADD     LIB          IF LIB=0 -> NO LIBS TO WRITE
+         + TR 0      ENOLIB       TR TO SIGNAL THIS AS AN ERROR
+
+         + R ADD     *
+         + TR        WRLIBDIR     WRITE LAST LIB DIRECTORY RECORD
+
+         + R ADD     *            FLUSH ANY PENDING BINARY CARD LIBRARY RECORD 
+         + TR        WRIBREL
+         + STOP      0001         +01 -> FLUSH LAST CARD
+         
+         + R ADD     *
+         + TR        WRLIBEND     GENERATE END OF LIBRARY RECORD FOR CODE TAPES
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGDONE      "CARDS READ"
+         + STOP      0212         INT AT COL 12
+         + STOP      NCARDS       NUMBER OF CARDS READ
+         + STOP      0000         END OF LINE. 
+
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+         + STOP      MSGDONE2     "ROUTINES"
+         + STOP      0212         INT AT COL 12
+         + STOP      NLIBS        TOTAL NUMBER OF LIBRARY ROUTINES GENERATED ON TAPE
+         + STOP      0000         END OF LINE. 
+
+         + WRITE EF  TAPELDIR     WRITE EOF IN LIBRARY DIRECTORY
+         + WRITE EF  TAPEBIN      WRITE EOF IN BIN LIBRARY ROUTINES TAPE
+         + WRITE EF  TAPETXT      WRITE EOF IN TEXT LIBRARY ROUTINES TAPE
+
+         + STOP      4095
+
+
+
+
+                                  READ PACT LIB START CARD
+
+                                           1         2         3         4         5         6         7 
+                                  123456789012345678901234567890123456789012345678901234567890123456789012
+                                    COMMENTS 
+                                   R /L01/ COMMENTS 
+                                   ^  ^
+                                   |  +-- name of the lib routine to be used in PACT programm LIB or DO command
+                                   +----- 'R' in 1st col signals the start of a new routine
+
+
+LIBCARD  + R ADD     LIB          IF THIS IS THE 1ST LIB ROUTINE ON TAPE, TR TO START PROCESSING IT
+         + TR 0      LIBSTART     ELSE FLUSH DATA FROM PREVIOUS ROUTINE TO TAPE BEFORE STARTING NEW ONE
+
+         + R ADD     *
+         + TR        WRLIBDIR     WRITE LIB DIRECTORY RECORD
+
+         + R ADD     *            FLUSH ANY PENDING BINARY CARD LIBRARY RECORD 
+         + TR        WRIBREL
+         + STOP      0001         +01 -> FLUSH CURRENT CARD
+
+
+LIBSTART + R ADD     *            PRINT LIBRARY ROUTINE NAME BEING PROCESSED
+         + TR        PRINTCRD
+
+         + R ADD     *           
+         + TR        RDALF        READ 3 CHARS IN MQ
+         + STOP      0005         AT COL 5..7
+         + STORE MQ  LIB          LIB ROUTINE NAME (IS BASE48 ALFA -> NEGATIVE)
+
+         + R SUB     ONE
+         + STORE     HI.P.REL     INIT HI WATER FOR PERISHABE STORAGE USED BY LIBRARY 
+         + R ADD     ZERO
+         + STORE     HI.I.REL     INIT HI WATER FOR INSTRUCTIONS USED BY LIBRARY (THE EXTENSION OF LIBRARY CODE)
+
+         + R ADD     NLIBS        INCR TOTAL NUMBER OF LIBRARIES GENERATED ON TAPE 
+         + ADD       ONE          
+         + STORE     NLIBS        
+
+         + TR        READCARD
+
+
+WRLIBDIR + ADD       TWO          WRITE LIB DIRECTORY RECORD
+         + STORE A   WRLIBDEX      
+
+         + R ADD     D100         REGULAR RECORD
+         + STORE     LDTYPE         
+         + R ADD     LIB
+         + STORE     LDLIBNAM     LIBRARY NAME (BASE48 ALFA, NEGATIVE VALUE) 
+
+         + R ADD     HI.P.REL     CALC EVEN EXTENSION FOR PERISHABE STORAGE REGION USED BY LIBRARY 
+         + ADD       TWO          -1 + 2 -> +1 -> even -> 0
+         + A RIGHT   0019          0 + 2 -> +2 -> even -> 2 (if hi perishable -> 2 halfwords)
+         + A LEFT    0019          1 + 2 -> +3 -> even -> 2 (if hi perishable -> 2 halfwords)
+         + STORE     LD.P.EXT
+
+         + R ADD     HI.I.REL     MAKE EVEN CODE STORAGE USED BY LIBRARY 
+         + ADD       TWO
+         + A RIGHT   0019
+         + A LEFT    0019
+         + STORE     LD.I.EXT
+
+         + R ADD     *            
+         + TR        WRTAPE       WRITE LIBRARY DIR RECORD TO TAPE
+         + STOP      TAPELDIR     TAPE TO WRITE TO
+         + STOP      LIBDIR       BUF TO WRITE TO TAPE
+         + STOP      LDLEN        LEN TO WRITE
+
+WRLIBDEX + TR        /   /
+
+
+WRLIBEND + ADD       TWO          GENERATE END OF LIBRARY RECORD FOR ALL TAPES
+         + STORE A   WRLIBEX      
+
+         + R ADD     *            CLEAR LIB DIRECTORY RECORD
+         + TR        CLMEM
+         + STOP      LIBDIR
+         + STOP      LDLEN
+
+         + R ADD     D999         SIGNAL END OF LIB DIR 
+         + STORE     LDTYPE        
+
+         + R ADD     *            
+         + TR        WRTAPE       
+         + STOP      TAPELDIR
+         + STOP      LIBDIR       BUF TO WRITE TO TAPE
+         + STOP      LDLEN
+
+         + R ADD     *            CLEAR LIB CODE RECORD
+         + TR        CLMEM
+         + STOP      LIBCODE
+         + STOP      LCLEN
+
+         + R ADD     D999         SIGNAL END OF LIB 
+         + STORE     LTYPE        
+
+         + R ADD     *            
+         + TR        WRTAPE       WRITE 'END OF LIBS' RECORD ON LIBRARY ROUTINES CODE
+         + STOP      TAPEBIN
+         + STOP      LIBCODE      BUF TO WRITE TO TAPE
+         + STOP      TWO          JUST WRITE 2 HALF WORDS, NO MORE IS NEEDED
+
+         + R ADD     *            
+         + TR        WRTAPE       WRITE 'END OF LIBS' RECORD ON LIBRARY ROUTINES CODE
+         + STOP      TAPETXT
+         + STOP      LIBCODE      BUF TO WRITE TO TAPE
+         + STOP      TWO          JUST WRITE 2 HALF WORDS, NO MORE IS NEEDED
+
+WRLIBEX  + TR        /   /
+
+
+
+                                  READ PACT RELATIVE TEXT CARDS
+
+                                           1         2         3         4         5         6         7 
+                                  123456789012345678901234567890123456789012345678901234567890123456789012
+                                   nnnn +RA R nnnn COMMENT <-- instr. nnnn=location/address, R=region = A I N V T P S
+                                   0059 +000009    COMMENT <-- number. All numbers are decimal
+                                                              
+
+INSTCARD + R ADD     *            DECODE TEXT RELATIVE ASSEMBLER CARD  
+         + TR        DECOTREL     RETURNS:    ACC = +/- MC.OP  MC.ADDR | MC.FORMAT
+                                              MQ  =   + MC.REG MC.LOC 
+         - STORE     OPADDR
+         + STORE MQ  REGLOC
+         + STORE A   MC.ADDR
+      
+         + R ADD     REGLOC       GET MC.LOC
+         + STORE A   MC.LOC
+         + A RIGHT   0012
+         + A RIGHT   0018
+         + A LEFT    0018         GET MC.REG (A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+         + STORE     MC.REG       
+
+         + R ADD     MC.LOC
+         + SUB       HI.I.REL     
+         + TR +      MC5
+
+         + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRSEQ       ERROR: INST LOC NOT IN SEQUENCE. MISSING "R /NAM/" CARD?
+
+MC5      + R ADD     MC.LOC
+         + STORE A   HI.I.REL     HI WATER FOR INSTRUCTIONS USED BY LIBRARY (THE EXTENSION OF LIBRARY CODE)
+
+         + R ADD     MC.REG
+         + SUB       D7           IF REG = 'S' THEN ...
+         + TR 0      MC6          ... TR TO ERROR: LIB ROUTINES CANNOT CALL EXTERNAL SYMBOLS
+         + TR        MC7
+
+MC6      + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOTRS     ERROR: LIB ROUTINES CANNOT CALL EXTERNAL SYMBOLS
+      
+MC7      + R ADD     MC.REG
+         + SUB       D3           IF REG = 'T' THEN ....
+         + TR 0      MC7B         ... TR TO CONVERT IT TO 'P'
+         + TR        MC7C         REG IS NOT 'T' -> CONTINUE
+
+MC7B     + R ADD     D5
+         + STORE     MC.REG
+         + TR        MC8
+
+MC7C     + R ADD     MC.REG       
+         + SUB       D5           IF REG = 'P' THEN ....
+         + TR 0      MC8          ... TR TO CHECK IF VAR ADDR > HI PERISHABLE HI-WATER
+         + TR        MC9          REG IS NOT 'P' -> TR TO GENERATE THE RECORD
+
+MC8      + R ADD     HI.P.REL     HI-WATER REL ADDRESS USED BY PERISHABLE (TEMP VAR) ON LIBRARY         
+         + SUB       MC.ADDR
+         + TR +      MC9          TR TO GENERATE RECORD IF TEMP VAR <= HI PERISHABLE HI-WATER
+         + R ADD     MC.ADDR
+         + STORE     HI.P.REL     SET NEW VALUE OF HI-WATER REL ADDRESS 
+         
+MC9      + NOOP      0000         WRITE LIB CODE RECORD
+
+         + R ADD     D100         SIGNAL REGULAR RECORD
+         + STORE     LTYPE        
+         + R ADD     LIB          POPULATE RECORD
+         + TR 0      ENOLIBC
+         + STORE     LLIBNAM
+
+         + R ADD     *
+         + TR        CLR16COL     CLEAR 16 LEFT COLUMNS OF CARD IMAGE
+
+         + R ADD     *            COPY CARD IMAGE TO LSRC
+         + TR        MEMCOPY
+         + STOP      0000
+         + STOP      LSRC
+         + STOP      D48
+
+         + R ADD     *            
+         + TR        WRTAPE       WRITE TEXT LIBRARY CODE RECORD 
+         + STOP      TAPETXT
+         + STOP      LIBCODE      BUF TO WRITE TO TAPE
+         + STOP      LCLEN
+
+         + R ADD     *            ADD TO REL BINARY CARD  (THIS ROUTINE CALL WRTCRD WHEN NEEDED)
+         + TR        WRIBREL
+         - STOP      0000         PARAM: BIN CARD TYPE REQUITED: -00 -> INSTR CARD, 
+         + STOP      LIB          PARAM: TOP SYMBOL FOR REL BINARY CARD
+         + STOP      MC.LOC       PARAM: LOCATION 0..4095 
+         + STOP      0000         PARAM: =0 -> NEXT PARAM IS HALF WORD TO ADD TO BIN CARD, FOLLOWED BY INDEX TAG 0..7
+         + STOP      OPADDR       PARAM: HALF WORD TO ADD TO BIN CARD
+         + STOP      MC.REG       PARAM: INDEX TAG 0..7
+
+         + TR        READCARD
+
+ENOLIBC  + R ADD     *            
+         + TR        ERROR
+         + STOP      ERRNOLIN     ERROR: NO LIBRARY CARD "R /NAM/" BEFORE FIRST INSTR
+
+WRTCRD   + ADD       TWO          WRITE BIN CARD ROUTINE, CALLED FROM WRIBREL
+         + STORE A   WRTCRDEX
+
+         + R ADD     *            CLEAR RECORD
+         + TR        CLMEM
+         + STOP      LIBCODE
+         + STOP      LCLEN
+
+         + R ADD     D100         SIGNAL REGULAR RECORD
+         + STORE     LTYPE        
+         + R ADD     LIB          POPULATE RECORD
+         + STORE     LLIBNAM
+
+         + R ADD     ZERO
+         + STORE     FORMAT       =0 -> BINARY FORMAT (OTHER VALUES =1 -> TEXT FORMAT (MC INSTR), =2 -> TEXT FORMAT (NUM))
+
+         + R ADD     *            COPY BIN INSTR CARD BUFFER TO CARD BUFFER AT ADDR ZERO
+         + TR        MEMCOPY
+LBINCRD  + STOP      /   /        ADDR OF BINCARD BUFFER TO BE WRITTEN 
+         + STOP      LSRC         DEST ADDR
+         + STOP      D48          LEN
+
+         + R ADD     *            
+         + TR        WRTAPE       WRITE BINARY LIBRARY CODE RECORD TO LIBRARY TAPE
+         + STOP      TAPEBIN
+         + STOP      LIBCODE      BUF TO WRITE TO TAPE
+         + STOP      LCLEN        
+
+WRTCRDEX + TR        /   /
+
+CLR16COL + ADD       TWO          CLEAR 16 LEFT COLUMNS OF CARD IMAGE
+         + STORE A   CLR16CEX     THESE COLUMNS HAVE THE TEXT RELATIVE ASSEMBLER, ALREADY DECODED
+                                  WILL BE CLEARED AS WILL BE REPLACED BY ABS TEXT LOCATIONS 
+         + R ADD     D12          ON STAGE "67 PUNCH ABS TEXT"
+         + STORE     N
+
+         + R ADD     ZERO
+         + STORE A   CLRD
+         + STORE A   CLWR
+
+CLRLOOP  + R ADD     N
+         + TR 0      CLR16CEX
+         + SUB       ONE
+         + STORE     N
+
+         + R ADD     ZERO
+CLRD     - ADD AB    /   /        READ CARD IMAGE LEFT FULL WORD
+         + L RIGHT   0020         PRESERVE LAST 20 COLS 
+         + R ADD     ZERO         (36 COLS PER FULL WORD MINUS 16 COLS TO CLEAR ON LEFT -> 36-16=20 COLS ON RIGHT TO PRESERVE)
+         + L LEFT    0020
+CLWR     - STORE     /   /        WRITE BACK CARD IMAGE. COLS 1..16 CLEARED
+
+         + R ADD     CLRD
+         + SUB       D4
+         + STORE A   CLRD
+         + STORE A   CLWR
+         + TR        CLRLOOP
+
+CLR16CEX + TR        /   /
+
+ERROR    + ADD       TWO
+         + STORE A   ERRP1
+ERRP1    + R ADD     /   /
+         + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+
+         + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         + TR        PRINTCRD
+         + R ADD     *
+         + TR        PRTNLINE     
+         + STOP      0101         STRINGZ AT COL 1
+ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         + STOP      0000         END OF LINE
+
+         + STOP      READCARD     IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING 
+
+
+
+                                  MACHINE CODE (MC) INSTRUCTION CARD LAYOUT. CODE = -00
+
+                                   / ........ [CODE][ORIGIN    ] [TOP SYMBOL      ] ............[      CHECK SUM       ].
+                                  |  ........ [REGION INDICES                     ] [COUNT           ] .................. 
+                                  |  ........ [0=ABS, 1=I-REG, 2=VAR, 3=TEMP, 4=NUM, 5=PERISHABLE, 7=SYMBOL             ]
+                                  |  ........ ........^......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ ........|......... .................. .................. .................. 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+                                  |  ........ [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] [REL MC INSTR    ] 
+
+                                  LAYOUT
+                                  
+                                             1         2         3         4         5         6         7 
+                                    123456789012345678901234567890123456789012345678901234567890123456789012
+                                     nnnn +RA V nnnn COMMENT <-- LSRC CARD IMAGE WHEN LFORMAT=1
+                                   MC.LOC ^^  ^ ^       
+                                    MC.SGN||  | |MC.ADDR
+                                      MC.OP|  |MC.REG (A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+
+                                             1         2         3         4         5         6         7 
+                                    123456789012345678901234567890123456789012345678901234567890123456789012
+                                     nnnn +nnnnnn    COMMENT <-- LSRC CARD IMAGE WHEN LFORMAT=2
+                                   MC.LOC ^^  
+                                    MC.SGN||LNUM
+
+                                  EQUIVALENCE
+                                     LIB   --> goes to --> TOP SYMBOL (NEGATIVE ALFA BASE48 VALUE)
+                                     MC.LOC                LOCATION ON CARD / ORIGIN
+                                     MC.OP + MC.ADDR       REL MC INSTR 
+                                     MC.REG (A=0, I=1...)  REGION INDICES
+
+
+           ORG       EVEN
+
+                                  LIBRARY DIRECTORY RECORD. 
+
+LDTYPE     DEF       0            TYPE OF RECORD: 100=REGULAR RECORD. 999=END OF LIB DIRECTORY
+LDLIBNAM   DEF       0            LIBRARY ROUTINE NAME (BASE48 ALFA, NEGATIVE VALUE). 
+LD.P.EXT   DEF       0            EXTENSION (IS EVEN) OF PERISHABLE REGION (TEMP VAR) USED ON LIBRARY ROUTINE
+LD.I.EXT   DEF       0            EXTENSION (IS EVEN) OF INSTR REGION OF LIBRARY ROUTINE
+
+LIBDIR     EQU       LDTYPE       LOCATION OF LIBRARY DIRECTORY RECORD START
+
+                                  LIBRARY DIRECTORY = MANY RECORDS LHTYPE=100 
+                                                      RECORD WITH  LHTYPE=999
+
+                                  LIBRARY CODE RECORD.
+
+LTYPE      DEF       0            TYPE OF RECORD: 100=REGULAR RECORD. 999=END OF LIB 
+LLIBNAM    DEF       0            LIBRARY ROUTINE NAME TO WITCH THIS RECORD BELONGS
+LSRC       RES       48           CARD IMAGE OF PACT REL ASSEMBLER CARD/REL BINARY CARD (24 FULL WORDS)
+OPADDR     DEF       0            = +/- MC.OP  MC.ADDR
+FORMAT     DEF       0            = 0 -> BINARY FORMAT, =1 -> TEXT FORMAT (MC INSTR), =2 -> TEXT FORMAT (NUM), 
+REGLOC     DEF       0            = + MC.REG MC.LOC (REG A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+DUMMY      DEF       0            Spare
+
+LIBCODE    EQU       LTYPE        LOCATION OF LIBRARY CODE RECORD START
+
+LDLEN      DEF       4            LENGH OF LIBRARY DIRECTORY RECORD 
+LCLEN      DEF       54           LENGH OF LIBRARY CODE RECORD 
+
+                                             1         2         3         4         5         6         7 
+                                    123456789012345678901234567890123456789012345678901234567890123456789012
+                                    nnnn +RA V nnnn COMMENT <-- LSRC CARD IMAGE WHEN LFORMAT=1
+                                  MC.LOC ^^  ^ ^       
+                                   MC.SGN||  | |MC.ADDR
+                                     MC.OP|  |MC.REG (A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+
+                                             1         2         3         4         5         6         7 
+                                    123456789012345678901234567890123456789012345678901234567890123456789012
+                                    nnnn +nnnnnn    COMMENT <-- LSRC CARD IMAGE WHEN LFORMAT=2
+                                  MC.LOC ^^  
+                                   MC.SGN||LNUM
+
+
+
+
+
+LIB        DEF       0            CURRENT LIBRARY NAME
+NLIBS      DEF       0            NUMBER OF LIBRARY ROUTINES LOADED IN TAPE 
+NCARDS     DEF       0            NUM OF CARDS READ
+CHAR       DEF       0
+MC.ADDR    DEF       0
+MC.LOC     DEF       0
+MC.REG     DEF       0
+HI.P.REL   DEF       0            HI-WATER REL ADDRESS USED BY PERISHABLE (TEMP VAR) ON LIBRARY
+HI.I.REL   DEF       0            HI WATER FOR INSTRUCTIONS USED BY LIBRARY (THE EXTENSION OF LIBRARY CODE)
+N          DEF       0
+
+                                  VARS/CONST HALF-WORD
+
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D3         DEF       3
+D4         DEF       4
+D5         DEF       5
+D7         DEF       7
+D11        DEF       11
+D12        DEF       12
+D30        DEF       30
+D48        DEF       48
+D100       DEF       100
+D999       DEF       999
+
+                                  TEXT
+
+
+MSGSTART   TXT       "GENERATE LIBRARY",0
+MSGDONE    TXT       "CARDS READ",0
+MSGDONE2   TXT       "ROUTINES",0
+
+ERRNOLIN   TXT       "NO LIB ROUTINE NAME",0       ERROR: MISSING CARD "R /NAM/ ROUTINE NAME TO BE USED IN PACT" BEFORE FIRST INSTR
+ERRSEQ     TXT       "BAQ LOC SEQ", 0              ERROR: INST LOC NOT IN SEQUENCE. MISSING "R /NAM/" CARD?
+ERRNOLIB   TXT       "NO LIBS",0                   ERROR: NO LIBS LOADED TO TAPE 
+ERRBADCT   TXT       "BAD CARD TYPE",0             ERROR: BAD CARD TYPE. SHOULD BE 'NNNN' OR 'R' 
+ERRNOTRS   TXT       "BAD S-REG USE",0             ERROR: LIB ROUTINES CANNOT CALL EXTERNAL SYMBOLS
+
+
+
+
+                                  TAPE ARRANGEMENT IN PACT COMPILER:
+                                  701 IO       SIMH    TAPE     
+                                  ADDRESS      DEV     NUMBER   USAGE 
+                                  0256         MT0     TAPE 1   PROGRAM
+                                  0257         MT1     TAPE 2   WORK TAPE
+                                  0258         MT2     TAPE 3   WORK TAPE
+                                  0259         MT3     TAPE 4   WORK TAPE
+
+TAPELDIR   EQU       0257         LIBRARY DIRECTORY
+TAPEBIN    EQU       0258         LIBRARY CODE ROUTINES, AS BINARY REL RECORD
+TAPETXT    EQU       0259         LIBRARY CODE ROUTINES, AS TEXT REL RECORD
+

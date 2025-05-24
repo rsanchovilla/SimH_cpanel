@@ -1,0 +1,123 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:SRCHTBL         SEARCH TABLE
+
+                                  SEARCH TABLE, RETURN ACC=ENTRY NUMBER WHERE VAL IS FOUND
+                                                          =0 IF NOT FOUND)
+                                  PARAMS: TBL: LOCATION OF TABLE START
+                                          LEN: LOCATION OF LEN=NUMBER OF HALF-WORDS TO SEARCH (=0 -> TABLE EMPTY, =1 -> TABLE HAS ONE ENTRY)
+                                          VAL: LOCATION OF VAL=VALUE TO FIND
+
+
+           HEAD      DEF:EQTBL          STORE VALUE INTO TABLE
+
+                                  STORE VALUE IN TABLE, AT GIVE ENTRY: TBL[ENT]=VAL
+                                  PARAMS: TBL: LOCATION OF TABLE START
+                                          ENT: LOCATION OF ENTRY. FIRST ENTRY OF TABLE IS 1 (STORED AT TBL ADDRESS)
+                                          VAL: LOCATION OF VAL=VALUE TO STORE
+
+           HEAD      DEF:READTBL        TAKE VALUE FROM TABLE
+
+                                  READ VALUE FROM TABLE, AT GIVE ENTRY. STORE IT IN VAL: VAL=TBL[ENT]
+                                  RESULT ALSO IN ACC: ACC=TBL[ENT]
+                                  PARAMS: TBL: LOCATION OF TABLE START
+                                          ENT: LOCATION OF ENTRY. FIRST ENTRY OF TABLE IS 1 (STORED AT TBL ADDRESS)
+                                          VAL: LOCATION OF VAL=VALUE READ FROM TABLE
+
+SRCHTBL  + LOAD MQ   ZERO
+         + TR        START
+EQTBL    + LOAD MQ   ONE
+         + TR        START
+READTBL  + LOAD MQ   TWO
+
+START    + ADD       TWO 
+         + STORE A   P1           PARM: ADDR OF TABLE
+         + ADD       ONE          
+         + STORE A   P2           PARM: LEN OF TABLE
+         + ADD       ONE          
+         + STORE A   P3           PARM: VAL TO FIND
+         + ADD       ONE          
+         + STORE A   EXIT
+
+P1       + R ADD     /   /        GET ADDR OF TABLE
+         + STORE A   TBL
+        
+P2       + R ADD     /   /        GET ADDR OF LEN OF TABLE/ENTRY ON TABLE
+         + STORE A   P2A
+P2A      + R ADD     /   /        DERREFERENCE -> ACC=LEN/ENTRY (1..LEN)
+         + STORE     N
+         + TR 0      EXIT         EXIT, CANNOT READ/STORE ON ENTRY 0, SEARCH ON EMPTY TABLE
+
+P3       + R ADD     /   /        GET ADDR OF VAL TO FIND
+         + STORE A   WRVAL
+         + STORE A   P3A
+P3A      + R ADD     /   /        DERREFERENCE -> ACC=VAL
+         + STORE     VAL
+
+         + STORE MQ  TEMP         JUMP TABLE DISPATCH
+         + R ADD     TEMP
+         + TR 0      LOOP0        TR TO SEARCH TABLE
+        
+         + R ADD     N            SUB ONE AS FIRST ENTRY ON TABLE IS "1"
+         + SUB       ONE          
+         + ADD       TBL          TABLE BASE ADDR
+         + STORE A   WRTBL
+         + STORE A   RDTBL2
+
+         + R ADD     TEMP
+         + SUB       ONE
+         + TR 0      STORETBL 
+
+RDTBL2   + R ADD     /   /        VAL=TBL[ENT]
+WRVAL    + STORE     /   /
+         + TR        EXIT
+
+STORETBL + R ADD     VAL          TBL[ENT]=VAL
+WRTBL    + STORE     /   /    
+         + TR        EXIT
+
+LOOP0    + R ADD     TBL
+         + STORE A   RDTBL
+         + R ADD     RDTBL
+         + STORE     TBL0
+         + ADD       N
+         + STORE     TEMP         THE END ADDR OF TABLE
+
+LOOP     + R ADD     VAL          ACC=THE SEARCHED VALUE
+RDTBL    + SUB       /   /    
+         + TR OV     OVOK         CLEAR OV JUST IN CASE
+OVOK     + TR 0      FOUND        TR IF VAL FOUND IN ENTRY N
+         + R ADD     RDTBL
+         + ADD       ONE
+         + STORE A   RDTBL
+         + SUB       TEMP
+         + TR 0      EXIT         NOT FOUND -> RETURN ZERO
+         + TR        LOOP
+
+FOUND    + R ADD     RDTBL        RETURN ENTRY FOUND
+         + SUB       TBL0
+         + ADD       ONE
+EXIT     + TR        /   /
+
+N        + STOP      0000
+VAL      + STOP      0000
+TBL      + STOP      0000
+TBL0     + STOP      0000
+TEMP     + STOP      0000
+
+ZERO     + STOP      0000
+ONE      + STOP      0001         constant 1
+TWO      + STOP      0002         constant 2
+
+

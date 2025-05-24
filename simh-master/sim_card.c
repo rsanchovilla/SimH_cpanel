@@ -73,6 +73,16 @@
 
     The card module uses up7 to hold a buffer for the card being translated
     and the backward translation table. Which is generated from the table.
+
+    Modified by RSV to support i701 simulator
+    Apr/25: Added CARD_IGNORE flag -> skip card "; comment" in deck text input file 
+            Added sim_peek_card() to return given card number from input deck
+            Improved binary format detection
+            Add \r\n on windows platform as end of line so it allows opening punched text card decks with notepad.exe without lines being messed-up
+            Add MODE_026A flag to support IBM 026-A character set used with IBM 701
+            Added sim_ascii_to_hol2() to return holtering punches according to current charset of unit
+
+
 */
 
 
@@ -86,6 +96,7 @@
 
 #define CARD_EOF          0x1000         /* This card is end of file card. */
 #define CARD_ERR          0x2000         /* Return error for this card */
+#define CARD_IGNORE       0xFFFF         /* RSV: skip this card: It is a "; comment" in deck text input file */
 #define DECK_SIZE         1000           /* Number of cards to allocate at a time */
 
 
@@ -112,6 +123,62 @@ const char          sim_six_to_ascii[64] = {
     'H', 'I', '?', '.', ')', '[', '<', '@',     /* 37 = stop code */
 };                              /* 72 = rec mark */
                                 /* 75 = squiggle, 77 = del */
+
+
+#define hY  0x800
+#define hX  0x400
+#define h0  0x200
+#define h1  0x100
+#define h83 0x042
+#define h84 0x022
+
+// RSV: Added IBM 026-A character set used by IBM 701
+//      added for convenience char '!' interpreted as "ZERO with X(11) MINUS punch" and
+//                            char '?' interpreted as "ZERO with Y(12) PLUS punch" 
+
+static const uint16          ascii_to_hol_026A[128] = {
+   /* Control                              */
+    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,    /*0-37*/
+   /*Control*/
+    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
+   /*Control*/
+    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
+   /*Control*/
+    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
+   /*  sp      !      "      #      $      %      &      ' */   
+   /* none           78                                 48 */
+    0x000, hX|h0,     0,hY|h84,hX|h83,h0|h84,     0,     0,     /* 40 - 77 */
+   /*   (      )      *      +      ,      -      .      / */
+   /* T48    X48                                           */   
+        0,     0,hX|h84,    hY,h0|h83,    hX,  hY|h83,h0|h1,    
+   /*   0      1      2      3      4      5      6      7 */
+   /* T      1      2      3      4      5      6      7   */
+    0x200, 0x100, 0x080, 0x040, 0x020, 0x010, 0x008, 0x004,
+   /*   8      9      :      ;      <      =      >      ? */
+   /* 8      9      58     Y68    X68            68        */
+    0x002, 0x001,    0,      0,     0,     0,     0, hY|h0,
+   /*   @      A      B      C      D      E      F      G */
+   /*  84    X1     X2     X3     X4     X5     X6     X7  */
+        0, 0x900, 0x880, 0x840, 0x820, 0x810, 0x808, 0x804,     /* 100 - 137 */
+   /*   H      I      J      K      L      M      N      O */
+   /* X8     X9     Y1     Y2     Y3     Y4     Y5     Y6  */
+    0x802, 0x801, 0x500, 0x480, 0x440, 0x420, 0x410, 0x408,
+   /*   P      Q      R      S      T      U      V      W */
+   /* Y7     Y8     Y9     T2     T3     T4     T5     T6  */
+    0x404, 0x402, 0x401, 0x280, 0x240, 0x220, 0x210, 0x208,
+   /*   X      Y      Z      [      \      ]      ^      _ */
+   /* T7     T8     T9     X58    X68    T58    T78     28 */
+    0x204, 0x202, 0x201,     0,     0,     0,     0,     0,
+   /*   `      a      b      c      d      e      f      g */
+       0, 0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,     /* 140 - 177 */
+   /*   h      i      j      k      l      m      n      o */
+    0xA02, 0xA01, 0xD00, 0xC80, 0xC40, 0xC20, 0xC10, 0xC08,
+   /*   p      q      r      s      t      u      v      w */
+    0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
+   /*   x      y      z      {      |      }      ~    del */
+   /*                     T79     X78   Y79     79         */
+    0x604, 0x602, 0x601,    0,     0,     0,     0, 0xf000
+};
 
 static const uint16          ascii_to_hol_026[128] = {
    /* Control                              */
@@ -408,6 +475,24 @@ const uint8        sim_parity_table[64] = {
     0100, 0000, 0000, 0100, 0000, 0100, 0100, 0000
 };
 
+// RSV: return holtering punches according to current charset selected in given unit
+uint16 sim_ascii_to_hol2(UNIT * uptr, char c) {
+
+    c = c & 127; 
+
+    switch(uptr->flags & MODE_CHAR) {
+       case MODE_026:  return ascii_to_hol_026[c];
+       case MODE_026A: return ascii_to_hol_026A[c];
+       case MODE_029:  return ascii_to_hol_029[c];
+       case MODE_DEC29: return ascii_to_dec_029[c];
+       case 0:
+       default: break;
+    }
+    return 0; 
+}
+
+
+
 struct card_formats {
     uint32      mode;
     const char  *name;
@@ -580,6 +665,32 @@ sim_card_output_hopper_count(UNIT *uptr) {
     return (int)data->punch_count;
 }
 
+// RSV: return card number Pos from input deck, but do not log on debug file
+// nor increment read cards counters
+t_cdstat
+sim_peek_card(UNIT * uptr, int pos, uint16 image[80])
+{
+    struct card_context  *data = (struct card_context *)uptr->card_ctx;
+    DEVICE               *dptr;
+    uint16               (*img)[80];
+    t_stat                r = CDSE_OK;
+
+    if (data == NULL || (uptr->flags & UNIT_ATT) == 0)
+        return CDSE_EMPTY;      /* attached? */
+    if (data->hopper_cards == 0 || pos >= (int) data->hopper_cards)
+        return CDSE_EMPTY;
+
+    dptr = find_dev_from_unit( uptr);
+    img = &(*data->images)[pos];
+    if ((*img)[0] & CARD_EOF)
+        r = CDSE_EOF;
+    else if ((*img)[0] & CARD_ERR)
+        r = CDSE_ERROR;
+    memcpy(image, img, 80 * sizeof(uint16));
+    image[0] &= 0xfff;          /* Remove any CARD_EOF and CARD_ERR Flags */
+    return r;
+}
+
 
 t_cdstat
 sim_read_card(UNIT * uptr, uint16 image[80])
@@ -715,7 +826,9 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
            buf->buffer[0] |= 0x80;
            if (i == 160 && odd == i)
                mode = MODE_CBN;
-           else if (i < 80 && even == i)
+           else if (i < 80 && even == i && i > 1)  
+               // RSV: added test "&& i>1" to avoid a binary card with row 6 punched in 1st column (a 6,F or K)
+               // is misiterpreted as BCD instead of binary
                mode = MODE_BCD;
         }
 
@@ -784,6 +897,12 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
             sim_debug(DEBUG_CARD, dptr, "-eof-");
             (*image)[0] = 015;       /* 6/7/9 punch */
             i = 4;
+        } else if ((buf->buffer[0] == ';') && (uptr->flags & SKIPCOMMENTCARD )) {
+            // RSV: mark this card. It is a "; comment" in deck text input file that should be ignored
+            sim_debug(DEBUG_CARD, dptr, "comment in cdr input file: ignored");
+            (*image)[0] = CARD_IGNORE; // mark card "to be ignored" 
+            i = 1; 
+            goto end_card;
         } else if (_cmpcard(&buf->buffer[0], "eoi")) {
             sim_debug(DEBUG_CARD, dptr, "-eoi-");
             (*image)[0] = 017;       /* 6/7/8/9 punch */
@@ -811,6 +930,9 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
                     default:
                     case MODE_026:
                            temp = ascii_to_hol_026[(int)c];
+                           break;
+                    case MODE_026A:
+                           temp = ascii_to_hol_026A[(int)c];
                            break;
                     case MODE_029:
                            temp = ascii_to_hol_029[(int)c];
@@ -1003,7 +1125,13 @@ _sim_read_deck(UNIT * uptr, int eof)
             r = sim_messagef(SCPE_OPENERR, "%s: %s Error (%s) in card %d\n",
                    sim_uname(uptr), uptr->filename, sim_error_text(r), cards);
         }
-        data->hopper_cards++;
+
+        // RSV: skip this card- It is a "; comment" in deck text input file */
+        if  ((*data->images)[data->hopper_cards][0] == CARD_IGNORE) {
+            // ignore the card
+        } else {
+            data->hopper_cards++;
+        }
         /* Move data to start at begining of buffer */
         /* Data is moved down to simplify the decoding of one card */
         l = buf.len - buf.size;
@@ -1067,14 +1195,21 @@ sim_punch_card(UNIT * uptr, uint16 image[80])
 
     /* Fix mode if in auto mode */
     if (mode == MODE_AUTO) {
-         /* Try to convert each column to ascii */
-         for (i = 0; i < 80; i++) {
-             out[i] = data->hol_to_ascii[image[i]];
-             if (out[i] == 0xff) {
-                ok = 0;
+         //RSV: if no support for lower case letters but punching a lower case letter
+         //     -> it is in fact a binary card being punched. 
+         if ((uptr->flags & MODE_LOWER) == 0) for (i = 0; i < 80; i++) {
+             if (data->hol_to_ascii[image[i]] >= 'a') {
+                ok = 2; break;
              }
          }
-         mode = ok?MODE_TEXT:MODE_OCTAL;
+         /* Try to convert each column to ascii */
+         if (ok == 1) for (i = 0; i < 80; i++) {
+             out[i] = data->hol_to_ascii[image[i]];
+             if (out[i] == 0xff) {
+                ok = 0; break;
+             }
+         }
+         mode = ok==0 ? MODE_OCTAL : ok==1 ? MODE_TEXT : MODE_BIN;
     }
 
     switch(mode) {
@@ -1092,6 +1227,11 @@ sim_punch_card(UNIT * uptr, uint16 image[80])
         sim_debug(DEBUG_CARD, dptr, "]\n");
         /* Trim off trailing spaces */
         while (outp > 0 && out[--outp] == ' ') ;
+#ifdef WIN32 
+        // RSV: add \r\n on windows platform, so it allows opening punched text card decks 
+        //      with notepad.exe without lines being messed-up
+        out[++outp] = '\r';  
+#endif
         out[++outp] = '\n';
         out[++outp] = '\0';
         break;
@@ -1139,7 +1279,6 @@ sim_punch_card(UNIT * uptr, uint16 image[80])
         out[outp++] = '\n';
         sim_debug(DEBUG_CARD, dptr, "%s", &out[4]);
         break;
-
 
     case MODE_BIN:
         sim_debug(DEBUG_CARD, dptr, "bin\n");
@@ -1322,6 +1461,9 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
          case 0:
          case MODE_026:
               temp = ascii_to_hol_026[i];
+              break;
+         case MODE_026A:
+              temp = ascii_to_hol_026A[i];
               break;
          case MODE_029:
               temp = ascii_to_hol_029[i];

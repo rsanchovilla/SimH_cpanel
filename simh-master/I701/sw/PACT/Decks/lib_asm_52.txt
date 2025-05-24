@@ -1,0 +1,232 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0   220
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF     0  DECOTREL
+; SY   1  USE        RDINT
+; SY   2  USE        RDALF
+; SY   3  USE        RDCHR
+; SY   4  USE        PRTNLINE
+; SY   5  USE        PRINTCRD
+;  
+         0000 +A  I 0214 DECOTREL + ADD       TWO          DECODE TEXT RELATIVE ASSEMBLER CARD
+         0001 +SA I 0127          + STORE A   EXIT         RETURN ADDR
+         0002 +RA I 0002          + R ADD     *           
+         0003 +T  S 0001          + TR        RDINT        READ RELATIVE LOCATION
+         0004 +H  A 0004          + STOP      0004         LEN=4 CHARS
+         0005 +H  A 0002          + STOP      0002         STARTING AT COL 2
+         0006 +ST I 0203          + STORE     MC.LOC       STORE INTEGER
+         0007 +AR A 0030          + A RIGHT   0030         SHIFT 30=A RIGHT 0012 + A RIGHT 0018
+         0008 +TZ I 0012          + TR 0      DECO1        TR IF CHECK MC.LOC < 4096
+         0009 +RA I 0009 EGT4K    + R ADD     *            
+         0010 +T  I 0128          + TR        ERROR
+         0011 +H  I 0184          + STOP      ERRGT4K      ERROR: LOCATION/ADDRESS > 4095
+         0012 +RA I 0012 DECO1    + R ADD     *           
+         0013 +T  S 0003          + TR        RDCHR        READ SIGN '+' OR '-'
+         0014 +H  A 0007          + STOP      0007         AT COL 7
+         0015 +ST I 0204          + STORE     MC.SGN       STORE BASE48 CHAR. 
+         0016 +S  I 0216          + SUB       D11          '-'
+         0017 +TZ I 0023          + TR 0      DECO2
+         0018 +S  I 0213          + SUB       ONE          WAS =12 -> '+'        
+         0019 +TZ I 0023          + TR 0      DECO2
+         0020 +RA I 0020          + R ADD     *            
+         0021 +T  I 0128          + TR        ERROR
+         0022 +H  I 0189          + STOP      ERRBADSG     ERROR: BAD SIGN. SHOULD BE '+' OR '-'
+         0023 +RA I 0023 DECO2    + R ADD     *
+         0024 +T  S 0003          + TR        RDCHR        READ 1 CHARS 
+         0025 +H  A 0008          + STOP      0008         AT COL 8 (=1ST CHAR OF OPCODE)
+         0026 +ST I 0210          + STORE     CHAR
+         0027 +TZ I 0070          + TR 0      EOPNF        1ST CHAR OF OP IS BLANK -> TR TO BAD OP ERROR
+         0028 +S  I 0216          + SUB       D11
+         0029 +TP I 0046          + TR +      MCMNE        1ST CHAR OF OP IS NOT NUMERIC -> TR TO GET OPCODE MNEMONIC       
+         0030 +RA I 0030          + R ADD     *            
+         0031 +T  S 0001          + TR        RDINT        READ NUMBER         NOTE: NO SIGN IS READ HERE. BUT IF NUM READ >= 131072 (=octal 400000)
+         0032 +H  A 0006          + STOP      0006         LEN=6 DIGITS              RETURNED NUM WILL BE NEGATIVE
+         0033 +H  A 0008          + STOP      0008         STARTING AT COL 8
+         0034 +ST I 0209          + STORE     NUM          STORE INTEGER.   
+         0035 +TP I 0041          + TR +      DECO3        TR IF NUM >= 0
+         0036 +RA I 0216          + R ADD     D11          BASE48 CODE FOR '-' IS 11
+         0037 +ST I 0204          + STORE     MC.SGN       SGN='-' -> SET SIGN NEGATIVE
+         0038 +RA I 0212          + R ADD     ZERO
+         0039 +AV I 0209          + ADD AB    NUM
+         0040 +ST I 0209          + STORE     NUM          MAKE NUM POSITIVE 0..131071
+         0041 +RA I 0212 DECO3    + R ADD     ZERO
+         0042 +ST I 0206          + STORE     MC.REG       REGION='A'=0
+         0043 +RA I 0214          + R ADD     TWO
+         0044 +ST I 0208          + STORE     MC.FMT       =2 -> SET AS REL TEXT NUMBER 
+         0045 +T  I 0115          + TR        DECODEOK     DECODE DONE, TR TO RETURN DECODED INSTR
+         0046 +RA I 0046 MCMNE    + R ADD     *
+         0047 +T  S 0002          + TR        RDALF        READ 3 CHARS IN MQ
+         0048 +H  A 0008          + STOP      0008         AT COL 8..10
+         0049 +SM I 0211          + STORE MQ  OP           GET OPCODE MNEMONIC (E.G: "RA ")       
+         0050 +RA I 0212          + R ADD     ZERO         CONVERT MNEMOMIC
+         0051 +ST I 0205          + STORE     MC.OP        TO OPERATION CODE 0..31
+         0052 +RA I 0066          + R ADD     TMNEAD
+         0053 +SA I 0054          + STORE A   RDOPMNE
+         0054 +RA A 0000 RDOPMNE  + R ADD     /   /
+         0055 +S  I 0211          + SUB       OP
+         0056 +TZ I 0077          + TR 0      MC2          TR IF MNEMONIC FOUND
+         0057 +RA I 0205          + R ADD     MC.OP
+         0058 +A  I 0213          + ADD       ONE
+         0059 +ST I 0205          + STORE     MC.OP
+         0060 +S  I 0219          + SUB       D32           
+         0061 +TZ I 0067          + TR 0      MC1          MNE NOT FOUND, TEST EXTRA EX INSTR
+         0062 +RA I 0054          + R ADD     RDOPMNE  
+         0063 +A  I 0213          + ADD       ONE
+         0064 +SA I 0054          + STORE A   RDOPMNE  
+         0065 +T  I 0054          + TR        RDOPMNE  
+         0066 +H  I 0151 TMNEAD   + STOP      TMNE
+         0067 +RA I 0211 MC1      + R ADD     OP
+         0068 +S  I 0183          + SUB       MNEEX        TEST FOR EXTRA OPCODE "EX"
+         0069 +TZ I 0073          + TR 0      MCEX         TR IF IS "EX" OPCODE 
+         0070 +RA I 0070 EOPNF    + R ADD     *            
+         0071 +T  I 0128          + TR        ERROR
+         0072 +H  I 0193          + STOP      ERROPNF      ERROR: UNKNOWN OPCODE MNEMONIC ON INSTR CARD
+         0073 +RA I 0216 MCEX     + R ADD     D11          MAKE SURE SIGN IS MINUS
+         0074 +ST I 0204          + STORE     MC.SGN
+         0075 +RA I 0218          + R ADD     D13
+         0076 +ST I 0205          + STORE     MC.OP        =MC INSTR OPCODE -> 13
+         0077 +RA I 0077 MC2      + R ADD     *           
+         0078 +T  S 0003          + TR        RDCHR        READ ADDRESS REGION A I V T N P # S
+         0079 +H  A 0011          + STOP      0011         AT COL 11
+         0080 +ST I 0210          + STORE     CHAR         STORE BASE48 CHAR. 
+         0081 +RA I 0212          + R ADD     ZERO         CONVERT REGION CHAR
+         0082 +ST I 0206          + STORE     MC.REG       TO REGION CODE 0..7
+         0083 +RA I 0097          + R ADD     TREGMNAD     (A=0, I=1, V=2, T=3, N=4, P=5, S=7)
+         0084 +SA I 0085          + STORE A   RDREGMNE
+         0085 +RA A 0000 RDREGMNE + R ADD     /   /        REG MNENONIC IS ALFA, SO NEGATIVE.  
+         0086 +A  I 0210          + ADD       CHAR         USE ADD INSTEAD OF SUB TO COMPARE 
+         0087 +TZ I 0101          + TR 0      MC4          TR IF MNEMONIC FOUND
+         0088 +RA I 0206          + R ADD     MC.REG
+         0089 +A  I 0213          + ADD       ONE
+         0090 +ST I 0206          + STORE     MC.REG
+         0091 +S  I 0215          + SUB       D8
+         0092 +TZ I 0098          + TR 0      MC3          REG NAME NOT FOUND
+         0093 +RA I 0085          + R ADD     RDREGMNE 
+         0094 +A  I 0213          + ADD       ONE
+         0095 +SA I 0085          + STORE A   RDREGMNE 
+         0096 +T  I 0085          + TR        RDREGMNE 
+         0097 +H  I 0143 TREGMNAD + STOP      TREGMNE
+         0098 +RA I 0098 MC3      + R ADD     *            
+         0099 +T  I 0128          + TR        ERROR
+         0100 +H  I 0198          + STOP      ERRREGNF     ERROR: UNKNOWN ADDRESS REGION ON INSTR CARD
+         0101 +RA I 0101 MC4      + R ADD     *           
+         0102 +T  S 0001          + TR        RDINT        READ INSTR ADDRESS
+         0103 +H  A 0004          + STOP      0004         LEN=4 DIGITS
+         0104 +H  A 0013          + STOP      0013         STARTING AT COL 13
+         0105 +ST I 0207          + STORE     MC.ADDR      STORE INTEGER
+         0106 +AR A 0030          + A RIGHT   0030         SHIFT 30=A RIGHT 0012 + A RIGHT 0018
+         0107 +TZ I 0109          + TR 0      MC5          TR ERROR IF ADDR < 4096
+         0108 +T  I 0009          + TR        EGT4K        TR ERROR IF ADDR > 4095
+         0109 +RA I 0213 MC5      + R ADD     ONE
+         0110 +ST I 0208          + STORE     MC.FMT       =1 -> SET AS REL TEXT INSTR 
+         0111 +RA I 0205          + R ADD     MC.OP        IS 0..31
+         0112 +AL A 0012          + A LEFT    0012
+         0113 +A  I 0207          + ADD       MC.ADDR      IS 0..4095
+         0114 +ST I 0209          + STORE     NUM 
+         0115 +RA I 0206 DECODEOK + R ADD     MC.REG       IS REGION A=0, I=1, V=2, T=3, N=4, P=5, S=7
+         0116 +AL A 0012          + A LEFT    0012
+         0117 +A  I 0203          + ADD       MC.LOC       IS 0..4095
+         0118 +ST I 0203          + STORE     MC.LOC       SAVE
+         0119 +RA I 0204          + R ADD     MC.SGN       IS 11 ('-') OR 12 ('+')
+         0120 +S  I 0217          + SUB       D12
+         0121 +LR A 0000          + L RIGHT   0000         IF MC.SGN = '-' THEN MQ IS SET TO NEGATIVE
+         0122 +RA I 0208          + R ADD     MC.FMT       IS 1..2 
+         0123 +AR A 0018          + A RIGHT   0018         PLACE MC.FORMAT IN RIGHT HALF WORD OF ACC
+         0124 +A  I 0209          + ADD       NUM
+         0125 +LL A 0000          + L LEFT    0000         COPY SIGN FROM MQ TO ACC 
+         0126 +LM I 0203          + LOAD MQ   MC.LOC
+         0127 +T  A 0000 EXIT     + TR        /   /
+         0128 +A  I 0214 ERROR    + ADD       TWO
+         0129 +SA I 0130          + STORE A   ERRP1
+         0130 +RA A 0000 ERRP1    + R ADD     /   /
+         0131 +SA I 0137          + STORE A   ERRSTRZ      SAVE ADDR OF ERROR TXT MESSAGE
+         0132 +RA I 0132          + R ADD     *            PRINT USER PROGRAM SOURCE CODE CARD JUST PROCESSED
+         0133 +T  S 0005          + TR        PRINTCRD
+         0134 +RA I 0134          + R ADD     *
+         0135 +T  S 0004          + TR        PRTNLINE     
+         0136 +H  A 0101          + STOP      0101         STRINGZ AT COL 1
+         0137 +H  A 0000 ERRSTRZ  + STOP      /   /        ERROR MESSAGE
+         0138 +H  A 0000          + STOP      0000         END OF LINE
+         0139 +H  I 0140          + STOP      ERRCONT      IF USER PRESS STARTS, PROGRAM RESUMES PROCESSING 
+         0140 +RA I 0212 ERRCONT  + R ADD     ZERO
+         0141 +LM I 0212          + LOAD MQ   ZERO
+         0142 +T  I 0127          + TR        EXIT
+         0143 -000013    TREGMNE    TXT       '  A'        MC.REG=0
+         0144 -000021               TXT       '  I'              =1
+         0145 -000034               TXT       '  V'              =2
+         0146 -000032               TXT       '  T'              =3
+         0147 -000026               TXT       '  N'              =4
+         0148 -000028               TXT       '  P'              =5   PERISHABLE STORAGE (=LIB TEMP VARS)
+         0149 -000044               TXT       '  #'        UNUSED
+         0150 -000031               TXT       '  S'              =7
+         0151 -046080    TMNE       TXT       'H  '        STOP/HALT
+         0152 -073728               TXT       'T  '        TRANSFER
+         0153 -074592               TXT       'TF '        TRANSFER ON OVERLOF
+         0154 -075072               TXT       'TP '        TRANSFER ON PLUS
+         0155 -075552               TXT       'TZ '        TRANSFER ON ZERO
+         0156 -071424               TXT       'S  '        SUBTRACT
+         0157 -070608               TXT       'RS '        RESET AND SUBTRACT
+         0158 -073056               TXT       'SV '        SUBTRACT ABSOLUTE VALUE
+         0159 -059904               TXT       'N  '        NO OPERATION
+         0160 -029952               TXT       'A  '        ADD
+         0161 -069744               TXT       'RA '        RESET AND ADD
+         0162 -031584               TXT       'AV '        ADD ABSOLUTE VALUE
+         0163 -072960               TXT       'ST '        STORE
+         0164 -072048               TXT       'SA '        STORE ADDRESS
+         0165 -072624               TXT       'SM '        STORE MQ
+         0166 -056496               TXT       'LM '        LOAD MQ
+         0167 -057600               TXT       'M  '        MULTIPLY
+         0168 -059040               TXT       'MR '        MULTIPLY AND ROUND
+         0169 -036864               TXT       'D  '        DIVIDE
+         0170 -069120               TXT       'R  '        ROUND
+         0171 -056448               TXT       'LL '        LONG LEFT SHIFT
+         0172 -056736               TXT       'LR '        LONG RIGHT SHIFT
+         0173 -031104               TXT       'AL '        ACCUMULATOR LEFT SHIFT
+         0174 -031392               TXT       'AR '        ACCUMULATOR RIGHT SHIFT
+         0175 -069888               TXT       'RD '        READ
+         0176 -069792               TXT       'RB '        READ BACKWARDs
+         0177 -080640               TXT       'W  '        WRITE
+         0178 -081456               TXT       'WE '        WRITE END OF FILE
+         0179 -070800               TXT       'RW '        REWIND TAPE
+         0180 -072192               TXT       'SD '        SET DRUM ADDR
+         0181 -072240               TXT       'SE '        SENSE
+         0182 -034560               TXT       'C  '        COPY
+         0183 -040896    MNEEX      TXT       'EX '        EXTRACT - late added opcode, with operation code = -13
+         0184 -032896    ERRGT4K    TXT       "BAD LOC/ADDR",0              ERROR: LOCATION/ADDRESS > 4095
+         0185 -001179    
+         0186 -036733    
+         0187 -037662    
+         0188 +000000    
+         0189 -032896    ERRBADSG   TXT       "BAD SIGN",0                  ERROR: BAD SIGN. SHOULD BE '+' OR '-'
+         0190 -001509    
+         0191 -045024    
+         0192 +000000    
+         0193 -032896    ERROPNF    TXT       "BAD OPCODE",0                ERROR: UNKNOWN OPCODE MNEMONIC ON INSTR CARD
+         0194 -001324    
+         0195 -035872    
+         0196 -039168    
+         0197 +000000    
+         0198 -032896    ERRREGNF   TXT       "BAD MC REG",0                ERROR: UNKNOWN ADDRESS REGION ON INSTR CARD
+         0199 -001215    
+         0200 -001457    
+         0201 -043776    
+         0202 +000000    
+         0203 +000000    MC.LOC     DEF       0            
+         0204 +000000    MC.SGN     DEF       0            =1 -> '+', =-1 -> '-'
+         0205 +000000    MC.OP      DEF       0            0..31 (NO SIGN)
+         0206 +000000    MC.REG     DEF       0            A=0, I=1, V=2, T=3, N=4, P=5, S=7
+         0207 +000000    MC.ADDR    DEF       0            0..4095
+         0208 +000000    MC.FMT     DEF       0            =1 -> TEXT FORMAT, MC INSTR, =2 -> TEXT FORMAT, NUM
+         0209 +000000    NUM        DEF       0            0..131071 (NO SIGN) 
+         0210 +000000    CHAR       DEF       0
+         0211 +000000    OP         DEF       0
+         0212 +000000    ZERO       DEF       0
+         0213 +000001    ONE        DEF       1
+         0214 +000002    TWO        DEF       2
+         0215 +000008    D8         DEF       8
+         0216 +000011    D11        DEF       11
+         0217 +000012    D12        DEF       12
+         0218 +000013    D13        DEF       13
+         0219 +000032    D32        DEF       32

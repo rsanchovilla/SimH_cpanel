@@ -1,0 +1,127 @@
+                                  (c) May 2025 by Roberto Sancho
+
+                                  PACT I Compiler
+                                   
+                                  To be assembled with Ibm701Assembler.exe cross-assembler
+
+LABEL--- S OPCODE--- OPADDR---    COMMENT   *NNNN -> octal number, else decimal number
+
+
+           HEAD      PACTREL      USING PACT RELATIVE ASSEMLER SYNTAX
+
+                                  DEFINE SYMBOLS NAME FOR PACT LOADER
+
+           HEAD      DEF:SINFN            SIN PACT instruction 
+                                          Return value with Q=1
+                                          computing procedure:
+                                          USING TAYLOR SERIES: sin x = x - (x^3/3!) + (x^5/5!) - (x^7/7!)
+                                          ARGUMENT = RADIANS, MUST BE IN RANGE -PI/2 TO +PI/2 (-1.57 .. +1.57)
+                                                     but accespt more range as internally, angle is Q=4 (-16..+16) 
+
+SINFN    + STORE A   EXIT         SAVE ACC
+
+         + R ADD     EXIT         RESTORE ACC
+         + ADD       TWO          
+         + STORE A   P1           PARM: Q OF ARGUMENT (GIVEN IN MQ). 
+         + ADD       ONE
+         + STORE A   EXIT
+         - STORE MQ  ANGLE        ANGLE (IN RADIANS)
+
+   P1    + R ADD     /   /        GET Q OF ARGUMENT. CAN BE NEGATIVE
+         + SUB       D4
+         + TR 0      NORM         =0 -> NO NEED TO SHIFT ANGLE VALUE
+         + TR +      LF           >0 -> SHIFT LEFT
+
+         + STORE A   RT1          <0 -> SHIFT RIGHT
+         - R ADD     ANGLE
+   RT1   + A RIGHT   /   /
+         + TR        ANG
+
+   LF    + STORE A   LF1
+         - R ADD     ANGLE
+   LF1   + A LEFT    /   /
+   ANG   - STORE     ANGLE        NOW ANGLE IS SET WITH Q=4 -> -916gr..+916gr
+
+   NORM  - R ADD     ANGLE        NORMALIZE ANGLE: TO FIT IN RANGE -PI..+PI
+         - L RIGHT   0035         ACC=0, MQ=ANGLE
+         - DIV       TWOPI        ACC CONTAINS THE REMAINDER (MODULO 2PI AT Q=4)
+         - STORE     ANGLE
+         - SUB       PI
+         + TR +      NORM1        TR IF ANGLE > +PI -> MUST ADJUST
+         - R ADD     ANGLE
+         - ADD       PI
+         + TR +      NORM2        TR IF ANGLE > -PI -> IN RANGE
+         - ADD       PI           ANGLE IS IN RANGE -2PI..-PI. ADD 2PI TO PLACE THE ANGLE IN RANGE 0..PI
+         + TR        NORM1B         
+   NORM1 - SUB       PI           SUB 2PI TO PLACE THE ANGLE IN RANGE -PI..0
+  NORM1B - STORE     ANGLE        
+
+   NORM2 - R ADD     PI           NORMALIZE ANGLE TO RANGE -PI/2..+PI/2
+         + A RIGHT   0001         ACC=PI/2
+         - SUB       ANGLE        
+         - TR +      NORM2A       IF ANGLE < PI/2 TR TO CONTINUE RANGE CHECK
+         - R ADD     PI           ANGLE > PI/2 -> MUST ADJUST -> ANGLE = PI - ANGLE  
+         + TR        NORM5
+  NORM2A - SUB       PI
+         - TR +      NORM3        IF ANGLE < -PI/2 -> MUST ADJUST 
+         - TR        DO.SIN       TR AS ANGLE IN RANGE -PI/2..PI/2
+   NORM3 - R SUB     PI           HERE ANGLE < -PI/2 -> ANGLE = -PI - ANGLE
+   NORM5 - SUB       ANGLE 
+         - STORE     ANGLE        
+
+DO.SIN   + R ADD     XX           COMPUTE SIN(XX=ANGLE) WITH Q=4
+         + STORE     RES          XX MUST BE < 2 (ELSE DIV CHECK) -> THIS IS WHY WE NORMALIZE TO -PI/2..+PI/2
+         + STORE     TERM
+
+         + R ADD     ONEQ4
+         + STORE     N            N=1
+
+LOOP     + R ADD     N            COMPUTE: TERM = - (TERM * XX * XX) / ((N+1) * (N+2))
+         + ADD       ONEQ4
+         + STORE     NN
+         + ADD       ONEQ4
+         + STORE     N
+
+         + R SUB     TERM
+         + LOAD MQ   ZERO
+         + DIV       NN           MQ= TERM/(N+1) AT Q=QTERM-QNN = 4-4=0
+         - MPY       XX           NO NEED TO LOAD MQ WITH VALUE. ALREADY SET BY DIV ABOVE. QRES=0+QXX=4. RESULT IN ACC
+         + LOAD MQ   ZERO
+         + DIV       N            MQ= TERM/(N+2) AT Q=QACC-QN = 4-4=0
+         - MPY       XX           NO NEED TO LOAD MQ WITH VALUE. ALREADY SET BY DIV ABOVE. QRES=0+QXX=4. RESULT IN ACC
+         - STORE     TERM         AT Q=4
+         + TR 0      LOOPE
+
+         + ADD       RES
+         + STORE     RES          RESULT = RESULT + TERM
+
+         + TR        LOOP
+
+LOOPE    + R ADD     RES          PUT THE RESULT IN ACC (Q=4)
+         + A LEFT    0003         SO RESULT IS Q=1
+EXIT     + TR        /   /        RETURN TO CALLER
+                                  
+ZERO       DEF       0
+ONE        DEF       1
+TWO        DEF       2
+D4         DEF       4
+ONEQ4      DEF       *20000       ONE REPRESENTED WITH Q=4 -> 0001 0...
+
+           ORG       EVEN
+
+TWOPI      DEF       *144417      VALUE OF 2xPI AT Q=4     
+           DEF       *665200            
+PI         DEF       *062207      VALUE OF PI AT Q=4     
+           DEF       *732500             
+
+           ORG       EVEN
+
+ANGLE      RES       2
+TERM       RES       2
+RES        RES       2
+
+XX         EQU       ANGLE
+
+N          RES       1
+NN         RES       1
+

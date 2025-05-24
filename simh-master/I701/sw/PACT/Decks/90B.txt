@@ -1,0 +1,328 @@
+                                                             (c) May 2025 by Roberto Sancho
+                           
+                                                             PACT I Compiler
+                                                              
+                                                             To be assembled with Ibm701Assembler.exe cross-assembler
+                           
+                                    
+                                                             THIS IS THE BINARY RELATIVE CARDS LOADER 
+                                                             IT IS AN ABSOLUTE PROGRAM, DOES NOT USE ANY EXTERNAL ROUTINE
+                           
+                                                             WILL READ PACT RELATIVE BINARY CARDS INTO STORAGE 
+                                                             IF SW2 IS ON, WILL STOP BEFORE START OF COMPILED PROGRAM 
+                           
+                           
+                                                             WHEN RUNNING SELFLOAD, THESE ARE THE ERROR STOPS:
+                                                                STOP 3936   REL LOAD ERROR: BAD CHECKSUM, PRESS START TO CONTINE PROCESSING CARD
+                                                                STOP 3890   REL LOAD ERROR: SYMBOL IN CARD NOT FOUND, PRESS START TO READ NEXT CARD 
+                                                                STOP 4031   REL LOAD ERROR: SYMBOL ALREADY DEFINED, PRESS START TO OVERWRITE SYMBOL 
+                                                                STOP 3989   REL LOAD ERROR: INSTR USES SYMBOL NUM THAT HAS NOT BEEN DEFINED, PRESS START TO CONTINUE 
+                                                                STOP 3890   REL LOAD ERROR: OP.LOC/EXT IS ZERO. PRESS START TO READ NEXT CONTROL CARD
+                           
+                           
+                                      OUTDEC
+                                      ORG       3850
+                           
+        DEC
+        NNNN OP ADDR COMMENTS
+        3850+10 3888 RELBINLD + R ADD     HI4094
+        3851+12 4087          + STORE     HI
+        3852+10 3885          + R ADD     L3817        SET TO INIT & CLEAR REGION ORIGIN TABLE ONCE ...
+        3853+12 3929          + STORE     L3861        ... AFTER READING CARD
+                           
+                                                             IF SW2 IS ON THEN LOAD ROUTINE WILL STOP BEFORE TR 0000
+        3854+30 0070          + SENSE     0070         SENSE SWITCH 2                                  
+        3855+01 3858          + TR        STARTLD      (ON POSITION MAKES SENSE OPCODE TO SKIP NEXT INSTR)
+                           
+        3856+10 4076          + R ADD     ZERO         IF SW2 IS ON, A "+STOP 0000" WILL REPLACE "+TR 0000" AT "RUN" LABEL
+        3857+12 3959          + STORE     RUN          ON LOAD TERMINATION, CPU WILL STOP. IF THEN USER PRESS START, EXECUTION WILL BE RESUMED 
+                                                             AND COMPILED PROGRAM ALREADY LOADED WILL BE EXECUTED
+                                                             RSV: This SW2 control is not original, but it is very handly to debug compiled program
+                           
+        3858+01 3890 STARTLD  + TR        READCC       TR TO READ CARD, THEN TR TO 3799
+                           
+                                                             PACT  REGION ORIGIN CONTROL CARD (INITIAL CONTROL CARD)
+                           
+                                                                         CODE=-00
+                           
+                                                              / ........ [CODE][ORIGIN=0  ] [TOP SYMBOL = 0  ] ............[      CHECK SUM       ].
+                                                             |  ........ .................. .................. [COUNT           ] .................. 
+                           
+                                                             |  ........ .................. .................. .................. .................. 
+                           
+                                                             |  ........ ........^......... .................. .................. .................. 
+                           
+                                                             |  ........ ........|......... .................. .................. .................. 
+                           
+                                                             |  ........ ........|......... .................. .................. .................. 
+                           
+                                                             |  ........ ........|......... .................. .................. .................. 
+                           
+                                                             |  ........ [SYMBOL          ] [OP=1][LOC OR EXT] .................. ..................
+                           
+                                                             |  ........ .................. .................. [1ST PACT REGION ] [OP=0][START     ] 
+                                                             |  ........ [4=NUMS REGION   ] [OP=1][LOC OR EXT] [5=PERISHBLE REG ] [OP=1][LOC OR EXT] 
+                                                             |  ........ [2=VARS REGION   ] [OP=1][LOC OR EXT] [3=TEMP REGION   ] [OP=1][LOC OR EXT] 
+                                                             |  ........ .................. .................. .................. ......[RO TBL AD ] 
+                           
+                                                                         START     = INITAL REGION = ABS LOCATION OF 1ST REGION TO BE EXECUTED
+                                                                         RO TBL AD = REGION ORIGIN TABLE ABSOLUTE LOCATION
+                                                                         OP=1 -> REGION EXTENT IS GIVEN
+                                                                         OP=0 -> REGION ABSOLUTE LOCATION IS GIVEN / REGION NOT USED
+                                                                         SYMBOL    = <0 -> BASE48 NAME OF PACT REGION. 
+                                                                                   = >0 -> BASE48 NAME OF LIBRARY ROUTINE
+                           
+                           
+                                                             INIT RO TABLE RELATED VALUES ACCORDING TO INITIAL CONTROL CARD RO TBL START ADDR
+                           
+        3859+10 0003 INITRO   + R ADD     0003         GET REGION ORIGIN TABLE ABSOLUTE LOCATION FROM INITIAL CONTROL CARD
+        3860+12 4094          + STORE     4094         SAVE RO TABLE ABSOLUTE ADDRESS  
+        3861+13 4065          + STORE A   ROTBLAD      SAVE RO TABLE ABSOLUTE ADDRESS  
+        3862+09 4078          + ADD       TWO
+        3863+13 3950          + STORE A   IREGSYAD     SAVE ADDR WHERE CURRENT I-REG SYMBOL NAME (TOP SYMBOL OF INTR CARD) WILL BE STORED
+        3864+09 4077          + ADD       ONE
+        3865+13 3952          + STORE A   IREGLOC      SAVE ADDR WHERE CURRENT I-REG ABS LOCATION WILL BE STORED
+        3866+13 3960          + STORE A   ICRD         SAVE ADDR WHERE CURRENT I-REG ABS LOCATION WILL BE STORED
+        3867+09 3889          + ADD       D11          INITIAL EXTENT (=SIZE) OF RO TABLE = 14 HALF WORDS = 7 SYMBOLS (0..6 = REG.A, REG.I, REG.V, REG.T, REG.N, REG.P)
+        3868+13 4066          + STORE A   ROEND
+        3869+13 3887          + STORE A   ROZEND       SAVE INITIAL END OF RO TABLE
+        3870+09 4077          + ADD       ONE
+        3871+13 4059          + STORE A   L3988        TO READ ABSOLUTE LOCATION OF 1ST REGION
+        3872+13 4070          + STORE A   SYAD         START OF SYMBOL ADDRESS       
+                                   
+        3873+10 4065          + R ADD     ROTBLAD      CLEAR REGION ORIGIN TABLE
+        3874+13 3876          + STORE A   L3808        
+        3875+15 4076          + LOAD MQ   ZERO
+        3876-14 0000 L3808    - STORE MQ  /   /
+        3877+10 3876          + R ADD     L3808                                                    
+        3878+05 4078          + SUB       TWO
+        3879+13 3876          + STORE A   L3808
+        3880+09 3887          + ADD       ROZEND
+        3881+03 3876          + TR +      L3808 
+                           
+        3882+10 3886          + R ADD     L3818        SET TO NOT CLEAR RO TABLE ...
+        3883+12 3929          + STORE     L3861        ... AFTER READING CARD
+        3884+01 3930          + TR        TSTCKSUM     TR TO CHECK CHKSUM ON CONTRL CARD  
+                           
+        3885+01 3859 L3817    + TR        INITRO    
+        3886+01 3930 L3818    + TR        TSTCKSUM     
+        3887+14 0000 ROZEND   + STORE MQ  /   /
+        3888+01 4094 HI4094   + TR        4094         HIMEM INITIAL VALUE
+        3889+00 0011 D11      + STOP      0011         
+                           
+                                                             READ CARD TO LOCATIONS 0000..0047
+                           
+        3890-24 2048 READCC   - READ      2048         PREPARE TO READ FROM CARD READER
+        3891+10 4076          + R ADD     ZERO
+        3892-12 4080          - STORE     DATA         INIT DATA2 (=HALF-WORD OF DATA) TO ZERO
+        3893-12 4082          - STORE     SUM          INIT CHECKSUM
+        3894+13 3980          + STORE A   RDINS        INIT TO READ INSTR FROM CARD
+        3895+13 4018          + STORE A   RDCC1        INIT TO READ CONTROL CARD
+        3896+13 3904          + STORE A   RD1C         INIT TO PROCESS CARD DATA STARTING AT ADDR 0000
+        3897+13 3900 RD1LOOP  + STORE A   RD1A         INIT TO COPY CARD DATA STARTING AT ADDR 0000
+        3898+09 4078          + ADD       TWO
+        3899+13 3901          + STORE A   RD1B
+        3900-31 0000 RD1A     - COPY      /   /        READ ROW FROM CARD
+        3901-31 0000 RD1B     - COPY      /   /
+        3902+10 4079          + R ADD     D3           TO UPDATE CHKSUM
+        3903+12 4084          + STORE     COUNT
+        3904+10 0000 RD1C     + R ADD     /   /        GET LEFT HALFWORD READ FROM CARD 
+        3905+12 4081          + STORE     DATA2        SAVE IN RIGHT HALF-WORD OF DATA
+        3906-10 4080          - R ADD     DATA         GET THE WHOLE DATA FULLWORD
+        3907-09 4082          - ADD       SUM          ADD IT TO CHECKSUM
+        3908-12 4082          - STORE     SUM          SAVE NEW CHKSUM
+        3909+10 3904          + R ADD     RD1C         INCR RD1C ADDR
+        3910+09 4077          + ADD       ONE
+        3911+13 3904          + STORE A   RD1C
+        3912+05 4064          + SUB       RDEND        TEST EN OF LOOP AT ADDR 0046 
+        3913+03 3921          + TR +      RD1END       TR IF END OF LOOP
+        3914+10 4084          + R ADD     COUNT
+        3915+05 4077          + SUB       ONE
+        3916+12 4084          + STORE     COUNT
+        3917+03 3904          + TR +      RD1C
+        3918+06 3901          + R SUB     RD1B
+        3919+09 4078          + ADD       TWO
+        3920+01 3897          + TR        RD1LOOP
+                           
+        3921+15 0044 RD1END   + LOAD MQ   0044         GET CARD CODE+ORIGIN
+        3922+20 0005          + L LEFT    0005
+        3923-12 4080          - STORE     DATA         SET DATA2=CODE
+        3924+21 0005          + L RIGHT   0005
+        3925+14 4080          + STORE MQ  DATA         SET ADDR PART OF DATA=CARD ORIGIN
+        3926+03 3959          + TR +      RUN          IF CARD CODE >= 0 -> START PACT PROGRAM (GO TO INSTR 0000 IN TRANSFER CARD)
+        3927+10 0042          + R ADD     0042         GET CARD COUNT
+        3928+13 4067          + STORE A   CRDCNT       SAVE CARD COUNT -> NUM OF HALF WORDS IN CARD
+        3929+01 3930 L3861    + TR        TSTCKSUM     TR TO TEST CHKSUM/CLEAR RO TABLE
+                           
+        3930-06 0046 TSTCKSUM - R SUB     0046         TEST CHKSUM ON CARD 
+        3931+22 0012          + A LEFT    0012         SHOULD MATCH THE CALCULATED ONE
+        3932+23 0013          + A RIGHT   0013         
+        3933-09 4082          - ADD       SUM
+        3934+04 3936          + TR 0      CHKOK        TR IF CHKSUM OK
+        3935+00 3936          + STOP      CHKOK        ERROR: BAD CHECKSUM, PRESS START TO CONTINE PROCESSING CARD
+                           
+        3936+10 4065 CHKOK    + R ADD     ROTBLAD      ADDR OF REGION ORIGIN TABLE
+        3937+13 3938          + STORE A   L3870        INIT TO SCAN RO TABLE TO FOUND CARD TOP SYMBOL
+        3938+10 0000 L3870    + R ADD     /   /
+        3939+05 0045          + SUB       0045         IS SAME AS TOP SYMBOL IN CARD? 
+        3940+04 3947          + TR 0      SYFND        IF =0 -> YES, SAME SYMBOL -> TR TO SYFND
+        3941+06 3938          + R SUB     L3870
+        3942+05 4078          + SUB       TWO
+        3943+13 3938          + STORE A   L3870
+        3944+09 4066          + ADD       ROEND
+        3945+03 3938          + TR +      L3870   
+        3946+00 3890          + STOP      READCC       ERROR: SYMBOL IN CARD NOT FOUND, PRESS START TO READ NEXT CARD 
+                           
+        3947+10 3938 SYFND    + R ADD     L3870        GET ADDR IN RO TABLE OF TOP SYMBOL FOUND
+        3948+13 3949          + STORE A   L3881
+        3949-10 0000 L3881    - R ADD     /   /        GET FULLWORD WITH TOP_SYMBOL_NAME|ABS_SYMB_LOC
+        3950-12 0000 IREGSYAD - STORE     /   /        SAVE TOP_SYMBOL_NAME|ABS_SYMB_LOC AS I-REG 
+        3951+04 3953          + TR 0      L3885
+        3952+10 0000 IREGLOC  + R ADD     /   /        GET ABS LOC OF CURRENT I-REG (=ABS LOC OF TOP SYMBOL IN CARD) 
+        3953+05 4080 L3885    + SUB       DATA         DATA=CARD ORIGIN
+        3954+13 3991          + STORE A   WRADDR       SET ABSOLUTE DESTINATION ADDR=CARD ORIGIN
+        3955+10 4081          + R ADD     DATA2        DATA2=CARD CODE (01=CONTROL CARD, 00=INST CARD)
+        3956+04 3960          + TR 0      ICRD         TR TO PROCESS PACT RELATIVE INSTR BINARY CARDS
+        3957+05 4077          + SUB       ONE
+        3958+04 4014          + TR 0      CCRD         TR TO PROCESS PACT CONTROL CARDS       
+        3959+01 0000 RUN      + TR        0000         ANY OTHER CARD CODE -> START PACT PROGRAM (GO TO INSTR 0000 IN TRANSFER CARD)
+                           
+                                                             PROCESS INSTR CARD
+                           
+        3960+10 0000 ICRD     + R ADD     /   /        GET ABS LOC OF CURRENT I-REG (=ABS LOC OF TOP SYMBOL IN CARD)
+        3961+04 4074          + TR 0      ERRNOLOC     IF =0 -> TR TO STOP, AS TOP SYMBOL NOT DEFINED
+        3962+10 4068          + R ADD     D36        
+        3963+13 3964          + STORE A   RD2LOOP
+        3964-10 0000 RD2LOOP  - R ADD     /   /        GET INDICES VALUE (3 BITS PER INDEX, FULLWORD=36 BITS -> 12 INDICES PER FULLWORD)
+        3965-12 4082          - STORE     SUM          SUM=INDICES 
+        3966+10 4071          + R ADD     D12
+        3967+12 4086          + STORE     INDCNT       INIT NUMBER OF INDICES LEFT IN SUM FULLWORD = 12
+        3968-15 4082          - LOAD MQ   SUM          GET INDICES FULLWORD
+        3969+10 4076          + R ADD     ZERO
+        3970+20 0000          + L LEFT    0000         ACC SIGN = BIT3 OF TAG 
+        3971+03 3974          + TR +      L3906        TR IF TAG IS 0,1,2,3
+        3972-10 4076          - R ADD     ZERO         ACC= 000000 000001
+        3973+21 0000          + L RIGHT   0000              
+        3974+20 0002 L3906    + L LEFT    0002         NOW ACC = 000000 000 TAG (WHERE TAG=0..7), MQ=REMAINING INDICES
+        3975+01 3978          + TR        L3910
+        3976+10 4076 L3908    + R ADD     ZERO
+        3977+20 0003          + L LEFT    0003
+        3978+22 0001 L3910    + A LEFT    0001       
+        3979-12 4084          - STORE     COUNT        -> REGAD = REGION INDEX TAG * 2 = REGION OFFSET ON RO TABLE
+        3980+10 0000 RDINS    + R ADD     /   /        READ INSTR HALFWORD
+        3981+12 4073          + STORE     INSTR        MACHINE CODE INSTR 
+        3982+10 4085          + R ADD     REGAD        REGION OFFSET ON RO TABLE
+        3983+05 4069          + SUB       D14          IF =14 -> INSTR REGION = 7
+        3984+04 4008          + TR 0      REG.S        TR IF INSTR REGION = 7 
+        3985+09 4070          + ADD       SYAD         ADDRESS WHERE SYMBOLS START IN RO 
+        3986+13 3987          + STORE A   L3919
+        3987+10 0000 L3919    + R ADD     /   /
+        3988+11 4073          + ADD AB    INSTR        MACHINE CODE INSTR 
+        3989+13 4073 L3921    + STORE A   INSTR        MACHINE CODE INSTR 
+        3990+10 4073          + R ADD     INSTR        MACHINE CODE INSTR 
+        3991+12 0000 WRADDR   + STORE     /   /        SAVE AT ABSOLUTE DESTINATION ADDR
+        3992+10 3980          + R ADD     RDINS        INCR INSTR TO READ
+        3993+09 4077          + ADD       ONE
+        3994+13 3980          + STORE A   RDINS
+        3995+05 4067          + SUB       CRDCNT
+        3996+03 3890          + TR +      READCC       TO READ NEXT CARD
+        3997+10 3991          + R ADD     WRADDR
+        3998+09 4077          + ADD       ONE
+        3999+13 3991          + STORE A   WRADDR
+        4000+06 4077          + R SUB     ONE          DEC NUMBER OF INDICES LEFT IN SUM FULLWORD
+        4001+09 4086          + ADD       INDCNT
+        4002+12 4086          + STORE     INDCNT
+        4003+03 3976          + TR +      L3908
+                           
+        4004+10 3964          + R ADD     RD2LOOP
+        4005+05 4078          + SUB       TWO
+        4006+13 3964          + STORE A   RD2LOOP
+        4007+01 3964          + TR        RD2LOOP
+                           
+        4008+10 4070 REG.S    + R ADD     SYAD         ADDRESS WHERE SYMBOLS START IN RO 
+        4009+11 4073          + ADD AB    INSTR        MACHINE CODE INSTR 
+        4010+13 4011          + STORE A   L3943        IF SYMBOL NOT DEFINED BUT USED -> ERROR
+        4011+10 0000 L3943    + R ADD     /   /
+        4012+04 4072          + TR 0      ERRSYND  
+        4013+01 3989          + TR        L3921
+                                                             PROCESS CONTROL CARD AT 0000..0047
+                           
+        4014+10 3991 CCRD     + R ADD     WRADDR       GET ABSOLUTE DESTINATION ADDR=CARD ORIGIN
+        4015+09 4065          + ADD       ROTBLAD      REGION ORIGIN TABLE ADDR   
+        4016+13 4021          + STORE A   RDRO         SET ADDR TO READ FROM REGION ORIGIN TABLE ENTRY
+        4017+13 4041          + STORE A   WRRO         SET ADDR TO WRITE TO REGION ORIGIN TABLE ENTRY
+        4018-10 0000 RDCC1    - R ADD     /   /        READ CONTROL CARD WORD = SYMBOL | OP.LOC/EXT
+        4019+04 4042          + TR 0      NXTSY        IF =0 -> PROCEED WITH NEXT WORD IN CONTROL CARD
+        4020-12 4082          - STORE     SUM          SAVE CONTROL CARD SUPLIED SYMBOL | OP.LOC/EXT
+        4021-10 0000 RDRO     - R ADD     /   /        READ FROM REGION ORIGIN TABLE ENTRY
+        4022+04 4031          + TR 0      RO1          TR TO RO1 IF REGION ORIGIN TABLE ENTRY IS FREE
+        4023-12 4080          - STORE     DATA         IF ENTRY IS USED, CHECK IT IS OCCUPIED BY SAME SYMBOL
+        4024+10 4080          + R ADD     DATA         A CURRENT ONE
+        4025+05 4082          + SUB       SUM
+        4026+04 4028          + TR 0      RO0          TR IF SAME SYMBOL
+        4027+00 4031          + STOP      RO1          ERROR: RO ENTRY USED BY ANOTHER SYMBOL, PRESS START TO OVERWRITE SYMBOL 
+        4028+10 4081 RO0      + R ADD     DATA2        GET SYMBOL LOC IN TABLE
+        4029+04 4031          + TR 0      RO1          TR IF ZERO (=EMPTY)
+        4030+00 4031          + STOP      RO1          STOP: SYMBOL ALREADY DEFINED, PRESS START TO OVERWRITE SYMBOL 
+        4031+10 4083 RO1      + R ADD     SUM2         GET OP.LOC/EXT FROM CONTROL CARD
+        4032+23 0030          + A RIGHT   0030
+        4033+04 4040          + TR 0      RO2          TR IF OP=0 -> SET ABSOLUTE LOCATION OF SYMBOL = OP.EXT
+        4034+10 4087          + R ADD     HI           HERE  OP>0 -> SET ABSOLUTE LOCATION OF SYMBOL = HI - OP.EXT
+        4035+05 4083          + SUB       SUM2         HI=HI - MAKE EVEN(SYMBOL EXTENT+1)
+        4036+23 0019          + A RIGHT   0019      
+        4037+22 0019          + A LEFT    0019
+        4038+13 4087          + STORE A   HI           
+        4039+12 4083          + STORE     SUM2         SYMBOL LOCATION = HI
+        4040-10 4082 RO2      - R ADD     SUM          GET SYMBOL | LOCATION
+        4041-12 0000 WRRO     - STORE     /   /        WRITE TO REGION ORIGIN TABLE ENTRY
+        4042+10 4021 NXTSY    + R ADD     RDRO         INCR TO READ/WRITE NEXT RO ENTRY
+        4043+05 4078          + SUB       TWO
+        4044+13 4021          + STORE A   RDRO
+        4045+13 4041          + STORE A   WRRO      
+        4046+09 4066          + ADD       ROEND        EXPAND RO TABLE IF NEEDED          
+        4047+03 4054          + TR +      L3983
+        4048+10 4066          + R ADD     ROEND
+        4049+13 4053          + STORE A   CLRRO        RSV: Set to clear new RO TABLE entry created. Not present in original code
+        4050+09 4078          + ADD       TWO
+        4051+13 4066          + STORE A   ROEND
+        4052+10 4076          + R ADD     ZERO         RSV: maybe RO table is cleared to a fixed high extend in missing code
+        4053-12 0000 CLRRO    - STORE     /   /        RSV: on start of loader routine
+        4054+10 4018 L3983    + R ADD     RDCC1        INCR TO READ NEXT WORD FROM CONTROL CARD
+        4055+05 4078          + SUB       TWO
+        4056+13 4018          + STORE A   RDCC1
+        4057+09 4067          + ADD       CRDCNT
+        4058+03 4018          + TR +      RDCC1        TR TO READ NEXT CONTROL CARD WORD
+        4059+10 0000 L3988    + R ADD     /   /        AT END OF CARD READ, 
+        4060+12 4095          + STORE     4095         SET ADDR 4095=LOC OF 1ST REGION=PROGRAM START
+        4061+10 4063          + R ADD     LTRNXTC      RSV: Fix so loc 4095 will only be set on FIRST control card processed.
+        4062+12 4059          + STORE     L3988             Any other following control card will not. Seems a bug in original code that only expects one control card (this < 30 symbols/regions defined)
+        4063+01 3890 LTRNXTC  + TR        READCC       READ NEXT CARD
+                           
+        4064+10 0046 RDEND    + R ADD     0046         LOCATION FOR END OF CARD DATA
+        4065+00 0000 ROTBLAD  + DEF       0            ABSOLUTE ADDR WHERE REGION ORIGIN TABLE STARTS
+        4066+10 0000 ROEND    + R ADD     0000         1ST ADDR AFTER REGION ORIGIN TABLE (=TABLE END)
+        4067+10 0000 CRDCNT   + R ADD     0000         LAST HALF WORD IN CONTROL CARD   
+        4068+00 0036 D36        DEF       36
+        4069+00 0014 D14        DEF       14
+        4070+00 0000 SYAD       DEF       0            ADDRESS WHERE SYMBOLS START IN RO 
+        4071+00 0012 D12        DEF       12
+        4072+00 3989 ERRSYND  + STOP      L3921        ERROR: INSTR USES SYMBOL NUM THAT HAS NOT BEEN DEFINED, PRESS START TO CONTINUE 
+        4073+00 0000 INSTR      DEF       0            MACHINE CODE INSTR 
+        4074+00 3890 ERRNOLOC + STOP      READCC       OP.LOC/EXT IS ZERO. PRESS START TO READ NEXT CONTROL CARD
+                                   
+                                      ORG       EVEN
+                           
+        4076+00 0000 ZERO       DEF       0
+        4077+00 0001 ONE        DEF       1
+        4078+00 0002 TWO        DEF       2
+        4079+00 0003 D3         DEF       3
+                           
+        4080+00 3850 DATA     + STOP      RELBINLD     TO AVOID "SYMBOL NOT REFERENCED" ASSEMBLER WARNING
+        4081+00 0000 DATA2      RES       1
+        4082+00 0000 SUM        RES       1
+        4083+00 0000 SUM2       RES       1
+        4084+00 0000 COUNT      RES       1
+        4085+00 0000 REGAD      RES       1            REGION OFFSET ON RO TABLE
+        4086+00 0000 INDCNT     RES       1            NUMBER OF INDICES LEFT IN SUM FULLWORD
+        4087+00 0000 HI         RES       1            HI MEM: LOWEST USED ADDR
+                           

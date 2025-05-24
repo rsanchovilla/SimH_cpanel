@@ -1,6 +1,6 @@
 
 This is the ReadMe file for IBM 701 simulator
-(C) Roberto Sancho 2021
+(C) Roberto Sancho 2025
 https://github.com/rsanchovilla/SimH_cpanel
 
 
@@ -37,6 +37,13 @@ Using Control Panel GUI
   Click on control panel image and drag mouse to move the window.
   Right click mouse to show a tooltip with image at 100% scale.
 
+  click card read input hopper/stacker or punched cards stacker
+  to open the Punched card View panel. Hotkeys available:
+
+   <-/-> cursor keys   show previous/next card
+   Home/End            show 1st/last card
+
+
   the Complete doc on simulator is here:
   https://github.com/rsanchovilla/SimH_cpanel/blob/master/Doc/i701_doc.docx
 
@@ -65,10 +72,15 @@ run CPanel IBM 701 demo.bat
    Will demo the assemblers using tapes 
    You can see all the hw working at real speed
 
+run CPanel IBM 701 PACT compiler demo.bat
+
+   Will demo the PACT compiler
+   You can see all the hw working at real speed
+
 
 Enjoy
 Roberto Sancho
-2021
+2025
 
 
 

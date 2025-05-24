@@ -1,0 +1,84 @@
+; SYMBOL TABLE
+; Reg Addr   Len
+;  I     0    75
+;  T     0     0
+;    Num  Op.  Addr  Name
+; SY   0  DEF    21  RDTAPE
+; SY   1  DEF    36  WRTAPE
+; SY   2  DEF     0  RWDRUM
+;  
+         0000 +A  I 0073 RWDRUM   + ADD       TWO 
+         0001 +SA I 0010          + STORE A   PDR1         PARM1: DRUM INSTR: READ/WRITE 0128  0129  0130  0131
+         0002 +A  I 0072          + ADD       ONE          
+         0003 +SA I 0012          + STORE A   PDR2         PARM2: DRUM ADDRESS (0..4094)
+         0004 +A  I 0072          + ADD       ONE          
+         0005 +SA I 0014          + STORE A   PDR3         PARM3: BUF START ADDRESS
+         0006 +A  I 0072          + ADD       ONE          
+         0007 +SA I 0016          + STORE A   PDR4         PARM4: LEN: NUMBER OF HALF-WORDS (MUST BE EVEN)
+         0008 +A  I 0072          + ADD       ONE          
+         0009 +SA I 0070          + STORE A   EXIT               
+         0010 +RA A 0000 PDR1     + R ADD     /   /        GET DRUM INSTR
+         0011 +ST I 0018          + STORE     DRIO
+         0012 +RA A 0000 PDR2     + R ADD     /   /        GET DRUM ADDR
+         0013 +SA I 0019          + STORE A   DRADDR
+         0014 +RA A 0000 PDR3     + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+         0015 +SA I 0057          + STORE A   RWCOPY    
+         0016 +RA A 0000 PDR4     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+         0017 +ST I 0074          + STORE     LEN
+         0018 +H  A 0000 DRIO     + STOP      /   /        INSTR: READ/WRITE 0128  0129  0130  0131
+         0019 +SD A 0000 DRADDR   + SET DR    /   /
+         0020 +T  I 0053          + TR        LOOP
+         0021 +A  I 0073 RDTAPE   + ADD       TWO 
+         0022 +SA I 0029          + STORE A   PR1          PARM1: TAPE ADDRESS
+         0023 +A  I 0072          + ADD       ONE          
+         0024 +SA I 0031          + STORE A   PR2          PARM2: BUF START ADDRESS
+         0025 +A  I 0072          + ADD       ONE          
+         0026 +SA I 0070          + STORE A   EXIT
+         0027 +TF I 0028          + TR OV     CLOV1        CLEAR OV THAT MAY HAVE BEEN SET
+         0028 +N  A 0000    CLOV1 + NOOP      0000
+         0029 +RA A 0000 PR1      + R ADD     /   /        GET TAPE ADDR
+         0030 +SA I 0033          + STORE A   RTAPAD       TAPE UNITS: 0256  0257  0258  0259
+         0031 +RA A 0000 PR2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+         0032 +SA I 0057          + STORE A   RWCOPY    
+         0033 +RD A 0000 RTAPAD   + READ      /   /
+         0034 +RA I 0071          + R ADD     ZERO
+         0035 +T  I 0055          + TR        LOOP1
+         0036 +A  I 0073 WRTAPE   + ADD       TWO 
+         0037 +SA I 0044          + STORE A   PW1          PARM1: TAPE ADDRESS
+         0038 +A  I 0072          + ADD       ONE          
+         0039 +SA I 0046          + STORE A   PW2          PARM2: BUF START ADDRESS
+         0040 +A  I 0072          + ADD       ONE          
+         0041 +SA I 0048          + STORE A   PW3          PARM3: BUF LEN
+         0042 +A  I 0072          + ADD       ONE          
+         0043 +SA I 0070          + STORE A   EXIT
+         0044 +RA A 0000 PW1      + R ADD     /   /        GET TAPE ADDR
+         0045 +SA I 0052          + STORE A   WTAPAD       TAPE UNITS: 0256  0257  0258  0259
+         0046 +RA A 0000 PW2      + R ADD     /   /        GET BUF ADDR (MUST BE EVEN)
+         0047 +SA I 0057          + STORE A   RWCOPY    
+         0048 +RA A 0000 PW3      + R ADD     /   /        GET ADDR OF LEN 
+         0049 +SA I 0050          + STORE A   PW3A
+         0050 +RA A 0000 PW3A     + R ADD     /   /        GET BUF LEN (MUST BE EVEN, CAN BE 0)
+         0051 +ST I 0074          + STORE     LEN
+         0052 +W  A 0000 WTAPAD   + WRITE     /   /        PREPARE TO WRITE ON TAPE
+         0053 +RA I 0074 LOOP     + R ADD     LEN
+         0054 +TZ I 0069          + TR 0      RWOK
+         0055 +S  I 0073 LOOP1    + SUB       TWO
+         0056 +ST I 0074          + STORE     LEN
+         0057 -C  A 0000 RWCOPY   - COPY      /   /        WRITE BUFFER TO TAPE
+         0058 +T  I 0061          + TR        GO 
+         0059 +T  I 0065          + TR        EOF          END OF FILE
+         0060 +T  I 0067          + TR        EOR          END OF RECORD
+         0061 +RA I 0057 GO       + R ADD     RWCOPY
+         0062 +S  I 0073          + SUB       TWO
+         0063 +SA I 0057          + STORE A   RWCOPY
+         0064 +T  I 0053          + TR        LOOP
+         0065 +RA I 0072 EOF      + R ADD     ONE          SET OV FLAG TO SIGNAL END OF FILE CONDITION
+         0066 +AL A 0036          + A LEFT    36
+         0067 +RS I 0074 EOR      + R SUB     LEN          RETURN NUMBER OF HALF-WORDS READ
+         0068 +S  I 0073          + SUB       TWO
+         0069 +W  A 2052 RWOK     + WRITE     2052         INSURE THAT MQ NOT IN USE            
+         0070 +T  A 0000 EXIT     + TR        /   /        RETURN TO CALLER
+         0071 +H  A 0000 ZERO     + STOP      0000
+         0072 +H  A 0001 ONE      + STOP      0001         
+         0073 +H  A 0002 TWO      + STOP      0002         
+         0074 +000000    LEN        RES       1

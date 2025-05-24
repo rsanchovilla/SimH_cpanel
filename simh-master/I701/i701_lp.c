@@ -77,9 +77,9 @@ int lp_wiring = 0;
 
 // timing variables
 t_int64 lp_timing_StartTickCount  = 0; // value of GlobalTickCount when card read cycle starts
-t_int64 lp_timing_DisconTickCount = 0; // value of GlobalTickCount when card read disconnects if no data is provied with COPY opcode
 extern int IOTicks;                    // ticks needed to execute i/o operation
 extern int IOREMAIN;                   // cpu ticks ramaining to disconnect IO device
+extern int CpuSpeed_Acceleration;      // cpu speed multiplier
 
 struct lp_wirings {
     uint32      mode;
@@ -89,10 +89,10 @@ struct lp_wirings {
 // simulator available printer wirings
 struct lp_wirings wirings[] = {
     {WIRING_NONE,        "NONE"},
-    {WIRING_NAA_SpeedEx, "SPEEDEX"},
-    {WIRING_NR9003,      "NR9003"},
-    {WIRING_SO2,         "SO2"},
-    {WIRING_PACT,        "PACT"},
+    {WIRING_NAA_SpeedEx, "SPEEDEX"},// wiring during assembling of SPEEDEX
+    {WIRING_NR9003,      "NR9003"}, // wiring during assembling of NR9003
+    {WIRING_SO2,         "SO2"},    // wiring during assembling of SO2 
+    {WIRING_PACT,        "PACT"},   // wiring during execution of PACT compiled programs
     {0, 0},
 };
 
@@ -133,7 +133,7 @@ void lpt_printline(UNIT * uptr, char * line, int bNoEcho)
     }
 
     // last lptPrintOutMAX printed lines will be saved on circular buffer lptPrintOut
-    // acts as mapped memory for 20 last lines printed
+    // acts as mapped memory for last lines printed
     nlen = (line) ? strlen(line):0; 
     n = LPT_COLUMNS * (lptPrintOutCount % lptPrintOutMAX); 
     for (i=0;i<LPT_COLUMNS;i++) {
@@ -160,7 +160,7 @@ void PrintLine(UNIT * uptr)
         // hub 10 -> print /   / 
         n=0;
         for (i=0; i<80; i++) {
-            c=sim_hol_to_ascii(image[i]);
+            c=hol_to_ascii(image[i]);
             c=sim_toupper(c);
             if ((i==6) || (i==8) || (i==15)  || (i==23)) {
                 // insert space between columns
@@ -188,13 +188,39 @@ void PrintLine(UNIT * uptr)
             line[n++] = c; 
         }
         line[n++] = 0; // terminate string
+    } else if (lp_wiring == WIRING_PACT) {
+        // three printers hubs used. Activated programatically with sense instruction
+        // spaces are added to separate 6 output numbers in columns
+        // hub 5 -> print a blank line
+        // hub 6 -> print two blanks line
+        // hub 7 -> new page
+        n=0;
+        for (i=0; i<80; i++) {
+            if ((i==11) || (i==23) || (i==35) || (i==47) || (i==59) || (i==71)) {
+                c=hol_to_ascii(image[i] & 0x3FF); // remove minus sign
+                line[n++] = c; 
+                // insert space/minus sign after number
+                if (image[i] & 0x400) {
+                    c='-'; // if char has X(11) punch -> print a minus sign
+                } else {
+                    c=' ';
+                }
+                line[n++] = c; 
+                c = ' '; // add a separation column
+            } else {
+                c=hol_to_ascii(image[i]); 
+            }
+            c=sim_toupper(c);
+            line[n++] = c; 
+        }
+        line[n++] = 0; // terminate string
     } else if (lp_wiring == WIRING_NR9003) {
-        // two printesr hubs used. Activated programatically with sense instruction
+        // two printers hubs used. Activated programatically with sense instruction
         // hub 6 -> print a sign + or -
         // hub 7 -> print negative sign
         n=0;
         for (i=0; i<80; i++) {
-            c=sim_hol_to_ascii(image[i]);
+            c=hol_to_ascii(image[i]);
             c=sim_toupper(c);
             if ((i==3) || (i==5) || (i==10)  || (i==12)) {
                 // insert dots between columns
@@ -230,7 +256,7 @@ void PrintLine(UNIT * uptr)
         // just add extra spaces between cols
         n=0;
         for (i=0; i<80; i++) {
-            c=sim_hol_to_ascii(image[i]);
+            c=hol_to_ascii(image[i]);
             c=sim_toupper(c);
             if ((i==1) || (i==56)) {
                 // insert triple space 
@@ -245,7 +271,7 @@ void PrintLine(UNIT * uptr)
     } else {
         // default wiring to none
         for (i=0; i<80; i++) {
-            c=sim_hol_to_ascii(image[i]);
+            c=hol_to_ascii(image[i]);
             c=sim_toupper(c);
             line[i] = c; 
         }
@@ -259,7 +285,7 @@ void PrintLine(UNIT * uptr)
 /* Start off a lpt command */
 uint32 lp_cmd(UNIT * uptr, uint16 cmd, uint16 fast)
 {
-    int n,msec; 
+    int msec; 
 
     IOTicks = 0; // duration of operation in Ticks
 
@@ -283,23 +309,23 @@ uint32 lp_cmd(UNIT * uptr, uint16 cmd, uint16 fast)
         // start a new printing cycle
 
         // Timing calculation
+        // print line cycle: 400 msec (150 lines per minute)
         // calc msec = time for printer to finish current in progress line printing cycle
         // calc nTick = number to ticks WRITE needs to be executed by cpu
-        // print line cycle: 400 msec (150 lines per minute)
-        if (lp_timing_DisconTickCount == 0) {
-            // =0 when exiting fast mode -> resync with global tick count
-            lp_timing_StartTickCount = 0;
-        }
-        if ((lp_timing_StartTickCount == 0) || ((msec = msec_elapsed(lp_timing_StartTickCount, GlobalTicksCount)) > 400)) {
-            msec = -1; // printer not in motion
-        }
-        if (msec == -1) {
+        msec = msec_elapsed(lp_timing_StartTickCount, GlobalTicksCount);
+        if ((msec > 400) || (msec < 0)) msec = -1; // card punch not in motion
+
+        if ((FAST) || (CpuSpeed_Acceleration<=0)) {
+            lp_timing_StartTickCount = GlobalTicksCount;
+            IOTicks = 0; 
+            IOREMAIN = msec_to_ticks(157); 
+        } else if (msec == -1) {
             // printer not in motion. Set start of motion as current tickcount
             lp_timing_StartTickCount = GlobalTicksCount;
-            // first 9-left copy must be given before 280 msec counting after start of motion
-            lp_timing_DisconTickCount = lp_timing_StartTickCount + msec_to_ticks(280); 
             // time needed for WRITE to execute and start printer motion: 220 msec
             IOTicks = msec_to_ticks(220); 
+            // after this, first COPY instr must be given before 50 msec elapsed
+            IOREMAIN = IOTicks + msec_to_ticks(50); 
             sim_debug(DEBUG_CMD, &lp_dev, "PRINTER: Start Motion\n");
         } else {
             // printer in motion. Wait to finish current cycle 
@@ -307,14 +333,12 @@ uint32 lp_cmd(UNIT * uptr, uint16 cmd, uint16 fast)
             IOTicks = msec_to_ticks(msec); 
             // printer in motion. Next cycle is 400 msec after the previous one
             lp_timing_StartTickCount += msec_to_ticks(400); 
-            // first 9-left copy must be given before 173 msec counting after start of cycle
-            lp_timing_DisconTickCount = lp_timing_StartTickCount + msec_to_ticks(173); 
-            // time needed for WRITE to execute in continuous motion: 100 msec (educated guess)
-            IOTicks += msec_to_ticks(100); 
+            // time needed for WRITE to execute in continuous motion: 16 msec 
+            IOTicks += msec_to_ticks(20); 
+            // after this, first COPY instr must be given before 157 msec elapsed
+            IOREMAIN = IOTicks + msec_to_ticks(157); 
             sim_debug(DEBUG_CMD, &lp_dev, "PRINTER: Continuous print (wait %d msec to start printing cycle\n", msec);
         }
-        // set the max time (in tick counts) to auto-disconnect device
-        IOREMAIN = (int) (lp_timing_DisconTickCount - GlobalTicksCount + 10); 
 
         if (lp_LineImage_index > 0) PrintLine(uptr); 
         lp_LineImage_index=0;
@@ -323,6 +347,26 @@ uint32 lp_cmd(UNIT * uptr, uint16 cmd, uint16 fast)
         // set printer hub
         int n = cmd >> 5; // hub number 1..
         lp_hub = lp_hub | (1 << n);
+        if (lp_wiring == WIRING_PACT) {
+            // three printers hubs used. Activated programatically with sense instruction
+            // spaces are added to separate 6 output numbers in columns
+            // hub 8 -> print a blank line
+            // hub 9 -> print two blanks line
+            // hub 10 -> new page
+            char line[3] = {0}; // empty line
+            if (lp_hub & (1 << 8)) {
+                sim_debug(DEBUG_DETAIL, &lp_dev, "Print blank Line\n");
+                lpt_printline(uptr, line, 0);
+            } else if (lp_hub & (1 << 9)) {
+                sim_debug(DEBUG_DETAIL, &lp_dev, "Print two blank Lines\n");
+                lpt_printline(uptr, line, 0);
+                lpt_printline(uptr, line, 0);
+            } else if (lp_hub & (1 << 10)) {
+                // new page is not implemented. Handled as blank line
+                sim_debug(DEBUG_DETAIL, &lp_dev, "New page\n");
+                lpt_printline(uptr, line, 0);
+            }
+        }
     } else if (cmd==OP_COPY) {
         if (lp_LineImage_index < 0) {
             sim_debug(DEBUG_CMD, &lp_dev, "COPY issued without previous WRITE\n");
@@ -331,29 +375,20 @@ uint32 lp_cmd(UNIT * uptr, uint16 cmd, uint16 fast)
         lp_LineImage[lp_LineImage_index++] = MQ; 
 
         // Timing calculation
-        // calc msec = time remaining for printer to accept next data from COPY
-        // calc nTick = number to ticks COPY needs to be executed by cpu
-        if (lp_timing_DisconTickCount == 0) {
-            // =0 when exiting fast mode -> resync with global tick count
-            lp_timing_DisconTickCount = GlobalTicksCount; 
-            lp_timing_StartTickCount = 0;
-        }
-        msec = msec_elapsed(GlobalTicksCount, lp_timing_DisconTickCount);
-        if ((n = (int) (lp_timing_DisconTickCount - GlobalTicksCount)) <0) {
-            sim_debug(DEBUG_CMD, &lp_dev, "COPY is %d Ticks (%d msec) too late. Printer disconnected\n", -n, -msec);
-            return STOP_COPYCHECK;
+        if ((FAST) || (CpuSpeed_Acceleration<=0)) {
+            IOTicks = 0; 
         } else {
-            sim_debug(DEBUG_CMD, &lp_dev, "COPY has been waiting for %d Ticks (%d msec)\n", n, msec);
+            IOTicks = IOREMAIN; // IOREMAIN is the number of ticks COPY should wait to have data ready 
+            msec = msec_elapsed(0, IOREMAIN);
         }
-        // wait for printer to be able to accept COPY data
-        IOTicks = n; 
+        // calc time card reader will need to accept COPY data
         if (lp_LineImage_index & 1) {
-            lp_timing_DisconTickCount += usec_to_ticks(540); // right copy must be given within 540 microsec. 
+            IOREMAIN = IOTicks + usec_to_ticks(540); // right copy must be given within 540 microsec. 
+            IOREMAIN += 20; // add 20 ticks as margin
         } else {
-            lp_timing_DisconTickCount += msec_to_ticks(13); // left copy must be given within 13 msec. 
+            IOREMAIN = IOTicks + msec_to_ticks(13); // left copy must be given within 13 msec. 
+            IOREMAIN += 120; // add 120 ticks as margin
         }
-        lp_timing_DisconTickCount += 20; // add 20 ticks as margin
-        IOREMAIN = (int) (lp_timing_DisconTickCount - GlobalTicksCount); 
 
         sim_debug(DEBUG_CMD, &lp_dev, "Send word %d to Printer \n", lp_LineImage_index);
         if (lp_LineImage_index == 24) {
@@ -418,7 +453,6 @@ t_stat lp_attach(UNIT * uptr, CONST char *file)
     if ((r = attach_unit(uptr, file)) != SCPE_OK) return r;
     lp_LineImage_index=-1; 
     lp_hub = 0;
-    lp_wiring = 0;
     memset(lp_LineImage, 0, sizeof(lp_LineImage));
     return SCPE_OK;
 }
@@ -430,8 +464,6 @@ t_stat lp_detach(UNIT * uptr)
     if (lp_LineImage_index > 0) PrintLine(uptr); 
     lp_LineImage_index=-1; 
     lp_hub = 0;
-    lp_wiring = 0;
-
     lpt_printline(uptr, NULL, 0); // print a blank line as a separator
     return detach_unit(uptr);
 }
