@@ -1,47 +1,192 @@
-# SimH_cpanel
+# Original Historical Software
 
-Old computers were massive, noisy, power-hungry and very beautiful, with plenty of blinkenlights, turning tapes, 
-punched cards, and of course rows and rows of buttons and switches.
-
-The aim of this project is to add nice visuals to SimH simulators on an interactive GUI to recreate the hypnotic experience 
-of looking the computer _processing_ and pushing/toggling that buttons and switches.
-
-The visuals covers interactive control panels (lights, switches, buttons toggles) but also
-other devices: tapes, card readers, disk, plotters, scopes, etc.
-
-Another main goal of this project is to recover 
-[original historical software](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Original_SoftWare_Recovered.md) 
-and bring it back to runnable condition on its original environment.
-
-IBM360 and i7000 work is based on Richard Cornwell SimH fork, modified to use cpanel modules. 
-swtpc6800 work is based on Bill Beech SimH simulator.
-HP2100 work is based on David Bryan simulator. 
-i650, NORC, i701 and MarkI simulators are my own SimH simulators.
-
-***WHAT'S NEW!: IBM 701 PACT Compiler + Punched Card Viewer***
+This is the list of recovered software, ready to run on emulator test-run .zip files.
+Just download the selected test-run, unzip it, and execute the appropriate .bat file
+All source code taken from original listings, except when noted.
 
 <table>
 <thead>
 <tr>
-<th>HP 2100</th>
-<th>Ferranti Mark I</th>
-<th>IBM 360/370</th>
+<th>Year</th>
+<th>Software</th>
+<th>Doc</th>
+<th>Test-run</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>
-<p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/HP2100/HP2100_animated.gif" alt="HP2100" title="HP 2100 family" /></p>
-</td>
+   <td>1951</td>  
+   <td>[Ferranti Mark 1 Scheme A](https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/MarkI/sw/SchemeA)
+       <p>
+       Oldest running system software, Oldest known command processor. Includes Math routines (fixed point), 
+       and some very primitive text handling routines
+   </td>
+   <td>
+       [Programming Manual, first edition + errata sheet (by Alan Turing)](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/MarkI/Ferranti%20Mark%20I%20Programming%20Manual%2C%20first%20edition%20%2B%20errata%20sheet-%20Alan%20Turing%20Collection%20-%20amt-b-31-57-3.pdf)
+       (Allan Turing Collection)
+   </td>
+   <td>
+       [Link](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/Ferranti_MarkI.zip)
+   </td>
+</tr>
+<tr>
+   <td>1952</td>  
+   <td>[Ferranti Mark 1 Scheme B](https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/MarkI/sw/SchemeB)
+       <p>
+       Includes Floating Point Math routines, FLOATCODE interpreter
+   </td>
+   <td>
+       [Programming Manual, second edition (by R.A. Brooker)](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/MarkI/Ferranti%20Mark%20I%20Programming%20Manual%2C%20second%20edition%20-%20CHM%20102724593-05-01-acc.pdf)
+       (Computer History Museum)
+   </td>
+   <td>
+       [Link](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/Ferranti_MarkI.zip)
+   </td>
+</tr>
+<tr>
+   <td>1952</td>  
+   <td>[Ferranti Mark 1 Glennie Autocode](https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/MarkI/sw/Glennie_Autocode)
+       <p>
+       Original code lost. rebuilt using inner working intructions and description 
+       of generated code stated in original doc
+   </td>
+   <td>
+       [Typewritten manual and lecture notes (A. Glennie)](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/MarkI/Manual%20describing%20Glennie%E2%80%99s%20AUTOCODE%20routine%20(1952).docx)
+       (Manchester University Archives)
+   </td>
+   <td>
+       [Link](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/Ferranti_MarkI.zip)
+   </td>
+</tr>
+<tr>
+   <td>1952</td>  
+   <td>[IBM 701 NR9003 Assembly](https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/I701/sw/Octionary)
+       <p>
+       Assembler for IBM machine, created by N.Rochester. Part of Octionary system created by 
+       IBM Laboratory in Poughkeepsie, New York
+       Original code lost. rebuilt using inner working intructions and description stated in original doc
+   </td>
+   <td>
+       [Symbolic Programming (N.Rochester)](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i701/PROG%20102663096-05-01-Symbolic%20Programming.pdf)
+       (Computer History Museum)
+       <p>
+       [Octionary Programming System](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i701/PROG%20102663096-05-01-Octionary%20Programming%20System.pdf)
+       (Computer History Museum)       
+   </td>
+   <td>
+       [Link](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701.zip)
+   </td>
+</tr>
+<tr>
+   <td>1952</td>  
+   <td>[IBM 701 SO2 Regional Assembler](https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/I701/sw/IBM_Binary_IO)
+       <p>
+       Assembler for IBM machine, created by William F. McClelland, Part of IBM Binary INPUT and OUTPUT system created by
+       IBM Applied Science Departement, New York
+       Original code lost. rebuilt using inner working intructions and description stated in original doc
+   </td>
+   <td>
+       [Regional Programming (N.Rochester)](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i701/PROG%20102663096-05-01-Regional%20Programming.pdf)
+       (Computer History Museum)
+       <p>
+       [IBM Binary IO](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i701/PROG%20102663096-05-01-IBM%20Binary%20IO.pdf)
+       (Computer History Museum)       
+   </td>
+   <td>
+       [Link](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701.zip)
+   </td>
+</tr>
+<tr>
+   <td>1953</td>  
+   <td>[Ferranti Mark 1 Scheme C](https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/MarkI/sw/SchemeC)
+       <p>
+       Improved Floating Point Math routines, standard decimal number I/O routines 
+   </td>
+   <td>
+       [Programming Manual, third edition (by R.A. Brooker)](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/MarkI/Ferranti%20Mark%20I%20Programming%20Manual%2C%20third%20edition%20-%20Bodleian%20Special%20Collection%20-%20MS.%20Eng.%20misc.%20b.%20260-C.41.pdf)
+       (Bodleian Archives & Manuscripts)
+   </td>
+   <td>
+       [Link](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/Ferranti_MarkI.zip)
+   </td>
+</tr>
+<tr>
+   <td>1953</td>  
+   <td>[IBM 701 NAA SpeedEx Assembler](https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/I701/sw/NAA_Assembler)
+       <p>
+       North American Aviation Singel Address Assembly Program SpeedEx Assembler, by Ed Law.       
+   </td>
+   <td>
+       [Programming Manual](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i701/PROG%20102663105-05-01-NAA%20SpeedEx%20assembler.pdf)
+       (Computer History Museum)
+   </td>
+   <td>
+       [Link](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i701/IBM701.zip)
+   </td>
+</tr>
+<tr>
+   <td>1954</td>  
+   <td>[Ferranti Mark 1 R.A.Brooker Autocode](https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/MarkI/sw/Glennie_Autocode)
+   </td>
+   <td>
+       [An attempt to simplify coding for the Manchester electronic computer](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/MarkI/An%20attempt%20to%20simplify%20coding%20for%20the%20Manchester%20electronic%20computer%200508-3443_6_9_302.pdf)
+       [Original Source Code Scan](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/MarkI/Brooker_Autocode_1955%20Original%20Source%20Code.pdf)
+       (Manchester University Archives)
+       [Simple Machine Paper](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/MarkI/simple-machine-paper.pdf)
+   </td>
+   <td>
+       [Link](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/Ferranti_MarkI.zip)
+   </td>
+</tr>
+<tr>
+   <td>1954</td>  
+   <td>[Ferranti Mark 1 Scheme T](https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/MarkI/sw/SchemeT)
+       <p>
+       Toronto University Schema 
+   </td>
+   <td>
+       [Love Letters, pages 13-18](https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/MarkI/Love%20Letters%20-%20Bodleian%20Special%20Collection%20-%20MS.%20Eng.%20misc.%20b.%20259-C.34.pdf)
+       (Bodleian Archives & Manuscripts)
+   </td>
+   <td>
+       [Link](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/Ferranti_MarkI.zip)
+   </td>
+</tr>
+
+
+</tbody>
+</table>
+
+
+
+
+
+1954    Ferranti Mark 1 Scheme T (1954)
+1954	IBM 650 Interpretive FDS (1954)
+1955	IBM 650 Regional Assembler (1955)
+1955    IBM 701 PACT I compiler (1955)(rebuild)
+1956	IBM 650 Bell Interpretive System (1956)
+1956	IBM 650 IT (1956) 
+1957	IBM 650 SOAP II (1957)
+1957	IBM 650 FORTRANSIT (1957)
+1958    IBM NORC PERT (1958)
+1959	IBM 650 SOAP IIA-4000 Build tape Library (1959)
+1959	IBM 650 SuperSoap (1959)
+
+
+
+</tbody>
+</table>
+
+
+
+
 <td>
 <p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/MarkI/MarkI_animated.gif" alt="MarkI" title="Ferranti Mark I" /></p>
 </td>
 <td>
 <p><img src="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/IBM360/IBM360_animated.gif" alt="IBM360" title="IBM 360" /></p>
 </td>
-</tr>
-</tbody>
-</table>
 
 <table>
 <thead>
