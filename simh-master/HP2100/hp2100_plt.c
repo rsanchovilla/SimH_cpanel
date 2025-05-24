@@ -502,7 +502,7 @@ DEVICE plt_dev = {
 	&plt_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, sim_plt_debug
     };
 
-static void plotter_quit_callback (void) 
+static void plotter_quit_callback (VID_DISPLAY * vptr_cp) 
 {
     // note: quit callback is executed on sim_video thread, not in main emulator thread
     // should not use sim_debug (is not thread safe) 

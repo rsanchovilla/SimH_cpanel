@@ -525,7 +525,7 @@ struct {
     FLIP_FLOP flagbuf;                                  /* flag buffer flip-flop */
 } rs232c = { CLEAR, CLEAR, CLEAR };
 
-static void scope_quit_callback (void) 
+static void scope_quit_callback (VID_DISPLAY * vptr_cp) 
 {
     // note: quit callback is executed on sim_video thread, not in main emulator thread
     // should not use sim_debug (is not thread safe) 

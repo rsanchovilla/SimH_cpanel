@@ -382,7 +382,7 @@ DEVICE tv_dev = {
     };
 
 
-static void tv_quit_callback (void) 
+static void tv_quit_callback (VID_DISPLAY * vptr_cp) 
 {
     // note: quit callback is executed on sim_video thread, not in main emulator thread
     // should not use sim_debug (is not thread safe) 
