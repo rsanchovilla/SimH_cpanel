@@ -3,6 +3,9 @@
 This is the list of recovered software, ready to run on emulator test-run .zip files.
 Just download the selected test-run, unzip it, and execute the appropriate .bat file
 All source code taken from original listings, except when noted.
+<br>
+Software available to play with:
+<br>
 
 - 1951    Ferranti Mark 1 Scheme A 
 - 1952    Ferranti Mark 1 Scheme B 
@@ -85,7 +88,7 @@ All source code taken from original listings, except when noted.
        Ferranti Mark 1 Glennie Autocode</a>
        <br>
        Early Compiler, fixed point. Support Algebraic notation on 1-letter variables. 
-       Original code lost. rebuilt using inner working intructions and description 
+       Original code lost. Rebuilt using inner working intructions and description 
        of generated code stated in original doc
    </td>
    <td>
@@ -107,7 +110,7 @@ All source code taken from original listings, except when noted.
        <br>
        Assembler for IBM machine, by N.Rochester. Part of Octionary system created by 
        IBM Laboratory in Poughkeepsie, New York.
-       Original code lost. rebuilt using inner working intructions and description stated in original doc.
+       Original code lost. Rebuilt using inner working intructions and description stated in original doc.
    </td>
    <td>
        <ul><li>
@@ -135,7 +138,7 @@ All source code taken from original listings, except when noted.
        <br>
        Assembler for IBM machine, by William F. McClelland, Part of IBM Binary INPUT and OUTPUT system created by
        IBM Applied Science Departement, New York.
-       Original code lost. rebuilt using inner working intructions and description stated in original doc.
+       Original code lost. Rebuilt using inner working intructions and description stated in original doc.
    </td>
    <td>
        <ul><li>
@@ -239,7 +242,7 @@ All source code taken from original listings, except when noted.
        <br>
        J.P. Humem, American Mathematical Society.
        <li>
-       <a href="https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/MarkI/sw/SchemeT">
+       <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/MarkI/Love%20Letters%20-%20Bodleian%20Special%20Collection%20-%20MS.%20Eng.%20misc.%20b.%20259-C.34.pdf">
        Original Source Code on pages 13-18</a> 
        <br>
        Bodleian Archives & Manuscripts Collection
@@ -302,16 +305,18 @@ All source code taken from original listings, except when noted.
        First compiler for IBM computer. Fixed point but rich set of features. 
        Result of the joint effort of Douglas, North American Aviation, 
        Ramo-Wooldridge, and The RAND Corporation. 
-       Original code lost. rebuilt using inner working intructions and description stated in original doc.
+       Original code lost. Rebuilt using inner working intructions and description stated in original doc.
    </td>
    <td>
        <ul><li>
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i701/PACT/00%20A%20Description%20of%20a%20Cooperative%20Venture%20in%20the%20Production%20of%20an%20Automatic%20Coding%20System%20320843.320844.pdf">
        ACM Digital Library</a> 
+       <br>
        More Documents available in folder
        <li>
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i701/PACT/PACT%20Primer%20102679434-05-01-acc.pdf">
        PACT primer</a>
+       <br>
        Computer History Museum
        <li>
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i701/PACT/PACT%20Manual%20p1%20FlorenceAnderson_CBI%20101_Box%201_Folder%207_60pp.pdf">
@@ -342,8 +347,8 @@ All source code taken from original listings, except when noted.
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i650/28-4024_FltDecIntrpSys.pdf">
        IBM Manual</a> 
        <br> 
-       V.M.Wolonis
-       IBM Manual, 1956, Bitsavers Collection
+       V.M.Wolonis, 
+       IBM Manual, Bitsavers Collection
    </td>
    <td>
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650.zip">
@@ -362,7 +367,7 @@ All source code taken from original listings, except when noted.
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i650/CarnegieInternalTranslator.pdf">
        IBM Library Manual</a> 
        <br> 
-       A.J.Perlis, 1956, Bitsavers Collection
+       A.J.Perlis, Bitsavers Collection
    </td>
    <td>
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650.zip">
@@ -381,7 +386,7 @@ All source code taken from original listings, except when noted.
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i650/24-4000-0_SOAPII.pdf">
        IBM Manual</a> 
        <br> 
-       1957, Bitsavers Collection
+       Bitsavers Collection
    </td>
    <td>
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650.zip">
@@ -391,7 +396,7 @@ All source code taken from original listings, except when noted.
 <tr>
    <td>1957</td>  
    <td>
-       <a href="https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/I650/sw/soap">
+       <a href="https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/I650/sw/fortransit">
        IBM 650 FORTRANSIT</a>
        <br>
        Developed by Bob Bemer.
@@ -402,7 +407,7 @@ All source code taken from original listings, except when noted.
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/i650/28-4028_FOR_TRANSIT.pdf">
        IBM Manual</a> 
        <br> 
-       1957, Bitsavers Collection
+       Bitsavers Collection
    </td>
    <td>
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/i650/IBM650.zip">
@@ -423,7 +428,7 @@ All source code taken from original listings, except when noted.
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/Manual/NORC/pert%20summary%20report%20phase%202.pdf">
        Report</a>
        <br> 
-       1958, Google Books
+       Google Books
    </td>
    <td>
        <a href="https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/NORC/NORC.zip">
