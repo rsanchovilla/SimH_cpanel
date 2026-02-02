@@ -3,7 +3,7 @@
 This is the list of recovered software, ready to run on emulator test-run .zip files.
 Just download the selected test-run, unzip it, and execute the appropriate .bat file
 All source code taken from original listings, except when noted.
-<br>
+<br><br>
 Software available to play with:
 <br>
 
@@ -202,7 +202,7 @@ Software available to play with:
        <a href="https://github.com/rsanchovilla/SimH_cpanel/tree/master/simh-master/MarkI/sw/Brooker_Autocode">
        Ferranti Mark 1 Brooker Autocode</a>
        <br>
-       Early Compiler, floating point and complex variables. By R.A.Brooker. 
+       Oldest running Original Compiler, floating point and complex variables. By R.A.Brooker. 
    </td>
    <td>
        <ul><li>
@@ -400,7 +400,7 @@ Software available to play with:
        IBM 650 FORTRANSIT</a>
        <br>
        Developed by Bob Bemer.
-       Oldest original FORTRAN I compiler available. 
+       Oldest running original FORTRAN I compiler. 
        Available only 1 month after IBM 704 FORTRAN. 
    </td>
    <td>
