@@ -1,3 +1,4 @@
+
        ; Show Star Treck USS Enterprise
        ; Earth and stars on GT-6144 graphic terminal
        ; using its gorgeous 64 horizontal x 96 vertical B/W 
@@ -205,7 +206,7 @@ img1   fcb $00, $0A, $0B, $0C, $FE, $01
        fcb $FE, $39, $02, $03, $FE, $2A
        fcb $15, $FE, $FF
 
-img2   fcb $C0, $1A, $1D, $1F, $FE, $01 
+img2   fcb $00, $1A, $1D, $1F, $FE, $01 
        fcb $17, $FE, $02, $13, $FE, $03 
        fcb $10, $FE, $04, $0D, $FE, $05 
        fcb $0B, $FE, $06, $0A, $FE, $07 
