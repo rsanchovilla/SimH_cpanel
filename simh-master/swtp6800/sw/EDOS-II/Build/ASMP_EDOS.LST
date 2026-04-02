@@ -1,0 +1,145 @@
+
+
+
+
+
+---
+
+
+PAGE  001   ASMPATCH          
+
+
+
+00001                     NAM    ASMPATCH 
+00002                     OPT    O,NOM,NOP  
+00003              *THIS PROGRAM PATCHES THE M6800 ASSEMBLER
+00004              *TO REQUEST THE USER TO SELECT IF OUTPUT IS 
+00005              *TO BE SENT THE PRINTER DEVICE USING THE 
+00006              * PROM DRIVER
+00007              *
+00008              *  From Bitsaver's manual
+00009              *  M6800_Co-Resident_Assembler_Reference_Manual_1976
+00010              *  Modified to work with EDOS-II under SimH
+00011              *  by Roberto Sancho, Mar/26
+00012              *
+00013              *
+00014      0000    PASS   EQU    0 
+00015      FF8A    XSTACK EQU    $FF8A    
+00016      FF53    AECHO  EQU    $FF53    ECHO ON/OFF FLAG =0 -> ECHO,  
+00017      011E    XDATA  EQU    $11E     asmb console string out
+00018      011B    XCIE   EQU    $11B     asmb console in char
+00019      0133    XHEAD  EQU    $133     asmb string out (w/leading <C 
+00020      0136    XLINE  EQU    $136     asmb string out
+00021      EAD5    LDATA  EQU    $EAD5    printer string out (w/leading 
+00022      EADD    LDATA1 EQU    $EADD    printer string out
+00023      0100    ASMB   EQU    $100     assembler cold start
+00024      0301    ENDSTB EQU    $301     default end-of-symbol table a 
+00025              *
+00026 0020                ORG    $20      assembler entry point from FD 
+00027              *
+00028 0020 8E FF8A        LDS    #XSTACK 
+00029 0023 96 00          LDA A  PASS 
+00030 0025 81 09          CMP A  #$9      OBJECT ONLY?
+00031 0027 27 1A          BEQ    ASM      YES
+00032 0029 CE 0054 TOP    LDX    #MSG 
+00033 002C BD 011E        JSR    XDATA 
+00034 002F CE 0000        LDX    #0 
+00035 0032 09      DELAY  DEX             
+00036 0033 26 FD          BNE    DELAY 
+00037 0035 7F FF53        CLR    AECHO    set echo on for user typed ch 
+00038 0038 BD 011B        JSR    XCIE 
+00039 003B 81 59          CMP A  #'Y 
+00040 003D 27 07          BEQ    PRNTR 
+00041 003F 81 4E          CMP A  #'N 
+00042 0041 26 E6          BNE    TOP 
+00043 0043 7E 1F00 ASM    JMP    ASMB1 
+00044 0046 CE EAD5 PRNTR  LDX    #LDATA 
+00045 0049 FF 0134        STX    XHEAD+1 
+00046 004C CE EADD        LDX    #LDATA1 
+00047 004F FF 0137        STX    XLINE+1 
+00048 0052 20 EF          BRA    ASM 
+00049 0054 50      MSG    FCC    /PRINTER?/
+      0055 52      
+      0056 49      
+      0057 4E      
+      0058 54      
+      0059 45      
+      005A 52      
+      005B 3F      
+00050 005C 04             FCB    4 
+00051              *
+00052 1F00                ORG    $1F00 
+00053              * 
+00054 1F00 CE 7FFF ASMB1  LDX    #$7FFF   ASMB can hadle RAM <32K becau 
+00055 1F03 FF 0301        STX    ENDSTB   set end-of-symbol table addre 
+00057 1F06 7E 0100        JMP    ASMB 
+00058              *
+00059              * Astral 2000 assembler Patched in Mar/2026 by 
+00060              * Roberto Sancho to run on SimH emulator using
+00061              * Motorola Exorciser EXBUG, and 
+00062              * iCOM FD360 floppy disk emulation
+00063              *
+00064              * EXBUG ROM entry points
+00065              *
+00066      F000    EXBUG  EQU    $F000    ; ENTER EXBUG
+00067      F012    XINCH  EQU    $F012    ; CHAR IN
+00068      F018    XOUTCH EQU    $F018    ; CHAR OUT
+00069      F021    XPCRLF EQU    $F021    ; PRINT C/R L/F 
+00070      F024    XPDATA EQU    $F024    ; PRINT C/R L/F THEN STRING
+00071      F027    XPDAT1 EQU    $F027    ; PRINT STRING 
+00072              *
+00073      E800    FDOS   EQU    $E800    ; LOAD FDOS
+00074      E803    EXEC   EQU    $E803    ; START EXEC
+00075      E806    RESET  EQU    $E806    ; INITIALIZE DISK CONTROLLER  
+00076      E809    XRI    EQU    $E809    ; RI - DISK READ VECTOR
+00077      E80C    XWRT   EQU    $E80C    ; WRT - DISK WRITE VECTOR
+00078      E80F    UPDT   EQU    $E80F    ; UPDT - UPDATE DISK DIRECTOR 
+00079      E82D    RESTR  EQU    $E82D    ; RESTR - RESTORE FILE POINTE 
+00080              *
+00081              * Set call to PRINT C/R L/F DATA ON CONSOLE
+00082 011F                ORG    $011F 
+00083 011F F024           FDB    XPDATA   
+00084              *
+00085              * Set call to PRINT DATA POINTED AT BY X- 
+00086 0122                ORG    $0122 
+00087 0122 F027           FDB    XPDAT1 
+00088              *
+00089              * Set call to PRINT C/R L/F ON CONSOLE
+00090 0125                ORG    $0125 
+00091 0125 F021           FDB    XPCRLF   
+00092              *
+00093              * Set call to CHAR IN
+00094 0158                ORG    $0158 
+00095 0158 F012           FDB    XINCH    
+00096              *
+00097              * Set call to CHAR OUT
+00098 0178                ORG    $0178 
+00099 0178 F018           FDB    XOUTCH   
+00100              *
+00101              * Set call to MONITOR
+00102 0131                ORG    $0131 
+00103 0131 F000           FDB    EXBUG 
+00104              *
+00105              * Set stack
+00106 0947                ORG    $0947 
+00107 0947 FF8A           FDB    XSTACK 
+00108              *
+00109              * Set call to WRT - DISK WRITE VECTOR
+00110 01D4                ORG    $01D4 
+00111 01D4 E80C           FDB    XWRT     
+00112              *
+00113              * Set call to RI - DISK READ VECTOR
+00114 0283                ORG    $0283 
+00115 0283 E809           FDB    XRI      
+00116              *
+00117              * Set call to RESTR - RESTORE FILE POINTERS
+00118 0950                ORG    $0950 
+00119 0950 E82D           FDB    RESTR    
+00120              *
+00121              * Set call to UPDT - UPDATE DISK DIRECTORY ON CLOSIN
+00122 0957                ORG    $0957 
+00123 0957 E80F           FDB    UPDT     
+00124              *
+00125                     END             
+
+TOTAL ERRORS 00000

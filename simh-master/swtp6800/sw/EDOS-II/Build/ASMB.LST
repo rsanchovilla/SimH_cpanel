@@ -1,0 +1,2909 @@
+
+
+10000                   PASS    EQU    $0000  iCOM PROM - PASS -> assembler params
+10001                   L0005   EQU    $0005
+
+                        STACK   EQU    $E0B8  
+
+10002                   CHIN    EQU    $E800  Monitor chin
+10003                   CHOUT   EQU    $E803  Monitor chout
+10004                   MONSTRT EQU    $E821  Monitor START
+10005                   PDATA   EQU    $EEEA  Astral Monitor PDATA - print <CR><LF> then print string 
+10006                   PDATA1  EQU    $EEEC  Astral Monitor PDATA1 - print string
+10007                   PCRLF   EQU    $EEF9  Astral Monitor CRLF - print CRLF
+10008                   LF018   EQU    $F018  iCOM PROM - DIO FDB DKDID (F800)
+10009                   UPDT    EQU    $F023  iCOM PROM - UPDT
+10010                   RESTR   EQU    $F03B  iCOM PROM - RESTR
+10011                   RI      EQU    $F135  iCOM PROM - RI
+10012                   WRT     EQU    $F1AD  iCOM PROM - WRT
+10013                   LF9CF   EQU    $F9CF
+10014                   LFCF4   EQU    $FCF4
+10015                   LFCF5   EQU    $FCF5
+10016                   LFCFD   EQU    $FCFD
+10017                   LFF02   EQU    $FF02
+10018                   LFF62   EQU    $FF62
+10019                   LFFC2   EQU    $FFC2
+10020                   LFFFF   EQU    $FFFF
+
+10023                           ORG    $0020
+
+10027                                             Assembler start
+10028   
+10029   0020 FE E014    L0020   LDX     $E014     Read PIA (returns E400)
+10030   0023 08         L0023   INX     
+10031   0024 FF 0301    L0024   STX     ENDSTBL   end-of-symbol table address = E401
+10032   0027 7E 0100    L0027   JMP     L0100
+
+00000   0034 00 00      PLINE   RMB     2         pointer to current char in source code line
+00000   0036 00         OPTYPE  RMB     1         opcode type
+00000   0040 00         FLGAMEM RMB     1         <>0 -> do assemble to memory
+00000   0044 00         FLGOBJ  RMB     1         =0 -> do not generate object code, <>0 -> DO generate object code
+00000   0061 00         NOOPT   RMB     1         0 -> OPT option selected, <>0 -> NOt selected
+
+00000   00BE 00         OPCH1   RMB     1         opcode 1st char
+00000   00BF 00         OPCH2   RMB     1         opcode 2nd char
+00000   00C0 00         OPCH3   RMB     1         opcode 3rd char
+00000   00F3 00 00      ENDLIN  RMB     2         Addr of last char (=0D or 1A) of input line buffer LIN
+
+
+10034   
+10035   0100 7E 08F4    L0100   JMP     START     
+10036   0103 7E 1641    MON2    JMP     L1641     jump to monitor
+10038   0106 7E 013F    L0106   JMP     L013F
+10039   0109 7E 0185    L0109   JMP     L0185
+10040   010C 7E 019D    L010C   JMP     L019D
+10041   010F 7E 01AB            JMP     L01AB
+10042   0112 7E 01B5    RDLIN2  JMP     RDLIN1    read source code line from disk input file (into LIN buffer)
+10043   0115 7E 016B    PRTCH2  JMP     PRTCH     Print char on console
+10044   0118 7E 014C    RDCH2   JMP     RDCH1     read char from console
+10045   011B 7E 014F            JMP     RDCH      read char from console
+10046   011E 7E EEEA    PDATAA  JMP     PDATA     Monitor PDATA print <CR><LF> string on console    
+10047   0121 7E EEEC    PDATA1A JMP     PDATA1    Monitor PDATA1 print string on console    
+10048   0124 7E EEF9    PCRLFA  JMP     PCRLF     Monitor print CRLF on console    
+10049   0127 7E 017B    L0127   JMP     L017B
+10050   012A 7E 0233    L012A   JMP     L0233
+10051   012D 7E 025A    DUMMY1  JMP     DUMMY     just return
+10052   0130 7E E821    MON     JMP     MONSTRT   Call Monitor START
+10053   0133 7E 011E    PDATAB  JMP     PDATAA    Call Monitor PDATA to print string in X up to char $04 preceeded by <CR><LF>
+10054   0136 7E 0121    PDATA1B JMP     PDATA1A   Call Monitor PDATA to print string in X up to char $04
+10055   0139 7E 0139    L0139   JMP     L0139
+10056   013C 7E 013C    L013C   JMP     L013C
+10057    ;
+10058   013F 7F 00F2    L013F   CLR     L00F2
+10059   0142 7F 00F6            CLR     L00F6
+10060   0145 7F 00F5            CLR     L00F5
+10061   0148 7F 00F7            CLR     L00F7
+10062   014B 39                 RTS     
+
+10064   014C 7C 00F7    RDCH1   INC     L00F7     read char from console
+10065   014F 7D 00F7    RDCH    TST     L00F7     read char from console
+10066   0152 27 03              BEQ     L0157
+10067   0154 01                 NOP     
+10068   0155 01                 NOP     
+10069   0156 01                 NOP     
+10070   0157 BD E800    L0157   JSR     CHIN      Monitor chin
+10071   015A CE 02AF            LDX     #MCHIN    chars to be ignored <NUL> <127 DEL> <$11 ^Q PTR ON> <$12 ^R PTP ON> <$13 ^S PTR OFF> <$14 ^T PTP OFF>
+10072   015D A1 00      L015D   CMPA    $0000,X
+10073   015F 27 EE              BEQ     RDCH      jump to ignore char in 
+10074   0161 08                 INX     
+10075   0162 8C 02B6            CPX     #MCHIN+7
+10076   0165 26 F6              BNE     L015D
+10077   0167 7F 00F7            CLR     L00F7     
+10078   016A 39                 RTS               return the char to caller
+
+10080   016B 81 09      PRTCH   CMPA    #$09      Print char on console
+10081   016D 26 02              BNE     L0171     is <TAB> ?
+10082   016F 86 20              LDAA    #$0020    if so, convert to space
+10083   0171 81 0D      L0171   CMPA    #$0D      is <CR> ?
+10084   0173 26 02              BNE     L0177
+10085   0175 8D AD              BSR     PCRLFA    if so, print CRLF
+10086   0177 BD E803    L0177   JSR     CHOUT     Monitor chout
+10087   017A 39                 RTS     
+
+10089   017B 39         L017B   RTS               Patched routine to return inmediatelly
+10091   017C 32                 PULA    
+10092   017D 4F         L017D   CLRA    
+10093   017E 8D 89              BSR     L0109
+10094   0180 5A                 DECB    
+10095   0181 26 FA              BNE     L017D
+10096   0183 20 A8              BRA     DUMMY1    just return
+10097    ;
+10098   0185 8D A3      L0185   BSR     L012A
+10099   0187 81 0D              CMPA    #$000D
+10100   0189 26 0B              BNE     L0196
+10101   018B 86 0A              LDAA    #$000A
+10102   018D BD 01D0            JSR     L01D0
+10103   0190 86 0D              LDAA    #$000D
+10104   0192 BD 01D0            JSR     L01D0
+10105   0195 4F                 CLRA    
+10106   0196 7E 01D0    L0196   JMP     L01D0
+10107    ;
+10108   0199 F0 7E01            SUBB    L7E01
+10109   019C 15                 *****
+10110   019D 8D 8B      L019D   BSR     L012A
+10111   019F A6 00      L019F   LDAA    $0000,X
+10112   01A1 81 04              CMPA    #$0004
+10113   01A3 27 88              BEQ     DUMMY1    just return
+10114   01A5 BD 01D0            JSR     L01D0
+10115   01A8 08                 INX     
+10116   01A9 20 F4              BRA     L019F
+10117    ;
+10118   01AB 7D 00F2    L01AB   TST     L00F2
+10119   01AE 26 70              BNE     L0220
+10120   01B0 7F 00F5            CLR     L00F5
+10121   01B3 20 03              BRA     L01B8
+
+10123   01B5 7C 00F5    RDLIN1  INC     L00F5     read source code line from disk input file (into LIN buffer)
+10124   01B8 CE 02B7    L01B8   LDX     #LIN      fill LIN buffer with <CR>s
+10125   01BB 86 0D              LDAA    #$0D
+10126   01BD A7 00      L01BD   STAA    $0000,X
+10127   01BF 08                 INX     
+10128   01C0 8C 02FF            CPX     #LIN+72   end of source code line buffer 
+10129   01C3 26 F8              BNE     L01BD
+10130   01C5 7D 00F6            TST     L00F6
+10131   01C8 27 03              BEQ     L01CD
+10132   01CA BD 012D            JSR     DUMMY1    just return
+10133   01CD 7E 01EB    L01CD   JMP     RDLIN     read source code line from disk input file (into LIN buffer)
+10134    ;
+10135   01D0 DF F0      L01D0   STX     L00F0
+10136   01D2 37                 PSHB    
+10137   01D3 BD F1AD            JSR     WRT       iCOM PROM - WRT
+10138   01D6 33                 PULB    
+10139   01D7 DE F0              LDX     L00F0
+10140   01D9 39                 RTS     
+
+10142   01DA F9 CF20            ADCB    LCF20
+10143   01DD 0D                 SEC     
+10144   01DE B6 FCFD            LDAA    LFCFD
+10145   01E1 84 55              ANDA    #$0055
+10146   01E3 B7 FCF4            STAA    LFCF4
+10147   01E6 86 11              LDAA    #$0011
+10148   01E8 BD F018            JSR     LF018
+
+10149   01EB CE 02B7    RDLIN   LDX     #LIN      read source code line from disk input file (into LIN buffer)
+10150   01EE 0D         L01EE   SEC     
+10151   01EF BD 0275            JSR     RDDSK     read char from disk input file. Carry set if end of file (in this case A=$1A)
+10152   01F2 A7 00              STAA    $0000,X   save the char
+10153   01F4 25 0C              BCS     L0202     jump if end of file -> line input ended
+10154   01F6 81 0D              CMPA    #$0D      is <CR> ?
+10155   01F8 27 08              BEQ     L0202     jump if so -> line input ended
+10156   01FA 8C 02FE            CPX     #LIN+71   end of source code line buffer 
+10157   01FD 27 EF              BEQ     L01EE     if hit end of line buffer continue reading to save last char of line in last position of buffer
+10158   01FF 08                 INX     
+10159   0200 20 EC              BRA     L01EE
+10161   0202 7F 00F5    L0202   CLR     L00F5     here line input ended
+10162   0205 7E 0218            JMP     L0218
+10164   0208 84 35              ANDA    #$0035
+10165   020A B7 FCF4            STAA    LFCF4
+10166   020D 86 13              LDAA    #$0013
+10167   020F BD F018            JSR     LF018
+10168   0212 B6 FCF5            LDAA    LFCF5
+10169   0215 B6 FCF5            LDAA    LFCF5
+10170   0218 7C 00F2    L0218   INC     L00F2
+10171   021B CE 02B7            LDX     #LIN      source code line read from input file
+10172   021E DF F3              STX     ENDLIN    Addr of last char (=0D or 1A) of input line buffer LIN
+10173   0220 DE F3      L0220   LDX     ENDLIN    Addr of last char (=0D or 1A) of input line buffer LIN     
+10174   0222 A6 00              LDAA    $0000,X
+10175   0224 08                 INX     
+10176   0225 DF F3              STX     ENDLIN    Addr of last char (=0D or 1A) of input line buffer LIN
+10177   0227 81 1A              CMPA    #$1A
+10178   0229 27 04              BEQ     L022F
+10179   022B 81 0D              CMPA    #$0D
+10180   022D 26 03              BNE     L0232
+10181   022F 7F 00F2    L022F   CLR     L00F2
+10182   0232 39         L0232   RTS     
+
+10184   0233 39         L0233   RTS     
+10185    ; -----------------------------------------------
+10186   0234 00                 *****
+10187   0235 F6 2621            LDAB    L2621
+10188   0238 36                 PSHA    
+10189   0239 7C 00F6            INC     L00F6
+10190   023C 7C FF62            INC     LFF62
+10191   023F 7D FF02            TST     LFF02
+10192   0242 27 0A              BEQ     L024E
+10193   0244 86 10              LDAA    #$0010
+10194   0246 BD F9CF            JSR     LF9CF
+10195   0249 86 30              LDAA    #$0030
+10196   024B BD F9CF            JSR     LF9CF
+10197   024E 86 7F      L024E   LDAA    #$007F
+10198   0250 BD F9CF            JSR     LF9CF
+10199   0253 86 12              LDAA    #$0012
+10200   0255 BD F9CF            JSR     LF9CF
+10201   0258 32                 PULA    
+10202   0259 39                 RTS     
+10203    ; -----------------------------------------------
+10204   025A 39         DUMMY   RTS     
+10205    ; -----------------------------------------------
+10206   025B 14                 *****
+10207   025C BD F9CF            JSR     LF9CF
+10208   025F 7D FF02            TST     LFF02
+10209   0262 27 0A              BEQ     L026E
+10210   0264 86 10              LDAA    #$0010
+10211   0266 BD F9CF            JSR     LF9CF
+10212   0269 86 39              LDAA    #$0039
+10213   026B BD F9CF            JSR     LF9CF
+10214   026E 7F 00F6    L026E   CLR     L00F6
+10215   0271 7F FF62            CLR     LFF62
+10216   0274 39                 RTS     
+10217    ; -----------------------------------------------
+10218   0275 DF F0      RDDSK   STX     L00F0     save X - read char from disk input file
+10219   0277 7D 00F5    L0277   TST     L00F5
+10220   027A 20 05              BRA     L0281
+10222   027C BD 0118            JSR     RDCH2     read char from console
+10223   027F 20 11              BRA     L0292
+10225   0281 37         L0281   PSHB    
+10226   0282 BD F135            JSR     RI        iCOM PROM - RI
+10228   0285 33                 PULB    
+10229   0286 25 21              BCS     RDEOF     if Carry set -> RI hit end of file -> jump to return $1A <EOF> char
+10230   0288 20 06              BRA     L0290
+
+10232   028A 47                 ASRA    
+10233   028B 24 F7              BCC     L0284
+10234   028D B6 FCF5            LDAA    LFCF5
+
+10235   0290 84 7F      L0290   ANDA    #$007F
+10236   0292 CE 02AF    L0292   LDX     #MCHIN    ignore chars: <NUL> <127 DEL> <$11 ^Q PTR ON> <$12 ^R PTP ON> <$13 ^S PTR OFF> <$14 ^T PTP OFF>
+10237   0295 A1 00      L0295   CMPA    $0000,X
+10238   0297 27 DE              BEQ     L0277     if read char is to be ignored, jump to read again
+10239   0299 08                 INX     
+10240   029A 8C 02B6            CPX     #MCHIN+7
+10241   029D 26 F6              BNE     L0295
+10242   029F 81 09              CMPA    #$09      is <TAB> ?
+10243   02A1 26 02              BNE     L02A5
+10244   02A3 86 20              LDAA    #$0020    if so -> replace by space
+10245   02A5 DE F0      L02A5   LDX     L00F0     restore X
+10246   02A7 0C                 CLC     
+10247   02A8 39                 RTS     
+10249   02A9 86 1A      RDEOF   LDAA    #$1A      return $1A <EOF> char
+10250   02AB DE F0              LDX     L00F0     restore X
+10251   02AD 0D                 SEC     
+10252   02AE 39                 RTS     
+
+10254   02AF 00         MCHIN   FCC     00,127,10,$11,$12,$13,$14    
+                                        <NUL> <127 DEL> <$11 ^Q PTR ON> <$12 ^R PTP ON> <$13 ^S PTR OFF> <$14 ^T PTP OFF>
+
+10259   02B6 00                 
+10260   02B7 00         LIN     RMB     72        source code line read from input file
+
+10333   0300 00                 *****
+10334   0301 24 00      ENDSTBL FDB     $2400     default end-of-symbol table address
+10336   0303 7E 0946    L0303   JMP     0BBA
+
+10338   0306 41         OPTABLE FCC     "ABA"
+10341   0309 10                 
+10343   030A 001B                 
+10344   030C 41                 FCC     "ADC"
+10347   030F 00                 
+10348   0310 D489              
+10350   0312 41                 FCC     "ADD"
+10353   0315 00                 
+10354   0316 D48B              
+10355   0318 41                 
+10356   0319 4E                 
+10357   031A 44                 
+10358   031B 00                 
+10359   031C D484              
+10360   031E 41                 
+10361   031F 53                 
+10362   0320 4C                 
+10363   0321 00                 
+10364   0322 4A                 
+10365   0323 48                 
+10366   0324 41                 
+10367   0325 53                 
+10368   0326 52                 
+10369   0327 00                 
+10370   0328 4A                 
+10371   0329 47                 
+10372   032A 42                 
+10373   032B 43                 
+10374   032C 43                 
+10375   032D 00                 
+10376   032E 20 24              
+10378   0330 42                 
+10379   0331 43                 
+10380   0332 53                 
+10381   0333 00                 
+10382   0334 20 25              
+10384   0336 42                 
+10385   0337 45                 
+10386   0338 51                 
+10387   0339 00                 
+10388   033A 20 27              
+10390   033C 42                 
+10391   033D 47                 
+10392   033E 45                 
+10393   033F 00                 
+10394   0340 20 2C              
+10396   0342 42                 
+10397   0343 47                 
+10398   0344 54                 
+10399   0345 00                 
+10400   0346 20 2E              
+10402   0348 42                 
+10403   0349 48                 
+10404   034A 49                 
+10405   034B 00                 
+10406   034C 20 22              
+10408   034E 42                 
+10409   034F 49                 
+10410   0350 54                 
+10411   0351 00                 
+10412   0352 D4 85              
+10413   0354 42          
+10414   0355 4C          
+10415   0356 45          
+10416   0357 00          
+10417   0358 20 2F       
+10419   035A 42          
+10420   035B 4C          
+10421   035C 53          
+10422   035D 00          
+10423   035E 20 23       
+10425   0360 42          
+10426   0361 4C          
+10427   0362 54          
+10428   0363 00          
+10429   0364 20 2D       
+10431   0366 42          
+10432   0367 4D          
+10433   0368 49          
+10434   0369 00          
+10435   036A 20 2B       
+10437   036C 42          
+10438   036D 4E          
+10439   036E 45          
+10440   036F 00          
+10441   0370 20 26       
+10443   0372 42          
+10444   0373 50          
+10445   0374 4C          
+10446   0375 00          
+10447   0376 20 2A       
+10449   0378 42          
+10450   0379 52          
+10451   037A 41          
+10452   037B 00          
+10453   037C 20 20       
+10455   037E 42          
+10456   037F 53          
+10457   0380 52          
+10458   0381 00          
+10459   0382 20 8D       
+10463   0384 42          
+10464   0385 56          
+10465   0386 43          
+10466   0387 00          
+10467   0388 20 28       
+10471   038A 42          
+10472   038B 56          
+10473   038C 53          
+10474   038D 00          
+10475   038E 20 29       
+10477   0390 43          
+10478   0391 42          
+10479   0392 41          
+10480   0393 10          
+10481   0394 00          
+10482   0395 11          
+10483   0396 43          
+10484   0397 4C          
+10485   0398 43          
+10486   0399 10          
+10487   039A 00          
+10488   039B 0C          
+10489   039C 43          
+10490   039D 4C          
+10491   039E 49          
+10492   039F 10          
+10493   03A0 00          
+10494   03A1 0E          
+10495   03A2 43          
+10496   03A3 4C          
+10497   03A4 52          
+10498   03A5 00          
+10499   03A6 4A          
+10500   03A7 4F          
+10501   03A8 43          
+10502   03A9 4C          
+10503   03AA 56          
+10504   03AB 10          
+10505   03AC 00          
+10506   03AD 0A          
+10507   03AE 43          
+10508   03AF 4D          
+10509   03B0 50          
+10510   03B1 00          
+10511   03B2 D4 81       
+10512   03B4 43          
+10513   03B5 4F          
+10514   03B6 4D          
+10515   03B7 00          
+10516   03B8 4A          
+10517   03B9 43          
+10518   03BA 43          
+10519   03BB 50          
+10520   03BC 58          
+10521   03BD 00          
+10522   03BE D0 8C       
+10523   03C0 44          
+10524   03C1 41          
+10525   03C2 41          
+10526   03C3 10          
+10527   03C4 00          
+10528   03C5 19          
+10529   03C6 44          
+10530   03C7 45          
+10531   03C8 43          
+10532   03C9 00          
+10533   03CA 4A          
+10534   03CB 4A          
+10535   03CC 44          
+10536   03CD 45          
+10537   03CE 53          
+10538   03CF 10          
+10539   03D0 00          
+10540   03D1 34          
+10541   03D2 44          
+10542   03D3 45          
+10543   03D4 58          
+10544   03D5 10          
+10545   03D6 00          
+10546   03D7 09          
+10547   03D8 45          
+10548   03D9 4F          
+10549   03DA 52          
+10550   03DB 00          
+10551   03DC D4 88       
+10552   03DE 49          
+10553   03DF 4E          
+10554   03E0 43          
+10555   03E1 00          
+10556   03E2 4A          
+10557   03E3 4C          
+10558   03E4 49          
+10559   03E5 4E          
+10560   03E6 53          
+10561   03E7 10          
+10562   03E8 00          
+10563   03E9 31          
+10564   03EA 49          
+10565   03EB 4E          
+10566   03EC 58          
+10567   03ED 10          
+10568   03EE 00          
+10569   03EF 08          
+10570   03F0 4A          
+10571   03F1 4D          
+10572   03F2 50          
+10573   03F3 00          
+10574   03F4 48          
+10575   03F5 6E 4A       
+10577   03F7 53          
+10578   03F8 52                 
+10579   03F9 00                 
+10580   03FA 48                 
+10581   03FB AD 4C              
+10582   03FD 44                 
+10583   03FE 41                 
+10584   03FF 00                 
+10585   0400 D4 86              
+10586   0402 4C                 
+10587   0403 44                 
+10588   0404 53                 
+10589   0405 00                 
+10590   0406 D0 8E              
+10591   0408 4C                 
+10592   0409 44                 
+10593   040A 58                 
+10594   040B 00                 
+10595   040C D0 CE              
+10596   040E 4C                 
+10597   040F 53                 
+10598   0410 52                 
+10599   0411 00                 
+10600   0412 4A                 
+10601   0413 44                 
+10602   0414 4E                 
+10603   0415 45                 
+10604   0416 47                 
+10605   0417 00                 
+10606   0418 4A                 
+10607   0419 40                 
+10608   041A 4E                 
+10609   041B 4F                 
+10610   041C 50                 
+10611   041D 10                 
+10612   041E 00                 
+10613   041F 01                 
+10614   0420 4F                 
+10615   0421 52                 
+10616   0422 41                 
+10617   0423 00                 
+10618   0424 D4 8A              
+10619   0426 50                 
+10620   0427 53                 
+10621   0428 48                 
+10622   0429 00                 
+10623   042A 02                 
+10624   042B 36                 
+10625   042C 50                 
+10626   042D 55                 
+10627   042E 4C                 
+10628   042F 00                 
+10629   0430 02                 
+10630   0431 32                 
+10631   0432 52                 
+10632   0433 4F                 
+10633   0434 4C                 
+10634   0435 00                 
+10635   0436 4A                 
+10636   0437 49                 
+10637   0438 52                 
+10638   0439 4F                 
+10639   043A 52                 
+10640   043B 00                 
+10641   043C 4A                 
+10642   043D 46                 
+10643   043E 52                 
+10644   043F 54                 
+10645   0440 49                 
+10646   0441 10                 
+10647   0442 00                 
+10648   0443 3B                 
+10650   0444 52                 
+10651   0445 54                 
+10652   0446 53                 
+10653   0447 10                 
+10654   0448 00                 
+10655   0449 39                 
+10657   044A 53                 
+10658   044B 42                 
+10659   044C 41                 
+10660   044D 10                 
+10661   044E 00                 
+10662   044F 10                 
+10663   0450 53                 
+10664   0451 42                 
+10665   0452 43                 
+10666   0453 00                 
+10667   0454 D4 82              
+10668   0456 53                 
+10669   0457 45                 
+10670   0458 43                 
+10671   0459 10                 
+10672   045A 00                 
+10673   045B 0D                 
+10674   045C 53                 
+10675   045D 45                 
+10676   045E 49                 
+10677   045F 10                 
+10678   0460 00                 
+10679   0461 0F                 
+10680   0462 53                 
+10681   0463 45                 
+10682   0464 56                 
+10683   0465 10                 
+10684   0466 00                 
+10685   0467 0B                 
+10686   0468 53                 
+10687   0469 54                 
+10688   046A 41                 
+10689   046B 00                 
+10690   046C 54                 
+10691   046D 87                 
+10692   046E 53                 
+10693   046F 54                 
+10694   0470 53                 
+10695   0471 00                 
+10696   0472 50                 
+10697   0473 8F                 
+10698   0474 53                 
+10699   0475 54                 
+10700   0476 58                 
+10701   0477 00                 
+10702   0478 50                 
+10703   0479 CF                 
+10704   047A 53                 
+10705   047B 55                 
+10706   047C 42                 
+10707   047D 00                 
+10708   047E D4 80              
+10709   0480 53                 
+10710   0481 57                 
+10711   0482 49                 
+10712   0483 10                 
+10713   0484 00                 
+10714   0485 3F                 
+10715   0486 54                 
+10716   0487 41                 
+10717   0488 42                 
+10718   0489 10                 
+10719   048A 00                 
+10720   048B 16                 
+10721   048C 54                 
+10722   048D 41                 
+10723   048E 50                 
+10724   048F 10                 
+10725   0490 00                 
+10726   0491 06                 
+10727   0492 54                 
+10728   0493 42                 
+10729   0494 41                 
+10730   0495 10                 
+10731   0496 00                 
+10732   0497 17                 
+10733   0498 54                 
+10734   0499 50                 
+10735   049A 41                 
+10736   049B 10                 
+10737   049C 00                 
+10738   049D 07                 
+10739   049E 54                 
+10740   049F 53                 
+10741   04A0 54                 
+10742   04A1 00                 
+10743   04A2 4A                 
+10744   04A3 4D                 
+10745   04A4 54                 
+10746   04A5 53                 
+10747   04A6 58                 
+10748   04A7 10                 
+10749   04A8 00                 
+10750   04A9 30                 
+10751   04AA 54                 
+10752   04AB 58                 
+10753   04AC 53                 
+10754   04AD 10                 
+10755   04AE 00                 
+10756   04AF 35                 
+10757   04B0 57                 FCC     "WAI"
+10760   04B3 10 
+10761   04B4 003E               FDB     $003E  
+10763   04B6 45                 FCC     "END"
+10766   04B9 D0
+10767   04BA 059C 
+10768   04BC 45                 FCC     "EQU"
+10770   04BF A0
+10771   04C0 059F 
+10772   04C2 46                 FCC     "FCB"
+10774   04C5 88              
+10775   04C6 05A2               
+10776   04C8 46                 FCC     "FCC"
+10778   04CB 80
+10779   04CC 05A5 
+10780   04CE 46                 FCC     "FDB"
+10782   04D1 88
+10783   04D2 05A8 
+10784   04D4 4D                 FCC     "MON"
+10786   04D7 80
+10787   04D8 05AB 
+10788   04DA 4E                 FCC     "NAM"
+10790   04DD 80
+10791   04DE 05AE 
+10792   04E0 4F                 FCC     "OPT" 
+10794   04E3 80 
+10795   04E4 05B1               FDB     J.OPT
+10796   04E6 4F                 FCC     "ORG"
+10797   04E9 C0
+10798   04EA 05B4
+10799   04EC 50                 FCC     "PAG"
+10800   04EF D0
+10801   04F0 05B7 
+10802   04F2 52                 FCC     "RMB"
+10803   04F5 80
+10804   04F6 05BA
+10805   04F8 53                 FCC     "SPC"
+10806   04FB D0 
+10807   04FC 05BD 
+10808   04FE 2A         MERROR  FCC    "****ERROR"
+10814   0507 00                 FCC    0,0,0,0,0
+10815   0508 00         
+10816   0509 00         
+10817   050A 00         
+10818   050B 00         
+10819   050C 0D                 FCC    13,10,4
+10820   050D 0A                 
+10821   050E 04                 
+10822   050F 0D                 FCC    13,13,10
+10823   0510 0D         MTOTERR FCC    13,10,"TOTAL ERRORS  COUN"
+10843   0524 0D                 FCC    13,10,4
+10844   0525 0A                 
+10845   0526 04                 
+10846   0527 53                 FCC    "S1"
+10847   0528 31                 
+10848   0529 00                 
+10849   052A 00                 
+10850   052B 00                 
+10851   052C 00         
+10852   052D 00         
+10853   052E 00         
+10854   052F 00         
+10855   0530 00         
+
+10914   056B 04                 FCC     4
+10915   056C 0D         MPAG    FCC     13,10,10,10,10       
+10916   056D 0A                 
+10917   056E 0A                 
+10918   056F 0A                 
+10919   0570 0A                 
+10920   0571 2D 2D              FCC     "---",13,10,10,10
+10921   0573 2D 0D              
+10922   0575 0A                 
+10923   0576 0A                 
+10924   0577 0A                 
+10925   0578 50                 FCC     "PAGE"
+10926   0579 41                 
+10927   057A 47                 
+10928   057B 45                 
+10929   057C 31         L057C   FCC     "12345   ",0
+10930   057D 32         
+10931   057E 33         
+10932   057F 34         
+10933   0580 35         
+10934   0581 20 20      
+10938   0583 20 00              
+
+10940   0585 00         L0585   *****
+10941   0586 00                 *****
+10942   0587 00                 *****
+10943   0588 00                 *****
+10944   0589 00                 *****
+10945   058A 00                 *****
+10946   058B 00                 *****
+10947   058C 20 20              
+10949   058E 00                 *****
+10950   058F 00                 *****
+10951   0590 00                 *****
+10952   0591 00                 *****
+10953   0592 00                 *****
+10954   0593 00                 *****
+10955   0594 00                 *****
+10956   0595 00                 *****
+10957   0596 0D                 
+10958   0597 0A                 
+10959   0598 0A                 
+10960   0599 0A                 
+10961   059A 0A                 
+10962   059B 04                 
+
+10963   059C 7E 0B8F            JMP     L0B8F
+10965   059F 7E 0B63            JMP     L0B63
+10967                   L05A0
+10969   05A2 7E 0D34            JMP     L0D34
+10971                   L05A3
+10973   05A5 7E 0BDD            JMP     L0BDD
+10975   05A8 7E 0CDC            JMP     L0CDC
+10977   05AB 7E 0B8F            JMP     L0B8F
+10979   05AE 7E 0D95    L05AE   JMP     L0D95
+10981   05B1 7E 0DD1    J.OPT   JMP     C.OPT
+10983   05B4 7E 0E6C            JMP     L0E6C
+10985   05B7 7E 0E7D            JMP     L0E7D
+10987   05BA 7E 0EB1            JMP     L0EB1
+10989   05BD 7E 0ECC            JMP     L0ECC
+10991   05C0 7E 09D4    L05C0   JMP     L09D4
+10993   05C3 7E 0B50    L05C3   JMP     L0B50
+10995   05C6 7E 08BA    L05C6   JMP     L08BA
+10997   05C9 7E 0660    L05C9   JMP     L0660
+10999   05CC 7E 0807    L05CC   JMP     L0807
+11001   05CF 7E 10A8    L05CF   JMP     L10A8
+11003   05D2 7E 1151    L05D2   JMP     L1151
+11005   05D5 7E 066A    L05D5   JMP     L066A
+11007   05D8 7E 0EEC    L05D8   JMP     L0EEC
+11009   05DB 7E 06FB    L05DB   JMP     L06FB
+11011   05DE 7E 0645    J.NXTC1 JMP     C.NXTC1   get next char from source line (can be a space)
+11013   05E1 7E 0649    J.NXTCH JMP     C.NXTCH   get next char from source line (skip spaces)
+11015   05E4 7E 084C    L05E4   JMP     L084C
+11017   05E7 7E 06AD    L05E7   JMP     L06AD
+11019   05EA 7E 1472    L05EA   JMP     L1472
+11021   05ED 7E 088B    J.ERR   JMP     L088B     Print Error given in Reg A
+11023   05F0 7E 1429    L05F0   JMP     L1429
+11025   05F3 7E 12DE    L05F3   JMP     L12DE
+11027   05F6 7E 0870    L05F6   JMP     L0870
+
+11029   05F9 96 3E      L05F9   LDAA    L003E
+11030   05FB 26 07              BNE     L0604
+11031   05FD 96 44              LDAA    FLGOBJ    =0 -> do not generate object code, <>0 -> DO generate object code
+11032   05FF 27 03              BEQ     L0604
+11033   0601 BD 010C            JSR     L010C
+11034   0604 39         L0604   RTS     
+
+11036   0605 4D         MTITL   FCC     "M6800 ASSEMBLER VERSION 1.2",13,10,4
+
+11065   0623 4E                 FCC     "NTER PASS : 1P,1S,2P,2L,2T",13,10
+00000   063F 0A 04      MLF     FCC     10,4        <LF>
+
+11091   0641 FF 0000    L0641   
+11092                   L0642
+11093                   L0643
+11094   0644 D0         L0644   
+
+11095   0645 37         C.NXTC1 PSHB              get next char from source line (can be a space)
+11096   0646 5F                 CLRB    
+11097   0647 20 03              BRA     L064C
+
+11099   0649 37         C.NXTCH PSHB              get next char from source line (skip spaces)
+11100   064A C6 FF              LDAB    #$FF
+11101   064C DF 65      L064C   STX     L0065     save X
+11103   064E DE 34              LDX     L0034     get pointer to current char in source code line
+11105   0650 A6 00      L0650   LDAA    $0000,X   get char from source line
+11106   0652 08                 INX     
+11107   0653 5D                 TSTB    
+11108   0654 27 04              BEQ     L065A
+11109   0656 81 20              CMPA    #$20      is space ?
+11110   0658 27 F6              BEQ     L0650
+11111   065A DF 34      L065A   STX     L0034     save pointer to current char in source code line
+11112   065C DE 65              LDX     L0065     restore X
+11113   065E 33                 PULB    
+11114   065F 39                 RTS     
+11115    ; -----------------------------------------------
+11116   0660 DF 65      L0660   STX     L0065
+11117                   L0661
+11118   0662 DE 34              LDX     PLINE     pointer to current char in source code line
+11119   0664 09         L0664   DEX     
+11120   0665 DF 34              STX     PLINE     pointer to current char in source code line
+11121   0667 DE 65              LDX     L0065
+11122                   L0668
+11123   0669 39                 RTS     
+11124    ; -----------------------------------------------
+11125   066A DF 7F      L066A   STX     L007F
+11126                   L066B
+11127   066C CE 0306    L066C   LDX     #OPTABLE  Opcode/Pseudo op table
+11129   066F A6 00      L066F   LDAA    $0000,X   get 1st char of opcode in table
+11130   0671 90 BE              SUBA    OPCH1     compare with source line opcode 1st char 
+11131   0673 84 7F              ANDA    #$007F
+11132   0675 26 1A              BNE     L0691     jump of not the same
+11133   0677 A6 01              LDAA    $0001,X
+11134   0679 90 BF      L0679   SUBA    OPCH2     compare with source line opcode 2nd char
+11135   067B 84 7F              ANDA    #$007F
+11136   067D 26 12              BNE     L0691
+11137   067F A6 02              LDAA    $0002,X
+11138   0681 90 C0              SUBA    OPCH3     compare with source line opcode 3rd char
+11139   0683 84 7F              ANDA    #$007F
+11140   0685 26 0A              BNE     L0691
+11141   0687 E6 03              LDAB    $0003,X   get type from table
+11142   0689 D7 36              STAB    OPTYPE    save opcode type
+11143   068B EE 04              LDX     $0004,X   get jump addr
+11144   068D DF 37              STX     L0037
+11145   068F 20 19              BRA     L06AA
+
+11147   0691 08         L0691   INX               Incr pointer by 3 (for opcode/pseudo op name) + 1 + 2 (for jump addr)
+11148   0692 08                 INX     
+11149   0693 08                 INX     
+11150   0694 08                 INX     
+11151   0695 08                 INX     
+11152   0696 08                 INX     
+11153   0697 8C 04FE            CPX     #MERROR   The message marks the end of table
+11154   069A 26 D3              BNE     L066F     
+11155   069C 86 CF              LDAA    #207      Error "Undefined Opcode"
+11156   069E BD 05ED            JSR     J.ERR     Print Error given in Reg A
+11157   06A1 86 00              LDAA    #$00
+11158   06A3 97 36              STAA    OPTYPE    opcode type
+11159   06A5 CE 0000            LDX     #$0000
+11160   06A8 DF 37              STX     L0037
+11161   06AA DE 81      L06AA   LDX     L0081
+11162   06AC 39                 RTS     
+11163    ; -----------------------------------------------
+11164   06AD 96 3F      L06AD   LDAA    L003F
+11165   06AF 26 42              BNE     L06F3
+11166   06B1 96 42              LDAA    L0042
+11167   06B3 26 3E              BNE     L06F3
+11168   06B5 DF 81              STX     L0081     Save string to print
+11169   06B7 DE 34              LDX     PLINE     pointer to current char in source code line
+11170   06B9 DF 7F              STX     L007F
+11171   06BB 96 43              LDAA    L0043
+11172   06BD 26 2A              BNE     L06E9
+11173   06BF 96 46              LDAA    L0046
+11174   06C1 27 26              BEQ     L06E9
+11175   06C3 7C 0039            INC     L0039
+11176   06C6 26 21              BNE     L06E9
+11177   06C8 86 CA              LDAA    #$00CA
+11178   06CA 97 39              STAA    L0039
+11179   06CC DE 49              LDX     L0049
+11180   06CE 08                 INX     
+11181   06CF DF 49              STX     L0049
+11182   06D1 96 49              LDAA    L0049
+11183   06D3 D6 4A              LDAB    L004A
+11184   06D5 CE 057C            LDX     #$057C
+11185   06D8 BD 05C6            JSR     L05C6
+11186   06DB 86 20              LDAA    #$0020
+11187   06DD B7 057C            STAA    L057C
+11188   06E0 B7 057D            STAA    L057D
+11189   06E3 CE 056C            LDX     #MPAG     <LF>...<LF> "---" <LF>...<LF> "PAGEnnnnn"
+11190   06E6 BD 0133            JSR     PDATAB    Call Monitor PDATA to print string in X up to char $04
+11191   06E9 DE 81      L06E9   LDX     L0081     restore string to print
+11192   06EB BD 0136            JSR     PDATA1B   Print string in X up to char $04
+11193   06EE DE 7F              LDX     L007F
+11194   06F0 DF 34              STX     PLINE     pointer to current char in source code line
+11195   06F2 39                 RTS     
+11196    ; -----------------------------------------------
+11197   06F3 96 27      L06F3   LDAA    L0027
+11198   06F5 27 03              BEQ     L06FA
+11199   06F7 BD 0136            JSR     PDATA1B   Print string in X up to char $04
+11200   06FA 39         L06FA   RTS     
+11201    ; -----------------------------------------------
+11202   06FB DE 34      L06FB   LDX     PLINE     pointer to current char in source code line
+11203   06FD DF 7F              STX     L007F
+11204   06FF C5 01              BITB    #$0001
+11205   0701 27 0D              BEQ     L0710
+11206   0703 CE 00AA            LDX     #$00AA
+11207   0706 96 47              LDAA    L0047
+11208   0708 BD 05F6            JSR     L05F6
+11209   070B 96 48              LDAA    L0048
+11210   070D BD 05F6            JSR     L05F6
+11211   0710 C5 02      L0710   BITB    #$0002
+11212   0712 27 08              BEQ     L071C
+11213   0714 CE 00AF            LDX     #$00AF
+11214   0717 96 38              LDAA    L0038
+11215   0719 BD 05F6            JSR     L05F6
+11216   071C C5 04      L071C   BITB    #$0004
+11217   071E 27 08              BEQ     L0728
+11218   0720 CE 00B2            LDX     #$00B2
+11219   0723 96 2F              LDAA    L002F
+11220   0725 BD 05F6            JSR     L05F6
+11221   0728 C5 08      L0728   BITB    #$0008
+11222   072A 27 0D              BEQ     L0739
+11223   072C CE 00B2            LDX     #$00B2
+11224   072F 96 2E              LDAA    L002E
+11225   0731 BD 05F6            JSR     L05F6
+11226   0734 96 2F              LDAA    L002F
+11227   0736 BD 05F6            JSR     L05F6
+11228   0739 C5 10      L0739   BITB    #$0010
+11229   073B 27 0D              BEQ     L074A
+11230   073D CE 00AF            LDX     #$00AF
+11231   0740 96 2E              LDAA    L002E
+11232   0742 BD 05F6            JSR     L05F6
+11233   0745 96 2F              LDAA    L002F
+11234   0747 BD 05F6            JSR     L05F6
+11235   074A 7D 0027    L074A   TST     L0027
+11236   074D 27 1D              BEQ     L076C
+11237   074F 0F                 SEI     
+11238   0750 9F 63              STS     L0063
+11239   0752 CE 00B7            LDX     #$00B7
+11240   0755 8E 02B6            LDS     #$02B6
+11241   0758 32         L0758   PULA    
+11242   0759 A7 00              STAA    $0000,X
+11243   075B 08                 INX     
+11244   075C 8C 00EA            CPX     #$00EA
+11245   075F 27 04              BEQ     L0765
+11246   0761 81 0D              CMPA    #$000D
+11247   0763 26 F3              BNE     L0758
+11248   0765 09         L0765   DEX     
+11249   0766 9E 63              LDS     L0063
+11250   0768 0E                 CLI     
+11251   0769 7E 07F6            JMP     L07F6
+11252    ;
+11253   076C CE 00B6    L076C   LDX     #$00B6
+11254   076F C5 20              BITB    #$0020
+11255   0771 27 20              BEQ     L0793
+11256   0773 7D 006D            TST     L006D
+11257   0776 26 05              BNE     L077D
+11258   0778 CE 02B7            LDX     #LIN      source code line read from input file
+11259   077B 20 02              BRA     L077F
+11260    ;
+11261   077D DE 6B      L077D   LDX     L006B
+11262   077F DF 34      L077F   STX     PLINE     pointer to current char in source code line
+11263   0781 CE 00B7            LDX     #$00B7
+11264   0784 BD 05DE    L0784   JSR     J.NXTC1   get next char from source line (can be a space)
+11265   0787 81 20              CMPA    #$0020
+11266   0789 27 08              BEQ     L0793
+11267   078B A7 00              STAA    $0000,X
+11268   078D 08                 INX     
+11269   078E 8C 00BD            CPX     #$00BD
+11270   0791 26 F1              BNE     L0784
+11271   0793 C5 40      L0793   BITB    #$0040
+11272   0795 27 28              BEQ     L07BF
+11273   0797 DE 59              LDX     L0059
+11274   0799 DF 34              STX     PLINE     pointer to current char in source code line
+11275   079B CE 00C5            LDX     #$00C5
+11276   079E 96 36              LDAA    OPTYPE    opcode type
+11277   07A0 85 10              BITA    #$0010
+11278   07A2 26 1B              BNE     L07BF
+11279   07A4 BD 05E1            JSR     J.NXTCH   get next char from source line (skip spaces)
+11280   07A7 BD 05C9            JSR     L05C9
+11281   07AA BD 05DE    L07AA   JSR     J.NXTC1   get next char from source line (can be a space)
+11282   07AD 81 20              CMPA    #$0020
+11283   07AF 27 19              BEQ     L07CA
+11284   07B1 81 0D              CMPA    #$000D
+11285   07B3 27 41              BEQ     L07F6
+11286   07B5 A7 00              STAA    $0000,X
+11287   07B7 08                 INX     
+11288   07B8 8C 00EA            CPX     #$00EA
+11289   07BB 26 ED              BNE     L07AA
+11290   07BD 20 37              BRA     L07F6
+11291    ;
+11292   07BF C5 80      L07BF   BITB    #$0080
+11293   07C1 27 33              BEQ     L07F6
+11294   07C3 DE 59              LDX     L0059
+11295   07C5 DF 34              STX     PLINE     pointer to current char in source code line
+11296   07C7 CE 00C5            LDX     #$00C5
+11297   07CA C5 80      L07CA   BITB    #$0080
+11298   07CC 27 28              BEQ     L07F6
+11299   07CE 08                 INX     
+11300   07CF 08                 INX     
+11301   07D0 DF 7D              STX     L007D
+11302   07D2 96 7D              LDAA    L007D
+11303   07D4 D6 7E              LDAB    L007E
+11304   07D6 F0 0644            SUBB    L0644
+11305   07D9 B2 0643            SBCA    L0643
+11306   07DC 24 03              BCC     L07E1
+11307   07DE CE 00CE            LDX     #$00CE
+11308   07E1 BD 05E1    L07E1   JSR     J.NXTCH   get next char from source line (skip spaces)
+11309   07E4 BD 05C9            JSR     L05C9
+11310   07E7 BD 05DE    L07E7   JSR     J.NXTC1   get next char from source line (can be a space)
+11311   07EA A7 00              STAA    $0000,X
+11312   07EC 81 0D              CMPA    #$000D
+11313   07EE 27 06              BEQ     L07F6
+11314   07F0 08                 INX     
+11315   07F1 8C 00EB            CPX     #$00EB
+11316   07F4 26 F1              BNE     L07E7
+11317   07F6 86 0D      L07F6   LDAA    #$000D
+11318   07F8 A7 01              STAA    $0001,X
+11319   07FA 86 0A              LDAA    #$000A
+11320   07FC A7 02              STAA    $0002,X
+11321   07FE 86 04              LDAA    #$0004
+11322   0800 A7 03              STAA    $0003,X
+11323   0802 DE 7F              LDX     L007F
+11324   0804 DF 34              STX     PLINE     pointer to current char in source code line
+11325   0806 39                 RTS     
+11326    ; -----------------------------------------------
+11327   0807 37         L0807   PSHB    
+11328   0808 36                 PSHA    
+11329   0809 A6 00              LDAA    $0000,X
+11330   080B E6 01              LDAB    $0001,X
+11331   080D 37                 PSHB    
+11332   080E 36                 PSHA    
+11333   080F 34                 DES     
+11334   0810 30                 TSX     
+11335   0811 86 01              LDAA    #$0001
+11336   0813 6D 01              TST     $0001,X
+11337   0815 2B 0B              BMI     L0822
+11338   0817 4C         L0817   INCA    
+11339   0818 68 02              ASL     $0002,X
+11340   081A 69 01              ROL     $0001,X
+11341   081C 2B 04              BMI     L0822
+11342   081E 81 11              CMPA    #$0011
+11343   0820 26 F5              BNE     L0817
+11344   0822 A7 00      L0822   STAA    $0000,X
+11345   0824 A6 03              LDAA    $0003,X
+11346   0826 E6 04              LDAB    $0004,X
+11347   0828 6F 03              CLR     $0003,X
+11348   082A 6F 04              CLR     $0004,X
+11349   082C E0 02      L082C   SUBB    $0002,X
+11350   082E A2 01              SBCA    $0001,X
+11351   0830 24 07              BCC     L0839
+11352   0832 EB 02              ADDB    $0002,X
+11353   0834 A9 01              ADCA    $0001,X
+11354   0836 0C                 CLC     
+11355   0837 20 01              BRA     L083A
+11356    ;
+11357   0839 0D         L0839   SEC     
+11358   083A 69 04      L083A   ROL     $0004,X
+11359   083C 69 03              ROL     $0003,X
+11360   083E 64 01              LSR     $0001,X
+11361   0840 66 02              ROR     $0002,X
+11362   0842 6A 00              DEC     $0000,X
+11363   0844 26 E6              BNE     L082C
+11364   0846 31                 INS     
+11365   0847 31                 INS     
+11366   0848 31                 INS     
+11367   0849 32                 PULA    
+11368   084A 33                 PULB    
+11369   084B 39                 RTS     
+11370    ; -----------------------------------------------
+11371   084C 37         L084C   PSHB    
+11372   084D 36                 PSHA    
+11373   084E A6 01              LDAA    $0001,X
+11374   0850 36                 PSHA    
+11375   0851 A6 00              LDAA    $0000,X
+11376   0853 36                 PSHA    
+11377   0854 86 10              LDAA    #$0010
+11378   0856 36                 PSHA    
+11379   0857 30                 TSX     
+11380   0858 A6 03              LDAA    $0003,X
+11381   085A 58         L085A   ASLB    
+11382   085B 49                 ROLA    
+11383   085C 68 02              ASL     $0002,X
+11384   085E 69 01              ROL     $0001,X
+11385   0860 24 04              BCC     L0866
+11386   0862 EB 04              ADDB    $0004,X
+11387   0864 A9 03              ADCA    $0003,X
+11388   0866 6A 00      L0866   DEC     $0000,X
+11389   0868 26 F0              BNE     L085A
+11390   086A 31                 INS     
+11391   086B 31                 INS     
+11392   086C 31                 INS     
+11393   086D 31                 INS     
+11394   086E 31                 INS     
+11395   086F 39                 RTS     
+11396    ; -----------------------------------------------
+11397   0870 37         L0870   PSHB    
+11398   0871 16                 TAB     
+11399   0872 44                 LSRA    
+11400   0873 44                 LSRA    
+11401   0874 44                 LSRA    
+11402   0875 44                 LSRA    
+11403   0876 8D 05              BSR     L087D
+11404   0878 17                 TBA     
+11405   0879 8D 02              BSR     L087D
+11406   087B 33                 PULB    
+11407   087C 39                 RTS     
+11408    ; -----------------------------------------------
+11409   087D 84 0F      L087D   ANDA    #$000F
+11410   087F 8A 30              ORAA    #$0030
+11411   0881 81 3A              CMPA    #$003A
+11412   0883 25 02              BCS     L0887
+11413   0885 8B 07              ADDA    #$0007
+11414   0887 A7 00      L0887   STAA    $0000,X
+11415   0889 08                 INX     
+11416   088A 39                 RTS     
+11417    ; -----------------------------------------------
+11418   088B DF 69      L088B   STX     L0069
+11419   088D D6 46              LDAB    L0046
+11420   088F 26 08              BNE     L0899
+11421   0891 81 D3              CMPA    #$00D3
+11422   0893 27 22              BEQ     L08B7
+11423   0895 81 D0              CMPA    #$00D0
+11424   0897 27 1E              BEQ     L08B7
+11425   0899 7C 0027    L0899   INC     L0027
+11426   089C DE 25              LDX     L0025
+11427   089E 08                 INX     
+11428   089F DF 25              STX     L0025
+11429   08A1 16                 TAB     
+11430   08A2 4F                 CLRA    
+11431   08A3 CE 0507            LDX     #$0507
+11432   08A6 BD 05C6            JSR     L05C6
+11433   08A9 86 20              LDAA    #$0020
+11434   08AB B7 0507            STAA    L0507
+11435   08AE B7 0508            STAA    L0508
+11436   08B1 CE 04FE            LDX     #MERROR   Message "****ERROR"
+11437   08B4 BD 05E7            JSR     L05E7
+11438   08B7 DE 69      L08B7   LDX     L0069
+11439   08B9 39                 RTS     
+11440    ; -----------------------------------------------
+11441   08BA DF 65      L08BA   STX     L0065
+11442   08BC CE 08EA            LDX     #$08EA
+11443   08BF 7F 0060    L08BF   CLR     L0060
+11444   08C2 E0 01      L08C2   SUBB    $0001,X
+11445   08C4 A2 00              SBCA    $0000,X
+11446   08C6 25 05              BCS     L08CD
+11447   08C8 7C 0060            INC     L0060
+11448   08CB 20 F5              BRA     L08C2
+11449    ;
+11450   08CD EB 01      L08CD   ADDB    $0001,X
+11451   08CF A9 00              ADCA    $0000,X
+11452   08D1 36                 PSHA    
+11453   08D2 DF 67              STX     L0067
+11454   08D4 DE 65              LDX     L0065
+11455   08D6 96 60              LDAA    L0060
+11456   08D8 8B 30              ADDA    #$0030
+11457   08DA A7 00              STAA    $0000,X
+11458   08DC 32                 PULA    
+11459   08DD 08                 INX     
+11460   08DE DF 65              STX     L0065
+11461   08E0 DE 67              LDX     L0067
+11462   08E2 08                 INX     
+11463   08E3 08                 INX     
+11464   08E4 8C 08F4            CPX     #START
+11465   08E7 26 D6              BNE     L08BF
+11466   08E9 39                 RTS     
+11467    ; -----------------------------------------------
+11468   08EA 27 10              BEQ     L08FC
+11469   08EC 03                 *****
+11470   08ED E8 00              EORB    $0000,X
+11471   08EF 64 00              LSR     $0000,X
+11472   08F1 0A                 CLV     
+11473   08F2 00                 *****
+11474   08F3 01                 NOP     
+
+11475   08F4 BD 0106    START   JSR     L0106     Cold Start Assembler
+11476   08F7 0F                 SEI     
+11477   08F8 CE 1640            LDX     #$1640
+11478   08FB DF 72              STX     L0072
+11480   08FD B6 1640            LDAA    L1640
+11481   0900 26 13              BNE     L0915
+11482   0902 C6 18              LDAB    #$0018
+11483   0904 CE 1D30            LDX     #$1D30
+11484   0907 8E 1627            LDS     #$1627
+11485   090A 32         L090A   PULA    
+11486   090B A7 00              STAA    $0000,X
+11487   090D 08                 INX     
+11488   090E 5A                 DECB    
+11489   090F 26 F9              BNE     L090A
+11490   0911 DF 72              STX     L0072
+11491   0913 20 06              BRA     L091B
+11492    ;
+11493   0915 CE 0130    L0915   LDX     #MON      Monitor START
+11494   0918 FF 0104            STX     MON2+1    Set vector at $0103
+11495   091B 0E         L091B   CLI     
+11496   091C 96 72              LDAA    L0072
+11497   091E D6 73              LDAB    L0073
+11498   0920 CB 08              ADDB    #$0008
+11499   0922 24 01              BCC     L0925
+11500   0924 4C                 INCA    
+11501   0925 F0 0302    L0925   SUBB    ENDSTBL+1
+11502   0928 B2 0301            SBCA    ENDSTBL   default end-of-symbol table address
+11503   092B 25 05              BCS     L0932
+11504   092D CE 2000            LDX     #$2000
+11505   0930 20 03              BRA     L0935
+11506    ;
+11507   0932 FE 0301    L0932   LDX     ENDSTBL   default end-of-symbol table address
+11508   0935 DF 23      L0935   STX     L0023
+11509   0937 09                 DEX     
+11510   0938 09                 DEX     
+11511   0939 09                 DEX     
+11512   093A 09                 DEX     
+11513   093B 09                 DEX     
+11514   093C 09                 DEX     
+11515   093D 09                 DEX     
+11516   093E 09                 DEX     
+11517   093F DF 74              STX     L0074
+11518   0941 CE 0000            LDX     #$0000
+11519   0944 DF 21              STX     L0021
+11520   0946 8E E0B8    L0946   LDS     #STACK 
+11521   0949 7F 003E            CLR     L003E
+11522   094C 7F 003F            CLR     L003F
+11523   094F BD F03B            JSR     RESTR     iCOM PROM - RESTR
+11524   0952 D6 00              LDAB    PASS      iCOM PROM - PASS -> assembler params: 2=List/Obj, 3=List Only, 4=Obj Only
+11525   0954 26 03              BNE     L0959
+11526   0956 7E F023            JMP     UPDT      iCOM PROM - UPDT
+11528   0959 86 31      L0959   LDAA    #$31
+11529   095B 54                 LSRB    
+11530   095C 25 03              BCS     L0961     Jump if list only
+11531   095E 4A                 DECA    
+11532   095F 1B                 ABA     
+11533   0960 5F                 CLRB    
+11534   0961 58         L0961   ASLB    
+11535   0962 D7 00              STAB    PASS      iCOM PROM - PASS -> assembler params
+11536   0964 81 31              CMPA    #$31
+11537   0966 26 13              BNE     L097B
+11538   0968 DE 72              LDX     L0072
+11539   096A DF 7B              STX     L007B
+11540   096C CE 0605            LDX     #MTITL    Message "M6800 ASSEMBLER VERSION 1.2"
+11541   096F BD 011E            JSR     PDATAA    Call Monitor PDATA to print string in X
+11542   0972 4F                 CLRA    
+11543   0973 97 25              STAA    L0025
+11544   0975 97 26              STAA    L0026
+11545   0977 97 46              STAA    L0046
+11546   0979 20 1A              BRA     L0995
+11547    ;
+11548   097B 81 32      L097B   CMPA    #$0032
+11549   097D 27 0F              BEQ     L098E
+11550   097F 81 33              CMPA    #$0033
+11551   0981 26 05              BNE     L0988
+11552   0983 7C 003E            INC     L003E
+11553   0986 20 06              BRA     L098E
+11554    ;
+11555   0988 BD 0115    L0988   JSR     PRTCH2    Print char on console
+11556   098B 7C 003F            INC     L003F
+11557   098E 97 46      L098E   STAA    L0046
+11558   0990 7F 004B            CLR     L004B
+11559   0993 4F                 CLRA    
+11560   0994 01                 NOP     
+11561   0995 97 42      L0995   STAA    L0042
+11562   0997 97 33              STAA    L0033
+11563   0999 97 41              STAA    L0041
+11564   099B 97 40              STAA    FLGAMEM   =0 -> assemble to output file, <>0 -> do assemble to memory
+11565   099D 97 44              STAA    FLGOBJ    =0 -> do not generate object code, <>0 -> DO generate object code
+11566   099F 97 45              STAA    L0045
+11567   09A1 97 4C              STAA    L004C
+11568   09A3 97 43              STAA    L0043
+11569   09A5 97 3D              STAA    L003D
+11570   09A7 86 FF              LDAA    #$00FF
+11571   09A9 97 39              STAA    L0039
+11572   09AB CE 0000            LDX     #$0000
+11573   09AE DF 49              STX     L0049
+11574   09B0 DF 47              STX     L0047
+11575   09B2 CE 1628            LDX     #$1628
+11576   09B5 7D 1640            TST     L1640
+11577   09B8 26 03              BNE     L09BD
+11578   09BA CE 1D30            LDX     #$1D30
+11579   09BD DF 79      L09BD   STX     L0079
+11580   09BF DF 77              STX     L0077
+11581   09C1 CE 0584            LDX     #$0584
+11582   09C4 86 20              LDAA    #$0020
+11583   09C6 A7 00      L09C6   STAA    $0000,X
+11584   09C8 08                 INX     
+11585   09C9 8C 0596            CPX     #$0596
+11586   09CC 26 F8              BNE     L09C6
+11587   09CE 86 FF              LDAA    #$00FF
+11588   09D0 97 33              STAA    L0033
+11589   09D2 20 03              BRA     L09D7
+11590    ;
+11591   09D4 7F 0033    L09D4   CLR     L0033
+11592   09D7 7F 0027    L09D7   CLR     L0027
+11593   09DA BD 0112            JSR     RDLIN2    read source code line from disk input file (into LIN buffer)
+11594   09DD 96 33              LDAA    L0033     
+11595   09DF 27 1B              BEQ     L09FC
+11596   09E1 7F 006D            CLR     L006D
+11597   09E4 CE 0000            LDX     #$0000
+11598   09E7 DF 6E              STX     L006E
+11599   09E9 B6 02B7            LDAA    LIN       get 1st char from source code line 
+11600   09EC 81 0D              CMPA    #$0D
+11601   09EE 27 E7              BEQ     L09D7     jump to read next line if this is an empty line
+11602   09F0 81 30              CMPA    #$30      is '0' ?
+11603   09F2 2D 08              BLT     L09FC
+11604   09F4 81 39              CMPA    #$39      is '9' ?
+11605   09F6 2E 04              BGT     L09FC
+11606   09F8 86 FF              LDAA    #$FF
+11607   09FA 97 6D              STAA    L006D
+11608   09FC CE 02B7    L09FC   LDX     #LIN      source code line read from input file
+11609   09FF DF 34              STX     PLINE     init pointer to current char in source code line to beggining of line
+11610   0A01 96 6D              LDAA    L006D
+11611   0A03 26 07              BNE     L0A0C
+11612   0A05 DE 6E              LDX     L006E
+11613   0A07 08                 INX     
+11614   0A08 DF 6E              STX     L006E
+11615   0A0A 20 07              BRA     L0A13
+11616    ;
+11617   0A0C BD 05D2    L0A0C   JSR     L05D2
+11618   0A0F DE 2C              LDX     L002C
+11619   0A11 DF 6E      L0A11   STX     L006E
+11620   0A13 CE 009C    L0A13   LDX     #$009C
+11621   0A16 86 20              LDAA    #$0020
+11622   0A18 A7 00      L0A18   STAA    $0000,X
+11623   0A1A 08                 INX     
+11624   0A1B 8C 00EC            CPX     #$00EC
+11625   0A1E 26 F8              BNE     L0A18
+11626   0A20 96 6E              LDAA    L006E
+11627   0A22 D6 6F              LDAB    L006F
+11628   0A24 CE 00A4            LDX     #$00A4
+11629   0A27 BD 05C6            JSR     L05C6
+11630   0A2A DE 34              LDX     PLINE     pointer to current char in source code line
+11631   0A2C DF 6B              STX     L006B
+11632   0A2E BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+11633   0A31 81 2A              CMPA    #$002A
+11634   0A33 26 3C              BNE     L0A71
+11635   0A35 7D 0046            TST     L0046
+11636   0A38 27 9A              BEQ     L09D4
+11637   0A3A CE 00B7            LDX     #$00B7
+11638   0A3D 0F                 SEI     
+11639   0A3E 9F 63              STS     L0063
+11640   0A40 96 6D              LDAA    L006D
+11641   0A42 27 05              BEQ     L0A49
+11642   0A44 9E 6B              LDS     L006B
+11643   0A46 34                 DES     
+11644   0A47 20 03              BRA     L0A4C
+11645    ;
+11646   0A49 8E 02B6    L0A49   LDS     #$02B6
+11647   0A4C 32         L0A4C   PULA    
+11648   0A4D A7 00              STAA    $0000,X
+11649   0A4F 81 0D              CMPA    #$000D
+11650   0A51 27 06              BEQ     L0A59
+11651   0A53 08                 INX     
+11652   0A54 8C 00EB            CPX     #$00EB
+11653   0A57 26 F3              BNE     L0A4C
+11654   0A59 9E 63      L0A59   LDS     L0063
+11655   0A5B 0E                 CLI     
+11656   0A5C 86 0D              LDAA    #$000D
+11657   0A5E A7 00              STAA    $0000,X
+11658   0A60 86 0A              LDAA    #$000A
+11659   0A62 A7 01              STAA    $0001,X
+11660   0A64 86 04              LDAA    #$0004
+11661   0A66 A7 02              STAA    $0002,X
+11662   0A68 CE 00A4            LDX     #$00A4
+11663   0A6B BD 05E7            JSR     L05E7
+11664   0A6E 7E 05C0            JMP     L05C0
+11665    ;
+11666   0A71 81 0D      L0A71   CMPA    #$000D
+11667   0A73 26 03              BNE     L0A78
+11668   0A75 7E 05C0            JMP     L05C0
+11669    ;
+11670   0A78 81 20      L0A78   CMPA    #$0020
+11671   0A7A 27 3D              BEQ     L0AB9
+11672   0A7C C6 06              LDAB    #$0006
+11673   0A7E CE 009C            LDX     #$009C
+11674   0A81 5D         L0A81   TSTB    
+11675   0A82 27 04              BEQ     L0A88
+11676   0A84 A7 00              STAA    $0000,X
+11677   0A86 08                 INX     
+11678   0A87 5A                 DECB    
+11679   0A88 BD 05DE    L0A88   JSR     J.NXTC1   get next char from source line (can be a space)
+11680   0A8B 81 20              CMPA    #$0020
+11681   0A8D 26 F2              BNE     L0A81
+11682   0A8F CE 009C            LDX     #$009C
+11683   0A92 20 0E              BRA     L0AA2
+11684    ;
+11685   0A94 A6 00      L0A94   LDAA    $0000,X
+11686   0A96 81 20              CMPA    #$0020
+11687   0A98 27 12              BEQ     L0AAC
+11688   0A9A 81 30              CMPA    #$0030
+11689   0A9C 2D 16              BLT     L0AB4
+11690   0A9E 81 39              CMPA    #$0039
+11691   0AA0 2F 0A              BLE     L0AAC
+11692   0AA2 A6 00      L0AA2   LDAA    $0000,X
+11693   0AA4 81 41              CMPA    #$0041
+11694   0AA6 2D 0C              BLT     L0AB4
+11695   0AA8 81 5A              CMPA    #$005A
+11696   0AAA 2E 08              BGT     L0AB4
+11697   0AAC 08         L0AAC   INX     
+11698   0AAD 8C 00A2            CPX     #$00A2
+11699   0AB0 26 E2              BNE     L0A94
+11700   0AB2 20 05              BRA     L0AB9
+11701    ;
+11702   0AB4 86 CD      L0AB4   LDAA    #205      Error "Laber Error"
+11703   0AB6 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+11704   0AB9 BD 05E1    L0AB9   JSR     J.NXTCH   get next char from source line (skip spaces)
+11705   0ABC 97 BE              STAA    OPCH1     save source line opcode 1st char
+11706   0ABE BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+11707   0AC1 97 BF              STAA    OPCH2     save source line opcode 2nd char
+11708   0AC3 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+11709   0AC6 97 C0              STAA    OPCH3     save source line opcode 3rd char
+11710   0AC8 DE 34              LDX     PLINE     pointer to current char in source code line
+11711   0ACA DF 59              STX     L0059
+11712   0ACC BD 05D5            JSR     L05D5
+11713   0ACF 7D 0038            TST     L0038
+11714   0AD2 26 0B              BNE     L0ADF
+11715   0AD4 C6 0B              LDAB    #$000B
+11716   0AD6 BD 05DB            JSR     L05DB
+11717   0AD9 C6 03              LDAB    #$0003
+11718   0ADB 20 69              BRA     L0B46
+11719    ;
+11720   0ADD 20 71              BRA     L0B50
+11721    ;
+11722   0ADF 7D 0033    L0ADF   TST     L0033
+11723   0AE2 27 09              BEQ     L0AED
+11724   0AE4 DE 37              LDX     L0037
+11725   0AE6 8C 05AE            CPX     #$05AE
+11726   0AE9 27 0E              BEQ     L0AF9
+11727   0AEB 20 07              BRA     L0AF4
+11728    ;
+11729   0AED DE 37      L0AED   LDX     L0037
+11730   0AEF 8C 05AE            CPX     #$05AE
+11731   0AF2 26 05              BNE     L0AF9
+11732   0AF4 86 C9      L0AF4   LDAA    #201      Error "NAM error"
+11733   0AF6 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+11734   0AF9 D6 36      L0AF9   LDAB    OPTYPE    opcode type
+11735   0AFB 96 9C              LDAA    L009C
+11736   0AFD 81 20              CMPA    #$0020
+11737   0AFF 27 16              BEQ     L0B17
+11738   0B01 C5 40              BITB    #$0040
+11739   0B03 27 07              BEQ     L0B0C
+11740   0B05 86 CD              LDAA    #205      Error "Label Error"
+11741   0B07 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+11742   0B0A 20 1E              BRA     L0B2A
+11743    ;
+11744   0B0C C5 20      L0B0C   BITB    #$0020
+11745   0B0E 26 10              BNE     L0B20
+11746   0B10 C6 01              LDAB    #$0001
+11747   0B12 BD 05F3            JSR     L05F3
+11748   0B15 20 09              BRA     L0B20
+11749    ;
+11750   0B17 C5 20      L0B17   BITB    #$0020
+11751   0B19 27 05              BEQ     L0B20
+11752   0B1B 86 CA              LDAA    #202      Error "EQU requires a label"
+11753   0B1D BD 05ED            JSR     J.ERR     Print Error given in Reg A
+11754   0B20 D6 36      L0B20   LDAB    OPTYPE    opcode type
+11755   0B22 C5 80              BITB    #$0080
+11756   0B24 27 04              BEQ     L0B2A
+11757   0B26 DE 37              LDX     L0037
+11758   0B28 6E 00              JMP     $0000,X
+11759    ;
+11760   0B2A D6 36      L0B2A   LDAB    OPTYPE    opcode type
+11761   0B2C C5 10              BITB    #$0010
+11762   0B2E 26 06              BNE     L0B36
+11763   0B30 BD 05D8            JSR     L05D8
+11764   0B33 7E 0B3C            JMP     L0B3C
+11765    ;
+11766   0B36 86 01      L0B36   LDAA    #$0001
+11767   0B38 97 20              STAA    L0020
+11768   0B3A C6 E3              LDAB    #$00E3
+11769   0B3C BD 05DB    L0B3C   JSR     L05DB
+11770   0B3F C6 01              LDAB    #$0001
+11771   0B41 BD 05EA            JSR     L05EA
+11772   0B44 D6 20              LDAB    L0020
+11773   0B46 DB 48      L0B46   ADDB    L0048
+11774   0B48 86 00              LDAA    #$0000
+11775   0B4A 99 47              ADCA    L0047
+11776   0B4C 97 47              STAA    L0047
+11777   0B4E D7 48              STAB    L0048
+11778   0B50 7D 0027    L0B50   TST     L0027
+11779   0B53 26 05              BNE     L0B5A
+11780   0B55 7D 0046            TST     L0046
+11781   0B58 27 06              BEQ     L0B60
+11782   0B5A CE 00A4    L0B5A   LDX     #$00A4
+11783   0B5D BD 05E7            JSR     L05E7
+11784   0B60 7E 05C0    L0B60   JMP     L05C0
+11785    ;
+11786   0B63 CE 009C    L0B63   LDX     #$009C
+11787   0B66 A6 00      L0B66   LDAA    $0000,X
+11788   0B68 36                 PSHA    
+11789   0B69 08                 INX     
+11790   0B6A 8C 00A4            CPX     #$00A4
+11791   0B6D 26 F7              BNE     L0B66
+11792   0B6F BD 05CF            JSR     L05CF
+11793   0B72 DE 2A              LDX     L002A
+11794   0B74 DF 2E              STX     L002E
+11795   0B76 CE 00A3            LDX     #$00A3
+11796   0B79 32         L0B79   PULA    
+11797   0B7A A7 00              STAA    $0000,X
+11798   0B7C 09                 DEX     
+11799   0B7D 8C 009B            CPX     #$009B
+11800   0B80 26 F7              BNE     L0B79
+11801   0B82 C6 FF              LDAB    #$00FF
+11802   0B84 BD 05F3            JSR     L05F3
+11803   0B87 C6 F0              LDAB    #$00F0
+11804   0B89 BD 05DB            JSR     L05DB
+11805   0B8C 7E 05C3            JMP     L05C3
+11806    ;
+11807   0B8F 96 46      L0B8F   LDAA    L0046
+11808   0B91 27 44              BEQ     L0BD7
+11809   0B93 C6 C0              LDAB    #$00C0
+11810   0B95 BD 05DB            JSR     L05DB
+11811   0B98 CE 00A4            LDX     #$00A4
+11812   0B9B BD 05E7            JSR     L05E7
+11813   0B9E C6 80              LDAB    #$0080
+11814   0BA0 BD 05EA            JSR     L05EA
+11815   0BA3 96 45              LDAA    L0045
+11816   0BA5 27 03              BEQ     L0BAA
+11817   0BA7 BD 05F0            JSR     L05F0
+11818   0BAA 96 25      L0BAA   LDAA    L0025
+11819   0BAC D6 26              LDAB    L0026
+11820   0BAE CE 051F            LDX     #$051F
+11821   0BB1 BD 05C6            JSR     L05C6
+11822   0BB4 CE 0510            LDX     #MTOTERR  Message "TOTAL ERRORS"
+11823   0BB7 BD 0136            JSR     PDATA1B   Print string in X up to char $04
+11824   0BBA 96 43              LDAA    L0043
+11825   0BBC 26 16              BNE     L0BD4
+11826   0BBE 96 42              LDAA    L0042
+11827   0BC0 26 12              BNE     L0BD4
+11828   0BC2 96 3F              LDAA    L003F
+11829   0BC4 26 0E              BNE     L0BD4
+11830   0BC6 96 39      L0BC6   LDAA    L0039
+11831   0BC8 81 FF              CMPA    #$00FF
+11832   0BCA 27 08              BEQ     L0BD4
+11833   0BCC CE 063F            LDX     #MLF      String just having an <LF> ($0A ascii)
+11834   0BCF BD 05E7            JSR     L05E7
+11835   0BD2 20 F2              BRA     L0BC6
+11836    ;
+11837   0BD4 7E 0303    L0BD4   JMP     L0303
+11838    ;
+11839   0BD7 BD 05F0    L0BD7   JSR     L05F0
+11840   0BDA 7E 0303            JMP     L0303
+11841    ;
+11842   0BDD BD 05E1    L0BDD   JSR     J.NXTCH   get next char from source line (skip spaces)
+11843   0BE0 97 62              STAA    L0062
+11844   0BE2 DE 34              LDX     PLINE     pointer to current char in source code line
+11845   0BE4 09                 DEX     
+11846   0BE5 DF 69              STX     L0069
+11847   0BE7 C6 FF              LDAB    #$00FF
+11848   0BE9 D7 61              STAB    NOOPT     OPT option selected, <>0 -> NOt selected
+11849   0BEB 81 30              CMPA    #$0030
+11850   0BED 2D 3B              BLT     L0C2A
+11851   0BEF 81 39              CMPA    #$0039
+11852   0BF1 2E 37              BGT     L0C2A
+11853   0BF3 BD 05DE    L0BF3   JSR     J.NXTC1   get next char from source line (can be a space)
+11854   0BF6 81 30              CMPA    #$0030
+11855   0BF8 2D 04              BLT     L0BFE
+11856   0BFA 81 39              CMPA    #$0039
+11857   0BFC 2F F5              BLE     L0BF3
+11858   0BFE 81 2C      L0BFE   CMPA    #$002C
+11859   0C00 27 07              BEQ     L0C09
+11860   0C02 DE 69              LDX     L0069
+11861   0C04 08                 INX     
+11862   0C05 DF 34              STX     PLINE     pointer to current char in source code line
+11863   0C07 20 21              BRA     L0C2A
+11864    ;
+11865   0C09 DE 69      L0C09   LDX     L0069
+11866   0C0B DF 34              STX     PLINE     pointer to current char in source code line
+11867   0C0D BD 05D2            JSR     L05D2
+11868   0C10 7F 0062            CLR     L0062
+11869   0C13 7D 002C            TST     L002C
+11870   0C16 26 09              BNE     L0C21
+11871   0C18 96 2D              LDAA    L002D
+11872   0C1A 4D                 TSTA    
+11873   0C1B 27 04              BEQ     L0C21
+11874   0C1D 97 61              STAA    NOOPT     OPT option selected, <>0 -> NOt selected
+11875   0C1F 20 09              BRA     L0C2A
+11876    ;
+11877   0C21 86 CC      L0C21   LDAA    #204      Error "Syntax error in source line"
+11878   0C23 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+11879   0C26 C6 01              LDAB    #$0001
+11880   0C28 D7 61              STAB    NOOPT     OPT option selected, <>0 -> NOt selected
+11881   0C2A BD 05DE    L0C2A   JSR     J.NXTC1   get next char from source line (can be a space)
+11882   0C2D 81 0D              CMPA    #$000D
+11883   0C2F 27 04              BEQ     L0C35
+11884   0C31 91 62              CMPA    L0062
+11885   0C33 26 02              BNE     L0C37
+11886   0C35 86 20      L0C35   LDAA    #$0020
+11887   0C37 97 38      L0C37   STAA    L0038
+11888   0C39 C6 E3              LDAB    #$00E3
+11889   0C3B BD 05DB            JSR     L05DB
+11890   0C3E DE 34              LDX     PLINE     pointer to current char in source code line
+11891   0C40 DF 67              STX     L0067
+11892   0C42 DE 69              LDX     L0069
+11893   0C44 DF 34              STX     PLINE     pointer to current char in source code line
+11894   0C46 CE 00C5            LDX     #$00C5
+11895   0C49 BD 05DE    L0C49   JSR     J.NXTC1   get next char from source line (can be a space)
+11896   0C4C 81 0D              CMPA    #$000D
+11897   0C4E 27 08              BEQ     L0C58
+11898   0C50 A7 00              STAA    $0000,X
+11899   0C52 08                 INX     
+11900   0C53 8C 00EA            CPX     #$00EA
+11901   0C56 26 F1              BNE     L0C49
+11902   0C58 86 0D      L0C58   LDAA    #$000D
+11903   0C5A A7 00              STAA    $0000,X
+11904   0C5C 86 0A              LDAA    #$000A
+11905   0C5E A7 01              STAA    $0001,X
+11906   0C60 86 04              LDAA    #$0004
+11907   0C62 A7 02              STAA    $0002,X
+11908   0C64 DE 67              LDX     L0067
+11909   0C66 DF 34              STX     PLINE     pointer to current char in source code line
+11910   0C68 C6 00              LDAB    #$0000
+11911   0C6A BD 05EA            JSR     L05EA
+11912   0C6D DE 47              LDX     L0047
+11913   0C6F 08                 INX     
+11914   0C70 DF 47              STX     L0047
+11915   0C72 7D 0046            TST     L0046
+11916   0C75 27 06              BEQ     L0C7D
+11917   0C77 CE 00A4            LDX     #$00A4
+11918   0C7A BD 05E7            JSR     L05E7
+11919   0C7D 7A 0061    L0C7D   DEC     NOOPT     OPT option selected, <>0 -> NOt selected
+11920   0C80 27 49              BEQ     L0CCB
+11921   0C82 BD 0CCE            JSR     L0CCE
+11922   0C85 BD 05DE    L0C85   JSR     J.NXTC1   get next char from source line (can be a space)
+11923   0C88 7D 0062            TST     L0062
+11924   0C8B 27 0F              BEQ     L0C9C
+11925   0C8D 91 62              CMPA    L0062
+11926   0C8F 27 3A              BEQ     L0CCB
+11927   0C91 81 0D              CMPA    #$000D
+11928   0C93 26 10              BNE     L0CA5
+11929   0C95 86 CC              LDAA    #204      Error "Syntax error in source line"
+11930   0C97 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+11931   0C9A 20 2F              BRA     L0CCB
+11932    ;
+11933   0C9C 81 0D      L0C9C   CMPA    #$000D
+11934   0C9E 26 05              BNE     L0CA5
+11935   0CA0 86 20              LDAA    #$0020
+11936   0CA2 BD 05C9            JSR     L05C9
+11937   0CA5 97 38      L0CA5   STAA    L0038
+11938   0CA7 C6 03              LDAB    #$0003
+11939   0CA9 BD 05DB            JSR     L05DB
+11940   0CAC C6 00              LDAB    #$0000
+11941   0CAE BD 05EA            JSR     L05EA
+11942   0CB1 DE 47              LDX     L0047
+11943   0CB3 08                 INX     
+11944   0CB4 DF 47              STX     L0047
+11945   0CB6 7D 0046            TST     L0046
+11946   0CB9 27 0B              BEQ     L0CC6
+11947   0CBB 7D 0041            TST     L0041
+11948   0CBE 26 06              BNE     L0CC6
+11949   0CC0 CE 00A4            LDX     #$00A4
+11950   0CC3 BD 05E7            JSR     L05E7
+11951   0CC6 7A 0061    L0CC6   DEC     NOOPT     OPT option selected, <>0 -> NOt selected
+11952   0CC9 26 BA              BNE     L0C85
+11953   0CCB 7E 05C0    L0CCB   JMP     L05C0
+11954    ;
+11955   0CCE CE 00A4    L0CCE   LDX     #$00A4
+11956   0CD1 86 20              LDAA    #$0020
+11957   0CD3 A7 00      L0CD3   STAA    $0000,X
+11958   0CD5 08                 INX     
+11959   0CD6 8C 00A9            CPX     #$00A9
+11960   0CD9 26 F8              BNE     L0CD3
+11961   0CDB 39                 RTS     
+11962    ; -----------------------------------------------
+11963   0CDC BD 05CF    L0CDC   JSR     L05CF
+11964   0CDF DE 2A              LDX     L002A
+11965   0CE1 DF 2E              STX     L002E
+11966   0CE3 C6 F1              LDAB    #$00F1
+11967   0CE5 BD 05DB            JSR     L05DB
+11968   0CE8 C6 00              LDAB    #$0000
+11969   0CEA BD 05EA            JSR     L05EA
+11970   0CED DE 47              LDX     L0047
+11971   0CEF 08                 INX     
+11972   0CF0 08                 INX     
+11973   0CF1 DF 47              STX     L0047
+11974   0CF3 96 46              LDAA    L0046
+11975   0CF5 27 06              BEQ     L0CFD
+11976   0CF7 CE 00A4            LDX     #$00A4
+11977   0CFA BD 05E7            JSR     L05E7
+11978   0CFD BD 0CCE    L0CFD   JSR     L0CCE
+11979   0D00 BD 05C9    L0D00   JSR     L05C9
+11980   0D03 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+11981   0D06 81 2C              CMPA    #$002C
+11982   0D08 27 03              BEQ     L0D0D
+11983   0D0A 7E 05C0            JMP     L05C0
+11984    ;
+11985   0D0D BD 05CF    L0D0D   JSR     L05CF
+11986   0D10 DE 2A              LDX     L002A
+11987   0D12 DF 2E              STX     L002E
+11988   0D14 C6 11              LDAB    #$0011
+11989   0D16 BD 05DB            JSR     L05DB
+11990   0D19 C6 00              LDAB    #$0000
+11991   0D1B BD 05EA            JSR     L05EA
+11992   0D1E DE 47              LDX     L0047
+11993   0D20 08                 INX     
+11994   0D21 08                 INX     
+11995   0D22 DF 47              STX     L0047
+11996   0D24 96 46              LDAA    L0046
+11997   0D26 27 D8              BEQ     L0D00
+11998   0D28 96 41              LDAA    L0041
+11999   0D2A 26 D4              BNE     L0D00
+12000   0D2C CE 00A4            LDX     #$00A4
+12001   0D2F BD 05E7            JSR     L05E7
+12002   0D32 20 CC              BRA     L0D00
+12003    ;
+12004   0D34 8D 4A      L0D34   BSR     L0D80
+12005   0D36 C6 E3              LDAB    #$00E3
+12006   0D38 BD 05DB            JSR     L05DB
+12007   0D3B C6 00              LDAB    #$0000
+12008   0D3D BD 05EA            JSR     L05EA
+12009   0D40 DE 47              LDX     L0047
+12010   0D42 08                 INX     
+12011   0D43 DF 47              STX     L0047
+12012   0D45 96 46              LDAA    L0046
+12013   0D47 27 06              BEQ     L0D4F
+12014   0D49 CE 00A4            LDX     #$00A4
+12015   0D4C BD 05E7            JSR     L05E7
+12016   0D4F BD 0CCE    L0D4F   JSR     L0CCE
+12017   0D52 BD 05C9    L0D52   JSR     L05C9
+12018   0D55 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12019   0D58 81 2C              CMPA    #$002C
+12020   0D5A 26 21              BNE     L0D7D
+12021   0D5C 8D 22              BSR     L0D80
+12022   0D5E C6 03              LDAB    #$0003
+12023   0D60 BD 05DB            JSR     L05DB
+12024   0D63 C6 00              LDAB    #$0000
+12025   0D65 BD 05EA            JSR     L05EA
+12026   0D68 DE 47              LDX     L0047
+12027   0D6A 08                 INX     
+12028   0D6B DF 47              STX     L0047
+12029   0D6D 96 46              LDAA    L0046
+12030   0D6F 27 E1              BEQ     L0D52
+12031   0D71 96 41              LDAA    L0041
+12032   0D73 26 DD              BNE     L0D52
+12033   0D75 CE 00A4            LDX     #$00A4
+12034   0D78 BD 05E7            JSR     L05E7
+12035   0D7B 20 D5              BRA     L0D52
+12036    ;
+12037   0D7D 7E 05C0    L0D7D   JMP     L05C0
+12038    ;
+12039   0D80 BD 05CF    L0D80   JSR     L05CF
+12040   0D83 96 2B              LDAA    L002B
+12041   0D85 D6 2A              LDAB    L002A
+12042   0D87 27 06              BEQ     L0D8F
+12043   0D89 86 D2              LDAA    #210      Error "BYTE overflow" out of -127..255 range
+12044   0D8B BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12045   0D8E 4F                 CLRA    
+12046   0D8F 97 38      L0D8F   STAA    L0038
+12047   0D91 39                 RTS     
+12048    ; -----------------------------------------------
+12049   0D92 7E 05C3            JMP     L05C3
+12050    ;
+12051   0D95 96 33      L0D95   LDAA    L0033
+12052   0D97 27 30              BEQ     L0DC9
+12053   0D99 86 FF              LDAA    #$00FF
+12054   0D9B 97 33              STAA    L0033
+12055   0D9D CE 0584            LDX     #$0584
+12056   0DA0 86 20              LDAA    #$0020
+12057   0DA2 A7 00      L0DA2   STAA    $0000,X
+12058   0DA4 08                 INX     
+12059   0DA5 8C 058C            CPX     #$058C
+12060   0DA8 26 F8              BNE     L0DA2
+12061   0DAA BD 05E1            JSR     J.NXTCH   get next char from source line (skip spaces)
+12062   0DAD CE 0584            LDX     #$0584
+12063   0DB0 81 0D      L0DB0   CMPA    #$000D
+12064   0DB2 27 15              BEQ     L0DC9
+12065   0DB4 81 20              CMPA    #$0020
+12066   0DB6 2D 04              BLT     L0DBC
+12067   0DB8 81 61              CMPA    #$0061
+12068   0DBA 2D 02              BLT     L0DBE
+12069   0DBC 86 20      L0DBC   LDAA    #$0020
+12070   0DBE A7 00      L0DBE   STAA    $0000,X
+12071   0DC0 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12072   0DC3 08                 INX     
+12073   0DC4 8C 058C            CPX     #$058C
+12074   0DC7 26 E7              BNE     L0DB0
+12075   0DC9 C6 C0      L0DC9   LDAB    #$00C0
+12076   0DCB BD 05DB            JSR     L05DB
+12077   0DCE 7E 05C3            JMP     L05C3
+12078    ;
+12079   0DD1 7F 0061    C.OPT   CLR     NOOPT     OPT directive
+12080   0DD4 C6 FF              LDAB    #$FF
+12081   0DD6 BD 05E1            JSR     J.NXTCH   get next char from source line (skip spaces)
+12082   0DD9 81 4E      L0DD9   CMPA    #$4E      is 'N'?
+12083   0DDB 26 0C              BNE     L0DE9
+12084   0DDD D7 61              STAB    NOOPT     set OPT option NOT selected
+12085   0DDF BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12086   0DE2 81 4F              CMPA    #$4F      is 'O'
+12087   0DE4 26 63              BNE     L0E49
+12088   0DE6 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12089   0DE9 81 4F      L0DE9   CMPA    #$4F      is option 'O' ? (generate object code)
+12090   0DEB 26 0C              BNE     L0DF9
+12091   0DED 7F 0044            CLR     FLGOBJ    =0 -> do not generate object code
+12092   0DF0 7D 0061            TST     NOOPT     OPT option selected, <>0 -> NOt selected
+12093   0DF3 26 5B              BNE     L0E50     jump if "OPT NOO" (do not generate object code)
+12094   0DF5 D7 44              STAB    FLGOBJ    <>0 -> do generate object code
+12095   0DF7 20 57              BRA     L0E50
+12096    ;
+12097   0DF9 81 4D      L0DF9   CMPA    #$4D      is option 'M' ? (assemble to memory)
+12098   0DFB 26 0C              BNE     L0E09
+12099   0DFD 7F 0040            CLR     FLGAMEM   =0 -> assemble to output file
+12100   0E00 7D 0061            TST     NOOPT     OPT option selected, <>0 -> NOt selected
+12101   0E03 26 4B              BNE     L0E50
+12102   0E05 D7 40              STAB    FLGAMEM   <>0 -> do assemble to memory
+12103   0E07 20 47              BRA     L0E50
+12104    ;
+12105   0E09 81 4C      L0E09   CMPA    #$4C      is option 'L' ? (generate listing of assembled prog)
+12106   0E0B 26 0C              BNE     L0E19
+12107   0E0D 7F 0042            CLR     L0042
+12108   0E10 7D 0061            TST     NOOPT     OPT option selected, <>0 -> NOt selected
+12109   0E13 27 3B              BEQ     L0E50
+12110   0E15 D7 42              STAB    L0042
+12111   0E17 20 37              BRA     L0E50
+12112    ;
+12113   0E19 81 47      L0E19   CMPA    #$47      is option 'G' ? (all data for FCC, FCB, FDB in listing)
+12114   0E1B 26 0C              BNE     L0E29
+12115   0E1D 7F 0041            CLR     L0041
+12116   0E20 7D 0061            TST     NOOPT     OPT option selected, <>0 -> NOt selected
+12117   0E23 27 2B              BEQ     L0E50
+12118   0E25 D7 41              STAB    L0041
+12119   0E27 20 27              BRA     L0E50
+12120    ;
+12121   0E29 81 53      L0E29   CMPA    #$53      is option 'S' ? (print symbol table)
+12122   0E2B 26 0C              BNE     L0E39
+12123   0E2D 7F 0045            CLR     L0045
+12124   0E30 7D 0061            TST     NOOPT     OPT option selected, <>0 -> NOt selected
+12125   0E33 26 1B              BNE     L0E50
+12126   0E35 D7 45              STAB    L0045
+12127   0E37 20 17              BRA     L0E50
+12128    ;
+12129   0E39 81 50      L0E39   CMPA    #$50      is option 'P' ? (paged listing)
+12130   0E3B 26 0C              BNE     L0E49
+12131   0E3D 7F 0043            CLR     L0043
+12132   0E40 7D 0061            TST     NOOPT     OPT option selected, <>0 -> NOt selected
+12133   0E43 27 0B              BEQ     L0E50
+12134   0E45 D7 43              STAB    L0043
+12135   0E47 20 07              BRA     L0E50
+12136    ;
+12137   0E49 86 D9      L0E49   LDAA    #217      undocumente error: undefined option
+12138   0E4B BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12139   0E4E 20 14              BRA     L0E64
+12140    ;
+12141   0E50 BD 05DE    L0E50   JSR     J.NXTC1   get next char from source line (can be a space)
+12142   0E53 81 0D              CMPA    #$0D
+12143   0E55 27 0D              BEQ     L0E64
+12144   0E57 81 2C              CMPA    #$2C
+12145   0E59 26 F5              BNE     L0E50
+12146   0E5B 7F 0061            CLR     NOOPT     OPT option selected, <>0 -> NOt selected
+12147   0E5E BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12148   0E61 7E 0DD9            JMP     L0DD9
+12149    ;
+12150   0E64 C6 C0      L0E64   LDAB    #$00C0
+12151   0E66 BD 05DB            JSR     L05DB
+12152   0E69 7E 05C3            JMP     L05C3
+12153    ;
+12154   0E6C BD 05CF    L0E6C   JSR     L05CF
+12155   0E6F DE 2A              LDX     L002A
+12156   0E71 DF 2E              STX     L002E
+12157   0E73 DF 47              STX     L0047
+12158   0E75 C6 C1              LDAB    #$00C1
+12159   0E77 BD 05DB            JSR     L05DB
+12160   0E7A 7E 05C3            JMP     L05C3
+12161    ;
+12162   0E7D BD 05DE    L0E7D   JSR     J.NXTC1   get next char from source line (can be a space)
+12163   0E80 81 45              CMPA    #$0045
+12164   0E82 27 07              BEQ     L0E8B
+12165   0E84 86 CA              LDAA    #202      Error "EQU requires a label"
+12166   0E86 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12167   0E89 20 23              BRA     L0EAE
+12168    ;
+12169   0E8B CE 00A4    L0E8B   LDX     #$00A4
+12170   0E8E 86 0A              LDAA    #$000A
+12171   0E90 D6 39              LDAB    L0039
+12172   0E92 5C                 INCB    
+12173   0E93 26 03              BNE     L0E98
+12174   0E95 7E 05C0            JMP     L05C0
+12175    ;
+12176   0E98 5C         L0E98   INCB    
+12177   0E99 27 05              BEQ     L0EA0
+12178   0E9B A7 00              STAA    $0000,X
+12179   0E9D 08                 INX     
+12180   0E9E 20 F8              BRA     L0E98
+12181    ;
+12182   0EA0 A7 02      L0EA0   STAA    $0002,X
+12183   0EA2 86 0D              LDAA    #$000D
+12184   0EA4 A7 01              STAA    $0001,X
+12185   0EA6 86 04              LDAA    #$0004
+12186   0EA8 A7 03              STAA    $0003,X
+12187   0EAA 86 FE              LDAA    #$00FE
+12188   0EAC 97 39              STAA    L0039
+12189   0EAE 7E 05C3    L0EAE   JMP     L05C3
+12190    ;
+12191   0EB1 BD 05CF    L0EB1   JSR     L05CF
+12192   0EB4 DE 2A              LDX     L002A
+12193   0EB6 DF 2E              STX     L002E
+12194   0EB8 C6 F1              LDAB    #$00F1
+12195   0EBA BD 05DB            JSR     L05DB
+12196   0EBD 96 2A              LDAA    L002A
+12197   0EBF D6 2B              LDAB    L002B
+12198   0EC1 DB 48              ADDB    L0048
+12199   0EC3 99 47              ADCA    L0047
+12200   0EC5 97 47              STAA    L0047
+12201   0EC7 D7 48              STAB    L0048
+12202   0EC9 7E 05C3            JMP     L05C3
+12203    ;
+12204   0ECC BD 05CF    L0ECC   JSR     L05CF
+12205   0ECF DE 2A              LDX     L002A
+12206   0ED1 96 39      L0ED1   LDAA    L0039
+12207   0ED3 81 FF              CMPA    #$00FF
+12208   0ED5 27 12              BEQ     L0EE9
+12209   0ED7 DE 2A              LDX     L002A
+12210   0ED9 8C 0000            CPX     #$0000
+12211   0EDC 27 0B              BEQ     L0EE9
+12212   0EDE 09                 DEX     
+12213   0EDF DF 2A              STX     L002A
+12214   0EE1 CE 063F            LDX     #MLF      String just having an <LF> ($0A ascii)
+12215   0EE4 BD 05E7            JSR     L05E7
+12216   0EE7 20 E8              BRA     L0ED1
+12217    ;
+12218   0EE9 7E 05C0    L0EE9   JMP     L05C0
+12219    ;
+12220   0EEC CE 0000    L0EEC   LDX     #$0000
+12221   0EEF DF 2E              STX     L002E
+12222   0EF1 7F 0032            CLR     L0032
+12223   0EF4 D6 37              LDAB    L0037
+12224   0EF6 C5 20              BITB    #$0020
+12225   0EF8 27 4F              BEQ     L0F49
+12226   0EFA 86 02              LDAA    #$0002
+12227   0EFC 97 20              STAA    L0020
+12228   0EFE BD 05CF            JSR     L05CF
+12229   0F01 DE 2A              LDX     L002A
+12230   0F03 DF 2E              STX     L002E
+12231   0F05 9C 47              CPX     L0047
+12232   0F07 26 06              BNE     L0F0F
+12233   0F09 86 FE      L0F09   LDAA    #$00FE
+12234   0F0B 97 2F              STAA    L002F
+12235   0F0D 20 30              BRA     L0F3F
+12236    ;
+12237   0F0F DE 47      L0F0F   LDX     L0047
+12238   0F11 08                 INX     
+12239   0F12 08                 INX     
+12240   0F13 DF 2A              STX     L002A
+12241   0F15 96 2A              LDAA    L002A
+12242   0F17 D6 2B              LDAB    L002B
+12243   0F19 D0 2F              SUBB    L002F
+12244   0F1B 27 13              BEQ     L0F30
+12245   0F1D 92 2E              SBCA    L002E
+12246   0F1F 24 14              BCC     L0F35
+12247   0F21 96 2E              LDAA    L002E
+12248   0F23 D6 2F              LDAB    L002F
+12249   0F25 D0 2B              SUBB    L002B
+12250   0F27 92 2A              SBCA    L002A
+12251   0F29 4D                 TSTA    
+12252   0F2A 26 16              BNE     L0F42
+12253   0F2C C1 80              CMPB    #$0080
+12254   0F2E 2A 12              BPL     L0F42
+12255   0F30 D7 2F      L0F30   STAB    L002F
+12256   0F32 C6 E7              LDAB    #$00E7
+12257   0F34 39                 RTS     
+12258    ; -----------------------------------------------
+12259   0F35 4D         L0F35   TSTA    
+12260   0F36 26 0A              BNE     L0F42
+12261   0F38 C1 81              CMPB    #$0081
+12262   0F3A 2A 06              BPL     L0F42
+12263   0F3C 50                 NEGB    
+12264   0F3D D7 2F              STAB    L002F
+12265   0F3F C6 E7      L0F3F   LDAB    #$00E7
+12266   0F41 39                 RTS     
+12267    ; -----------------------------------------------
+12268   0F42 86 D0      L0F42   LDAA    #208      Error "Branch error" destiantion out of range
+12269   0F44 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12270   0F47 20 C0              BRA     L0F09
+12271    ;
+12272   0F49 BD 05E1    L0F49   JSR     J.NXTCH   get next char from source line (skip spaces)
+12273   0F4C 97 60              STAA    L0060
+12274   0F4E BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12275   0F51 97 61              STAA    NOOPT     OPT option selected, <>0 -> NOt selected
+12276   0F53 D6 37              LDAB    L0037
+12277   0F55 C5 04              BITB    #$0004
+12278   0F57 26 03              BNE     L0F5C
+12279   0F59 7E 1060            JMP     L1060
+12280    ;
+12281   0F5C 81 20      L0F5C   CMPA    #$0020
+12282   0F5E 26 5D              BNE     L0FBD
+12283   0F60 96 60              LDAA    L0060
+12284   0F62 81 41              CMPA    #$0041
+12285   0F64 27 0A              BEQ     L0F70
+12286   0F66 81 42              CMPA    #$0042
+12287   0F68 26 53              BNE     L0FBD
+12288   0F6A D6 38              LDAB    L0038
+12289   0F6C CA 40              ORAB    #$0040
+12290   0F6E D7 38              STAB    L0038
+12291   0F70 DE 34      L0F70   LDX     PLINE     pointer to current char in source code line
+12292   0F72 DF 59              STX     L0059
+12293   0F74 97 C2              STAA    L00C2
+12294   0F76 BD 05E1            JSR     J.NXTCH   get next char from source line (skip spaces)
+12295   0F79 97 60              STAA    L0060
+12296   0F7B BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12297   0F7E 97 61              STAA    NOOPT     OPT option selected, <>0 -> NOt selected
+12298   0F80 96 60              LDAA    L0060
+12299   0F82 81 23              CMPA    #$0023
+12300   0F84 27 03              BEQ     L0F89
+12301   0F86 7E 1060            JMP     L1060
+12302    ;
+12303   0F89 BD 05C9    L0F89   JSR     L05C9
+12304   0F8C 96 37              LDAA    L0037
+12305   0F8E 85 80              BITA    #$0080
+12306   0F90 27 2B              BEQ     L0FBD
+12307   0F92 BD 05CF            JSR     L05CF
+12308   0F95 DE 2A              LDX     L002A
+12309   0F97 DF 2E              STX     L002E
+12310   0F99 BD 05C9            JSR     L05C9
+12311   0F9C BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12312   0F9F 81 2C              CMPA    #$002C
+12313   0FA1 27 1A              BEQ     L0FBD
+12314   0FA3 96 37              LDAA    L0037
+12315   0FA5 85 04              BITA    #$0004
+12316   0FA7 27 22              BEQ     L0FCB
+12317   0FA9 86 02              LDAA    #$0002
+12318   0FAB 97 20              STAA    L0020
+12319   0FAD C6 E7              LDAB    #$00E7
+12320   0FAF D7 58              STAB    L0058
+12321   0FB1 D6 2E              LDAB    L002E
+12322   0FB3 27 05              BEQ     L0FBA
+12323   0FB5 86 D2              LDAA    #210      Error "BYTE overflow" out of -127..255 range
+12324   0FB7 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12325   0FBA D6 58      L0FBA   LDAB    L0058
+12326   0FBC 39                 RTS     
+12327    ; -----------------------------------------------
+12328   0FBD 86 D1      L0FBD   LDAA    #209      Error "illegal address mode"
+12329   0FBF BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12330   0FC2 7F 0038            CLR     L0038
+12331   0FC5 7F 002E            CLR     L002E
+12332   0FC8 7F 002F            CLR     L002F
+12333   0FCB 86 03      L0FCB   LDAA    #$0003
+12334   0FCD 97 20              STAA    L0020
+12335   0FCF C6 EB              LDAB    #$00EB
+12336   0FD1 39                 RTS     
+12337    ; -----------------------------------------------
+12338   0FD2 DE 59      L0FD2   LDX     L0059
+12339   0FD4 DF 34              STX     PLINE     pointer to current char in source code line
+12340   0FD6 BD 05CF            JSR     L05CF
+12341   0FD9 DE 2A              LDX     L002A
+12342   0FDB DF 2E              STX     L002E
+12343   0FDD BD 05C9            JSR     L05C9
+12344   0FE0 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12345   0FE3 81 2C              CMPA    #$002C
+12346   0FE5 26 48              BNE     L102F
+12347   0FE7 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12348   0FEA 81 58      L0FEA   CMPA    #$0058
+12349   0FEC 26 CF              BNE     L0FBD
+12350   0FEE BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12351   0FF1 81 20              CMPA    #$0020
+12352   0FF3 27 04              BEQ     L0FF9
+12353   0FF5 81 0D              CMPA    #$000D
+12354   0FF7 26 C4              BNE     L0FBD
+12355   0FF9 96 37      L0FF9   LDAA    L0037
+12356   0FFB 85 40              BITA    #$0040
+12357   0FFD 27 BE              BEQ     L0FBD
+12358   0FFF 7D 002E            TST     L002E
+12359   1002 27 05              BEQ     L1009
+12360   1004 86 D2              LDAA    #210      Error "BYTE overflow" out of -127..255 range
+12361   1006 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12362   1009 86 02      L1009   LDAA    #$0002
+12363   100B 97 20              STAA    L0020
+12364   100D 96 38              LDAA    L0038
+12365   100F 8A 20              ORAA    #$0020
+12366   1011 97 38              STAA    L0038
+12367   1013 C6 E7              LDAB    #$00E7
+12368   1015 39                 RTS     
+12369    ; -----------------------------------------------
+12370   1016 81 58      L1016   CMPA    #$0058
+12371   1018 26 11              BNE     L102B
+12372   101A 96 60              LDAA    L0060
+12373   101C 81 2C              CMPA    #$002C
+12374   101E 27 07              BEQ     L1027
+12375   1020 81 23      L1020   CMPA    #$0023
+12376   1022 26 AE              BNE     L0FD2
+12377   1024 7E 0F89            JMP     L0F89
+12378    ;
+12379   1027 96 61      L1027   LDAA    NOOPT     OPT option selected, <>0 -> NOt selected
+12380   1029 20 BF              BRA     L0FEA
+12381    ;
+12382   102B 96 60      L102B   LDAA    L0060
+12383   102D 20 F1              BRA     L1020
+12384    ;
+12385   102F 96 32      L102F   LDAA    L0032
+12386   1031 26 17              BNE     L104A
+12387   1033 96 2E              LDAA    L002E
+12388   1035 26 13              BNE     L104A
+12389   1037 96 37              LDAA    L0037
+12390   1039 85 10              BITA    #$0010
+12391   103B 27 0D              BEQ     L104A
+12392   103D 96 38              LDAA    L0038
+12393   103F 8A 10              ORAA    #$0010
+12394   1041 97 38              STAA    L0038
+12395   1043 86 02              LDAA    #$0002
+12396   1045 97 20              STAA    L0020
+12397   1047 C6 E7              LDAB    #$00E7
+12398   1049 39                 RTS     
+12399    ; -----------------------------------------------
+12400   104A D6 37      L104A   LDAB    L0037
+12401   104C C5 18              BITB    #$0018
+12402   104E 26 03              BNE     L1053
+12403   1050 7E 0FBD            JMP     L0FBD
+12404    ;
+12405   1053 96 38      L1053   LDAA    L0038
+12406   1055 8A 30              ORAA    #$0030
+12407   1057 97 38              STAA    L0038
+12408   1059 86 03              LDAA    #$0003
+12409   105B 97 20              STAA    L0020
+12410   105D C6 EB              LDAB    #$00EB
+12411   105F 39                 RTS     
+12412    ; -----------------------------------------------
+12413   1060 96 61      L1060   LDAA    NOOPT     OPT option selected, <>0 -> NOt selected
+12414   1062 81 20              CMPA    #$0020
+12415   1064 27 04              BEQ     L106A
+12416   1066 81 0D              CMPA    #$000D
+12417   1068 26 AC              BNE     L1016
+12418   106A 96 60      L106A   LDAA    L0060
+12419   106C 81 41              CMPA    #$0041
+12420   106E 27 18              BEQ     L1088
+12421   1070 81 42              CMPA    #$0042
+12422   1072 26 2A              BNE     L109E
+12423   1074 D6 37              LDAB    L0037
+12424   1076 C1 02              CMPB    #$0002
+12425   1078 26 08              BNE     L1082
+12426   107A D6 38              LDAB    L0038
+12427   107C CA 01              ORAB    #$0001
+12428   107E D7 38              STAB    L0038
+12429   1080 20 06              BRA     L1088
+12430    ;
+12431   1082 D6 38      L1082   LDAB    L0038
+12432   1084 CA 10              ORAB    #$0010
+12433   1086 D7 38              STAB    L0038
+12434   1088 97 C2      L1088   STAA    L00C2
+12435   108A DE 34              LDX     PLINE     pointer to current char in source code line
+12436   108C DF 59              STX     L0059
+12437   108E 96 37              LDAA    L0037
+12438   1090 85 02              BITA    #$0002
+12439   1092 26 03              BNE     L1097
+12440   1094 7E 0FBD            JMP     L0FBD
+12441    ;
+12442   1097 86 01      L1097   LDAA    #$0001
+12443   1099 97 20              STAA    L0020
+12444   109B C6 A3              LDAB    #$00A3
+12445   109D 39                 RTS     
+12446    ; -----------------------------------------------
+12447   109E 81 58      L109E   CMPA    #$0058
+12448   10A0 26 03              BNE     L10A5
+12449   10A2 7E 0FF9            JMP     L0FF9
+12450    ;
+12451   10A5 7E 0FD2    L10A5   JMP     L0FD2
+12452    ;
+12453   10A8 CE 0000    L10A8   LDX     #$0000
+12454   10AB DF 2A              STX     L002A
+12455   10AD 86 2B              LDAA    #$002B
+12456   10AF 97 28              STAA    L0028
+12457   10B1 7F 0029            CLR     L0029
+12458   10B4 BD 05E1            JSR     J.NXTCH   get next char from source line (skip spaces)
+12459   10B7 81 2A              CMPA    #$002A
+12460   10B9 27 4B              BEQ     L1106
+12461   10BB BD 05C9            JSR     L05C9
+12462   10BE BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12463   10C1 81 0D              CMPA    #$000D
+12464   10C3 27 35              BEQ     L10FA
+12465   10C5 81 20              CMPA    #$0020
+12466   10C7 27 31              BEQ     L10FA
+12467   10C9 81 2C              CMPA    #$002C
+12468   10CB 27 2D              BEQ     L10FA
+12469   10CD BD 05C9    L10CD   JSR     L05C9
+12470   10D0 BD 05DE    L10D0   JSR     J.NXTC1   get next char from source line (can be a space)
+12471   10D3 81 0D              CMPA    #$000D
+12472   10D5 27 22              BEQ     L10F9
+12473   10D7 81 20              CMPA    #$0020
+12474   10D9 27 1E              BEQ     L10F9
+12475   10DB 81 2C              CMPA    #$002C
+12476   10DD 27 1A              BEQ     L10F9
+12477   10DF 81 2B              CMPA    #$002B
+12478   10E1 27 1F              BEQ     L1102
+12479   10E3 81 2D              CMPA    #$002D
+12480   10E5 27 1B              BEQ     L1102
+12481   10E7 81 2F              CMPA    #$002F
+12482   10E9 27 17              BEQ     L1102
+12483   10EB 81 2A              CMPA    #$002A
+12484   10ED 26 17              BNE     L1106
+12485   10EF 7D 0029            TST     L0029
+12486   10F2 27 0E              BEQ     L1102
+12487   10F4 86 CC      L10F4   LDAA    #204      Error "Syntax error in source line"
+12488   10F6 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12489   10F9 39         L10F9   RTS     
+12490    ; -----------------------------------------------
+12491   10FA D6 36      L10FA   LDAB    OPTYPE    opcode type
+12492   10FC C5 08              BITB    #$0008
+12493   10FE 27 F4              BEQ     L10F4
+12494   1100 20 F7              BRA     L10F9
+12495    ;
+12496   1102 97 28      L1102   STAA    L0028
+12497   1104 20 CA              BRA     L10D0
+12498    ;
+12499   1106 BD 05C9    L1106   JSR     L05C9
+12500   1109 BD 05D2            JSR     L05D2
+12501   110C 96 28              LDAA    L0028
+12502   110E 81 2B              CMPA    #$002B
+12503   1110 27 0E              BEQ     L1120
+12504   1112 81 2D              CMPA    #$002D
+12505   1114 27 19              BEQ     L112F
+12506   1116 81 2A              CMPA    #$002A
+12507   1118 27 1F              BEQ     L1139
+12508   111A 81 2F              CMPA    #$002F
+12509   111C 27 27              BEQ     L1145
+12510   111E 20 FE      L111E   BRA     L111E
+12511    ;
+12512   1120 96 2A      L1120   LDAA    L002A
+12513   1122 D6 2B              LDAB    L002B
+12514   1124 DB 2D              ADDB    L002D
+12515   1126 99 2C              ADCA    L002C
+12516   1128 97 2A      L1128   STAA    L002A
+12517   112A D7 2B              STAB    L002B
+12518   112C 7E 10CD            JMP     L10CD
+12519    ;
+12520   112F 96 2A      L112F   LDAA    L002A
+12521   1131 D6 2B              LDAB    L002B
+12522   1133 D0 2D              SUBB    L002D
+12523   1135 92 2C              SBCA    L002C
+12524   1137 20 EF              BRA     L1128
+12525    ;
+12526   1139 96 2A      L1139   LDAA    L002A
+12527   113B D6 2B              LDAB    L002B
+12528   113D CE 002C            LDX     #$002C
+12529   1140 BD 05E4            JSR     L05E4
+12530   1143 20 E3              BRA     L1128
+12531    ;
+12532   1145 96 2A      L1145   LDAA    L002A
+12533   1147 D6 2B              LDAB    L002B
+12534   1149 CE 002C            LDX     #$002C
+12535   114C BD 05CC            JSR     L05CC
+12536   114F 20 D7              BRA     L1128
+12537    ;
+12538   1151 7F 002C    L1151   CLR     L002C
+12539   1154 7F 002D            CLR     L002D
+12540   1157 DE 34              LDX     PLINE     pointer to current char in source code line
+12541   1159 DF 81              STX     L0081
+12542   115B BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12543   115E 81 2A              CMPA    #$002A
+12544   1160 26 05              BNE     L1167
+12545   1162 DE 47              LDX     L0047
+12546   1164 DF 2C              STX     L002C
+12547   1166 39                 RTS     
+12548    ; -----------------------------------------------
+12549   1167 81 27      L1167   CMPA    #$0027
+12550   1169 26 1A              BNE     L1185
+12551   116B BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12552   116E 97 2B              STAA    L002B
+12553   1170 7F 002A            CLR     L002A
+12554   1173 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12555   1176 BD 12BB            JSR     L12BB
+12556   1179 27 03              BEQ     L117E
+12557   117B 7E 1203            JMP     L1203
+12558    ;
+12559   117E 86 CC      L117E   LDAA    #204      Error "Syntax error in source line"
+12560   1180 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12561   1183 20 7E              BRA     L1203
+12562    ;
+12563   1185 CE 002C    L1185   LDX     #$002C
+12564   1188 81 24              CMPA    #$0024
+12565   118A 27 5B              BEQ     L11E7
+12566   118C 81 40              CMPA    #$0040
+12567   118E 27 74              BEQ     L1204
+12568   1190 81 25              CMPA    #$0025
+12569   1192 26 03              BNE     L1197
+12570   1194 7E 122B            JMP     L122B
+12571    ;
+12572   1197 81 30      L1197   CMPA    #$0030
+12573   1199 2D 07              BLT     L11A2
+12574   119B 81 39              CMPA    #$0039
+12575   119D 2E 03              BGT     L11A2
+12576   119F 7E 1287            JMP     L1287
+12577    ;
+12578   11A2 97 9C      L11A2   STAA    L009C
+12579   11A4 CE 009C            LDX     #$009C
+12580   11A7 C6 20              LDAB    #$0020
+12581   11A9 E7 00      L11A9   STAB    $0000,X
+12582   11AB 08                 INX     
+12583   11AC 8C 00A2            CPX     #$00A2
+12584   11AF 26 F8              BNE     L11A9
+12585   11B1 CE 009C            LDX     #$009C
+12586   11B4 20 10              BRA     L11C6
+12587    ;
+12588   11B6 BD 05DE    L11B6   JSR     J.NXTC1   get next char from source line (can be a space)
+12589   11B9 BD 12BB            JSR     L12BB
+12590   11BC 26 1F              BNE     L11DD
+12591   11BE 81 30              CMPA    #$0030
+12592   11C0 2D 04              BLT     L11C6
+12593   11C2 81 3A              CMPA    #$003A
+12594   11C4 2D 0D              BLT     L11D3
+12595   11C6 81 41      L11C6   CMPA    #$0041
+12596   11C8 2D 04              BLT     L11CE
+12597   11CA 81 5A              CMPA    #$005A
+12598   11CC 2F 05              BLE     L11D3
+12599   11CE 86 CC      L11CE   LDAA    #204      Error "Syntax error in source line"
+12600   11D0 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12601   11D3 8C 00A2    L11D3   CPX     #$00A2
+12602   11D6 27 DE              BEQ     L11B6
+12603   11D8 A7 00              STAA    $0000,X
+12604   11DA 08                 INX     
+12605   11DB 20 D9              BRA     L11B6
+12606    ;
+12607   11DD C6 00      L11DD   LDAB    #$0000
+12608   11DF BD 05F3            JSR     L05F3
+12609   11E2 DE 70              LDX     L0070
+12610   11E4 DF 2C              STX     L002C
+12611   11E6 39                 RTS     
+12612    ; -----------------------------------------------
+12613   11E7 6F 00      L11E7   CLR     $0000,X
+12614   11E9 6F 01              CLR     $0001,X
+12615   11EB BD 05DE    L11EB   JSR     J.NXTC1   get next char from source line (can be a space)
+12616   11EE BD 15E2            JSR     L15E2
+12617   11F1 2B 09              BMI     L11FC
+12618   11F3 BD 12AA            JSR     L12AA
+12619   11F6 AB 01              ADDA    $0001,X
+12620   11F8 A7 01              STAA    $0001,X
+12621   11FA 20 EF              BRA     L11EB
+12622    ;
+12623   11FC 81 48      L11FC   CMPA    #$0048
+12624   11FE 26 03              BNE     L1203
+12625   1200 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12626   1203 39         L1203   RTS     
+12627    ; -----------------------------------------------
+12628   1204 6F 00      L1204   CLR     $0000,X
+12629   1206 6F 01              CLR     $0001,X
+12630   1208 BD 05DE    L1208   JSR     J.NXTC1   get next char from source line (can be a space)
+12631   120B 81 30              CMPA    #$0030
+12632   120D 2D 0F              BLT     L121E
+12633   120F 81 38              CMPA    #$0038
+12634   1211 2A 0B              BPL     L121E
+12635   1213 84 07              ANDA    #$0007
+12636   1215 BD 12AE            JSR     L12AE
+12637   1218 AB 01              ADDA    $0001,X
+12638   121A A7 01              STAA    $0001,X
+12639   121C 20 EA              BRA     L1208
+12640    ;
+12641   121E 81 4F      L121E   CMPA    #$004F
+12642   1220 27 04              BEQ     L1226
+12643   1222 81 51              CMPA    #$0051
+12644   1224 26 24              BNE     L124A
+12645   1226 BD 05DE    L1226   JSR     J.NXTC1   get next char from source line (can be a space)
+12646   1229 20 D8              BRA     L1203
+12647    ;
+12648   122B 6F 00      L122B   CLR     $0000,X
+12649   122D 6F 01              CLR     $0001,X
+12650   122F BD 05DE    L122F   JSR     J.NXTC1   get next char from source line (can be a space)
+12651   1232 81 30              CMPA    #$0030
+12652   1234 27 04              BEQ     L123A
+12653   1236 81 31              CMPA    #$0031
+12654   1238 26 07              BNE     L1241
+12655   123A 46         L123A   RORA    
+12656   123B 69 01              ROL     $0001,X
+12657   123D 69 00              ROL     $0000,X
+12658   123F 20 EE              BRA     L122F
+12659    ;
+12660   1241 81 42      L1241   CMPA    #$0042
+12661   1243 26 05              BNE     L124A
+12662   1245 BD 05DE            JSR     J.NXTC1   get next char from source line (can be a space)
+12663   1248 20 B9              BRA     L1203
+12664    ;
+12665   124A BD 12BB    L124A   JSR     L12BB
+12666   124D 26 05              BNE     L1254
+12667   124F 86 D8              LDAA    #216      Error "bad Pseudo op operand"
+12668   1251 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12669   1254 39         L1254   RTS     
+12670    ; -----------------------------------------------
+12671   1255 BD 05DE    L1255   JSR     J.NXTC1   get next char from source line (can be a space)
+12672   1258 BD 12BB    L1258   JSR     L12BB
+12673   125B 27 F8              BEQ     L1255
+12674   125D DE 34              LDX     PLINE     pointer to current char in source code line
+12675   125F DF 7F              STX     L007F
+12676   1261 09                 DEX     
+12677   1262 09                 DEX     
+12678   1263 A6 00              LDAA    $0000,X
+12679   1265 DE 81              LDX     L0081
+12680   1267 DF 34              STX     PLINE     pointer to current char in source code line
+12681   1269 CE 002C            LDX     #$002C
+12682   126C 81 4F              CMPA    #$004F
+12683   126E 27 94              BEQ     L1204
+12684   1270 81 51              CMPA    #$0051
+12685   1272 27 90              BEQ     L1204
+12686   1274 81 48              CMPA    #$0048
+12687   1276 26 03              BNE     L127B
+12688   1278 7E 11E7            JMP     L11E7
+12689    ;
+12690   127B 81 42      L127B   CMPA    #$0042
+12691   127D 27 AC              BEQ     L122B
+12692   127F DE 7F              LDX     L007F
+12693   1281 DF 34              STX     PLINE     pointer to current char in source code line
+12694   1283 39                 RTS     
+12695    ; -----------------------------------------------
+12696   1284 BD 05DE    L1284   JSR     J.NXTC1   get next char from source line (can be a space)
+12697   1287 81 30      L1287   CMPA    #$0030
+12698   1289 2B CD              BMI     L1258
+12699   128B 81 39              CMPA    #$0039
+12700   128D 2E C9              BGT     L1258
+12701   128F 84 0F              ANDA    #$000F
+12702   1291 97 83              STAA    L0083
+12703   1293 A6 00              LDAA    $0000,X
+12704   1295 E6 01              LDAB    $0001,X
+12705   1297 58                 ASLB    
+12706   1298 49                 ROLA    
+12707   1299 BD 12AE            JSR     L12AE
+12708   129C EB 01              ADDB    $0001,X
+12709   129E A9 00              ADCA    $0000,X
+12710   12A0 DB 83              ADDB    L0083
+12711   12A2 89 00              ADCA    #$0000
+12712   12A4 A7 00              STAA    $0000,X
+12713   12A6 E7 01              STAB    $0001,X
+12714   12A8 20 DA              BRA     L1284
+12715    ;
+12716   12AA 68 01      L12AA   ASL     $0001,X
+12717   12AC 69 00              ROL     $0000,X
+12718   12AE 68 01      L12AE   ASL     $0001,X
+12719   12B0 69 00              ROL     $0000,X
+12720   12B2 68 01              ASL     $0001,X
+12721   12B4 69 00              ROL     $0000,X
+12722   12B6 68 01              ASL     $0001,X
+12723   12B8 69 00              ROL     $0000,X
+12724   12BA 39                 RTS     
+12725    ; -----------------------------------------------
+12726   12BB DF 30      L12BB   STX     L0030
+12727   12BD CE 12D6            LDX     #$12D6
+12728   12C0 A1 00      L12C0   CMPA    $0000,X
+12729   12C2 27 0C              BEQ     L12D0
+12730   12C4 08                 INX     
+12731   12C5 8C 12DE            CPX     #$12DE
+12732   12C8 26 F6              BNE     L12C0
+12733   12CA DE 30              LDX     L0030
+12734   12CC 7D 0642            TST     L0642
+12735   12CF 39                 RTS     
+12736    ; -----------------------------------------------
+12737   12D0 DE 30      L12D0   LDX     L0030
+12738   12D2 7D 0641            TST     L0641
+12739   12D5 39                 RTS     
+12740    ; -----------------------------------------------
+12741   12D6 0A                 CLV     
+12742   12D7 0D                 SEC     
+12743   12D8 20 2A              BRA     L1304
+12744    ;
+12745   12DA 2B 2C              BMI     L1308
+12746   12DC 2D 2F              BLT     L130D
+12747   12DE D7 76      L12DE   STAB    L0076
+12748   12E0 CE 1628            LDX     #$1628
+12749   12E3 7D 1640            TST     L1640
+12750   12E6 26 03              BNE     L12EB
+12751   12E8 CE 1D30            LDX     #$1D30
+12752   12EB DF 79      L12EB   STX     L0079
+12753   12ED 0F                 SEI     
+12754   12EE 9F 5E              STS     L005E
+12755   12F0 CE 0084            LDX     #$0084
+12756   12F3 8E 009B            LDS     #$009B
+12757   12F6 32         L12F6   PULA    
+12758   12F7 A7 00              STAA    $0000,X
+12759   12F9 08                 INX     
+12760   12FA 8C 008A            CPX     #$008A
+12761   12FD 26 F7              BNE     L12F6
+12762   12FF 9E 5E              LDS     L005E
+12763   1301 0E                 CLI     
+12764   1302 5D                 TSTB    
+12765   1303 2B 07              BMI     L130C
+12766                   L1304
+12767   1305 26 09              BNE     L1310
+12768   1307 CE FFFF            LDX     #$FFFF
+12769                   L1308
+12770   130A 20 0C              BRA     L1318
+12771    ;
+12772   130C DE 2A      L130C   LDX     L002A
+12773                   L130D
+12774   130E 20 02              BRA     L1312
+12775    ;
+12776   1310 DE 47      L1310   LDX     L0047
+12777   1312 96 84      L1312   LDAA    L0084
+12778   1314 8A 80              ORAA    #$0080
+12779   1316 97 84              STAA    L0084
+12780   1318 DF 8A      L1318   STX     L008A
+12781   131A 96 79      L131A   LDAA    L0079
+12782   131C D6 7A              LDAB    L007A
+12783   131E D0 7C              SUBB    L007C
+12784   1320 92 7B              SBCA    L007B
+12785   1322 25 03              BCS     L1327
+12786   1324 7E 13B6            JMP     L13B6
+12787    ;
+12788   1327 BD 13FC    L1327   JSR     L13FC
+12789   132A CE 0084            LDX     #$0084
+12790   132D A6 00      L132D   LDAA    $0000,X
+12791   132F A0 08              SUBA    $0008,X
+12792   1331 84 7F              ANDA    #$007F
+12793   1333 27 05              BEQ     L133A
+12794   1335 BD 13F1            JSR     L13F1
+12795   1338 20 E0              BRA     L131A
+12796    ;
+12797   133A 08         L133A   INX     
+12798   133B 8C 008A            CPX     #$008A
+12799   133E 26 ED              BNE     L132D
+12800   1340 7D 0076            TST     L0076
+12801   1343 27 41              BEQ     L1386
+12802   1345 DE 79              LDX     L0079
+12803   1347 DF 77              STX     L0077
+12804   1349 7D 008C            TST     L008C
+12805   134C 2A 13              BPL     L1361
+12806   134E DE 8A              LDX     L008A
+12807   1350 9C 92              CPX     L0092
+12808   1352 27 44              BEQ     L1398
+12809   1354 96 8D              LDAA    L008D
+12810   1356 8A 80              ORAA    #$0080
+12811   1358 97 8D              STAA    L008D
+12812   135A 86 D5              LDAA    #213      Error "EQU syntax error"
+12813   135C BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12814   135F 20 34              BRA     L1395
+12815    ;
+12816   1361 CE 0084    L1361   LDX     #$0084
+12817   1364 A6 00      L1364   LDAA    $0000,X
+12818   1366 A7 08              STAA    $0008,X
+12819   1368 08                 INX     
+12820   1369 8C 008C            CPX     #$008C
+12821   136C 26 F6              BNE     L1364
+12822   136E DE 79              LDX     L0079
+12823   1370 DF 65              STX     L0065
+12824   1372 DE 7B              LDX     L007B
+12825   1374 DF 79              STX     L0079
+12826   1376 BD 1412            JSR     L1412
+12827   1379 DE 65              LDX     L0065
+12828   137B A6 08      L137B   LDAA    $0008,X
+12829   137D A7 00              STAA    $0000,X
+12830   137F 08                 INX     
+12831   1380 9C 7B              CPX     L007B
+12832   1382 26 F7              BNE     L137B
+12833   1384 20 12              BRA     L1398
+12834    ;
+12835   1386 7D 008C    L1386   TST     L008C
+12836   1389 2A 20              BPL     L13AB
+12837   138B 7D 008D            TST     L008D
+12838   138E 2A 0F              BPL     L139F
+12839   1390 86 CE              LDAA    #206      Error "redefined symbol"
+12840   1392 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12841   1395 BD 1412    L1395   JSR     L1412
+12842   1398 DE 92      L1398   LDX     L0092
+12843   139A DF 70              STX     L0070
+12844   139C 9E 5E              LDS     L005E
+12845   139E 39                 RTS     
+12846    ; -----------------------------------------------
+12847   139F 96 77      L139F   LDAA    L0077
+12848   13A1 D6 78              LDAB    L0078
+12849   13A3 D0 7A              SUBB    L007A
+12850   13A5 92 79              SBCA    L0079
+12851   13A7 25 07              BCS     L13B0
+12852   13A9 20 ED              BRA     L1398
+12853    ;
+12854   13AB 86 D3      L13AB   LDAA    #211      Error "Undef symbol"
+12855   13AD BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12856   13B0 0D         L13B0   SEC     
+12857   13B1 79 0032            ROL     L0032
+12858   13B4 20 E2              BRA     L1398
+12859    ;
+12860   13B6 CE 0084    L13B6   LDX     #$0084
+12861   13B9 A6 00      L13B9   LDAA    $0000,X
+12862   13BB A7 08              STAA    $0008,X
+12863   13BD 08                 INX     
+12864   13BE 8C 008C            CPX     #$008C
+12865   13C1 26 F6              BNE     L13B9
+12866   13C3 96 7B              LDAA    L007B
+12867   13C5 D6 7C              LDAB    L007C
+12868   13C7 D0 75              SUBB    L0075
+12869   13C9 92 74              SBCA    L0074
+12870   13CB 2A 1D              BPL     L13EA
+12871   13CD 7D 0076            TST     L0076
+12872   13D0 26 09              BNE     L13DB
+12873   13D2 86 D3              LDAA    #211      Error "Undef symbol"
+12874   13D4 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12875   13D7 0D                 SEC     
+12876   13D8 79 0032            ROL     L0032
+12877   13DB DE 7B      L13DB   LDX     L007B
+12878   13DD DF 79              STX     L0079
+12879   13DF DF 77              STX     L0077
+12880   13E1 BD 1412            JSR     L1412
+12881   13E4 DE 79              LDX     L0079
+12882   13E6 DF 7B              STX     L007B
+12883   13E8 20 AE              BRA     L1398
+12884    ;
+12885   13EA 86 DD      L13EA   LDAA    #221      Symbol table overflow
+12886   13EC BD 05ED            JSR     J.ERR     Print Error given in Reg A
+12887   13EF 20 A7              BRA     L1398
+12888    ;
+12889   13F1 C6 08      L13F1   LDAB    #$0008
+12890   13F3 DE 79              LDX     L0079
+12891   13F5 08         L13F5   INX     
+12892   13F6 5A                 DECB    
+12893   13F7 26 FC              BNE     L13F5
+12894   13F9 DF 79              STX     L0079
+12895   13FB 39                 RTS     
+12896    ; -----------------------------------------------
+12897   13FC 0F         L13FC   SEI     
+12898   13FD 9F 5C              STS     L005C
+12899   13FF CE 008C            LDX     #$008C
+12900   1402 9E 79              LDS     L0079
+12901   1404 34                 DES     
+12902   1405 32         L1405   PULA    
+12903   1406 A7 00              STAA    $0000,X
+12904   1408 08                 INX     
+12905   1409 8C 0094            CPX     #$0094
+12906   140C 26 F7              BNE     L1405
+12907   140E 9E 5C              LDS     L005C
+12908   1410 0E                 CLI     
+12909   1411 39                 RTS     
+12910    ; -----------------------------------------------
+12911   1412 0F         L1412   SEI     
+12912   1413 9F 5C              STS     L005C
+12913   1415 C6 08              LDAB    #$0008
+12914   1417 8E 008B            LDS     #$008B
+12915   141A DE 79              LDX     L0079
+12916   141C 32         L141C   PULA    
+12917   141D A7 00              STAA    $0000,X
+12918   141F 08                 INX     
+12919   1420 5A                 DECB    
+12920   1421 26 F9              BNE     L141C
+12921   1423 DF 79              STX     L0079
+12922   1425 9E 5C              LDS     L005C
+12923   1427 0E                 CLI     
+12924   1428 39                 RTS     
+12925    ; -----------------------------------------------
+12926   1429 DE 72      L1429   LDX     L0072
+12927   142B DF 79              STX     L0079
+12928   142D 96 79      L142D   LDAA    L0079
+12929   142F D6 7A              LDAB    L007A
+12930   1431 D0 7C              SUBB    L007C
+12931   1433 92 7B              SBCA    L007B
+12932   1435 24 3A              BCC     L1471
+12933   1437 BD 13FC            JSR     L13FC
+12934   143A 96 8C              LDAA    L008C
+12935   143C 7D 0046            TST     L0046
+12936   143F 27 05              BEQ     L1446
+12937   1441 4D                 TSTA    
+12938   1442 2A 29              BPL     L146D
+12939   1444 20 03              BRA     L1449
+12940    ;
+12941   1446 4D         L1446   TSTA    
+12942   1447 2B 24              BMI     L146D
+12943   1449 96 92      L1449   LDAA    L0092
+12944   144B D6 93              LDAB    L0093
+12945   144D CE 0093            LDX     #$0093
+12946   1450 BD 05F6            JSR     L05F6
+12947   1453 17                 TBA     
+12948   1454 BD 05F6            JSR     L05F6
+12949   1457 86 20              LDAA    #$0020
+12950   1459 97 92              STAA    L0092
+12951   145B 86 0D              LDAA    #$000D
+12952   145D A7 00              STAA    $0000,X
+12953   145F 86 0A              LDAA    #$000A
+12954   1461 A7 01              STAA    $0001,X
+12955   1463 86 04              LDAA    #$0004
+12956   1465 A7 02              STAA    $0002,X
+12957   1467 CE 008C            LDX     #$008C
+12958   146A BD 05E7            JSR     L05E7
+12959   146D 8D 82      L146D   BSR     L13F1
+12960   146F 20 BC              BRA     L142D
+12961    ;
+12962   1471 39         L1471   RTS     
+12963    ; -----------------------------------------------
+12964   1472 96 46      L1472   LDAA    L0046
+12965   1474 27 6E              BEQ     L14E4
+12966   1476 CE 00AF            LDX     #$00AF
+12967   1479 DF 54              STX     L0054
+12968   147B D7 5B              STAB    L005B
+12969   147D 96 4B              LDAA    L004B
+12970   147F 26 47              BNE     L14C8
+12971   1481 96 3E              LDAA    L003E
+12972   1483 26 43              BNE     L14C8
+12973   1485 96 44              LDAA    FLGOBJ    =0 -> do not generate object code, <>0 -> DO generate object code
+12974   1487 27 3F              BEQ     L14C8
+12975   1489 BD 0127            JSR     L0127
+12976   148C 86 FF              LDAA    #$00FF
+12977   148E 97 4B              STAA    L004B
+12978   1490 86 20              LDAA    #$0020
+12979   1492 CE 1603            LDX     #$1603
+12980   1495 A7 00      L1495   STAA    $0000,X
+12981   1497 08                 INX     
+12982   1498 8C 1613            CPX     #$1613
+12983   149B 26 F8              BNE     L1495
+12984   149D 0F                 SEI     
+12985   149E CE 0583            LDX     #$0583
+12986   14A1 DF 6B              STX     L006B
+12987   14A3 CE 1603            LDX     #$1603
+12988   14A6 86 0B              LDAA    #$000B
+12989   14A8 97 53              STAA    L0053
+12990   14AA 9F 5C      L14AA   STS     L005C
+12991   14AC 9E 6B              LDS     L006B
+12992   14AE 32                 PULA    
+12993   14AF 9F 6B              STS     L006B
+12994   14B1 9E 5C              LDS     L005C
+12995   14B3 BD 15D6            JSR     L15D6
+12996   14B6 8C 1613            CPX     #$1613
+12997   14B9 26 EF              BNE     L14AA
+12998   14BB 96 53              LDAA    L0053
+12999   14BD 43                 COMA    
+13000   14BE BD 15D6            JSR     L15D6
+13001   14C1 0E                 CLI     
+13002   14C2 CE 15FB            LDX     #$15FB
+13003   14C5 BD 05F9            JSR     L05F9
+13004   14C8 DE 47      L14C8   LDX     L0047
+13005   14CA DF 4D              STX     L004D
+13006   14CC 7D 005B            TST     L005B
+13007   14CF 2A 03              BPL     L14D4
+13008   14D1 7E 15B6            JMP     L15B6
+13009    ;
+13010   14D4 DE 54      L14D4   LDX     L0054
+13011   14D6 A6 00      L14D6   LDAA    $0000,X
+13012   14D8 81 20              CMPA    #$0020
+13013   14DA 26 09              BNE     L14E5
+13014   14DC 08                 INX     
+13015   14DD DF 54              STX     L0054
+13016   14DF 8C 00B7            CPX     #$00B7
+13017   14E2 26 F2              BNE     L14D6
+13018   14E4 39         L14E4   RTS     
+13019    ; -----------------------------------------------
+13020   14E5 7D 004C    L14E5   TST     L004C
+13021   14E8 26 25              BNE     L150F
+13022   14EA 36         L14EA   PSHA    
+13023   14EB 7F 0053            CLR     L0053
+13024   14EE 86 FF              LDAA    #$00FF
+13025   14F0 97 4C              STAA    L004C
+13026   14F2 CE 0529            LDX     #$0529
+13027   14F5 6F 00      L14F5   CLR     $0000,X
+13028   14F7 08                 INX     
+13029   14F8 8C 0569            CPX     #$0569
+13030   14FB 26 F8              BNE     L14F5
+13031   14FD DE 4D              LDX     L004D
+13032   14FF DF 4F              STX     L004F
+13033   1501 CE 052B            LDX     #$052B
+13034   1504 96 4F              LDAA    L004F
+13035   1506 BD 15D6            JSR     L15D6
+13036   1509 96 50              LDAA    L0050
+13037   150B BD 15D4            JSR     L15D4
+13038   150E 32                 PULA    
+13039   150F DE 4D      L150F   LDX     L004D
+13040   1511 9C 4F              CPX     L004F
+13041   1513 27 05              BEQ     L151A
+13042   1515 BD 157C            JSR     L157C
+13043   1518 20 D0              BRA     L14EA
+13044    ;
+13045   151A DE 54      L151A   LDX     L0054
+13046   151C BD 15E2            JSR     L15E2
+13047   151F 48                 ASLA    
+13048   1520 48                 ASLA    
+13049   1521 48                 ASLA    
+13050   1522 48                 ASLA    
+13051   1523 16                 TAB     
+13052   1524 08                 INX     
+13053   1525 A6 00              LDAA    $0000,X
+13054   1527 08                 INX     
+13055   1528 DF 54              STX     L0054
+13056   152A BD 15E2            JSR     L15E2
+13057   152D 1B                 ABA     
+13058   152E 7D 0040            TST     FLGAMEM   =0 -> assemble to output file, <>0 -> do assemble to memory
+13059   1531 27 31              BEQ     L1564
+13060   1533 36                 PSHA    
+13061   1534 96 4D              LDAA    L004D
+13062   1536 D6 4E              LDAB    L004E
+13063   1538 D0 22              SUBB    L0022
+13064   153A 92 21              SBCA    L0021
+13065   153C 25 0A              BCS     L1548
+13066   153E 96 4D              LDAA    L004D
+13067   1540 D6 4E              LDAB    L004E
+13068   1542 D0 24              SUBB    L0024
+13069   1544 92 23              SBCA    L0023
+13070   1546 25 0F              BCS     L1557
+13071   1548 32         L1548   PULA    
+13072   1549 DE 4D              LDX     L004D
+13073   154B A7 00              STAA    $0000,X
+13074   154D A1 00              CMPA    $0000,X
+13075   154F 26 05              BNE     L1556
+13076   1551 7F 003D            CLR     L003D
+13077   1554 20 0E              BRA     L1564
+13078    ;
+13079   1556 36         L1556   PSHA    
+13080   1557 86 DA      L1557   LDAA    #218      Error "Memory error"
+13081   1559 7D 003D            TST     L003D
+13082   155C 26 05              BNE     L1563
+13083   155E 97 3D              STAA    L003D
+13084   1560 BD 05ED            JSR     J.ERR     Print Error given in Reg A
+13085   1563 32         L1563   PULA    
+13086   1564 8D 6E      L1564   BSR     L15D4
+13087   1566 DE 4D              LDX     L004D
+13088   1568 08                 INX     
+13089   1569 DF 4D              STX     L004D
+13090   156B DF 4F              STX     L004F
+13091   156D DE 56              LDX     L0056
+13092   156F 8C 0565            CPX     #$0565
+13093   1572 27 03              BEQ     L1577
+13094   1574 7E 14D4            JMP     L14D4
+13095    ;
+13096   1577 8D 03      L1577   BSR     L157C
+13097   1579 7E 14D4            JMP     L14D4
+13098    ;
+13099   157C 36         L157C   PSHA    
+13100   157D 7F 004C            CLR     L004C
+13101   1580 86 03              LDAA    #$0003
+13102   1582 CE 052B            LDX     #$052B
+13103   1585 4C         L1585   INCA    
+13104   1586 08                 INX     
+13105   1587 6D 00              TST     $0000,X
+13106   1589 26 FA              BNE     L1585
+13107   158B 44                 LSRA    
+13108   158C 36                 PSHA    
+13109   158D BD 15D4            JSR     L15D4
+13110   1590 96 53              LDAA    L0053
+13111   1592 43                 COMA    
+13112   1593 09                 DEX     
+13113   1594 09                 DEX     
+13114   1595 BD 15D6            JSR     L15D6
+13115   1598 86 0D              LDAA    #$000D
+13116   159A A7 00              STAA    $0000,X
+13117   159C 86 0A              LDAA    #$000A
+13118   159E A7 01              STAA    $0001,X
+13119   15A0 86 00              LDAA    #$0000
+13120   15A2 A7 02              STAA    $0002,X
+13121   15A4 86 04              LDAA    #$0004
+13122   15A6 A7 03              STAA    $0003,X
+13123   15A8 32                 PULA    
+13124   15A9 CE 0529            LDX     #$0529
+13125   15AC 8D 28              BSR     L15D6
+13126   15AE CE 0527            LDX     #$0527
+13127   15B1 BD 05F9            JSR     L05F9
+13128   15B4 32                 PULA    
+13129   15B5 39                 RTS     
+13130    ; -----------------------------------------------
+13131   15B6 7D 004C    L15B6   TST     L004C
+13132   15B9 27 02              BEQ     L15BD
+13133   15BB 8D BF              BSR     L157C
+13134   15BD 96 3E      L15BD   LDAA    L003E
+13135   15BF 26 0D              BNE     L15CE
+13136   15C1 96 44              LDAA    FLGOBJ    =0 -> do not generate object code, <>0 -> DO generate object code
+13137   15C3 27 09              BEQ     L15CE
+13138   15C5 CE 1619            LDX     #$1619
+13139   15C8 BD 05F9            JSR     L05F9
+13140   15CB BD 0127            JSR     L0127
+13141   15CE 7F 004B    L15CE   CLR     L004B
+13142   15D1 7E 14E4            JMP     L14E4
+13143    ;
+13144   15D4 DE 56      L15D4   LDX     L0056
+13145   15D6 36         L15D6   PSHA    
+13146   15D7 9B 53              ADDA    L0053
+13147   15D9 97 53              STAA    L0053
+13148   15DB 32                 PULA    
+13149   15DC BD 05F6            JSR     L05F6
+13150   15DF DF 56              STX     L0056
+13151   15E1 39                 RTS     
+13152    ; -----------------------------------------------
+13153   15E2 81 30      L15E2   CMPA    #$0030
+13154   15E4 2B 11              BMI     L15F7
+13155   15E6 81 39              CMPA    #$0039
+13156   15E8 2F 0A              BLE     L15F4
+13157   15EA 81 41              CMPA    #$0041
+13158   15EC 2B 09              BMI     L15F7
+13159   15EE 81 46              CMPA    #$0046
+13160   15F0 2E 05              BGT     L15F7
+13161   15F2 80 07              SUBA    #$0007
+13162   15F4 84 0F      L15F4   ANDA    #$000F
+13163   15F6 39                 RTS     
+
+13165   15F7 7D 06
+13166   15F9 41 39              FCC     "A9S00B0000"
+
+13178   1605 20 20              
+13180   1607 20 20              
+13182   1609 20 20              
+13184   160B 20 20              
+13186   160D 20 20              
+13188   160F 20 20              
+13190   1611 20 20              
+13192   1613 00                 
+13193   1614 00                 
+13194   1615 0D                 
+13195   1616 0A                 
+13196   1617 00                 
+13197   1618 04                 
+13198   1619 53                 FCC     "S9030000FC"
+13209   1623 0D                 
+13210   1624 0A                 
+13211   1625 00         
+13212   1626 04         
+13213   1627 00         

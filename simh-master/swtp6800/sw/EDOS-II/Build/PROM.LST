@@ -1,0 +1,588 @@
+
+
+
+
+
+---
+
+
+PAGE  001   FDOS RES          
+
+
+
+00001                     NAM    FDOS     RESIDENT MODULE
+00002              * OPT SYMBOLS
+00003                     OPT    O,NOM,NOP  
+00004              * 4/9/75
+00005              *
+00006              * VERSION 2.0
+00007              *
+00008      EC00    DKDID  EQU    $EC00 
+00009      EC01    DKDIC  EQU    $EC01 
+00010      EC02    DKCOD  EQU    $EC02 
+00011      EC03    DKCOC  EQU    $EC03 
+00012      EC06    DKDOD  EQU    $EC06 
+00013      EC07    DKDOC  EQU    $EC07 
+00014              *
+00015      F564    XBUG   EQU    $F564 
+00016      F018    CO     EQU    $F018 
+00017      FF90    TEMP   EQU    $FF90 
+00018      FF8A    XSTACK EQU    $FF8A 
+00019              *
+00020      0020    EXEC   EQU    $20 
+00021      0023    UPDATE EQU    $23 
+00022              *
+00023      0020    EDIT   EQU    $20 
+00024      0400    ASMB   EQU    $400 
+00025              *
+00026      0000    PASS   EQU    0        ASSEMBLY PASS INFO
+00027      0001    OFILE  EQU    1        OFILE NUMBER
+00028      0002    OUNIT  EQU    2        OFILE UNIT
+00029      0003    IUNIT  EQU    3        IFILE UNIT - SCTR/UNIT
+00030      0004    ISIZE  EQU    4        IFILE SIZE
+00031      0006    ITRK   EQU    6        IFILE TRACK
+00032      0007    ISCTR  EQU    7        IFILE SECTOR
+00033      0008    ICNTR  EQU    8        IFILE BUFFER COUNTER
+00034      0009    OSIZE  EQU    9        OFILE SIZE
+00035      000B    OTRK   EQU    11       OFILE TRACK
+00036      000C    OSCTR  EQU    12       OFILE SECTOR
+00037      000D    OCNTR  EQU    13       OFILE BUFFER COUNTER
+00038      000E    TITRK  EQU    14       TEMP LOC 1
+00039      000F    TISZE  EQU    15       TEMP LOC 2
+00040              *
+00041 E800                ORG    $E800 
+00042              *
+00043      E800    FDOS   EQU    * 
+00044 E800 BD E841        JSR    FDOS1    LOAD FDOS
+00045 E803 7E 0020        JMP    EXEC     START EXEC
+00046              *
+00047      E806    INTIO  EQU    * 
+00048 E806 7E E859        JMP    RESET    INITIALIZE I/O
+00049              *
+00050      E809    XRI    EQU    * 
+00051 E809 7E E91B        JMP    RI       DISK READ VECTOR
+00052              *
+00053      E80C    XWRT   EQU    * 
+00054 E80C 7E E98E        JMP    WRT      DISK WRITE VECTOR
+00055              *
+00056      E80F    UPDT   EQU    * 
+00057 E80F 7E EA79        JMP    PATCH 
+00058 E812 7E 0023        JMP    UPDATE   START UPDATE
+00059              *
+00060      E815    PROG   EQU    * 
+00061 E815 BD E887        JSR    REDX     LOAD PROGRAM
+00062 E818 7E F564        JMP    XBUG     GO TO EXBUG
+00063              *
+00064      E81B    ASSEM  EQU    * 
+00065 E81B BD E887        JSR    REDX     LOAD ASSEMBLER
+00066 E81E BD E82D        JSR    RESTR    RESTORE IFILE POINTERS
+00067 E821 7E 0400        JMP    ASMB     START ASSEMBLER
+00068              *
+00069      E824    EDITR  EQU    * 
+00070 E824 BD E887        JSR    REDX     LOAD EDITOR
+00071 E827 BD E82D        JSR    RESTR    RESTORE IFILE PNTRS
+00072 E82A 7E 0020        JMP    EDIT     START EDITOR
+00073              *
+00074      E82D    RESTR  EQU    * 
+00075 E82D DE 0F          LDX    TISZE    RESTORE IFILE PNTRS
+00076 E82F DF 04          STX    ISIZE    IFILE SIZE
+00077 E831 96 0E          LDA A  TITRK 
+00078 E833 97 06          STA A  ITRK     TRACK
+00079 E835 96 03          LDA A  IUNIT    UNIT/SECTOR
+00080 E837 0C             CLC             
+00081 E838 46             ROR A           
+00082 E839 46             ROR A           
+00083 E83A 46             ROR A           
+00084 E83B 97 07          STA A  ISCTR 
+00085 E83D 7F 0008        CLR    ICNTR    BUFFER COUNTER
+00086 E840 39             RTS             
+00087              *
+00088      E841    FDOS1  EQU    * 
+00089 E841 BD E859        JSR    RESET    RESET ELECTRONICS
+00090 E844 CE 004E        LDX    #78      SET ISIZE=78
+00091 E847 DF 04          STX    ISIZE 
+00092 E849 7F 0006        CLR    ITRK     TRACK=1
+00093 E84C 7C 0006        INC    ITRK 
+00094 E84F 7F 0007        CLR    ISCTR    SETCTOR=0
+00095 E852 7F 0008        CLR    ICNTR    RD BFR EMPTY
+00096 E855 BD E887        JSR    REDX     LOAD FDOS
+00097 E858 39             RTS             
+00098              *
+00099              * SUBROUTINE TO SET UP PIA'S AND RESET
+00100              * DRIVE ELECTRONICS.
+00101              *
+00102      E859    RESET  EQU    * 
+00103 E859 7F EC01        CLR    DKDIC    SET DIRECTIONS
+00104 E85C 7F EC03        CLR    DKCOC 
+00105 E85F 7F EC07        CLR    DKDOC 
+00106 E862 7F EC00        CLR    DKDID 
+00107 E865 86 FF          LDA A  #$FF 
+00108 E867 B7 EC02        STA A  DKCOD 
+00109 E86A B7 EC06        STA A  DKDOD 
+00110 E86D 86 04          LDA A  #$4      SET DATA IN CNTRL
+00111 E86F B7 EC01        STA A  DKDIC 
+00112 E872 86 04          LDA A  #$4      SET DATA OUT CNTRL
+00113 E874 B7 EC07        STA A  DKDOC 
+00114 E877 86 2C          LDA A  #$2C     SET CMD OUT CNTRL
+00115 E879 B7 EC03        STA A  DKCOC 
+00116 E87C 86 80          LDA A  #$80     ISSUE CLEAR ELECTRONICS
+00117 E87E B7 EC02        STA A  DKCOD 
+00118 E881 86 0C          LDA A  #$0C 
+00119 E883 BD EA3E        JSR    LOOP 
+00120 E886 39             RTS             
+00121              *
+00122              * SUBROUTINE TO READ AN OBJECT FILE
+00123              * INTO MEMORY
+00124              *
+00125      E887    REDX   EQU    * 
+00126 E887 BD E912        JSR    RIX      GET A CHAR
+00127 E88A 25 23          BCS    REDX3    EOF
+00128 E88C 81 53          CMP A  #'S      S?
+00129 E88E 26 F7          BNE    REDX     NO
+00130 E890 7F FF92        CLR    TEMP+2   RESET CHKSM
+00131 E893 8D 7D          BSR    RIX      GET A CHAR
+00132 E895 25 10          BCS    REDX2    LOAD ERROR
+00133 E897 81 30          CMP A  #'0 
+00134 E899 27 EC          BEQ    REDX     HDR BLK-SKIp
+00135 E89B 81 31          CMP A  #'1 
+00136 E89D 27 11          BEQ    REDX4    DATA BLK
+00137 E89F 81 39          CMP A  #'9 
+00138 E8A1 27 E4          BEQ    REDX     EOF BLK-SKIP
+00139 E8A3 81 1B          CMP A  #$1B     ESC?
+00140 E8A5 27 08          BEQ    REDX3    YES-END OF OBJECT FILE
+00141              *
+00142 E8A7 86 3F   REDX2  LDA A  #$3F     LOAD ERROR
+00143 E8A9 BD F018        JSR    CO 
+00144 E8AC 7E F564        JMP    XBUG 
+00145              *
+00146 E8AF 39      REDX3  RTS             
+00147              *
+00148 E8B0 8D 29   REDX4  BSR    RDBYT    GET BYTE COUNT
+00149 E8B2 4A             DEC A           DECR COUNT
+00150 E8B3 B7 FF93        STA A  TEMP+3   SAVE CNT
+00151 E8B6 8D 23          BSR    RDBYT    READ ADDR(H)
+00152 E8B8 B7 FF90        STA A  TEMP 
+00153 E8BB 8D 1E          BSR    RDBYT    READ ADDR(L)
+00154 E8BD B7 FF91        STA A  TEMP+1 
+00155              *
+00156 E8C0 7D FF93 REDX5  TST    TEMP+3   COUNT=0?
+00157 E8C3 27 0D          BEQ    REDX6    YES
+00158 E8C5 8D 14          BSR    RDBYT    NO-READ DATA
+00159 E8C7 FE FF90        LDX    TEMP 
+00160 E8CA A7 00          STA A  0,X      SAVE IT
+00161 E8CC 08             INX             INCR ADDRESS
+00162 E8CD FF FF90        STX    TEMP 
+00163 E8D0 20 EE          BRA    REDX5    CONTINUE
+00164              *
+00165 E8D2 8D 07   REDX6  BSR    RDBYT    READ CHKSM
+00166 E8D4 7C FF92        INC    TEMP+2 
+00167 E8D7 26 CE          BNE    REDX2    CHKSM ERROR
+00168 E8D9 20 AC          BRA    REDX     CHKSM OK
+00169              *
+00170      E8DB    RDBYT  EQU    * 
+00171 E8DB 8D 35          BSR    RIX      GET A CHAR
+00172 E8DD 25 C8          BCS    REDX2    EOF
+00173 E8DF 8D 1D          BSR    CHEX     CONVERT TO HEX
+00174 E8E1 25 C4          BCS    REDX2 
+00175 E8E3 48             ASL A           
+00176 E8E4 48             ASL A           
+00177 E8E5 48             ASL A           
+00178 E8E6 48             ASL A           
+00179 E8E7 36             PSH A           
+00180 E8E8 8D 28          BSR    RIX 
+00181 E8EA 25 BB          BCS    REDX2 
+00182 E8EC 8D 10          BSR    CHEX 
+00183 E8EE 25 B7          BCS    REDX2 
+00184 E8F0 33             PUL B           
+00185 E8F1 1B             ABA             
+00186 E8F2 16             TAB             
+00187 E8F3 BB FF92        ADD A  TEMP+2   ADD TO CHKSM
+00188 E8F6 B7 FF92        STA A  TEMP+2 
+00189 E8F9 7A FF93        DEC    TEMP+3   DECR BYTE CNT
+00190 E8FC 17             TBA             
+00191 E8FD 39             RTS             
+00192              *
+00193 E8FE 80 30   CHEX   SUB A  #$30 
+00194 E900 25 0F          BCS    CHEX2 
+00195 E902 8B E9          ADD A  #$E9 
+00196 E904 25 0B          BCS    CHEX2 
+00197 E906 8B 06          ADD A  #6 
+00198 E908 2A 04          BPL    CHEX1 
+00199 E90A 8B 07          ADD A  #7 
+00200 E90C 25 03          BCS    CHEX2 
+00201              *
+00202 E90E 8B 0A   CHEX1  ADD A  #10 
+00203 E910 0C             CLC             
+00204 E911 39      CHEX2  RTS             
+00205              *
+00206              *
+00207              * SUBROUTINE TO READ AN ASCII BYTE FROM DISK & RETUR
+00208              * IT IN A-REGISTER. IF EOF, CARRY IS SET
+00209              *
+00210      E912    RIX    EQU    * 
+00211 E912 BD E91B        JSR    RI       GET BYTE
+00212 E915 25 03          BCS    RIX1     EOF
+00213 E917 84 7F          AND A  #$7F 
+00214 E919 0C             CLC             
+00215 E91A 39      RIX1   RTS             
+00216              *
+00217              *
+00218              * SUBROUTINE TO READ AN 8-BIT BYTE FROM DISK & RETUR
+00219              * IT IN A-REGISTER. IF EOF, CARRY IS SET.
+00220              *
+00221      E91B    RI     EQU    * 
+00222 E91B 7D 0008        TST    ICNTR    COUNT=0
+00223 E91E 26 4D          BNE    RI10     NO
+00224              *
+00225 E920 CE 0006 RI5    LDX    #ITRK 
+00226 E923 BD E9EF        JSR    INCDA 
+00227 E926 DE 04          LDX    ISIZE    DECR & CHK IFILE SIZE
+00228 E928 09             DEX             
+00229 E929 26 05          BNE    RI3      OK
+00230 E92B 7F 0008        CLR    ICNTR 
+00231 E92E 0D             SEC             SET EOF
+00232 E92F 39             RTS             
+00233              *
+00234 E930 DF 04   RI3    STX    ISIZE 
+00235 E932 96 07          LDA A  ISCTR    XMIT U/S
+00236 E934 BD EA03        JSR    XUS 
+00237 E937 BD EA4D        JSR    CHK      MAKE SURE A DISK
+00238 E93A 86 80          LDA A  #128     SET CNTR =128
+00239 E93C 97 08          STA A  ICNTR 
+00240 E93E 86 05          LDA A  #5       SET TRY COUNT=5
+00241 E940 B7 FF94        STA A  TEMP+4 
+00242 E943 96 06          LDA A  ITRK     SEEK TRACK
+00243 E945 BD EA2B        JSR    SEEK 
+00244              *
+00245 E948 86 02   RI6    LDA A  #2       READ DATA
+00246 E94A BD EA3E        JSR    LOOP 
+00247 E94D B6 EC00        LDA A  DKDID    DD MARK?
+00248 E950 84 80          AND A  #$80 
+00249 E952 27 05          BEQ    RI4      NO
+00250 E954 BD EA38        JSR    RFLAG    YES-RESET FLAG
+00251 E957 20 C7          BRA    RI5      GO TO NEXT SECTOR
+00252              *
+00253 E959 B6 EC00 RI4    LDA A  DKDID    CRC ERROR
+00254 E95C 84 08          AND A  #$8 
+00255 E95E 27 0D          BEQ    RI10     NO
+00256 E960 BD EA38        JSR    RFLAG    YES-RESET FLAG
+00257 E963 7A FF94        DEC    TEMP+4   DECR TRIES
+00258 E966 26 E0          BNE    RI6      TRY AGAIN
+00259 E968 86 01          LDA A  #1       CAN'T READ MEDIA
+00260 E96A 7E EA57        JMP    CHK1 
+00261              *
+00262 E96D 86 3C   RI10   LDA A  #$3C     SET CMD CNTRL
+00263 E96F B7 EC03        STA A  DKCOC 
+00264 E972 86 40          LDA A  #$40     SET FOR READ DATA
+00265 E974 B7 EC02        STA A  DKCOD 
+00266 E977 B6 EC00        LDA A  DKDID    READ DATA
+00267 E97A 36             PSH A           
+00268 E97B 86 2C          LDA A  #$2C     RESET CMD CNTRL
+00269 E97D B7 EC03        STA A  DKCOC 
+00270 E980 86 40          LDA A  #$40     STROBE BFR
+00271 E982 B7 EC02        STA A  DKCOD 
+00272 E985 7F EC02        CLR    DKCOD 
+00273 E988 7A 0008        DEC    ICNTR    DECR READ CNTR
+00274 E98B 32             PUL A           
+00275 E98C 0C             CLC             
+00276 E98D 39             RTS             
+00277              *
+00278              * SUBROUTINE TO WRITE A BYTE TO DISK.
+00279              * EXPECTS BYTE IN A-REGISTER
+00280              *
+00281      E98E    WRT    EQU    * 
+00282 E98E B7 EC06        STA A  DKDOD    OUTPUT DATA
+00283 E991 86 30          LDA A  #$30 
+00284 E993 B7 EC02        STA A  DKCOD 
+00285 E996 7C 000D        INC    OCNTR    INCR BFR COUNT
+00286 E999 96 0D          LDA A  OCNTR    =128?
+00287 E99B 81 80          CMP A  #128 
+00288 E99D 27 01          BEQ    WRT4     YES
+00289 E99F 39             RTS             NO-EXIT
+00290              *
+00291 E9A0 7F 000D WRT4   CLR    OCNTR    CLR COUNT
+00292              *
+00293 E9A3 96 0C   WRT1   LDA A  OSCTR    XMIT U/S
+00294 E9A5 BD EA03        JSR    XUS 
+00295 E9A8 BD EA4D        JSR    CHK      MAKE SURE A DISK
+00296 E9AB 86 05          LDA A  #5       SET TRY COUNT=5
+00297 E9AD B7 FF94        STA A  TEMP+4 
+00298 E9B0 96 0B          LDA A  OTRK     SEEK TRACK
+00299 E9B2 BD EA2B        JSR    SEEK 
+00300              *
+00301 E9B5 86 04   WRT2   LDA A  #4       WRITE DATA
+00302 E9B7 BD EA3E        JSR    LOOP 
+00303 E9BA 86 06          LDA A  #6       READ FOR CRC
+00304 E9BC BD EA3E        JSR    LOOP 
+00305 E9BF B6 EC00        LDA A  DKDID    CRC ERROR?
+00306 E9C2 84 08          AND A  #8 
+00307 E9C4 27 12          BEQ    WRT3     NO
+00308 E9C6 BD EA38        JSR    RFLAG    YES-RESET FLAG
+00309 E9C9 7A FF94        DEC    TEMP+4   DECR TRY COUNT
+00310 E9CC 26 E7          BNE    WRT2     TRY AGAIN
+00311 E9CE 86 0E          LDA A  #$E      WRTIE AS DD
+00312 E9D0 BD EA3E        JSR    LOOP 
+00313 E9D3 BD E9DC        JSR    WRTN     INCR DA & CHK SIZE
+00314 E9D6 20 CB          BRA    WRT1 
+00315              *
+00316 E9D8 BD E9DC WRT3   JSR    WRTN 
+00317 E9DB 39             RTS             
+00318              *
+00319              * SUBROUTINE TO INCR DA & CHK OFILE SIZE
+00320              *
+00321      E9DC    WRTN   EQU    * 
+00322 E9DC CE 000B        LDX    #OTRK 
+00323 E9DF BD E9EF        JSR    INCDA 
+00324 E9E2 DE 09          LDX    OSIZE 
+00325 E9E4 09             DEX             
+00326 E9E5 DF 09          STX    OSIZE 
+00327 E9E7 2B 01          BMI    WRTN1 
+00328 E9E9 39             RTS             
+00329              *
+00330 E9EA 86 02   WRTN1  LDA A  #2 
+00331 E9EC 7E EA57        JMP    CHK1 
+00332              *
+00333              *SUBROUTINE TO INCR DA. TRACK IN 0,X, SECTOR IN 1,X
+00334              *
+00335      E9EF    INCDA  EQU    * 
+00336 E9EF 6C 01          INC    1,X 
+00337 E9F1 A6 01          LDA A  1,X      SECTOR=27?
+00338 E9F3 84 1F          AND A  #$1F 
+00339 E9F5 81 1B          CMP A  #27 
+00340 E9F7 27 01          BEQ    INCDB    YES
+00341 E9F9 39             RTS             NO
+00342              *
+00343 E9FA A6 01   INCDB  LDA A  1,X 
+00344 E9FC 84 C1          AND A  #$C1     SET SCTR=1
+00345 E9FE A7 01          STA A  1,X 
+00346 EA00 6C 00          INC    0,X      INCR TRACK
+00347 EA02 39             RTS             
+00348              *
+00349              * SUBROUTINE TO XMIT UNIT/SECTOR (LOGICAL) BYTE
+00350              *
+00351      EA03    XUS    EQU    * 
+00352 EA03 36             PSH A           EXTRACT LOG SCTR
+00353 EA04 84 1F          AND A  #$1F 
+00354 EA06 CE EA5E        LDX    #TBL     GET TABLE PNTR
+00355 EA09 FF FF94        STX    TEMP+4 
+00356 EA0C 5F             CLR B           MAKE INTO SCTR PNTR
+00357 EA0D BB FF95        ADD A  TEMP+5 
+00358 EA10 F9 FF94        ADC B  TEMP+4 
+00359 EA13 B7 FF95        STA A  TEMP+5 
+00360 EA16 F7 FF94        STA B  TEMP+4 
+00361 EA19 FE FF94        LDX    TEMP+4 
+00362 EA1C 33             PUL B           MERGE UNIT & PHYS SCTR.
+00363 EA1D C4 C0          AND B  #$C0 
+00364 EA1F A6 00          LDA A  0,X 
+00365 EA21 1B             ABA             
+00366 EA22 B7 EC06        STA A  DKDOD    ISSUE IT
+00367 EA25 86 20          LDA A  #$20 
+00368 EA27 B7 EC02        STA A  DKCOD 
+00369 EA2A 39             RTS             
+00370              *
+00371              * SUBROUTINE TO SEEK TRACK IN A
+00372              *
+00373      EA2B    SEEK   EQU    * 
+00374 EA2B B7 EC06        STA A  DKDOD 
+00375 EA2E 86 10          LDA A  #$10 
+00376 EA30 B7 EC02        STA A  DKCOD 
+00377 EA33 86 08          LDA A  #$8 
+00378 EA35 7E EA3E        JMP    LOOP 
+00379              *
+00380              * SUBROUTINE TO RESET ERROR FLAG
+00381              *
+00382      EA38    RFLAG  EQU    * 
+00383 EA38 86 0A          LDA A  #$A 
+00384 EA3A B7 EC02        STA A  DKCOD 
+00385 EA3D 39             RTS             
+00386              *
+00387              * SUBROUTINE TO ISSUE (A) CMD & LOOP ON BUSY
+00388              *
+00389      EA3E    LOOP   EQU    * 
+00390 EA3E F6 EC00        LDA B  DKDID    CLEAR BUSY
+00391 EA41 B7 EC02        STA A  DKCOD    ISSUE CMD
+00392 EA44 B6 EC01 LOOP1  LDA A  DKDIC    DONE?
+00393 EA47 2A FB          BPL    LOOP1    NO
+00394 EA49 F6 EC00        LDA B  DKDID    YES-CLR BUSY
+00395 EA4C 39             RTS             EXIT
+00396              *
+00397              * SUBROUTINE TO CHECK IF A DISK, ELSE ERROR 3
+00398              *
+00399      EA4D    CHK    EQU    * 
+00400 EA4D B6 EC00        LDA A  DKDID 
+00401 EA50 84 20          AND A  #$20 
+00402 EA52 26 01          BNE    CHK2 
+00403 EA54 39             RTS             OK
+00404 EA55 86 03   CHK2   LDA A  #3       ERROR
+00405              *
+00406              * ROUTINE TO PUT ERROR (A)
+00407              *
+00408 EA57 8A 30   CHK1   ORA A  #$30     CONVERT TO ASCII
+00409 EA59 BD F018        JSR    CO 
+00410 EA5C 7E F564        JMP    XBUG 
+00411              *
+00412              * PHYSICAL SECTOR TABLE IN ORDER OF LOGICAL SECTOR N
+00413              *
+00414      EA5E    TBL    EQU    *-1 
+00415 EA5F 01             FCB    1,10,19,2,11,20,3,12,21,4,13,22,5 
+      EA60 0A      
+      EA61 13      
+      EA62 02      
+      EA63 0B      
+      EA64 14      
+      EA65 03      
+      EA66 0C      
+      EA67 15      
+      EA68 04      
+      EA69 0D      
+      EA6A 16      
+      EA6B 05      
+00416 EA6C 0E             FCB    14,23,6,15,24,7,16,25,8,17,26,9,18 
+      EA6D 17      
+      EA6E 06      
+      EA6F 0F      
+      EA70 18      
+      EA71 07      
+      EA72 10      
+      EA73 19      
+      EA74 08      
+      EA75 11      
+      EA76 1A      
+      EA77 09      
+      EA78 12      
+00417              *
+00418 EA79 8E FF8A PATCH  LDS    #XSTACK 
+00419 EA7C BD E841        JSR    FDOS1 
+00420 EA7F 7E 0023        JMP    UPDATE 
+00421              *
+00422              * PAPER TAPE LOADER
+00423              *
+00424 EB00                ORG    $EB00 
+00425              *
+00426      EC04    PTDTA  EQU    $EC04 
+00427      EC05    PTCTL  EQU    $EC05 
+00428      EB00    PTLDR  EQU    * 
+00429 EB00 20 0E          BRA    LDR0 
+00430              *
+00431      EB02    RDRIN  EQU    * 
+00432 EB02 20 39          BRA    GETC 
+00433              *
+00434      EB04    INITR  EQU    * 
+00435 EB04 7F EC05        CLR    PTCTL 
+00436 EB07 7F EC04        CLR    PTDTA 
+00437 EB0A 86 3C          LDA A  #$3C 
+00438 EB0C B7 EC05        STA A  PTCTL 
+00439 EB0F 39             RTS             
+00440              *
+00441      EB10    LDR0   EQU    * 
+00442 EB10 0F             SEI             
+00443 EB11 BD EB04        JSR    INITR 
+00444 EB14 8D 27   LDR1   BSR    GETC     GET A CHAR
+00445 EB16 25 22          BCS    LDR5     NO TAPE
+00446 EB18 81 53          CMP A  #'S      S?
+00447 EB1A 26 F8          BNE    LDR1     NO
+00448 EB1C 7F FF92        CLR    TEMP+2 
+00449 EB1F 8D 1C          BSR    GETC     GET A CHAR
+00450 EB21 25 10          BCS    LDR3     NO TAPE
+00451 EB23 81 30          CMP A  #'0 
+00452 EB25 27 ED          BEQ    LDR1     HEADER BLOCK-SKIP
+00453 EB27 81 31          CMP A  #'1 
+00454 EB29 27 5F          BEQ    LDR6     DATA BLOCK
+00455 EB2B 81 39          CMP A  #'9 
+00456 EB2D 27 E5          BEQ    LDR1     EOF BLOCK-SKIP
+00457 EB2F 81 1B          CMP A  #$1B     ESC?
+00458 EB31 27 07          BEQ    LDR5     YES-END OF OBJECT FILE
+00459              *
+00460 EB33 86 3F   LDR3   LDA A  #$3F     PRINT ?
+00461 EB35 BD F018        JSR    CO 
+00462 EB38 20 00          BRA    LDR5 
+00463              *
+00464 EB3A 7E F564 LDR5   JMP    XBUG 
+00465              *
+00466      EB3D    GETC   EQU    * 
+00467 EB3D B6 EC04        LDA A  PTDTA    CLR INTERRUPT
+00468 EB40 86 34          LDA A  #$34     STROBE RDR
+00469 EB42 B7 EC05        STA A  PTCTL 
+00470 EB45 86 3C          LDA A  #$3C 
+00471 EB47 B7 EC05        STA A  PTCTL 
+00472 EB4A FF FF94        STX    TEMP+4 
+00473 EB4D CE 0000        LDX    #0       SET TIME OUT
+00474              *
+00475 EB50 B6 EC05 GETC1  LDA A  PTCTL    DONE?
+00476 EB53 2B 08          BMI    GETC2    YES
+00477 EB55 09             DEX             NO-TIME OUT?
+00478 EB56 26 F8          BNE    GETC1    NO
+00479 EB58 FE FF94        LDX    TEMP+4 
+00480 EB5B 0D             SEC             
+00481 EB5C 39             RTS             
+00482              *
+00483 EB5D B6 EC04 GETC2  LDA A  PTDTA    GET CHAR
+00484 EB60 84 7F          AND A  #$7F     STRIP PARITY
+00485 EB62 FE FF94        LDX    TEMP+4 
+00486 EB65 0C             CLC             CLR CARRY
+00487 EB66 39             RTS             
+00488              *
+00489      EB67    RDPR   EQU    *        MAKE A BYTE FROM 2 CHARS
+00490 EB67 8D D4          BSR    GETC     GET A CHAR
+00491 EB69 25 C8          BCS    LDR3 
+00492 EB6B 8D 23          BSR    CVHEX    CONVERT TO HEX
+00493 EB6D 25 C4          BCS    LDR3 
+00494 EB6F 48             ASL A           
+00495 EB70 48             ASL A           
+00496 EB71 48             ASL A           
+00497 EB72 48             ASL A           
+00498 EB73 36             PSH A           
+00499 EB74 8D C7          BSR    GETC 
+00500 EB76 25 BB          BCS    LDR3 
+00501 EB78 8D 16          BSR    CVHEX 
+00502 EB7A 25 B7          BCS    LDR3 
+00503 EB7C 33             PUL B           
+00504 EB7D 1B             ABA             
+00505 EB7E 16             TAB             
+00506 EB7F BB FF92        ADD A  TEMP+2   ADD TO CHKSM
+00507 EB82 B7 FF92        STA A  TEMP+2 
+00508 EB85 7A FF93        DEC    TEMP+3 
+00509 EB88 17             TBA             
+00510 EB89 39             RTS             
+00511              *
+00512 EB8A 20 18   LDR6   BRA    DATA 
+00513 EB8C 20 A5   LDR7   BRA    LDR3 
+00514 EB8E 20 84   LDR8   BRA    LDR1 
+00515              *
+00516 EB90 80 30   CVHEX  SUB A  #$30 
+00517 EB92 25 0F          BCS    CVHEX2 
+00518 EB94 8B E9          ADD A  #$E9 
+00519 EB96 25 0B          BCS    CVHEX2 
+00520 EB98 8B 06          ADD A  #6 
+00521 EB9A 2A 04          BPL    CVHEX1 
+00522 EB9C 8B 07          ADD A  #7 
+00523 EB9E 25 03          BCS    CVHEX2 
+00524              *
+00525 EBA0 8B 0A   CVHEX1 ADD A  #10 
+00526 EBA2 0C             CLC             
+00527 EBA3 39      CVHEX2 RTS             
+00528              *
+00529      EBA4    DATA   EQU    * 
+00530 EBA4 8D C1          BSR    RDPR     GET COUNT BYTE
+00531 EBA6 4A             DEC A           DECR COUNT
+00532 EBA7 B7 FF93        STA A  TEMP+3 
+00533 EBAA 8D BB          BSR    RDPR     READ ADDR(H)
+00534 EBAC B7 FF90        STA A  TEMP 
+00535 EBAF 8D B6          BSR    RDPR     READ ADDR(L)
+00536 EBB1 B7 FF91        STA A  TEMP+1 
+00537 EBB4 FE FF90        LDX    TEMP 
+00538              *
+00539 EBB7 7D FF93 DATA1  TST    TEMP+3 
+00540 EBBA 27 07          BEQ    DATA2    YES
+00541 EBBC 8D A9          BSR    RDPR     NO-READ DATA
+00542 EBBE A7 00          STA A  0,X      SAVE IT
+00543 EBC0 08             INX             INCR ADDRESS
+00544 EBC1 20 F4          BRA    DATA1 
+00545              *
+00546 EBC3 8D A2   DATA2  BSR    RDPR     READ CHKSM
+00547 EBC5 7C FF92        INC    TEMP+2 
+00548 EBC8 26 C2          BNE    LDR7     CHKSM ERROR
+00549 EBCA 20 C2          BRA    LDR8     CHKSM OK
+00550                     END             
+
+TOTAL ERRORS 00000
