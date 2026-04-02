@@ -18,7 +18,7 @@ swtpc6800 work is based on Bill Beech SimH simulator.
 HP2100 work is based on David Bryan simulator. 
 i650, NORC, i701 and MarkI simulators are my own SimH simulators.
 
-***WHAT'S NEW!: IBM 701 PACT Compiler + Punched Card Viewer***
+***WHAT'S NEW!: Motorola EDOS-II and iCOM FDOS-II***
 
 <table>
 <thead>
@@ -282,7 +282,8 @@ or `run swtp6800 SWTPc 8K Basic 2.3 (1978).bat` batch file to run TSC BASICs
 or execute `run swtp6800 TSC 4K MicroBasicPlus 2.1 (1977).bat`, 
 or execute `run swtp6800 TSC 8K Basic (1980).bat` batch file to run SWTPC BASICs
 
-* execute `run swtp6800 MITS Altair 680 Basic 3.2 (1976).bat` batch file to Microsoft Basic 3.2 ported from MITS Altair 680
+* execute `run swtp6800 MITS Altair 680 Basic 3.2 (1976).bat` batch file to run Microsoft Basic 3.2 ported from MITS Altair 680, 
+or execute `run swtp6800 G2 MS Basic (1978).bat` batch file to run Microsoft Basic 6800 ported from GRT 
 
 Other 
 
@@ -331,6 +332,10 @@ HEMENWAY CP/68 Operating System ported to MF68 floppy disk
 TSC FLEX 2.0 Operating System for MF68 floppy disk
 * execute `run swtp6800 DOS68 5.1C (1980).bat` or `run swtp6800 DOS68 5.1C demo.bat` batch file to run 
 SSB (System Signals Broacasting) DOS 5.1C Operating System ported to MF68 floppy disk
+* execute `run swtp6800 iCOM FDOS-II (1976).bat` or `run swtp6800 iCOM FDOS-II demo.bat` batch file to run 
+iCOM FDOS-II operating system for FD360 Floppy Disk Drive
+* execute `run swtp6800 Motorola EDOS-II (1976).bat` or `run swtp6800 Motorola EDOS-II demo.bat` batch file to run 
+Motorola EDOS-II operating system for Exorciser ExorDisk-I
 
   ![SWTPC 6800 OS](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FloppyDisk.png)
 

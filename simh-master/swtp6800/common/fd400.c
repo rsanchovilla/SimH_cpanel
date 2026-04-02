@@ -1,4 +1,4 @@
-/*  fd400.c: Percom LFD-400 FDC Simulator
+/*  fd400.c: Percom LFD-400 5 1/4 inch Floppy FDC Simulator
 
     Copyright (c) 2022, Roberto Sancho
 
@@ -15,7 +15,7 @@
         THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
         IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
         FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-        WILLIAM A BEECH BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+        ROBERTO SANCHO BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
         IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
         CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -29,11 +29,9 @@
 
         The FDC-400 is a 5-1/4"-inch floppy controller which can control up
         to four 5-1/4inch floppy drives.  
-        This file only emulates the minimum functionality to interface with
-        the virtual disk file.
 
         The floppy controller is interfaced to the CPU by use of 7 memory 
-        addreses (0xCC00-0xCC06).
+        mapped addreses (0xCC00-0xCC06).
 
         Address     Mode    Function
         -------     ----    --------
@@ -109,7 +107,7 @@
         S = Step Bit (1=Move disk head one track using direction D)
         DD = Select drive (0..3)
 
-        LFD-400 Disck supports these operating systems (1977)
+        LFD-400 Disk supports these operating systems (1977)
 
         - MINIDOS: Just Load/Save ram starting at given sector in disk. 
                    No files. No sector allocation management. Rom based 
@@ -131,7 +129,7 @@
         fd400_dsk_unit[cur_drv].fileref   unit current attached file reference
 
         At start, units discs from controller are dissabled
-        To use it, befor attaching the disk image, iy is mecessary to do "set lfd-4000 enabled"
+        To use it, before attaching the disk image, it is necessary to do "set lfd-4000 enabled"
         (for unit 0), and optionally "set lfd-4001 enabled" (for unit 1) and so on.
 
         to use it 
@@ -149,7 +147,7 @@
 #define SECT_SIZE       (8+4+256)  /* sector size=header (10 bytes) + data (256 bytes) + CRC (2 bytes)  */
 #define NUM_SECT        10              /* sectors/track */
 #define TRACK_SIZE      (SECT_SIZE * NUM_SECT) /* trk size (bytes) */
-#define HEADS           1               /* handle as SS with twice the sectors */
+#define HEADS           1               /* handle as SS */
 #define NUM_CYL         40              /* maximum tracks */
 #define DSK_SIZE        (NUM_SECT * HEADS * NUM_CYL * SECT_SIZE) /* dsk size (bytes) */
 
@@ -188,6 +186,12 @@ struct {
        fd400_dsk_mod        Disk Controller modifiers list
 */
 
+MTAB fd400_mod[] = {
+    { UNIT_RO, UNIT_RO, "RO", "RO", NULL },
+    { UNIT_RO,       0, "RW", "RW", NULL },
+    { 0 }
+};
+
 UNIT fd400_dsk_unit[] = {
         { UDATA (NULL, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+UNIT_DIS, 0)  },
         { UDATA (NULL, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+UNIT_DIS, 0)  },
@@ -212,7 +216,7 @@ DEVICE fd400_dsk_dev = {
     "LFD-400",                          //name
     fd400_dsk_unit,                     //units
     fd400_dsk_reg,                      //registers
-    NULL,                               //modifiers
+    fd400_mod,                          //modifiers
     NUM_DISK,                           //numunits
     16,                                 //aradix
     16,                                 //awidth
@@ -513,6 +517,14 @@ t_stat fd400_attach (UNIT * uptr, CONST char * file)
     t_stat r; 
 
     if ((r = attach_unit(uptr, file)) != SCPE_OK) return r;
+    if (sim_switches & SWMASK ('N')) {            // new disk
+        // create a 40*10*268=107200 bytes blank disk
+        uint8 sector[SECT_SIZE*NUM_SECT];
+        int i; 
+        memset(sector,0,sizeof(sector));
+        for (i=0; i<NUM_CYL*HEADS; i++) sim_fwrite(sector,sizeof(sector),1,uptr->fileref);
+    }
+
     uptr->u4 = uptr->u5 = 0;
     uptr->u6 = sim_fsize(uptr->fileref);
     uptr->pos = 0; 

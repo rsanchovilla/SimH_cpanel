@@ -1,4 +1,4 @@
-/* swtp_defs.h: SWTP 6800 simulator definitions
+/* swtp_defs.h: SWTPC 6800 simulator definitions
 
 Copyright (c) 2005-2012, William Beech
 

@@ -1,4 +1,4 @@
-/*  mp-s.c: SWTP MP-S serial I/O card simulator
+/*  mp-s.c: SWTPC MP-S serial I/O card simulator
 
     Copyright (c) 2005-2012, William Beech
 
@@ -49,13 +49,54 @@
         | I | P | O | F |CTS|DCD|TXE|RXF|
         +---+---+---+---+---+---+---+---+
 
-        RXF - A 1 in this bit position means a character has been received
-              on the data port and is ready to be read.
-        TXE - A 1 in this bit means the port is ready to receive a character
-              on the data port and transmit it out over the serial line.
+        RXF - Receive register Full: A 1 in this bit position means a 
+              character has been received on the data port and is ready to be read.
+        TXE - Transmit register Empty: A 1 in this bit means the port is ready to 
+              receive a character on the data port and transmit it out over the serial line.
      
         A read to the data port gets the buffered character, a write
         to the data port writes the character to the device.
+
+        DCD - Modem Carrier Detect line (not simulated in SimH)
+        CTS - Modem Clear to Send line (not simulated in SimH)
+        F - A 1 indicates Framming error (not simulated in SimH)
+        O - A 1 indicates Receiver overrun error (not simulated in SimH)
+        P - A 1 Parity overrun error (not simulated in SimH)
+        I - A 1 indicates IRQ requested by ACIA (not simulated in SimH)
+
+        Control port:
+
+        +---+---+---+---+---+---+---+---+
+        | I |  TC   |  Word Sel |  CDS  |
+        +---+---+---+---+---+---+---+---+
+
+        CDS - Counter Divide Select. Set clock divider
+              00 div by 1 
+              01 div by 16
+              10 div by 64
+              11 resets the ACIA
+
+        Word Select - Indicates 7/8 bits, Odd/even parity, And 1/2 stop bits. 
+              (not simulated in SimH)
+              000 7 bits, Even parity, 2 stop bits
+              001 7 bits, Odd parity, 2 stop bits
+              010 7 bits, Even parity, 1 stop bit
+              011 7 bits, Odd parity, 1 stop bit
+              100 8 bits, No parity, 2 stop bits
+              101 8 bits, No parity, 1 stop bit
+              110 8 bits, Even parity, 1 stop bit
+              111 8 bits, Odd parity, 1 stop bit
+
+        TC - Sets RTS line state, enable/disables ACIA
+             generating IRQ on byte transmission 
+             (not simulated in SimH)
+             00 RTS=1, Tx interrupt Disabled
+             01 RTS=1, Tx interrupt Enabled
+             10 RTS=0, Tx interrupt Disabled
+             11 RTS=1, (tx break level), Tx interrupt Enabled
+
+        I -  enable/disable ACIA generating IRQ on byte receive
+             (not simulated in SimH)
 */
 
 #include    <stdio.h>
@@ -66,6 +107,7 @@
 
 int32 odata;
 int32 status;
+int32 InstrCount0 = 0; // to regulate the rate rx chars are returned to prog
 
 int32 ptp_flag = 0;
 int32 ptr_flag = 0;
@@ -80,7 +122,6 @@ t_stat sio_svc (UNIT *uptr);
 t_stat sio_reset (DEVICE *dptr);
 t_stat ptr_reset (DEVICE *dptr);
 t_stat ptp_reset (DEVICE *dptr);
-t_stat sio_attach(UNIT * uptr, CONST char *file);
 
 int32 sio0s(int32 io, int32 data);
 int32 sio0d(int32 io, int32 data);
@@ -94,6 +135,28 @@ int32 sio1d(int32 io, int32 data);
    sio_reg        SIO register list
    sio_mod        SIO modifiers list */
 
+#define UNIT_V_SIO7BIT   (UNIT_V_UF)     /* SIO outputs only 7bits? */
+#define UNIT_SIO7BIT     (1 << UNIT_V_SIO7BIT)
+
+// debug for character based i/o devices
+DEBTAB char_io_debug[] = {
+    { "ALL", DEBUG_all, "All debug bits" },
+    { "FLOW", DEBUG_flow, "Flow control" },
+    { "READ", DEBUG_read, "Read Command" },
+    { "WRITE", DEBUG_write, "Write Command"},
+    { NULL }
+};
+
+// strings for debug output
+char strCtrl[3] = "^X"; 
+char strAsc[4] = "'X'"; 
+
+#define strData(data)   data==13 ? "<CR>":  data==10 ? "<LF>":      \
+                        data==0  ? "<NUL>": data==26 ? "<^Z EOF>":  \
+                        data==0x11 ? "<^Q PTR ON>":  data==0x12 ? "<^R PTP ON>":  \
+                        data==0x13 ? "<^S PTR OFF>": data==0x14 ? "<^T PTP OFF>":  \
+                        data<32  ? (strCtrl[1]=data+'A'-1,strCtrl) : (strAsc[1]=data, strAsc)  
+
 UNIT sio_unit = { UDATA (&sio_svc, 0, 0), KBD_POLL_WAIT
 };
 
@@ -103,11 +166,21 @@ REG sio_reg[] = {
     { NULL }
 };
 
+MTAB sio_mod[] = {
+    { UNIT_SIO7BIT, UNIT_SIO7BIT, "7BITS", "7BITS", NULL }, // set mp-s 7bits --> to out only 7bit ascii to console
+    { UNIT_SIO7BIT, 0,            "8BITS", "8BITS", NULL },
+    { 0 }  };
+
 DEVICE sio_dev = {
-    "MP-S", &sio_unit, sio_reg, NULL,
+    "MP-S", &sio_unit, sio_reg, sio_mod,
     1, 10, 31, 1, 8, 8,
     NULL, NULL, &sio_reset,
-    NULL, &sio_attach, NULL
+    NULL, NULL, NULL,
+    NULL,                               //ctxt
+    DEV_DEBUG,                          //flags
+    0,                                  //dctrl
+    char_io_debug,                      //debflags
+    NULL
 };
 
 /* paper tape reader data structures
@@ -124,7 +197,12 @@ DEVICE ptr_dev = {
     "PTR", &ptr_unit, NULL, NULL, 
     1, 10, 31, 1, 8, 8,
     NULL, NULL, &ptr_reset,
-    NULL, NULL, NULL
+    NULL, NULL, NULL,
+    NULL,                               //ctxt
+    DEV_DEBUG,                          //flags
+    0,                                  //dctrl
+    char_io_debug,                      //debflags
+    NULL
 };
 
 /* paper tape punch data structures
@@ -141,7 +219,12 @@ DEVICE ptp_dev = {
     "PTP", &ptp_unit, NULL, NULL,
     1, 10, 31, 1, 8, 8,
     NULL, NULL, &ptp_reset,
-    NULL, NULL, NULL
+    NULL, NULL, NULL,
+    NULL,                               //ctxt
+    DEV_DEBUG,                          //flags
+    0,                                  //dctrl
+    char_io_debug,                      //debflags
+    NULL
 };
 
 /* console input service routine */
@@ -169,6 +252,7 @@ t_stat sio_svc (UNIT *uptr)
 
 t_stat sio_reset (DEVICE *dptr)
 {
+    sim_debug (DEBUG_flow, dptr, "SIO reset \n"); 
     sio_unit.buf = 0;
     odata  = 0;                    // Data buffer
     status = 0x02;                 // Status buffer
@@ -181,6 +265,7 @@ t_stat sio_reset (DEVICE *dptr)
 
 t_stat ptr_reset (DEVICE *dptr)
 {
+    sim_debug (DEBUG_flow, dptr, "PTR reset \n"); 
     ptr_flag = 0;
     return SCPE_OK;
 }
@@ -189,31 +274,34 @@ t_stat ptr_reset (DEVICE *dptr)
 
 t_stat ptp_reset (DEVICE *dptr)
 {
+    sim_debug (DEBUG_flow, dptr, "PTP reset \n"); 
     ptp_flag = 0;
     return SCPE_OK;
 }
 
 /*  I/O instruction handlers, called from the MP-B2 module when a
-   read or write occur to addresses 0x8004-0x8007. */
+    read or write occur to addresses 0x8000-0x801F. */
 
 // return <0 if no char received (on ptr or on keyb polling)
 //        0..255 char read
 int GetPtrConsoleChar(void)
 {
     extern int32 InstrCount;                   // intructions executed count 
-    static int32 InstrCount0=0;
     int32  m; 
     int byte; 
 
-    m = (InstrCount - InstrCount0) ; // number of instr exectued elapsed from last time this routine was called
-    if ((m>0) && (m<150)) return -1; // too few instr exec -> no time to receive anything new -> return no data received
+    if (InstrCount0 == 0) InstrCount0=InstrCount; 
+    m = (InstrCount - InstrCount0) ; // number of instr executed elapsed from last time this routine was called
+    if ((m>=0) && (m<150)) return -1; // too few instr exec -> no time to receive anything new -> return no data received
     InstrCount0=InstrCount;
 
     if (ptr_flag==0) {                 
-        // PRT disabled, new reading from console
+        // PTR disabled, new reading from console
         byte=sio_unit.buf;
         sio_unit.buf=0; // mark polled char as processed, so next polled char can be read
         if (byte==0) return -1; // char zero is no char read
+        sim_debug (DEBUG_read, &sio_dev, "Console In Char: %d $%02X (%s) \n", 
+             byte, byte, strData(byte)); 
         return byte; // return next char
     }
     // RDR is enabled
@@ -231,6 +319,10 @@ int GetPtrConsoleChar(void)
         if (byte == EOF) { // end of file?
             ptr_flag = 0;           // clear reader flag
             byte = 0;               // and return byte zero
+            sim_debug (DEBUG_read, &sio_dev, "PTR In Char: EOF: End of input Tape file (read 0 <NUL>), turn PTR OFF\n"); 
+        } else {
+            sim_debug (DEBUG_read, &sio_dev, "PTR In Char: %d $%02X (%s) \n", 
+                byte, byte, strData(byte)); 
         }
         ptr_unit.pos++;             // step character count
         return byte; 
@@ -284,12 +376,13 @@ int32 sio0s(int32 io, int32 data)
         return (status); // return acia status
     }                       
     // control register write
-    if (data == 0x03) {             // reset port!
-        status = 0x02;              // transmite data reg empty
+    if ((data & 0x03) == 3) {       // reset port!
+        status = 0x02;              // transmit data reg empty, receive flag clear
         sio_unit.buf = 0;
         sio_unit.pos = 0;
         odata = 0;
     }
+    InstrCount0=0; // when control reg is written, reset count for delay on rx chars into GetPtrConsoleChar
     return 0; 
 }
 
@@ -297,8 +390,6 @@ int32 sio0s(int32 io, int32 data)
 int32 sio0d(int32 io, int32 data)
 {
     extern int32 InstrCount;                   // intructions executed count 
-    extern int32 PC; 
-
 
     if (io == 0) {                      
         // data register read
@@ -306,7 +397,6 @@ int32 sio0d(int32 io, int32 data)
         return odata; 
     } else {                            
         // data register write
-
         if ((ptr_flag) && (data == 0x81)) {
             // send char 129 dec with ptr active -> hack to receive bin file from ptr
             // this is non-realistic, but very handly to implement SDOS PORT: device over PTP and PTR
@@ -316,7 +406,7 @@ int32 sio0d(int32 io, int32 data)
         }
         if (ptp_flag) {
             if (data == 0x82) {
-                // send char 130 dec with ptp active -> hack to send ascii file to ptp without echo on console
+                // send char 130 dec with ptp active -> hack to send ascii file to ptp without echo on console.
                 // this is non-realistic, but very handly to implement SDOS PORT: device over PTP and PTR
                 ptp_send_bin = -1; 
             } else if (data == 0x83) {
@@ -353,31 +443,40 @@ int32 sio0d(int32 io, int32 data)
                 if (data >= 32) data =0x80; // data should not be printed
             }
         }
-        if (isprint(data) || data == '\r' || data == '\n' || data == 8) { // printable?
-            sim_putchar(data);          // print character on console
+        if (sio_unit.flags & UNIT_SIO7BIT) {
+            data &= 127;    // use only plain 7bit ascii
+        }
+        sim_debug (DEBUG_write, &sio_dev, "Out Char: %d $%02X (%s) \n", 
+             data, data, strData(data)); 
+        if (isprint(data) || data == '\r' || data == '\n' || data == 8 || data == 26) { // printable?
+            if (data != 26) {
+                sim_putchar(data);          // print character on console (except ^Z)
+                sim_debug (DEBUG_write, &sio_dev, "Show in console \n");
+            }
             if (ptp_flag && ptp_unit.flags & UNIT_ATT) { // PTP enabled & attached?
                 putc(data, ptp_unit.fileref);
                 ptp_unit.pos++;         // step character counter
+                sim_debug (DEBUG_write, &sio_dev, "PTP Out: punch char in paper tape \n");
             }
         } else {                        // control Reader/Punch
             switch (data) {
                 case 0x11:              // PTR on (^Q)
                     ptr_flag = 1;
                     ptr_send_bin=0; 
-//                    printf("Reader on\n");
+                    sim_debug (DEBUG_flow, &sio_dev, "Set PTR on \n");
                     break;
                 case 0x12:              // PTP on (^R)
                     ptp_flag = 1;
                     ptp_send_bin=0; 
-//                    printf("Punch on\n");
+                    sim_debug (DEBUG_flow, &sio_dev, "Set PTP on \n");
                     break;
                 case 0x13:              // PTR off (^S)
                     ptr_flag = 0;
-//                    printf("Reader off-%d bytes read\n", ptr_unit.pos);
+                    sim_debug (DEBUG_flow, &sio_dev, "Set PTR off \n");
                     break;
                 case 0x14:              // PTP off (^T)
                     ptp_flag = 0;
-//                    printf("Punch off-%d bytes written\n", ptp_unit.pos);
+                    sim_debug (DEBUG_flow, &sio_dev, "Set PTP off \n");
                     if (ptp_send_bin != 0) {
                         detach_unit(&ptp_unit); 
                     }
@@ -404,16 +503,9 @@ int32 sio1s(int32 io, int32 data)
 
 int32 sio1d(int32 io, int32 data)
 {
-    return odata;
+   return odata;
 }
 
-t_stat sio_attach(UNIT * uptr, CONST char *file)
-{
-    t_stat              r;
-
-    if ((r = attach_unit(uptr, file)) != SCPE_OK) return r;
-    return r;
-}
 
 /* end of mp-s.c */
 

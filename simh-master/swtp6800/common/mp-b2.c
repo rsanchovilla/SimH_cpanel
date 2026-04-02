@@ -49,6 +49,9 @@
 #define UNIT_RAM_C000     (1 << UNIT_V_RAM_C000)
 
 t_stat set_64k (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
+t_stat set_64k_iobase (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
+t_stat set_64k_rombase (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
+t_stat show_64k(FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
 /* function prototypes */
 
@@ -100,9 +103,41 @@ extern UNIT  fd400_dsk_unit[];
 extern int32 timer0pia(int32 io, int32 data);
 extern int32 timer1pia(int32 io, int32 data);
 
+/* MP-LA Parallel Card for Line Printer I/O routines */
+extern int32 par0pia(int32 io, int32 data);  // par0pia and par1pia simulates SWTPC PR-40 line printer
+extern int32 par1pia(int32 io, int32 data);
+extern int32 par26pia(int32 io, int32 data); // par26pia and par27pia simulates exorciser line printer
+extern int32 par27pia(int32 io, int32 data);
+extern int32 lpt_iobase;                     
+extern int32 lpt_type;                       // 0=disabled, 1=pr40 printer, 2=exorciser printer (M68SP702 702 Printer with MEX68PI Printer Interface I/O Module)
+
+// Motorola Exorciser Line Printer
+extern int32 par26pia(int32 io, int32 data);
+extern int32 par27pia(int32 io, int32 data);
+
 /* HLE-HD I/O routines */
 extern int32 hd0cmd(int32 io, int32 data);
 extern int32 hd1data(int32 io, int32 data);
+
+/* iCOM FD360 FDC I/O routines */
+extern int32 fd360_dkdid(int32 io, int32 data);
+extern int32 fd360_dkdic(int32 io, int32 data);
+extern int32 fd360_dkcod(int32 io, int32 data);
+extern int32 fd360_dkcoc(int32 io, int32 data);
+extern int32 fd360_dkdod(int32 io, int32 data);
+extern int32 fd360_dkdoc(int32 io, int32 data);
+extern int32 fd360_iobase; // default addr for disk controller PIAs
+extern DEVICE fd360_dsk_dev; 
+
+/* Optional serial port I/O routines */
+extern int32 sio0s_port(int32 io, int32 data);
+extern int32 sio0d_port(int32 io, int32 data);
+extern int32 sio1s_port(int32 io, int32 data);
+extern int32 sio1d_port(int32 io, int32 data);
+extern int32 sio_port_iobase; // default addr for ACIAs
+extern int ac30_mode;         // cassette 0=off, <>0 on
+extern int sio_port_mode;     // 0=off, 1=on
+
 
 /* This is the I/O configuration table.  There are 32 possible
 device addresses, if a device is plugged into a port it's routine
@@ -110,21 +145,22 @@ address is here, 'nulldev' means no device is available
 */
 
 struct idev dev_table[32] = {
-        {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev}, /*Port 0 8000-8003 */
-        {&sio0s},       {&sio0d},       {&sio1s},       {&sio1d},   /*Port 1 8004-8007 */
+        {&sio0s_port},  {&sio0d_port},  {&sio1s_port},  {&sio1d_port},  /* Port 0 8000-8003 */
+        {&sio0s},       {&sio0d},       {&sio1s},       {&sio1d},       /* Port 1 8004-8007 */
 /* sio1x routines just return the last value read on the matching
    sio0x routine.  SWTBUG tests for the MP-C with most port reads! */
-        {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev},     /*Port 2 8008-800B*/
-        {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev},     /*Port 3 800C-800F*/
+        {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev},     /* Port 2 8008-800B */
+        {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev},     /* Port 3 800C-800F */
         // addr 800C and 800D are used by gt6144 graphic card
         //      800E and 800F             ppg-j analog joystick
-        {&hd0cmd},     {&hd1data},     {&timer0pia},   {&timer1pia},   /*Port 4 8010-8013*/
+        {&hd0cmd},     {&hd1data},     {&timer0pia},   {&timer1pia},    /* Port 4 8010-8013 */
         // addr 8012 and 8013 are used by mp-t timer card
         // addr 8010 and 8011 are used by HLE-Hard Disk 
-        {&dc4_fdcdrv},  {&nulldev},     {&nulldev},     {&nulldev},     /*Port 5 8014-8017*/
-        {&dc4_fdccmd},  {&dc4_fdctrk},  {&dc4_fdcsec},  {&dc4_fdcdata}, /*Port 6 8018-801B*/
+        {&dc4_fdcdrv},  {&nulldev},     {&nulldev},     {&nulldev},     /* Port 5 8014-8017 */
+        {&dc4_fdccmd},  {&dc4_fdctrk},  {&dc4_fdcsec},  {&dc4_fdcdata}, /* Port 6 8018-801B */
         // addr 8018 and 8019 are also used by Graph1 terminal
-        {&nulldev},     {&nulldev},     {&nulldev},     {&nulldev}      /*Port 7 801C-801F*/
+        {&par0pia},     {&par1pia},     {&nulldev},     {&nulldev}      /* Port 7 801C-801F */
+        // addr 801C is used by MP-LA Paraller interface Board for line printer
 };
 
 struct idev dev_table2[8] = {
@@ -134,6 +170,15 @@ struct idev dev_table2[8] = {
         {&fd400_startrw} /* addr CC04 */, {&nulldev},     
         {&nulldev},                       {&nulldev}
 };
+
+struct idev dev_table3[8] = {
+/* iCOM FD360 routines */
+        {&fd360_dkdid} /* addr F800 */, {&fd360_dkdic}       /* addr F801 */,
+        {&fd360_dkcod} /* addr F802 */, {&fd360_dkcoc}       /* addr F803 */, 
+        {&nulldev},                     {&nulldev},
+        {&fd360_dkdod} /* addr F806 */, {&fd360_dkdoc}       /* addr F807 */ 
+};
+
 
 /* dummy i/o device */
 
@@ -173,8 +218,10 @@ MTAB MB_mod[] = {
     { UNIT_RAM_A000, 0, "BD4 Off", "NOBD4", NULL },
     { UNIT_RAM_C000, UNIT_RAM_C000, "BD5 On", "BD5", NULL },
     { UNIT_RAM_C000, 0, "BD5 Off", "NOBD5", NULL },
-    { MTAB_XTD | MTAB_VDV, 0,       NULL,     "NO64K", &set_64k, NULL, NULL},
+    { MTAB_XTD | MTAB_VDV, 0,       "NO64K",  "NO64K", &set_64k, &show_64k, NULL},
     { MTAB_XTD | MTAB_VDV, 1,       NULL,     "64K"  , &set_64k, NULL, NULL},
+    { MTAB_XTD | MTAB_VDV, 1,       NULL,     "IOBASE"  , &set_64k_iobase, NULL, NULL},
+    { MTAB_XTD | MTAB_VDV, 1,       NULL,     "ROMBASE"  , &set_64k_rombase, NULL, NULL},
     { 0 }
 };
 
@@ -211,22 +258,66 @@ DEVICE MB_dev = {
     NULL                                //lname
 };
 
-// Hack for 64k RAM:
+// 64k RAM Mode:
 //	System has ram in 0000..FFFF
-//      except FF00..FF1F that is the I/O 
+//      except 32 bytes at iobase (defaults to FF00..FF1F) that is the I/O 
 //      no bootrom, no eprom
+//  other devices (fd360, sio-port) can be enables and placed in the memory
+//  map at desierd iobase address
 
-int Hack64kRAM=0; 
+int Mode64kRAM=0; 
+int Mode64k_iobase=0xFF00; // I/O base address for I/O when 64k RAM active
+int Mode64k_rombase=0;     // lowest ROM address to cope with destructive RAM scanning routines (=0 -> not set=
+
 int RAM64k[65536]; 
+
+t_stat show_64k(FILE *st, UNIT *uptr, int32 val, CONST void *desc) 
+{
+    if (Mode64kRAM == 0) return SCPE_OK;
+    fprintf (st, "iobase=%04x", Mode64k_iobase);
+    if (Mode64k_rombase) fprintf (st, ", rombase=%04x", Mode64k_rombase);
+    return SCPE_OK;
+}
+
 t_stat set_64k (UNIT *uptr, int32 value, CONST char *cptr, void *desc)
 {
     if (value == 1) {
         // activate 64k RAM
-        Hack64kRAM=1;
+        Mode64kRAM=1;
         memset(RAM64k, 0, sizeof(RAM64k)); 
     } else {
-        Hack64kRAM=0;
+        Mode64kRAM=0;
     }
+    return SCPE_OK; 
+}
+
+t_stat set_64k_iobase (UNIT *uptr, int32 value, CONST char *cptr, void *desc)
+{
+    int num; 
+    t_stat r; 
+
+    if (Mode64kRAM==0) {
+        sim_printf("IOBASE can be set only if 64K mode is active\n");
+        return SCPE_ARG;
+    }
+    num = (int32) get_uint (cptr, 16, 65536, &r); // value is given as hex value
+    if (r != SCPE_OK) return r;
+    Mode64k_iobase=num; 
+    return SCPE_OK; 
+}
+
+t_stat set_64k_rombase (UNIT *uptr, int32 value, CONST char *cptr, void *desc)
+{
+    int num; 
+    t_stat r; 
+
+    if (Mode64kRAM==0) {
+        sim_printf("ROMBASE can be set only if 64K mode is active\n");
+        return SCPE_ARG;
+    }
+    num = (int32) get_uint (cptr, 16, 65536, &r); // value is given as hex value
+    if (r != SCPE_OK) return r;
+    Mode64k_rombase=num; 
     return SCPE_OK; 
 }
 
@@ -236,9 +327,33 @@ int32 MB_get_mbyte(int32 addr)
 {
     int32 val;
 
-    if (Hack64kRAM) {
-        if ((addr >= 0xFF00) && (addr <= 0xFF20)) {
-            val = (dev_table[addr - 0xFF00].routine(0, 0)) & 0xFF;
+    if (Mode64kRAM) {
+        if ((fd360_dsk_dev.flags & DEV_DIS) == 0) {
+           if ((addr >= fd360_iobase) && (addr < fd360_iobase + 8)) {
+              val = (dev_table3[addr - fd360_iobase].routine(0, 0));
+              return val; 
+           }
+        } 
+        if (lpt_type != 0) {
+            if ((addr >= lpt_iobase) && (addr < lpt_iobase + 2)) {
+                if (lpt_type == 2) {
+                    if (addr == lpt_iobase) {val = par26pia(0,0);}   /* read status register */
+                    else                    {val = par27pia(0,0);}   /* read data register */
+                } else {
+                    if (addr == lpt_iobase) {val = par0pia(0,0);}    /* read status register */
+                    else                    {val = par1pia(0,0);}    /* read data register */
+                }
+                return val; 
+            }
+        }
+        if ((sio_port_mode != 0) || (ac30_mode !=0 )) {
+            if ((addr >= sio_port_iobase) && (addr < sio_port_iobase + 2)) {
+               val = (dev_table[addr - sio_port_iobase].routine(0, 0));
+               return val; 
+            }
+        }
+        if ((addr >= Mode64k_iobase) && (addr < Mode64k_iobase + 32)) {
+            val = (dev_table[addr - Mode64k_iobase].routine(0, 0)) & 0xFF;
         } else {
             val = RAM64k[addr]; 
         }
@@ -316,9 +431,36 @@ int32 MB_get_mword(int32 addr)
 
 void MB_put_mbyte(int32 addr, int32 val)
 {
-    if (Hack64kRAM) {
-        if ((addr >= 0xFF00) && (addr <= 0xFF20)) {
-            dev_table[addr - 0xFF00].routine(1, val); // I/0 address FF00 - FF1F
+
+    if (Mode64kRAM) {
+        if ((fd360_dsk_dev.flags & DEV_DIS) == 0) {
+            if ((addr >= fd360_iobase) && (addr < fd360_iobase + 8)) {
+               dev_table3[addr - fd360_iobase].routine(1, val);
+               return; 
+            }
+        } 
+        if (lpt_type != 0) {
+            if ((addr >= lpt_iobase) && (addr < lpt_iobase + 2)) {
+                if (lpt_type == 2) {
+                    if (addr == lpt_iobase) {par26pia(1,val);}   /* read status register */
+                    else                    {par27pia(1,val);}   /* read data register */
+                } else {
+                    if (addr == lpt_iobase) {par0pia(1,val);}    /* read status register */
+                    else                    {par1pia(1,val);}    /* read data register */
+                }
+                return; 
+            }
+        }
+        if ((sio_port_mode != 0) || (ac30_mode !=0 )) {
+            if ((addr >= sio_port_iobase) && (addr < sio_port_iobase + 2)) {
+               dev_table[addr - sio_port_iobase].routine(1, val);
+               return; 
+            }
+        }
+        if ((addr >= Mode64k_iobase) && (addr < Mode64k_iobase + 32)) {
+            dev_table[addr - Mode64k_iobase].routine(1, val); // I/0 address FF00 - FF1F
+        } else if ((Mode64k_rombase) && ((addr & 0xFF00) == (Mode64k_rombase & 0xFF00))) {
+            // the rombase page address is non-writtable/READ-ONLY
         } else {
             RAM64k[addr] = val; 
         }

@@ -15,7 +15,7 @@
         THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
         IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
         FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-        WILLIAM A BEECH BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+        ROBERTO SANCHO BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
         IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
         CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -191,7 +191,7 @@ int32 hd0cmd(int32 io, int32 data)
     int i, tr, n; 
 
     if ((hd_unit.flags & UNIT_DIS) || ((hd_unit.flags & UNIT_ATT) == 0)) {  
-        // HD disabled or hd image file not attached, Respend as not connected
+        // HD disabled or hd image file not attached, Respond as not connected
         return nulldev(io, data);
     }
     if (io==0) { 
@@ -267,12 +267,13 @@ int32 hd0cmd(int32 io, int32 data)
             sim_debug (DEBUG_flow, &hd_dev, "Ignored unknown %d cmd \n", data);
             break; 
     }
+    return 0;
 }
 
 int32 hd1data(int32 io, int32 data)
 {
     if ((hd_unit.flags & UNIT_DIS) || ((hd_unit.flags & UNIT_ATT) == 0)) {  
-        // HD disabled or hd image file not attached, Respend as not connected
+        // HD disabled or hd image file not attached, Respond as not connected
         return nulldev(io, data);
     }
     if (io==0) { 

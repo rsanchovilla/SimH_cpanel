@@ -1211,7 +1211,7 @@ t_stat sim_instr (void)
                 lo = fetch_word();
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
-                COND_SET_FLAG_N(op1 >> 8);
+                COND_SET_FLAG_N( (IX>>8)-(lo>>8) ); // CPX sets N flag only on MSB compare
                 condevalVs(IX >> 8, lo >> 8, op1 >> 8);
                 break;
             case 0x8D:                  /* BSR rel */
@@ -1320,7 +1320,7 @@ t_stat sim_instr (void)
                 lo = CPU_BD_get_mword(fetch_byte() & BYTEMASK); 
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
-                COND_SET_FLAG_N(op1 >> 8);
+                COND_SET_FLAG_N( (IX>>8)-(lo>>8) ); // CPX sets N flag only on MSB compare
                 condevalVs(IX >> 8, lo >> 8, op1 >> 8);
                 break;
             case 0x9E:                  /* LDS dir */
@@ -1426,7 +1426,7 @@ t_stat sim_instr (void)
                 lo = CPU_BD_get_mword((fetch_byte() + IX) & ADDRMASK);
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
-                COND_SET_FLAG_N(op1 >> 8);
+                COND_SET_FLAG_N( (IX>>8)-(lo>>8) ); // CPX sets N flag only on MSB compare
                 condevalVs(IX >> 8, lo >> 8, op1 >> 8);
                 break;
             case 0xAD:                  /* JSR ind */
@@ -1539,7 +1539,7 @@ t_stat sim_instr (void)
                 lo = CPU_BD_get_mword(EA); 
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
-                COND_SET_FLAG_N(op1 >> 8);
+                COND_SET_FLAG_N( (IX>>8)-(lo>>8) ); // CPX sets N flag only on MSB compare
                 condevalVs(IX >> 8, lo >> 8, op1 >> 8);
                 break;
             case 0xBD:                  /* JSR ext */
@@ -2244,53 +2244,59 @@ void sim_load_S19(FILE *fileref, CONST char *fnam)
 {
     char slin[1024];
     char c;
-    int i,nlin,nlen,b,bH,bL,addr,addr0,chksum,cnt;
+    int i,iStart,nlin,nlen,b,bH,bL,addr,addr0,chksum,cnt;
 
     nlin=0;
     cnt=0; addr=addr0=-1; 
     while (fgets (slin, sizeof(slin)-1, fileref)) {
-        nlin++;
-        if (slin[0] != 'S') continue; // not an S-record -> skip line
-        if (slin[1] != '1') continue; // not an S1 record -> skip line
+        nlin++; 
+        iStart=0; nlen=strlen(slin);
+        if (nlen == 0) {
+            sim_printf("S19 file: line %d: has no chars in it (starts with 00 <NUL> ??) \n", nlin);
+            continue; 
+        }
+        while ((iStart<nlen) && (slin[iStart]<=32)) iStart++; // skip any leading non printable char 
+        if (iStart==nlen) continue; // no S-record in current line -> skip line
+        if (slin[iStart+0] != 'S') continue; // not an S-record -> skip line
+        if (slin[iStart+1] != '1') continue; // not an S1 record -> skip line
         // remove trailing blanks and \r\n
-        nlen=strlen(slin);
-        while ((nlen>0) && (slin[nlen-1]<=' ')) nlen--;
+        while ((nlen>0) && (slin[nlen-1]<=32)) nlen--;
         slin[nlen]=0;
         if (nlen<10) {
             sim_printf("S19 file: line %d: line skipped (too short)\n", nlin);
             continue; 
         }
-        if (nlen&1) {
-            sim_printf("S19 file: line %d: line skipped (len is odd, missing one nyble)\n", nlin);
-            continue; 
-        }
         // decode line
         b=bH=bL=0; chksum=0;
-        for(i=2;i<nlen;i++) {
+        for(i=iStart+2;i<nlen;i++) {
             c=slin[i];
             if (!(((c>='0') && (c<='9')) || ((c>='A') && (c<='F')))) {
                 sim_printf("S19 file: line %d: char %d: invalid char %c\n", nlin,i+i, (c<32)? '?':c);
                 break; 
             }
             b = (b * 16 + ((c<='9') ? c-'0' : c-'A'+10)) & 0xFF;
-            if ((i&1)==0) continue; // read next nyble to compose byte b
+            if (((i-iStart)&1)==0) continue; // read next nyble to compose byte b
             bH=bL; bL=b; // remember last two bytes
             if (i<nlen-2) chksum += b;
-            if (i==3) { // S19 Count decoded
+            if (i-iStart==3) { // S19 Count decoded
                 // b holds count bytes in line. Calc in c the expected line line length
                 c=2 /* 'S1' */ +2 /* count 2-hex-chars value */ +b*2; /* count bytes as 2-hex chars */ 
-                if (c!=nlen) {
+                if (c!=nlen-iStart) {
                     sim_printf("S19 file: line %d: length is %d, but should have %d for %d encoded bytes of data \n", 
                                 nlin, nlen, c, b);
                     break; 
                 }
-            } else if (i==7) { // S19 16-bits addr decoded
+            } else if (i-iStart==7) { // S19 16-bits addr decoded 
                 //compose the address with bH and bL 
                 addr = bH*256+bL; 
                 if (addr0 <0) addr0=addr; 
-            } else if ((i>7) && (i<nlen-2)) { // S19 data bytes decoded
+            } else if ((i-iStart>7) && (i<nlen-2)) { // S19 data bytes decoded
                 // store the byte b at addr
                 CPU_BD_put_mbyte(addr, b);
+                if (b != CPU_BD_get_mbyte(addr) ) {
+                    sim_printf("S19 file: line %d: loading to non-RAM address %04X \n", nlin, addr);
+                    break; 
+                }
                 addr++; cnt++; 
             } else if (i==nlen-1) { // S19 one-byte checksum decoded
                 chksum = (~chksum) & 0xFF; 
@@ -2318,6 +2324,17 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
     int32 i, addr = 0, cnt = 0, addr0;
     t_stat r;
 
+    if (flag) {
+       // the syntax "DUMP filename" will write full 64k memory as a binary file
+       uint8 ram[65536];
+       for (addr=0;addr<256*256;addr++) {
+           ram[addr] = CPU_BD_get_mbyte(addr);
+       }
+       sim_fwrite(ram, 1, 256*256, fileref);
+       printf("64K bytes saved \n");
+       return SCPE_OK; 
+    }
+
     while (isspace(*cptr)) cptr++; // remove leading spaces
 
     //if file extension is .LST, will load file as symbolic information
@@ -2325,12 +2342,13 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
         sim_load_symbolic(fileref, fnam);
         return SCPE_OK; 
     }
-    //the symtax LOAD filename S19 will load filename as Motorola S_record format
-    if (sim_strncasecmp(cptr, "S19", 3)==0) {
+    //the syntax "LOAD filename S19" or if file extension is .S19 will load filename as Motorola S_record format
+    if ((sim_strncasecmp(cptr, "S19", 3)==0) ||
+        ((strlen(fnam)>4) && (sim_strncasecmp(&fnam[strlen(fnam)-4], ".S19", 4)==0))) {
         sim_load_S19(fileref, fnam);
         return SCPE_OK; 
     }
-
+    //the syntax "LOAD filename HHHH" will load filename at addr HHHH (hex) as binay image
     if (*cptr != 0) {
         addr=get_uint(cptr, 16, 0xFFFF, &r);
         if (r) return r; 
@@ -2343,7 +2361,7 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
         addr++;
         cnt++;
     }                                   // end while
-    printf ("%d Bytes loaded at %04X\n", cnt, addr0);
+    sim_printf ("%d Bytes loaded at %04X\n", cnt, addr0);
     return (SCPE_OK);
 }
 
@@ -2428,9 +2446,15 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
 
 t_stat parse_sym (CONST char *cptr, t_addr addr, UNIT *uptr, t_value *val, int32 sw)
 {
-    // only supports deposit 8-bit hex values
+    // only supports deposit 8-bit hex values en 16-nit hex address
+    // syntax: dep hhhh aa [ ; comment ]
+
     t_stat r; 
-    *val = get_uint(cptr, 16, 255, &r);
+    char gbuf[CBUFSIZE];
+
+    cptr = get_glyph (cptr, gbuf, 0);      // get param
+    if ((cptr) && (*cptr != 0) && (*cptr != ';')) return SCPE_ARG; // only one value per deposit allowed
+    *val = get_uint(gbuf, 16, 255, &r);
     return r;
 }
 

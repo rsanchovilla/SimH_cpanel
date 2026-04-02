@@ -65,7 +65,7 @@ extern int32 MB_get_mbyte(int32 addr);
 extern int32 MB_get_mword(int32 addr);
 extern void MB_put_mbyte(int32 addr, int32 val);
 extern void MB_put_mword(int32 addr, int32 val);
-extern int Hack64kRAM; 
+extern int Mode64kRAM; 
 
 /* M6810 bus routines */
 extern int32 m6810_get_mbyte(int32 addr);
@@ -135,7 +135,7 @@ int32 CPU_BD_get_mbyte(int32 addr)
 {
     int32 val;
 
-    if (Hack64kRAM) {
+    if (Mode64kRAM) {
         val = MB_get_mbyte(addr) & 0xFF;
         sim_debug (DEBUG_read, &CPU_BD_dev, "CPU_BD_get_mbyte: mp_b2 val=%02X\n", val);
         return val; 
@@ -188,7 +188,7 @@ void CPU_BD_put_mbyte(int32 addr, int32 val)
     sim_debug (DEBUG_write, &CPU_BD_dev, "CPU_BD_put_mbyte: addr=%04X, val=%02X\n",
         addr, val);
 
-    if (Hack64kRAM) {
+    if (Mode64kRAM) {
         MB_put_mbyte(addr, val);
         return; 
     }

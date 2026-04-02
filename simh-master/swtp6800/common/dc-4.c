@@ -83,7 +83,7 @@
         B - When 1, the controller is busy.
         D - When 1, index mark detected (type I) or data request - read data 
             ready/write data empty (type II or III).
-        H - When 1, track 0 (type I) or lost data (type II or III).
+        L - When 1, track 0 (type I) or lost data (type II or III).
         C - When 1, crc error detected.
         S - When 1, seek (type I) or RNF (type II or III) error.
         H - When 1, head is currently loaded (type I) or record type/
@@ -270,6 +270,7 @@
 /* function prototypes */
 
 t_stat dc4_dsk_reset (DEVICE *dptr);
+t_stat dc4_attach (UNIT *, CONST char *);
 t_stat dc4_dsk_set_fmt(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat dc4_dsk_show_fmt(FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
@@ -358,7 +359,7 @@ DEVICE dc4_dsk_dev = {
     NULL,                               //deposit
     &dc4_dsk_reset,                     //reset
     NULL,                               //boot
-    NULL,                               //attach
+    &dc4_attach,                        //attach
     NULL,                               //detach
     NULL,                               //ctxt
     DEV_DEBUG,                          //flags
@@ -413,6 +414,8 @@ struct {
     {2, "35x18x128-1", "128 bytes sector, 35 tracks, 18 sectors per track (first sector is number 1)"},
     {2, "FLEX1", "TSC FLEX 1.0"},
     {2, "CP68", "HEMENWAY CP/68"},
+    {2, "FDOS-II", "iCOM FDOS-II"},
+    {2, "EDOS-II", "Motorola EDOS-II"},
     {3, "SIRx256-1", "256 bytes sector, tracks and sectors defined in SIR record (first sector is number 1)"},
     {3, "FLEX2", "TSC FLEX 2.0"},
     {4, "35x18x128-1x2sides", "128 bytes sector, 35 tracks, 18 sectors per track (first sector is number 1), two sides"},
@@ -452,7 +455,7 @@ t_stat dc4_dsk_set_fmt(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 }
 
 /*  I/O instruction handlers, called from the MP-B2 module when a
-   read or write occur to addresses 0x8004-0x8007. */
+    read or write occur to addresses 0x8000-0x801F. */
 
 /* DC-4 drive select register routine - this register is not part of the 1797
 */
@@ -497,8 +500,8 @@ int32 dc4_fdcdrv(int32 io, int32 data)
             if (disk_image_size==35*10*256) { // 89600 bytes -> FDOS image
                 dc4.fmt=1; //FDOS image
             } else if (disk_image_size==35*18*128) { // 80640 bytes -> FLEX 1.0 image
-                dc4.fmt=2; //FLEX 1.0 image
-                // note: DOS68 format (fmt=5) cannot be difierentiated from FLEX 1.0
+                dc4.fmt=2; //FLEX 1.0 / CP68 / EDOS-II / FDOS-II image
+                // note: DOS68 format (fmt=5) cannot be diferentiated from FLEX 1.0
             } else if (disk_image_size==35*18*128*2) { // 161280 bytes -> SDOS 1.1 image
                 dc4.fmt=4; //SDOS 1.1 image
             } else if ((SIR[0]==0) && (SIR[1]==0)) {
@@ -553,8 +556,8 @@ int32 dc4_fdcdrv(int32 io, int32 data)
         }
         dc4.trksiz = dc4.spt * dc4.sectsize;
         dc4.dsksiz = dc4.trksiz * dc4.cpd * dc4.heds;
-        sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: Geometry: Sector Size %d, Sectors per Track %d, Tracks %d, Sides %d, Disk Size %d \n",
-            dc4.sectsize, dc4.spt, dc4.cpd, dc4.heds, dc4.dsksiz);
+        sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: Geometry: Sector %d bytes, Sectors per Track %d, Tracks %d, Sides %d, Disk Size %d, 1st sector on track has SectorID=%d \n",
+            dc4.sectsize, dc4.spt, dc4.cpd, dc4.heds, dc4.dsksiz, dc4.sector_base);
         return 0;
     } else {                            /* read from DC-4 drive register */
         sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdrv: Drive read as %02X \n", dc4.intrq);
@@ -628,9 +631,11 @@ int32 dc4_fdccmd(int32 io, int32 data)
             case 0xBC:                  //write multiple sectors command type II
                 sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Write disk %d, track %d, sector %d, side %d \n",
                     dc4.cur_dsk, TRK, SECT, side);
+                dc4.multiple_sector=0;
                 if (dc4_dsk_unit[dc4.cur_dsk].u3 & WRPROT) {
                     sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Cannot write to write-protected disc %d \n",
                        dc4.cur_dsk);
+                    dc4_dsk_unit[dc4.cur_dsk].u3 |= WRTFALT; /* set Write Fault */
                 } else {
                     dc4_dsk_unit[dc4.cur_dsk].u3 |= BUSY;/* set BUSY */
                     dc4.busy_countdown=5; // start busy countdown
@@ -647,17 +652,18 @@ int32 dc4_fdccmd(int32 io, int32 data)
                     dc4_dsk_unit[dc4.cur_dsk].u3 |= DRQ;/* set DRQ */
                     dc4.wrt_flag = 1;           /* set write flag */
                     dc4_dsk_unit[dc4.cur_dsk].pos = 0; /* clear counter */
+                    dc4.multiple_sector= (data == 0xBC) ? 1:0;
                 }
                 break;
             case 0x1B:                  //seek command type I
                 TRK = dc4.fdcbyte; /* set track */
-                dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(BUSY | DRQ); /* clear flags */
+                dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(BUSY | DRQ | RECNF | WRTFALT); /* clear flags */
                 sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Seek disk %d, track %d \n",
                     dc4.cur_dsk, TRK);
                 break;
             case 0x0B:                  //restore command type I  
                 TRK = 0;   /* home the drive */
-                dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(BUSY | DRQ | RECNF); /* clear flags */
+                dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(BUSY | DRQ | RECNF | WRTFALT); /* clear flags */
                 sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdccmd: Drive %d homed \n", dc4.cur_dsk);
                 break;
             case 0xF0:                  //write track command type III
@@ -697,7 +703,7 @@ int32 dc4_fdccmd(int32 io, int32 data)
 int32 dc4_fdctrk(int32 io, int32 data)
 {
     if (io) {
-        dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(RECNF); /* clear flags */
+        dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(RECNF | WRTFALT); /* clear flags */
         TRK = data & 0xFF;
         sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdctrk: Drive %d track set to %d \n",
             dc4.cur_dsk, TRK);
@@ -716,11 +722,18 @@ int32 dc4_fdctrk(int32 io, int32 data)
 int32 dc4_fdcsec(int32 io, int32 data)
 {
     if (io) {
-        dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(RECNF); /* clear flags */
+        dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(RECNF | WRTFALT); /* clear flags */
         SECT = data & 0xFF;
-        if (SECT < dc4.sector_base) SECT=dc4.sector_base; 
-        // if (SECT == 0)  /* fix for swtp boot! */
-        //    SECT = 1;
+        // simulate the SectorID starting at 0
+        if (dc4.fmt==4) { //SDOS 1.1 image
+            if ((dc4.sector_base == 1) && (TRK == 0) && (SECT < 1)) {
+               sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcsec: Convert sector 0 to 1\n");
+               SECT++; 
+            }
+        } else if ((dc4.sector_base == 1) && (TRK == 0) && (SECT < 2)) {
+            sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcsec: Convert sector 0,1 to 1,2\n");
+            SECT++; 
+        }
         sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcsec: Drive %d sector set to %d \n",
             dc4.cur_dsk, SECT);
         return 0; 
@@ -745,13 +758,21 @@ int32 dc4_fdcdata(int32 io, int32 data)
                   data, data, (data < 32) ? '?':data, dc4.cur_dsk, TRK, SECT, dc4_dsk_unit[dc4.cur_dsk].pos);
             *((uint8 *)(dc4_dsk_unit[dc4.cur_dsk].filebuf) + dc4_dsk_unit[dc4.cur_dsk].pos) = data; /* byte into buffer */
             dc4_dsk_unit[dc4.cur_dsk].pos++;    /* step counter */
-            if (dc4_dsk_unit[dc4.cur_dsk].pos == dc4.sectsize) {
-                dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(BUSY | DRQ);
+            if (dc4_dsk_unit[dc4.cur_dsk].pos == dc4.sectsize) { // sector finished
                 if (dc4.wrt_flag) {         /* if initiated by FDC write command */
                     sim_fwrite(dc4_dsk_unit[dc4.cur_dsk].filebuf, dc4.sectsize, 1, dc4_dsk_unit[dc4.cur_dsk].fileref); /* write it */
                     dc4.wrt_flag = 0;       /* clear write flag */
                 }
                 sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdata: Sector write complete \n");
+                if ((dc4.multiple_sector) && (SECT-dc4.sector_base < dc4.spt-1)) { // write multiple in progress
+                    SECT++;
+                    sim_debug (DEBUG_flow, &dc4_dsk_dev, "fdcdata: Multiple write, writting next sector %d \n", 
+                        SECT);
+                    dc4_dsk_unit[dc4.cur_dsk].pos = 0; 
+                    dc4.wrt_flag = 1; 
+                } else {
+                    dc4_dsk_unit[dc4.cur_dsk].u3 &= ~(BUSY | DRQ);
+                }
             }
         }
         return 0;
@@ -787,6 +808,33 @@ int32 dc4_fdcdata(int32 io, int32 data)
         } else
         return 0;
     }
+}
+
+t_stat dc4_attach (UNIT * uptr, CONST char * file)
+{
+    t_stat r; 
+    int disk_image_size, i; 
+
+    if ((r = attach_unit(uptr, file)) != SCPE_OK) return r;
+
+    if (sim_switches & SWMASK ('N')) {            // new disk
+        // create a blank disk
+        uint8 sector[256];  
+
+        if (dc4.fmt==1) {
+            disk_image_size=35*10*256;  // 89600 bytes -> FDOS image
+        } else if ((dc4.fmt==2)  || (dc4.fmt==5)) {
+            disk_image_size=35*18*128; // 80640 bytes -> FLEX 1.0 image
+            // note: DOS68 format (fmt=5) cannot be diferentiated from FLEX 1.0
+        } else if (dc4.fmt==4) {
+            disk_image_size=35*18*128*2; // 161280 bytes -> SDOS 1.1 image
+        } else {
+            return sim_messagef(SCPE_ARG, "Cannot create a new disk for current format");
+        }
+        memset(sector,0,sizeof(sector));
+        for (i=0; i<disk_image_size/256; i++) sim_fwrite(sector,sizeof(sector),1,uptr->fileref);
+    }
+    return SCPE_OK;
 }
 
 /* end of dc-4.c */
