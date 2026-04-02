@@ -1,0 +1,1579 @@
+00000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+
+
+
+00001                     NAM    DI-68-OEM 
+
+
+00003              *ICOM, INC. FD360-X-6800-OEM DIAGNOSTIC
+
+
+00005              *PROCEDURE:
+00006              *  LOAD DIAGNOSTIC INTO RAM
+00007              *  START THE DIAGNOSTIC PROGRAM AT LOCATION 100 HEX
+00008              *  INSERT A SCRATCH DISKETTE INTO THE DRIVE UNIT
+00009              *     TO BE TESTED.
+00010              *  TYPE THE DESIRED COMMAND
+00011              *  CONTINUOUSLY OPERATING TESTS MUST BE MANUALLY
+00012              *     ABORTED (CARRIAGE RETURN STARTS THE TEST)
+
+
+00014              *U = DRIVE UNIT NUMBER 0, 1, 2, OR 3.
+00015              *T = TRACK 0 - 76 DECIMAL
+00016              *S = SECTOR 1 - 26 DECIMAL
+
+
+00018              *COMMANDS:
+
+
+00020              *A    - CLEAR DRIVE ELECTRONICS
+00021              *BU,T - SEEK TO TRACK
+00022              *DU,S - READ (SECTOR) TO BUFFER FROM PRESENT TRACK
+00023              *FU,S - WRITE (BUFFER) TO SECTOR ON PRESENT TRACK
+00024              *GU,S - READ/WRITE TEST (CONTINUOUS) USING (BUFFER)
+00025              *HU   - TRACK 0 TO TRACK 76 LOOP (CONTINUOUS)
+00026              *I    - UNIT SELECT TEST
+00027              *JU   - SEEK TEST PERFORMED ONCE
+00028              *KU   - SEEK TEST PERFORMED CONTINUOUSLY
+00029              *LU   - SEEK TEST READ ONLY (CONTINUOUS)
+00030              *MU   - DD MARK TEST PERFORMED ONCE
+00031              *N    - RETURN TO EXBUG
+00032              *OXX  - FILL THE BUFFER WITH THE HEX VALUE XX
+00033              *P    - PRINT THE CONTENTS OF THE BUFFER
+
+
+00035              *LIST OF ERROR MESSAGES:
+
+
+00037              *XX - SELECTED DRIVE UNIT NOT READY
+00038              *01 - CRC ERROR ON 5 READ ATTEMPTS -- 01(TRK)
+00039              *02 - CRC ERROR ON 5 WRITE ATTEMPTS -- 02(TRK)
+00040              *03 - READ/WRITE TEST DATA ERROR --
+00041              *           03(REC'D)(EXP'D)(BYTE#)
+00042              *04 - UNIT SELECT ERROR -- 04(REC'D)(EXP'D)
+00043              *05 - SEEK ERROR -- 05(REC'D)(EXP'D)(TRK)(SCTR)
+00044              *06 - DD MARK ERROR -- 06(SCTR)
+00045              *07 - DD MARK ERROR ON READ/WRITE TEST
+
+
+
+
+
+
+
+---
+
+
+PAGE  002   DI-68-OE          
+
+
+
+00047              *THE BUFFER IS LOCATIONS 1000-107F HEX
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+---
+
+
+PAGE  003   DI-68-OE          
+
+
+
+00049                     OPT    O 
+00050                     OPT    SYMBOLS 
+
+
+00052 0040                ORG    $40 
+
+
+00054      F000    PROM   EQU    $F000 
+
+
+00056      F006    CHRIN  EQU    PROM+6 
+00057      F009    COUT   EQU    PROM+9 
+00058      F015    MNTR   EQU    PROM+$15 
+00059      1B00    XSTACK EQU    $1B00 
+00060      F018    DIO    EQU    PROM+$18 
+00061      F1FF    SAVE   EQU    PROM+$1FF 
+
+
+00063      0000    RAM    EQU    0 
+
+
+00065      000A    UNIT   EQU    RAM+10 
+00066      000B    TRACK  EQU    RAM+11 
+00067      000C    SECTOR EQU    RAM+12 
+00068      0019    SAVXR  EQU    RAM+25 
+
+
+00070 0040 0019           RMB    25 
+00071 0059 0001    STACK  RMB    1 
+00072 005A 0002    SAVEX  RMB    2 
+00073 005C 0001    SAVEA  RMB    1 
+00074 005D 0001    COUNT  RMB    1 
+00075 005E 0001    BYTE   RMB    1 
+00076 005F 0001    CNT    RMB    1 
+
+
+
+
+
+00078 0100                ORG    $100 
+
+
+00080 0100 7E 0118        JMP    START 
+
+
+00082 0103 20 13          BRA    START 
+00083 0105 55             FCC    !UP!
+      0106 50      
+00084 0107 05BE           FDB    $5BE 
+00085 0109 44             FCC    !DISK DIAGNOSTIC!
+      010A 49      
+      010B 53      
+      010C 4B      
+      010D 20      
+
+
+
+
+
+---
+
+
+PAGE  004   DI-68-OE          
+
+
+
+      010E 44      
+      010F 49      
+      0110 41      
+      0111 47      
+      0112 4E      
+      0113 4F      
+      0114 53      
+      0115 54      
+      0116 49      
+      0117 43      
+
+
+
+
+
+00087      0118    START  EQU    * 
+00088 0118 7F 000C        CLR    SECTOR 
+00089 011B BD 01B3        JSR    RESET    RESET DISK
+00090 011E 8E 0059        LDS    #STACK   SET STACK
+00091 0121 BD 01AF        JSR    PCRLF 
+00092 0124 86 3D          LDA A  #$3D     PRINT =
+00093 0126 BD 0197        JSR    CO 
+00094 0129 BD 019B        JSR    KBDI     GET CMD CHAR
+00095 012C 80 41          SUB A  #'A 
+00096 012E 2B 1C          BMI    LER 
+00097 0130 81 13          CMP A  #$13 
+00098 0132 2A 18          BPL    LER      NOT A-S
+00099 0134 97 5C          STA A  SAVEA    CONVERT TO VECTOR
+00100 0136 9B 5C          ADD A  SAVEA 
+00101 0138 9B 5C          ADD A  SAVEA 
+00102 013A 5F             CLR B           
+00103 013B CE 0158        LDX    #TBL 
+00104 013E DF 5A          STX    SAVEX 
+00105 0140 9B 5B          ADD A  SAVEX+1 
+00106 0142 D9 5A          ADC B  SAVEX 
+00107 0144 D7 5A          STA B  SAVEX 
+00108 0146 97 5B          STA A  SAVEX+1 
+00109 0148 DE 5A          LDX    SAVEX 
+00110 014A 6E 00          JMP    X 
+
+
+
+00112      014C    LER    EQU    * 
+00113 014C 86 3F          LDA A  #$3F 
+00114 014E BD 0197        JSR    CO 
+00115 0151 86 3F          LDA A  #$3F 
+00116 0153 BD 0197        JSR    CO 
+00117 0156 20 C0          BRA    START 
+
+
+
+
+
+00119              *COMMAND BRANCH TABLE
+
+
+
+
+
+---
+
+
+PAGE  005   DI-68-OE          
+
+
+
+00121      0158    TBL    EQU    * 
+00122 0158 7E 0289        JMP    CA 
+00123 015B 7E 029B        JMP    CB 
+00124 015E 7E 014C        JMP    LER 
+00125 0161 7E 02BC        JMP    CD 
+00126 0164 7E 014C        JMP    LER 
+00127 0167 7E 030E        JMP    CF 
+00128 016A 7E 0342        JMP    CG 
+00129 016D 7E 040A        JMP    CH 
+00130 0170 7E 042E        JMP    XCI 
+00131 0173 7E 0479        JMP    CJ 
+00132 0176 7E 048C        JMP    CK 
+00133 0179 7E 049E        JMP    CL 
+00134 017C 7E 04AD        JMP    CM 
+00135 017F 7E 0507        JMP    CN 
+00136 0182 7E 050A        JMP    XCO 
+00137 0185 7E 0555        JMP    CP 
+00138 0188 7E 014C        JMP    LER 
+00139 018B 7E 014C        JMP    LER 
+00140 018E 7E 014C        JMP    LER 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+---
+
+
+PAGE  006   DI-68-OE          
+
+
+
+00142              *CHAR INPUT ROUTINE
+
+
+00144      0191    CI     EQU    * 
+00145 0191 BD F006        JSR    CHRIN 
+00146 0194 84 7F          AND A  #$7F 
+00147 0196 39             RTS             
+
+
+
+00149              *CHAR OUTPUT ROUTINE
+
+
+00151      0197    CO     EQU    * 
+00152 0197 BD F009        JSR    COUT 
+00153 019A 39             RTS             
+
+
+
+00155              *KEYBOARD INPUT WITH ECHO
+
+
+00157      019B    KBDI   EQU    * 
+00158 019B BD 0191        JSR    CI 
+00159 019E 36      KBDI2  PSH A           
+00160 019F BD 0197        JSR    CO 
+00161 01A2 32             PUL A           
+00162 01A3 81 0D          CMP A  #$D 
+00163 01A5 26 07          BNE    KBDI1 
+00164 01A7 36             PSH A           
+00165 01A8 86 0A          LDA A  #$A 
+00166 01AA BD 0197        JSR    CO 
+00167 01AD 32             PUL A           
+00168 01AE 39      KBDI1  RTS             
+
+
+
+00170              *PRINT CRLF
+
+
+00172      01AF    PCRLF  EQU    * 
+00173 01AF 86 0D          LDA A  #$D 
+00174 01B1 20 EB          BRA    KBDI2 
+
+
+
+00176              *SET UP DISK PIA'S AND RESET DRIVE ELECTRONICS
+
+
+00178      01B3    RESET  EQU    * 
+00179 01B3 BD F1FF        JSR    SAVE 
+00180 01B6 6F 01          CLR    1,X      SET DIRECTIONS
+00181 01B8 6F 03          CLR    3,X 
+00182 01BA 6F 07          CLR    7,X 
+
+
+
+
+
+---
+
+
+PAGE  007   DI-68-OE          
+
+
+
+00183 01BC 6F 00          CLR    0,X 
+00184 01BE 86 FF          LDA A  #$FF 
+00185 01C0 A7 02          STA A  2,X 
+00186 01C2 A7 06          STA A  6,X 
+00187 01C4 86 04          LDA A  #4       SET DATA IN CNTRL
+00188 01C6 A7 01          STA A  1,X 
+00189 01C8 86 04          LDA A  #4       SET DATA OUT CNTRL
+00190 01CA A7 07          STA A  7,X 
+00191 01CC 86 2C          LDA A  #$2C     SET CMD OUT CNTRL
+00192 01CE A7 03          STA A  3,X 
+00193 01D0 86 80          LDA A  #$80     CLR ELECTRONICS
+00194 01D2 DE 19          LDX    SAVXR 
+00195 01D4 BD F1FF XMIT   JSR    SAVE 
+00196 01D7 E6 00          LDA B  0,X      CLEAR BUSY
+00197 01D9 A7 02          STA A  2,X      ISSUE CMD
+00198 01DB DE 19          LDX    SAVXR 
+00199 01DD 39             RTS             
+
+
+00201      01DE    LOOP   EQU    * 
+00202 01DE BD 01D4        JSR    XMIT 
+00203 01E1 BD F1FF        JSR    SAVE 
+00204 01E4 A6 01   LOOP1  LDA A  1,X      DONE?
+00205 01E6 2A FC          BPL    LOOP1 
+00206 01E8 A6 00          LDA A  0,X      YES-CLR BUSY
+00207 01EA DE 19          LDX    SAVXR 
+00208 01EC 39             RTS             
+
+
+
+00210              *SUBROUTINE TO GET UNIT #
+
+
+00212      01ED    GTUNT  EQU    * 
+00213 01ED BD 023B        JSR    GTDGT    GET A DIGIT
+00214 01F0 25 1A          BCS    GTUNT1   NOT
+00215 01F2 36             PSH A           
+00216 01F3 84 FC          AND A  #$FC 
+00217 01F5 26 15          BNE    GTUNT1   NOT 0-3
+00218 01F7 32             PUL A           
+00219 01F8 97 0A          STA A  UNIT     OK-SAVE UNIT
+00220 01FA BD 0267        JSR    XMTUS 
+00221 01FD BD F1FF        JSR    SAVE 
+00222 0200 A6 00          LDA A  0,X 
+00223 0202 DE 19          LDX    SAVXR 
+00224 0204 84 20          AND A  #$20 
+00225 0206 26 07          BNE    GTUNT2 
+00226 0208 BD 019B        JSR    KBDI     GET NEXT CHAR
+00227 020B 39             RTS             
+
+00229 020C 7E 014C GTUNT1 JMP    LER 
+
+00231 020F 86 58   GTUNT2 LDA A  #'X 
+00232 0211 BD 0197        JSR    CO 
+
+
+
+
+
+---
+
+
+PAGE  008   DI-68-OE          
+
+
+
+00233 0214 86 58          LDA A  #'X 
+00234 0216 BD 0197        JSR    CO 
+00235 0219 20 F1          BRA    GTUNT1 
+
+
+
+00237              *SUBROUTINE TO GET A DECIMAL NUMBER
+
+
+00239 021B 0001    NMBR   RMB    1 
+
+00241      021C    GTNMB  EQU    * 
+00242 021C 7F 021B        CLR    NMBR 
+00243 021F BD 023B GTNMB1 JSR    GTDGT 
+00244 0222 25 0F          BCS    GTNMB2   NOT A DIGIT-CR?
+00245 0224 F6 021B        LDA B  NMBR     (NMBR*10)+DIGIT
+00246 0227 58             ASL B           
+00247 0228 58             ASL B           
+00248 0229 FB 021B        ADD B  NMBR 
+00249 022C 58             ASL B           
+00250 022D 1B             ABA             
+00251 022E B7 021B        STA A  NMBR 
+00252 0231 20 EC          BRA    GTNMB1 
+
+00254 0233 81 0D   GTNMB2 CMP A  #$D 
+00255 0235 26 D5          BNE    GTUNT1   ERROR
+00256 0237 B6 021B        LDA A  NMBR 
+00257 023A 39             RTS             
+
+
+
+00259              *SUBROUTINE TO GET A DECIMAL DIGIT
+00260              *RETURNS CARRY SET IF NOT - CHAR IN A
+
+
+00262      023B    GTDGT  EQU    * 
+00263 023B BD 019B        JSR    KBDI 
+00264 023E 36             PSH A           
+00265 023F 80 30          SUB A  #$30 
+00266 0241 2B 09          BMI    GTDGT1   NOT DIGIT
+00267 0243 80 0A          SUB A  #10 
+00268 0245 2A 05          BPL    GTDGT1   NOT
+00269 0247 32             PUL A           
+00270 0248 84 0F          AND A  #$F      OK
+00271 024A 0C             CLC             
+00272 024B 39             RTS             
+
+00274 024C 32      GTDGT1 PUL A           
+00275 024D 0D             SEC             NOT
+00276 024E 39             RTS             
+
+
+
+00278              *SUBROUTINE TO LIST (A) AS 2 CHARS
+
+
+
+
+
+---
+
+
+PAGE  009   DI-68-OE          
+
+
+
+00280      024F    LBYTE  EQU    * 
+00281 024F 97 5C          STA A  SAVEA 
+00282 0251 44             LSR A           
+00283 0252 44             LSR A           
+00284 0253 44             LSR A           
+00285 0254 44             LSR A           
+00286 0255 BD 025C        JSR    HXD 
+00287 0258 96 5C          LDA A  SAVEA 
+00288 025A 84 0F          AND A  #$F 
+00289 025C 81 0A   HXD    CMP A  #10 
+00290 025E 2B 02          BMI    HXD1 
+00291 0260 8B 07          ADD A  #7 
+00292 0262 8B 30   HXD1   ADD A  #$30 
+00293 0264 7E 0197        JMP    CO 
+
+
+
+00295              *SUBROUTINE TO XMIT UNIT/SECTOR
+
+
+00297      0267    XMTUS  EQU    * 
+00298 0267 96 0A          LDA A  UNIT     SET UNIT
+00299 0269 0C             CLC             
+00300 026A 46             ROR A           
+00301 026B 46             ROR A           
+00302 026C 46             ROR A           
+00303 026D 9A 0C          ORA A  SECTOR   MERGE SECTOR
+00304 026F BD F1FF        JSR    SAVE 
+00305 0272 A7 06          STA A  6,X 
+00306 0274 DE 19          LDX    SAVXR 
+00307 0276 86 20          LDA A  #$20 
+00308 0278 7E 01D4        JMP    XMIT 
+
+
+
+00310              *SUBROUTINE TO XMIT TRACK
+
+
+00312      027B    XMTTK  EQU    * 
+00313 027B 96 0B          LDA A  TRACK 
+00314 027D BD F1FF        JSR    SAVE 
+00315 0280 A7 06          STA A  6,X 
+00316 0282 DE 19          LDX    SAVXR 
+00317 0284 86 10          LDA A  #$10 
+00318 0286 7E 01D4        JMP    XMIT 
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+---
+
+
+PAGE  010   DI-68-OE          
+
+
+
+00320              *CLEAR DRIVE ELECTRONICS
+
+
+00322      0289    CA     EQU    * 
+00323 0289 BD 019B        JSR    KBDI     WAIT FOR CR
+00324 028C 81 0D          CMP A  #$D 
+00325 028E 27 03          BEQ    CA1 
+00326 0290 7E 014C        JMP    LER 
+00327 0293 86 80   CA1    LDA A  #$80     CLR ELECT
+00328 0295 BD 01D4        JSR    XMIT 
+00329 0298 7E 0118        JMP    START 
+
+
+
+00331              *SEEK TO TRACK
+
+
+00333      029B    CB     EQU    * 
+00334 029B BD 01ED        JSR    GTUNT    GET UNIT #
+00335 029E 81 2C          CMP A  #', 
+00336 02A0 27 03          BEQ    CB1 
+00337 02A2 7E 014C        JMP    LER 
+00338 02A5 BD 021C CB1    JSR    GTNMB    GET TRACK
+00339 02A8 97 0B          STA A  TRACK 
+00340 02AA 86 01          LDA A  #1 
+00341 02AC 97 0C          STA A  SECTOR   SET SCTR
+00342 02AE BD 0267        JSR    XMTUS    XMIT U/S
+00343 02B1 BD 027B        JSR    XMTTK    XMIT TRK
+00344 02B4 86 08          LDA A  #$8      SEEK
+00345 02B6 BD 01DE        JSR    LOOP 
+00346 02B9 7E 0118        JMP    START 
+
+
+
+00348              *READ SECTOR TO BUFFER FROM PRESENT TRACK
+
+
+00350      02BC    CD     EQU    * 
+00351 02BC BD 01ED        JSR    GTUNT    UNIT
+00352 02BF 81 2C          CMP A  #', 
+00353 02C1 27 03          BEQ    CD1 
+00354 02C3 7E 014C        JMP    LER 
+00355 02C6 BD 021C CD1    JSR    GTNMB    SECTOR
+00356 02C9 97 0C          STA A  SECTOR 
+00357 02CB BD 0267        JSR    XMTUS    ISSUE U/S
+00358 02CE 86 05          LDA A  #5       SET 5 TRIES
+00359 02D0 97 5D          STA A  COUNT 
+00360 02D2 86 02   CD2    LDA A  #2       READ
+00361 02D4 BD 01DE        JSR    LOOP 
+00362 02D7 BD F1FF        JSR    SAVE 
+00363 02DA A6 00          LDA A  0,X      CRC?
+00364 02DC DE 19          LDX    SAVXR 
+00365 02DE 84 08          AND A  #8 
+00366 02E0 27 17          BEQ    CD3      NO
+
+
+
+
+
+---
+
+
+PAGE  011   DI-68-OE          
+
+
+
+00367 02E2 86 0A          LDA A  #$A      YES-RESET FLAG
+00368 02E4 BD 01D4        JSR    XMIT 
+00369 02E7 7A 005D        DEC    COUNT    DONE?
+00370 02EA 26 E6          BNE    CD2      NO
+00371 02EC 86 01          LDA A  #1       YES-ERROR 1
+00372 02EE BD 024F        JSR    LBYTE 
+00373 02F1 96 0B          LDA A  TRACK 
+00374 02F3 BD 024F        JSR    LBYTE 
+00375 02F6 7E 0118        JMP    START 
+
+00377 02F9 86 80   CD3    LDA A  #128     XFER TO MEM
+00378 02FB 97 5D          STA A  COUNT 
+00379 02FD CE 1000        LDX    #$1000 
+00380 0300 BD 03EE CD4    JSR    GTBYTE 
+00381 0303 A7 00          STA A  X 
+00382 0305 08             INX             
+00383 0306 7A 005D        DEC    COUNT 
+00384 0309 26 F5          BNE    CD4 
+00385 030B 7E 0118        JMP    START 
+
+
+
+00387              *WRITE BUFFER TO SECTOR ON PRESENT TRACK
+
+
+00389      030E    CF     EQU    * 
+00390 030E BD 01ED        JSR    GTUNT 
+00391 0311 81 2C          CMP A  #', 
+00392 0313 27 03          BEQ    CF1 
+00393 0315 7E 014C        JMP    LER 
+
+00395 0318 BD 021C CF1    JSR    GTNMB    SECTOR
+00396 031B 97 0C          STA A  SECTOR 
+00397 031D BD 0267        JSR    XMTUS    ISSUE U/S
+00398 0320 86 80          LDA A  #128     XFER FROM MEM
+00399 0322 97 5D          STA A  COUNT 
+00400 0324 CE 1000        LDX    #$1000 
+00401 0327 C6 30          LDA B  #$30 
+00402 0329 A6 00   CF2    LDA A  X 
+00403 032B BD F1FF        JSR    SAVE 
+00404 032E A7 06          STA A  6,X 
+00405 0330 E7 02          STA B  2,X 
+00406 0332 DE 19          LDX    SAVXR 
+00407 0334 08             INX             
+00408 0335 7A 005D        DEC    COUNT 
+00409 0338 26 EF          BNE    CF2 
+00410 033A 86 04          LDA A  #4       WRITE IT
+00411 033C BD 01DE        JSR    LOOP 
+00412 033F 7E 0118        JMP    START 
+
+
+
+00414              *READ/WRITE TEST ON PRESENT TRACK USING (BUFFER)
+
+
+
+
+
+
+---
+
+
+PAGE  012   DI-68-OE          
+
+
+
+00416      0342    CG     EQU    * 
+00417 0342 BD 01ED        JSR    GTUNT 
+00418 0345 81 2C          CMP A  #', 
+00419 0347 27 03          BEQ    CG1 
+00420 0349 7E 014C        JMP    LER 
+
+00422 034C BD 021C CG1    JSR    GTNMB    SECTOR
+00423 034F 97 0C          STA A  SECTOR 
+00424 0351 BD 0267        JSR    XMTUS    ISSUE U/S
+00425 0354 86 80   CG2    LDA A  #128     XFER FROM BFR
+00426 0356 97 5D          STA A  COUNT 
+00427 0358 CE 1000        LDX    #$1000 
+00428 035B C6 30          LDA B  #$30 
+00429 035D A6 00   CG3    LDA A  X 
+00430 035F BD F1FF        JSR    SAVE 
+00431 0362 A7 06          STA A  6,X 
+00432 0364 E7 02          STA B  2,X 
+00433 0366 DE 19          LDX    SAVXR 
+00434 0368 08             INX             
+00435 0369 7A 005D        DEC    COUNT 
+00436 036C 26 EF          BNE    CG3 
+00437 036E 86 05          LDA A  #5       WRITE IT-5 TRIES
+00438 0370 97 5D          STA A  COUNT 
+00439 0372 86 04   CG4    LDA A  #4 
+00440 0374 BD 01DE        JSR    LOOP 
+00441 0377 86 02          LDA A  #2       REREAD
+00442 0379 BD 01DE        JSR    LOOP 
+00443 037C BD F1FF        JSR    SAVE 
+00444 037F A6 00          LDA A  0,X      CRC?
+00445 0381 DE 19          LDX    SAVXR 
+00446 0383 84 08          AND A  #$8 
+00447 0385 27 1E          BEQ    CG5      NO
+00448 0387 86 0A          LDA A  #$A      YES-RESET FLAG
+00449 0389 BD F1FF        JSR    SAVE 
+00450 038C A7 02          STA A  2,X 
+00451 038E DE 19          LDX    SAVXR 
+00452 0390 7A 005D        DEC    COUNT    DONE?
+00453 0393 26 DD          BNE    CG4      NO
+00454 0395 86 02          LDA A  #2       YES ERROR 02
+00455 0397 BD 024F        JSR    LBYTE 
+00456 039A 96 0B          LDA A  TRACK 
+00457 039C BD 024F        JSR    LBYTE 
+00458 039F 7E 0118        JMP    START 
+
+00460 03A2 BD F1FF        JSR    SAVE 
+00461 03A5 A6 00   CG5    LDA A  0,X 
+00462 03A7 DE 19          LDX    SAVXR 
+00463 03A9 84 80          AND A  #$80 
+00464 03AB 26 39          BNE    CG8 
+00465 03AD 86 80          LDA A  #128     READ & CHK DATA
+00466 03AF 97 5D          STA A  COUNT 
+00467 03B1 86 01          LDA A  #1 
+00468 03B3 97 5E          STA A  BYTE 
+00469 03B5 CE 1000        LDX    #$1000 
+
+
+
+
+
+---
+
+
+PAGE  013   DI-68-OE          
+
+
+
+00470 03B8 BD 03EE CG6    JSR    GTBYTE   GET BYTE
+00471 03BB A1 00          CMP A  X 
+00472 03BD 26 0B          BNE    CG7      DATA ERROR
+00473 03BF 08             INX             
+00474 03C0 7C 005E        INC    BYTE 
+00475 03C3 7A 005D        DEC    COUNT 
+00476 03C6 26 F0          BNE    CG6      NOT DONE
+00477 03C8 20 8A          BRA    CG2      DONE
+
+00479 03CA E6 00   CG7    LDA B  X        ERROR 03
+00480 03CC 37             PSH B           
+00481 03CD 36             PSH A           
+00482 03CE 86 03          LDA A  #3 
+00483 03D0 BD 024F        JSR    LBYTE 
+00484 03D3 32             PUL A           
+00485 03D4 BD 024F        JSR    LBYTE 
+00486 03D7 32             PUL A           
+00487 03D8 BD 024F        JSR    LBYTE 
+00488 03DB 96 5E          LDA A  BYTE 
+00489 03DD BD 024F        JSR    LBYTE 
+00490 03E0 BD 01AF        JSR    PCRLF 
+00491 03E3 7E 0354        JMP    CG2 
+
+00493 03E6 86 07   CG8    LDA A  #7 
+00494 03E8 BD 024F        JSR    LBYTE 
+00495 03EB 7E 0118        JMP    START 
+
+
+
+00497      03EE    GTBYTE EQU    * 
+00498 03EE 86 3C          LDA A  #$3C 
+00499 03F0 BD F1FF        JSR    SAVE 
+00500 03F3 A7 03          STA A  3,X 
+00501 03F5 86 40          LDA A  #$40 
+00502 03F7 A7 02          STA A  2,X 
+00503 03F9 A6 00          LDA A  0,X 
+00504 03FB 36             PSH A           
+00505 03FC 86 2C          LDA A  #$2C 
+00506 03FE A7 03          STA A  3,X 
+00507 0400 86 40          LDA A  #$40 
+00508 0402 A7 02          STA A  2,X 
+00509 0404 6F 02          CLR    2,X 
+00510 0406 DE 19          LDX    SAVXR 
+00511 0408 32             PUL A           
+00512 0409 39             RTS             
+
+
+
+00514              *TRACK 0 - 76 LOOP
+
+
+00516      040A    CH     EQU    * 
+00517 040A BD 01ED        JSR    GTUNT    UNIT
+00518 040D 81 0D          CMP A  #$D 
+
+
+
+
+
+---
+
+
+PAGE  014   DI-68-OE          
+
+
+
+00519 040F 27 03          BEQ    CH1 
+00520 0411 7E 014C        JMP    LER 
+
+00522 0414 86 01   CH1    LDA A  #1 
+00523 0416 97 0C          STA A  SECTOR 
+00524 0418 86 4C          LDA A  #76 
+00525 041A 97 0B          STA A  TRACK 
+00526 041C BD 0267        JSR    XMTUS 
+00527 041F 86 0C   CH2    LDA A  #$C      RTN TO TRK 0
+00528 0421 BD 01DE        JSR    LOOP 
+00529 0424 BD 027B        JSR    XMTTK    SEEK 76
+00530 0427 86 08          LDA A  #8 
+00531 0429 BD 01DE        JSR    LOOP 
+00532 042C 20 F1          BRA    CH2      CYCLE
+
+
+
+00534              *UNIT SELECT TEST
+
+
+00536      042E    XCI    EQU    * 
+00537 042E BD 019B        JSR    KBDI 
+00538 0431 81 0D          CMP A  #$D 
+00539 0433 27 03          BEQ    CI3 
+00540 0435 7E 014C        JMP    LER 
+
+00542 0438 4F      CI3    CLR A           
+00543 0439 7F 005C        CLR    SAVEA 
+00544 043C BD F1FF CI1    JSR    SAVE 
+00545 043F A7 04          STA A  4,X 
+00546 0441 86 20          LDA A  #$20 
+00547 0443 A7 02          STA A  2,X 
+00548 0445 A6 00          LDA A  0,X      GET UNIT
+00549 0447 DE 19          LDX    SAVXR 
+00550 0449 84 06          AND A  #$6 
+00551 044B 48             ASL A           
+00552 044C 48             ASL A           
+00553 044D 48             ASL A           
+00554 044E 48             ASL A           
+00555 044F 48             ASL A           
+00556 0450 91 5C          CMP A  SAVEA 
+00557 0452 26 0B          BNE    CI2      NOT SAME
+00558 0454 86 40          LDA A  #$40     INCR UNIT
+00559 0456 9B 5C          ADD A  SAVEA 
+00560 0458 97 5C          STA A  SAVEA 
+00561 045A 26 E0          BNE    CI1      STILL MORE
+00562 045C 7E 0118        JMP    START    DONE
+
+00564 045F 36      CI2    PSH A           ERROR
+00565 0460 86 04          LDA A  #4 
+00566 0462 BD 024F        JSR    LBYTE 
+00567 0465 32             PUL A           
+00568 0466 0C             CLC             
+00569 0467 49             ROL A           
+
+
+
+
+
+---
+
+
+PAGE  015   DI-68-OE          
+
+
+
+00570 0468 49             ROL A           
+00571 0469 49             ROL A           
+00572 046A BD 024F        JSR    LBYTE 
+00573 046D 96 5C          LDA A  SAVEA 
+00574 046F 0C             CLC             
+00575 0470 49             ROL A           
+00576 0471 49             ROL A           
+00577 0472 49             ROL A           
+00578 0473 BD 024F        JSR    LBYTE 
+00579 0476 7E 0118        JMP    START 
+
+
+
+00581              *SEEK TEST ONCE
+
+
+00583      0479    CJ     EQU    * 
+00584 0479 BD 01ED        JSR    GTUNT 
+00585 047C 81 0D          CMP A  #$D 
+00586 047E 27 03          BEQ    CJ1 
+00587 0480 7E 014C        JMP    LER 
+
+00589 0483 BD 058A CJ1    JSR    SKW 
+00590 0486 BD 0633        JSR    SKR 
+00591 0489 7E 0118        JMP    START 
+
+
+
+00593              *SEEK TEST CONTINUOUS
+
+
+00595      048C    CK     EQU    * 
+00596 048C BD 01ED        JSR    GTUNT 
+00597 048F 81 0D          CMP A  #$D 
+00598 0491 27 03          BEQ    CK1 
+00599 0493 7E 014C        JMP    LER 
+
+00601 0496 BD 058A CK1    JSR    SKW 
+00602 0499 BD 0633        JSR    SKR 
+00603 049C 20 F8          BRA    CK1 
+
+
+
+00605              *SEEK TEST READ ONLY
+
+
+00607      049E    CL     EQU    * 
+00608 049E BD 01ED        JSR    GTUNT 
+00609 04A1 81 0D          CMP A  #$D 
+00610 04A3 27 03          BEQ    CL1 
+00611 04A5 7E 014C        JMP    LER 
+00612 04A8 BD 0633 CL1    JSR    SKR 
+00613 04AB 20 FB          BRA    CL1 
+
+
+
+
+
+
+---
+
+
+PAGE  016   DI-68-OE          
+
+
+
+00615              *DD MARK TEST ONCE
+
+
+00617      04AD    CM     EQU    * 
+00618 04AD BD 01ED        JSR    GTUNT 
+00619 04B0 81 0D          CMP A  #$D 
+00620 04B2 27 03          BEQ    CM1 
+00621 04B4 7E 014C        JMP    LER 
+
+00623 04B7 86 01   CM1    LDA A  #1 
+00624 04B9 97 0C          STA A  SECTOR 
+00625 04BB BD 0267 CM2    JSR    XMTUS 
+00626 04BE 86 0E          LDA A  #$E      WRITE DD MARK
+00627 04C0 BD 01DE        JSR    LOOP 
+00628 04C3 7C 000C        INC    SECTOR 
+00629 04C6 96 0C          LDA A  SECTOR 
+00630 04C8 81 1B          CMP A  #27 
+00631 04CA 26 EF          BNE    CM2 
+
+00633 04CC 86 01          LDA A  #1       READ IT
+00634 04CE 97 0C          STA A  SECTOR 
+00635 04D0 BD 0267 CM3    JSR    XMTUS 
+00636 04D3 86 02          LDA A  #2 
+00637 04D5 BD 01DE        JSR    LOOP 
+00638 04D8 BD F1FF        JSR    SAVE 
+00639 04DB A6 00          LDA A  0,X 
+00640 04DD DE 19          LDX    SAVXR 
+00641 04DF 84 80          AND A  #$80 
+00642 04E1 27 15          BEQ    CM4      ERROR
+00643 04E3 86 0A   CM5    LDA A  #$A      RESET FLAG
+00644 04E5 BD F1FF        JSR    SAVE 
+00645 04E8 A7 02          STA A  2,X 
+00646 04EA DE 19          LDX    SAVXR 
+00647 04EC 7C 000C        INC    SECTOR 
+00648 04EF 96 0C          LDA A  SECTOR 
+00649 04F1 81 1B          CMP A  #27 
+00650 04F3 26 DB          BNE    CM3 
+00651 04F5 7E 0118        JMP    START    DONE
+
+00653 04F8 86 06   CM4    LDA A  #6 
+00654 04FA BD 024F        JSR    LBYTE 
+00655 04FD 96 0C          LDA A  SECTOR 
+00656 04FF BD 024F        JSR    LBYTE 
+00657 0502 BD 01AF        JSR    PCRLF 
+00658 0505 20 DC          BRA    CM5 
+
+
+
+00660              *RETURN TO MNTR
+
+
+00662      0507    CN     EQU    * 
+00663 0507 7E F015        JMP    MNTR 
+
+
+
+
+
+
+---
+
+
+PAGE  017   DI-68-OE          
+
+
+
+00665              *FILL BUFFER WITH XX
+
+
+00667      050A    XCO    EQU    * 
+00668 050A BD 019B        JSR    KBDI 
+00669 050D 80 30          SUB A  #$30 
+00670 050F 25 41          BCS    XCO4 
+00671 0511 8B E9          ADD A  #$E9 
+00672 0513 25 3D          BCS    XCO4 
+00673 0515 8B 06          ADD A  #6 
+00674 0517 2A 04          BPL    XCO1 
+00675 0519 8B 07          ADD A  #7 
+00676 051B 25 35          BCS    XCO4 
+00677 051D 8B 0A   XCO1   ADD A  #10 
+00678 051F 48             ASL A           
+00679 0520 48             ASL A           
+00680 0521 48             ASL A           
+00681 0522 48             ASL A           
+00682 0523 36             PSH A           
+00683 0524 BD 019B        JSR    KBDI 
+00684 0527 80 30          SUB A  #$30 
+00685 0529 25 27          BCS    XCO4 
+00686 052B 8B E9          ADD A  #$E9 
+00687 052D 25 23          BCS    XCO4 
+00688 052F 8B 06          ADD A  #6 
+00689 0531 2A 04          BPL    XCO2 
+00690 0533 8B 07          ADD A  #7 
+00691 0535 25 1B          BCS    XCO4 
+00692 0537 8B 0A   XCO2   ADD A  #10 
+00693 0539 33             PUL B           
+00694 053A 1B             ABA             
+00695 053B 36             PSH A           
+00696 053C BD 019B        JSR    KBDI 
+00697 053F 81 0D          CMP A  #$D 
+00698 0541 26 0F          BNE    XCO4 
+00699 0543 32             PUL A           
+00700 0544 CE 1000        LDX    #$1000 
+00701 0547 C6 80          LDA B  #128 
+00702 0549 A7 00   XCO3   STA A  X 
+00703 054B 08             INX             
+00704 054C 5A             DEC B           
+00705 054D 26 FA          BNE    XCO3 
+00706 054F 7E 0118        JMP    START 
+
+00708 0552 7E 014C XCO4   JMP    LER 
+
+
+
+00710              *PRINT CONTENTS OF BUFFER
+
+
+00712      0555    CP     EQU    * 
+00713 0555 BD 019B        JSR    KBDI 
+00714 0558 81 0D          CMP A  #$D 
+
+
+
+
+
+---
+
+
+PAGE  018   DI-68-OE          
+
+
+
+00715 055A 27 03          BEQ    CP4 
+00716 055C 7E 014C        JMP    LER 
+
+00718 055F 86 08   CP4    LDA A  #8 
+00719 0561 97 5F          STA A  CNT 
+00720 0563 CE 1000        LDX    #$1000 
+00721 0566 BD 01AF CP1    JSR    PCRLF 
+00722 0569 86 10          LDA A  #16 
+00723 056B 97 5D          STA A  COUNT 
+00724 056D A6 00   CP2    LDA A  X 
+00725 056F BD 024F        JSR    LBYTE 
+00726 0572 08             INX             
+00727 0573 7A 005D        DEC    COUNT 
+00728 0576 27 07          BEQ    CP3 
+00729 0578 86 20          LDA A  #$20 
+00730 057A BD 0197        JSR    CO 
+00731 057D 20 EE          BRA    CP2 
+
+00733 057F 7A 005F CP3    DEC    CNT 
+00734 0582 26 E2          BNE    CP1 
+00735 0584 BD 01AF        JSR    PCRLF 
+00736 0587 7E 0118        JMP    START 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+---
+
+
+PAGE  019   DI-68-OE          
+
+
+
+00738              *WRITE SECTION OF SEEK TEST
+
+
+00740      058A    SKW    EQU    * 
+00741 058A 7F 000B        CLR    TRACK    SET TRACK
+00742 058D 86 05   SKW6   LDA A  #5 
+00743 058F 97 5F          STA A  CNT 
+00744 0591 86 01   SKW5   LDA A  #1 
+00745 0593 97 0C          STA A  SECTOR   & SECTOR
+00746 0595 BD 0267        JSR    XMTUS    SELECT DRIVE
+00747 0598 BD 027B SKW1   JSR    XMTTK    SEEK
+00748 059B 86 08          LDA A  #$8 
+00749 059D BD 01DE        JSR    LOOP 
+00750 05A0 BD 0267 SKW2   JSR    XMTUS    ISSUE U/S
+00751 05A3 CE 000B        LDX    #TRACK   GET DATA PNTR
+00752 05A6 C6 40          LDA B  #64      PAIR COUNT
+00753 05A8 D7 5D          STA B  COUNT 
+00754 05AA C6 30          LDA B  #$30 
+00755 05AC A6 00   SKW3   LDA A  X 
+00756 05AE BD F1FF        JSR    SAVE 
+00757 05B1 A7 06          STA A  6,X      TRACK
+00758 05B3 E7 02          STA B  2,X 
+00759 05B5 DE 19          LDX    SAVXR 
+00760 05B7 A6 01          LDA A  1,X 
+00761 05B9 BD F1FF        JSR    SAVE 
+00762 05BC A7 06          STA A  6,X      SECTOR
+00763 05BE E7 02          STA B  2,X 
+00764 05C0 DE 19          LDX    SAVXR 
+00765 05C2 7A 005D        DEC    COUNT 
+00766 05C5 26 E5          BNE    SKW3 
+00767 05C7 86 04          LDA A  #4       WRITE IT
+00768 05C9 BD 01DE        JSR    LOOP 
+00769 05CC 86 02          LDA A  #2       DONE W/SECTOR
+00770 05CE 9B 0C          ADD A  SECTOR 
+00771 05D0 97 0C          STA A  SECTOR 
+00772 05D2 81 1B          CMP A  #27      DONE W/TRK?
+00773 05D4 2B CA          BMI    SKW2     NO
+00774 05D6 81 1C          CMP A  #28 
+00775 05D8 27 06          BEQ    SKW4     YES
+00776 05DA 86 02          LDA A  #2       HALF
+00777 05DC 97 0C          STA A  SECTOR 
+00778 05DE 20 C0          BRA    SKW2 
+
+00780 05E0 86 1A   SKW4   LDA A  #26 
+00781 05E2 97 5D          STA A  COUNT 
+00782 05E4 86 01          LDA A  #1       INIT SECTOR
+00783 05E6 97 0C          STA A  SECTOR 
+00784 05E8 BD 0267 SKW7   JSR    XMTUS    READ IT
+00785 05EB 86 02          LDA A  #2 
+00786 05ED BD 01DE        JSR    LOOP 
+00787 05F0 BD F1FF        JSR    SAVE 
+00788 05F3 A6 00          LDA A  0,X 
+00789 05F5 DE 19          LDX    SAVXR 
+00790 05F7 84 08          AND A  #8 
+
+
+
+
+
+---
+
+
+PAGE  020   DI-68-OE          
+
+
+
+00791 05F9 26 0A          BNE    SKW8     ERROR
+00792 05FB 7C 000C        INC    SECTOR   OK
+00793 05FE 7A 005D        DEC    COUNT 
+00794 0601 26 E5          BNE    SKW7     NOT DONE
+00795 0603 20 12          BRA    SKW10 
+
+00797 0605 7A 005F SKW8   DEC    CNT      ERROR
+00798 0608 26 1A          BNE    SKW11    RE-WRITE
+00799 060A 86 02          LDA A  #2       MEDIA ERROR
+00800 060C BD 024F        JSR    LBYTE 
+00801 060F 96 0B          LDA A  TRACK 
+00802 0611 BD 024F        JSR    LBYTE 
+00803 0614 BD 01AF        JSR    PCRLF 
+00804 0617 7C 000B SKW10  INC    TRACK    GET NEXT TRACK
+00805 061A 96 0B          LDA A  TRACK 
+00806 061C 81 4D          CMP A  #77 
+00807 061E 26 10          BNE    SKW12    STILL MORE
+00808 0620 7F 000B        CLR    TRACK    NO MORE
+00809 0623 39             RTS             
+
+00811 0624 86 0A   SKW11  LDA A  #$A 
+00812 0626 BD F1FF        JSR    SAVE 
+00813 0629 A7 02          STA A  2,X      RESET FLAG
+00814 062B DE 19          LDX    SAVXR 
+00815 062D 7E 0591        JMP    SKW5 
+
+00817 0630 7E 058D SKW12  JMP    SKW6 
+
+
+
+00819              *READ SECTION OF SEEK TEST
+
+
+00821      0633    SKR    EQU    * 
+00822 0633 7F 000B        CLR    TRACK    INIT TRK
+00823 0636 86 01   SKR1   LDA A  #1 
+00824 0638 97 0C          STA A  SECTOR   & SECTOR
+00825 063A BD 0267        JSR    XMTUS    SELECT UNIT
+00826 063D BD 027B        JSR    XMTTK    SEEK
+00827 0640 86 08          LDA A  #8 
+00828 0642 BD 01DE        JSR    LOOP 
+00829 0645 86 05   SKR2   LDA A  #5       SET COUNT
+00830 0647 97 5F          STA A  CNT 
+00831 0649 BD 0267        JSR    XMTUS    ISSUE U/S
+00832 064C 86 02   SKR3   LDA A  #2       READ
+00833 064E BD 01DE        JSR    LOOP 
+00834 0651 BD F1FF        JSR    SAVE 
+00835 0654 A6 00          LDA A  0,X      CRC?
+00836 0656 DE 19          LDX    SAVXR 
+00837 0658 84 08          AND A  #8 
+00838 065A 27 28          BEQ    SKR5     OK
+00839 065C 86 0A          LDA A  #$A      ERROR-RESET FLAG
+00840 065E BD F1FF        JSR    SAVE 
+00841 0661 A7 02          STA A  2,X 
+
+
+
+
+
+---
+
+
+PAGE  021   DI-68-OE          
+
+
+
+00842 0663 DE 19          LDX    SAVXR 
+00843 0665 7A 005F        DEC    CNT 
+00844 0668 26 E2          BNE    SKR3     TRY AGAIN
+00845 066A 86 01          LDA A  #1       ERROR 01
+00846 066C BD 024F        JSR    LBYTE 
+00847 066F 96 0B          LDA A  TRACK 
+00848 0671 BD 024F        JSR    LBYTE 
+00849 0674 BD 01AF        JSR    PCRLF 
+00850 0677 7C 000B SKR4   INC    TRACK 
+00851 067A 96 0B          LDA A  TRACK 
+00852 067C 81 4D          CMP A  #77 
+00853 067E 26 B6          BNE    SKR1     NEXT TRACK
+00854 0680 7F 000B        CLR    TRACK 
+00855 0683 39             RTS             
+
+00857 0684 CE 000B SKR5   LDX    #TRACK   DATA PNTR
+00858 0687 86 40          LDA A  #64 
+00859 0689 97 5D          STA A  COUNT 
+00860 068B BD 03EE SKR6   JSR    GTBYTE   GET A BYTE
+00861 068E A1 00          CMP A  X 
+00862 0690 26 24          BNE    SKR7     ERROR
+00863 0692 BD 03EE        JSR    GTBYTE 
+00864 0695 A1 01          CMP A  1,X 
+00865 0697 26 3D          BNE    SKR8     ERROR
+00866 0699 7A 005D        DEC    COUNT 
+00867 069C 26 ED          BNE    SKR6     CONTINUE
+00868 069E 86 04   SKR11  LDA A  #4 
+00869 06A0 16             TAB             
+00870 06A1 9B 0C          ADD A  SECTOR 
+00871 06A3 97 0C          STA A  SECTOR 
+00872 06A5 80 1B          SUB A  #27 
+00873 06A7 2B 9C          BMI    SKR2 
+00874 06A9 8B 1B          ADD A  #27 
+00875 06AB 10             SBA             
+00876 06AC 2A FD          BPL    *-1 
+00877 06AE 1B             ABA             
+00878 06AF 27 C6          BEQ    SKR4 
+00879 06B1 4C             INC A           
+00880 06B2 97 0C          STA A  SECTOR 
+00881 06B4 20 8F          BRA    SKR2 
+
+00883 06B6 E6 00   SKR7   LDA B  X 
+00884 06B8 37      SKR10  PSH B           
+00885 06B9 36             PSH A           
+00886 06BA 86 05          LDA A  #5 
+00887 06BC BD 024F        JSR    LBYTE 
+00888 06BF 32             PUL A           
+00889 06C0 BD 024F        JSR    LBYTE 
+00890 06C3 32             PUL A           
+00891 06C4 BD 024F        JSR    LBYTE 
+00892 06C7 96 0B          LDA A  TRACK 
+00893 06C9 BD 024F        JSR    LBYTE 
+00894 06CC 96 0C          LDA A  SECTOR 
+00895 06CE BD 024F        JSR    LBYTE 
+
+
+
+
+
+---
+
+
+PAGE  022   DI-68-OE          
+
+
+
+00896 06D1 BD 01AF        JSR    PCRLF 
+00897 06D4 20 C8          BRA    SKR11 
+
+00899 06D6 E6 01   SKR8   LDA B  1,X 
+00900 06D8 20 DE          BRA    SKR10 
+
+
+00902 E0FE                ORG    $E0FE 
+00903 E0FE 0100           FDB    $100 
+
+
+
+00905                     END             
+PROM   F000
+CHRIN  F006
+COUT   F009
+MNTR   F015
+XSTACK 1B00
+DIO    F018
+SAVE   F1FF
+RAM    0000
+UNIT   000A
+TRACK  000B
+SECTOR 000C
+SAVXR  0019
+STACK  0059
+SAVEX  005A
+SAVEA  005C
+COUNT  005D
+BYTE   005E
+CNT    005F
+START  0118
+LER    014C
+TBL    0158
+CI     0191
+CO     0197
+KBDI   019B
+KBDI2  019E
+KBDI1  01AE
+PCRLF  01AF
+RESET  01B3
+XMIT   01D4
+LOOP   01DE
+LOOP1  01E4
+GTUNT  01ED
+GTUNT1 020C
+GTUNT2 020F
+NMBR   021B
+GTNMB  021C
+GTNMB1 021F
+GTNMB2 0233
+GTDGT  023B
+GTDGT1 024C
+LBYTE  024F
+
+
+
+
+
+---
+
+
+PAGE  023   DI-68-OE          
+
+
+
+HXD    025C
+HXD1   0262
+XMTUS  0267
+XMTTK  027B
+CA     0289
+CA1    0293
+CB     029B
+CB1    02A5
+CD     02BC
+CD1    02C6
+CD2    02D2
+CD3    02F9
+CD4    0300
+CF     030E
+CF1    0318
+CF2    0329
+CG     0342
+CG1    034C
+CG2    0354
+CG3    035D
+CG4    0372
+CG5    03A5
+CG6    03B8
+CG7    03CA
+CG8    03E6
+GTBYTE 03EE
+CH     040A
+CH1    0414
+CH2    041F
+XCI    042E
+CI3    0438
+CI1    043C
+CI2    045F
+CJ     0479
+CJ1    0483
+CK     048C
+CK1    0496
+CL     049E
+CL1    04A8
+CM     04AD
+CM1    04B7
+CM2    04BB
+CM3    04D0
+CM5    04E3
+CM4    04F8
+CN     0507
+XCO    050A
+XCO1   051D
+XCO2   0537
+XCO3   0549
+XCO4   0552
+CP     0555
+CP4    055F
+CP1    0566
+
+
+
+
+
+---
+
+
+PAGE  024   DI-68-OE          
+
+
+
+CP2    056D
+CP3    057F
+SKW    058A
+SKW6   058D
+SKW5   0591
+SKW1   0598
+SKW2   05A0
+SKW3   05AC
+SKW4   05E0
+SKW7   05E8
+SKW8   0605
+SKW10  0617
+SKW11  0624
+SKW12  0630
+SKR    0633
+SKR1   0636
+SKR2   0645
+SKR3   064C
+SKR4   0677
+SKR5   0684
+SKR6   068B
+SKR11  069E
+SKR7   06B6
+SKR10  06B8
+SKR8   06D6
+
+TOTAL ERRORS 

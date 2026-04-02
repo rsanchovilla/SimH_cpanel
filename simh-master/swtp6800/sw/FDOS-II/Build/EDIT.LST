@@ -1,0 +1,1044 @@
+10000                   ATOPM   EQU    $E014  MONITOR: ADDRESS OF TOP MEMORY 
+10001                   PIA     EQU    $E401  CONSOLE PIA
+10002                   CI      EQU    $F006  PROM CI
+10003                   CO      EQU    $F009  PROM CO
+10004                   UPDT    EQU    $F023  PROM UPDT
+10005                   RIX     EQU    $F12C  PROM RIX
+10006                   WRT     EQU    $F1AD  PROM WRT
+10007    ;       
+10008    ;       
+10009                           ORG    $0040
+10010    ;       
+10011    ;       
+10012   0040 7E 0100            JMP     L0100
+10013   0043 7E F006    INCH    JMP     CI      Input char from console
+10014   0046 7E F009    OUTCH   JMP     CO      Print char in console
+10015   0049 7E F12C    RDDSK   JMP     RIX     PROM RIX read char from file
+10016   004C 7E F1AD    WRDSK   JMP     WRT     PROM WRT write char to file
+10017   004F 7E 08A0    ECHOOFF JMP     ECHOFF  Set ECHO OFF by writing $37 on PIA at E401
+10018   
+10019   0100 8E 00C0    L0100   LDS     #$00C0       EDITOR Start
+10020   0103 BD 004F            JSR     ECHOOFF      Set ECHO OFF by writing $37 on PIA at E401
+10021   0106 BD 0210            JSR     PRTCRLF      Print <CR><LF>
+10022   0109 F6 0858            LDAB    MTITLE       Message ""FDOS-II/ASTRAL 2000 EDITOR VER. 1.1""
+10023   010C CE 0859            LDX     #MTITLE+1
+10024   010F BD 0206            JSR     PRTSTR       Print string addr in X, length in B
+10025   0112 BD 08B0            JSR     SETHIME      Set HIMEM var (=last addr of RAM availabre) 
+10026   0115 CE 0A00            LDX     #$0A00
+10027   0118 DF 8C              STX     L008C
+10028   011A 96 65              LDAA    HIMEM+1
+10029   011C D6 64              LDAB    HIMEM     Now (B,A)=Last addr of RAM
+10030   011E 90 8D              SUBA    L008D
+10031   0120 D2 8C              SBCB    L008C     Now (B,A)=HIMEM - $0A00
+10032   0122 97 63              STAA    WSMAX+1
+10033   0124 D7 62              STAB    WSMAX    Max num of chars in workspace
+10034   0126 4F                 CLRA    
+10035   0127 5F                 CLRB    
+10036   0128 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10037   012B 86 FF              LDAA    #$FF
+10038   012D A7 00              STAA    $0000,X   set empty workspace
+10039   012F A7 01              STAA    $0001,X
+10040   0131 CE 0001            LDX     #$0001
+10041   0134 DF 54              STX     L0054
+10042   0136 DF 58              STX     WSLEN     num chars in workspace
+
+                                                     Main command loop
+10043   0138 8E 00C0    MAIN    LDS     #$00C0
+10044   013B BD 0210            JSR     PRTCRLF      Print <CR><LF>
+10045   013E BD 0247            JSR     RCMDLIN      Print command prompt "@" read command line
+
+10046   0141 8E 00C0    L0141   LDS     #$00C0
+10047   0144 DE 54              LDX     L0054
+10048   0146 DF 56              STX     L0056
+10049   0148 DE 58              LDX     WSLEN     num chars in workspace
+10050   014A DF 5A              STX     L005A
+10051   014C 4F                 CLRA    
+10052   014D 97 61              STAA    L0061
+10053   014F 4C                 INCA    
+10054   0150 97 60              STAA    NLIN         Number of lines defaults to 1
+10055   0152 BD 030C    L0152   JSR     L030C
+10056   0155 96 5E              LDAA    CMD         Editor Command typed by used
+10057   0157 81 2D              CMPA    #$2D        = '-' ? 
+10058   0159 27 0A              BEQ     L0165
+10059   015B 81 2B              CMPA    #$2B        = '+' ? 
+10060   015D 27 06              BEQ     L0165
+10061   015F 96 5F              LDAA    L005F
+10062   0161 81 01              CMPA    #$01
+10063   0163 26 03              BNE     L0168
+10064   0165 BD 0351    L0165   JSR     L0351
+10065   0168 96 5F      L0168   LDAA    L005F
+10066   016A 27 1F              BEQ     L018B
+10067   016C 96 5E              LDAA    CMD         Editor Command typed by used
+10068   016E 81 1B              CMPA    #$1B        = <ESC>? 
+10069   0170 27 E0              BEQ     L0152
+
+                                                    Command Unknown error
+ 
+10070   0172 BD 0210    ERRCMD  JSR     PRTCRLF      Print <CR><LF>
+10071   0175 86 22              LDAA    #$22         '"'
+10072   0177 BD 0046            JSR     OUTCH        Print Char in console
+10073   017A 96 5E              LDAA    CMD         Editor Command typed by used      
+10074   017C BD 0046            JSR     OUTCH        Print Char in console
+10075   017F F6 087C            LDAB    MUNK         Message '" ????'
+10076   0182 CE 087D            LDX     #$087D
+10077   0185 BD 0206            JSR     PRTSTR       Print string addr in X, length in B
+10078   0188 7E 0138            JMP     MAIN         Main command loop
+10079    ;
+10080   018B 96 5E      L018B   LDAA    CMD         Editor Command typed by used
+10081   018D 84 1F              ANDA    #$001F
+10082   018F 97 8A              STAA    L008A
+10083   0191 9B 8A              ADDA    L008A
+10084   0193 9B 8A              ADDA    L008A       Now: A=(cmd & 31) * 3
+10085   0195 5F                 CLRB    
+10086   0196 CE 01A4            LDX     #CMDTBL-3
+10087   0199 DF 8C              STX     L008C
+10088   019B 9B 8D              ADDA    L008D
+10089   019D D9 8C              ADCB    L008C
+10090   019F 97 8D              STAA    L008D
+10091   01A1 D7 8C              STAB    L008C
+10092   01A3 DE 8C              LDX     L008C      Now: X=CMDTBL + (cmd & 31) * 3 - 3
+10093   01A5 6E 00              JMP     $0000,X    Jump to command execution
+10094    
+10095   01A7 7E 054E    CMDTBL  JMP     CMD.A      Command "A" append 50 lines from input file
+10097   01AA 7E 05A0            JMP     L05A0      Command "B" go to beggining of workspace
+10099   01AD 7E 05A8            JMP     L05A8      Command "C" change str<ESC>str<ESC> 
+10101   01B0 7E 05BE            JMP     L05BE      Command "D" delete +/-n chars from workspace
+10103   01B3 7E 060A            JMP     CMD.E      Command "E" end: write workspace to output file, read remaining input file and write it to output file, exit to FDOS
+10105   01B6 7E 0654            JMP     L0654      Command "F" 
+10107   01B9 7E 0172            JMP     ERRCMD       Command Unknown error
+10109   01BC 7E 0172            JMP     ERRCMD       Command Unknown error
+10111   01BF 7E 0660            JMP     L0660      Command "I" insert: insert text at buf pointer
+10113   01C2 7E 0172            JMP     ERRCMD       Command Unknown error
+10115   01C5 7E 06DB            JMP     L06DB      Command "K" delete +/-n lines from workspace
+10117   01C8 7E 06FE            JMP     L06FE      Command "L" move pointer +/-n lines up/down
+10119   01CB 7E 0708            JMP     L0708      Command "M" move pointer +/-n chars left/right 
+10121   01CE 7E 0753            JMP     L0753      Command "N" search, reading input file and writting it to output file
+10123   01D1 7E 0172            JMP     ERRCMD       Command Unknown error
+10125   01D4 7E 07A9            JMP     L07A9      Command "P" write n lines to output file
+10127   01D7 7E 0172            JMP     ERRCMD       Command Unknown error
+10129   01DA 7E 0172            JMP     ERRCMD       Command Unknown error
+10131   01DD 7E 07EF            JMP     L07EF      Command "S" search
+10133   01E0 7E 0801            JMP     CMD.T      Command "T" type lines in terminal
+10135   01E3 7E 0172            JMP     ERRCMD       Command Unknown error
+10137   01E6 7E 0172            JMP     ERRCMD       Command Unknown error
+10139   01E9 7E 0172            JMP     ERRCMD       Command Unknown error
+10141   01EC 7E 0172            JMP     ERRCMD       Command Unknown error
+10143   01EF 7E 0172            JMP     ERRCMD       Command Unknown error
+10145   01F2 7E 0851            JMP     L0851      Command "Z" set the buffer pointer at end of workspace
+10146    ;
+10147   01F5 BD 0043    INCH7B  JSR     INCH      Input char from console
+10148   01F8 84 7F              ANDA    #$007F    remove parity bit
+10149   01FA 39                 RTS     
+
+10151   01FB 39         L01FB   RTS               <- just RTS. Was the flush current write sector to disk on FDOS-I
+                                                     The original code is LDAB OCNTR (D6 0D)
+
+10153   01FC C6 3C              LDAB    #$003C
+10154   01FE 4F         L01FE   CLRA    
+10155   01FF BD 004C            JSR     WRDSK        write char to file
+10156   0202 5A                 DECB    
+10157   0203 26 F9              BNE     L01FE
+10158   0205 39                 RTS     
+10159   
+10160                                                Print string addr in X, length in B
+10161   
+10162   0206 A6 00      PRTSTR  LDAA    $0000,X      get the char from string
+10163   0208 BD 0046            JSR     OUTCH        Print Char in console
+10164   020B 08                 INX     
+10165   020C 5A                 DECB    
+10166   020D 26 F7              BNE     PRTSTR
+10167   020F 39                 RTS     
+10168   
+10169   0210 86 0D      PRTCRLF LDAA    #$0D         <CR>    Print <CR><LF>
+10170   0212 BD 0046            JSR     OUTCH        Print Char in console
+10171   0215 86 0A              LDAA    #$0A         <LF>
+10172   0217 7E 0046            JMP     OUTCH        Print Char in console
+10173    ;
+10174   021A BD 0049    RDDSK1  JSR     RDDSK        read char from file
+10175   021D 25 03              BCS     L0222        if end of file carry set
+10176   021F 84 7F              ANDA    #$007F       get byte
+10177   0221 39                 RTS     
+10178   0222 86 1A      L0222   LDAA    #$1A         if EOF return ^Z
+10179   0224 39                 RTS     
+10180   
+10181   0225 39         L0225   RTS     
+10183   0226 39         L0226   RTS     
+
+10185   0227 86 55              LDAA    #$0055
+10186   0229 CE 09FF            LDX     #$09FF
+10187   022C 08         L022C   INX     
+10188   022D A7 00              STAA    $0000,X
+10189   022F A1 00              CMPA    $0000,X
+10190   0231 27 F9              BEQ     L022C
+10191   0233 09                 DEX     
+10192   0234 DF 64              STX     HIMEM     Last addr of RAM
+10193   0236 39                 RTS     
+
+10195   0237 CE 0A00    WSADDR  LDX     #$0A00     X=(B,A)+$0A00 = addr in text workspace
+10196   023A DF 8C              STX     L008C
+10197   023C 9B 8D              ADDA    L008D
+10198   023E D9 8C              ADCB    L008C
+10199   0240 97 8D              STAA    L008D
+10200   0242 D7 8C              STAB    L008C
+10201   0244 DE 8C              LDX     L008C
+10202   0246 39                 RTS     
+
+                                                  Print command prompt "@" read command line
+
+10204   0247 86 40      L0247   LDAA    #$40     '@'
+10205   0249 BD 0046            JSR     OUTCH      Print Char in console
+10206   024C DE 62              LDX     WSMAX    Max num of chars in workspace
+10207   024E DF 52              STX     L0052
+10208   0250 09                 DEX     
+10209   0251 DF 5C              STX     L005C
+10210   0253 7F 0067            CLR     L0067
+10211   0256 BD 01F5    L0256   JSR     INCH7B    Input char from console, remove bit 7
+10212   0259 97 66              STAA    L0066
+10213   025B 81 18              CMPA    #$18      ^X ?
+10214   025D 26 03              BNE     L0262
+10215   025F 7E 0138            JMP     MAIN         Main command loop
+10216    ;
+10217   0262 81 0D      L0262   CMPA    #$0D      <CR> ? 
+10218   0264 26 17              BNE     L027D
+10219   0266 DE 52              LDX     L0052
+10220   0268 09                 DEX     
+10221   0269 DF 52              STX     L0052
+10222   026B D6 52              LDAB    L0052
+10223   026D 96 53              LDAA    L0053
+10224   026F BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10225   0272 86 0D              LDAA    #$000D     <CR>
+10226   0274 A7 00              STAA    $0000,X
+10227   0276 BD 0046            JSR     OUTCH      Print Char in console
+10228   0279 86 0A              LDAA    #$000A     <LF>
+10229   027B 97 66              STAA    L0066
+10230   027D 81 01      L027D   CMPA    #$01
+10231   027F 26 2F              BNE     L02B0
+10232   0281 01                 NOP     
+10233   0282 01                 NOP     
+10234   0283 01                 NOP     
+10235   0284 DE 62              LDX     WSMAX    Max num of chars in workspace
+10236   0286 9C 52              CPX     L0052
+10237   0288 26 06              BNE     L0290
+10238   028A BD 0210            JSR     PRTCRLF      Print <CR><LF>
+10239   028D 7E 0247            JMP     RCMDLIN      Print command prompt "@" read command line
+10240    ;
+10241   0290 D6 52      L0290   LDAB    L0052
+10242   0292 96 53              LDAA    L0053
+10243   0294 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10244   0297 A6 00              LDAA    $0000,X
+10245   0299 97 66              STAA    L0066
+10246   029B 81 1B              CMPA    #$001B
+10247   029D 26 06              BNE     L02A5
+10248   029F 86 24              LDAA    #$0024
+10249   02A1 97 66              STAA    L0066
+10250   02A3 20 03              BRA     L02A8
+10251    ;
+10252   02A5 BD 0046    L02A5   JSR     OUTCH      Print Char in console
+10253   02A8 DE 52      L02A8   LDX     L0052
+10254   02AA 08                 INX     
+10255   02AB DF 52              STX     L0052
+10256   02AD 7E 0305            JMP     L0305
+10257    ;
+10258   02B0 DE 58      L02B0   LDX     WSLEN     num chars in workspace
+10259   02B2 08                 INX     
+10260   02B3 08                 INX     
+10261   02B4 9C 52              CPX     L0052
+10262   02B6 26 03              BNE     L02BB
+10263   02B8 BD 04A0            JSR     L04A0
+10264   02BB DE 58      L02BB   LDX     WSLEN     num chars in workspace
+10265   02BD 08                 INX     
+10266   02BE 08                 INX     
+10267   02BF 9C 52              CPX     L0052
+10268   02C1 26 08              BNE     L02CB
+10269   02C3 86 07              LDAA    #$07     <BELL>
+10270   02C5 BD 0046            JSR     OUTCH      Print Char in console
+10271   02C8 7E 0256            JMP     L0256
+10272    ;
+10273   02CB 96 66      L02CB   LDAA    L0066
+10274   02CD 81 7D              CMPA    #$007D
+10275   02CF 26 04              BNE     L02D5
+10276   02D1 86 1B              LDAA    #$1B
+10277   02D3 97 66              STAA    L0066
+10278   02D5 96 66      L02D5   LDAA    L0066
+10279   02D7 81 1B              CMPA    #$1B      <ESC>
+10280   02D9 26 07              BNE     L02E2
+10281   02DB 86 24              LDAA    #$24     '$'
+10282   02DD BD 0046            JSR     OUTCH      Print Char in console
+10283   02E0 20 05              BRA     L02E7
+10284    ;
+10285   02E2 96 66      L02E2   LDAA    L0066
+10286   02E4 BD 0046            JSR     OUTCH      Print Char in console
+10287   02E7 DE 52      L02E7   LDX     L0052
+10288   02E9 09                 DEX     
+10289   02EA DF 52              STX     L0052
+10290   02EC D6 52              LDAB    L0052
+10291   02EE 96 53              LDAA    L0053
+10292   02F0 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10293   02F3 96 66              LDAA    L0066
+10294   02F5 A7 00              STAA    $0000,X
+10295   02F7 86 1B              LDAA    #$001B
+10296   02F9 91 66              CMPA    L0066
+10297   02FB 26 08              BNE     L0305
+10298   02FD 91 67              CMPA    L0067
+10299   02FF 26 04              BNE     L0305
+10300   0301 BD 0210            JSR     PRTCRLF      Print <CR><LF>
+10301   0304 39                 RTS     
+10302    ; -----------------------------------------------
+10303   0305 96 66      L0305   LDAA    L0066
+10304   0307 97 67              STAA    L0067
+10305   0309 7E 0256            JMP     L0256
+10306    ;
+10307   030C D6 5C      L030C   LDAB    L005C
+10308   030E 96 5D              LDAA    L005D
+10309   0310 90 53              SUBA    L0053
+10310   0312 D2 52              SBCB    L0052
+10311   0314 2A 03              BPL     L0319
+10312   0316 BD 0247            JSR     RCMDLIN      Print command prompt "@" read command line
+10313   0319 86 02      L0319   LDAA    #$0002
+10314   031B 97 5F              STAA    L005F
+10315   031D D6 5C              LDAB    L005C
+10316   031F 96 5D              LDAA    L005D
+10317   0321 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10318   0324 A6 00              LDAA    $0000,X
+10319   0326 97 82              STAA    L0082
+10320   0328 80 41              SUBA    #$0041
+10321   032A 2B 09              BMI     L0335
+10322   032C 86 5A              LDAA    #$005A
+10323   032E 90 82              SUBA    L0082
+10324   0330 2B 03              BMI     L0335
+10325   0332 7F 005F            CLR     L005F
+10326   0335 96 82      L0335   LDAA    L0082
+10327   0337 80 30              SUBA    #$0030
+10328   0339 2B 0C              BMI     L0347
+10329   033B 86 39              LDAA    #$0039
+10330   033D 90 82              SUBA    L0082
+10331   033F 2B 06              BMI     L0347
+10332   0341 7F 005F            CLR     L005F
+10333   0344 7C 005F            INC     L005F
+10334   0347 DE 5C      L0347   LDX     L005C
+10335   0349 09                 DEX     
+10336   034A DF 5C              STX     L005C
+10337   034C 96 82              LDAA    L0082
+10338   034E 97 5E              STAA    CMD         Editor Command typed by used
+10339   0350 39                 RTS     
+10340    ; -----------------------------------------------
+10341   0351 96 5E      L0351   LDAA    CMD         Editor Command typed by used
+10342   0353 81 2D              CMPA    #$002D
+10343   0355 26 06              BNE     L035D
+10344   0357 86 FF              LDAA    #$00FF
+10345   0359 97 61              STAA    L0061
+10346   035B 20 04              BRA     L0361
+10347    ;
+10348   035D 81 2B      L035D   CMPA    #$002B
+10349   035F 26 03              BNE     L0364
+10350   0361 BD 030C    L0361   JSR     L030C
+10351   0364 7F 0060    L0364   CLR     NLIN         Number of lines
+10352   0367 96 5F      L0367   LDAA    L005F
+10353   0369 81 01              CMPA    #$0001
+10354   036B 26 19              BNE     L0386
+10355   036D 96 5E              LDAA    CMD         Editor Command typed by used
+10356   036F 84 0F              ANDA    #$000F
+10357   0371 36                 PSHA    
+10358   0372 96 60              LDAA    NLIN         Number of lines
+10359   0374 9B 60              ADDA    NLIN         Number of lines
+10360   0376 16                 TAB     
+10361   0377 1B                 ABA     
+10362   0378 9B 60              ADDA    NLIN         Number of lines
+10363   037A 16                 TAB     
+10364   037B 1B                 ABA     
+10365   037C 33                 PULB    
+10366   037D 1B                 ABA     
+10367   037E 97 60              STAA    NLIN         Number of lines
+10368   0380 BD 030C            JSR     L030C
+10369   0383 7E 0367            JMP     L0367
+10370    ;
+10371   0386 96 61      L0386   LDAA    L0061
+10372   0388 27 0A              BEQ     L0394
+10373   038A 96 60              LDAA    NLIN         Number of lines
+10374   038C 26 06              BNE     L0394
+10375   038E 7F 0060            CLR     NLIN         Number of lines
+10376   0391 7C 0060            INC     NLIN         Number of lines
+10377   0394 39         L0394   RTS     
+10378    ; -----------------------------------------------
+10379   0395 8D 04      L0395   BSR     L039B
+10380   0397 4D                 TSTA    
+10381   0398 27 46              BEQ     L03E0
+10382   039A 39                 RTS     
+10383    ; -----------------------------------------------
+10384   039B 7F 007D    L039B   CLR     L007D
+10385   039E BD 030C    L039E   JSR     L030C
+10386   03A1 CE 0068            LDX     #$0068
+10387   03A4 DF 8C              STX     L008C
+10388   03A6 96 7D              LDAA    L007D
+10389   03A8 5F                 CLRB    
+10390   03A9 9B 8D              ADDA    L008D
+10391   03AB D9 8C              ADCB    L008C
+10392   03AD D7 8C              STAB    L008C
+10393   03AF 97 8D              STAA    L008D
+10394   03B1 DE 8C              LDX     L008C
+10395   03B3 96 5E              LDAA    CMD         Editor Command typed by used
+10396   03B5 A7 00              STAA    $0000,X
+10397   03B7 81 1B              CMPA    #$001B
+10398   03B9 27 0C              BEQ     L03C7
+10399   03BB 96 7D              LDAA    L007D
+10400   03BD 80 11              SUBA    #$0011
+10401   03BF 2A 06              BPL     L03C7
+10402   03C1 7C 007D            INC     L007D
+10403   03C4 7E 039E            JMP     L039E
+10404    ;
+10405   03C7 BD 03FE    L03C7   JSR     L03FE
+10406   03CA DE 7B              LDX     L007B
+10407   03CC 08                 INX     
+10408   03CD 27 0F              BEQ     L03DE
+10409   03CF D6 7B              LDAB    L007B
+10410   03D1 96 7C              LDAA    L007C
+10411   03D3 9B 55              ADDA    L0055
+10412   03D5 D9 54              ADCB    L0054
+10413   03D7 D7 7B              STAB    L007B
+10414   03D9 97 7C              STAA    L007C
+10415   03DB 86 FF              LDAA    #$00FF
+10416   03DD 39                 RTS     
+10417    ; -----------------------------------------------
+10418   03DE 4F         L03DE   CLRA    
+10419   03DF 39                 RTS     
+10420    ; -----------------------------------------------
+10421   03E0 CE 0884    L03E0   LDX     #MNOTFND+1
+10422   03E3 F6 0883            LDAB    MNOTFND
+10423   03E6 BD 0206            JSR     PRTSTR       Print string addr in X, length in B
+10424   03E9 CE 0068            LDX     #$0068
+10425   03EC D6 7D              LDAB    L007D
+10426   03EE 27 03              BEQ     L03F3
+10427   03F0 BD 0206            JSR     PRTSTR       Print string addr in X, length in B
+10428   03F3 86 22      L03F3   LDAA    #$22       '"'
+10429   03F5 BD 0046            JSR     OUTCH        Print Char in console
+10430   03F8 BD 0210            JSR     PRTCRLF      Print <CR><LF>
+10431   03FB 7E 0138            JMP     MAIN         Main command loop
+10432    ;
+10433   03FE CE 0000    L03FE   LDX     #$0000
+10434   0401 DF 7B              STX     L007B
+10435   0403 D6 7B      L0403   LDAB    L007B
+10436   0405 96 7C              LDAA    L007C
+10437   0407 7E 0893            JMP     L0893
+10438    ;
+10439   040A 54                 LSRB    
+10440   040B 81 FF      L040B   CMPA    #$00FF
+10441   040D 27 3A              BEQ     L0449
+10442   040F 7F 0086            CLR     L0086
+10443   0412 D6 7B      L0412   LDAB    L007B
+10444   0414 96 7C              LDAA    L007C
+10445   0416 9B 55              ADDA    L0055
+10446   0418 D9 54              ADCB    L0054
+10447   041A 9B 86              ADDA    L0086
+10448   041C C9 00              ADCB    #$0000
+10449   041E BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10450   0421 A6 00              LDAA    $0000,X
+10451   0423 97 88              STAA    L0088
+10452   0425 CE 0068            LDX     #$0068
+10453   0428 DF 8C              STX     L008C
+10454   042A 96 86              LDAA    L0086
+10455   042C 5F                 CLRB    
+10456   042D 9B 8D              ADDA    L008D
+10457   042F D9 8C              ADCB    L008C
+10458   0431 D7 8C              STAB    L008C
+10459   0433 97 8D              STAA    L008D
+10460   0435 DE 8C              LDX     L008C
+10461   0437 A6 00              LDAA    $0000,X
+10462   0439 91 88              CMPA    L0088
+10463   043B 26 12              BNE     L044F
+10464   043D A6 01              LDAA    $0001,X
+10465   043F 81 1B              CMPA    #$001B
+10466   0441 27 0B              BEQ     L044E
+10467   0443 7C 0086            INC     L0086
+10468   0446 7E 0412            JMP     L0412
+10469    ;
+10470   0449 CE FFFF    L0449   LDX     #$FFFF
+10471   044C DF 7B              STX     L007B
+10472   044E 39         L044E   RTS     
+10473    ; -----------------------------------------------
+10474   044F 96 88      L044F   LDAA    L0088
+10475   0451 81 FF              CMPA    #$00FF
+10476   0453 27 F4              BEQ     L0449
+10477   0455 DE 7B              LDX     L007B
+10478   0457 08                 INX     
+10479   0458 DF 7B              STX     L007B
+10480   045A 7E 0403            JMP     L0403
+10481    ;
+10482   045D DE 54      L045D   LDX     L0054
+10483   045F DF 58              STX     WSLEN     num chars in workspace
+10484   0461 D6 5A      L0461   LDAB    L005A
+10485   0463 96 5B              LDAA    L005B
+10486   0465 90 57              SUBA    L0057
+10487   0467 D2 56              SBCB    L0056
+10488   0469 2B 21              BMI     L048C
+10489   046B D6 56              LDAB    L0056
+10490   046D 96 57              LDAA    L0057
+10491   046F BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10492   0472 A6 00              LDAA    $0000,X
+10493   0474 36                 PSHA    
+10494   0475 D6 58              LDAB    WSLEN     num chars in workspace
+10495   0477 96 59              LDAA    WSLEN+1
+10496   0479 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10497   047C 32                 PULA    
+10498   047D A7 00              STAA    $0000,X
+10499   047F DE 56              LDX     L0056
+10500   0481 08                 INX     
+10501   0482 DF 56              STX     L0056
+10502   0484 DE 58              LDX     WSLEN     num chars in workspace
+10503   0486 08                 INX     
+10504   0487 DF 58              STX     WSLEN     num chars in workspace
+10505   0489 7E 0461            JMP     L0461
+10506    ;
+10507   048C DE 58      L048C   LDX     WSLEN     num chars in workspace
+10508   048E 09                 DEX     
+10509   048F DF 58              STX     WSLEN     num chars in workspace
+10510   0491 D6 58              LDAB    WSLEN     num chars in workspace
+10511   0493 96 59              LDAA    WSLEN+1
+10512   0495 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10513   0498 86 FF              LDAA    #$00FF
+10514   049A A7 00              STAA    $0000,X
+10515   049C BD 04A0            JSR     L04A0
+10516   049F 39                 RTS     
+10517    ; -----------------------------------------------
+10518   04A0 DE 62      L04A0   LDX     WSMAX    Max num of chars in workspace
+10519   04A2 09                 DEX     
+10520   04A3 DF 82              STX     L0082
+10521   04A5 D6 5C      L04A5   LDAB    L005C
+10522   04A7 96 5D              LDAA    L005D
+10523   04A9 90 53              SUBA    L0053
+10524   04AB D2 52              SBCB    L0052
+10525   04AD 2B 20              BMI     L04CF
+10526   04AF D6 5C              LDAB    L005C
+10527   04B1 96 5D              LDAA    L005D
+10528   04B3 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10529   04B6 A6 00              LDAA    $0000,X
+10530   04B8 36                 PSHA    
+10531   04B9 D6 82              LDAB    L0082
+10532   04BB 96 83              LDAA    L0083
+10533   04BD BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10534   04C0 32                 PULA    
+10535   04C1 A7 00              STAA    $0000,X
+10536   04C3 DE 82              LDX     L0082
+10537   04C5 09                 DEX     
+10538   04C6 DF 82              STX     L0082
+10539   04C8 DE 5C              LDX     L005C
+10540   04CA 09                 DEX     
+10541   04CB DF 5C              STX     L005C
+10542   04CD 20 D6              BRA     L04A5
+10543    ;
+10544   04CF DE 82      L04CF   LDX     L0082
+10545   04D1 08                 INX     
+10546   04D2 DF 52              STX     L0052
+10547   04D4 DE 62              LDX     WSMAX    Max num of chars in workspace
+10548   04D6 09                 DEX     
+10549   04D7 DF 5C              STX     L005C
+10550   04D9 39                 RTS     
+10551    ; -----------------------------------------------
+10552   04DA DE 54      L04DA   LDX     L0054
+10553   04DC DF 7E              STX     L007E
+10554   04DE 96 61              LDAA    L0061
+10555   04E0 26 04              BNE     L04E6
+10556   04E2 96 60              LDAA    NLIN         Number of lines
+10557   04E4 26 45              BNE     L052B
+10558   04E6 DE 58      L04E6   LDX     WSLEN     num chars in workspace
+10559   04E8 9C 54              CPX     L0054
+10560   04EA 26 0C              BNE     L04F8
+10561   04EC CE 0001            LDX     #$0001
+10562   04EF 9C 54              CPX     L0054
+10563   04F1 27 05              BEQ     L04F8
+10564   04F3 DE 7E              LDX     L007E
+10565   04F5 09                 DEX     
+10566   04F6 DF 7E              STX     L007E
+10567   04F8 7C 0060    L04F8   INC     NLIN         Number of lines
+10568   04FB 96 60      L04FB   LDAA    NLIN         Number of lines
+10569   04FD 27 15              BEQ     L0514
+10570   04FF D6 7E              LDAB    L007E
+10571   0501 96 7F              LDAA    L007F
+10572   0503 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10573   0506 A6 00              LDAA    $0000,X
+10574   0508 97 80              STAA    L0080
+10575   050A 81 FF              CMPA    #$00FF
+10576   050C 26 0D              BNE     L051B
+10577   050E DE 7E              LDX     L007E
+10578   0510 08                 INX     
+10579   0511 DF 7E              STX     L007E
+10580   0513 39                 RTS     
+10581    ; -----------------------------------------------
+10582   0514 DE 7E      L0514   LDX     L007E
+10583   0516 08                 INX     
+10584   0517 08                 INX     
+10585   0518 DF 7E              STX     L007E
+10586   051A 39                 RTS     
+10587    ; -----------------------------------------------
+10588   051B 96 80      L051B   LDAA    L0080
+10589   051D 81 0A              CMPA    #$000A
+10590   051F 26 03              BNE     L0524
+10591   0521 7A 0060            DEC     NLIN         Number of lines
+10592   0524 DE 7E      L0524   LDX     L007E
+10593   0526 09                 DEX     
+10594   0527 DF 7E              STX     L007E
+10595   0529 20 D0              BRA     L04FB
+10596    ;
+10597   052B 96 60      L052B   LDAA    NLIN         Number of lines
+10598   052D 26 01              BNE     L0530
+10599   052F 39                 RTS     
+10600    ; -----------------------------------------------
+10601   0530 D6 7E      L0530   LDAB    L007E
+10602   0532 96 7F              LDAA    L007F
+10603   0534 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10604   0537 A6 00              LDAA    $0000,X
+10605   0539 97 80              STAA    L0080
+10606   053B 81 FF              CMPA    #$00FF
+10607   053D 26 01              BNE     L0540
+10608   053F 39                 RTS     
+10609    ; -----------------------------------------------
+10610   0540 81 0A      L0540   CMPA    #$000A
+10611   0542 26 03              BNE     L0547
+10612   0544 7A 0060            DEC     NLIN         Number of lines
+10613   0547 DE 7E      L0547   LDX     L007E
+10614   0549 08                 INX     
+10615   054A DF 7E              STX     L007E
+10616   054C 20 DD              BRA     L052B
+
+                                                    Command "A" append 50 lines from input file
+
+10618   054E 8D 03      CMD.A   BSR     L0553
+10619   0550 7E 0141            JMP     L0141
+10620    ;
+10621   0553 7F 0060    L0553   CLR     NLIN        Number of lines=0
+10622   0556 D6 58      L0556   LDAB    WSLEN       num chars in workspace
+10623   0558 96 59              LDAA    WSLEN+1     
+10624   055A 90 53              SUBA    L0053       
+10625   055C D2 52              SBCB    L0052
+10626   055E 8B 0A              ADDA    #$000A
+10627   0560 C9 00              ADCB    #$0000
+10628   0562 2A 30              BPL     L0594       jump if no room in workspace
+10629   0564 BD 021A            JSR     RDDSK1      read char from file
+10630   0567 97 5E              STAA    CMD         save char
+10631   0569 81 1A              CMPA    #$1A        = ^Z <EOF) ? 
+10632   056B 27 27              BEQ     L0594       if so -> jump to terminate append
+10633   056D 81 00              CMPA    #$00        = 0 <NUL> ?
+10634   056F 27 E5              BEQ     L0556       if so -> jump to append next char
+10635   0571 81 7F              CMPA    #$007F      = <DEL> ? 
+10636   0573 27 E1              BEQ     L0556       if so -> jump to append next char
+10637   0575 D6 58              LDAB    WSLEN       num chars in workspace
+10638   0577 96 59              LDAA    WSLEN+1
+10639   0579 BD 0237            JSR     WSADDR      X=(B,A)+$0A00 = addr in text workspace
+10640   057C 96 5E              LDAA    CMD         char read from file
+10641   057E A7 00              STAA    $0000,X     add to workspace
+10642   0580 DE 58              LDX     WSLEN       num chars in workspace
+10643   0582 08                 INX     
+10644   0583 DF 58              STX     WSLEN       num chars in workspace
+10645   0585 96 5E              LDAA    CMD         char read from file
+10646   0587 81 0A              CMPA    #$0A        = <LF>?
+10647   0589 26 CB              BNE     L0556       if not -> jump to append next char
+10648   058B 7C 0060            INC     NLIN        <LF> indicates the end of line
+10649   058E 96 60              LDAA    NLIN        incr NLIN count
+10650   0590 81 32              CMPA    #50         = 50 lines read?
+10651   0592 26 C2              BNE     L0556       if not -> jump to append next char
+10652   0594 D6 58      L0594   LDAB    WSLEN       num chars in workspace       
+10653   0596 96 59              LDAA    WSLEN+1
+10654   0598 BD 0237            JSR     WSADDR      X=(B,A)+$0A00 = addr in text workspace
+10655   059B 86 FF              LDAA    #$FF        Mark end of text 
+10656   059D A7 00              STAA    $0000,X     Store at end of workspace
+10657   059F 39                 RTS     
+10658    ; -----------------------------------------------
+10659   05A0 CE 0001    L05A0   LDX     #$0001
+10660   05A3 DF 54              STX     L0054
+10661   05A5 7E 0141            JMP     L0141
+10662    ;
+10663   05A8 BD 0395    L05A8   JSR     L0395
+10664   05AB D6 7B              LDAB    L007B
+10665   05AD 96 7C              LDAA    L007C
+10666   05AF D7 54              STAB    L0054
+10667   05B1 97 55              STAA    L0055
+10668   05B3 9B 7D              ADDA    L007D
+10669   05B5 C9 00              ADCB    #$0000
+10670   05B7 D7 56              STAB    L0056
+10671   05B9 97 57              STAA    L0057
+10672   05BB 7E 0660            JMP     L0660
+10673    ;
+10674   05BE 96 61      L05BE   LDAA    L0061
+10675   05C0 27 26              BEQ     L05E8
+10676   05C2 7F 008C            CLR     L008C
+10677   05C5 96 60              LDAA    NLIN         Number of lines
+10678   05C7 97 8D              STAA    L008D
+10679   05C9 DE 54              LDX     L0054
+10680   05CB 9C 8C              CPX     L008C
+10681   05CD 2A 07              BPL     L05D6
+10682   05CF CE 0001            LDX     #$0001
+10683   05D2 DF 54              STX     L0054
+10684   05D4 20 0C              BRA     L05E2
+10685    ;
+10686   05D6 D6 54      L05D6   LDAB    L0054
+10687   05D8 96 55              LDAA    L0055
+10688   05DA 90 60              SUBA    NLIN         Number of lines
+10689   05DC C2 00              SBCB    #$0000
+10690   05DE D7 54              STAB    L0054
+10691   05E0 97 55              STAA    L0055
+10692   05E2 BD 045D    L05E2   JSR     L045D
+10693   05E5 7E 0141            JMP     L0141
+10694    ;
+10695   05E8 D6 54      L05E8   LDAB    L0054
+10696   05EA 96 55              LDAA    L0055
+10697   05EC 9B 60              ADDA    NLIN         Number of lines
+10698   05EE C9 00              ADCB    #$0000
+10699   05F0 D7 82              STAB    L0082
+10700   05F2 97 83              STAA    L0083
+10701   05F4 D6 58              LDAB    WSLEN     num chars in workspace
+10702   05F6 96 59              LDAA    WSLEN+1
+10703   05F8 90 83              SUBA    L0083
+10704   05FA D2 82              SBCB    L0082
+10705   05FC 2A 06              BPL     L0604
+10706   05FE DE 58              LDX     WSLEN     num chars in workspace
+10707   0600 DF 56              STX     L0056
+10708   0602 20 DE              BRA     L05E2
+10709    ;
+10710   0604 DE 82      L0604   LDX     L0082
+10711   0606 DF 56              STX     L0056
+10712   0608 20 D8              BRA     L05E2
+
+                                                 Command "E" end: write workspace to output file, 
+                                                                  read remaining input file and write 
+                                                                  it to output file, exit to FDOS
+10714   060A 8D 02      CMD.E   BSR     L060E    write workspace in output file
+10715   060C 20 2B              BRA     L0639    copy remaining input file in output file
+10716    ;
+10717   060E BD 0225    L060E   JSR     L0225     Just RTS
+10718   0611 CE 0001            LDX     #$0001     
+10719   0614 DF 82              STX     L0082
+10720   0616 DE 58      L0616   LDX     WSLEN     num chars in workspace
+10721   0618 09                 DEX     
+10722   0619 DF 8C              STX     L008C     write workspace in output file
+10723   061B D6 8C              LDAB    L008C
+10724   061D 96 8D              LDAA    L008D
+10725   061F 90 83              SUBA    L0083
+10726   0621 D2 82              SBCB    L0082
+10727   0623 2B 13              BMI     L0638
+10728   0625 D6 82              LDAB    L0082
+10729   0627 96 83              LDAA    L0083
+10730   0629 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10731   062C A6 00              LDAA    $0000,X
+10732   062E BD 004C            JSR     WRDSK    .*echo inch:A    write char to file
+10733   0631 DE 82              LDX     L0082
+10734   0633 08                 INX     
+10735   0634 DF 82              STX     L0082
+10736   0636 20 DE              BRA     L0616
+10738   0638 39         L0638   RTS     
+
+10740   0639 BD 021A    L0639   JSR     RDDSK1      read char from file
+10741   063C 97 5E              STAA    CMD      .*echo i2ch:A   Editor Command typed by used
+10742   063E 81 1A              CMPA    #$1A        is ^Z ? (EOF)
+10743   0640 27 06              BEQ     L0648       
+10744   0642 BD 004C            JSR     WRDSK        write char to file
+10745   0645 7E 0639            JMP     L0639
+10746    ;
+10747   0648 BD 004C    L0648   JSR     WRDSK        write <EOF> to file
+10748   064B BD 01FB            JSR     L01FB        <- just RTS. Was the flush current write sector to disk on FDOS-I
+10749   064E BD 0226            JSR     L0226
+10750   0651 7E F023            JMP     UPDT         update (flush) output file
+10751    ;
+10752   0654 BD 0225    L0654   JSR     L0225     Just RTS
+10753   0657 BD 01FB            JSR     L01FB     <- just RTS. Was the flush current write sector to disk on FDOS-I
+10754   065A BD 0226            JSR     L0226
+10755   065D 7E 0141            JMP     L0141
+10756    ;
+10757   0660 BD 030C    L0660   JSR     L030C
+10758   0663 96 5E              LDAA    CMD         Editor Command typed by used
+10759   0665 81 1B              CMPA    #$001B
+10760   0667 27 6C              BEQ     L06D5
+10761   0669 81 7D              CMPA    #$007D
+10762   066B 27 68              BEQ     L06D5
+10763   066D DE 54              LDX     L0054
+10764   066F 9C 56              CPX     L0056
+10765   0671 26 50              BNE     L06C3
+10766   0673 D6 52              LDAB    L0052
+10767   0675 96 53              LDAA    L0053
+10768   0677 80 0A              SUBA    #$000A
+10769   0679 C2 00              SBCB    #$0000
+10770   067B D7 8C              STAB    L008C
+10771   067D 97 8D              STAA    L008D
+10772   067F DE 58              LDX     WSLEN     num chars in workspace
+10773   0681 9C 8C              CPX     L008C
+10774   0683 26 03              BNE     L0688
+10775   0685 7E 0138            JMP     MAIN         Main command loop
+10776    ;
+10777   0688 DE 58      L0688   LDX     WSLEN     num chars in workspace
+10778   068A DF 82              STX     L0082
+10779   068C DE 52              LDX     L0052
+10780   068E 09                 DEX     
+10781   068F 09                 DEX     
+10782   0690 DF 56              STX     L0056
+10783   0692 DF 5A              STX     L005A
+10784   0694 D6 82      L0694   LDAB    L0082
+10785   0696 96 83              LDAA    L0083
+10786   0698 90 55              SUBA    L0055
+10787   069A D2 54              SBCB    L0054
+10788   069C 2B 20              BMI     L06BE
+10789   069E D6 82              LDAB    L0082
+10790   06A0 96 83              LDAA    L0083
+10791   06A2 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10792   06A5 A6 00              LDAA    $0000,X
+10793   06A7 36                 PSHA    
+10794   06A8 D6 56              LDAB    L0056
+10795   06AA 96 57              LDAA    L0057
+10796   06AC BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10797   06AF 32                 PULA    
+10798   06B0 A7 00              STAA    $0000,X
+10799   06B2 DE 82              LDX     L0082
+10800   06B4 09                 DEX     
+10801   06B5 DF 82              STX     L0082
+10802   06B7 DE 56              LDX     L0056
+10803   06B9 09                 DEX     
+10804   06BA DF 56              STX     L0056
+10805   06BC 20 D6              BRA     L0694
+10806    ;
+10807   06BE DE 56      L06BE   LDX     L0056
+10808   06C0 08                 INX     
+10809   06C1 DF 56              STX     L0056
+10810   06C3 D6 54      L06C3   LDAB    L0054
+10811   06C5 96 55              LDAA    L0055
+10812   06C7 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10813   06CA 96 5E              LDAA    CMD         Editor Command typed by used
+10814   06CC A7 00              STAA    $0000,X
+10815   06CE DE 54              LDX     L0054
+10816   06D0 08                 INX     
+10817   06D1 DF 54              STX     L0054
+10818   06D3 20 8B              BRA     L0660
+10819    ;
+10820   06D5 BD 045D    L06D5   JSR     L045D
+10821   06D8 7E 0141            JMP     L0141
+10822    ;
+10823   06DB BD 04DA    L06DB   JSR     L04DA
+10824   06DE DE 7E              LDX     L007E
+10825   06E0 DF 56              STX     L0056
+10826   06E2 D6 56              LDAB    L0056
+10827   06E4 96 57              LDAA    L0057
+10828   06E6 90 55              SUBA    L0055
+10829   06E8 D2 54              SBCB    L0054
+10830   06EA 2A 0C              BPL     L06F8
+10831   06EC DE 54              LDX     L0054
+10832   06EE DF 82              STX     L0082
+10833   06F0 DE 56              LDX     L0056
+10834   06F2 DF 54              STX     L0054
+10835   06F4 DE 82              LDX     L0082
+10836   06F6 DF 56              STX     L0056
+10837   06F8 BD 045D    L06F8   JSR     L045D
+10838   06FB 7E 0141            JMP     L0141
+10839    ;
+10840   06FE BD 04DA    L06FE   JSR     L04DA
+10841   0701 DE 7E              LDX     L007E
+10842   0703 DF 54              STX     L0054
+10843   0705 7E 0141            JMP     L0141
+10844    ;
+10845   0708 96 61      L0708   LDAA    L0061
+10846   070A 27 25              BEQ     L0731
+10847   070C DE 54              LDX     L0054
+10848   070E 09                 DEX     
+10849   070F DF 8C              STX     L008C
+10850   0711 D6 8C              LDAB    L008C
+10851   0713 96 8D              LDAA    L008D
+10852   0715 90 60              SUBA    NLIN         Number of lines
+10853   0717 C2 00              SBCB    #$0000
+10854   0719 2B 0F              BMI     L072A
+10855   071B D6 54              LDAB    L0054
+10856   071D 96 55              LDAA    L0055
+10857   071F 90 60              SUBA    NLIN         Number of lines
+10858   0721 C2 00              SBCB    #$0000
+10859   0723 D7 54              STAB    L0054
+10860   0725 97 55              STAA    L0055
+10861   0727 7E 0141    L0727   JMP     L0141
+10862    ;
+10863   072A CE 0001    L072A   LDX     #$0001
+10864   072D DF 54              STX     L0054
+10865   072F 20 F6              BRA     L0727
+10866    ;
+10867   0731 D6 54      L0731   LDAB    L0054
+10868   0733 96 55              LDAA    L0055
+10869   0735 9B 60              ADDA    NLIN         Number of lines
+10870   0737 C9 00              ADCB    #$0000
+10871   0739 D7 82              STAB    L0082
+10872   073B 97 83              STAA    L0083
+10873   073D D6 58              LDAB    WSLEN     num chars in workspace
+10874   073F 96 59              LDAA    WSLEN+1
+10875   0741 90 83              SUBA    L0083
+10876   0743 D2 82              SBCB    L0082
+10877   0745 2B 06              BMI     L074D
+10878   0747 DE 82              LDX     L0082
+10879   0749 DF 54              STX     L0054
+10880   074B 20 DA              BRA     L0727
+10881    ;
+10882   074D DE 58      L074D   LDX     WSLEN     num chars in workspace
+10883   074F DF 54              STX     L0054
+10884   0751 20 D4              BRA     L0727
+10885    ;
+10886   0753 BD 039B    L0753   JSR     L039B
+10887   0756 4D         L0756   TSTA    
+10888   0757 27 03              BEQ     L075C
+10889   0759 7E 07F2            JMP     L07F2
+10890    ;
+10891   075C 86 FF      L075C   LDAA    #$00FF
+10892   075E 97 60              STAA    NLIN         Number of lines
+10893   0760 DE 54              LDX     L0054
+10894   0762 DF 56              STX     L0056
+10895   0764 DE 58              LDX     WSLEN     num chars in workspace
+10896   0766 DF 5A              STX     L005A
+10897   0768 BD 07AF            JSR     L07AF
+10898   076B 8E 00C0            LDS     #$00C0
+10899   076E 4F                 CLRA    
+10900   076F 97 61              STAA    L0061
+10901   0771 4C                 INCA    
+10902   0772 97 60              STAA    NLIN         Number of lines
+10903   0774 DE 54              LDX     L0054
+10904   0776 DF 56              STX     L0056
+10905   0778 DE 58              LDX     WSLEN     num chars in workspace
+10906   077A DF 5A              STX     L005A
+10907   077C BD 0553            JSR     L0553
+10908   077F DE 54              LDX     L0054
+10909   0781 09                 DEX     
+10910   0782 9C 58              CPX     WSLEN     num chars in workspace
+10911   0784 26 1E              BNE     L07A4
+10912   0786 CE 0884            LDX     #MNOTFND+1
+10913   0789 F6 0883            LDAB    MNOTFND
+10914   078C BD 0206            JSR     PRTSTR       Print string addr in X, length in B
+10915   078F CE 0068            LDX     #$0068
+10916   0792 D6 7D              LDAB    L007D
+10917   0794 27 03              BEQ     L0799
+10918   0796 BD 0206            JSR     PRTSTR       Print string addr in X, length in B
+10919   0799 86 22      L0799   LDAA    #$22         '"'
+10920   079B BD 0046            JSR     OUTCH        Print Char in console
+10921   079E BD 0210            JSR     PRTCRLF      Print <CR><LF>
+10922   07A1 7E F023            JMP     UPDT         update (flush) output file
+10923    ;
+10924   07A4 BD 03C7    L07A4   JSR     L03C7
+10925   07A7 20 AD              BRA     L0756
+10926    ;
+10927   07A9 BD 07AF    L07A9   JSR     L07AF
+10928   07AC 7E 0141            JMP     L0141
+10929    ;
+10930   07AF 7F 0061    L07AF   CLR     L0061
+10931   07B2 CE 0001            LDX     #$0001
+10932   07B5 DF 54              STX     L0054
+10933   07B7 BD 04DA            JSR     L04DA
+10934   07BA DE 7E              LDX     L007E
+10935   07BC DF 56              STX     L0056
+10936   07BE BD 0225            JSR     L0225     Just RTS
+10937   07C1 CE 0001            LDX     #$0001
+10938   07C4 DF 82              STX     L0082
+10939   07C6 DE 56      L07C6   LDX     L0056
+10940   07C8 09                 DEX     
+10941   07C9 DF 8C              STX     L008C
+10942   07CB D6 8C              LDAB    L008C
+10943   07CD 96 8D              LDAA    L008D
+10944   07CF 90 83              SUBA    L0083
+10945   07D1 D2 82              SBCB    L0082
+10946   07D3 2B 13              BMI     L07E8
+10947   07D5 D6 82              LDAB    L0082
+10948   07D7 96 83              LDAA    L0083
+10949   07D9 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10950   07DC A6 00              LDAA    $0000,X
+10951   07DE BD 004C            JSR     WRDSK        write char to file
+10952   07E1 DE 82              LDX     L0082
+10953   07E3 08                 INX     
+10954   07E4 DF 82              STX     L0082
+10955   07E6 20 DE              BRA     L07C6
+10956    ;
+10957   07E8 BD 045D    L07E8   JSR     L045D
+10958   07EB BD 0226            JSR     L0226
+10959   07EE 39                 RTS     
+10960    ; -----------------------------------------------
+10961   07EF BD 0395    L07EF   JSR     L0395
+10962   07F2 D6 7B      L07F2   LDAB    L007B
+10963   07F4 96 7C              LDAA    L007C
+10964   07F6 9B 7D              ADDA    L007D
+10965   07F8 C9 00              ADCB    #$0000
+10966   07FA D7 54              STAB    L0054
+10967   07FC 97 55              STAA    L0055
+10968   07FE 7E 0141            JMP     L0141
+
+                                                    Command "T" type line in console
+
+10970   0801 BD 04DA    CMD.T   JSR     L04DA
+10971   0804 DE 7E              LDX     L007E
+10972   0806 DF 82              STX     L0082
+10973   0808 9C 54              CPX     L0054
+10974   080A 27 42              BEQ     L084E
+10975   080C D6 54              LDAB    L0054
+10976   080E 96 55              LDAA    L0055
+10977   0810 90 83              SUBA    L0083
+10978   0812 D2 82              SBCB    L0082
+10979   0814 2A 1C              BPL     L0832
+10980   0816 D6 82              LDAB    L0082
+10981   0818 96 83              LDAA    L0083
+10982   081A BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10983   081D DF 82              STX     L0082
+10984   081F D6 54              LDAB    L0054
+10985   0821 96 55              LDAA    L0055
+10986   0823 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10987   0826 9C 82      L0826   CPX     L0082
+10988   0828 27 24              BEQ     L084E
+10989   082A A6 00              LDAA    $0000,X
+10990   082C BD 0046            JSR     OUTCH      Print Char in console
+10991   082F 08                 INX     
+10992   0830 20 F4              BRA     L0826
+10993    ;
+10994   0832 D6 54      L0832   LDAB    L0054
+10995   0834 96 55              LDAA    L0055
+10996   0836 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+10997   0839 DF 84              STX     L0084
+10998   083B D6 82              LDAB    L0082
+10999   083D 96 83              LDAA    L0083
+11000   083F BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+11001   0842 9C 84      L0842   CPX     L0084
+11002   0844 27 08              BEQ     L084E
+11003   0846 A6 00              LDAA    $0000,X
+11004   0848 BD 0046            JSR     OUTCH      Print Char in console
+11005   084B 08                 INX     
+11006   084C 20 F4              BRA     L0842
+11007    ;
+11008   084E 7E 0141    L084E   JMP     L0141
+11009    ;
+11010   0851 DE 58      L0851   LDX     WSLEN     num chars in workspace
+11011   0853 DF 54              STX     L0054
+11012   0855 7E 0141            JMP     L0141
+11013    
+11014   0858            MTITLE  FCB     23 
+11015   0859                    FCC     "FDOS-II/ASTRAL 2000 EDITOR VER. 1.1"
+11016   
+11017   087C            MUNK    FCB     06                   
+11018   087D 22                 FCC     '" ????'             
+11019   0883            MNOTFND 0C                  
+11020   0884                    FCC     "CAN'T FIND ?"
+11021    ;
+11022   0890 01                 NOP     
+11023   0891 01                 NOP     
+11024   0892 39                 RTS     
+11025    ; -----------------------------------------------
+11026   0893 9B 55      L0893   ADDA    L0055
+11027   0895 D9 54              ADCB    L0054
+11028   0897 BD 0237            JSR     WSADDR   X=(B,A)+$0A00 = addr in text workspace
+11029                   L0899
+11030   089A A6 00              LDAA    $0000,X
+11031                   L089B
+11032   089C 7E 040B            JMP     L040B
+11033    ;
+11034   089F FF 
+
+11035   08A0 86 37      ECHOFF  LDAA    #$37      Init Console PIA -  SET ECHO OFF
+11036   08A2 B7 E401            STAA    PIA
+11038   08A5 39                 RTS     
+
+11046   08B0 86 55      SETHIME LDAA    #$55      Set HIMEM var (=last addr of RAM availabre) 
+11047   08B2 CE 09FF            LDX     #$09FF    Scan RAM available
+11049   08B5 08         L08B5   INX     
+11050   08B6 A7 00              STAA    $0000,X
+11051   08B8 BC E014            CPX     ATOPM     MONITOR: ADDRESS OF TOP MEMORY 
+11052   08BB 26 F8              BNE     L08B5
+11053   08BD 09                 DEX     
+11054   08BE DF 64              STX     HIMEM     Last addr of RAM
+11055   08C0 39                 RTS     
+11056   
+11057                   L08CB
+11058                   L08D1
+11059                   L08DD
+11060   8637 FF FFFF    L8637   STX     LFFFF
+11061   8655 FF FFFF    L8655   STX     LFFFF

@@ -1,0 +1,2273 @@
+00000  
+00001                                             FDOS-II executve EXEC
+00002                                             
+00003                                             Thanks to Ben Zotto for FDOS-II original disk
+00004                                             Disassembly annotated by Roberto Sancho Feb/2026
+00005                  
+10000  
+10001                SECTORS EQU     26        Sectors per track
+10002                TRACKS  EQU     77        tracks per disk 
+10003                MAXSIZE EQU     (NUMTRK-1)*NUMSEC-1      (77-1)*26-1=1975=07B7h -> max posible file size in sectors - 1
+10004  
+10005                                          ICOM FD360 PROM ENTRY POINTS
+10006  
+10007                DKDID EQU $F800 INPUT DATA FROM DISK
+10008                DKDIC EQU $F801 INPUT DATA CONTROL
+10009                DKCOD EQU $F802 OUTPUT COMMANDS TO DISK
+10010                DKCOC EQU $F803 OUTPUT COMMAND CONTROL
+10011                DKDOD EQU $F806 OUTPUT DATA TO DISK
+10012                DKDOC EQU $F807 OUTPUT DATA CONTROL
+
+                                               Also uses $E401 PIA SIO SERIAL I/O. =$37 to turn echo off
+10013                                
+10014                FDOS    EQU     $F000     Boot FDOS          
+10015                        EQU     $F003     FDOS call updt
+10016                
+10017                CI      EQU     $F006     CI    console char in            
+10018                CO      EQU     $F009     CO    console char out
+10019                RDI     EQU     $F00C     RDI   paper tape reader in
+10020                LO      EQU     $F00F     LO    list output
+10021                PO      EQU     $F012     PO    punch output
+10022                EXIT    EQU     $F015     MONITOR
+10023                
+10024                DIO     EQU     $F018     Disk I/O PIA port is FDB DKDID = $F800
+10025                                          used en COPY command, in XSUP/LOOPP/RDSECP routine
+10026                 
+10027                PROG    EQU     $F02C     PROG  load a program and return to monitor
+10028                ASSEM   EQU     $F032     ASSEM load and start assembler
+10029                RESTR   EQU     $F03B     RESTR restore IFILE pointers
+10030                RESET   EQU     $F06F     RESET set up PIAs and reset drive electronics
+10031                RI      EQU     $F135     RI    read a byte from disk in reg A, if EOF carry is set
+10032                WRT     EQU     $F1AD     WRT   write a byte to disk from reg A
+10033                SAVE    EQU     $F1FF     SAVE  STX SAVXR; LDX DIO; RTS save X, return Input data from disk
+10034                XUS     EQU     $F22C     XMIT  send select unit/sector (logical) to disk
+10035                SEEK    EQU     $F250     SEEK  track in A
+10036                RFLAG   EQU     $F25F     RFLAG Reset error flag
+10037                LOOP    EQU     $F268     LOOP  Issue command in reg A and loop on busy 
+10038  
+10039                                          VARIABLES IN ZERO PAGE USED BY ICOM FD360 PROM ENTRY POINTS
+10040  
+10041                PASS    EQU     $00       ASSEMBLY PASS INFO
+10042                OFILE   EQU     $01       OFILE NUMBER (set if output file open)
+10043                OUNIT   EQU     $02       OFILE UNIT
+10044                IUNIT   EQU     $03       IFILE UNIT - SCTR/UNIT
+10045                ISIZE   EQU     $04       IFILE SIZE
+10046                ITRK    EQU     $06       IFILE TRACK
+10047                ISCTR   EQU     $07       IFILE SECTOR
+10048                ICNTR   EQU     $08       IFILE BUFFER COUNTER
+10049                OSIZE   EQU     $09       OFILE SIZE
+10050                OTRK    EQU     $0B       OFILE TRACK
+10051                OSCTR   EQU     $0C       OFILE SECTOR
+10052                OCNTR   EQU     $0D       OFILE BUFFER COUNTER
+10053                TITRK   EQU     $0E       save ITRACK
+10054                TISZE   EQU     $0F       save ISIZE
+10055  
+10056  
+10057                SAVXR   EQU     $19       Save X reg, used by PROM
+10058                TEMP    EQU     $11        
+10059                OFFSET  EQU     $17       Offset when loading a prog
+10060  
+10061                        ORG     $0100     EXEC start
+10062                EXECINI EQU *             Start of executive prog
+10063   
+10064  0100 7E 0202          JMP     EXECINI   EXEC Cold Start 
+10065  0103 7E 073D          JMP     UPDAT     close output file (flush data to floppy)
+10066  0106 7E F012  PCHOUT  JMP     PO        punch output
+10067  0109 7E F00C  RDRIN   JMP     RDI       paper tape reader in
+10068  010C 7E F00F  LPTOUT  JMP     LO        Send a char to line printer
+10069  010F 7E F006  CONIN   JMP     CI        Read char from console (bloquing)
+10070  0112 7E F009  CONOUT  JMP     CO        Print char in A in console
+10071  
+10072  0115          CMDLIN  RMB     80        Command Line buffer: the command line typed by user at "!" prompt. 
+10073  0165          CMDINI  RMB     2         stores the addr of 1st char in command line buffer to be processed
+10074  0167          CMDLEND RMB     2         stores the addr of last char in command line buffer (the addr of final <CR> + 1)
+10075  0169          FNAME   RMB     5         current filename param (read from command line)
+10076  016E          DRVNUM  RMB     1         drive unit number 0..3
+10077  016F          ATTRIB  RMB     1         file attribute 
+10078  0170          FSIZE   RMB     2         file size
+10079  0172          TMP     RMB     1         temp value used in hex to binary conversion CVTH2B routine, RENAM/COPY commands, punch space PCHADV routine
+10080  0173          TMPH    RMB     1         8/16bit temp value used RDSECT/WRSECT, number of free sectors in disc in OPENX routine,
+10081  0174          TMPL    RMB     1                 16bits hex to bin value as result of CVTH2B, temp value in COPY/MERGE command
+10082  0175          NLINE   RMB     1         current line for VIEW command   
+10083  0176          L0176
+10084  0177          DIRPTR  RMB     2         addr of current dir entry into sector buffer
+10085  0179          SECBUF  RMB     128       Disk Sector buffer
+10086  01F9          DRVSEC  RMB     1         unit (in bits 7-6) and sector (bits 5-0. 1st sector of track is sector 1)
+10087  01FA          NXTTRK  RMB     1         1st free sector to place in end-of-dir entry 
+10088  01FB          NXTSEC  RMB     1
+10089  01FC          NEWTRK  RMB     1         1st track when creating a new file
+10090  01FD          NEWSEC  RMB     1         1st sector when creating a new file
+10091  01FE          L01FE
+10092  01FF          SVIUNIT RMD     1         save Input file unit | sector
+10093  0200          LINCNT  RMD     1         Line count for VIEW command
+10094  0201          EOFFLAG RMD     1         end of file flag
+10095  
+10096  0202 8E 1FF0  EXECINI LDS     #EXECEND  Set initial stack
+10097  0205 BD 041E          JSR     PRTLN     Print <CR><LF> to start a new line
+10098  0208 F6 035F          LDAB    MBANNER   String "ICOM FDOS-II" (cold startup banner)
+10099  020B CE 0360          LDX     #MBANNER+1
+10100  020E BD 0414          JSR     PRTSTR    Print String
+10101  0211 BD 041E          JSR     PRTLN     Print <CR><LF> to start a new line
+10102  
+10103  0214 BD 119F  EXEC    JSR     ECHOOFF   SET ECHO OFF for CONIN
+10104  0217 8E 1FF0          LDS     #EXECEND  Init this stack pointer
+10105  021A BD 0381          JSR     RDCMD     Print "!" prompt and read command line from console
+10106  021D BD 03BE          JSR     GETFNAM   Get 1st param in command line into FNAME/DRVNUM variables
+10107  0220 CE 0265          LDX     #CMDTBL
+10108                                          Scan command table for FNAME and jump to corresponding routine
+10109  0223 8C 02F8  L0223   CPX     #CMDTEND  table finished?
+10110  0226 26 0B            BNE     L0233     if not finished -> jump to process the current table entry 
+10111                                          Command not found:
+10112  0228 F6 02F8  ERFMT   LDAB    MFMTERR   String "FORMAT ERROR"
+10113  022B CE 02F9          LDX     #MFMTERR+1
+10114  022E BD 0414  PRTERR  JSR     PRTSTR    Print String
+10115  0231 20 E1            BRA     EXEC      jump to Executive warm start 
+10116                                          Process command table entry:
+10117  0233 A6 00    L0233   LDAA    $0000,X   Compare command in FNAME with command name in table
+10118  0235 B1 0169          CMPA    FNAME
+10119  0238 26 22            BNE     L025C     jump if not this command
+10120  023A A6 01            LDAA    $0001,X
+10121  023C B1 016A          CMPA    FNAME+1
+10122  023F 26 1B            BNE     L025C     jump if not this command
+10123  0241 A6 02            LDAA    $0002,X
+10124  0243 B1 016B          CMPA    FNAME+2
+10125  0246 26 14            BNE     L025C     jump if not this command
+10126  0248 A6 03            LDAA    $0003,X
+10127  024A B1 016C          CMPA    FNAME+3
+10128  024D 26 0D            BNE     L025C     jump if not this command
+10129  024F A6 04            LDAA    $0004,X
+10130  0251 B1 016D          CMPA    FNAME+4
+10131  0254 26 06            BNE     L025C     jump if not this command
+10132                                          command found in command table:
+10133  0256 EE 05            LDX     $0005,X   get the address for this comand
+10134  0258 AD 00            JSR     $0000,X   call it
+10135  025A 20 B8            BRA     EXEC      jump to Executive warm start 
+10136                                          command found in current entry:
+10137  025C 08       L025C   INX               select next command table entry   
+10138  025D 08               INX     
+10139  025E 08               INX     
+10140  025F 08               INX     
+10141  0260 08               INX     
+10142  0261 08               INX     
+10143  0262 08               INX     
+10144  0263 20 BE            BRA     L0223     jump to process the command table entry
+10145   ;
+10146  0265 41534D  CMDTBL   FCC     "ASMB "   Command Table
+10147  026A 0B82             FDB     C.ASMB 
+10148  026C 45444954         FCC     "EDIT "
+10149  0271 0BBC             FDB     C.EDIT
+10150  0273 52554E20         FCC     "RUN  "
+10151  0278 0787             FDB     C.RUN
+10152  027A 52554E47         FCC     "RUNGO"                  
+10153  027F 07AF             FDB     C.RUNGO
+10154  0281 45584954         FCC     "EXIT "
+10155  0286 F015             FDB     EXIT
+10156  0288 4C495354         FCC     "LIST "
+10157  028D 0A92             FDB     C.LIST
+10158  028F 5052494E         FCC     "PRINT"
+10159  0294 0812             FDB     C.PRINT
+10160  0296 494E4954         FCC     "INIT "
+10161  029B 0A4B             FDB     C.INIT
+10162  029D 434F5059         FCC     "COPY "
+10163  02A2 0D4A             FDB     C.COPY
+10164  02A4 52454E41         FCC     "RENAM"
+10165  02A9 09B4             FDB     C.RENAM
+10166  02AB 44454C45         FCC     "DELET"
+10167  02B0 0F76             FDB     C.DELET
+10168  02B2 4D455247         FCC     "MERGE"
+10169  02B7 0EF1             FDB     C.MERGE
+10170  02B9 44554D50         FCC     "DUMP "
+10171  02BE 0D0F             FDB     C.DUMP
+10172  02C0 4C4F4144         FCC     "LOAD "
+10173  02C5 0C96             FDB     C.LOAD
+10174  02C7 43484741         FCC     "CHGAT"
+10175  02CC 0948             FDB     C.CHGAT
+10176  02CE 43524541         FCC     "CREAT"
+10177  02D3 0A15             FDB     C.CREAT
+10178  02D5 5847454E         FCC     "XGEN "
+10179  02DA 0C9F             FDB     C.XGEN
+10180  02Dc 484F4D45         FCC     "HOME "
+10181  02E1 0A70             FDB     C.HOME
+10182  02E3 494E4954         FCC     "INITX"
+10183  02E8 0A55             FDB     C.INITX
+10184  02EA 56494557         FCC     "VIEW "
+10185  02EF 085C             FDB     C.VIEW
+10186  02F1 4255494C         FCC     "BUILD"
+10187  02F6 0C16             FDB     C.BUILD
+10188  02F8          CMDTEND EQU     *         Command table end         
+10189  
+10190  02F8 0C       MFMTERR FCB     12,"FORMAT ERROR"
+10191  0305 0C       MNOFILE FCB     12,"NO SUCH FILE"
+10192  0312 09       MDUPLFL FCB      9,"DUPL NAME"
+10193  031C 07       MNOROOM FCB      7,"NO ROOM"
+10194  0324 1B       MDIRHDR FCB     27,"NAME   ATTR TRAK SCTR  SIZE"
+10195  0340 0E       MNOTRDY FCB     14,"DISK NOT READY"
+10196  034F 0B       MDSKERR FCB     11,"MEDIA ERROR"
+10197  035B 03       MEOF    FCB      3,"EOF"
+10198  
+10199  035F 21 49    MBANNER FCB     33,"ICOM FDOS-II/ASTRAL 2000 VER. 1"
+10200  
+10201                                          Print "!" prompt, read command line (with editing) from console until user hits <CR>
+10202                                          on exit: CMDLIN  stores the typed command line, including <CR> at the end
+10203                                                   CMDINI  stores the addr of 1st char in command line buffer to be processed
+10204                                                   CMDLEND stores the addr of last char in command line buffer (the addr of final <CR> + 1)
+10205  
+10206  0381 BD 041E  RDCMD   JSR     PRTLN     Print <CR><LF> to start a new line
+10207  0384 86 21            LDAA    #$21      '!'
+10208  0386 BD 0112  L0386   JSR     CONOUT    Print command prompt
+10209  0389 CE 0115          LDX     #CMDLIN   Command Line buffer address
+10210  038C FF 0165          STX     CMDINI    stores the addr of 1st char in command line buffer to be processed
+10211                                          main loop:
+10212  038F BD 0422  L038F   JSR     GETKEY    Read char from console (blocking)
+10213  0392 81 08            CMPA    #$08      = BackSpace?
+10214  0394 27 1B            BEQ     L03B1
+10215  0396 81 18            CMPA    #$18      = Ctrl-X ?
+10216  0398 27 21            BEQ     L03BB     if so, return to executive to ask for a new command line
+10217  039A 81 8A            CMPA    #$8A      RSV: Maybe replace by ESC
+10218  039C 27 1D            BEQ     L03BB     if so, return to executive to ask for a new command line
+10219  039E A7 00            STAA    $0000,X   Save key in Command Line Buffer
+10220  03A0 08               INX               incr pointer into buffer
+10221  03A1 8C 0165          CPX     #CMDLIN+$50
+10222  03A4 26 03            BNE     L03A9     jump if buffer not full
+10223  03A6 7E 0228          JMP     ERFMT     Print "FORMAT ERROR", return to command prompt
+10224  03A9 81 0D    L03A9   CMPA    #$0D      = <CR>?
+10225  03AB 26 E2            BNE     L038F     if key presed by used is not <CR> then return to main loop to read next key from console
+10226  03AD FF 0167          STX     CMDLEND   stores the addr of last char in command line buffer (the addr of final <CR> + 1)
+10227  03B0 39               RTS 
+10228                                          handle the BackSpace key:    
+10229  03B1 8C 0115  L03B1   CPX     #CMDLIN   Command Line buffer address
+10230  03B4 27 CB            BEQ     RDCMD     if command line is empty, jump to print again command prompt in a new line
+10231  03B6 09               DEX               decrement buffer pointer
+10232  03B7 A6 00            LDAA    $0000,X   A=last key pressed
+10233  03B9 20 D4            BRA     L038F
+10234  03BB 7E 0214  L03BB   JMP     EXEC      jump to Executive warm start 
+10235   
+10236                                          get filename from command line
+10237                                          can be ":n" -> drive specifier -> sets drvNum
+10238                                          can be "fname" -> sets fname
+10239                                          can be "fname:n" -> sets fname and drvNum
+10240                                          read chars from cmdline until CR or ',' 
+10241                                          on exit: FNAME   filename param (read from command line)
+10242                                                           if not specified, fname="     " (5 spaces)
+10243                                                   DRVNUM  drive specified (=0 if none specified)
+10244                                                           if not specified, drvnum=0
+10245   
+10246  03BE CE 0169  GETFNAM LDX     #FNAME    fill fname with spaces
+10247  03C1 86 20            LDAA    #$20      
+10248  03C3 C6 05            LDAB    #$05      fname length
+10249  03C5 A7 00    L03C5   STAA    $0000,X
+10250  03C7 08               INX     
+10251  03C8 5A               DECB    
+10252  03C9 26 FA            BNE     L03C5
+10253  03CB 7F 016E          CLR     DRVNUM    set DrvNum=0 -> defaults to unit 0
+10254  
+10255  03CE CE 0169          LDX     #FNAME
+10256  03D1 BD 03F7  L03D1   JSR     CHKPARM   check param available, return 1st char
+10257  03D4 81 3A            CMPA    #$3A      is ":" ?
+10258  03D6 26 15            BNE     L03ED     if not -> jump to handle file name
+10259                                          handle unit number 
+10260  03D8 BD 03F7          JSR     CHKPARM   check param available, get unit digit
+10261  03DB 80 30            SUBA    #$30      convert ascii '0' to binary 0
+10262  03DD 16               TAB               save unit in B
+10263  03DE 84 FC            ANDA    #$FC      check if units in 0..3 range
+10264  03E0 26 08            BNE     L03EA     if not on 0..3 rangel -> jump to print error message
+10265  03E2 F7 016E          STAB    DRVNUM    save unit 
+10266  03E5 BD 03F7  L03E5   JSR     CHKPARM   ignore any remaining char and return
+10267  03E8 20 FB            BRA     L03E5
+10268  
+10269  03EA 7E 0228  L03EA   JMP     ERFMT     Print "FORMAT ERROR", return to command prompt
+10270                                          handle fine name:
+10271  03ED 8C 016E  L03ED   CPX     #FNAME+5  fname var full?
+10272  03F0 27 DF            BEQ     L03D1     if so -> jump to process next char from param 
+10273  03F2 A7 00            STAA    $0000,X   store param char in fname
+10274  03F4 08               INX     
+10275  03F5 20 DA            BRA     L03D1     jump to process next char from param 
+10276   
+10277                                          check there is a param at current cmd line pointer char
+10278                                          if char is <CR> or ',' -> not a param -> make caller returns
+10279                                          else -> preserves X value, A=1st char of param
+10280   
+10281  03F7 FF 0412  CHKPARM STX     L0412     save X 
+10282  03FA FE 0165          LDX     CMDINI    get the addr of 1st char in command line buffer to be processed
+10283  03FD A6 00            LDAA    $0000,X   get 1st char of param
+10284  03FF 81 0D            CMPA    #$0D      is <CR> ? 
+10285  0401 27 0C            BEQ     L040F     if so, command line ended, there is no param to read -> make caller returns
+10286  0403 08               INX     
+10287  0404 FF 0165          STX     CMDINI    stores the addr of 1st char in command line buffer to be processed
+10288  0407 81 2C            CMPA    #$2C      is ',' ?
+10289  0409 27 04            BEQ     L040F     if so, param ended -> make caller returns
+10290  040B FE 0412          LDX     L0412     restore X
+10291  040E 39               RTS     
+10292  040F 31       L040F   INS               make caller returns
+10293  0410 31               INS     
+10294  0411 39               RTS     
+10295  0412 00       L0412   RMB     2         local save area for X
+10296  
+10297  
+10298  0414 A6 00    PRTSTR  LDAA    $0000,X   Print String at addr in reg X, length reg B
+10299  0416 BD 0112          JSR     CONOUT
+10300  0419 08               INX     
+10301  041A 5A               DECB    
+10302  041B 26 F7            BNE     PRTSTR    
+10303  041D 39               RTS     
+10304  
+10305  041E 86 0D    PRTLN   LDAA    #$0D      Print #13#10 <CR><LF> in console to start a new line
+10306  0420 20 09            BRA     L042B
+10307   
+10308                                          read a key from console (blocking) with echo
+10309                                          print #10#13 if RETURN is pressed
+10310                                          On exit: pressed key in A
+10311   
+10312  0422 BD 010F  GETKEY  JSR     CONIN     Read char from console (bloking)
+10313  0425 84 7F            ANDA    #$7F      make it 7-bit ascii
+10314  0427 81 7F            CMPA    #$7F      is <DEL> pressed?
+10315  0429 27 10            BEQ     L043B     if so, return 
+10316  042B 36       L042B   PSHA              save read char in A
+10317  042C BD 0112          JSR     CONOUT    echo typed char in console
+10318  042F 32               PULA              restore read char in A
+10319  0430 81 0D            CMPA    #$0D      is <CR> pressed?
+10320  0432 26 07            BNE     L043B     if not, return char in A
+10321  0434 36               PSHA              if char typed by user is <CR>, then
+10322  0435 86 0A            LDAA    #$0A         after echoing it
+10323  0437 BD 0112          JSR     CONOUT       print a <LF>
+10324  043A 32               PULA              restore read char in A
+10325  043B 39       L043B   RTS     
+10326  
+10327  043C 36       LPTHH   PSHA              Send A as HH hex string to line printer
+10328  043D 8D 15            BSR     CVTH2X    Convert Hi nibble of A to A='0'..'F' 
+10329  043F BD 010C          JSR     LPTOUT
+10330  0442 32               PULA    
+10331  0443 8D 13            BSR     CVTL2X    Convert Lo nibble of A to A='0'..'F' 
+10332  0445 7E 010C          JMP     LPTOUT
+10333   ;
+10334  0448 36       PRTHH   PSHA              Print A as HH hex string on console
+10335  0449 8D 09            BSR     CVTH2X    Convert Hi nibble of A to A='0'..'F' 
+10336  044B BD 0112          JSR     CONOUT
+10337  044E 32               PULA    
+10338  044F 8D 07            BSR     CVTL2X    Convert Lo nibble of A to A='0'..'F' 
+10339  0451 7E 0112          JMP     CONOUT
+10340   ;
+10341  0454 44       CVTH2X  LSRA              Convert Hi nibble of A to A='0'..'F' 
+10342  0455 44               LSRA    
+10343  0456 44               LSRA    
+10344  0457 44               LSRA    
+10345  0458 84 0F    CVTL2X  ANDA    #$0F      Convert Lo nibble of A to A='0'..'F' 
+10346  045A 81 0A            CMPA    #$0A 
+10347  045C 2B 02            BMI     L0460
+10348  045E 8B 07            ADDA    #$07
+10349  0460 8B 30    L0460   ADDA    #$30
+10350  0462 39               RTS     
+10351  
+10352                                          Read a disk sector 
+10353                                          on entry: A=unit (bits 7-6) | sector (1st sector is 1)
+10354                                                    B=track (1st track is 0)
+10355                                                    X=addr of buffer where to store data read from disk
+10356                                          on exit:  A=0 -> Ok, A<>0 -> error
+10357  
+10358  0463 FF 0173  RDSECT  STX     TMPH      save sector buffer addr
+10359  0466 37               PSHB    
+10360  0467 BD F22C          JSR     XUS       PROM Call: select unit/sector
+10361  046A BD 04D9          JSR     DSKRDY    Check if disk is ready (print error and return to command prompt if not)
+10362  046D 32               PULA    
+10363  046E BD F250          JSR     SEEK      PROM Call: Seek track in A
+10364  0471 86 05            LDAA    #$05
+10365  0473 B7 01FE          STAA    L01FE     set retry count
+10366  0476 86 02    L0476   LDAA    #$02      Read command
+10367  0478 BD F268          JSR     LOOP      PROM Call: Issue command in reg A and loop on busy 
+10368  047B BD F1FF          JSR     SAVE      PROM Call: Save X in SAVXR and LDX DIO 
+10369  047E A6 00            LDAA    $0000,X   DKDID READ THE DISK STATUS
+10370  0480 DE 19            LDX     SAVXR     PROM Var - get disk status DKDID 
+10371  0482 84 80            ANDA    #$80      IF DELETED DATA (DD), REPORT IT
+10372  0484 26 1D            BNE     L04A3
+10373  0486 BD F1FF          JSR     SAVE      PROM Call: Save X in SAVXR and LDX DIO 
+10374  0489 A6 00            LDAA    $0000,X   DKDID READ THE DISK STATUS
+10375  048B DE 19            LDX     SAVXR     PROM Var
+10376  048D 84 08            ANDA    #$08      if CRC error
+10377  048F 4D               TSTA    
+10378  0490 27 17            BEQ     L04A9
+10379  0492 BD F25F          JSR     RFLAG     PROM Call: reset disk error flag
+10380  0495 7A 01FE          DEC     L01FE
+10381  0498 26 DC            BNE     L0476
+10382  049A F6 034F  EDSKERR LDAB    MDSKERR   String "MEDIA ERROR"
+10383  049D CE 0350          LDX     #MDSKERR+1
+10384  04A0 7E 022E          JMP     PRTERR    Print error msg and return to command line
+10385  04A3 BD F25F  L04A3   JSR     RFLAG     PROM Call: reset disk error flag
+10386  04A6 86 80            LDAA    #$80
+10387  04A8 39               RTS     
+10388  04A9 FE 0173  L04A9   LDX     TMPH      get sector buffer addr
+10389  04AC 86 80            LDAA    #$80
+10390  04AE B7 01FE          STAA    L01FE
+10391  04B1 86 3C    L04B1   LDAA    #$3C      DEFINE DISK COMMAND MODE
+10392  04B3 BD F1FF          JSR     SAVE      PROM Call: Save X in SAVXR and LDX DIO 
+10393  04B6 A7 03            STAA    $0003,X   DKCOC SET DISK TO COMMAND MODE
+10394  04B8 86 40            LDAA    #$40      DEFINE READ DATA COMMAND
+10395  04BA A7 02            STAA    $0002,X   DKCOD COMMAND DISK TO READ
+10396  04BC A6 00            LDAA    $0000,X   DKDID READ THE DATA FROM THE IDISK
+10397  04BE DE 19            LDX     SAVXR     PROM Var
+10398  04C0 A7 00            STAA    $0000,X   STORE AWAY READ BYTE
+10399  04C2 86 2C            LDAA    #$2C      DEFINE RESET COMMAND MODE
+10400  04C4 BD F1FF          JSR     SAVE      PROM Call: Save X in SAVXR and LDX DIO 
+10401  04C7 A7 03            STAA    $0003,X   DKCOC RESET DISK FROM COMMAND MODE
+10402  04C9 86 40            LDAA    #$40      DEFINE READ DATA COMMAND
+10403  04CB A7 02            STAA    $0002,X   DKCOD STROBE IN RESET COMMAND MODE
+10404  04CD 6F 02            CLR     $0002,X   DKCOD CLEAR COMMAND OUT OF PIA
+10405  04CF DE 19            LDX     SAVXR     PROM Var
+10406  04D1 08               INX     
+10407  04D2 7A 01FE          DEC     L01FE
+10408  04D5 26 DA            BNE     L04B1
+10409  04D7 4F               CLRA    
+10410  04D8 39               RTS     
+10411   
+10412                                          Check if Disk is ready
+10413                                          Print error and return to command prompt if not
+10414                                          X reg is preserved
+10415   
+10416  04D9 BD F1FF  DSKRDY  JSR     SAVE      PROM Call: Save X in SAVXR and LDX DIO 
+10417  04DC A6 00            LDAA    $0000,X   DKDID READ DISK STATUS REGISTER
+10418  04DE DE 19            LDX     SAVXR     PROM Var
+10419  04E0 84 20            ANDA    #$20      check if selected disk ready
+10420  04E2 26 01            BNE     L04E5
+10421  04E4 39               RTS     
+10422  04E5 F6 0340  L04E5   LDAB    MNOTRDY   String "DISK NOT READY"
+10423  04E8 CE 0341          LDX     #MNOTRDY+1
+10424  04EB 7E 022E          JMP     PRTERR    Print error msg and return to command line
+10425  
+10426                                          Write a disk sector 
+10427                                          on entry: A=unit (bits 7-6) | sector (1st sector is 1)
+10428                                                    B=track (1st track is 0)
+10429                                                    X=addr of buffer with data to write to disk
+10430                                          on exit:  A=0 -> Ok, A<>0 -> error
+10431  
+10432  04EE FF 0173  WRSECT  STX     TMPH      save sector buffer addr
+10433  04F1 37               PSHB    
+10434  04F2 BD F22C          JSR     XMIT      ROM Call: select unit/sector (logical)
+10435  04F5 BD 04D9          JSR     DSKRDY    Check if disk is ready (print error and return to command prompt if not)
+10436  04F8 32               PULA    
+10437  04F9 BD F250          JSR     SEEK      PROM Call: Seek track in A
+10438  04FC 86 05            LDAA    #$05
+10439  04FE B7 01FE          STAA    L01FE     Set retry count
+10440  0501 FE 0173          LDX     TMPH      get sector buffer addr
+10441  0504 C6 80            LDAB    #$80
+10442  0506 A6 00    L0506   LDAA    $0000,X   PICK UP A DATA BYTE
+10443  0508 BD F1FF          JSR     SAVE      PROM Call: Save X in SAVXR and LDX DIO 
+10444  050B A7 06            STAA    $0006,X   DKDOD LOAD DATA TO BUFFER
+10445  050D 86 30            LDAA    #$30      DEFINE LOAD COMMAND
+10446  050F A7 02            STAA    $0002,X   DKCOD COMMAND BUFFER TO LOAD
+10447  0511 DE 19            LDX     SAVXR     PROM Var
+10448  0513 08               INX     
+10449  0514 5A               DECB    
+10450  0515 26 EF            BNE     L0506
+10451  0517 86 04    L0517   LDAA    #$04      DEFINE WRITE COMMAND
+10452  0519 BD F268          JSR     LOOP      PROM CAll: Issue command in reg A and loop on busy 
+10453  051C 86 06            LDAA    #$06      ASK DISK FOR STATUS
+10454  051E BD F268          JSR     LOOP      PROM CAll: Issue command in reg A and loop on busy 
+10455  0521 BD F1FF          JSR     SAVE      PROM Call: Save X in SAVXR and LDX DIO 
+10456  0524 A6 00            LDAA    $0000,X   DKDID READ THE REQUESTED STATUS
+10457  0526 DE 19            LDX     SAVXR     PROM Var
+10458  0528 84 08            ANDA    #$08      CRC error ? 
+10459  052A 27 0F            BEQ     L053B     success exit
+10460  052C BD F25F          JSR     RFLAG     PROM Call: reset disk error flag
+10461  052F 7A 01FE          DEC     L01FE
+10462  0532 26 E3            BNE     L0517
+10463  0534 86 0E            LDAA    #$0E      Ask disk to mark this sector = DD
+10464  0536 BD F268          JSR     LOOP      PROM CAll: Issue command in reg A and loop on busy 
+10465  0539 86 01            LDAA    #$01      failure exit
+10466  053B 39       L053B   RTS     
+10467   
+10468                                          directory search. 
+10469                                          on entry: FNAME/DRVNUM has the filename to search for in directory
+10470                                                    dir sectors are settled in track 0, sector 4 up to end of track
+10471                                          on exit: if fname found in dir -> A=0, 
+10472                                                   DIRPTR has the addr of current dir entry of found FNAME
+10473                                                   DRVSEC has the unit/sector of dir sector of found FNAME 
+10474                                                   not found -> A<>0
+10475                                          
+10476  
+10477                                          dir entry layout: bytes 0..4 fname
+10478                                                                  5    attribute	00=regular file, 80=deleted file
+10479                                                                  6    start track 0..76
+10480                                                                  7    start sector 1..26
+10481                                                                  8,9  file length (in sectors) (8=MSB, 9=LSB)
+10482                                                                  10   not used
+10483  
+10484   
+10485  053C 0C       DIRSRCH CLC               (is FNDFL routine in EDOS-II)
+10486  053D B6 016E          LDAA    DRVNUM    get the unit of file to search
+10487  0540 46               RORA    
+10488  0541 46               RORA    
+10489  0542 46               RORA    
+10490  0543 8A 04            ORAA    #$04      dir starts at sector 4
+10491  0545 B7 01F9          STAA    DRVSEC    save unit (in bits 7-6) and 1st sector of dir (bits 5-0)
+10492                                          Loop on dir sectors into track
+10493  0548 B6 01F9  L0548   LDAA    DRVSEC    get unit (in bits 7-6) and sector (bits 5-0) for current dir sector
+10494  054B 84 3F            ANDA    #$3F      isolate sector
+10495  054D 81 1B            CMPA    #SECTORS+1
+10496  054F 27 49            BEQ     L059A     if current dir sector <> last one -> proceed with this dir sector
+10497  0551 CE 0179          LDX     #SECBUF   Disk Sector buffer
+10498  0554 B6 01F9          LDAA    DRVSEC    get unit (in bits 7-6) and sector (bits 5-0) to read
+10499  0557 5F               CLRB              B=Track to read (=0 because dir is in track 0)
+10500  0558 BD 0463          JSR     RDSECT    Read a disk sector (A=unit/sec, B=track, X=buffer)
+10501  055B 4D               TSTA    
+10502  055C 27 05            BEQ     L0563     jump if ad ok. 
+10503  055E 7C 01F9          INC     DRVSEC    If cannot read the dir secotr, proceed to next one
+10504  0561 20 E5            BRA     L0548
+10505                                          Decode dir sector:
+10506  0563 CE 0179  L0563   LDX     #SECBUF   Disk Sector buffer
+10507  0566 FF 0177          STX     DIRPTR    set addr of 1st dir entry into sector buffer
+10508                                          Loop on dir sectors into sector buffer
+10509  0569 FE 0177  L0569   LDX     DIRPTR    get addr current dir entry 
+10510  056C A6 05            LDAA    $0005,X   a=attribute
+10511  056E 81 FF            CMPA    #$FF      is = $FF ? 
+10512  0570 27 28            BEQ     L059A     if attrib=FF -> jump to return from dir search (with A not zero)
+10513  0572 81 80            CMPA    #$80      is = $80 ?
+10514  0574 27 25            BEQ     L059B     if attrib=80 -> deleted file -> jump to skip this entry and proceed with the next one
+10515  0576 A6 00            LDAA    $0000,X   compare FNAME with dir entry
+10516  0578 B1 0169          CMPA    FNAME
+10517  057B 26 1E            BNE     L059B     not same name -> jump to skip this entry and proceed with the next one
+10518  057D A6 01            LDAA    $0001,X
+10519  057F B1 016A          CMPA    FNAME+1
+10520  0582 26 17            BNE     L059B     not same name -> jump to skip this entry and proceed with the next one
+10521  0584 A6 02            LDAA    $0002,X
+10522  0586 B1 016B          CMPA    FNAME+2
+10523  0589 26 10            BNE     L059B     not same name -> jump to skip this entry and proceed with the next one
+10524  058B A6 03            LDAA    $0003,X
+10525  058D B1 016C          CMPA    FNAME+3
+10526  0590 26 09            BNE     L059B     not same name -> jump to skip this entry and proceed with the next one
+10527  0592 A6 04            LDAA    $0004,X
+10528  0594 B1 016D          CMPA    FNAME+4
+10529  0597 26 02            BNE     L059B     not same name -> jump to skip this entry and proceed with the next one
+10530  0599 4F               CLRA              file found in direntry DIRPTR -> return A=0
+10531  059A 39       L059A   RTS    
+10532                                          Proceed to next dir entry:
+10533  059B 86 0B    L059B   LDAA    #$0B      add 11 to dirptr
+10534  059D 5F               CLRB    
+10535  059E BB 0178          ADDA    DIRPTR+1
+10536  05A1 F9 0177          ADCB    DIRPTR    
+10537  05A4 B7 0178          STAA    DIRPTR+1
+10538  05A7 F7 0177          STAB    DIRPTR    
+10539  05AA FE 0177          LDX     DIRPTR    DIRPTR=DIRPTR+11
+10540  05AD 8C 01F2          CPX     #SECBUF+11*11
+10541  05B0 26 B7            BNE     L0569     if not all dir entries in dir sector are processed -> jump to process next dir entry
+10542  05B2 7C 01F9          INC     DRVSEC    incr to select next dir sector
+10543  05B5 20 91            BRA     L0548     jump to read and process dir sector
+10544   
+10545   
+10546                                          open a file for reading
+10547                                          On Entry: FNAME/DRVNUM has the filename/unit to search to in dir and open
+10548                                          On Return: A<>0 -> file not found
+10549                                                     A=0 -> file opened
+10550                                                     set IUNIT, ITRK, ISCTR, ISIZE, ICNTR=0
+10551   
+10552  05B7 BD 053C  OPENR   JSR     DIRSRCH   
+10553  05BA 4D               TSTA              if A=0 -> FNAME found ...
+10554  05BB 27 01            BEQ     L05BE     ... then jump to process the file
+10555  05BD 39               RTS     
+10556  
+10557  05BE FE 0177  L05BE   LDX     DIRPTR    get addr current dir entry 
+10558  05C1 E6 06            LDAB    $0006,X   get file starting track from dir entry
+10559  05C3 D7 06            STAB    ITRK      PROM Var: Track for input file
+10560  05C5 E6 08            LDAB    $0008,X   get file size (Hi byte)
+10561  05C7 D7 04            STAB    ISIZE     PROM Var: size (in sectors) of input file
+10562  05C9 E6 09            LDAB    $0009,X   get file size (Lo byte)
+10563  05CB D7 05            STAB    ISIZE+1
+10564  05CD 7F 0008          CLR     ICNTR     PROM Var: IFILE buffer counter
+10565  05D0 F6 016E          LDAB    DRVNUM    Get file unit 
+10566  05D3 0C               CLC     
+10567  05D4 56               RORB    
+10568  05D5 56               RORB    
+10569  05D6 56               RORB              
+10570  05D7 EA 07            ORAB    $0007,X   now B=unit in bits 7-6 | start sector of file
+10571  05D9 5A               DECB    
+10572  05DA D7 07            STAB    ISCTR     PROM Var: current sector
+10573  05DC 0C               CLC     
+10574  05DD 59               ROLB    
+10575  05DE 59               ROLB    
+10576  05DF 59               ROLB    
+10577  05E0 D7 03            STAB    IUNIT     PROM Var: Unit and sector for input file
+10578  05E2 4F               CLRA    
+10579  05E3 39               RTS     
+10580  
+10581                                          open a file for writing
+10582                                          On Entry: FNAME/DRVNUM has the filename/unit to search to in dir and open
+10583                                          On Return: A<>0 -> file not found
+10584                                                     A=0 -> file opened
+10585                                                     set OUNIT, OTRK, OSCTR, OSIZE, OCNTR=0
+10586  
+10587  05E4 BD 053C  OPENW   JSR     DIRSRCH
+10588  05E7 4D               TSTA              if A=0 -> FNAME found ...
+10589  05E8 27 01            BEQ     L05EB     ... then jump to process the file
+10590  05EA 39               RTS   
+10591    
+10592  05EB FE 0177  L05EB   LDX     DIRPTR    get addr current dir entry 
+10593  05EE E6 06            LDAB    $0006,X   get file starting track from dir entry
+10594  05F0 D7 0B            STAB    OTRK      PROM Var: set output file start track
+10595  05F2 E6 08            LDAB    $0008,X   get file size (Hi byte)
+10596  05F4 A6 09            LDAA    $0009,X   get file size (Lo byte)
+10597  05F6 80 01            SUBA    #$01
+10598  05F8 C2 00            SBCB    #$00
+10599  05FA D7 09            STAB    OSIZE     PROM Var: set size of output file
+10600  05FC 97 0A            STAA    OSIZE+1   PROM Var: set size of output file
+10601  05FE 7F 000D          CLR     OCNTR     PROM Var: set buffer counter of output file
+10602  0601 F6 016E          LDAB    DRVNUM    RSV: Possible bug: should replace sector in DRVNUM with one given by DIRSRCH
+10603  0604 D7 02            STAB    OUNIT     PROM Var: Unit and sector for output file
+10604  0606 0C               CLC     
+10605  0607 56               RORB    
+10606  0608 56               RORB    
+10607  0609 56               RORB    
+10608  060A EA 07            ORAB    $0007,X   now B=unit in bits 7-6 | start sector of file
+10609  060C D7 0C            STAB    OSCTR     PROM Var: set output file start sector
+10610  060E 4F               CLRA    
+10611  060F 39               RTS     
+10612  
+10613                                          open a NEW file for writing
+10614                                          On Entry: FNAME/DRVNUM has the filename/unit to search to in dir and open
+10615                                                    FSIZE has the size (in sectors) of file to create
+10616                                          On Return: A=3 -> no room (X=number of free sectors=max size of file that can be created)
+10617                                                     A=2 -> file alreay exists
+10618                                                     A=1 -> error in directory
+10619                                                     A=0 -> success, new dir entry created for file
+10620                                                            set OUNIT, OTRK, OSCTR, OSIZE, OCNTR=0
+10621  
+10622  0610 BD 053C  OPENX   JSR     DIRSRCH   (=CREAF routine in EDOS-II)
+10623  0613 4D               TSTA              if A<>0 -> FNAME NOT found ...
+10624  0614 26 03            BNE     L0619     ... then jump to proceed
+10625  0616 86 02            LDAA    #$02
+10626  0618 39               RTS     
+10627  
+10628  0619 81 FF    L0619   CMPA    #$FF
+10629  061B 27 03            BEQ     L0620     if A=FF -> file not found -> jump to proceed
+10630  061D 86 01            LDAA    #$01
+10631  061F 39               RTS     
+10632  
+10633  0620 FE 0177  L0620   LDX     DIRPTR    get addr of last dir entry 
+10634  0623 86 1A            LDAA    #SECTORS
+10635  0625 B7 01FE          STAA    L01FE
+10636  0628 4F               CLRA    
+10637  0629 5F               CLRB    
+10638                                          compute BA=track * 26
+10639  062A AB 06    L062A   ADDA    $0006,X   get track from last dir entry (=track where is the 1st free sector)
+10640  062C C9 00            ADCB    #$00
+10641  062E 7A 01FE          DEC     L01FE
+10642  0631 26 F7            BNE     L062A
+10643                                          compute BA=track*26+sector = total used number of sectors 
+10644  0633 AB 07            ADDA    $0007,X   get file starting sector from dir entry
+10645  0635 C9 00            ADCB    #$00
+10646  0637 B7 01FF          STAA    SVIUNIT
+10647  063A F7 01FE          STAB    L01FE
+10648                                          compute BA = (SECTORS*TRACKS-2) - (track*26+sector) = total free number of sectors 
+10649  063D CE 07D0          LDX     #SECTORS*TRACKS-2   total number of sectors in disk
+10650  0640 FF 0173          STX     TMPH      temp value
+10651  0643 F6 0173          LDAB    TMPH      temp value
+10652  0646 B6 0174          LDAA    TMPL      temp value
+10653  0649 B0 01FF          SUBA    SVIUNIT
+10654  064C F2 01FE          SBCB    L01FE
+10655                                          compute BA = total free number of sectors - fsize
+10656  064F F7 0173          STAB    TMPH      temp value - save total free number of sectors
+10657  0652 B7 0174          STAA    TMPL      temp value
+10658  0655 B0 0171          SUBA    FSIZE+1
+10659  0658 F2 0170          SBCB    FSIZE     
+10660  065B 2A 06            BPL     L0663     if >=0 -> fsize does fit in free space -> jump to proceed
+10661  065D FE 0173          LDX     TMPH      temp value - total free number of sectors
+10662  0660 86 03            LDAA    #$03
+10663  0662 39               RTS     
+10664  
+10665  0663 FE 0177  L0663   LDX     DIRPTR    get addr of last dir entry 
+10666  0666 B6 0169          LDAA    FNAME     save FNAME in dir entry
+10667  0669 A7 00            STAA    $0000,X
+10668  066B B6 016A          LDAA    FNAME+1
+10669  066E A7 01            STAA    $0001,X
+10670  0670 B6 016B          LDAA    FNAME+2
+10671  0673 A7 02            STAA    $0002,X
+10672  0675 B6 016C          LDAA    FNAME+3
+10673  0678 A7 03            STAA    $0003,X
+10674  067A B6 016D          LDAA    FNAME+4
+10675  067D A7 04            STAA    $0004,X
+10676  
+10677                                          Set attrib of new file in dir entry just created, update end-of-dir (Trakm Sector, size) 
+10678                                          to take into account room used 
+10679                                          on entry: ATTRIB, FSIZE, DIRPTR, DRVSEC, reg X=DIRPTR
+10680  
+10681  067F B6 016F  NEWATSZ LDAA    ATTRIB    file attribute
+10682  0682 A7 05            STAA    $0005,X   save attrib in dir entry
+10683  0684 F6 0170          LDAB    FSIZE
+10684  0687 B6 0171          LDAA    FSIZE+1
+10685  068A 8B 01            ADDA    #$01
+10686  068C C9 00            ADCB    #$00
+10687  068E E7 08            STAB    $0008,X   save FSIZE+1 in dir entry
+10688  0690 A7 09            STAA    $0009,X
+10689  
+10690  0692 E6 06            LDAB    $0006,X   get track, sector from dir entry: is the 1st free sector, that 
+10691  0694 A6 07            LDAA    $0007,X   will becomes the 1st sector of new file
+10692  0696 F7 01FC          STAB    NEWTRK    starting track of new file
+10693  0699 B7 01FD          STAA    NEWSEC    starting sector of new file
+10694  069C FE 0170          LDX     FSIZE 
+10695  069F 8C 0000          CPX     #$00      if FSIZE=0 -> incr it, then save it again in dir entry
+10696  06A2 26 09            BNE     L06AD
+10697  06A4 08               INX     
+10698  06A5 FF 0170          STX     FSIZE
+10699  06A8 FE 0177          LDX     DIRPTR    get addr current dir entry 
+10700  06AB 20 D2            BRA     NEWATSZ   Set attrib of new file in dir entry just created, update end-of-dir 
+10701                                          compute new 1st sector free in B=track, A=sector
+10702  06AD 8C 0000  L06AD   CPX     #$00      increment B=track, A=sector for X sectors
+10703  06B0 27 0B            BEQ     L06BD     (track is incr when sector exceeds SECTORS)
+10704  06B2 4C               INCA    
+10705  06B3 81 1B            CMPA    #SECTORS+1
+10706  06B5 26 03            BNE     L06BA
+10707  06B7 5C               INCB    
+10708  06B8 86 01            LDAA    #$01
+10709  06BA 09       L06BA   DEX     
+10710  06BB 26 F0            BNE     L06AD
+10711  
+10712  06BD F7 01FA  L06BD   STAB    NXTTRK    save new track 
+10713  06C0 B7 01FB          STAA    NXTSEC    save new sector (for 1st free sector)
+10714  06C3 FE 0177          LDX     DIRPTR    get addr current dir entry 
+10715  06C6 8C 01E7          CPX     #SECBUF+11*10
+10716  06C9 26 27            BNE     L06F2     if not last one in dir sector -> jump to proceed
+10717                                          save current dir sector (has the dir entry for new file created)
+10718  06CB 5F       L06CB   CLRB              B=0 -> track 0
+10719  06CC B6 01F9          LDAA    DRVSEC    unit (in bits 7-6) and sector (bits 5-0)
+10720  06CF CE 0179          LDX     #SECBUF   Disk Sector buffer
+10721  06D2 BD 04EE          JSR     WRSECT    
+10722  06D5 4D               TSTA    
+10723  06D6 27 0F            BEQ     NEWDIR    if write OK (A=0) -> jump to Create end-of-dir entry at start of dir sector
+10724                                          if write error, proceed with next dir sector
+10725  06D8 7C 01F9          INC     DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+10726  06DB F6 01F9          LDAB    DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+10727  06DE C4 3F            ANDB    #$3F
+10728  06E0 C1 1B            CMPB    #SECTORS+1
+10729  06E2 26 E7            BNE     L06CB
+10730  06E4 7E 049A          JMP     EDSKERR   Print error "MEDIA ERROR" and return to command prompt
+10731  
+10732                                          Create end-of-dir entry at start of dir sector
+10733                                          on entry: DRVSEC = unit and sector where to create dir entry
+10734                                                    NXTTRK, NXTSEC: 1st free sector to place in end-of-dir entry
+10735   
+10736  06E7 CE 0179  NEWDIR  LDX     #SECBUF   Disk Sector buffer
+10737  06EA FF 0177          STX     DIRPTR    set addr for current dir entry as 1st entry en sector
+10738  06ED 7C 01F9          INC     DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+10739  06F0 20 0F            BRA     L0701
+10740   ;
+10741  06F2 5F       L06F2   CLRB    
+10742  06F3 86 0B            LDAA    #$0B
+10743  06F5 BB 0178          ADDA    L0178
+10744  06F8 F9 0177          ADCB    DIRPTR    get addr current dir entry 
+10745  06FB B7 0178          STAA    L0178
+10746  06FE F7 0177          STAB    DIRPTR    get addr current dir entry 
+10747                                          create a new last dir entry 
+10748  0701 FE 0177  L0701   LDX     DIRPTR    get addr current dir entry 
+10749  0704 C6 05            LDAB    #$05      fname length=5
+10750  0706 86 2A            LDAA    #$2A      '*'
+10751  0708 A7 00    L0708   STAA    $0000,X   save '*****' as filename
+10752  070A 08               INX     
+10753  070B 5A               DECB    
+10754  070C 26 FA            BNE     L0708
+10755  070E 86 FF            LDAA    #$FF
+10756  0710 A7 00            STAA    $0000,X   set attrib = $FF
+10757  0712 08               INX     
+10758  0713 B6 01FA          LDAA    NXTTRK
+10759  0716 A7 00            STAA    $0000,X   store new track
+10760  0718 08               INX     
+10761  0719 B6 01FB          LDAA    NXTSEC
+10762  071C A7 00            STAA    $0000,X   store new 1st free sector
+10763  071E 5F       L071E   CLRB    
+10764  071F B6 01F9          LDAA    DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+10765  0722 84 3F            ANDA    #$3F
+10766  0724 81 1B            CMPA    #SECTORS+1
+10767  0726 26 03            BNE     L072B     jump if room for new dir sector
+10768  0728 7E 049A  ERMEDIA JMP     EDSKERR   Print error "MEDIA ERROR" and return to command prompt
+10769   
+10770  072B B6 01F9  L072B   LDAA    DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+10771  072E CE 0179          LDX     #SECBUF   Disk Sector buffer
+10772  0731 BD 04EE          JSR     WRSECT    Save new dir sector
+10773  0734 4D               TSTA    
+10774  0735 26 01            BNE     L0738
+10775  0737 39               RTS     
+10776  
+10777  0738 7C 01F9  L0738   INC     DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+10778  073B 20 E1            BRA     L071E
+10779  
+10780  
+10781                                          Close output file (flush data to floppy)
+10782  
+10783  073D 0F       UPDAT   SEI               RSV: this is necessary?
+10784  073E 7D 0001          TST     OFILE     PROM Var: Output file number
+10785  0741 26 03            BNE     L0746     if <>0 -> there is an open output file -> jump to flush it
+10786  0743 7E 0214  L0743   JMP     EXEC      jump to Executive warm start 
+10787                                          fill last sector with zeroes
+10788  0746 7D 000D  L0746   TST     OCNTR     PROM Var: buffer counter of output file
+10789  0749 27 06            BEQ     L0751
+10790  074B 4F               CLRA    
+10791  074C BD F1AD          JSR     WRT       PROM Call: write byte to disk
+10792  074F 20 F5            BRA     L0746
+10793                                  
+10794  0751 CE 0000  L0751   LDX     #$00
+10795  0754 FF 0169          STX     FNAME     clear FNAME
+10796  0757 FF 016B          STX     FNAME+2
+10797  075A FF 016C          STX     FNAME+3
+10798  
+10799  075D 96 02            LDAA    OUNIT     PROM Var: Unit and sector for output file
+10800  075F B7 016E          STAA    DRVNUM
+10801  0762 4F               CLRA    
+10802  0763 B7 016F          STAA    ATTRIB    set file attribute = 0
+10803  0766 BD 053C          JSR     DIRSRCH   search for FNAME=0000 -> will not found to -> should return $FF as file not found
+10804  0769 81 FF            CMPA    #$FF
+10805  076B 26 BB            BNE     ERMEDIA   ... else some error has ocurred searching the dir
+10806  076D FE 0177          LDX     DIRPTR    get addr of last dir entry (as file 00000 is not found)
+10807  0770 A6 09            LDAA    $0009,X   get file size (LSB)
+10808  0772 E6 08            LDAB    $0008,X   get file size (MSB)
+10809  0774 80 01            SUBA    #$01    
+10810  0776 C2 00            SBCB    #$00
+10811  0778 90 0A            SUBA    OSIZE+1   PROM Var: set size of output file 
+10812  077A D2 09            SBCB    OSIZE     PROM Var: set size of output file
+10813                                          fsize = free size - actual output file size
+10814  077C B7 0171          STAA    FSIZE+1
+10815  077F F7 0170          STAB    FSIZE
+10816  0782 BD 067F          JSR     NEWATSZ   Set attrib of new file in dir entry just created, update end-of-dir 
+10817  0785 20 BC            BRA     L0743     jp to terminate update
+10818   ;
+10819                                          ********************************************
+10820                                          * FDOS command: RUN,progfile[,hhhh]
+10821                                          ********************************************
+10822                                          * load prog from with bias hhhh (16bits hex value). 
+10824                                          * then go to monitor
+10825  
+10826  0787 BD 03BE  C.RUN   JSR     GETFNAM   Get next param (program file) in command line into FNAME/DRVNUM variables
+10827  078A BD 05B7          JSR     OPENR     Open file for reading
+10828  078D 4D               TSTA    
+10829  078E 27 09            BEQ     L0799     if A=0 -> open file success -> proceed
+10830  0790 F6 0305  ERNOFIL LDAB    MNOFILE   String "NO FILE"
+10831  0793 CE 0306          LDX     #MNOFILE+1
+10832  0796 7E 022E          JMP     PRTERR    Print error msg and return to command line
+10833   ;
+10834  0799 BD 03BE  L0799   JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+10835  079C CE 0169          LDX     #FNAME    is the optional offset on loading 
+10836  079F BD 096F          JSR     CVTH2B    convert hex HHHH string at addr X to binay in TMPH,TMPL
+10837  07A2 FE 0173          LDX     TMPH      conversion result - the offset in RUN command
+10838  07A5 DF 17            STX     OFFSET    PROM Var: Offset when loading a prog
+10839  07A7 BD 0C00          JSR     HIMEM     Set the High RAM addr in TEMP var
+10840  07AA 9E 11            LDS     TEMP      PROM Var
+10841  07AC 7E F02C          JMP     PROG      PROM Call: PROG loads a program an return to monitor
+10842  
+10843                                          ********************************************
+10844                                          * FDOS command: RUNGO,progfile,[InFile],[OutFile],[hh]
+10845                                          ********************************************
+10846                                          * is present, outfile is created. If already exists -> error "DUPL FILE"
+10847                                          * hh is progfile param stored in PASS
+10848  
+10849  07AF BD 03BE  C.RUNGO JSR     GETFNAM   Get next param (progfile) in command line into FNAME/DRVNUM variables
+10850  07B2 BD 03BE          JSR     GETFNAM   Get next param (InFile) in command line into FNAME/DRVNUM variables
+10851  07B5 CE 0001          LDX     #$01      init to no input file
+10852  07B8 DF 04            STX     ISIZE     PROM Var: size (in sectors) of input file
+10853  07BA 7F 0006          CLR     ITRK      PROM Var: Track for input file
+10854  07BD 7F 0003          CLR     IUNIT     PROM Var: Unit and sector for input file
+10855  07C0 B6 0169          LDAA    FNAME
+10856  07C3 81 20            CMPA    #$20
+10857  07C5 27 09            BEQ     L07D0     if no infile -> jump to proceed without input file
+10858  07C7 BD 05B7          JSR     OPENR     Open input file for reading
+10859  07CA 4D               TSTA    
+10860  07CB 27 03            BEQ     L07D0     if A=0 -> open file success -> proceed
+10861  07CD 7E 0790          JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+10862   ;
+10863  07D0 BD 03BE  L07D0   JSR     GETFNAM   Get next param (OutFile) in command line into FNAME/DRVNUM variables
+10864  07D3 B6 0169          LDAA    FNAME
+10865  07D6 81 20            CMPA    #$20
+10866  07D8 27 05            BEQ     L07DF     if no outfile -> jump to proceed without output file
+10867  07DA BD 0C4A          JSR     NEWFILE   Create new file FNAME
+10868  07DD 20 16            BRA     L07F5
+10869   ;
+10870  07DF CE 0001  L07DF   LDX     #$01
+10871  07E2 DF 09            STX     OSIZE     PROM Var: set size of output file
+10872  07E4 86 4C            LDAA    #TRACKS-1
+10873  07E6 97 0B            STAA    OTRK      PROM Var: set output file start track
+10874  07E8 86 01            LDAA    #$01
+10875  07EA 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+10876  07EC 7F 000D          CLR     OCNTR     PROM Var: set buffer counter of output file
+10877  07EF BD 0C84          JSR     SVIFILE   Save ITRK/ISIZE/IUNIT
+10878  07F2 7F 0001          CLR     OFILE     PROM Var: Output file number
+10879  
+10880  07F5 BD 03BE  L07F5   JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+10881  07F8 CE 0169          LDX     #FNAME
+10882  07FB BD 096F          JSR     CVTH2B    convert hex HHHH string at addr X to binay in TMPH,TMPL
+10883  07FE B6 0174          LDAA    TMPL      temp value
+10884  0801 97 00            STAA    PASS      PROM Var: assembly pass info
+10885  0803 CE 0115          LDX     #CMDLIN   Command Line buffer address
+10886  0806 FF 0165          STX     CMDINI    stores the addr of 1st char in command line buffer to be processed
+10887  0809 BD 03BE          JSR     GETFNAM   Get next param (skips "RUNGO")
+10888  080C BD 03BE          JSR     GETFNAM   Get next param (the program filename)
+10889  080F 7E 0BE6          JMP     LOADRUN   Load FNAME prog file and Run it 
+10890  
+10891                                          ********************************************
+10892                                          * FDOS command: PRINT,fname
+10893                                          ********************************************
+10894                                          * send file to line printer
+10895  
+10896  0812 BD 03BE  C.PRINT JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+10897  0815 BD 11B0          JSR     OPCHK9X   Open FNAME and Check file attrib. If is $9X return to command prompt
+10898  0818 4D               TSTA    
+10899  0819 27 03            BEQ     L081E
+10900  081B 7E 0790          JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+10901   ;
+10902  081E BD F135  L081E   JSR     RI        RI read a byte from disk in reg A, if EOF carry is set
+10903  0821 25 09            BCS     L082C     Ctrl-Z <EOF> read from disk -> jump to terminate printing
+10904  0823 84 7F            ANDA    #$7F
+10905  0825 27 F7            BEQ     L081E     Skip any 00 byte
+10906  0827 BD 010C          JSR     LPTOUT    Print 
+10907  082A 20 F2            BRA     L081E
+10908   ;
+10909  082C 7E 0214  L082C   JMP     EXEC      jump to Executive warm start 
+10910   
+10911                                          process <fname,hhhh> command parameter
+10912                                          on exit: fname is open for read
+10913                                                   hhhh hex value defaults to $14 (=20) if not set
+10914                                                   stored in NFRAM2,NFRAME     
+10933  
+10934                                          ********************************************
+10935                                          * FDOS command: VIEW,fname,nn,n0
+10936                                          ********************************************
+10937                                          * view file in console
+10938                                          * nn=lines per frame in hex. defaults to 20 (dec) = 14 (hex)
+10939                                          * n0=first line to be shown
+10940                                          * keys while viewving a file: N/P -> next/prev frame, F/B
+10941  
+10915  082F CE 0000  CMDFNHH LDX     #$00
+10916  0832 FF 0175          STX     NLINE     current line for VIEW command
+10917  0835 BD 03BE          JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+10918  0838 BD 05B7          JSR     OPENR     Open file for reading
+10919  083B 4D               TSTA    
+10920  083C 27 03            BEQ     L0841     if A=0 -> open file success -> proceed
+10921  083E 7E 0790          JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+10923  0841 BD 0C84  L0841   JSR     SVIFILE   Save ITRK/ISIZE/IUNIT
+10924  0844 BD 03BE          JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+10925  0847 CE 0169          LDX     #FNAME
+10926  084A BD 096F          JSR     CVTH2B    convert hex HHHH string at addr X to binay in TMPH,TMPL
+10927  084D FE 0173          LDX     TMPH      conversion result
+10928  0850 26 03            BNE     L0855
+10929  0852 CE 0014          LDX     #$14      =20 is the default value for lines per frame
+10930  0855 FF 01FE  L0855   STX     NFRAM2    number of lines per frame 
+10931  0858 FF 0946          STX     NFRAME    number of lines per frame (defaults to 20)
+10932  085B 39               RTS     
+
+10942  085C BD 082F  C.VIEW  JSR     CMDFNHH   process <fname,hhhh> command parameter
+10943  085F BD 11C2          JSR     CHK9XP    Check file attrib. If is $9X return to command prompt, else read next param
+10944  0862 CE 0169          LDX     #FNAME
+10945  0865 BD 096F          JSR     CVTH2B    convert hex HHHH string at addr X to binay in TMPH,TMPL
+10946  0868 FE 0173          LDX     TMPH      temp value -> n0 param = first line to be shown
+10947  086B FF 0200          STX     LINCNT    Set Line count for VIEW command
+
+10948  086E FE 0200  VIEW1   LDX     LINCNT    Get Line count for VIEW command
+10949  0871 8C 0000          CPX     #$00      if > then 0 read LINE0 lines from file
+10950  0874 27 12            BEQ     VIEWN     goto print next frame of file
+                                               skip LINCNT lines from input file
+
+10951  0876 BD F135  VIEW2   JSR     RI        RI read a byte from disk in reg A, if EOF carry is set
+10952  0879 25 79            BCS     VIEWEOF   jmp if end of file
+10953  087B 84 7F            ANDA    #$7F      clear bit8
+10954  087D 27 F7            BEQ     VIEW2     if <NUL> goto read next byte from file
+10955  087F 81 0A            CMPA    #$0A
+10956  0881 26 F3            BNE     VIEW2     if not <LF> goto read next byte from file
+10957  0883 BD 0926          JSR     INCLIN    incr NLINE, decr LINE0
+10958  0886 26 EE            BNE     VIEW2     if LINE0 <> 0 goto read next byte from file
+
+10959  0888 FE 01FE  VIEWN   LDX     NFRAM2    get number of lines per frame      
+10960  088B FF 0200          STX     LINCNT    Line count for VIEW command
+
+                                               print LINCNT lines from input file
+
+10961  088E BD 0935  VIEW4   JSR     PRTHHHH   Print NLINE as 4 hex digits, then space
+10962  0891 BD F135  VIEW5   JSR     RI        RI read a byte from disk in reg A, if EOF carry is set
+10963  0894 25 5E            BCS     VIEWEOF   jmp if end of file
+10964  0896 84 7F            ANDA    #$7F
+10965  0898 27 F7            BEQ     VIEW5     if <NUL> goto read next byte from file
+10966  089A 81 0A            CMPA    #$0A   
+10967  089C 27 05            BEQ     VIEW6
+10968  089E BD 0112          JSR     CONOUT    print char from file if not <LF>
+10969  08A1 20 EE            BRA     VIEW5
+10971  08A3 BD 0112  VIEW6   JSR     CONOUT    print <LF>
+10972  08A6 BD 0926          JSR     INCLIN    incr NLINE, decr LINE0
+10973  08A9 26 E3            BNE     VIEW4     if LINE0 <> 0 goto read next byte from file
+
+10974  08AB BD 0422  VIEWGK  JSR     GETKEY    Get Key from console
+10975  08AE 36               PSHA      
+10976  08AF BD 041E          JSR     PRTLN     Print <CR><LF> to start a new line
+10977  08B2 32               PULA    
+10978  08B3 C6 46            LDAB    #$46      'F'
+10979  08B5 11               CBA     
+10980  08B6 26 02            BNE     VIEW8     key is not 'F'
+10981  08B8 20 35            BRA     VIEWF     Process F (First) command -> return to first frame of file 
+10983  08BA C6 50    VIEW8   LDAB    #$50      'P'
+10984  08BC 11               CBA     
+10985  08BD 27 40            BEQ     VIEWP     Process P (Previous) command -> print previous frame
+10986  08BF C6 4E            LDAB    #$4E      'N'
+10987  08C1 11               CBA     
+10988  08C2 27 C4            BEQ     VIEWN     Process N (Next) command -> print next frame of file 
+10989  08C4 C6 42            LDAB    #$42      'B'
+10990  08C6 11               CBA     
+10991  08C7 27 0F            BEQ     VIEWB     Process B (Beginning) command -> print 1st line of file
+10992  08C9 C6 0D            LDAB    #$0D      <CR>
+10993  08CB 11               CBA     
+10994  08CC 27 07            BEQ     VIEWX     Process <CR> -> exits VIEW command
+10995  08CE 86 3F            LDAA    #$3F      '?'
+10996  08D0 BD 0112          JSR     CONOUT
+10997  08D3 20 D6            BRA     VIEWGK    jump to get key from user
+10998   ;
+10999  08D5 7E 0202  VIEWX   JMP     EXECINI   EXEC Cold Start 
+11000   
+11014                                          Process B (Beginning) command -> return to first line of file 
+11001  08D8 8D 0B    VIEWB   BSR     CMDLRST   Reset command line pointer, 
+11002  08DA BD 082F          JSR     CMDFNHH   process <fname,hhhh> command parameter 
+11003  08DD CE 0000          LDX     #$00
+11004  08E0 FF 0200          STX     LINCNT    Line count for VIEW command
+11005  08E3 20 89            BRA     VIEW1
+11006   
+11007                                          Reset command line pointer, so
+11008                                          next call to GETFNAM will fill FNAME with 1st command line parameter 
+11009   
+11010  08E5 CE 0115  CMDLRST LDX     #CMDLIN   Command Line buffer address
+11011  08E8 FF 0165          STX     CMDINI    stores the addr of 1st char in command line buffer to be processed
+11012  08EB BD 03BE          JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11013  08EE 39               RTS     
+11014                                          Process F (First) command -> return to first frame of file 
+11015  08EF 8D F4    VIEWF   BSR     CMDLRST   Reset command line pointer, so
+11016  08F1 7E 085C          JMP     C.VIEW
+11017   ;
+11018  08F4 F6 035B  VIEWEOF LDAB    MEOF      String "EOF"
+11019  08F7 CE 035C          LDX     #MEOF+1
+11020  08FA BD 0414          JSR     PRTSTR    Print String
+11021  08FD 20 AC            BRA     VIEWGK    jump to get key from user
+11022                                          Process P (Previous) command -> print previous frame
+11023  08FF FE 0175  VIEWP   LDX     NLINE     current line for VIEW command
+11024  0902 B6 0947          LDAA    NFRAME+1  number of lines per frame (defaults to 20)
+11025  0905 49               ROLA    
+11026  0906 09       VIEW9   DEX     
+11027  0907 27 E6            BEQ     VIEWF     -> return to first frame of file 
+11028  0909 4A               DECA    
+11029  090A 26 FA            BNE     VIEW9
+11030  090C FF 0200          STX     LINCNT    Line count for VIEW command
+11031  090F CE 0000          LDX     #$00
+11032  0912 FF 0175          STX     NLINE     current line for VIEW command
+11033  0915 FE 0946          LDX     NFRAME    number of lines per frame (defaults to 20)
+11034  0918 FF 01FE          STX     NFRAM2    number of lines per frame 
+11035  091B BD F03B          JSR     RESTR     restore IFILE pointers -> rewind the file
+11036  091E 86 0A            LDAA    #$0A
+11037  0920 BD 0112          JSR     CONOUT
+11038  0923 7E 086E          JMP     VIEW1
+11039   ;
+11040  0926 FE 0175  INCLIN  LDX     NLINE     current line for VIEW command
+11041  0929 08               INX     
+11042  092A FF 0175          STX     NLINE     current line for VIEW command
+11043  092D FE 0200          LDX     LINCNT    Line count for VIEW command
+11044  0930 09               DEX     
+11045  0931 FF 0200          STX     LINCNT    Line count for VIEW command
+11046  0934 39               RTS     
+11047  
+11048  0935 B6 0175  PRTHHHH LDAA    NLINE     current line for VIEW command
+11049  0938 BD 0448          JSR     PRTHH     Print A as HH hex string
+11050  093B B6 0176          LDAA    NLINE+1
+11051  093E BD 0448          JSR     PRTHH     Print A as HH hex string
+11052  0941 86 20            LDAA    #$20
+11053  0943 7E 0112          JMP     CONOUT
+
+11055  0946 00 14    NFRAME  RMB     2         number of lines per frame (defaults to 20)   
+11057  
+11058                                          ********************************************
+11059                                          * FDOS command: CHGAT,fname,nn (hex)
+11060                                          ********************************************
+11061                                          * set file attribute to nn
+11062  
+11063  0948 BD 03BE  C.CHGAT JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11064  094B BD 053C          JSR     DIRSRCH
+11065  094E 4D               TSTA    
+11066  094F 27 03            BEQ     L0954
+11067  0951 7E 0790          JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+11068   
+11069  0954 BD 03BE  L0954   JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11070  0957 CE 0169          LDX     #FNAME
+11071  095A BD 096F          JSR     CVTH2B    convert hex HHHH string at addr X to binay in TMPH,TMPL
+11072  095D BD 11B3          JSR     CHK9X     Check file attrib. If is $9X return to command prompt
+11073  0960 B6 0174          LDAA    TMPL      get the new attribute to set
+11074  0963 81 FF            CMPA    #$FF
+11075  0965 27 05            BEQ     L096C     jump to error (cannot set attrib $FF)
+11076  0967 A7 05            STAA    $0005,X   store new attrib in dir entry
+11077  0969 7E 0A04          JMP     L0A04
+11078   ;
+11079  096C 7E 0228  L096C   JMP     ERFMT     Print "FORMAT ERROR", return to command prompt
+11080   ;
+11081   
+11082                                          Convert HHHH to binary
+11083                                          On Entry: X=addr of buf with HHHH hex string
+11084                                          On exit: TMPH,TMPL holds the resulting value of HHHH string pointed by X
+11085                                          
+11086  096F 7F 0173  CVTH2B  CLR     TMPH      temp value - holds the MSB resulting value of HHHH string pointed by X
+11087  0972 7F 0174          CLR     TMPL      temp value - holds the LSB resulting value of HHHH string pointed by X
+11088  0975 A6 00    L0975   LDAA    $0000,X   get next char from buffer
+11089  0977 BD 0983          JSR     L0983
+11090  097A 24 04            BCC     L0980     if carry set -> error -> return
+11091  097C FE 0175          LDX     L0175
+11092  097F 39               RTS     
+11093  0980 08       L0980   INX     
+11094  0981 20 F2            BRA     L0975
+11095   ;
+11096  0983 80 30    L0983   SUBA    #$30      convert '0' -> 0
+11097  0985 25 2C            BCS     L09B3     if char < '0' -> carry is set -> jump to return
+11098  0987 8B E9            ADDA    #$E9
+11099  0989 25 28            BCS     L09B3     if char > 'F' -> carry is set -> jump to return
+11100  098B 8B 06            ADDA    #$06
+11101  098D 2A 04            BPL     L0993
+11102  098F 8B 07            ADDA    #$07
+11103  0991 25 20            BCS     L09B3
+11104  0993 8B 0A    L0993   ADDA    #$0A    
+11105  0995 0C               CLC     
+11106  0996 25 1B            BCS     L09B3
+11107  0998 B7 0172          STAA    TMP       save bin digit
+11108  099B F6 0173          LDAB    TMPH      temp value - holds the MSB resulting value of HHHH string pointed by X
+11109  099E B6 0174          LDAA    TMPL      temp value - holds the LSB resulting value of HHHH string pointed by X
+11110  09A1 48               ASLA    
+11111  09A2 59               ROLB    
+11112  09A3 48               ASLA    
+11113  09A4 59               ROLB    
+11114  09A5 48               ASLA    
+11115  09A6 59               ROLB    
+11116  09A7 48               ASLA    
+11117  09A8 59               ROLB    
+11118  09A9 BB 0172          ADDA    TMP       add bin digit saved
+11119  09AC F7 0173          STAB    TMPH      temp value - holds the MSB resulting value of HHHH string pointed by X
+11120  09AF B7 0174          STAA    TMPL      temp value - holds the LSB resulting value of HHHH string pointed by X
+11121  09B2 0C               CLC     
+11122  09B3 39       L09B3   RTS     
+11123  
+11124                                          ********************************************
+11125                                          * FDOS command: RENAM,OldName,NewName
+11126                                          ********************************************
+11127  
+11128  09B4 BD 03BE C.RENAM  JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11129  09B7 B6 016E          LDAA    DRVNUM
+11130  09BA B7 0172          STAA    TMP       save file to rename unit
+11131  09BD BD 03BE          JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11132  09C0 B6 0172          LDAA    TMP       restore save file to rename unit
+11133  09C3 B7 016E          STAA    DRVNUM
+11134  09C6 BD 053C          JSR     DIRSRCH   check if Newfile exists
+11135  09C9 4D               TSTA    
+11136  09CA 27 6A            BEQ     ERDUPL    if A=0 -> file exists -> jump to print "DUPL FILE" error and return to command prompt
+11137  09CC CE 0115          LDX     #CMDLIN   Command Line buffer address
+11138  09CF FF 0165          STX     CMDINI    stores the addr of 1st char in command line buffer to be processed
+11139  09D2 BD 03BE          JSR     GETFNAM   Get next param ("RENAME") in command line into FNAME/DRVNUM variables
+11140  09D5 BD 03BE          JSR     GETFNAM   Get next param (OldName) in command line into FNAME/DRVNUM variables
+11141  09D8 BD 053C          JSR     DIRSRCH   check if Oldfile exists
+11142  09DB 4D               TSTA    
+11143  09DC 27 03            BEQ     L09E1     if A<>0 -> file does not exists -> jump to proceed
+11144  09DE 7E 0790  L09DE   JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+11145   ;
+11146  09E1 BD 03BE  L09E1   JSR     GETFNAM   Get next param (NewName) in command line into FNAME/DRVNUM variables
+11147  09E4 FE 0177          LDX     DIRPTR    get addr current dir entry (points to OldFile)
+11148  09E7 B6 0169          LDAA    FNAME
+11149  09EA 81 20            CMPA    #$20
+11150  09EC 27 F0            BEQ     L09DE     jump if NewName is blank
+11151  09EE A7 00            STAA    $0000,X   Update filename
+11152  09F0 B6 016A          LDAA    FNAME+1
+11153  09F3 A7 01            STAA    $0001,X
+11154  09F5 B6 016B          LDAA    FNAME+2
+11155  09F8 A7 02            STAA    $0002,X
+11156  09FA B6 016C          LDAA    FNAME+3
+11157  09FD A7 03            STAA    $0003,X
+11158  09FF B6 016D          LDAA    FNAME+4
+11159  0A02 A7 04            STAA    $0004,X
+11160  0A04 5F       L0A04   CLRB    
+11161  0A05 B6 01F9          LDAA    DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+11162  0A08 CE 0179          LDX     #SECBUF   Disk Sector buffer
+11163  0A0B BD 04EE          JSR     WRSECT
+11164  0A0E 4D               TSTA    
+11165  0A0F 26 01            BNE     L0A12
+11166  0A11 39               RTS     
+11167  0A12 7E 049A  L0A12   JMP     EDSKERR   Print error "MEDIA ERROR" and return to command prompt
+11168  
+11169                                          ********************************************
+11170                                          * FDOS command: CREAT,fname,hh
+11171                                          ********************************************
+11172                                          * create new file of given length (in sectors)
+11173                                          
+11174  0A15 7F 016F  C.CREAT CLR     ATTRIB    file attribute
+11175  0A18 BD 03BE          JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11176  0A1B FE 0165          LDX     CMDINI    get the addr of 1st char in command line buffer to be processed
+11177  0A1E BD 096F          JSR     CVTH2B    convert hex HHHH string at addr X to binay in TMPH,TMPL
+11178  0A21 FE 0173          LDX     TMPH      get the hh value
+11179  0A24 27 22            BEQ     L0A48
+11180  0A26 FF 0170          STX     FSIZE     use it as file length
+11181  0A29 BD 0610          JSR     OPENX     Open new file for writting
+11182  0A2C 4D               TSTA    
+11183  0A2D 26 03            BNE     ERNEWFI   Print new file creation error, return to command prompt
+11184  0A2F 7E 0214          JMP     EXEC      jump to Executive warm start 
+11185   ;
+11186  0A32 81 02    ERNEWFI CMPA    #$02      Print error when creating a new file: A=2 -> file already exists
+11187  0A34 26 09            BNE     ERNROOM                                         else > no room
+11188  0A36 F6 0312  ERDUPL  LDAB    MDUPLFL   String "DUPL FILE"
+11189  0A39 CE 0313          LDX     #MDUPLFL+1
+11190  0A3C 7E 022E          JMP     PRTERR    Print error msg and return to command line
+11191  0A3F F6 031C  ERNROOM LDAB    MNOROOM   String "NO ROOM"
+11192  0A42 CE 031D          LDX     #MNOROOM+1
+11193  0A45 7E 022E          JMP     PRTERR    Print error msg and return to command line
+11194   ;
+11195  0A48 7E 0228  L0A48   JMP     ERFMT     Print "FORMAT ERROR", return to command prompt
+11196  
+11197                                          ********************************************
+11198                                          * FDOS command: INIT[,unit]
+11199                                          ********************************************
+11200                                          * unit cannot be 0. to init unit 0 use command INITX
+11201  
+11202  0A4B BD 0B4D  C.INIT  JSR     GETUNIT   Get next command line param as unit 0..3 (sets DRVNUM with unit number)
+11203  0A4E B6 016E          LDAA    DRVNUM
+11204  0A51 27 3C            BEQ     ERFMT2    jump to print "FORMAT ERROR", return to command prompt
+11205  0A53 20 03            BRA     L0A58
+11206   ;
+11207                                          ********************************************
+11208                                          * FDOS command: INITX
+11209                                          ********************************************
+11210                                          * init unit 0 
+11211  
+11212  0A55 7F 016E  C.INITX CLR     DRVNUM    set unit to init as zero
+11213  0A58 B6 016E  L0A58   LDAA    DRVNUM
+11214  0A5B 0C               CLC     
+11215  0A5C 46               RORA    
+11216  0A5D 46               RORA    
+11217  0A5E 46               RORA    
+11218  0A5F 8A 03            ORAA    #$03
+11219  0A61 B7 01F9          STAA    DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+11220  0A64 86 01            LDAA    #$01     
+11221  0A66 B7 01FA          STAA    NXTTRK    1st file of disk starts at track 1, sector
+11222  0A69 B7 01FB          STAA    NXTSEC
+11223  0A6C BD 06E7          JSR     NEWDIR    Create end-of-dir entry at start of dir sector
+11224  0A6F 39               RTS     
+11225  
+11226                                          ********************************************
+11227                                          * FDOS command: HOME[,unit]
+11228                                          ********************************************
+11229  
+11230  0A70 BD 0B4D  C.HOME  JSR     GETUNIT   Get next command line param as unit 0..3 (sets DRVNUM with unit number)
+11231  0A73 B6 016E          LDAA    DRVNUM
+11232  0A76 0C               CLC     
+11233  0A77 46               RORA    
+11234  0A78 46               RORA    
+11235  0A79 46               RORA    
+11236  0A7A 4C               INCA              A=unit | sector 1
+11237  0A7B BD F1FF          JSR     SAVE      PROM Call: Save X in SAVXR and LDX DIO 
+11238  0A7E A7 06            STAA    $0006,X   DKDOD COMMAND DISK <UNIT><SECTOR>
+11239  0A80 86 20            LDAA    #$20
+11240  0A82 A7 02            STAA    $0002,X   DKCOD TO THE COMMAND REGISTER
+11241  0A84 DE 19            LDX     SAVXR     PROM Var
+11242  0A86 BD 04D9          JSR     DSKRDY    Check if disk is ready (print error and return to command prompt if not)
+11243  0A89 86 0C            LDAA    #$0C      Seek to track 0 command
+11244  0A8B BD F268          JSR     LOOP      PROM CAll: Issue command in reg A and loop on busy 
+11245  0A8E 39               RTS     
+11246  0A8F 7E 0228  ERFMT2  JMP     ERFMT     Print "FORMAT ERROR", return to command prompt
+11247  
+11248                                          ********************************************
+11249                                          * FDOS command: LIST[,unit]
+11250                                          ********************************************
+11251                                          list the disk directory 
+11252                                          
+11253  0A92 BD 0B4D  C.LIST  JSR     GETUNIT   Get next command line param as unit 0..3 (sets DRVNUM with unit number)
+11254  0A95 B6 016E          LDAA    DRVNUM
+11255  0A98 0C               CLC     
+11256  0A99 46               RORA    
+11257  0A9A 46               RORA    
+11258  0A9B 46               RORA    
+11259  0A9C 8A 04            ORAA    #$04      Now unit in bits 7-6 | sector 4 (start of dir)
+11260  0A9E B7 01F9          STAA    DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+11261  
+11262  0AA1 BD 0B78          JSR     LPTLN     Print <CR><LF> on printer
+11263                                          RSV: replace by PRTLN to display in console instead of sending it to printer
+11264  0AA4 F6 0324          LDAB    MDIRHDR   String "NAME   ATTR TRAK SCTR  SIZE"
+11265  0AA7 CE 0325          LDX     #MDIRHDR+1
+11266  0AAA A6 00    L0AAA   LDAA    $0000,X   
+11267  0AAC BD 010C          JSR     LPTOUT    Print the string
+11268                                          RSV: replace by CONOUT to display the directory in console instead of sending it to printer
+11269  0AAF 08               INX     
+11270  0AB0 5A               DECB    
+11271  0AB1 26 F7            BNE     L0AAA
+11272  0AB3 BD 0B78          JSR     LPTLN     Print <CR><LF> on printer
+11273                                          RSV: replace by PRTLN to display in console instead of sending it to printer
+11274  0AB6 BD 0B78          JSR     LPTLN     Print <CR><LF> on printer
+11275                                          RSV: replace by PRTLN to display in console instead of sending it to printer
+11276  
+11277  0AB9 B6 01F9  L0AB9   LDAA    DRVSEC    get unit (in bits 7-6) and current dir sector (bits 5-0)
+11278  0ABC 84 3F            ANDA    #$3F      isolate sector
+11279  0ABE 81 1B            CMPA    #SECTORS+1
+11280  0AC0 26 06            BNE     L0AC8     if current dir sector <> last one -> proceed with this dir sector
+11281  0AC2 BD 0B78  L0AC2   JSR     LPTLN     Print <CR><LF> on printer
+11282                                          RSV: replace by PRTLN to display in console instead of sending it to printer
+11283  0AC5 7E 0214          JMP     EXEC      jump to Executive warm start 
+11284   
+11285  0AC8 B6 01F9  L0AC8   LDAA    DRVSEC    get unit (in bits 7-6) and current dir sector (bits 5-0)
+11286  0ACB 5F               CLRB              Select track 0 in B: directory resides in track 0
+11287  0ACC CE 0179          LDX     #SECBUF   Disk Sector buffer    
+11288  0ACF BD 0463          JSR     RDSECT    Read a disk sector (A=unit/sec, B=track, X=buffer)
+11289  0AD2 4D               TSTA    
+11290  0AD3 27 05            BEQ     L0ADA
+11291  0AD5 7C 01F9          INC     DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+11292  0AD8 20 DF    L0AD8   BRA     L0AB9
+11293   
+11294  0ADA CE 0179  L0ADA   LDX     #SECBUF   Disk Sector buffer
+11295  0ADD FF 0177          STX     DIRPTR    get addr current dir entry 
+11296  0AE0 FE 0177  L0AE0   LDX     DIRPTR    get addr current dir entry 
+11297  0AE3 A6 05            LDAA    $0005,X   get attrib 
+11298  0AE5 81 FF            CMPA    #$FF      is $FF?
+11299  0AE7 27 D9            BEQ     L0AC2     if so -> end-of-dir entry -> jump to end dir listing
+11300  0AE9 A6 00            LDAA    $0000,X   printout file name
+11301  0AEB BD 010C          JSR     LPTOUT
+11302  0AEE A6 01            LDAA    $0001,X
+11303  0AF0 BD 010C          JSR     LPTOUT
+11304  0AF3 A6 02            LDAA    $0002,X
+11305  0AF5 BD 010C          JSR     LPTOUT
+11306  0AF8 A6 03            LDAA    $0003,X
+11307  0AFA BD 010C          JSR     LPTOUT
+11308  0AFD A6 04            LDAA    $0004,X
+11309  0AFF BD 010C          JSR     LPTOUT
+11310  0B02 BD 0B69          JSR     LPT3SPC   Print 3 Spaces
+11311  0B05 A6 05            LDAA    $0005,X   get attrib
+11312  0B07 BD 043C          JSR     LPTHH     print 2-hex digits numberHH
+11313  0B0A BD 0B69          JSR     LPT3SPC   Print 3 Spaces
+11314  0B0D A6 06            LDAA    $0006,X   get 1st track 
+11315  0B0F BD 043C          JSR     LPTHH     print 2-hex digits numberHH
+11316  0B12 BD 0B69          JSR     LPT3SPC   Print 3 Spaces
+11317  0B15 A6 07            LDAA    $0007,X   get 1st sector
+11318  0B17 BD 043C          JSR     LPTHH     print 2-hex digits numberHH
+11319  0B1A BD 0B69          JSR     LPT3SPC   Print 3 Spaces
+11320  0B1D E6 08            LDAB    $0008,X   get file size (MSB)
+11321  0B1F A6 09            LDAA    $0009,X   get file size (LSB)
+11322  0B21 80 01            SUBA    #$01
+11323  0B23 C2 00            SBCB    #$00    
+11324  0B25 36               PSHA    
+11325  0B26 17               TBA     
+11326  0B27 BD 043C          JSR     LPTHH     print file size (MSB)
+11327  0B2A 32               PULA    
+11328  0B2B BD 043C          JSR     LPTHH     print file size (LSB)
+11329  0B2E BD 0B78          JSR     LPTLN     Print <CR><LF> on printer
+11330  0B31 86 0B            LDAA    #$0B      add 11 to DIRPTR to select next dir entry                                                      
+11331  0B33 5F               CLRB    
+11332  0B34 BB 0178          ADDA    L0178
+11333  0B37 F9 0177          ADCB    DIRPTR    get addr current dir entry 
+11334  0B3A B7 0178          STAA    L0178
+11335  0B3D F7 0177          STAB    DIRPTR    get addr current dir entry 
+11336  0B40 FE 0177          LDX     DIRPTR    get addr current dir entry 
+11337  0B43 8C 01F2          CPX     #SECBUF+11*11
+11338  0B46 26 98            BNE     L0AE0     jump if more dir entries in this dir sector
+11339  0B48 7C 01F9          INC     DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+11340  0B4B 20 8B            BRA     L0AD8     jump to proceed with next dir sector
+11341   
+11342                                          Get next command line param as unit number '0'..'3'
+11343                                          If empty -> asume '0'
+11344                                          on exit: DRVNUM = 0..3 the unit number
+11345   
+11346  0B4D BD 03BE  GETUNIT JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11347  0B50 B6 0169          LDAA    FNAME
+11348  0B53 81 20            CMPA    #$20
+11349  0B55 27 0B            BEQ     L0B62
+11350  0B57 80 30            SUBA    #$30
+11351  0B59 16               TAB     
+11352  0B5A 84 FC            ANDA    #$FC
+11353  0B5C 26 08            BNE     L0B66
+11354  0B5E F7 016E          STAB    DRVNUM
+11355  0B61 39               RTS     
+11356  0B62 7F 016E  L0B62   CLR     DRVNUM
+11357  0B65 39               RTS     
+11358  0B66 7E 0228  L0B66   JMP     ERFMT     Print "FORMAT ERROR", return to command prompt
+11359   
+11360  0B69 86 20    LPT3SPC LDAA    #$20      Print 3 spaces
+11361  0B6B BD 010C          JSR     LPTOUT
+11362  0B6E 86 20            LDAA    #$20
+11363  0B70 BD 010C          JSR     LPTOUT
+11364  0B73 86 20            LDAA    #$20
+11365  0B75 7E 010C          JMP     LPTOUT
+11366   
+11367  0B78 86 0D    LPTLN   LDAA    #$0D      Print <CR><LF> on printer
+11368  0B7A BD 010C          JSR     LPTOUT
+11369  0B7D 86 0A            LDAA    #$0A
+11370  0B7F 7E 010C          JMP     LPTOUT
+11371  
+11372                                          ********************************************
+11373                                          * FDOS command: ASMB,SrcFname,ObjFname,nn
+11374                                          ********************************************
+11375                                          * all params must be given
+11376                                          * ObjFname is created, should not exist
+11377                
+11378  0B82 BD 0C2D  C.ASMB  JSR     GTASMPA   Get ASMB params SrcFname (opened as input), ObjFname (file created for output)
+11379  0B85 BD 03BE          JSR     GETFNAM   Get next param in command line (nn) into FNAME/DRVNUM variables
+11380  0B88 CE 0169          LDX     #FNAME
+11381  0B8B BD 096F          JSR     CVTH2B    convert hex HHHH string at addr X to binay in TMPH,TMPL
+11382  0B8E 86 FF            LDAA    #$FF
+11383  0B90 97 01            STAA    OFILE     PROM Var: Output file number
+11384  0B92 B6 0174          LDAA    TMPL      result of CVTH2B conversion: the nn param
+11385  0B95 36               PSHA    
+11386  0B96 80 05            SUBA    #$05      is nn <= 5?
+11387  0B98 2A 1F            BPL     ERFMT2    if nn > 5 -> jump to print "FORMAT ERROR" and return to command prompt
+11388  0B9A 32               PULA    
+11389  0B9B 36               PSHA    
+11390  0B9C 80 02            SUBA    #$02      is nn >= 2?
+11391  0B9E 2B 19            BMI     ERFMT2    if nn < 2 -> jump to print "FORMAT ERROR" and return to command prompt
+11392  0BA0 32               PULA    
+11393  0BA1 48               ASLA    
+11394  0BA2 4C               INCA    
+11395  0BA3 97 00            STAA    PASS      PROM Var: assembly pass info
+11396  0BA5 97 00            STAA    PASS      PROM Var: assembly pass info
+11397  0BA7 81 07            CMPA    #$07
+11398  0BA9 26 03            BNE     L0BAE
+11399  0BAB 7F 0001          CLR     OFILE     PROM Var: Output file number
+11400  0BAE CE 0115  L0BAE   LDX     #CMDLIN   Command Line buffer address
+11401  0BB1 FF 0165          STX     CMDINI    stores the addr of 1st char in command line buffer to be processed
+11402  0BB4 BD 03BE          JSR     GETFNAM   Get next param in command line ("ASMB") into FNAME/DRVNUM variables
+11403  0BB7 20 2D            BRA     LOADRUN   Load FNAME prog file and Run it 
+11404   
+11405  0BB9 7E 0228  ERFMT2  JMP     ERFMT     Print "FORMAT ERROR", return to command prompt
+11406  
+11407                                          ********************************************
+11408                                          * FDOS command: EDIT,InFname,NewOutFName
+11409                                          ********************************************
+11410                                          * alternate valid syntax: EDIT,,NewOutFName
+11411                                          * NewOutFName is created, should not exists
+11412  
+11413  0BBC BD 03BE  C.EDIT  JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11414  0BBF B6 0169          LDAA    FNAME
+11415  0BC2 81 20            CMPA    #$20
+11416  0BC4 27 50            BEQ     C.BUILD
+11417  0BC6 BD 0C37          JSR     GTEDTPA   open FNAME as input, NewOutFName (file created for output)
+11418  0BC9 7F 016E  L0BC9   CLR     DRVNUM
+11419  0BCC CE 0169          LDX     #FNAME    set FNAME='EDIT '
+11420  0BCF 86 45            LDAA    #$45      'E'
+11421  0BD1 A7 00            STAA    $0000,X
+11422  0BD3 86 44            LDAA    #$44      'D'
+11423  0BD5 A7 01            STAA    $0001,X
+11424  0BD7 86 49            LDAA    #$49      'I'
+11425  0BD9 A7 02            STAA    $0002,X
+11426  0BDB 86 54            LDAA    #$54      'T'
+11427  0BDD A7 03            STAA    $0003,X
+11428  0BDF B7 0200          STAA    LINCNT    Line count for VIEW command
+11429  0BE2 86 20            LDAA    #$20      <SPACE>
+11430  0BE4 A7 04            STAA    $0004,X
+11431  
+11432                                          Load and Run a prog from disk
+11433                                          On Entry: FNAME/DRVNUM -> the program to load from disk
+11434                                                    SVIUNIT -> the Unit and sector for input file
+11435  
+11436  0BE6 BD 05B7  LOADRUN JSR     OPENR     Open FNAME for reading
+11437  0BE9 4D               TSTA    
+11438  0BEA 27 03            BEQ     L0BEF     if A=0 -> open file success -> proceed
+11439  0BEC 7E 0790          JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+11440    
+11441  0BEF B6 01FF  L0BEF   LDAA    SVIUNIT
+11442  0BF2 97 03            STAA    IUNIT     PROM Var: Unit and sector for input file
+11443  0BF4 CE 0000          LDX     #$0000
+11444  0BF7 DF 17            STX     OFFSET    PROM Var: Offset when loading a prog
+11445  0BF9 8D 05            BSR     HIMEM     Set the High RAM addr in TEMP var
+11446  0BFB 9E 11            LDS     TEMP      PROM Var
+11447  0BFD 7E F032          JMP     ASSEM     PROM Call: load and start assembler
+11448   
+11449                                          Scan RAM to find high RAM addr
+11450                                          on exit: TEMP var in zero page holds the highest RAM addr 
+11451                                          RSV: change this routine to set a fixed himem value instead of scanning ram
+11452                                               to avoid messing with mapped I/O addr
+11453   
+11454  0C00 CE 1FF0  HIMEM   LDX     #EXECEND  End of exec addr
+11455  0C03 86 A5            LDAA    #$A5
+11456  0C05 E6 00    L0C05   LDAB    $0000,X   check if value written to addr X is read back
+11457  0C07 A7 00            STAA    $0000,X   
+11458  0C09 A1 00            CMPA    $0000,X
+11459  0C0B 26 05            BNE     L0C12     if not read back -> end of ram found -> jump to set TEMP var
+11460  0C0D E7 00            STAB    $0000,X
+11461  0C0F 08               INX     
+11462  0C10 20 F3            BRA     L0C05
+11463  0C12 09       L0C12   DEX     
+11464  0C13 DF 11            STX     TEMP      PROM Var
+11465  0C15 39               RTS     
+11466  
+11467                                          ********************************************
+11468                                          * FDOS command: BUILD,newfile
+11469                                          ********************************************
+11470                                          * create new file and Call editor on it
+11471  
+11472  0C16 CE 0001  C.BUILD LDX     #$0001    Set vars for a dummy input file
+11473  0C19 DF 04            STX     ISIZE     PROM Var: size (in sectors) of input file
+11474  0C1B 86 01            LDAA    #$01
+11475  0C1D 97 06            STAA    ITRK      PROM Var: Track for input file
+11476  0C1F 7F 0008          CLR     ICNTR     PROM Var: IFILE buffer counter
+11477  0C22 7F 0007          CLR     ISCTR     PROM Var: current sector
+11478  0C25 7F 0003          CLR     IUNIT     PROM Var: Unit and sector for input file
+11479  0C28 BD 0C40          JSR     CREATF    Get FNAME from command line and create it as new output file 
+11480  0C2B 20 9C            BRA     L0BC9
+11481   
+11482                                          get ASMB params
+11483   
+11484  0C2D BD 03BE  GTASMPA JSR     GETFNAM   Get next param (SrcFname) in command line into FNAME/DRVNUM variables
+11485  0C30 B6 0169          LDAA    FNAME
+11486  0C33 81 20            CMPA    #$20
+11487  0C35 27 06            BEQ     ERNOFI2   jump to Print error "NO FILE", return to command prompt
+11488  0C37 BD 11B0  GTEDTPA JSR     OPCHK9X   Open FNAME and Check file attrib. If is $9X return to command prompt
+11489  0C3A 4D               TSTA    
+11490  0C3B 27 03            BEQ     CREATF    Get FNAME from command line (ObjFname) and create it as new output file
+11491  0C3D 7E 0790  ERNOFI2 JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+11492   
+11493                                          Create a new output file 
+11494                                          name from command param, attrib = FF, size = free space
+11495   
+11496  0C40 BD 03BE  CREATF  JSR     GETFNAM   Get output filename into FNAME/DRVNUM variables as next param in command line 
+11497  0C43 B6 0169          LDAA    FNAME
+11498  0C46 81 20            CMPA    #$20      is FNAME set?
+11499  0C48 27 F3            BEQ     ERNOFI2   jump to Print error "NO FILE", return to command prompt
+11500  
+11501                                          Create a new output file 
+11502                                          name = fname, attrib = FF, size = free space
+11503  
+11504  0C4A CE 07B7  NEWFILE LDX     #MAXSIZE  Max posible file size in sectors (is DOOF1 routine in EDOS-II)
+11505  0C4D DF 09            STX     OSIZE     PROM Var: set size of output file
+11506  0C4F FF 0170          STX     FSIZE
+11507                                          Set FSIZE for new output file = free space in disk
+11508  0C52 86 FF    L0C52   LDAA    #$FF
+11509  0C54 B7 016F          STAA    ATTRIB    file attribute
+11510  0C57 BD 0610          JSR     OPENX     Open new file for writting
+11511  0C5A 4D               TSTA    
+11512  0C5B 27 11            BEQ     L0C6E     jump if success -> proceed with new file created
+11513  0C5D 81 03            CMPA    #$03      if A=3 -> no room (X=number of free sectors=max size of file that can be created), use this value
+11514  0C5F 26 0A            BNE     L0C6B     jump to print file creation error          
+11515  0C61 DF 09            STX     OSIZE     PROM Var: use available size as size of output file
+11516  0C63 FF 0170          STX     FSIZE
+11517  0C66 26 EA            BNE     L0C52     if disk not full -> go back to tray to open file again
+11518  0C68 7E 0A3F          JMP     ERNROOM   Print "NO ROOM" error, return to command prompt
+11519  0C6B 7E 0A32  L0C6B   JMP     ERNEWFI   Print new file creation error, return to command prompt
+11520                                          Set Track/sector for new output file     
+11521  0C6E B6 01FC  L0C6E   LDAA    NEWTRK    starting track of new file
+11522  0C71 97 0B            STAA    OTRK      PROM Var: set output file start track
+11523  0C73 B6 016E          LDAA    DRVNUM
+11524  0C76 97 02            STAA    OUNIT     PROM Var: Unit and sector for output file
+11525  0C78 0C               CLC     
+11526  0C79 46               RORA    
+11527  0C7A 46               RORA    
+11528  0C7B 46               RORA    
+11529  0C7C BA 01FD          ORAA    NEWSEC    starting sector of new file
+11530  0C7F 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+11531  0C81 7F 000D          CLR     OCNTR     PROM Var: set buffer counter of output file
+11532  
+11533                                          Save ITRK/ISIZE/IUNIT
+11534  
+11535  0C84 96 06    SVIFILE LDAA    ITRK      PROM Var: Track for input file
+11536  0C86 97 0E            STAA    TITRK     PROM Var
+11537  0C88 DE 04            LDX     ISIZE     PROM Var: size (in sectors) of input file
+11538  0C8A DF 0F            STX     TISZE     PROM Var
+11539  0C8C 96 03            LDAA    IUNIT     PROM Var: Unit and sector for input file
+11540  0C8E B7 01FF          STAA    SVIUNIT
+11541  0C91 86 FF            LDAA    #$FF
+11542  0C93 97 01            STAA    OFILE     PROM Var: Output file number
+11543  0C95 39               RTS     
+11544  
+11545                                          ********************************************
+11546                                          * FDOS command: LOAD,newfile
+11547                                          ********************************************
+11548                                          * create a new file and loads it from paper tape
+11549  
+11550  0C96 BD 0C40  C.LOAD  JSR     CREATF    Get FNAME from command line and create it as new output file
+11551  0C99 BD 0D01          JSR     WROFILE   read bytes and write them into output file until Ctrl-Z
+11552  0C9C 7E 073D          JMP     UPDAT     close output file (flush data to floppy)     
+11553  
+11554                                          ********************************************
+11555                                          * FDOS command: XGEN[,fname]
+11556                                          ********************************************
+11557                                          * if fname present -> will use it as EXEC
+11558                                          * else -> will read EXEC from paper tape
+11559  
+11560  0C9F 86 01    C.XGEN  LDAA    #$01      Set destination to track 1, sector 1, unit 0
+11561  0CA1 97 0B            STAA    OTRK      PROM Var: set output file start track
+11562  0CA3 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+11563  0CA5 7F 0002          CLR     OUNIT     PROM Var: Unit and sector for output file
+11564  0CA8 7F 000D          CLR     OCNTR     PROM Var: set buffer counter of output file
+11565  0CAB CE 0083          LDX     #$0083    Size of EXEC
+11566  0CAE DF 09            STX     OSIZE     PROM Var: set size of output file
+11567  0CB0 BD 03BE          JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11568  0CB3 B6 0169          LDAA    FNAME
+11569  0CB6 81 20            CMPA    #$20
+11570  0CB8 27 0F            BEQ     L0CC9
+11571  0CBA BD 05B7          JSR     OPENR     Open file for reading
+11572  0CBD 4D               TSTA    
+11573  0CBE 27 03            BEQ     L0CC3     if A=0 -> open file success -> proceed
+11574  0CC0 7E 0790          JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+11575   ;
+11576  0CC3 CE F135  L0CC3   LDX     #RI       addr of a PROM Call: read byte from disk
+11577  0CC6 FF 0D02          STX     WROFILE+1 set to read bytes from input file 
+11578  0CC9 BD 0D01  L0CC9   JSR     WROFILE   read bytes and write them into output file until Ctrl-Z
+11579  0CCC CE 0109          LDX     #RDRIN
+11580  0CCF FF 0D02          STX     WROFILE+1 restore to read bytes from tape reader
+11581  0CD2 86 53            LDAA    #$53      'S'
+11582  0CD4 BD F1AD          JSR     WRT       PROM Call: write byte to disk
+11583  0CD7 86 1B            LDAA    #$1B      <ESC>
+11584  0CD9 BD F1AD          JSR     WRT       PROM Call: write byte to disk
+11585  0CDC 86 14            LDAA    #$14      Ctrl-T -> punch off command
+11586  0CDE BD F1AD          JSR     WRT       PROM Call: write byte to disk
+11587  0CE1 7D 000D  L0CE1   TST     OCNTR     PROM Var: buffer counter of output file
+11588  0CE4 27 06            BEQ     L0CEC
+11589  0CE6 4F               CLRA    
+11590  0CE7 BD F1AD          JSR     WRT       PROM Call: write byte to disk
+11591  0CEA 20 F5            BRA     L0CE1
+11592   ;
+11593  0CEC 86 03    L0CEC   LDAA    #$03
+11594  0CEE B7 01F9          STAA    DRVSEC    save unit (in bits 7-6) and sector (bits 5-0)
+11595  0CF1 86 01            LDAA    #$01
+11596  0CF3 B7 01FB          STAA    NXTSEC
+11597  0CF6 96 0B            LDAA    OTRK      PROM Var: get output file start track
+11598  0CF8 4C               INCA    
+11599  0CF9 B7 01FA          STAA    NXTTRK
+11600  0CFC BD 06E7          JSR     NEWDIR    Create end-of-dir entry at start of dir sector
+11601  0CFF 39               RTS     
+11602  0D00 39       L0D00   RTS     
+11603  
+11604                                          read bytes and write them into output file until Ctrl-Z
+11605                                          
+11606  0D01 BD 0109  WROFILE JSR     RDRIN     get byte from paper tape reader
+11607  0D04 25 FA            BCS     L0D00
+11608  0D06 81 1A            CMPA    #$1A      read until chr(26) Control-Z
+11609  0D08 27 F6            BEQ     L0D00
+11610  0D0A BD F1AD          JSR     WRT       PROM Call: write byte to disk
+11611  0D0D 20 F2            BRA     WROFILE   read bytes and write them into output file until Ctrl-Z
+11612  
+11613                                          ********************************************
+11614                                          * FDOS command: DUMP,filename
+11615                                          ********************************************
+11616                                          * Paper tape punch given filename 
+11617  
+11618  0D0F BD 03BE  C.DUMP  JSR     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+11619  0D12 BD 11B0          JSR     OPCHK9X   Open FNAME and Check file attrib. If is $9X return to command prompt
+11620  0D15 4D               TSTA    
+11621  0D16 27 03            BEQ     L0D1B
+11622  0D18 7E 0790          JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+11623   
+11624  0D1B BD 0D3B  L0D1B   JSR     PCHADV    Puch 64 zeros to advance paper tape as trailing/leading space
+11625  0D1E BD 0D3B          JSR     PCHADV    Puch 64 zeros to advance paper tape as trailing/leading space
+11626  0D21 BD F135  L0D21   JSR     RI        RI read a byte from disk in reg A, if EOF carry is set
+11627  0D24 25 05            BCS     PCHADV    if eeof -> goto Puch 64 zeros to advance paper tape as trailing/leading space and return
+11628  0D26 BD 0106          JSR     PCHOUT
+11629  0D29 20 F6            BRA     L0D21
+11630   
+11631  0D2B 86 1A    L0D2B   LDAA    #$1A      punch a Cntrl-Z to signal end of file
+11632  0D2D BD 0106          JSR     PCHOUT
+11633  0D30 86 0D            LDAA    #$0D
+11634  0D32 BD 0106          JSR     PCHOUT
+11635  0D35 BD 0D3B          JSR     PCHADV    Puch 64 zeros to advance paper tape as trailing/leading space
+11636  0D38 7E 0214          JMP     EXEC      jump to Executive warm start 
+11637   ;
+11638  0D3B C6 64    PCHADV  LDAB    #$64      Puch 64 zeros to advance paper tape as trailing/leading space
+11639  0D3D F7 0172          STAB    TMP       punch counter
+11640  0D40 4F       L0D40   CLRA    
+11641  0D41 BD 0106          JSR     PCHOUT
+11642  0D44 7A 0172          DEC     TMP       decr punch counter
+11643  0D47 26 F7            BNE     L0D40
+11644  0D49 39               RTS     
+11645                                          ********************************************
+11646                                          * FDOS command: COPY
+11647                                          ********************************************
+11648                                          * full copy disk from unit 0 to unit 1
+11649                                          
+11650  0D4A FE F018  C.COPY  LDX     DIO       PROM Call: Now X= DKDID = $F800 = Disk I/O PIA address
+11651  0D4D FF 0E53          STX     RDSECP0+1 set DKDID Disk I/O port address in RDSECP routine
+11652  0D50 FF 0E66          STX     RDSECP1+1 set DKDID Disk I/O port address in RDSECP routine
+11653  0D53 FF 0E81          STX     RDSECP4+1 set DKDID Disk I/O port address in RDSECP routine
+11654  0D56 FF 0EC2          STX     CHKCRC1+1 set DKDID Disk I/O port address in CHKCRC routine
+11655  0D59 FF 0EEE          STX     LOOPP+12  set Disk I/O port address in LOOPP routine
+11656  0D5C FF 0EE3          STX     LOOPP+1   set Disk I/O port address in LOOPP routine
+11657  0D5F 08               INX     
+11658  0D60 FF 0EE9          STX     LOOPP+7   set Disk I/O port address in LOOPP routine
+11659  0D63 08               INX     
+11660  0D64 FF 0E7E          STX     RDSECP3+1 set DKCOD Disk I/O port address in RDSECP routine
+11661  0D67 FF 0E8C          STX     RDSECP6+1 set DKCOD Disk I/O port address in RDSECP routine
+11662  0D6A FF 0E8F          STX     RDSECP7+1 set DKCOD Disk I/O port address in RDSECP routine
+11663  0D6D FF 0EAB          STX     WRSECP2+1 set DKCOD Disk I/O port address in WRSECP routine
+11664  0D70 FF 0EE6          STX     LOOPP+4   set Disk I/O port address in LOOPP routine
+11665  0D73 FF 0E45          STX     XSUP+6    set Disk I/O port address in XSUP routine
+11666  0D76 08               INX     
+11667  0D77 FF 0E7B          STX     RDSECP2+1 set DKCOC Disk I/O port address in RDSECP routine
+11668  0D7A FF 0E89          STX     RDSECP5+1 set DKCOC Disk I/O port address in RDSECP routine
+11669  0D7D 08               INX     
+11670  0D7E 08               INX     
+11671  0D7F 08               INX     
+11672  0D80 FF 0EA8          STX     WRSECP1+1 set DKDOD Disk I/O port address in WRSECP routine
+11673  0D83 FF 0E40          STX     XSUP+1    set Disk I/O port address in XSUP routine
+11674                                          Set start of source unit 0
+11675  0D86 86 01            LDAA    #$01      Copy disk start at unit 0, track 0, sector 1
+11676  0D88 97 07            STAA    ISCTR     PROM Var: current sector
+11677  0D8A 7F 0006          CLR     ITRK      PROM Var: Track for input file
+11678                                          Set start of destination unit 1
+11679  0D8D 86 41            LDAA    #$41      Select unit 1, sector 1, track 0
+11680  0D8F 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+11681  0D91 7F 000B          CLR     OTRK      PROM Var: set output file start track = 0 
+11682                                          Select track, sector on source unit 0
+11683  0D94 96 07    L0D94   LDAA    ISCTR     PROM Var: current sector in source unit 0
+11684  0D96 BD 0E3F          JSR     XSUP      transmit physical <unit><secot> to disk
+11685  0D99 BD 04D9          JSR     DSKRDY    Check if disk is ready (print error and return to command prompt if not)
+11686  0D9C 96 06            LDAA    ITRK      PROM Var: Track for source unit 0
+11687  0D9E BD F250          JSR     SEEK      PROM Call: Seek track in disk 0
+11688  
+11689  0DA1 CE 1200          LDX     #TRKBUF   Init of track buffer at $1200
+11690  0DA4 FF 0173          STX     TMPH      Save Track buffer pointer
+11691  
+11692  0DA7 96 07    L0DA7   LDAA    ISCTR     PROM Var: get current source sector in unit 0
+11693  0DA9 BD 0E3F          JSR     XSUP      transmit physical <unit><secot> to disk
+11694  0DAC FE 0173          LDX     TMPH      get Track buffer pointer
+11695  0DAF BD 0E48          JSR     RDSECP    read physical sector 
+11696  0DB2 FF 0173          STX     TMPH      update Track buffer pointer
+11697  0DB5 86 03            LDAA    #$03      interleave sectors by 3
+11698  0DB7 9B 07            ADDA    ISCTR     PROM Var: current sector
+11699  0DB9 97 07            STAA    ISCTR     PROM Var: current sector
+11700  0DBB C6 02            LDAB    #$02      assume rev 1, start rev 2 at sector 2
+11701  0DBD 81 1C            CMPA    #SECTORS+2  if next sector=28 -> end of rev 1
+11702  0DBF 27 12            BEQ     L0DD3     jump to start rev 2 at sector 2
+11703  0DC1 5C               INCB              assume rev 2, start rev 3 at sector 3
+11704  0DC2 81 1D            CMPA    #SECTORS+3  if next sector=29 -> end of rev 2
+11705  0DC4 27 0D            BEQ     L0DD3     jump to start rev 3
+11706  0DC6 81 1B            CMPA    #SECTORS+1  if next sector=27 -> end of rev 3
+11707  0DC8 26 DD            BNE     L0DA7
+11708  0DCA 7C 0006          INC     ITRK      PROM Var: Track for input file
+11709  0DCD 86 01            LDAA    #$01      start on sector 1
+11710  0DCF 97 07            STAA    ISCTR     PROM Var: current sector
+11711  0DD1 20 04            BRA     L0DD7
+11712   ;
+11713  0DD3 D7 07    L0DD3   STAB    ISCTR     PROM Var: current sector
+11714  0DD5 20 D0            BRA     L0DA7     jump to start rev 2 or 3, read interleaved sectors
+11715   ;
+11716  0DD7 86 05    L0DD7   LDAA    #$05
+11717  0DD9 B7 0172          STAA    TMP       retries counter for disk i/o operation
+11718  0DDC CE 1200  L0DDC   LDX     #TRKBUF   Init of track buffer at $1200
+11719  0DDF FF 0173          STX     TMPH      set Track buffer pointer
+11720  0DE2 96 0C            LDAA    OSCTR     PROM Var: get output file start sector
+11721  0DE4 BD 0E3F          JSR     XSUP      transmit physical <unit><secot> to disk
+11722  0DE7 BD 04D9          JSR     DSKRDY    Check if disk is ready (print error and return to command prompt if not)
+11723  0DEA 96 0B            LDAA    OTRK      PROM Var: get output file start track
+11724  0DEC BD F250          JSR     SEEK      PROM Call: Seek track in A
+11725  0DEF 96 0C    L0DEF   LDAA    OSCTR     PROM Var: set output file start sector
+11726  0DF1 BD 0E3F          JSR     XSUP      transmit physical <unit><secot> to disk
+11727  0DF4 FE 0173          LDX     TMPH      get Track buffer pointer
+11728  0DF7 BD 0E9A          JSR     WRSECP    write physical sect
+11729  0DFA FF 0173          STX     TMPH      set Track buffer pointer
+11730  0DFD 86 03            LDAA    #$03      interleave sectors by 3
+11731  0DFF 9B 0C            ADDA    OSCTR     PROM Var: output file start sector
+11732  0E01 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+11733  0E03 C6 42            LDAB    #$42      assume rev 1, start rev 2 at sector 2
+11734  0E05 81 5C            CMPA    #SECTORS+2+$40   if sector=28 -> end of rev 1
+11735  0E07 27 0F            BEQ     L0E18
+11736  0E09 5C               INCB    
+11737  0E0A 81 5D            CMPA    #SECTORS+3+$40   if sector=29 -> if end of pass 2
+11738  0E0C 27 0A            BEQ     L0E18
+11739  0E0E 81 5B            CMPA    #SECTORS+1+$40   if sector=27 -> if end of pass 23
+11740  0E10 26 DD            BNE     L0DEF
+11741  0E12 86 41            LDAA    #$41      start <unit 1><sector 1>
+11742  0E14 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+11743  0E16 20 04            BRA     L0E1C
+11744   ;
+11745  0E18 D7 0C    L0E18   STAB    OSCTR     PROM Var: set output file start sector
+11746  0E1A 20 D3            BRA     L0DEF
+11747   ;
+11748  0E1C BD 0EB7  L0E1C   JSR     CHKCRC    Check CRC on data read
+11749  0E1F 27 0F            BEQ     L0E30
+11750  0E21 86 41            LDAA    #$41      start <unit 1><sector 1>
+11751  0E23 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+11752  0E25 BD F25F          JSR     RFLAG     PROM Call: reset disk error flag
+11753  0E28 7A 0172          DEC     TMP       retries counter for disk i/o operation
+11754  0E2B 26 AF            BNE     L0DDC     if >0 -> ump to try again
+11755  0E2D 7E 049A          JMP     EDSKERR   Print error "MEDIA ERROR" and return to command prompt
+11756   ;
+11757  0E30 7C 000B  L0E30   INC     OTRK      PROM Var: output file start track
+11758  0E33 96 0B            LDAA    OTRK      PROM Var: get output file start track
+11759  0E35 81 4D            CMPA    #TRACKS   = last track num (76) + 1
+11760  0E37 26 03            BNE     L0E3C
+11761  0E39 7E 0214          JMP     EXEC      jump to Executive warm start 
+11762   ;
+11763  0E3C 7E 0D94  L0E3C   JMP     L0D94
+11764                                           
+11765                                          send select unit/sector (physical) to disk drive
+11766                                          by writting on it PIA I/O port
+11767                                          C.COPY addr is replaced by COPY command with the needed PIA I/O address
+11768                                          
+11769  0E3F B7 0D4A  XSUP    STAA    C.COPY    transmit physical <unit><secot> to disk
+11770  0E42 86 20            LDAA    #$20
+11771  0E44 B7 0D4A          STAA    C.COPY
+11772  0E47 39               RTS     
+11773  
+11774                                          read physical sector in ITRK,ISECT
+11775                                          store read bytes at address X                                            
+11776                                          on exit: X=next byte in buffer
+11777  
+11778  0E48 86 05    RDSECP  LDAA    #$05      set retry count to 5
+11779  0E4A B7 01FE          STAA    NFRAM2    number of lines per frame 
+11780  0E4D 86 02    L0E4D   LDAA    #$02      A=disk read command
+11781  0E4F BD 0EE2          JSR     LOOPP     Issue command to disk (loop on busy)
+11782  0E52 B6 0D4A  RDSECP0 LDAA    C.COPY    DKDID read disk status
+11783  0E55 84 08            ANDA    #$08      check if CRC error 
+11784  0E57 27 08            BEQ     L0E61     if =0 -> jump if not
+11785  0E59 BD F25F          JSR     RFLAG     PROM Call: reset disk error flag
+11786  0E5C 7A 01FE          DEC     L01FE     decr retry count
+11787  0E5F 26 EC            BNE     L0E4D     jump to try again
+11788  
+11789  0E61 86 04    L0E61   LDAA    #$04      write data command
+11790  0E63 A7 00            STAA    $0000,X   save at start of buffer
+11791  0E65 B6 0D4A  RDSECP1 LDAA    C.COPY    DKDID read disk status
+11792  0E68 84 80            ANDA    #$80      
+11793  0E6A 27 04            BEQ     L0E70     jump if sector not DD (deleted data)
+11794  0E6C 86 0E            LDAA    #$0E      write data command for DD sector
+11795  0E6E A7 00            STAA    $0000,X   save at start of buffer
+11796  
+11797  0E70 08       L0E70   INX               skip command byte
+11798  0E71 86 80            LDAA    #128      sector length
+11799  0E73 B7 01FE          STAA    L01FE     set sector bytes count
+11800  0E76 C6 40            LDAB    #$40      read data command
+11801  0E78 86 3C    L0E78   LDAA    #$3C      command control
+11802  0E7A B7 0D4A  RDSECP2 STAA    C.COPY    DKCOC issue command control 
+11803  0E7D F7 0D4A  RDSECP3 STAB    C.COPY    DKCOD issue command in B reg (read data)
+11804  0E80 B6 0D4A  RDSECP4 LDAA    C.COPY    DKDID get data read from disk unit
+11805  0E83 A7 00            STAA    $0000,X   store data in buffer
+11806  0E85 08               INX               incr disk buffer pointer
+11807  0E86 86 2C            LDAA    #$2C      reset drive command
+11808  0E88 B7 0D4A  RDSECP5 STAA    C.COPY    DKCOC issue reset command
+11809  0E8B F7 0D4A  RDSECP6 STAB    C.COPY    DKCOD issue command in B reg (read data)
+11810  0E8E 7F 0D4A  RDSECP7 CLR     C.COPY    DKCOD clear command register
+11811  0E91 7A 01FE          DEC     L01FE     decr bytes count
+11812  0E94 26 E2            BNE     L0E78     if >0 -> not all bytes of sector read from unit -> jump to read next one
+11813  0E96 BD F25F          JSR     RFLAG     PROM Call: reset disk error flag
+11814  0E99 39               RTS     
+11815  
+11816                                          write physical sector in OTRK,OSECT
+11817                                          store read bytes at address X                                            
+11818                                          on exit: X=next byte in buffer
+11819  
+11820  0E9A A6 00    WRSECP  LDAA    $0000,X   get write control byte stored by RDSECP at beggining of track buffer TRKBUF
+11821  0E9C 36               PSHA              save it
+11822  0E9D 08               INX               step over command byte
+11823  0E9E 86 80            LDAA    #128 
+11824  0EA0 B7 01FE          STAA    L01FE     set sector byte count
+11825  0EA3 C6 30            LDAB    #$30      write disk command
+11826  
+11827  0EA5 A6 00    L0EA5   LDAA    $0000,X   get byte to write to disk
+11828  0EA7 B7 0D4A  WRSECP1 STAA    C.COPY    DKDOD output it to disk
+11829  0EAA F7 0D4A  WRSECP2 STAB    C.COPY    DKCOD strobe data in to internal disk buffer
+11830  0EAD 08               INX               incr pointer in buffer
+11831  0EAE 7A 01FE          DEC     L01FE     decr byte count
+11832  0EB1 26 F2            BNE     L0EA5     if >0 -> jump to send next byte
+11833  0EB3 32               PULA              get back the command to write to disk 
+11834  0EB4 7E 0EE2          JMP     LOOPP     Issue command to disk (loop on busy)
+11835   
+11836                                          read a track and check CRC
+11837                                          return A=0 if success, <>0 if CRC error
+11838   
+11839  0EB7 96 0C    CHKCRC  LDAA    OSCTR     PROM Var: get output file start sector
+11840  0EB9 BD 0E3F          JSR     XSUP      transmit physical <unit><secot> to disk
+11841  0EBC 86 06            LDAA    #$06      read disk for CRC command
+11842  0EBE BD 0EE2          JSR     LOOPP     Issue command to disk (loop on busy)
+11843  0EC1 B6 0D4A  CHKCRC1 LDAA    C.COPY    DKDID read disk status
+11844  0EC4 84 08            ANDA    #$08      check if CRC error bit is on
+11845  0EC6 26 19            BNE     L0EE1     if so -> jump to exit
+11846  0EC8 86 02            LDAA    #$02      interleave sectors by 2 during read pass
+11847  0ECA 9B 0C            ADDA    OSCTR     PROM Var: output file start sector
+11848  0ECC 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+11849  0ECE 81 5B            CMPA    #SECTORS+1+$40   if end of pass 1
+11850  0ED0 2B E5            BMI     CHKCRC    
+11851  0ED2 81 5C            CMPA    #SECTORS+2+$40   if end of pass 2
+11852  0ED4 27 06            BEQ     L0EDC
+11853  0ED6 86 42            LDAA    #$42      = unit 1 | sector 2 for pass2
+11854  0ED8 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+11855  0EDA 20 DB            BRA     CHKCRC    
+11856   ;
+11857  0EDC 86 41    L0EDC   LDAA    #$41      = unit 1 | sector 1 
+11858  0EDE 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+11859  0EE0 4F               CLRA              success
+11860  0EE1 39       L0EE1   RTS     
+11861  
+11862                                          Issue command to disk, loop on busy
+11863                                          
+11864  0EE2 F6 0D4A  LOOPP   LDAB    C.COPY    Issue command to disk, loop on busy
+11865  0EE5 B7 0D4A          STAA    C.COPY
+11866  0EE8 B6 0D4A  L0EE8   LDAA    C.COPY
+11867  0EEB 2A FB            BPL     L0EE8
+11868  0EED F6 0D4A          LDAB    C.COPY
+11869  0EF0 39               RTS     
+11870  
+11871                                          ********************************************
+11872                                          * FDOS command: MERGE,NewFname,fname1,fname2,...
+11873                                          ********************************************
+11874                                          * copy fname1 + fname2 + ... to NewFName
+11875                                          * NewFName is created, should not exist
+11876                                          
+11877  0EF1 BD 0C40  C.MERGE JSR     CREATF    Get FNAME from command line and create it as new output file
+11878  0EF4 BD 03BE  L0EF4   JSR     GETFNAM   Get next param (fnameN) in command line into FNAME/DRVNUM variables
+11879  0EF7 B6 0169          LDAA    FNAME
+11880  0EFA 81 20            CMPA    #$20
+11881  0EFC 27 0E            BEQ     L0F0C     if no more filenames -> jump to terminate command
+11882  0EFE BD 11B0          JSR     OPCHK9X   Open FNAME and Check file attrib. If is $9X return to command prompt
+11883  0F01 4D               TSTA    
+11884  0F02 27 03            BEQ     L0F07
+11885  0F04 7E 0790          JMP     ERNOFIL   Print error "NO FILE", return to command prompt
+11886  0F07 BD 0F0F  L0F07   JSR     CPFILE    copy source file to destination file
+11887  0F0A 20 E8            BRA     L0EF4
+11888  0F0C 7E 073D  L0F0C   JMP     UPDAT     close output file (flush data to floppy)
+11889   
+11890                                copy input file to output file via track buffer
+11891                                
+11892  0F0F 7F 0201  CPFILE  CLR     EOFFLAG   clear end of file flag
+11893  0F12 CE 1200  L0F12   LDX     #TRKBUF   Init of track buffer at $1200
+11894  0F15 FF 0173  L0F15   STX     TMPH      temp value 
+11895  0F18 BD F135          JSR     RI        RI read a byte from disk in reg A, if EOF carry is set
+11896  0F1B 25 2C            BCS     L0F49     if end of file -> jump to start writting
+11897  0F1D 81 1A            CMPA    #$1A      = Ctrl-Z ? 
+11898  0F1F 27 28            BEQ     L0F49     if <EOF> is read -> -> jump to start writting
+11899  0F21 FE 0173          LDX     TMPH      temp value 
+11900  0F24 A7 00            STAA    $0000,X   Store in track buffer
+11901  0F26 08               INX     
+11902  0F27 8C 1EFE          CPX     #SECTORS*128-1   =3326
+11903  0F2A 26 E9            BNE     L0F15
+11904  0F2C FF 0173          STX     TMPH      temp value 
+11905  0F2F CE 1200  L0F2F   LDX     #TRKBUF   Init of track buffer at $1200
+11906  0F32 FF 0175  L0F32   STX     L0175     Output pointer 
+11907  0F35 A6 00            LDAA    $0000,X
+11908  0F37 BD F1AD          JSR     WRT       PROM Call: write byte to disk
+11909  0F3A FE 0175          LDX     L0175     Output pointer 
+11910  0F3D 08               INX     
+11911  0F3E BC 0173          CPX     TMPH      temp value 
+11912  0F41 26 EF            BNE     L0F32
+11913  0F43 7D 0201          TST     EOFFLAG   end of file ?
+11914  0F46 27 CA            BEQ     L0F12     if not -> proceed 
+11915  0F48 39               RTS               file copied -> return
+11916  
+11917  0F49 7C 0201  L0F49   INC     EOFFLAG   set end of file flag
+11918  0F4C 20 E1            BRA     L0F2F     jump to start writing
+11919   ;
+11920  0F4E 00       DUNIT   RMB     1         unit 0..4 begin modified (on DELETE, PACK)
+11921  0F4F 00 00    PUFCP   RMB     2         FILE CONTROL BLOCK STRING POINTER (FILE BEING PURGED)
+11922  0F51 00       PUSEC   RMB     1         CURRENT SECTOR BEING PURGED <UNIT><SECTOR>
+11923  0F52 00 00    PUFMP   RMB     2         FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+11924  0F54 00       PUSEM   RMB     1         CURRENT SECTOR BEING MOVED <UNIT><SECTOR>
+11925  
+11926  0F55 0A       MPERM   FCB     10," PERMANENT"
+11927  0F60 08       MDEL    FCB     8, " DELETED"
+11928  0F69 0C       MPACKNG FCB     12,"PACKING DISK"
+11929  
+11930                                          ********************************************
+11931                                          * FDOS command: DELET[:unit],fname[,fname2...]
+11932                                          ********************************************
+11933                                          * if no filename is give, just pack the disk
+11934  
+11935  0F76 B6 016E  C.DELET LDAA    DRVNUM    Get current unit (set by GETFNAME when called during command line parsing)
+11936  0F79 B7 0F4E          STAA    DUNIT     Save it (the unit begin used on DELETE)
+11937  0F7C BD 03BE  L0F7C   JSR     GETFNAM   Get next param (file to delete) in command line into FNAME/DRVNUM variables
+11938  0F7F B6 0169          LDAA    FNAME     get the param (filename to delete)
+11939  0F82 81 20            CMPA    #$20      is blank ?
+11940  0F84 26 03            BNE     L0F89     jump if param is filled
+11941  0F86 7E 102A          JMP     PACK      param not filled -> command terminated -> proceed to pack the disk
+11942   
+11943  0F89 B6 0F4E  L0F89   LDAA    DUNIT     Get the unit used on DELETE
+11944  0F8C B7 016E          STAA    DRVNUM    Use it
+11945  0F8F BD 05B7          JSR     OPENR     Open file for reading
+11946  0F92 4D               TSTA    
+11947  0F93 26 E7            BNE     L0F7C     if A<>0 -> open file fail -> file does not exists -> proceed with next param (next file to delete)
+11948  0F95 BD 11C8          JSR     CHKPERM   check permanent attribute in Dir Entry (attrib=$01 -> permanent file)
+11949  0F98 01               NOP     
+11950  0F99 26 16            BNE     L0FB1     jump if regular file 
+11951  0F9B CE 0169          LDX     #FNAME
+11952  0F9E C6 05            LDAB    #5        Print the Filename 
+11953  0FA0 BD 0414          JSR     PRTSTR    Print String
+11954  0FA3 CE 0F56          LDX     #MPERM+1  String " PERMANENT"
+11955  0FA6 F6 0F55          LDAB    MPERM
+11956  0FA9 BD 0414          JSR     PRTSTR    Print String
+11957  0FAC BD 041E          JSR     PRTLN     Print <CR><LF> to start a new line
+11958  0FAF 20 CB            BRA     L0F7C     proceed with next param (next file to delete)
+11959   
+11960  0FB1 86 80    L0FB1   LDAA    #$80      Set attribute as file deleted
+11961  0FB3 A7 05            STAA    $0005,X   store it in dir entry
+11962  0FB5 B6 01F9          LDAA    DRVSEC    get current dir entry unit (in bits 7-6) and sector (bits 5-0)                  
+11963  0FB8 5F               CLRB              B=track=0 -> dir is in track 0
+11964  0FB9 CE 0179          LDX     #SECBUF   Disk Sector buffer 
+11965  0FBC BD 04EE          JSR     WRSECT    write back dir entry to disk, with attribute set to $80
+11966  0FBF 4D               TSTA    
+11967  0FC0 27 03            BEQ     L0FC5     jump if write succeed
+11968  0FC2 7E 049A          JMP     EDSKERR   Print error "MEDIA ERROR" and return to command prompt
+11969   
+11970  0FC5 CE 0169  L0FC5   LDX     #FNAME
+11971  0FC8 C6 05            LDAB    #$05      Print the Filename 
+11972  0FCA BD 0414          JSR     PRTSTR    Print String
+11973  0FCD CE 0F61          LDX     #MDEL+1   String " DELETED"
+11974  0FD0 F6 0F60          LDAB    MDEL
+11975  0FD3 BD 0414          JSR     PRTSTR    Print String
+11976  0FD6 BD 041E          JSR     PRTLN     Print <CR><LF> to start a new line
+11977  0FD9 20 A1            BRA     L0F7C     proceed with next param (next file to delete)
+11978   
+11979   
+11980   
+11981  0FDB 0C       DIRSE   CLC               read and set-up 1st dir sector
+11982  0FDC B6 0F4E          LDAA    DUNIT     Get the unit beging used on DELETE
+11983  0FDF 46               RORA    
+11984  0FE0 46               RORA    
+11985  0FE1 46               RORA    
+11986  0FE2 8A 04            ORAA    #$04      now A=<unit> | sector 4 = start of dir
+11987  0FE4 B7 0F54          STAA    PUSEM     CURRENT SECTOR BEING MOVED <UNIT><SECTOR>
+11988  0FE7 CE 0179  L0FE7   LDX     #SECBUF   Disk Sector buffer
+11989  0FEA FF 0F52          STX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+11990  0FED B6 0F54  L0FED   LDAA    PUSEM     the current purge dir sector <UNIT><SECTOR>
+11991  0FF0 84 3F            ANDA    #$3F
+11992  0FF2 81 1B            CMPA    #SECTORS+1   is end of track?
+11993  0FF4 26 03            BNE     L0FF9     if no -> jump to proceed
+11994  0FF6 86 FF            LDAA    #$FF      flag as end of dir
+11995  0FF8 39               RTS     
+11996  
+11997  0FF9 CE 0179  L0FF9   LDX     #SECBUF   Start at beginning of Sector buffer
+11998  0FFC B6 0F54          LDAA    PUSEM     get current dir <UNIT><SECTOR>
+11999  0FFF 5F               CLRB              track=0 for dir
+12000  1000 BD 0463          JSR     RDSECT    Read a disk sector (A=unit/sec, B=track, X=buffer)
+12001  1003 4D               TSTA    
+12002  1004 27 05            BEQ     L100B     
+12003  
+12004  1006 7C 0F54  L1006   INC     PUSEM     CURRENT SECTOR <UNIT><SECTOR>
+12005  1009 20 DC            BRA     L0FE7     if error -> use next dir sector
+12006  100B FE 0F52  L100B   LDX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12007  100E A6 05            LDAA    $0005,X
+12008  1010 39               RTS     
+12009                                          get next dir entry. return attrib of entry (=FF if is the end-of-dir entry)
+12010  1011 86 0B    NXTFCB  LDAA    #$0B      dir entry id 11 bytes long
+12011  1013 5F               CLRB    
+12012  1014 BB 0F53          ADDA    PUFMP+1   incr pointer in dir sector
+12013  1017 F9 0F52          ADCB    PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12014  101A B7 0F53          STAA    PUFMP+1
+12015  101D F7 0F52          STAB    PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12016  1020 FE 0F52          LDX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12017  1023 8C 01F2          CPX     #SECBUF+11*11
+12018  1026 26 C5            BNE     L0FED
+12019  1028 20 DC            BRA     L1006     no more dir entries in this sector -> jump to proceed with next sector
+12020   
+12021  102A CE 0F6A  PACK    LDX     #MPACKNG+1 String "PACKING DISK"
+12022  102D F6 0F69          LDAB    MPACKNG
+12023  1030 BD 0414          JSR     PRTSTR    Print String
+12024  1033 BD 041E          JSR     PRTLN     Print <CR><LF> to start a new line
+12025  1036 BD 0FDB          JSR     DIRSE     read and set-up dir sector
+12026  1039 81 FF    L1039   CMPA    #$FF      if = $FF -> is end of dir track -> return
+12027  103B 26 01            BNE     L103E
+12028  103D 39               RTS     
+12029  
+12030  103E 81 80    L103E   CMPA    #$80      is attrin = 480? (deleted file)
+12031  1040 27 05            BEQ     PURFL     if so -> jump to purge this file
+12032  1042 BD 1011          JSR     NXTFCB    get next dir entry
+12033  1045 20 F2            BRA     L1039
+12034   ;
+12035  1047 FE 0F52  PURFL   LDX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12036  104A A6 06            LDAA    $0006,X
+12037  104C 97 0B            STAA    OTRK      PROM Var: set output file start track
+12038  104E B6 0F4E          LDAA    DUNIT     Get the unit beging used on DELETE
+12039  1051 97 02            STAA    OUNIT     PROM Var: Unit and sector for output file
+12040  1053 0C               CLC     
+12041  1054 46               RORA    
+12042  1055 46               RORA    
+12043  1056 46               RORA    
+12044  1057 AA 07            ORAA    $0007,X
+12045  1059 97 0C            STAA    OSCTR     PROM Var: set output file start sector
+12046  105B 7F 000D          CLR     OCNTR     PROM Var: buffer counter of output file
+12047  105E CE 07B7          LDX     #MAXSIZE  Max posible file size in sectors 
+12048  1061 DF 09            STX     OSIZE     PROM Var: set size of output file
+12049  1063 FF 0170          STX     FSIZE
+12050  1066 FE 0F52          LDX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12051  1069 FF 0F4F          STX     PUFCP     FILE CONTROL BLOCK STRING POINTER (FILE BEING PURGED)
+12052  106C B6 0F54          LDAA    PUSEM     CURRENT SECTOR BEING MOVED <UNIT><SECTOR>
+12053  106F B7 0F51          STAA    PUSEC     CURRENT SECTOR BEING PURGED <UNIT><SECTOR>
+12054  1072 BD 1011  L1072   JSR     NXTFCB    get next dir entry
+12055  1075 81 FF            CMPA    #$FF
+12056  1077 27 36            BEQ     L10AF
+12057  1079 81 80            CMPA    #$80
+12058  107B 27 F5            BEQ     L1072
+12059  107D FE 0F52          LDX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12060  1080 A6 06            LDAA    $0006,X
+12061  1082 97 06            STAA    ITRK      PROM Var: Track for input file
+12062  1084 A6 08            LDAA    $0008,X
+12063  1086 97 04            STAA    ISIZE     PROM Var: size (in sectors) of input file
+12064  1088 A6 09            LDAA    $0009,X
+12065  108A 97 05            STAA    ISIZE+1
+12066  108C 7F 0008          CLR     ICNTR     PROM Var: IFILE buffer counter
+12067  108F B6 0F4E          LDAA    DUNIT     Get the unit beging used on DELETE
+12068  1092 0C               CLC     
+12069  1093 46               RORA    
+12070  1094 46               RORA    
+12071  1095 46               RORA    
+12072  1096 AA 07            ORAA    $0007,X
+12073  1098 4A               DECA    
+12074  1099 97 07            STAA    ISCTR     PROM Var: current sector
+12075  109B 0C               CLC     
+12076  109C 49               ROLA    
+12077  109D 49               ROLA    
+12078  109E 49               ROLA    
+12079  109F 97 03            STAA    IUNIT     PROM Var: Unit and sector for input file
+12080  10A1 BD 0F0F          JSR     CPFILE    copy source file to destination file
+12081  10A4 7D 000D  L10A4   TST     OCNTR     PROM Var: buffer counter of output file
+12082  10A7 27 09            BEQ     L10B2
+12083  10A9 4F               CLRA    
+12084  10AA BD F1AD          JSR     WRT       PROM Call: write byte to disk
+12085  10AD 20 F5            BRA     L10A4
+12086   
+12087  10AF 7E 116A  L10AF   JMP     WRTEOD    write end-of-dir entry
+12088   ;
+12089  10B2 FE 0F52  L10B2   LDX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12090  10B5 A6 05            LDAA    $0005,X
+12091  10B7 36               PSHA    
+12092  10B8 A6 04            LDAA    $0004,X
+12093  10BA 36               PSHA    
+12094  10BB A6 03            LDAA    $0003,X
+12095  10BD 36               PSHA    
+12096  10BE A6 02            LDAA    $0002,X
+12097  10C0 36               PSHA    
+12098  10C1 A6 01            LDAA    $0001,X
+12099  10C3 36               PSHA    
+12100  10C4 A6 00            LDAA    $0000,X
+12101  10C6 36               PSHA    
+12102  10C7 F6 0170          LDAB    FSIZE
+12103  10CA B6 0171          LDAA    FSIZE+1
+12104  10CD 90 0A            SUBA    OSIZE+1   PROM Var: set size of output file
+12105  10CF D2 09            SBCB    OSIZE     PROM Var: set size of output file
+12106  10D1 8B 01            ADDA    #$01
+12107  10D3 C9 00            ADCB    #$00
+12108  10D5 37               PSHB    
+12109  10D6 36               PSHA    
+12110  10D7 CE 0179          LDX     #SECBUF   Disk Sector buffer
+12111  10DA B6 0F51          LDAA    PUSEC     CURRENT SECTOR BEING PURGED <UNIT><SECTOR>
+12112  10DD 5F               CLRB    
+12113  10DE BD 0463          JSR     RDSECT    Read a disk sector (A=unit/sec, B=track, X=buffer)
+12114  10E1 FE 0F4F          LDX     PUFCP     FILE CONTROL BLOCK STRING POINTER (FILE BEING PURGED)
+12115  10E4 32               PULA    
+12116  10E5 A7 09            STAA    $0009,X
+12117  10E7 32               PULA    
+12118  10E8 A7 08            STAA    $0008,X
+12119  10EA 32               PULA    
+12120  10EB A7 00            STAA    $0000,X
+12121  10ED 32               PULA    
+12122  10EE A7 01            STAA    $0001,X
+12123  10F0 32               PULA    
+12124  10F1 A7 02            STAA    $0002,X
+12125  10F3 32               PULA    
+12126  10F4 A7 03            STAA    $0003,X
+12127  10F6 32               PULA    
+12128  10F7 A7 04            STAA    $0004,X
+12129  10F9 32               PULA    
+12130  10FA A7 05            STAA    $0005,X
+12131  10FC CE 0179          LDX     #SECBUF   Disk Sector buffer
+12132  10FF B6 0F51          LDAA    PUSEC     CURRENT SECTOR BEING PURGED <UNIT><SECTOR>
+12133  1102 5F               CLRB    
+12134  1103 BD 04EE          JSR     WRSECT
+12135  1106 4D               TSTA    
+12136  1107 27 03            BEQ     L110C
+12137  1109 7E 049A          JMP     EDSKERR   Print error "MEDIA ERROR" and return to command prompt
+12138   ;
+12139  110C B6 0F52  L110C   LDAA    PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12140  110F 36               PSHA    
+12141  1110 B6 0F53          LDAA    PUFMP+1
+12142  1113 36               PSHA    
+12143  1114 B6 0F54          LDAA    PUSEM     CURRENT SECTOR BEING MOVED <UNIT><SECTOR>
+12144  1117 36               PSHA    
+12145  1118 FE 0F4F          LDX     PUFCP     FILE CONTROL BLOCK STRING POINTER (FILE BEING PURGED)
+12146  111B FF 0F52          STX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12147  111E B6 0F51          LDAA    PUSEC     CURRENT SECTOR BEING PURGED <UNIT><SECTOR>
+12148  1121 B7 0F54          STAA    PUSEM     CURRENT SECTOR BEING MOVED <UNIT><SECTOR>
+12149  1124 BD 1011          JSR     NXTFCB    get next dir entry
+12150  1127 FE 0F52          LDX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12151  112A 96 0B            LDAA    OTRK      PROM Var: get output file start track
+12152  112C A7 06            STAA    $0006,X
+12153  112E 96 0C            LDAA    OSCTR     PROM Var: get output file start sector
+12154  1130 84 3F            ANDA    #$3F
+12155  1132 A7 07            STAA    $0007,X
+12156  1134 CE 0179          LDX     #SECBUF   Disk Sector buffer
+12157  1137 B6 0F54          LDAA    PUSEM     CURRENT SECTOR BEING MOVED <UNIT><SECTOR>
+12158  113A 5F               CLRB    
+12159  113B BD 04EE          JSR     WRSECT
+12160  113E 4D               TSTA    
+12161  113F 27 03            BEQ     L1144
+12162  1141 7E 049A  EDSKER2 JMP     EDSKERR   Print error "MEDIA ERROR" and return to command prompt
+12163   
+12164  1144 CE 07B7  L1144   LDX     #MAXSIZE  Max posible file size in sectors (is PURF7 routine in EDOS-II)
+12165  1147 DF 09            STX     OSIZE     PROM Var: set size of output file
+12166  1149 FF 0170          STX     FSIZE
+12167  114C 7F 000D          CLR     OCNTR     PROM Var: buffer counter of output file
+12168  114F FE 0F52          LDX     PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12169  1152 FF 0F4F          STX     PUFCP     FILE CONTROL BLOCK STRING POINTER (FILE BEING PURGED)
+12170  1155 B6 0F54          LDAA    PUSEM     CURRENT SECTOR BEING MOVED <UNIT><SECTOR>
+12171  1158 B7 0F51          STAA    PUSEC     CURRENT SECTOR BEING PURGED <UNIT><SECTOR>
+12172  115B 32               PULA    
+12173  115C B7 0F54          STAA    PUSEM     CURRENT SECTOR BEING MOVED <UNIT><SECTOR>
+12174  115F 32               PULA    
+12175  1160 B7 0F53          STAA    PUFMP+1
+12176  1163 32               PULA    
+12177  1164 B7 0F52          STAA    PUFMP     FILE CONTROL BLOCK STRING POINTER (FILE BEING MOVED)
+12178  1167 7E 1072          JMP     L1072
+12179   
+12180                                          write end-of-dir entry
+12181  116A CE 0179  WRTEOD  LDX     #SECBUF   Disk Sector buffer
+12182  116D B6 0F51          LDAA    PUSEC     dir <UNIT><SECTOR>
+12183  1170 5F               CLRB              B=0 -> Track 0 -> dir track
+12184  1171 BD 0463          JSR     RDSECT    Read dir sector (A=unit/sec, B=track, X=buffer)
+12185  1174 FE 0F4F          LDX     PUFCP     FILE CONTROL BLOCK STRING POINTER (FILE BEING PURGED)
+12186  1177 86 2A            LDAA    #$2A      '*'
+12187  1179 A7 00            STAA    $0000,X   set the name of end-of-dir entry to '*****'
+12188  117B A7 01            STAA    $0001,X
+12189  117D A7 02            STAA    $0002,X
+12190  117F A7 03            STAA    $0003,X
+12191  1181 A7 04            STAA    $0004,X
+12192  1183 86 FF            LDAA    #$FF
+12193  1185 A7 05            STAA    $0005,X   set attrib = $FF
+12194  1187 96 0B            LDAA    OTRK      PROM Var: get output file start track
+12195  1189 A7 06            STAA    $0006,X   Set track = track used by output file
+12196  118B 96 0C            LDAA    OSCTR     PROM Var: get output file start sector
+12197  118D 84 3F            ANDA    #$3F    
+12198  118F A7 07            STAA    $0007,X   Set sector = sector used by output file
+12199  1191 CE 0179          LDX     #SECBUF   Disk Sector buffer
+12200  1194 B6 0F51          LDAA    PUSEC     CURRENT SECTOR BEING PURGED <UNIT><SECTOR>
+12201  1197 5F               CLRB    
+12202  1198 BD 04EE          JSR     WRSECT    write dir sector
+12203  119B 4D               TSTA    
+12204  119C 26 A3            BNE     EDSKER2   Print error "MEDIA ERROR" and return to command prompt
+12205  119E 39               RTS     
+12206                                          This is the customized I/O initialization for the OEMed HW
+12207  
+                                               SET ECHO OFF for CONIN
+12208  119F 86 37    ECHOOFF LDAA    #$37      ASTRAL I/O: ECHO OFF
+12209  11A1 B7 E401          STAA    $E401     Astral PIA SIO SERIAL I/O
+12210  11A4 7E F06F          JMP     RESET     PROM Call: set up PIAs and reset drive electronics
+12211   
+12212  11A7 00               *****
+12213  11A8 00               *****
+12214  11A9 00               *****
+12215  11AA 00               *****
+12216  11AB 00               *****
+12217  11AC 00               *****
+12218  11AD 00               *****
+12219  11AE 00               *****
+12220  11AF 00               *****
+12221  
+12222                                          Open file and Check file attrib. If is $9X return to command prompt
+12223                                          
+12224  11B0 BD 05B7  OPCHK9X JSR     OPENR     Open file for reading
+12225  
+12226                                          Check file attrib for and already open file. If is $9X return to command prompt
+12227  
+12228  11B3 FE 0177  CHK9X   LDX     DIRPTR    get addr current dir entry 
+12229  11B6 A6 05            LDAA    $0005,X   get attribute of file
+12230  11B8 84 F0            ANDA    #$F0      if attrib is $9X -> abort command and return to executive
+12231  11BA 81 90            CMPA    #$90
+12232  11BC 27 01            BEQ     L11BF
+12233  11BE 39               RTS     
+12234  11BF 7E 0214  L11BF   JMP     EXEC      jump to Executive warm start 
+12235  
+12236                                          
+12237                                          Check file attrib. If is $9X return to command prompt
+12238                                          then get next command line param
+12239  
+12240  11C2 BD 11B3  CHK9XP  JSR     CHK9X     Check file attrib. If is $9X return to command prompt
+12241  11C5 7E 03BE          JMP     GETFNAM   Get next param in command line into FNAME/DRVNUM variables
+12242                                          
+12243                                          Check if attrib = $01 (permanent file)
+12244   
+12245  11C8 A6 05    CHKPERM LDAA    $0005,X   Get Attrib
+12246  11CA 84 0F            ANDA    #$0F      
+12247  11CC 81 01            CMPA    #$01      is = $X1 ? 
+12248  11CE 39               RTS     
+12249  
+12250                                          TRACK BUFFER & LARGE BUFFER ALLOCATION BEGINS AFTER EDOS
+12251  
+12252                        ORG     $1200
+12253   
+12254  1200 00       TRKBUF  EQU     *         DISK TRACK BUFFER START ADDRESS
+12255                        RMB     SECTORS*128+1   LARGE DATA BUFFER
+12256  
+12257                        ORG     $1FF0   
+12258  1FF0 00       EXECEND EQU     *

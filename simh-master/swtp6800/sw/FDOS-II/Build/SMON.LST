@@ -1,0 +1,837 @@
+00000
+---
+
+
+PAGE  001                     
+
+
+
+00001              * NAM SMON
+00002              * VERSION 1.00
+00003              *
+00004                     OPT    O,NOP 
+00005              ****************************************************
+00006              * REPLACEMENT FOR MIKBUG ROM
+00007              * FOR SWTPC 6800 COMPUTER SYSTEM
+00008              * COPYRIGHT 1977
+00009              * SOUTHWEST TECHNICAL PROD. CORP.
+00010              * AUGUST, 1977
+00011              ****************************************************
+00012              * Modified by Roberto Sancho Mar/2026 
+00013              * To be used with FDOS-II/6800 OEM RESIDENT (the FDO
+00014              * iCOM Drive build-in PROM)
+00015              *
+00016              * ASTRAL 2000 FDOS-II original memory map:
+00017              *      0000-8000 Regular RAM
+00018              *      E000      ASTMON ROM Monitor RAM
+00019              *      E400      Keyboard/console/papertape/cassette
+00020              *      E800      ASTMON ROM Monitor 
+00021              *      F000      iCOM FD360 Floppy PROM (the FDOS-RO
+00022              *      F800      iCOM FD360 Floppy PIAs
+00023              *      FD00      video display card PIAs
+00024              *      FF00      same as rom at EF00
+00025              *
+00026              * Memory map for SimH SWTPC emulator to run ASTRAL 2
+00027              *
+00028              *      0000-8000 Regular RAM
+00029              *      8000      Swtpc I/O PIAs
+00030              *      E000-E0FF Monitor RAM
+00031              *      E400-E4FF Monitor RAM
+00032              *      E800-EFFF Monitor ROM (based on SWTPBUG) 
+00033              *      F000      iCOM FD360 Floppy PROM (the FDOS-RO
+00034              *      F800      iCOM FD360 Floppy PIAs
+00035              *      FFF8-FFFF Monitor ROM 
+00036              *
+00037              * to be used in SIMH Swtpc with 64k active
+00038              *
+00039              * changes to SWTBUG
+00040              *     removed 'D' command (boot disk)
+00041              *     removed 'C' command (clear CT-1204 screen)
+00042              *     changed 'Z' command. Now restarts monitor
+00043              *
+00044              * Sets Variables expected by FDOS-II
+00045              *
+00046              * issue "J F000" at monitor '$' prompt to boot FDOS
+00047              *
+00048      8004    CTLPOR EQU    $8004    ; CONSOLE CONTROL PORT ADDRES 
+00049      801C    PARADR EQU    $801C    ; PARALLEL PORT ADDRESS
+00050      7FFF    HIMEM  EQU    $7FFF    ; LAST BYTE OF USABLE MEM (SH 
+00051              *
+00052 E000                ORG    $E000    ; START OF MONITOR RAM
+00053              * 
+00054 E000 0002    IRQ    RMB    2        ; IRQ POINTER
+00055 E002 0002    BEGA   RMB    2        ; BEGINNING ADDR PNCH
+00056 E004 0002    ENDA   RMB    2        ; ENDING ADDR PNCH
+00057 E006 0002    NMI    RMB    2        ; NMI INTERRUPT VECTOR
+00058 E008 0001    SP     RMB    1        ; S HIGH
+00059 E009 0001           RMB    1        ; S LOW
+00060 E00A 0002    PORADD RMB    2        ; PORT ADDRESS
+00061 E00C 0001    PORECH RMB    1        ; ECHO ON/OFF FLAG =0 -> ECHO 
+00062 E00D 0001    XHI    RMB    1        ; XREG HIGH
+00063 E00E 0001    XLOW   RMB    1        ; XREG LOW
+00064 E00F 0001    CKSM   RMB    1        ; CHECKSUM
+00065 E010 0002    XTEMP  RMB    2        ; X-REG TEMP STGE
+00066 E012 0002    SWIJMP RMB    2        ; SWI JUMP VECTOR
+00067              *
+00068 E014 0002    ATOPM  RMB    2        ; ADDRESS OF TOP MEMORY. SHOU 
+00069 E016 0006           RMB    6 
+00070 E01C 0001    CHAR   RMB    1        ; INPUT CHAR. SHOULD BE AT $E 
+00071 E01D 0001    CHARUC RMB    1        ; INPUT CHAR UPPER CASE AND N 
+00072              *
+00073 E01E 0002    BKPT   RMB    2        ; BREAKPOINT ADDRESS
+00074 E020 0001    BKLST  RMB    1        ; BREAKPOINT DATA
+00075 E021 0026           RMB    38       
+00076 E047 0002    STACK  RMB    2        ; SWTBUG STACK
+00077 E049 0002    SPBAS  RMB    2        ; STACK SAVE WHEN CALLED FROM 
+00078 E04B 0002    TW     RMB    2        ; TEMPORARY STORAGE
+00079 E04D 0001    TEMP   RMB    1        ; TEMPORARY STORAGE
+00080 E04E 0001    BYTECT RMB    1        ; BYTECT AND MCONT TEMP.
+00081              *
+00082 E04F 0001    RDRON  RMB    1        ; =1 -> INPUT FROM PAPER TAPE 
+00083 E050 0001    PCHON  RMB    1        ; =1 -> OUTPUT TO PAPER TAPE  
+00084 E051 0001    LPTINI RMB    1        ; =1 -> Line printer initiali 
+00085 E052 0002    XSAVE2 RMB    2        ; save X
+00086 E054 0002    XSAVE3 RMB    2        ; save X
+00087              *
+00088 E0FE                ORG    $E0FE 
+00089              *
+00090 E0FE 0002    ENTRY  RMB    2        ; USEG BY FDOS-II TO GET THE  
+00091              *                       ; WITH WHEN
+00092              *
+00093 E400                ORG    $E400 
+00094              *
+00095 E400 0001    PIASNS RMB    1        ; if BIT7=1 -> no pending cha 
+00096              *                       ; set by CO routine. Read by
+00097 E401 0001    PIAECO RMB    1        ; used by CI routine. =$37 -> 
+00098              *                       ; set by FDOS-II EXEC, BASIC
+00099              *
+00100 E800                ORG    $E800 
+00101              *
+00102              *                       ; JUMP TABLE FOR CONSOLE
+00103              *                       ; PRINTER, PAPER TAPE PUNCH,
+00104 E800 7E E83B CI     JMP    INCH1    ; CONSOLE IN
+00105 E803 7E E896 CO     JMP    OUTCH1   ; CONSOLE OUT
+00106 E806 7E E81E RDRIN  JMP    RDRIN1   ; PAPER TAPE READER IN
+00107 E809 7E E87C PO     JMP    PCHOU1   ; PAPER TAPE PUNCH OUT
+00108 E80C 7E E958 LO     JMP    OUTCH    ; REDIRECT PRINTER TO CONSOLE 
+00109 E80F 7E E8D4 MNTR   JMP    MNTR1    
+00110              *
+00111 E812 7F E04F START0 CLR    RDRON    ; =0 -> NO INPUT FROM PAPER T 
+00112 E815 7F E050        CLR    PCHON    ; =0 -> NO OUTPUT TO PAPER TA 
+00113 E818 7F E051        CLR    LPTINI   ; =0 -> LINE PRINTER NOT INIT 
+00114 E81B 7E E9B3        JMP    START 
+00115              *
+00116 E81E 7D E04F RDRIN1 TST    RDRON    ; IS TAPE READER ACTIVE?
+00117 E821 26 13          BNE    RDRIN0   ; JUMP IF SO
+00118 E823 37             PSH B           ; SAVE B,X
+00119 E824 FF E052        STX    XSAVE2 
+00120 E827 BD EBDA        JSR    RDON     ; TURN TAPE READER ON
+00121 E82A 33             PUL B           
+00122 E82B FE E052        LDX    XSAVE2   ; RESTORE B,X
+00123 E82E 86 01          LDA A  #$01 
+00124 E830 B7 E04F        STA A  RDRON    ; =1 -> PAPER TAPE READER ACT 
+00125 E833 B7 E00C        STA A  PORECH   ; NO ECHO
+00126 E836 BD E95B RDRIN0 JSR    INCH 
+00127 E839 0C             CLC             ; CLEAR CARRY TO AS NO END ON 
+00128 E83A 39             RTS             
+00129              *
+00130 E83B 7D E04F INCH1  TST    RDRON    ; IS TAPE READER ACTIVE?
+00131 E83E 27 11          BEQ    INCH0    ; JUMP IF NOT
+00132 E840 37             PSH B           ; SAVE B,X
+00133 E841 FF E052        STX    XSAVE2 
+00134 E844 BD EBF0        JSR    RDOFF    ; TURN TAPE READER OFF
+00135 E847 33             PUL B           
+00136 E848 FE E052        LDX    XSAVE2   ; RESTORE B,X
+00137 E84B 7F E04F        CLR    RDRON    ; =0 -> PAPER TAPE READER NOT 
+00138 E84E 7F E00C        CLR    PORECH   ; RESTORE ECHO ON
+00139 E851 B6 E00C INCH0  LDA A  PORECH   ; INPUT CHAR FROM CONSOLE (BL 
+00140 E854 36             PSH A           ; SAVE ECHO STATE
+00141 E855 B6 E401        LDA A  PIAECO   ; =$37 -> no echo, =$3F -> ec 
+00142 E858 84 08          AND A  #$08 
+00143 E85A 88 08          EOR A  #$08     ; now echo -> 0, no echo -> < 
+00144 E85C B7 E00C        STA A  PORECH   ; SET PORECH ECHO accorging t 
+00145 E85F BD E95B        JSR    INCH 
+00146 E862 B7 E01C        STA A  CHAR     ; SAVE ORIGINAL CHAR
+00147 E865 32             PUL A           
+00148 E866 B7 E00C        STA A  PORECH   ; RESTORE ECHO STATE
+00149              *                       ; CONVERT A TO UPPERCASE 
+00150 E869 B6 E01C        LDA A  CHAR 
+00151 E86C 84 7F          AND A  #$7F 
+00152 E86E 81 61          CMP A  #$61 
+00153 E870 2D 06          BLT    CVUC1 
+00154 E872 81 7B          CMP A  #$7B 
+00155 E874 2C 02          BGE    CVUC1 
+00156 E876 80 20          SUB A  #$20 
+00157 E878 B7 E01D CVUC1  STA A  CHARUC   ; SAVE & RETURN UPPER CASE CH 
+00158 E87B 39             RTS             
+00159              *
+00160 E87C 7D E050 PCHOU1 TST    PCHON    ; IS TAPE PUNCH ACTIVE?
+00161 E87F 26 12          BNE    PCHOU0   ; JUMP IF SO
+00162 E881 36             PSH A           
+00163 E882 37             PSH B           
+00164 E883 FF E052        STX    XSAVE2   ; SAVE A,B,X
+00165 E886 BD EBF6        JSR    PNCHON   ; TURN TAPE PUNCH ON
+00166 E889 86 01          LDA A  #$01 
+00167 E88B B7 E050        STA A  PCHON    ; =1 -> PAPER TAPE PUNCH ACTI 
+00168 E88E FE E052        LDX    XSAVE2   ; RESTORE A,B,X
+00169 E891 33             PUL B           
+00170 E892 32             PUL A           
+00171 E893 7E E958 PCHOU0 JMP    OUTCH    
+00172              *
+00173 E896 36      OUTCH1 PSH A           
+00174 E897 37             PSH B           
+00175 E898 FF E052        STX    XSAVE2   ; SAVE A,B,X
+00176 E89B 7D E050        TST    PCHON    ; IS TAPE PUNCH ACTIVE?
+00177 E89E 27 16          BEQ    OUCH0    ; JUMP IF NOT
+00178 E8A0 C6 14          LDA B  #20      ;
+00179 E8A2 86 1A   OUTCHZ LDA A  #$1A     ; PUNCH SEVERAL ^Z AS EOF
+00180 E8A4 BD E958        JSR    OUTCH    
+00181 E8A7 5A             DEC B           
+00182 E8A8 26 F8          BNE    OUTCHZ 
+00183 E8AA BD EEF9        JSR    CRLF     ; AND THE A <CR><LF>
+00184 E8AD BD EBFC        JSR    PNCHOF   ; TURN TAPE PUNCH OFF
+00185 E8B0 7F E050        CLR    PCHON    ; =0 -> PAPER TAPE PUNCH NOT  
+00186 E8B3 FE E052        LDX    XSAVE2 
+00187              *                       ; SET BIT7=1 on PIASNS if NO
+00188 E8B6 BD EAB3 OUCH0  JSR    SAVGET   ; SAVE IXR, GET PORT# AND TYP 
+00189 E8B9 26 0A          BNE    OUCH1    ; INPUT FROM PIA IF NOT
+00190 E8BB A6 00          LDA A  0,X      ; bit 0=0 -> no pending char  
+00191 E8BD 84 01          AND A  #$01 
+00192 E8BF 88 01          EOR A  #$01 
+00193 E8C1 47             ASR A           
+00194 E8C2 46             ROR A           
+00195 E8C3 20 04          BRA    OUCH2 
+00196 E8C5 A6 00   OUCH1  LDA A  0,X      ; LOOK FOR START BIT
+00197 E8C7 84 80          AND A  #$80 
+00198 E8C9 B7 E400 OUCH2  STA A  PIASNS   ; update PIASNS: if BIT7=1 -> 
+00199 E8CC 33             PUL B           
+00200 E8CD 32             PUL A           
+00201 E8CE FE E010        LDX    XTEMP 
+00202 E8D1 7E E958        JMP    OUTCH    
+00203              *
+00204 E8D4 7F E00C MNTR1  CLR    PORECH   ; TURN ECHO ON
+00205 E8D7 86 80          LDA A  #$80 
+00206 E8D9 B7 E400        STA A  PIASNS   ; update PIASNS: if BIT7=1 -> 
+00207 E8DC 7E E9B3        JMP    START    ; START MONITOR 
+00208              *
+00209 E8DF BE E049 GOTO   LDS    SPBAS    ; RELOAD SP SET BY BASIC (THE 
+00210 E8E2 3B             RTI             ; RETURN TO IT
+00211              *
+00212              *I/O INTERRUPT SEQUENCE
+00213 E8E3 FE E000 IRQV   LDX    IRQ 
+00214 E8E6 6E 00          JMP    0,X 
+00216              *JUMP TO USER PROGRAM
+00217 E8E8 8D 40   JUMP   BSR    BADDR 
+00218 E8EA 6E 00          JMP    0,X 
+00220              *ASCII LOADING ROUTINE
+00221 E8EC BD EBDA LOAD   JSR    RDON     ; READER ON, DIS ECHO, GET P# 
+00222 E8EF 8D 6A   LOAD3  BSR    INCH 
+00223 E8F1 81 53          CMP A  #'S 
+00224 E8F3 26 FA          BNE    LOAD3    ; 1ST CHAR NOT S
+00225 E8F5 8D 64          BSR    INCH     ; READ CHAR
+00226 E8F7 81 39          CMP A  #'9      
+00227 E8F9 27 29          BEQ    LOAD21 
+00228 E8FB 81 31          CMP A  #'1 
+00229 E8FD 26 F0          BNE    LOAD3    ; 2ND CHAR NOT 1
+00230 E8FF 7F E00F        CLR    CKSM     ; ZERO CHECKSUM
+00231 E902 8D 34          BSR    BYTE     ; READ BYTE
+00232 E904 80 02          SUB A  #2 
+00233 E906 B7 E04E        STA A  BYTECT   ; BYTE COUNT
+00234              *BUILD ADDRESS
+00235 E909 8D 1F          BSR    BADDR 
+00236              *STORE DATA
+00237 E90B 8D 2B   LOAD11 BSR    BYTE 
+00238 E90D 7A E04E        DEC    BYTECT 
+00239 E910 27 09          BEQ    LOAD15   ; ZERO BYTE COUNT
+00240 E912 A7 00          STA A  0,X      ; STORE DATA
+00241 E914 A1 00          CMP A  0,X      ; DATA STORED?
+00242 E916 26 08          BNE    LOAD19 
+00243 E918 08             INX             
+00244 E919 20 F0          BRA    LOAD11 
+00245 E91B 7C E00F LOAD15 INC    CKSM 
+00246 E91E 27 CF          BEQ    LOAD3 
+00247 E920 86 3F   LOAD19 LDA A  #'? 
+00248 E922 8D 34          BSR    OUTCH 
+00249 E924 BD EBF0 LOAD21 JSR    RDOFF 
+00250 E927 7E EA35        JMP    CONTRL 
+00252              *BUILD ADDRESS
+00253 E92A 8D 0C   BADDR  BSR    BYTE     ; READ 2 FRAMES
+00254 E92C B7 E00D        STA A  XHI 
+00255 E92F 8D 07          BSR    BYTE 
+00256 E931 B7 E00E        STA A  XLOW 
+00257 E934 FE E00D        LDX    XHI      ; LOAD IXR WITH NUMBER
+00258 E937 39             RTS             
+00260              *INPUT BYTE (TWO FRAMES)
+00261 E938 8D 53   BYTE   BSR    INHEX    ; GET HEX CHAR
+00262 E93A 48      BYTE1  ASL A           
+00263 E93B 48             ASL A           
+00264 E93C 48             ASL A           
+00265 E93D 48             ASL A           
+00266 E93E 16             TAB             
+00267 E93F 8D 4C          BSR    INHEX 
+00268 E941 1B             ABA             
+00269 E942 16             TAB             
+00270 E943 FB E00F        ADD B  CKSM 
+00271 E946 F7 E00F        STA B  CKSM 
+00272 E949 39             RTS             
+00274 E94A 44      OUTHL  LSR A           ; OUT HEX LEFT BCD DIGIT
+00275 E94B 44             LSR A           
+00276 E94C 44             LSR A           
+00277 E94D 44             LSR A           
+00278 E94E 84 0F   OUTHR  AND A  #$F      ; OUT HEX RIGHT BCD DIGIT
+00279 E950 8B 30          ADD A  #$30 
+00280 E952 81 39          CMP A  #$39 
+00281 E954 23 02          BLS    OUTCH 
+00282 E956 8B 07          ADD A  #$7 
+00284              *OUTPUT ONE CHAR
+00285 E958 7E EAB1 OUTCH  JMP    OUTEEE 
+00286 E95B 7E EA8D INCH   JMP    INEEE 
+00288              *PRINT DATA POINTED TO BY X REG
+00289 E95E 8D F8   PDATA2 BSR    OUTCH 
+00290 E960 08             INX             
+00291 E961 A6 00   PDATA1 LDA A  0,X 
+00292 E963 81 04          CMP A  #4 
+00293 E965 26 F7          BNE    PDATA2 
+00294 E967 39             RTS             ; STOP ON HEX 04
+00296 E968 7E EA2D C1     JMP    SWTCTL 
+00298              *MEMORY EXAMINE AND CHANGE
+00299 E96B 8D BD   CHANGE BSR    BADDR 
+00300 E96D CE EA80 CHA51  LDX    #MCL 
+00301 E970 8D EF          BSR    PDATA1   ; C/R L/F
+00302 E972 CE E00D        LDX    #XHI 
+00303 E975 8D 34          BSR    OUT4HS   ; PRINT ADDRESS
+00304 E977 FE E00D        LDX    XHI 
+00305 E97A 8D 31          BSR    OUT2HS   ; PRINT OLD DATA
+00306 E97C 8D 31          BSR    OUTS     ; OUTPUT SPACE
+00307 E97E 8D DB   ANOTH  BSR    INCH     ; INPUT CHAR
+00308 E980 81 20          CMP A  #$20 
+00309 E982 27 FA          BEQ    ANOTH 
+00310 E984 81 0D          CMP A  #$D 
+00311 E986 27 E0          BEQ    C1 
+00312 E988 81 5E          CMP A  #'^      ; UP ARROW?
+00313 E98A 20 2C          BRA    AL3      ; BRANCH FOR ADJUSTMENT
+00314 E98C 01             NOP             
+00316              *INPUT HEX CHARACTER
+00317 E98D 8D CC   INHEX  BSR    INCH 
+00318 E98F 80 30   INHEX1 SUB A  #$30 
+00319 E991 2B 4C          BMI    C3 
+00320 E993 81 09          CMP A  #$9 
+00321 E995 2F 0A          BLE    IN1HG 
+00322 E997 81 11          CMP A  #$11 
+00323 E999 2B 44          BMI    C3       ; NOT HEX
+00324 E99B 81 16          CMP A  #$16 
+00325 E99D 2E 40          BGT    C3       ; NOT HEX
+00326 E99F 80 07          SUB A  #7 
+00327 E9A1 39      IN1HG  RTS             
+00329 E9A2 A6 00   OUT2H  LDA A  0,X      ; OUTPUT 2 HEX CHAR
+00330 E9A4 8D A4   OUT2HA BSR    OUTHL    ; OUT LEFT HEX CHAR
+00331 E9A6 A6 00          LDA A  0,X 
+00332 E9A8 08             INX             
+00333 E9A9 20 A3          BRA    OUTHR    ; OUTPUT RIGHT HEX CHAR
+00335 E9AB 8D F5   OUT4HS BSR    OUT2H    ; OUTPUT 4 HEX CHAR + SPACE
+00336 E9AD 8D F3   OUT2HS BSR    OUT2H    ; OUTPUT 2 HEX CHAR + SPACE
+00338 E9AF 86 20   OUTS   LDA A  #$20     ; SPACE
+00339 E9B1 20 A5          BRA    OUTCH    ; (BSR & TRS)
+00341              *ENTER POWER ON SEQUENCE
+00342 E9B3 8E E047 START  LDS    #STACK 
+00343 E9B6 20 2C          BRA    AL1      ; BRANCH FOR ADDRESS COMPATIB 
+00345              ********************************************
+00346              *PART OF MEMORY EXAMINE AND CHANGE
+00347 E9B8 26 07   AL3    BNE    SK1 
+00348 E9BA 09             DEX             
+00349 E9BB 09             DEX             
+00350 E9BC FF E00D        STX    XHI 
+00351 E9BF 20 AC          BRA    CHA51 
+00352 E9C1 FF E00D SK1    STX    XHI 
+00353 E9C4 20 02          BRA    AL4 
+00355 E9C6 20 6D   EOE3   BRA    CONTRL   ; BRANCH FOR MIKBUG EQUIV. CO 
+00357 E9C8 81 30   AL4    CMP A  #$30 
+00358 E9CA 25 A1          BCS    CHA51 
+00359 E9CC 81 46          CMP A  #$46 
+00360 E9CE 22 9D          BHI    CHA51 
+00361 E9D0 8D BD          BSR    INHEX1 
+00362 E9D2 BD E93A        JSR    BYTE1 
+00363 E9D5 09             DEX             
+00364 E9D6 A7 00          STA A  0,X      ; CHANGE MEMORY
+00365 E9D8 A1 00          CMP A  0,X 
+00366 E9DA 27 91          BEQ    CHA51    ; DID CHANGE
+00367 E9DC 7E E920        JMP    LOAD19   ; DIDN'T CHANGE
+00368 E9DF BE E008 C3     LDS    SP 
+00369 E9E2 20 49          BRA    SWTCTL 
+00370              **************************************************
+00372              *CONTINUE POWER UP SEQUENCE
+00373 E9E4 BF E008 AL1    STS    SP       ; INIT TARGET STACK PTR.
+00374 E9E7 86 FF          LDA A  #$FF 
+00375 E9E9 BD EBA8        JSR    SWISET 
+00376              *CONFIGURE FOR PIA AND SEE IF OK
+00377 E9EC CE 8004        LDX    #CTLPOR 
+00378 E9EF BD EB64        JSR    PIAINI   ; INIT PIA
+00379 E9F2 A6 00          LDA A  0,X 
+00380 E9F4 A1 02          CMP A  2,X 
+00381 E9F6 20 02          BRA    AL2 
+00383 E9F8 20 19          BRA    PRINT    ; BRA FOR BILOAD
+00385 E9FA 26 39   AL2    BNE    CONTRL 
+00387              *INITIALIZE AS ACIA
+00388 E9FC 86 03          LDA A  #3       ; ACIA MASTER RESET
+00389 E9FE A7 00          STA A  0,X 
+00390 EA00 86 11          LDA A  #$11 
+00391 EA02 A7 00          STA A  0,X 
+00392 EA04 20 2F          BRA    CONTRL 
+00394              *ENTER FROM SOFTWARE INTERRUPT
+00395 EA06 01      SF0    NOP             
+00396 EA07 BF E008 SFE1   STS    SP       ; SAVE TARGETS STACK POINTER
+00397              *DECREMENT P COUNTER
+00398 EA0A 30             TSX             
+00399 EA0B 6D 06          TST    6,X 
+00400 EA0D 26 02          BNE    *+4 
+00401 EA0F 6A 05          DEC    5,X 
+00402 EA11 6A 06          DEC    6,X 
+00403              *PRINT CONTENTS OF STACK.
+00404 EA13 CE EA80 PRINT  LDX    #MCL 
+00405 EA16 BD E961        JSR    PDATA1 
+00406 EA19 FE E008        LDX    SP 
+00407 EA1C 08             INX             
+00408 EA1D 8D 8E          BSR    OUT2HS   ; COND CODES
+00409 EA1F 8D 8C          BSR    OUT2HS   ; ACC B
+00410 EA21 8D 8A          BSR    OUT2HS   ; ACC A
+00411 EA23 8D 86          BSR    OUT4HS   ; IXR
+00412 EA25 8D 84          BSR    OUT4HS   ; PGM COUNTER
+00413 EA27 CE E008        LDX    #SP 
+00414 EA2A BD E9AB        JSR    OUT4HS   ; STACK POINTER
+00415 EA2D FE E012 SWTCTL LDX    SWIJMP 
+00416 EA30 8C EA06        CPX    #SF0 
+00417 EA33 27 19          BEQ    CONTR1 
+00419 EA35 8E E047 CONTRL LDS    #STACK   ; SET CONTRL STACK POINTER
+00420 EA38 CE 8004        LDX    #CTLPOR  ; RESET TO CONTROL PORT
+00421 EA3B FF E00A        STX    PORADD 
+00422 EA3E 7F E00C        CLR    PORECH   ; TURN ECHO ON
+00423 EA41 8D 70          BSR    SAVGET   ; GET PORT # AND TYPE
+00424 EA43 27 03          BEQ    POF1 
+00425 EA45 BD EB5D        JSR    PIAECH   ; SET PIA ECHO ON IF MP-C INT 
+00426 EA48 BD EBFC POF1   JSR    PNCHOF   ; TURN PUNCH OFF
+00427 EA4B BD EBF0        JSR    RDOFF    ; TURN READER OFF
+00428 EA4E CE EA7F CONTR1 LDX    #MCLOFF 
+00429 EA51 BD E961        JSR    PDATA1   ; PRINT DATA STRING
+00430 EA54 8D 37          BSR    INEEE    ; READ COMMAND CHARACTER
+00432              *COMMAND LOOKUP ROUTINE
+00433 EA56 CE EC7A LOOK   LDX    #TABLE 
+00434 EA59 A1 00   OVER   CMP A  0,X 
+00435 EA5B 26 07          BNE    SK3 
+00436 EA5D BD E9AF        JSR    OUTS     ; SKIP SPACE
+00437 EA60 EE 01          LDX    1,X 
+00438 EA62 6E 00          JMP    0,X 
+00439 EA64 08      SK3    INX             
+00440 EA65 08             INX             
+00441 EA66 08             INX             
+00442 EA67 8C EC9B        CPX    #TABEND+3 
+00443 EA6A 26 ED          BNE    OVER 
+00444 EA6C 20 BF   SWTL1  BRA    SWTCTL 
+00446              *SOFTWARE INTERRUPT ENTRY POINT
+00447 EA6E FE E012 SFE    LDX    SWIJMP   ; JUMP TO VECTORED SOFTWARE I 
+00448 EA71 6E 00          JMP    0,X 
+00450 EA73 53      S9     FCB    'S,'9,4  ; END OF TAPE
+      EA74 39      
+      EA75 04      
+00452              ***************************************************
+00453 EA76 0D      MTAPE1 FCB    $D,$A,$15,0,0,0,'S,'1,4  ; PUNCH FORMA 
+      EA77 0A      
+      EA78 15      
+      EA79 00      
+      EA7A 00      
+      EA7B 00      
+      EA7C 53      
+      EA7D 31      
+      EA7E 04      
+00455 EA7F 13      MCLOFF FCB    $13      ; READER OFF
+00456 EA80 0D      MCL    FCB    $D,$A,$15,0,0,0,'$,4 
+      EA81 0A      
+      EA82 15      
+      EA83 00      
+      EA84 00      
+      EA85 00      
+      EA86 24      
+      EA87 04      
+00458              ***************************************************
+00461              *NMI SEQUENCE
+00462 EA88 FE E006 NMIV   LDX    NMI      ; GET NMI VECTOR
+00463 EA8B 6E 00          JMP    0,X 
+00465 EA8D 20 3F   INEEE  BRA    INEEE1 
+00467              *BYTE SEARCH ROUTINE
+00468 EA8F BD E92A SEARCH JSR    BADDR    ; GET TOP ADDRESS
+00469 EA92 FF E004        STX    ENDA 
+00470 EA95 BD E92A        JSR    BADDR    ; GET BOTTOM ADDRESS
+00471 EA98 BD E938        JSR    BYTE     ; GET BYTE TO SEARCH FOR
+00472 EA9B 16             TAB             
+00473 EA9C A6 00   OVE    LDA A  0,X 
+00474 EA9E FF E00D        STX    XHI 
+00475 EAA1 11             CBA             
+00476 EAA2 27 02          BEQ    PNT 
+00477 EAA4 20 20          BRA    INCR1 
+00478 EAA6 CE EA80 PNT    LDX    #MCL 
+00479 EAA9 BD E961        JSR    PDATA1 
+00480 EAAC CE E00D        LDX    #XHI 
+00481 EAAF 20 0F          BRA    SKP0 
+00482              ***************************************************
+00483 EAB1 20 3A   OUTEEE BRA    OUTEE1 
+00485              *SAVE IXR AND LOAD IXR WITH CORRECT
+00486              *PORT NUMBER AND TEST FOR TYPE
+00487 EAB3 FF E010 SAVGET STX    XTEMP    ; STORE INDEX REGISTER
+00488 EAB6 FE E00A GETPT1 LDX    PORADD 
+00489 EAB9 37      ISACIA PSH B           
+00490 EABA E6 01          LDA B  1,X 
+00491 EABC E1 03          CMP B  3,X 
+00492 EABE 33             PUL B           
+00493 EABF 39             RTS             
+00494              ***************************************************
+00496              *CONTINUATION OF SEARCH ROUTINE
+00497 EAC0 BD E9AB SKP0   JSR    OUT4HS 
+00498 EAC3 FE E00D        LDX    XHI 
+00499 EAC6 BC E004 INCR1  CPX    ENDA 
+00500 EAC9 27 A1          BEQ    SWTL1 
+00501 EACB 08             INX             
+00502 EACC 20 CE          BRA    OVE 
+00504 EACE 8D 06   INEEE1 BSR    INCH8    ; INPUT 8 BIT CHARACTER
+00505 EAD0 84 7F          AND A  #%01111111  ; GET RID OF PARITY BIT
+00506 EAD2 39             RTS             
+00508 EAD3 31      BILD   INS             ; FIX UP STACK WHEN USING
+00509 EAD4 31             INS             ; BINARY LOADER ON SWTPC TAPE 
+00510 EAD5 31             INS             
+00512              *INPUT ONE CHAR INTO ACC A
+00513 EAD6 37      INCH8  PSH B           ; SAVE ACC B
+00514 EAD7 8D DA          BSR    SAVGET   ; SAVE IXR, GET PORT# AND TYP 
+00515 EAD9 26 28          BNE    IN1      ; INPUT FROM PIA IF NOT
+00516 EADB 86 15          LDA A  #$15     ; RECONFIG FOR 8 BIT, 1 SB
+00517 EADD A7 00          STA A  0,X 
+00518 EADF A6 00   ACIAIN LDA A  0,X 
+00519 EAE1 47             ASR A           
+00520 EAE2 24 FB          BCC    ACIAIN   ; NOT READY
+00521 EAE4 A6 01          LDA A  1,X      ; LOAD CHAR
+00522 EAE6 F6 E00C        LDA B  PORECH 
+00523 EAE9 27 07          BEQ    ACIOUT   ; ECHO
+00524 EAEB 20 11          BRA    RES      ; DON'T ECHO
+00526              *OUTPUT ONE CHARACTER
+00527 EAED 37      OUTEE1 PSH B           ; SAVE ACC B
+00528 EAEE 8D C3          BSR    SAVGET 
+00529 EAF0 26 2E          BNE    IOUT 
+00531 EAF2 C6 11   ACIOUT LDA B  #$11 
+00532 EAF4 E7 00          STA B  0,X 
+00533 EAF6 E6 00   ACIOU1 LDA B  0,X 
+00534 EAF8 57             ASR B           
+00535 EAF9 57             ASR B           
+00536 EAFA 24 FA          BCC    ACIOU1   ; ACIA NOT READY
+00537 EAFC A7 01          STA A  1,X      ; OUTPUT CHARACTER
+00538 EAFE 33      RES    PUL B           ; RESTORE ACC B
+00539 EAFF FE E010        LDX    XTEMP 
+00540 EB02 39             RTS             
+00542              *PIA INPUT ROUTINE
+00543 EB03 A6 00   IN1    LDA A  0,X      ; LOOK FOR START BIT
+00544 EB05 2B FC          BMI    IN1 
+00545 EB07 8D 3A          BSR    DDL      ; DELAY HALF BIT TIME
+00546 EB09 C6 04          LDA B  #4       ; SET DEL FOR FULL BIT TIME
+00547 EB0B E7 02          STA B  2,X 
+00548 EB0D 58             ASL B           ; SET UP CNTR WITH 8
+00549 EB0E 8D 2A   IN3    BSR    DEL      ; WAIT ONE CHAR TIME
+00550 EB10 0D             SEC             
+00551 EB11 69 00          ROL    0,X 
+00552 EB13 46             ROR A           
+00553 EB14 5A             DEC B           
+00554 EB15 26 F7          BNE    IN3 
+00555 EB17 8D 21          BSR    DEL      ; WAIT FOR STOP BIT
+00556 EB19 F6 E00C        LDA B  PORECH   ; IS ECHO DESIRED?
+00557 EB1C 27 13          BEQ    IOUT2    ; ECHO
+00558 EB1E 20 DE          BRA    RES      ; RESTORE IXR,ACCB
+00559              *PIA OUTPUT ROUTINE
+00560 EB20 8D 23   IOUT   BSR    DDL1     ; DELAY ONE HALF BIT TIME
+00561 EB22 C6 0A          LDA B  #$A      ; SET UP COUNTER
+00562 EB24 6A 00          DEC    0,X      ; SET START BIT
+00563 EB26 8D 16          BSR    DE       ; START TIMER
+00564 EB28 8D 10   OUT1   BSR    DEL      ; DELAY ONE BIT TIME
+00565 EB2A A7 00          STA A  0,X      ; PUT OUT ONE DATA BIT
+00566 EB2C 0D             SEC             
+00567 EB2D 46             ROR A           ; SHIFT IN NEXT BIT
+00568 EB2E 5A             DEC B           ; DECREMENT COUNTER
+00569 EB2F 26 F7          BNE    OUT1     ; TEST FOR 0
+00570 EB31 E6 02   IOUT2  LDA B  2,X      ; TEST FOR STOP BITS
+00571 EB33 58             ASL B           ; SHIFT BIT TO SIGN
+00572 EB34 2A C8          BPL    RES      ; BRA FOR 1 STOP BIT
+00573 EB36 8D 02          BSR    DEL      ; DELAY FOR STOP BITS
+00574 EB38 20 C4          BRA    RES 
+00575 EB3A 6D 02   DEL    TST    2,X      ; IS TIME UP
+00576 EB3C 2A FC          BPL    DEL 
+00577 EB3E 6C 02   DE     INC    2,X      ; RESET TIMER
+00578 EB40 6A 02          DEC    2,X 
+00579 EB42 39             RTS             
+00581 EB43 6F 02   DDL    CLR    2,X      ; HALF BIT DELAY
+00582 EB45 8D F7   DDL1   BSR    DE 
+00583 EB47 20 F1          BRA    DEL 
+00586              *OPTIONAL PORT ROUTINE
+00587 EB49 8D 83   OPTL   BSR    INEEE1 
+00588 EB4B 16             TAB             
+00589 EB4C 7F E00B        CLR    PORADD+1 ; SET I/O ADDRESS FOR $8000
+00590 EB4F FE E00A        LDX    PORADD 
+00591 EB52 8D 10          BSR    PIAINI   ; INITIALIZE PIA
+00592 EB54 8D 07          BSR    PIAECH   ; SET ECHO
+00593 EB56 CE EC92        LDX    #TABLE1  ; P, L OR E
+00594 EB59 17             TBA             
+00595 EB5A 7E EA59        JMP    OVER     ; LOOK AT TABLE FOR E, L OR P 
+00597 EB5D 86 34   PIAECH LDA A  #$34     ; SET DDR
+00598 EB5F A7 03          STA A  3,X 
+00599 EB61 A7 02          STA A  2,X 
+00600 EB63 39      NOOPT  RTS             
+00602              *PIA INITIALIZATION ROUTINE
+00603 EB64 6C 00   PIAINI INC    0,X      ; SET DDR
+00604 EB66 86 07          LDA A  #$7 
+00605 EB68 A7 01          STA A  1,X 
+00606 EB6A 6C 00          INC    0,X 
+00607 EB6C A7 02          STA A  2,X 
+00608 EB6E 39             RTS             
+00610              *GENERAL PURPOSE DELAY LOOP
+00611 EB6F CE FFFF DELAY  LDX    #$FFFF 
+00612 EB72 09      DELAY1 DEX             
+00613 EB73 8C 8014        CPX    #$8014   ; STOP AT 8014
+00614 EB76 26 FA   DUM    BNE    DELAY1 
+00615 EB78 39             RTS             
+00617              *BREAKPOINT ENTERING ROUTINE
+00618 EB79 CE EA06 BREAK  LDX    #SF0 
+00619 EB7C BC E012        CPX    SWIJMP   ; BREAKPOINTS ALREADY IN USE? 
+00620 EB7F 27 1A          BEQ    INUSE 
+00621 EB81 08             INX             
+00622 EB82 8D 38   BREAK0 BSR    STO1 
+00623 EB84 BD E92A        JSR    BADDR 
+00624 EB87 FF E01E        STX    BKPT 
+00625 EB8A A6 00          LDA A  0,X 
+00626 EB8C B7 E020        STA A  BKLST 
+00627 EB8F 86 3F          LDA A  #$3F 
+00628 EB91 A7 00          STA A  0,X 
+00629 EB93 CE EA06        LDX    #SF0 
+00630 EB96 8D 24          BSR    STO1 
+00631 EB98 7E EA4E        JMP    CONTR1 
+00632 EB9B FE E01E INUSE  LDX    BKPT 
+00633 EB9E B6 E020        LDA A  BKLST 
+00634 EBA1 A7 00          STA A  0,X 
+00635 EBA3 CE EA07        LDX    #SFE1 
+00636 EBA6 20 DA          BRA    BREAK0 
+00638 EBA8 B7 E048 SWISET STA A  STACK+1  ; FIX POWER UP INTERRUPT
+00639 EBAB CE 7FFF        LDX    #HIMEM   ; INIT ADDRESS OF TOP MEMORY
+00640 EBAE FF E014        STX    ATOPM    
+00641 EBB1 FE E012        LDX    SWIJMP 
+00642 EBB4 8C EA06        CPX    #SF0 
+00643 EBB7 27 06          BEQ    STORTN 
+00644 EBB9 CE EA07 STO    LDX    #SFE1 
+00645 EBBC FF E012 STO1   STX    SWIJMP 
+00646 EBBF 39      STORTN RTS             
+00648 EBC0 8D 5D   PUNCH1 BSR    PUNCH 
+00649 EBC2 20 0F          BRA    POFC4 
+00651              *FORMAT END OF TAPE WITH PGM. CTR. AND S9
+00652 EBC4 CE A049 PNCHS9 LDX    #$A049 
+00653 EBC7 FF E004        STX    ENDA 
+00654 EBCA 09             DEX             
+00655 EBCB 8D 55          BSR    PUNCH2 
+00656 EBCD CE EA73        LDX    #S9 
+00657 EBD0 BD E961 PDAT   JSR    PDATA1 
+00658 EBD3 8D 27   POFC4  BSR    PNCHOF 
+00659 EBD5 8D 98          BSR    DELAY 
+00660 EBD7 7E EA35 C4     JMP    CONTRL 
+00662 EBDA 7F E00C RDON   CLR    PORECH   
+00663 EBDD 7C E00C        INC    PORECH   ; DISABLE ECHO FOR ACIA
+00664 EBE0 86 11          LDA A  #$11     ; RON CHAR.
+00665 EBE2 C6 20          LDA B  #$20     ; STROBE CHAR
+00666 EBE4 8D 1A          BSR    STROBE 
+00667 EBE6 BD EAB9        JSR    ISACIA   ; CHECK TO SEE IF PIA
+00668 EBE9 27 04          BEQ    RTNN 
+00669 EBEB 86 3C          LDA A  #$3C     ; DISABLE PIA ECHO IF PIA
+00670 EBED A7 03          STA A  3,X 
+00671 EBEF 39      RTNN   RTS             
+00673 EBF0 86 13   RDOFF  LDA A  #$13     ; TURN READER OFF
+00674 EBF2 C6 10          LDA B  #$10 
+00675 EBF4 20 0A          BRA    STROBE 
+00677 EBF6 86 12   PNCHON LDA A  #$12 
+00678 EBF8 C6 04          LDA B  #4 
+00679 EBFA 20 04          BRA    STROBE 
+00681 EBFC 86 14   PNCHOF LDA A  #$14 
+00682 EBFE C6 08          LDA B  #$8 
+00684              *PIA STROBING ROUTINE FOR PUNCH/READ ON/OFF
+00685 EC00 BD E958 STROBE JSR    OUTCH 
+00686 EC03 BD EAB6        JSR    GETPT1 
+00687 EC06 27 16          BEQ    RTN1 
+00688 EC08 86 02          LDA A  #2 
+00689 EC0A CA 01          ORA B  #1 
+00690 EC0C 8D 0C          BSR    STR2 
+00691 EC0E 8D 08          BSR    STR1 
+00692 EC10 86 02          LDA A  #2 
+00693 EC12 C6 01          LDA B  #1 
+00694 EC14 E7 00          STA B  0,X 
+00695 EC16 8D 02          BSR    STR2 
+00696 EC18 86 06   STR1   LDA A  #6 
+00697 EC1A A7 01   STR2   STA A  1,X 
+00698 EC1C E7 00          STA B  0,X 
+00699 EC1E 39      RTN1   RTS             
+00701              *PUNCH FROM BEGINNING ADDRESS (BEGA) THRU
+00702              *ENDING ADDRESS (ENDA)
+00703 EC1F FE E002 PUNCH  LDX    BEGA 
+00704 EC22 FF E04B PUNCH2 STX    TW 
+00705 EC25 8D CF          BSR    PNCHON 
+00706 EC27 B6 E005 PUN11  LDA A  ENDA+1 
+00707 EC2A B0 E04C        SUB A  TW+1 
+00708 EC2D F6 E004        LDA B  ENDA 
+00709 EC30 F2 E04B        SBC B  TW 
+00710 EC33 26 04          BNE    PUN22 
+00711 EC35 81 10          CMP A  #16 
+00712 EC37 25 02          BCS    PUN23 
+00713 EC39 86 0F   PUN22  LDA A  #15 
+00714 EC3B 8B 04   PUN23  ADD A  #4 
+00715 EC3D B7 E04E        STA A  BYTECT 
+00716 EC40 80 03          SUB A  #3 
+00717 EC42 B7 E04D        STA A  TEMP 
+00718              *PUNCH C/R L/F NULLS S1
+00719 EC45 CE EA76        LDX    #MTAPE1 
+00720 EC48 BD E961        JSR    PDATA1 
+00721 EC4B 5F             CLR B           
+00722              *PUNCH FRAME COUNT
+00723 EC4C CE E04E        LDX    #BYTECT 
+00724 EC4F 8D 24          BSR    PUNT2    ; PUNCH 2 HEX CHARACTERS
+00725              *PUNCH ADDRESS
+00726 EC51 CE E04B        LDX    #TW 
+00727 EC54 8D 1F          BSR    PUNT2 
+00728 EC56 8D 1D          BSR    PUNT2 
+00729              *PUNCH DATA
+00730 EC58 FE E04B        LDX    TW 
+00731 EC5B 8D 18   PUN32  BSR    PUNT2    ; PUNCH ONE BYTE
+00732 EC5D 7A E04D        DEC    TEMP 
+00733 EC60 26 F9          BNE    PUN32 
+00734 EC62 FF E04B        STX    TW 
+00735 EC65 53             COM B           
+00736 EC66 37             PSH B           
+00737 EC67 30             TSX             
+00738 EC68 8D 0B          BSR    PUNT2    ; PUNCH CHECKSUM
+00739 EC6A 33             PUL B           ; RESTORE STACK
+00740 EC6B FE E04B        LDX    TW 
+00741 EC6E 09             DEX             
+00742 EC6F BC E004        CPX    ENDA 
+00743 EC72 26 B3          BNE    PUN11 
+00744 EC74 39      RTN5   RTS             
+00746              *PUNCH 2 HEX CHAR, UPDATE CHECKSUM
+00747 EC75 EB 00   PUNT2  ADD B  0,X 
+00748 EC77 7E E9A2        JMP    OUT2H    ; OUTPUT 2 HEX CHAR AND RTS
+00750              *COMMAND TABLE
+00751 EC7A 47      TABLE  FCB    'G       ; GOTO
+00752 EC7B E8DF           FDB    GOTO 
+00753 EC7D 5A             FCB    'Z       ; GOTO PROM -> RESTART MONITO 
+00754 EC7E E9B3           FDB    START 
+00755 EC80 4D             FCB    'M       ; MEMORY EXAM AND CHANGE
+00756 EC81 E96B           FDB    CHANGE 
+00757 EC83 46             FCB    'F       ; BYTE SEARCH
+00758 EC84 EA8F           FDB    SEARCH 
+00759 EC86 52             FCB    'R       ; REGISTER DUMP
+00760 EC87 EA13           FDB    PRINT 
+00761 EC89 4A             FCB    'J       ; JUMP
+00762 EC8A E8E8           FDB    JUMP 
+00763 EC8C 42             FCB    'B       ; BREAKPOINT
+00764 EC8D EB79           FDB    BREAK 
+00765 EC8F 4F             FCB    'O       ; OPTIONAL PORT
+00766 EC90 EB49           FDB    OPTL 
+00767 EC92 50      TABLE1 FCB    'P       ; ASCII PUNCH
+00768 EC93 EBC0           FDB    PUNCH1 
+00769 EC95 4C             FCB    'L       ; ASCII LOAD
+00770 EC96 E8EC           FDB    LOAD 
+00771 EC98 45      TABEND FCB    'E       ; END OF TAPE
+00772 EC99 EBC4           FDB    PNCHS9 
+00775 EC9B 37      OUTLPT PSH B           
+00776 EC9C FF E054        STX    XSAVE3   ; SAVE B,X
+00777 EC9F CE 801C        LDX    #PARADR  ; CONFIGURE PIA
+00778 ECA2 7D E051        TST    LPTINI   ; TEST IF PORT INITIALIZED
+00779 ECA5 26 0B          BNE    OULPT1   ; JUMP IF SO
+00780 ECA7 C6 FF          LDA B  #$FF 
+00781 ECA9 E7 00          STA B  0,X 
+00782 ECAB C6 3F          LDA B  #$3F 
+00783 ECAD E7 01          STA B  1,X 
+00784 ECAF 7C E051        INC    LPTINI   
+00785 ECB2 A7 00   OULPT1 STA A  0,X      ; SAVE CHAR TO SEND VIA MP-LA 
+00786 ECB4 C6 37          LDA B  #$37 
+00787 ECB6 E7 01          STA B  1,X      ; SEND CHAR TO PRINTER 
+00788 ECB8 C6 3F          LDA B  #$3F     
+00789 ECBA E7 01          STA B  1,X 
+00790 ECBC 6D 01   OULPT2 TST    1,X 
+00791 ECBE 2A FC          BPL    OULPT2   ; WAIT UNTIL READY
+00792 ECC0 BD E958        JSR    OUTCH    ; ECHO PRINTED CHAR TO CONSOL 
+00793 ECC3 33             PUL B           
+00794 ECC4 FE E054        LDX    XSAVE3   ; RESTORE B,X
+00795 ECC7 39             RTS             
+00797              *SEND TO LINE PRINTER DATA POINTED TO BY X REG
+00798 ECC8 8D D1   LDATA2 BSR    OUTLPT 
+00799 ECCA 08             INX             
+00800 ECCB A6 00   LDATA1 LDA A  0,X 
+00801 ECCD 81 04          CMP A  #4 
+00802 ECCF 26 F7          BNE    LDATA2 
+00803 ECD1 39             RTS             ; STOP ON HEX 04
+00805 ED5C                ORG    $ED5C    ; ROUTINE THAT SHOULD BE AT $ 
+00807              * GET 16 BIT VALUE IN X, A REG = TERMINATING CHAR
+00808              *
+00809 ED5C 7F E01E GV16   CLR    BKPT 
+00810 ED5F 7F E01F        CLR    BKPT+1 
+00811 ED62 BD ED8B G2     JSR    INHEX2 
+00812 ED65 26 04          BNE    G1       ; NOT HEX
+00813 ED67 8D 07          BSR    SHFT 
+00814 ED69 20 F7          BRA    G2 
+00815 ED6B FE E01E G1     LDX    BKPT 
+00816 ED6E 17             TBA             ; TERMINATING CHAR
+00817 ED6F 39             RTS             
+00819 ED70 8D 0D   SHFT   BSR    G20 
+00820 ED72 8D 0B          BSR    G20 
+00821 ED74 8D 09          BSR    G20 
+00822 ED76 8D 07          BSR    G20 
+00823 ED78 BB E01F        ADD A  BKPT+1 
+00824 ED7B B7 E01F        STA A  BKPT+1 
+00825 ED7E 39             RTS             
+00826              *
+00827 ED7F 78 E01E G20    ASL    BKPT 
+00828 ED82 78 E01F        ASL    BKPT+1 
+00829 ED85 24 03          BCC    G21 
+00830 ED87 7C E01E        INC    BKPT 
+00831 ED8A 39      G21    RTS             
+00833 ED8B BD E95B INHEX2 JSR    INCH 
+00834 ED8E 16             TAB             ; CONVERT ASCII TO HEX
+00835 ED8F 80 30          SUB A  #$30 
+00836 ED91 2B 10          BMI    G31      ; NOT HEX
+00837 ED93 81 09          CMP A  #$09 
+00838 ED95 2F 0A          BLE    G32 
+00839 ED97 81 11          CMP A  #$11 
+00840 ED99 2B 08          BMI    G31      ; NOT HEX
+00841 ED9B 81 16          CMP A  #$16 
+00842 ED9D 2E 04          BGT    G31      ; NOT HEX
+00843 ED9F 80 07          SUB A  #7 
+00844 EDA1 C6 00   G32    LDA B  #0 
+00845 EDA3 C1 00   G31    CMP B  #0 
+00846 EDA5 39             RTS             
+00849 EEEA                ORG    $EEEA    ; ROUTINES THAT SHOULD BE AT  
+00851 EEEA 8D 0D          BSR    CRLF     ; PRINT C/R L/F ON CONSOLE
+00852 EEEC 7E E961        JMP    PDATA1   ; PRINT DATA POINTED AT BY X- 
+00853 EEEF 8D 1E          BSR    LCRLF    ; PRINT C/R L/F ON LINE PRINT 
+00854 EEF1 7E ECCB        JMP    LDATA1   ; PRINT DATA POINTED AT BY X- 
+00856 EEF9                ORG    $EEF9    ; ROUTINE THAT SHOULD BE AT $ 
+00858 EEF9 FF EF06 CRLF   STX    XTEMP1 
+00859 EEFC CE EF08        LDX    #MCRLF 
+00860 EEFF BD E961        JSR    PDATA1 
+00861 EF02 FE EF06        LDX    XTEMP1 
+00862 EF05 39             RTS             
+00863 EF06 0002    XTEMP1 RMB    2 
+00864 EF08 0D      MCRLF  FCB    $D,$A,0,0,0,0,4 
+      EF09 0A      
+      EF0A 00      
+      EF0B 00      
+      EF0C 00      
+      EF0D 00      
+      EF0E 04      
+00866 EF0F FF EF06 LCRLF  STX    XTEMP1 
+00867 EF12 CE EF08        LDX    #MCRLF 
+00868 EF15 BD ECCB        JSR    LDATA1 
+00869 EF18 FE EF06        LDX    XTEMP1 
+00870 EF1B 39             RTS             
+00872 FFF8                ORG    $FFF8 
+00874 FFF8 E8E3           FDB    IRQV     ; IRQ VECTOR
+00875 FFFA EA6E           FDB    SFE      ; SOFTWARE INTERRUPT
+00876 FFFC EA88           FDB    NMIV     ; NMI VECTOR
+00877 FFFE E812           FDB    START0   ; RESTART VECTOR
+00879                     END             
+
+TOTAL ERRORS 
