@@ -332,10 +332,6 @@ HEMENWAY CP/68 Operating System ported to MF68 floppy disk
 TSC FLEX 2.0 Operating System for MF68 floppy disk
 * execute `run swtp6800 DOS68 5.1C (1980).bat` or `run swtp6800 DOS68 5.1C demo.bat` batch file to run 
 SSB (System Signals Broacasting) DOS 5.1C Operating System ported to MF68 floppy disk
-* execute `run swtp6800 iCOM FDOS-II (1976).bat` or `run swtp6800 iCOM FDOS-II demo.bat` batch file to run 
-iCOM FDOS-II operating system for FD360 Floppy Disk Drive
-* execute `run swtp6800 Motorola EDOS-II (1976).bat` or `run swtp6800 Motorola EDOS-II demo.bat` batch file to run 
-Motorola EDOS-II operating system for Exorciser ExorDisk-I
 
   ![SWTPC 6800 OS](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FloppyDisk.png)
 
@@ -347,6 +343,15 @@ Once uncompressed, you will find several ready to run .bat files:
 * execute `run swtp6800 SDOS 1.1G (1985).bat` to run Software Dynamics SDOS 1.1G Operating System for MF-68 floppy disk
 * execute `run swtp6800 SDOS 1.1G build.bat` to run build SDOS 1.1G Operating System floppy disk images from SDOS binary files in /build folder
 * execute `run swtp6800 SDOS 1.1G compile.bat` to run compile SDOS 1.1G Operating System binary files in /comp folder from sources in /build/src
+
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FDOS-II_EDOS_II.zip) to download 
+FDOS-II and EDOS-II Operating Systems test run.
+
+* execute `run swtp6800 iCOM FDOS-II (1976).bat` or `run swtp6800 iCOM FDOS-II demo.bat` batch file to run 
+iCOM FDOS-II operating system for FD360 Floppy Disk Drive
+* execute `run swtp6800 Motorola EDOS-II (1976).bat` or `run swtp6800 Motorola EDOS-II demo.bat` batch file to run 
+Motorola EDOS-II operating system for Exorciser ExorDisk-I
+
 
 ## IBM 370
 
