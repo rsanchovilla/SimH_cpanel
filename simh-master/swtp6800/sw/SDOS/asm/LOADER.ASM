@@ -5,11 +5,26 @@
 ;* (C) Roberto Sancho, Jun/2022
 ;*
 
+;* Added fixes from MAY/2023 by Mike Douglas to work on real hardware
+;* The MF68 does not support dosuble side operations, so it has been made to work
+;* on Peripheral Technologies FD-2 Floppy controller (controller chip is WD2797)
+;* which supports double side and is compatible with MF68
+;*
+
 ; this loader is implemented to work with D command from SWTBUG ROM
 ; D command loads sector zero into addr $2400, and branch to it
 ; Sector zero of disk is the boot sector of SDOS. It has 16 bytes of prog
 ; then 16 bytes for disk info, then 32 bytes for disk name (ascii)
 ; the rest of sector is prog. 
+
+; Comments by Mike Douglas on physical disk format:
+; THE SWTBUG D COMMAND READS CONSECUTIVE SECTORS STARTING AT SECTOR 0
+; INTO RAM AT $2400 UNTIL AN ERROR OCCURS. THIS LOADER IS 5 SECTORS
+; LONG AND IS ON SECTORS 0-4 ON THE DISK. SECTOR 5 DOES NOT EXIST
+; AND SECTORS RESUME WITH SECTOR 6. THE SWTBUG D COMMAND STOPS
+; READING WHEN IT IS NOT ABLE TO READ SECTOR 5. ONLY TRACK 0
+; SIDE 0 IS FORMATTED THIS WAY (0,1,2,3,4,6,7...). ALL OTHER TRACKS
+; HAVE SECTORS 1-18.
 
 
        org  $2400
@@ -51,8 +66,7 @@ LoaderStart  equ *
 			; in this case, all the program is loaded at $2400 and onwards
 			; track zero on disk has sectors numbered a 0,1, 3,... (weird, isn't it?)
 
-boot   JSR INTDK	; INIT THE DISK SYSTEM disk vars
-       ldaa $2411	; get num of sectors per cluster
+boot   ldaa $2411	; get num of sectors per cluster
        inca             ; after the incr, a=first sector of Cluster 1
        staa sect	; the first sector to read (is the first sector of sdos.sys)      
        ldx #buf+128
@@ -137,6 +151,7 @@ PLEN    fdb 0
 GOFLAG  fcb 0
 
 ; DISK DRIVERS FOR SOUTHWEST TECHNICAL PRODUCTS MF-68
+; (FD-2 CONTROLLER)
 
 ; INPUT PARAMS
 
@@ -148,10 +163,10 @@ DDATA  fdb 0         ; POINTER TO DATA BUFFER (MUST HAVE 128 BYTES)
 
 ; COMMANDS FOR WD1771 CONTROLLER CHIP
 ;
-FDRSC  EQU $0B       ; RESTORE
-FDSKI  EQU $1B       ; SEEK
-FDRDC  EQU $8C       ; READ A SECTOR
-FDWRC  EQU $AC       ; WRITE A SECTOR
+FDRSC  EQU $08       ; RESTORE
+FDSKI  EQU $18       ; SEEK
+FDRDC  EQU $88       ; READ A SECTOR
+FDWRC  EQU $A8       ; WRITE A SECTOR
 
 ; ADDR OF WD1771 CONTROLLER CHIP REGISTERS 
 
@@ -163,111 +178,55 @@ DATREG EQU $801B
 
 ; DRIVER VARS
 
-CURDRV FCB $FF       ; PRESENTLY SELECTED DRIVE #
-CTRK0  fcb 0,0,0,0   ; TRACK STATE TABLE
-RCNT   fcb 0         ; RETRY COUNT
-SIDEBT fcb 0         ; SIDE SELECTION BIT
-
-; INIT THE DISK SYSTEM
-
-INTDK  CLR CURDRV    ; ASSUME DRIVE 0 BOOTED
-       LDAA #$FF
-       STAA CTRK0       
-       STAA CTRK0+1
-       STAA CTRK0+2       
-       STAA CTRK0+3
-DUMMY  RTS       
+RCNT   FCB  0         ; RETRY COUNT
 
 ; READ A SECTOR
 ;
-RDSEC  JSR SELDRV 
-RDSEC1 JSR READ       ; GETA SECTOR
-       BEQ QUIT10     ; OK
+RDSEC  JSR SELDRV     ; SELECT DRIVE AND SIDE
+RDSEC1 JSR READ       ; READ A SECTOR
+       BEQ RDEXIT     ; OK
        DEC RCNT       ; RETRY AGAIN?
        BNE RDSEC1     ; YES
-       BRA QERR
+       TSTA           ; A=ERROR STATUS
+RDEXIT RTS
 
-; WRITE A SECTOR
-;
-WRSEC  JSR SELDRV 
-WTSEC1 JSR WRITE
-       BEQ QUIT10     ; OK
-       DEC RCNT       ; TRY AGAIN?
-       BNE WTSEC1     ; YES
-QERR   TSTA           ; A HAS THE STATUS BITS WITH ERROR 
-QUIT10 RTS
-
-; READ A SECTOR (A=TRK, B=SECTOR, X=CTRKx)
+; READ A SECTOR (A=TRK, B=SECTOR)
 ;
 READ   JSR SEEK
-       LDAA #FDRDC    ; READ
-       ADDA SIDEBT
+       LDAA #FDRDC    ; READ COMMAND
        STAA CMDREG     
        JSR DEL56U     ; DELAY
        LDX DDATA      ; GET BUFFER ADDRESS
-       LDAB #128      ; 128 BYTES/SECTOR     
+
 READ1  LDAA CMDREG     
        BITA #$02      ; DATA REG FULL?
        BNE READ2      ; YES
        BITA #1        ; BUSY?
-       BNE READ1      ; YES
-       BRA READ3      ; ERROR
+       BNE READ1      ; LOOP IF BUSY, ELSE ERROR
+
+       ANDA #$1C      ; MASK OFF STATUS BITS
+       RTS             
+
 READ2  LDAA DATREG    ; GET A BYTE
        STAA 0,X       ; STORE IN BUFFER
        INX             
-       DECB            
-       BNE READ1      ; DO AGAIN
-       BSR WBUSY      ; WAIT TILL DONE
-READ3  ANDA #$1C      ; MASK OF STATUS BITS
-       RTS             
+       BNE READ1      ; LOOP TO READ NEXT BYTE
                        
-WBUSY  LDAA CMDREG     
-       BITA #1        ; BUSY?
-       BNE WBUSY      ; YES
-       RTS
+; SEEK A=TRACK, B=SECTOR
 
-; WRITE A SECTOR (A=TRK, B=SECTOR, X=CTRKx)
+SEEK   STAB SECREG    ; SET SECTOR
+       CMPA TRKREG    ; ON TRACK?
+       BEQ CMDEX      ; YES
 
-WRITE  JSR SEEK
-       LDAA #FDWRC    ; WRITE COMMAND
-       ADDA SIDEBT
-       STAA CMDREG     
-       JSR DEL56U      
-       LDX DDATA      ; GET BUFFER ADDRESS
-       LDAB #128      ; 128 BYTES/SECTOR
-WRITE1 LDAA CMDREG     
-       BITA #2        ; REG EMPTY?
-       BNE WRITE2     ; YES
-       BITA #1        ; BUSY?
-       BNE WRITE1     ; YES
-       BRA QERR       ; ERROR
-WRITE2 LDAA 0,X       ; GET A BYTE
-       STAA DATREG     
-       INX             
-       DECB            
-       BNE WRITE1     ; DO AGAIN
-       JSR WBUSY      ; WAIT FOR BUSY
-WRITE3 ANDA #$7C      ; MASK OFF STATUS BITS
-       RTS
-
-; SEEK A=TRACK, B=SECTOR, X=CTRKx
-
-SEEK   CMPA TRKREG    ; ON TRACK?
-       BEQ SEEK2      ; YES
        STAA DATREG    ; NO, STORE TRACK#
-       JSR DEL56U      
-       STAA 0,X       ; SAVE CURRENT TRACK OF DRIVE
        LDAA #FDSKI    ; SEEK COMMAND
-       STAA CMDREG     
-       JSR DEL56U      
-       JSR WBUSY      ; WAIT FOR BUSY
-SEEK2  STAB SECREG    ; SET SECTOR
+DOCMD  STAA CMDREG
        JSR DEL56U
-       LDAA SIDE
-       BEQ SEEK3
-       LDAA #$08      ; SELECT SIDE 1
-SEEK3  STAA SIDEBT       
-       RTS
+
+WBUSY  LDAA CMDREG
+       BITA #1
+       BNE WBUSY
+CMDEX  RTS
 
 ; DEL56U- DELAY 56us INCLUDING THE CALL TO DELAY56U
 
@@ -275,40 +234,22 @@ DEL56U JSR DELAY2
 DELAY2 JSR DELAY3
 DELAY3 RTS
 
-; FIND TRACK- RETURN X->TRACK TABLE FOR CURDRV
-
-FNDTRK LDX #CTRK0     ; POINT TO TABLE
-       LDAA CURDRV
-       BEQ FNDTK3
-FNDTK2 INX
-       DECA
-       BNE FNDTK2
-FNDTK3 RTS
-
 ; RESTORE SEEK TRACK0
 
-RESTOR LDAA #FDRSC    ; RESTORE COMMAND
-       STAA CMDREG
-       JSR DEL56U
-       JSR WBUSY
-       RTS
+RESTOR BSR SELDRV     ; SELECT THE DRIVE
+       LDAA #FDRSC    ; RESTORE COMMAND
+       BRA DOCMD      ; EXEC DISK CONTROLLER CMD
 
 ; SELECT THE DRIVE
-; RETURN A=TRACK, B=SECTOR, X=CTRKx
+; RETURN A=TRACK, B=SECTOR
 
-SELDRV BSR FNDTRK     ; SAVE TRACK FOR CURRENT DRIVE
-       LDAA TRKREG     
-       STAA 0,X        
-       LDAA DRV       ; GET DRIVE 
-       STAA CURDRV     
-       STAA DRVREG    ; SELECT THE DRIVE
-       BSR FNDTRK     ; LOAD TRACK FOR NEW DRIVE
-       LDAA 0,X       ; A=CURRENT DRIVE TRACK
-       STAA TRKREG     
-       CMPA #$FF      ; INITIALIZED?
-       BNE SELD1      ; YES
-       BSR RESTOR     ; SEEK TRACK0
-SELD1  LDAA #5        ; SET RETRY COUNT
+SELDRV LDAA DRV       ; GET DRIVE 
+       TST  SIDE
+       BEQ  DOSEL
+       ORAA #$40
+DOSEL  STAA DRVREG    ; SELECT THE DRIVR
+
+       LDAA #5        ; SET RETRY COUNT
        STAA RCNT       
        LDAA TRK       ; GET TRACK#        
        LDAB SECT      ; GET SECTOR#
@@ -320,8 +261,7 @@ LoaderLen equ	*-LoaderStart+1
 			; in this case, the program is loaded at its assembled address
 			; track zero on disk has sectors numbered a 1,2,3,... (the expected SDOS numbering)
        
-boot2  JSR INTDK	
-       ldaa #1
+boot2  ldaa #1
        staa sect
        clr  side
        clr  trk

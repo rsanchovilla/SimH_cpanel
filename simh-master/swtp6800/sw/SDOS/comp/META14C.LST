@@ -1,0 +1,3218 @@
+
+
+
+
+ASM/6800 1.3H4: 0000                    
+08/16/82 00:00:00; Page 1; Form 1       
+META14C.ASM
+                  2:                    WITH    WI=107,DE=51
+                  3: * METAPLUS COMPILED BY METAPLUS VERSION 1.4c
+  0000            4:                    ORG     0
+0000 0001         5: ATTRIBUTE          RMB     1
+0001 0001         6: TOKEN              RMB     1
+0002 0001         7: SUBR               RMB     1
+0003 0001         8: REFERENCED         RMB     1
+0004 0001         9: DEFINED            RMB     1
+0005 0001        10: STATEVARIABLE      RMB     1
+0006 0001        11: KEYWORD            RMB     1
+0007 0001        12: TYPENAME           RMB     1
+0008 0001        13: STATEVALUE         RMB     1
+  0104           14:                    ORG     $104            METAMACHINE ENTRY POINTS
+0104 0003        15: STARTTOKEN         RMB     3
+0107 0003        16: GETTOKENCHAR       RMB     3
+010A 0003        17: BACKUP             RMB     3
+010D 0003        18: EATTOKEN           RMB     3
+0110 0003        19: FINDSTAR           RMB     3
+0113 0003        20: FINDSTARN          RMB     3
+0116 0003        21: PUTCHAR            RMB     3
+0119 0003        22: ENTERMETA          RMB     3
+  0C80           23:                    ORG     $C80
+0C80 7E1291      24:                    JMP     DEBLANKTOKEN
+0C83 7E1189      25:                    JMP     ERRORTOKEN
+0C86 7E11A2      26:                    JMP     KEYWORDTOKEN
+0C89 1D61        27:                    #:21
+0C8B 0000        28:                    #.KEYWORDLIST
+0C8D 1149        29:                    #:31
+  0C89           30: .TA                EQU     *-6
+  0003           31: .TC                SET     3
+  001D           32:                    RPT     29
+0C8F 0000        33:                    #0
+  0B49           34: .SA                EQU     *-$C0*2
+  00C0           35: .SC                SET     $C0
+  0240           36:                    RPT     576
+0CC9 0000        37:                    #0
+  1149           38: :31                EQU     *
+1149 3B          39:                    +:11-*-1
+114A 4D455441    40:                    FCC     'METAPLUS Version 1.4c Copyright (c) 1979 Software Dynamics
+1184 0D          41:                    +$D
+
+
+
+
+ASM/6800 1.3H4: 1184                    
+08/16/82 00:00:00; Page 2; Form 1       
+META14C.ASM
+  1185           42: :11                EQU     *
+  00C0           43: METAPLUS           EQU     .SC
+  00C1           44: .SC                SET     .SC+1
+1185 C0          45:                    METAPLUS
+1186 2C          46:                    $2C
+1187 00          47:                    0
+  0000           48: .PK                SET     0
+  0000           49: .KEYWORDLIST       EQU     .PK
+  0000           50: .VC                SET     0
+  0003           51: ERROR              EQU     .TC
+  0004           52: .TC                SET     .TC+1
+  1188           53: .                  SET     *
+  0C8F           54:                    ORG     ERROR*2+.TA
+0C8F 1188        55:                    #.
+  1188           56:                    ORG     .
+                 57: *
+                 58: *                  ERROR HANDLER
+                 59: *                  LOOK FOR $(#';' :0-:7F) ';'
+                 60: *
+  0D39           61: SUCCESS            EQU     $0D39
+  0C39           62: FAILURE            EQU     $0C39
+1188 00          63: LASTTIME           FCB     0               1 --> DON'T ACCEPT TOKEN THIS TIME
+1189 B61188      64: ERRORTOKEN         LDAA    LASTTIME        DID WE SEE ';' LAST TIME THRU ?
+118C 260F        65:                    BNE     ERRORTOKENDONE  B/ YES
+118E BD0107      66:                    JSR     GETTOKENCHAR    GO GET ONE
+1191 813B        67:                    CMPA    #';             IS IT A SEMICOLON?
+1193 2606        68:                    BNE     SAYWEGOTIT      B/ NOPE, EAT IT UP
+1195 7C1188      69:                    INC     LASTTIME        THIS IS IT!
+1198 BD1297      70:                    JSR     REMBLANKS       EAT UP ALL THE BLANKS, TOO
+119B 0D          71: SAYWEGOTIT         SEC
+119C 39          72:                    RTS                     SAY THAT WE ARE HAPPY
+119D 7F1188      73: ERRORTOKENDONE     CLR     LASTTIME        SET UP FOR NEXT ERROR
+11A0 0C          74:                    CLC
+11A1 39          75:                    RTS
+  0004           76: ID                 EQU     .TC
+  0005           77: .TC                SET     .TC+1
+  11A2           78: .                  SET     *
+  0C91           79:                    ORG     ID*2+.TA
+0C91 11A2        80:                    #.
+  11A2           81:                    ORG     .
+
+
+
+
+ASM/6800 1.3H4: 0C91                    
+08/16/82 00:00:00; Page 3; Form 1       
+META14C.ASM
+                 82: *
+                 83: *                  ID TEST
+                 84: *                  LOOK FOR 'A'-'Z' $('A'-'Z' / '0'-'9')
+                 85: *
+  11A2           86: KEYWORDTOKEN       EQU     *
+11A2 BD0107      87:                    JSR     GETTOKENCHAR    GET ME AN INPUT CHAR
+11A5 8D4A        88:                    BSR     ISLETTER
+11A7 2414        89:                    BCC     ID3             B/ NO
+11A9 BD0107      90: ID1                JSR     GETTOKENCHAR
+11AC 8D43        91:                    BSR     ISLETTER
+11AE 25F9        92:                    BCS     ID1             B/ YES, KEEP GOING
+11B0 8D50        93:                    BSR     ISDIGIT
+11B2 25F5        94:                    BCS     ID1             B/ YES, KEEP GOING
+11B4 8124        95:                    CMPA    #'$             TRAILING '$' ?
+11B6 2703        96:                    BEQ     ID2             B/ YES, ACCEPT IT
+11B8 BD010A      97:                    JSR     BACKUP          DON'T COUNT THE LAST CHAR
+11BB 0D39        98: ID2                SUCCESS                 ALL IS WELL
+11BD 0C39        99: ID3                FAILURE                 NOT AN ID
+  0005          100: NUM                EQU     .TC
+  0006          101: .TC                SET     .TC+1
+  11BF          102: .                  SET     *
+  0C93          103:                    ORG     NUM*2+.TA
+0C93 11BF       104:                    #.
+  11BF          105:                    ORG     .
+                106: *
+                107: *                  NUM
+                108: *                  LOOK FOR '0'-'9' $('0'-'9')
+                109: *
+11BF BD0107     110:                    JSR     GETTOKENCHAR    GET ME A CHAR
+11C2 8D3E       111:                    BSR     ISDIGIT IS IT A DIGIT?
+11C4 240C       112:                    BCC     NUM2            B/ NO
+11C6 BD0107     113: NUM1               JSR     GETTOKENCHAR    GET ME ANOTHER CHAR
+11C9 8D37       114:                    BSR     ISDIGIT IS THIS A DIGIT?
+11CB 25F9       115:                    BCS     NUM1            B/ YES, KEEP GOING
+11CD BD010A     116:                    JSR     BACKUP          DON'T COUNT THE LAST CHAR
+11D0 0D39       117:                    SUCCESS                 ALL IS WELL
+11D2 0C39       118: NUM2               FAILURE 
+  0006          119: STARQUERY          EQU     .TC
+  0007          120: .TC                SET     .TC+1
+  11D4          121: .                  SET     *
+
+
+
+
+ASM/6800 1.3H4: 11D2                    
+08/16/82 00:00:00; Page 4; Form 1       
+META14C.ASM
+  0C95          122:                    ORG     STARQUERY*2+.TA
+0C95 11D4       123:                    #.
+  11D4          124:                    ORG     .
+                125: *
+                126: *                  STARQUERY
+                127: *                  LOOK FOR '*' '0'-'9' $('0'-'9') '?'
+                128: *
+11D4 BD0107     129:                    JSR     GETTOKENCHAR
+11D7 812A       130:                    CMPA    #'*
+11D9 2614       131:                    BNE     STARQUERY2      B/ NO GOOD
+11DB BD0107     132:                    JSR     GETTOKENCHAR
+11DE 8D22       133:                    BSR     ISDIGIT IS IT A DIGIT?
+11E0 240D       134:                    BCC     STARQUERY2      B/ NO
+11E2 BD0107     135: STARQUERY1         JSR     GETTOKENCHAR
+11E5 8D1B       136:                    BSR     ISDIGIT IS IT A DIGIT?
+11E7 25F9       137:                    BCS     STARQUERY1      B/ YES, KEEP GOING
+11E9 813F       138:                    CMPA    #'?
+11EB 2602       139:                    BNE     STARQUERY2      B/NOT A TOKEN
+11ED 0D39       140:                    SUCCESS                 ALL IS WELL
+11EF 0C39       141: STARQUERY2         FAILURE 
+                142: *
+                143: *                  CHARACTER CHECK ROUTINES
+                144: *
+11F1 8141       145: ISLETTER           CMPA    #'A             IS IT A LETTER?
+11F3 2503       146:                    BCS     ISLETTER1       B/ NO
+11F5 815B       147:                    CMPA    #'Z+1
+11F7 39         148:                    RTS                     C BIT ON IF YES, OFF IF NO
+11F8 0C         149: ISLETTER1          CLC                     NOT A LETTER
+11F9 39         150:                    RTS
+                151: *
+11FA 8141       152: ISHEXDIGIT         CMPA    #'A             IS IT A HEX DIGIT?
+11FC 2504       153:                    BCS     ISDIGIT         B/ NO
+11FE 8147       154:                    CMPA    #'F+1
+1200 2506       155:                    BCS     ISDIGIT1        B/ YES
+1202 8130       156: ISDIGIT            CMPA    #'0             IS IT A DIGIT?
+1204 25F2       157:                    BCS     ISLETTER1       B/ NO
+1206 813A       158:                    CMPA    #'9+1
+1208 39         159: ISDIGIT1           RTS                     C BIT ON IF YES, OFF IF NO
+  0007          160: HEXNUM             EQU     .TC
+  0008          161: .TC                SET     .TC+1
+
+
+
+
+ASM/6800 1.3H4: 1208                    
+08/16/82 00:00:00; Page 5; Form 1       
+META14C.ASM
+  1209          162: .                  SET     *
+  0C97          163:                    ORG     HEXNUM*2+.TA
+0C97 1209       164:                    #.
+  1209          165:                    ORG     .
+                166: *
+                167: *                  HEXNUM
+                168: *                  LOOK FOR ('0'-'9' / 'A'-'F') $('0'-'9' / 'A'-'F')
+                169: *
+1209 BD0107     170:                    JSR     GETTOKENCHAR
+120C 8DEC       171:                    BSR     ISHEXDIGIT      IS IT A HEX DIGIT?
+120E 240C       172:                    BCC     HEXNUM2 B/ NO
+1210 BD0107     173: HEXNUM1            JSR     GETTOKENCHAR
+1213 8DE5       174:                    BSR     ISHEXDIGIT      IS IT A HEX DIGIT?
+1215 25F9       175:                    BCS     HEXNUM1         B/ YES, KEEP GOING
+1217 BD010A     176:                    JSR     BACKUP          DON'T COUNT THE LAST CHAR
+121A 0D39       177:                    SUCCESS                 ALL IS WELL
+121C 0C39       178: HEXNUM2            FAILURE                 TOO BAD
+  0008          179: NONBLANK           EQU     .TC
+  0009          180: .TC                SET     .TC+1
+  121E          181: .                  SET     *
+  0C99          182:                    ORG     NONBLANK*2+.TA
+0C99 121E       183:                    #.
+  121E          184:                    ORG     .
+                185: *
+                186: *                  NONBLANK
+                187: *                  LOOK FOR ANYTHING WHICH REMBLANK WON'T SWALLOW....
+                188: 
+121E BD0107     189:                    JSR     GETTOKENCHAR    GET FIRST CHARACTER OF "NONBLANK"
+1221 8120       190:                    CMPA    #$20            A BLANK?
+1223 2721       191:                    BEQ     NONBLANKFAIL
+1225 8109       192:                    CMPA    #$9             TAB?
+1227 271D       193:                    BEQ     NONBLANKFAIL
+1229 810D       194:                    CMPA    #$D             CR?
+122B 2719       195:                    BEQ     NONBLANKFAIL
+122D 810C       196:                    CMPA    #$C             FORM?
+122F 2715       197:                    BEQ     NONBLANKFAIL
+1231 813B       198:                    CMPA    #';             END RULE ?
+1233 2711       199:                    BEQ     NONBLANKFAIL
+1235 812F       200:                    CMPA    #'/             BEGIN COMMENT ?
+1237 260F       201:                    BNE     NONBLANKL       B/ NO, MUST BE WHAT WE WANT!
+
+
+
+
+ASM/6800 1.3H4: 1239                    
+08/16/82 00:00:00; Page 6; Form 1       
+META14C.ASM
+1239 BD0107     202:                    JSR     GETTOKENCHAR    LOOKS LIKE BEGIN COMMENT
+123C 812A       203:                    CMPA    #'*             ...?
+123E 2608       204:                    BNE     NONBLANKL       B/ NOT BEGIN COMMENT!
+1240 BD010A     205:                    JSR     BACKUP          IS BEGIN COMMENT, REJECT IT
+1243 BD010A     206:                    JSR     BACKUP
+1246 0C39       207: NONBLANKFAIL       FAILURE 
+1248 BD0107     208: NONBLANKL          JSR     GETTOKENCHAR    GET NEXT CHARACTER OF "NONBLANK"
+124B 8120       209:                    CMPA    #$20            A BLANK?
+124D 271E       210:                    BEQ     NONBLANKACCEPT
+124F 8109       211:                    CMPA    #$9             TAB?
+1251 271A       212:                    BEQ     NONBLANKACCEPT
+1253 810D       213:                    CMPA    #$D             CR?
+1255 2716       214:                    BEQ     NONBLANKACCEPT
+1257 810C       215:                    CMPA    #$C             FORM?
+1259 2712       216:                    BEQ     NONBLANKACCEPT
+125B 813B       217:                    CMPA    #';             END RULE ?
+125D 270E       218:                    BEQ     NONBLANKACCEPT
+125F 812F       219:                    CMPA    #'/             BEGIN COMMENT ?
+1261 26E5       220:                    BNE     NONBLANKL       B/ NO, MUST BE WHAT WE WANT!
+1263 BD0107     221:                    JSR     GETTOKENCHAR    LOOKS LIKE BEGIN COMMENT
+1266 812A       222:                    CMPA    #'*             ...?
+1268 26DE       223:                    BNE     NONBLANKL       B/ NOT BEGIN COMMENT!
+126A BD010A     224:                    JSR     BACKUP          IS BEGIN COMMENT, REJECT IT
+126D BD010A     225: NONBLANKACCEPT     JSR     BACKUP
+1270 0D39       226:                    SUCCESS 
+  0009          227: STRING             EQU     .TC
+  000A          228: .TC                SET     .TC+1
+  1272          229: .                  SET     *
+  0C9B          230:                    ORG     STRING*2+.TA
+0C9B 1272       231:                    #.
+  1272          232:                    ORG     .
+                233: *
+                234: *                  STRING
+                235: *                  LOOK FOR                "'" $(#"'" ;0-:7F) "'" /
+                236: *                          '"' $(#'"' :0-:7F) '"'
+                237: *
+1272 BD0107     238:                    JSR     GETTOKENCHAR
+1275 8127       239:                    CMPA    #''             SINGLE QUOTE?
+1277 2609       240:                    BNE     STRING2         B/ NO
+1279 BD0107     241: STRING1            JSR     GETTOKENCHAR
+
+
+
+
+ASM/6800 1.3H4: 127C                    
+08/16/82 00:00:00; Page 7; Form 1       
+META14C.ASM
+127C 8127       242:                    CMPA    #''             SINGLE QUOTE?
+127E 26F9       243:                    BNE     STRING1         B/ NO, KEEP GOING
+1280 0D39       244:                    SUCCESS 
+1282 8122       245: STRING2            CMPA    #'"             DOUBLE QUOTE?
+1284 2609       246:                    BNE     STRING5         B/ NO, IT'S NOT A STRING
+1286 BD0107     247: STRING3            JSR     GETTOKENCHAR
+1289 8122       248:                    CMPA    #'"             DOUBLE QUOTE?
+128B 26F9       249:                    BNE     STRING3         B/ NO, KEEP GOING
+128D 0D39       250:                    SUCCESS                 ALL IS WELL
+128F 0C39       251: STRING5            FAILURE 
+  000A          252: DEBLANK            EQU     .TC
+  000B          253: .TC                SET     .TC+1
+  1291          254: .                  SET     *
+  0C9D          255:                    ORG     DEBLANK*2+.TA
+0C9D 1291       256:                    #.
+  1291          257:                    ORG     .
+1291 0C         258: DEBLANKTOKEN       CLC
+1292 39         259:                    RTS                     WE HAVE EXPLICIT BLANK SURPRESSOR IN METAPL
+  000B          260: EATBLANKS          EQU     .TC
+  000C          261: .TC                SET     .TC+1
+  1293          262: .                  SET     *
+  0C9F          263:                    ORG     EATBLANKS*2+.TA
+0C9F 1293       264:                    #.
+  1293          265:                    ORG     .
+                266: *
+                267: *                  REMOVE BLANKS
+                268: *                  LOOK FOR $(' ' / :9 / :D / '/' '*' $(#:D :0-:7F) :D / :C)
+                269: *
+1293 8D02       270:                    BSR     REMBLANKS
+1295 0C39       271:                    FAILURE                 IN SPITE OF THE FACE THAT WE ATE A LOT OF S
+                272: *
+1297 BD0107     273: REMBLANKS          JSR     GETTOKENCHAR
+129A 8120       274:                    CMPA    #$20            IS IT A BLANK?
+129C 272C       275:                    BEQ     REMBLANK3       B/ YES, TRY FOR ANOTHER
+129E 8109       276:                    CMPA    #$9             IS IT A TAB?
+12A0 2728       277:                    BEQ     REMBLANK3       B/ YES, TRY FOR ANOTHER
+12A2 810D       278:                    CMPA    #$D             IS IT A CR?
+12A4 2724       279:                    BEQ     REMBLANK3       B/ YES, TRY FOR ANOTHER
+12A6 810C       280:                    CMPA    #$C             FORM FEED ?
+12A8 2720       281:                    BEQ     REMBLANK3
+
+
+
+
+ASM/6800 1.3H4: 12AA                    
+08/16/82 00:00:00; Page 8; Form 1       
+META14C.ASM
+12AA 812F       282:                    CMPA    #'/             IS IT A COMMENT?
+12AC 260A       283:                    BNE     REMBLANK1       B/ NO
+12AE BD0107     284:                    JSR     GETTOKENCHAR
+12B1 812A       285:                    CMPA    #'*
+12B3 2707       286:                    BEQ     REMBLANK2       B/ YES
+12B5 BD010A     287:                    JSR     BACKUP
+12B8 BD010A     288: REMBLANK1          JSR     BACKUP
+12BB 39         289:                    RTS
+12BC BD0107     290: REMBLANK2          JSR     GETTOKENCHAR
+12BF 36         291:                    PSHA
+12C0 BD010D     292:                    JSR     EATTOKEN
+12C3 32         293:                    PULA
+12C4 810D       294:                    CMPA    #$D             IS IT A CR?
+12C6 26F4       295:                    BNE     REMBLANK2       B/ NO, KEEP GOING
+12C8 20CD       296:                    BRA     REMBLANKS       B/ YES, TRY FOR ANOTHER
+12CA BD010D     297: REMBLANK3          JSR     EATTOKEN
+12CD 20C8       298:                    BRA     REMBLANKS
+  000C          299: NOTENDOFLINECHARACTER      EQU             .TC
+  000D          300: .TC                SET     .TC+1
+  12CF          301: .                  SET     *
+  0CA1          302:                    ORG     NOTENDOFLINECHARACTER*2+.TA
+0CA1 12CF       303:                    #.
+  12CF          304:                    ORG     .
+                305: *                  RECOGNIZES ANYTHING EXCEPT END OF LINE
+12CF BD0107     306:                    JSR     GETTOKENCHAR
+12D2 810D       307:                    CMPA    #$D
+12D4 2602       308:                    BNE     NOTENDOFLINES
+12D6 0C39       309:                    FAILURE 
+12D8 0D39       310: NOTENDOFLINES      SUCCESS 
+  00C1          311: BLANKS             EQU     .SC
+  00C2          312: .SC                SET     .SC+1
+  12DA          313: .                  SET     *
+  0CCB          314:                    ORG     BLANKS*2+.SA
+0CCB 12DA       315:                    #.
+  12DA          316:                    ORG     .
+12DA 0B         317:                    +EATBLANKS
+12DB 2A         318:                    $2A
+12DC 34         319:                    $34
+12DD 29         320:                    $29
+  12DE          321: .                  SET     *
+
+
+
+
+ASM/6800 1.3H4: 12DD                    
+08/16/82 00:00:00; Page 9; Form 1       
+META14C.ASM
+  0CC9          322:                    ORG     METAPLUS*2+.SA
+0CC9 12DE       323:                    #.
+  12DE          324:                    ORG     .
+12DE C1         325:                    BLANKS
+12DF 8296       326:                    ((:12-*)&$3FFF)+$8000
+12E1 21         327:                    $21
+12E2 2E53594E   328:                    FCC     '.SYNTA'
+12E8 D8         329:                    'X+$80
+12E9 2C         330:                    $2C
+12EA C1         331:                    BLANKS
+12EB 2C         332:                    $2C
+12EC 04         333:                    +ID
+12ED 2C         334:                    $2C
+12EE C1         335:                    BLANKS
+12EF 2C         336:                    $2C
+12F0 09         337:                    +STRING
+12F1 2C         338:                    $2C
+12F2 C1         339:                    BLANKS
+12F3 2C         340:                    $2C
+12F4 30         341:                    $30
+12F5 09544142   342:                    FCC     ' TABS           20,28,44,4'
+1305 B5         343:                    '5+$80
+1306 2F         344:                    $2F
+1307 30         345:                    $30
+1308 09574954   346:                    FCC     ' WITH           WI=107,DE=5'
+1319 B1         347:                    '1+$80
+131A 2F         348:                    $2F
+131B 30         349:                    $30
+131C 2A         350:                    FCC     '*'
+131D A0         351:                    ' +$80
+131E 3201       352:                    $32,1
+1320 30         353:                    $30
+1321 20434F4D   354:                    FCC     ' COMPILED BY METAPLUS VERSION 1.4'
+1342 E3         355:                    'c+$80
+1343 2F         356:                    $2F
+1344 21         357:                    $21
+1345 41545452   358:                    FCC     'ATTRIBUTE'
+134E D3         359:                    'S+$80
+134F 8019       360:                    ((:13-*)&$3FFF)+$8000
+1351 C1         361:                    BLANKS
+
+
+
+
+ASM/6800 1.3H4: 1352                    
+08/16/82 00:00:00; Page 10; Form 1      
+META14C.ASM
+1352 2C         362:                    $2C
+1353 21         363:                    $21
+                364:                    FCC     ''
+1354 BD         365:                    '=+$80
+1355 2C         366:                    $2C
+  00C2          367: SETLOADADDRESS     EQU     .SC
+  00C3          368: .SC                SET     .SC+1
+1356 C2         369:                    SETLOADADDRESS
+1357 30         370:                    $30
+                371:                    FCC     ''
+1358 B0         372:                    '0+$80
+1359 2F         373:                    $2F
+  00C3          374: ATTRIBUTEDEFINITION        EQU             .SC
+  00C4          375: .SC                SET     .SC+1
+135A C3         376:                    ATTRIBUTEDEFINITION
+135B 2C         377:                    $2C
+  135C          378: :14                EQU     *
+135C 21         379:                    $21
+                380:                    FCC     ''
+135D AC         381:                    ',+$80
+135E 8004       382:                    ((:15-*)&$3FFF)+$8000
+1360 C3         383:                    ATTRIBUTEDEFINITION
+1361 2C         384:                    $2C
+  1362          385: :15                EQU     *
+1362 7FFA       386:                    ((:14-*)&$3FFF)+$4000
+1364 34         387:                    $34
+1365 21         388:                    $21
+                389:                    FCC     ''
+1366 BB         390:                    ';+$80
+1367 2C         391:                    $2C
+  1368          392: :13                EQU     *
+1368 4003       393:                    ((:16-*)&$3FFF)+$4000
+136A 34         394:                    $34
+  136B          395: :16                EQU     *
+136B 2C         396:                    $2C
+136C C1         397:                    BLANKS
+136D 2C         398:                    $2C
+136E 21         399:                    $21
+136F 54595045   400:                    FCC     'TYPE'
+1373 D3         401:                    'S+$80
+
+
+
+
+ASM/6800 1.3H4: 1374                    
+08/16/82 00:00:00; Page 11; Form 1      
+META14C.ASM
+1374 8019       402:                    ((:17-*)&$3FFF)+$8000
+1376 C1         403:                    BLANKS
+1377 2C         404:                    $2C
+1378 21         405:                    $21
+                406:                    FCC     ''
+1379 BD         407:                    '=+$80
+137A 2C         408:                    $2C
+137B C2         409:                    SETLOADADDRESS
+137C 30         410:                    $30
+                411:                    FCC     ''
+137D B1         412:                    '1+$80
+137E 2F         413:                    $2F
+  00C4          414: TYPEDEFINITION     EQU     .SC
+  00C5          415: .SC                SET     .SC+1
+137F C4         416:                    TYPEDEFINITION
+1380 2C         417:                    $2C
+  1381          418: :18                EQU     *
+1381 21         419:                    $21
+                420:                    FCC     ''
+1382 AC         421:                    ',+$80
+1383 8004       422:                    ((:19-*)&$3FFF)+$8000
+1385 C4         423:                    TYPEDEFINITION
+1386 2C         424:                    $2C
+  1387          425: :19                EQU     *
+1387 7FFA       426:                    ((:18-*)&$3FFF)+$4000
+1389 34         427:                    $34
+138A 21         428:                    $21
+                429:                    FCC     ''
+138B BB         430:                    ';+$80
+138C 2C         431:                    $2C
+  138D          432: :17                EQU     *
+138D 4003       433:                    ((:1A-*)&$3FFF)+$4000
+138F 34         434:                    $34
+  1390          435: :1A                EQU     *
+1390 2C         436:                    $2C
+1391 C2         437:                    SETLOADADDRESS
+1392 30         438:                    $30
+1393 24313034   439:                    FCC     '$104           METAMACHINE ENTRY POINT'
+13AF D3         440:                    'S+$80
+13B0 2F         441:                    $2F
+
+
+
+
+ASM/6800 1.3H4: 13B1                    
+08/16/82 00:00:00; Page 12; Form 1      
+META14C.ASM
+13B1 30         442:                    $30
+13B2 53544152   443:                    FCC     'STARTTOKEN     RMB '
+13C1 B3         444:                    '3+$80
+13C2 2F         445:                    $2F
+13C3 30         446:                    $30
+13C4 47455454   447:                    FCC     'GETTOKENCHAR   RMB '
+13D5 B3         448:                    '3+$80
+13D6 2F         449:                    $2F
+13D7 30         450:                    $30
+13D8 4241434B   451:                    FCC     'BACKUP         RMB '
+13E3 B3         452:                    '3+$80
+13E4 2F         453:                    $2F
+13E5 30         454:                    $30
+13E6 45415454   455:                    FCC     'EATTOKEN       RMB '
+13F3 B3         456:                    '3+$80
+13F4 2F         457:                    $2F
+13F5 30         458:                    $30
+13F6 46494E44   459:                    FCC     'FINDSTAR       RMB '
+1403 B3         460:                    '3+$80
+1404 2F         461:                    $2F
+1405 30         462:                    $30
+1406 46494E44   463:                    FCC     'FINDSTARN      RMB '
+1414 B3         464:                    '3+$80
+1415 2F         465:                    $2F
+1416 30         466:                    $30
+1417 50555443   467:                    FCC     'PUTCHAR        RMB '
+1423 B3         468:                    '3+$80
+1424 2F         469:                    $2F
+1425 30         470:                    $30
+1426 454E5445   471:                    FCC     'ENTERMETA      RMB '
+1434 B3         472:                    '3+$80
+1435 2F         473:                    $2F
+1436 C2         474:                    SETLOADADDRESS
+1437 30         475:                    $30
+1438 244338     476:                    FCC     '$C8'
+143B B0         477:                    '0+$80
+143C 2F         478:                    $2F
+143D 30         479:                    $30
+143E 094A4D50   480:                    FCC     '  JMP            DEBLANKTOKE'
+144E CE         481:                    'N+$80
+
+
+
+
+ASM/6800 1.3H4: 144F                    
+08/16/82 00:00:00; Page 13; Form 1      
+META14C.ASM
+144F 2F         482:                    $2F
+1450 30         483:                    $30
+1451 094A4D50   484:                    FCC     '  JMP            ERRORTOKE'
+145F CE         485:                    'N+$80
+1460 2F         486:                    $2F
+1461 30         487:                    $30
+1462 094A4D50   488:                    FCC     '  JMP            KEYWORDTOKE'
+1472 CE         489:                    'N+$80
+1473 2F         490:                    $2F
+  00C5          491: ADDRESS            EQU     .SC
+  00C6          492: .SC                SET     .SC+1
+1474 C5         493:                    ADDRESS
+  00C6          494: LABEL              EQU     .SC
+  00C7          495: .SC                SET     .SC+1
+1475 C6         496:                    LABEL
+1476 3302       497:                    $33,2
+1478 2F         498:                    $2F
+1479 C5         499:                    ADDRESS
+147A 30         500:                    $30
+147B 2E4B4559   501:                    FCC     '.KEYWORDLIS'
+1486 D4         502:                    'T+$80
+1487 2F         503:                    $2F
+1488 C5         504:                    ADDRESS
+1489 C6         505:                    LABEL
+148A 3303       506:                    $33,3
+148C 2F         507:                    $2F
+148D 30         508:                    $30
+148E 2E54       509:                    FCC     '.T'
+1490 C1         510:                    'A+$80
+  00C7          511: EQUHERE            EQU     .SC
+  00C8          512: .SC                SET     .SC+1
+1491 C7         513:                    EQUHERE
+1492 30         514:                    $30
+1493 2D         515:                    FCC     '-'
+1494 B6         516:                    '6+$80
+1495 2F         517:                    $2F
+1496 30         518:                    $30
+1497 2E544309   519:                    FCC     '.TC       SET         '
+149F B3         520:                    '3+$80
+14A0 2F         521:                    $2F
+
+
+
+
+ASM/6800 1.3H4: 14A1                    
+08/16/82 00:00:00; Page 14; Form 1      
+META14C.ASM
+14A1 30         522:                    $30
+14A2 09525054   523:                    FCC     '  RPT            2'
+14A8 B9         524:                    '9+$80
+14A9 2F         525:                    $2F
+14AA C5         526:                    ADDRESS
+14AB 30         527:                    $30
+                528:                    FCC     ''
+14AC B0         529:                    '0+$80
+14AD 2F         530:                    $2F
+14AE 30         531:                    $30
+14AF 2E53       532:                    FCC     '.S'
+14B1 C1         533:                    'A+$80
+14B2 C7         534:                    EQUHERE
+14B3 30         535:                    $30
+14B4 2D244330   536:                    FCC     '-$C0*'
+14B9 B2         537:                    '2+$80
+14BA 2F         538:                    $2F
+14BB 30         539:                    $30
+14BC 2E534309   540:                    FCC     '.SC SET         $C'
+14C6 B0         541:                    '0+$80
+14C7 2F         542:                    $2F
+14C8 30         543:                    $30
+14C9 09525054   544:                    FCC     '  RPT            57'
+14D0 B6         545:                    '6+$80
+14D1 2F         546:                    $2F
+14D2 C5         547:                    ADDRESS
+14D3 30         548:                    $30
+                549:                    FCC     ''
+14D4 B0         550:                    '0+$80
+14D5 2F         551:                    $2F
+14D6 C6         552:                    LABEL
+14D7 3303       553:                    $33,3
+14D9 C7         554:                    EQUHERE
+14DA 2F         555:                    $2F
+  00C8          556: BYTE               EQU     .SC
+  00C9          557: .SC                SET     .SC+1
+14DB C8         558:                    BYTE
+14DC C6         559:                    LABEL
+14DD 3301       560:                    $33,1
+14DF 30         561:                    $30
+
+
+
+
+ASM/6800 1.3H4: 14E0                    
+08/16/82 00:00:00; Page 15; Form 1      
+META14C.ASM
+14E0 2D2A2D     562:                    FCC     '-*-'
+14E3 B1         563:                    '1+$80
+14E4 2F         564:                    $2F
+  00C9          565: TEXT               EQU     .SC
+  00CA          566: .SC                SET     .SC+1
+14E5 C9         567:                    TEXT
+14E6 3202       568:                    $32,2
+14E8 2F         569:                    $2F
+14E9 C8         570:                    BYTE
+14EA 30         571:                    $30
+14EB 24         572:                    FCC     '$'
+14EC C4         573:                    'D+$80
+14ED 2F         574:                    $2F
+14EE C6         575:                    LABEL
+14EF 3301       576:                    $33,1
+14F1 C7         577:                    EQUHERE
+14F2 2F         578:                    $2F
+  00CA          579: SREF               EQU     .SC
+  00CB          580: .SC                SET     .SC+1
+14F3 CA         581:                    SREF
+14F4 38         582:                    $38
+14F5 01         583:                    +:1B-*-1
+14F6 01         584:                    +1
+  14F7          585: :1B                EQU     *
+14F7 2C         586:                    $2C
+  00CB          587: MBE                EQU     .SC
+  00CC          588: .SC                SET     .SC+1
+14F8 CB         589:                    MBE
+14F9 2F         590:                    $2F
+  00CC          591: MFIN               EQU     .SC
+  00CD          592: .SC                SET     .SC+1
+14FA CC         593:                    MFIN
+14FB 2F         594:                    $2F
+  00CD          595: PREVIOUSKEYWORD    EQU     .SC
+  00CE          596: .SC                SET     .SC+1
+14FC CD         597:                    PREVIOUSKEYWORD
+  00CE          598: SETEQU             EQU     .SC
+  00CF          599: .SC                SET     .SC+1
+14FD CE         600:                    SETEQU
+14FE 30         601:                    $30
+
+
+
+
+ASM/6800 1.3H4: 14FE                    
+08/16/82 00:00:00; Page 16; Form 1      
+META14C.ASM
+                602:                    FCC     ''
+14FF B0         603:                    '0+$80
+1500 2F         604:                    $2F
+1501 C1         605:                    BLANKS
+1502 2C         606:                    $2C
+1503 21         607:                    $21
+1504 4B455957   608:                    FCC     'KEYWORD'
+150B D3         609:                    'S+$80
+150C 8010       610:                    ((:1C-*)&$3FFF)+$8000
+150E C1         611:                    BLANKS
+150F 2C         612:                    $2C
+1510 21         613:                    $21
+                614:                    FCC     ''
+1511 BD         615:                    '=+$80
+1512 2C         616:                    $2C
+1513 C1         617:                    BLANKS
+1514 2C         618:                    $2C
+  1515          619: :1D                EQU     *
+  00CF          620: KEYWORDNAME        EQU     .SC
+  00D0          621: .SC                SET     .SC+1
+1515 CF         622:                    KEYWORDNAME
+1516 7FFF       623:                    ((:1D-*)&$3FFF)+$4000
+1518 34         624:                    $34
+1519 21         625:                    $21
+                626:                    FCC     ''
+151A BB         627:                    ';+$80
+151B 2C         628:                    $2C
+  151C          629: :1C                EQU     *
+151C 4003       630:                    ((:1E-*)&$3FFF)+$4000
+151E 34         631:                    $34
+  151F          632: :1E                EQU     *
+151F 2C         633:                    $2C
+1520 30         634:                    $30
+1521 2E4B4559   635:                    FCC     '.KEYWORDLIS'
+152C D4         636:                    'T+$80
+  00D0          637: EQUATE             EQU     .SC
+  00D1          638: .SC                SET     .SC+1
+152D D0         639:                    EQUATE
+152E CD         640:                    PREVIOUSKEYWORD
+152F 2F         641:                    $2F
+
+
+
+
+ASM/6800 1.3H4: 1530                    
+08/16/82 00:00:00; Page 17; Form 1      
+META14C.ASM
+1530 C1         642:                    BLANKS
+1531 2C         643:                    $2C
+1532 30         644:                    $30
+1533 2E56       645:                    FCC     '.V'
+1535 C3         646:                    'C+$80
+1536 CE         647:                    SETEQU
+1537 30         648:                    $30
+                649:                    FCC     ''
+1538 B0         650:                    '0+$80
+1539 2F         651:                    $2F
+153A 21         652:                    $21
+153B 53544154   653:                    FCC     'STATEVARIABLE'
+1548 D3         654:                    'S+$80
+1549 8010       655:                    ((:1F-*)&$3FFF)+$8000
+154B C1         656:                    BLANKS
+154C 2C         657:                    $2C
+154D 21         658:                    $21
+                659:                    FCC     ''
+154E BD         660:                    '=+$80
+154F 2C         661:                    $2C
+1550 C1         662:                    BLANKS
+1551 2C         663:                    $2C
+  1552          664: :110               EQU     *
+  00D1          665: STATEVARDEFINITION EQU     .SC
+  00D2          666: .SC                SET     .SC+1
+1552 D1         667:                    STATEVARDEFINITION
+1553 7FFF       668:                    ((:110-*)&$3FFF)+$4000
+1555 34         669:                    $34
+1556 21         670:                    $21
+                671:                    FCC     ''
+1557 BB         672:                    ';+$80
+1558 2C         673:                    $2C
+  1559          674: :1F                EQU     *
+1559 4003       675:                    ((:111-*)&$3FFF)+$4000
+155B 34         676:                    $34
+  155C          677: :111               EQU     *
+155C 2C         678:                    $2C
+155D C1         679:                    BLANKS
+155E 2C         680:                    $2C
+155F 35         681:                    $35
+
+
+
+
+ASM/6800 1.3H4: 155F                    
+08/16/82 00:00:00; Page 18; Form 1      
+META14C.ASM
+  1560          682: :112               EQU     *
+  00D2          683: STMT               EQU     .SC
+  00D3          684: .SC                SET     .SC+1
+1560 D2         685:                    STMT
+1561 7FFF       686:                    ((:112-*)&$3FFF)+$4000
+1563 34         687:                    $34
+1564 21         688:                    $21
+1565 2E454E     689:                    FCC     '.EN'
+1568 C4         690:                    'D+$80
+1569 2C         691:                    $2C
+156A C6         692:                    LABEL
+156B 3302       693:                    $33,2
+156D C7         694:                    EQUHERE
+156E 2F         695:                    $2F
+156F 30         696:                    $30
+1570 09454E     697:                    FCC     ' EN'
+1573 C4         698:                    'D+$80
+1574 2F         699:                    $2F
+  1575          700: :12                EQU     *
+1575 29         701:                    $29
+  1576          702: .                  SET     *
+  0CCF          703:                    ORG     ATTRIBUTEDEFINITION*2+.SA
+0CCF 1576       704:                    #.
+  1576          705:                    ORG     .
+1576 C1         706:                    BLANKS
+1577 800D       707:                    ((:113-*)&$3FFF)+$8000
+1579 04         708:                    +ID
+157A 2C         709:                    $2C
+157B 2300       710:                    $23,ATTRIBUTE
+157D 31         711:                    $31
+  00D3          712: RESERVE            EQU     .SC
+  00D4          713: .SC                SET     .SC+1
+157E D3         714:                    RESERVE
+157F 30         715:                    $30
+                716:                    FCC     ''
+1580 B1         717:                    '1+$80
+1581 2F         718:                    $2F
+1582 C1         719:                    BLANKS
+1583 2C         720:                    $2C
+  1584          721: :113               EQU     *
+
+
+
+
+ASM/6800 1.3H4: 1584                    
+08/16/82 00:00:00; Page 19; Form 1      
+META14C.ASM
+1584 29         722:                    $29
+  1585          723: .                  SET     *
+  0CD1          724:                    ORG     TYPEDEFINITION*2+.SA
+0CD1 1585       725:                    #.
+  1585          726:                    ORG     .
+1585 C1         727:                    BLANKS
+1586 800D       728:                    ((:114-*)&$3FFF)+$8000
+1588 04         729:                    +ID
+1589 2C         730:                    $2C
+158A 2307       731:                    $23,TYPENAME
+158C 31         732:                    $31
+158D D3         733:                    RESERVE
+158E 30         734:                    $30
+                735:                    FCC     ''
+158F B1         736:                    '1+$80
+1590 2F         737:                    $2F
+1591 C1         738:                    BLANKS
+1592 2C         739:                    $2C
+  1593          740: :114               EQU     *
+1593 29         741:                    $29
+  1594          742: .                  SET     *
+  0CE7          743:                    ORG     KEYWORDNAME*2+.SA
+0CE7 1594       744:                    #.
+  1594          745:                    ORG     .
+1594 04         746:                    +ID
+1595 803E       747:                    ((:115-*)&$3FFF)+$8000
+1597 2306       748:                    $23,KEYWORD
+1599 C1         749:                    BLANKS
+159A 2C         750:                    $2C
+159B 3201       751:                    $32,1
+159D C7         752:                    EQUHERE
+159E 2F         753:                    $2F
+159F C6         754:                    LABEL
+15A0 3302       755:                    $33,2
+15A2 C8         756:                    BYTE
+15A3 30         757:                    $30
+                758:                    FCC     ''
+15A4 B0         759:                    '0+$80
+15A5 2F         760:                    $2F
+15A6 C8         761:                    BYTE
+
+
+
+
+ASM/6800 1.3H4: 15A7                    
+08/16/82 00:00:00; Page 20; Form 1      
+META14C.ASM
+15A7 30         762:                    $30
+                763:                    FCC     ''
+15A8 B0         764:                    '0+$80
+15A9 2F         765:                    $2F
+15AA C8         766:                    BYTE
+15AB 30         767:                    $30
+                768:                    FCC     ''
+15AC B0         769:                    '0+$80
+15AD 2F         770:                    $2F
+15AE C5         771:                    ADDRESS
+15AF CD         772:                    PREVIOUSKEYWORD
+15B0 2F         773:                    $2F
+15B1 C8         774:                    BYTE
+15B2 30         775:                    $30
+15B3 243830     776:                    FCC     '$80'
+15B6 AB         777:                    '++$80
+15B7 C6         778:                    LABEL
+15B8 3301       779:                    $33,1
+15BA 30         780:                    $30
+15BB 2D2A2D     781:                    FCC     '-*-'
+15BE B1         782:                    '1+$80
+15BF 2F         783:                    $2F
+15C0 C9         784:                    TEXT
+15C1 30         785:                    $30
+                786:                    FCC     ''
+15C2 A2         787:                    '"+$80
+15C3 3201       788:                    $32,1
+15C5 30         789:                    $30
+                790:                    FCC     ''
+15C6 A2         791:                    '"+$80
+15C7 2F         792:                    $2F
+15C8 C6         793:                    LABEL
+15C9 3301       794:                    $33,1
+15CB C7         795:                    EQUHERE
+15CC 2F         796:                    $2F
+15CD CD         797:                    PREVIOUSKEYWORD
+15CE CE         798:                    SETEQU
+15CF C6         799:                    LABEL
+15D0 3302       800:                    $33,2
+15D2 2F         801:                    $2F
+
+
+
+
+ASM/6800 1.3H4: 15D2                    
+08/16/82 00:00:00; Page 21; Form 1      
+META14C.ASM
+  15D3          802: :115               EQU     *
+15D3 29         803:                    $29
+  15D4          804: .                  SET     *
+  0CEB          805:                    ORG     STATEVARDEFINITION*2+.SA
+0CEB 15D4       806:                    #.
+  15D4          807:                    ORG     .
+15D4 04         808:                    +ID
+15D5 8030       809:                    ((:116-*)&$3FFF)+$8000
+15D7 2305       810:                    $23,STATEVARIABLE
+15D9 C1         811:                    BLANKS
+15DA 2C         812:                    $2C
+15DB 3201       813:                    $32,1
+15DD D0         814:                    EQUATE
+15DE 30         815:                    $30
+15DF 2E56       816:                    FCC     '.V'
+15E1 C3         817:                    'C+$80
+15E2 2F         818:                    $2F
+15E3 30         819:                    $30
+15E4 2E56       820:                    FCC     '.V'
+15E6 C3         821:                    'C+$80
+15E7 CE         822:                    SETEQU
+15E8 30         823:                    $30
+15E9 2E56432B   824:                    FCC     '.VC+'
+15ED B1         825:                    '1+$80
+15EE 2F         826:                    $2F
+15EF 30         827:                    $30
+15F0 2E56       828:                    FCC     '.V'
+15F2 D6         829:                    'V+$80
+15F3 CE         830:                    SETEQU
+15F4 30         831:                    $30
+                832:                    FCC     ''
+15F5 B0         833:                    '0+$80
+15F6 2F         834:                    $2F
+15F7 21         835:                    $21
+                836:                    FCC     ''
+15F8 A8         837:                    '(+$80
+15F9 2C         838:                    $2C
+15FA C1         839:                    BLANKS
+15FB 2C         840:                    $2C
+  15FC          841: :117               EQU     *
+
+
+
+
+ASM/6800 1.3H4: 15FB                    
+08/16/82 00:00:00; Page 22; Form 1      
+META14C.ASM
+  00D4          842: STATENAMEDEFINITION        EQU             .SC
+  00D5          843: .SC                SET     .SC+1
+15FC D4         844:                    STATENAMEDEFINITION
+15FD 7FFF       845:                    ((:117-*)&$3FFF)+$4000
+15FF 34         846:                    $34
+1600 21         847:                    $21
+                848:                    FCC     ''
+1601 A9         849:                    ')+$80
+1602 2C         850:                    $2C
+1603 C1         851:                    BLANKS
+1604 2C         852:                    $2C
+  1605          853: :116               EQU     *
+1605 29         854:                    $29
+  1606          855: .                  SET     *
+  0CF1          856:                    ORG     STATENAMEDEFINITION*2+.SA
+0CF1 1606       857:                    #.
+  1606          858:                    ORG     .
+1606 04         859:                    +ID
+1607 801A       860:                    ((:118-*)&$3FFF)+$8000
+1609 2308       861:                    $23,STATEVALUE
+160B 3201       862:                    $32,1
+160D D0         863:                    EQUATE
+160E 30         864:                    $30
+160F 2E56       865:                    FCC     '.V'
+1611 D6         866:                    'V+$80
+1612 2F         867:                    $2F
+1613 30         868:                    $30
+1614 2E56       869:                    FCC     '.V'
+1616 D6         870:                    'V+$80
+1617 CE         871:                    SETEQU
+1618 30         872:                    $30
+1619 2E56562B   873:                    FCC     '.VV+'
+161D B1         874:                    '1+$80
+161E 2F         875:                    $2F
+161F C1         876:                    BLANKS
+1620 2C         877:                    $2C
+  1621          878: :118               EQU     *
+1621 29         879:                    $29
+  1622          880: .                  SET     *
+  0CED          881:                    ORG     STMT*2+.SA
+
+
+
+
+ASM/6800 1.3H4: 0CED                    
+08/16/82 00:00:00; Page 23; Form 1      
+META14C.ASM
+0CED 1622       882:                    #.
+  1622          883:                    ORG     .
+1622 04         884:                    +ID
+1623 8039       885:                    ((:119-*)&$3FFF)+$8000
+1625 C1         886:                    BLANKS
+1626 2C         887:                    $2C
+1627 21         888:                    $21
+                889:                    FCC     ''
+1628 BD         890:                    '=+$80
+1629 801A       891:                    ((:11A-*)&$3FFF)+$8000
+162B C1         892:                    BLANKS
+162C 2C         893:                    $2C
+  00D5          894: SDEF               EQU     .SC
+  00D6          895: .SC                SET     .SC+1
+162D D5         896:                    SDEF
+162E 38         897:                    $38
+162F 01         898:                    +:11B-*-1
+1630 01         899:                    +1
+  1631          900: :11B               EQU     *
+1631 2C         901:                    $2C
+  00D6          902: PHRASE             EQU     .SC
+  00D7          903: .SC                SET     .SC+1
+1632 D6         904:                    PHRASE
+1633 2C         905:                    $2C
+  1634          906: :11C               EQU     *
+1634 21         907:                    $21
+                908:                    FCC     ''
+1635 AF         909:                    '/+$80
+1636 8008       910:                    ((:11D-*)&$3FFF)+$8000
+1638 C1         911:                    BLANKS
+1639 2C         912:                    $2C
+  00D7          913: MRT                EQU     .SC
+  00D8          914: .SC                SET     .SC+1
+163A D7         915:                    MRT
+163B 2F         916:                    $2F
+163C D6         917:                    PHRASE
+163D 2C         918:                    $2C
+  163E          919: :11D               EQU     *
+163E 7FF6       920:                    ((:11C-*)&$3FFF)+$4000
+1640 34         921:                    $34
+
+
+
+
+ASM/6800 1.3H4: 1640                    
+08/16/82 00:00:00; Page 24; Form 1      
+META14C.ASM
+  00D8          922: MR                 EQU     .SC
+  00D9          923: .SC                SET     .SC+1
+1641 D8         924:                    MR
+1642 2F         925:                    $2F
+  1643          926: :11A               EQU     *
+1643 4013       927:                    ((:11E-*)&$3FFF)+$4000
+1645 21         928:                    $21
+                929:                    FCC     ''
+1646 BA         930:                    ':+$80
+1647 800F       931:                    ((:11F-*)&$3FFF)+$8000
+  00D9          932: TDEF               EQU     .SC
+  00DA          933: .SC                SET     .SC+1
+1649 D9         934:                    TDEF
+164A 38         935:                    $38
+164B 01         936:                    +:120-*-1
+164C 01         937:                    +1
+  164D          938: :120               EQU     *
+164D 2C         939:                    $2C
+164E C1         940:                    BLANKS
+164F 2C         941:                    $2C
+  00DA          942: ASSEMBLY           EQU     .SC
+  00DB          943: .SC                SET     .SC+1
+1650 DA         944:                    ASSEMBLY
+1651 2C         945:                    $2C
+  1652          946: :121               EQU     *
+1652 DA         947:                    ASSEMBLY
+1653 7FFF       948:                    ((:121-*)&$3FFF)+$4000
+1655 34         949:                    $34
+  1656          950: :11F               EQU     *
+  1656          951: :11E               EQU     *
+1656 2C         952:                    $2C
+1657 21         953:                    $21
+                954:                    FCC     ''
+1658 BB         955:                    ';+$80
+1659 2C         956:                    $2C
+165A C1         957:                    BLANKS
+165B 2C         958:                    $2C
+  165C          959: :119               EQU     *
+165C 29         960:                    $29
+  165D          961: .                  SET     *
+
+
+
+
+ASM/6800 1.3H4: 165C                    
+08/16/82 00:00:00; Page 25; Form 1      
+META14C.ASM
+  0CFD          962:                    ORG     ASSEMBLY*2+.SA
+0CFD 165D       963:                    #.
+  165D          964:                    ORG     .
+165D 21         965:                    $21
+                966:                    FCC     ''
+165E A1         967:                    '!+$80
+165F 800A       968:                    ((:122-*)&$3FFF)+$8000
+  1661          969: :123               EQU     *
+  00DB          970: ASSEMBLYCHARACTER  EQU     .SC
+  00DC          971: .SC                SET     .SC+1
+1661 DB         972:                    ASSEMBLYCHARACTER
+1662 7FFF       973:                    ((:123-*)&$3FFF)+$4000
+1664 34         974:                    $34
+1665 21         975:                    $21
+1666 8D         976:                    +$80+$D
+1667 2C         977:                    $2C
+1668 2F         978:                    $2F
+  1669          979: :122               EQU     *
+1669 29         980:                    $29
+  166A          981: .                  SET     *
+  0CFF          982:                    ORG     ASSEMBLYCHARACTER*2+.SA
+0CFF 166A       983:                    #.
+  166A          984:                    ORG     .
+166A 0C         985:                    +NOTENDOFLINECHARACTER
+166B 8003       986:                    ((:124-*)&$3FFF)+$8000
+166D 31         987:                    $31
+  166E          988: :124               EQU     *
+166E 29         989:                    $29
+  00DC          990: CHOICE             EQU     .SC
+  00DD          991: .SC                SET     .SC+1
+  166F          992: .                  SET     *
+  0D01          993:                    ORG     CHOICE*2+.SA
+0D01 166F       994:                    #.
+  166F          995:                    ORG     .
+166F D6         996:                    PHRASE
+1670 8028       997:                    ((:125-*)&$3FFF)+$8000
+1672 21         998:                    $21
+                999:                    FCC     ''
+1673 AF        1000:                    '/+$80
+1674 8020      1001:                    ((:126-*)&$3FFF)+$8000
+
+
+
+
+ASM/6800 1.3H4: 1676                    
+08/16/82 00:00:00; Page 26; Form 1      
+META14C.ASM
+1676 C1        1002:                    BLANKS
+1677 2C        1003:                    $2C
+  00DD         1004: BRANCHTRUE         EQU     .SC
+  00DE         1005: .SC                SET     .SC+1
+1678 DD        1006:                    BRANCHTRUE
+1679 3301      1007:                    $33,1
+  00DE         1008: BTTAIL             EQU     .SC
+  00DF         1009: .SC                SET     .SC+1
+167B DE        1010:                    BTTAIL
+167C 2F        1011:                    $2F
+167D D6        1012:                    PHRASE
+167E 2C        1013:                    $2C
+  167F         1014: :127               EQU     *
+167F 21        1015:                    $21
+               1016:                    FCC     ''
+1680 AF        1017:                    '/+$80
+1681 800B      1018:                    ((:128-*)&$3FFF)+$8000
+1683 C1        1019:                    BLANKS
+1684 2C        1020:                    $2C
+1685 DD        1021:                    BRANCHTRUE
+1686 3301      1022:                    $33,1
+1688 DE        1023:                    BTTAIL
+1689 2F        1024:                    $2F
+168A D6        1025:                    PHRASE
+168B 2C        1026:                    $2C
+  168C         1027: :128               EQU     *
+168C 7FF3      1028:                    ((:127-*)&$3FFF)+$4000
+168E 34        1029:                    $34
+168F C6        1030:                    LABEL
+1690 3301      1031:                    $33,1
+1692 C7        1032:                    EQUHERE
+1693 2F        1033:                    $2F
+  1694         1034: :126               EQU     *
+1694 4003      1035:                    ((:129-*)&$3FFF)+$4000
+1696 34        1036:                    $34
+  1697         1037: :129               EQU     *
+1697 2C        1038:                    $2C
+  1698         1039: :125               EQU     *
+1698 29        1040:                    $29
+  1699         1041: .                  SET     *
+
+
+
+
+ASM/6800 1.3H4: 1698                    
+08/16/82 00:00:00; Page 27; Form 1      
+META14C.ASM
+  0CF5         1042:                    ORG     PHRASE*2+.SA
+0CF5 1699      1043:                    #.
+  1699         1044:                    ORG     .
+  00DF         1045: ACTION             EQU     .SC
+  00E0         1046: .SC                SET     .SC+1
+1699 DF        1047:                    ACTION
+169A 8004      1048:                    ((:12A-*)&$3FFF)+$8000
+  00E0         1049: PHTAIL             EQU     .SC
+  00E1         1050: .SC                SET     .SC+1
+169C E0        1051:                    PHTAIL
+169D 2C        1052:                    $2C
+  169E         1053: :12A               EQU     *
+169E 404C      1054:                    ((:12B-*)&$3FFF)+$4000
+  00E1         1055: NOTTST             EQU     .SC
+  00E2         1056: .SC                SET     .SC+1
+16A0 E1        1057:                    NOTTST
+16A1 8025      1058:                    ((:12C-*)&$3FFF)+$8000
+  00E2         1059: BRANCHFALSE        EQU     .SC
+  00E3         1060: .SC                SET     .SC+1
+16A3 E2        1061:                    BRANCHFALSE
+16A4 3301      1062:                    $33,1
+  00E3         1063: BFTAIL             EQU     .SC
+  00E4         1064: .SC                SET     .SC+1
+16A6 E3        1065:                    BFTAIL
+16A7 2F        1066:                    $2F
+  16A8         1067: :12D               EQU     *
+16A8 E1        1068:                    NOTTST
+16A9 8007      1069:                    ((:12E-*)&$3FFF)+$8000
+16AB E2        1070:                    BRANCHFALSE
+16AC 3301      1071:                    $33,1
+16AE E3        1072:                    BFTAIL
+16AF 2F        1073:                    $2F
+  16B0         1074: :12E               EQU     *
+16B0 7FF8      1075:                    ((:12D-*)&$3FFF)+$4000
+16B2 34        1076:                    $34
+  00E4         1077: TEST               EQU     .SC
+  00E5         1078: .SC                SET     .SC+1
+16B3 E4        1079:                    TEST
+16B4 8007      1080:                    ((:12F-*)&$3FFF)+$8000
+16B6 E2        1081:                    BRANCHFALSE
+
+
+
+
+ASM/6800 1.3H4: 16B7                    
+08/16/82 00:00:00; Page 28; Form 1      
+META14C.ASM
+16B7 3301      1082:                    $33,1
+16B9 E3        1083:                    BFTAIL
+16BA 2F        1084:                    $2F
+  16BB         1085: :12F               EQU     *
+16BB 4003      1086:                    ((:130-*)&$3FFF)+$4000
+16BD DF        1087:                    ACTION
+  16BE         1088: :130               EQU     *
+16BE 2C        1089:                    $2C
+16BF E0        1090:                    PHTAIL
+16C0 2C        1091:                    $2C
+16C1 C6        1092:                    LABEL
+16C2 3301      1093:                    $33,1
+16C4 C7        1094:                    EQUHERE
+16C5 2F        1095:                    $2F
+  16C6         1096: :12C               EQU     *
+16C6 4024      1097:                    ((:12B-*)&$3FFF)+$4000
+16C8 E4        1098:                    TEST
+16C9 8021      1099:                    ((:131-*)&$3FFF)+$8000
+16CB 21        1100:                    $21
+               1101:                    FCC     ''
+16CC AF        1102:                    '/+$80
+16CD 22        1103:                    $22
+16CE 8018      1104:                    ((:132-*)&$3FFF)+$8000
+16D0 21        1105:                    $21
+               1106:                    FCC     ''
+16D1 A9        1107:                    ')+$80
+16D2 22        1108:                    $22
+16D3 8013      1109:                    ((:132-*)&$3FFF)+$8000
+16D5 21        1110:                    $21
+               1111:                    FCC     ''
+16D6 BB        1112:                    ';+$80
+16D7 22        1113:                    $22
+16D8 800E      1114:                    ((:132-*)&$3FFF)+$8000
+16DA E2        1115:                    BRANCHFALSE
+16DB 3301      1116:                    $33,1
+16DD E3        1117:                    BFTAIL
+16DE 2F        1118:                    $2F
+16DF E0        1119:                    PHTAIL
+16E0 2C        1120:                    $2C
+16E1 C6        1121:                    LABEL
+
+
+
+
+ASM/6800 1.3H4: 16E2                    
+08/16/82 00:00:00; Page 29; Form 1      
+META14C.ASM
+16E2 3301      1122:                    $33,1
+16E4 C7        1123:                    EQUHERE
+16E5 2F        1124:                    $2F
+  16E6         1125: :132               EQU     *
+16E6 4003      1126:                    ((:133-*)&$3FFF)+$4000
+16E8 34        1127:                    $34
+  16E9         1128: :133               EQU     *
+16E9 2C        1129:                    $2C
+  16EA         1130: :131               EQU     *
+  16EA         1131: :12B               EQU     *
+16EA 8004      1132:                    ((:134-*)&$3FFF)+$8000
+16EC C1        1133:                    BLANKS
+16ED 2C        1134:                    $2C
+  16EE         1135: :134               EQU     *
+16EE 29        1136:                    $29
+  16EF         1137: .                  SET     *
+  0D09         1138:                    ORG     PHTAIL*2+.SA
+0D09 16EF      1139:                    #.
+  16EF         1140:                    ORG     .
+  16EF         1141: :135               EQU     *
+16EF DF        1142:                    ACTION
+16F0 4007      1143:                    ((:136-*)&$3FFF)+$4000
+16F2 E4        1144:                    TEST
+16F3 8004      1145:                    ((:137-*)&$3FFF)+$8000
+16F5 CB        1146:                    MBE
+16F6 2F        1147:                    $2F
+  16F7         1148: :137               EQU     *
+  16F7         1149: :136               EQU     *
+16F7 7FF8      1150:                    ((:135-*)&$3FFF)+$4000
+16F9 34        1151:                    $34
+16FA 29        1152:                    $29
+  16FB         1153: .                  SET     *
+  0D11         1154:                    ORG     TEST*2+.SA
+0D11 16FB      1155:                    #.
+  16FB         1156:                    ORG     .
+16FB 04        1157:                    +ID
+16FC 8062      1158:                    ((:138-*)&$3FFF)+$8000
+16FE 2701      1159:                    $27,TOKEN
+1700 8007      1160:                    ((:139-*)&$3FFF)+$8000
+  00E5         1161: TREF               EQU     .SC
+
+
+
+
+ASM/6800 1.3H4: 1700                    
+08/16/82 00:00:00; Page 30; Form 1      
+META14C.ASM
+  00E6         1162: .SC                SET     .SC+1
+1702 E5        1163:                    TREF
+1703 38        1164:                    $38
+1704 01        1165:                    +:13A-*-1
+1705 01        1166:                    +1
+  1706         1167: :13A               EQU     *
+1706 2C        1168:                    $2C
+  1707         1169: :139               EQU     *
+1707 4056      1170:                    ((:13B-*)&$3FFF)+$4000
+1709 2705      1171:                    $27,STATEVARIABLE
+170B 8031      1172:                    ((:13C-*)&$3FFF)+$8000
+170D 21        1173:                    $21
+               1174:                    FCC     ''
+170E BF        1175:                    '?+$80
+170F 2C        1176:                    $2C
+1710 04        1177:                    +ID
+1711 2C        1178:                    $2C
+1712 2708      1179:                    $27,STATEVALUE
+1714 800A      1180:                    ((:13D-*)&$3FFF)+$8000
+  00E6         1181: MQUERYSTATE        EQU     .SC
+  00E7         1182: .SC                SET     .SC+1
+1716 E6        1183:                    MQUERYSTATE
+1717 3201      1184:                    $32,1
+1719 30        1185:                    $30
+               1186:                    FCC     ''
+171A AC        1187:                    ',+$80
+171B 3202      1188:                    $32,2
+171D 2F        1189:                    $2F
+  171E         1190: :13D               EQU     *
+171E 401D      1191:                    ((:13E-*)&$3FFF)+$4000
+1720 2D        1192:                    $2D
+1721 4E656564  1193:                    FCC     'Need State value name her'
+173A E5        1194:                    'e+$80
+  173B         1195: :13E               EQU     *
+173B 2C        1196:                    $2C
+  173C         1197: :13C               EQU     *
+173C 4021      1198:                    ((:13B-*)&$3FFF)+$4000
+173E 2706      1199:                    $27,KEYWORD
+1740 8006      1200:                    ((:13F-*)&$3FFF)+$8000
+  00E7         1201: MKEYWORDTEST       EQU     .SC
+
+
+
+
+ASM/6800 1.3H4: 1740                    
+08/16/82 00:00:00; Page 31; Form 1      
+META14C.ASM
+  00E8         1202: .SC                SET     .SC+1
+1742 E7        1203:                    MKEYWORDTEST
+1743 3201      1204:                    $32,1
+1745 2F        1205:                    $2F
+  1746         1206: :13F               EQU     *
+1746 4017      1207:                    ((:13B-*)&$3FFF)+$4000
+1748 34        1208:                    $34
+1749 CA        1209:                    SREF
+174A 38        1210:                    $38
+174B 01        1211:                    +:140-*-1
+174C 01        1212:                    +1
+  174D         1213: :140               EQU     *
+174D 2C        1214:                    $2C
+174E 21        1215:                    $21
+               1216:                    FCC     ''
+174F DB        1217:                    '[+$80
+1750 8009      1218:                    ((:141-*)&$3FFF)+$8000
+1752 C1        1219:                    BLANKS
+1753 2C        1220:                    $2C
+  00E8         1221: ARGS               EQU     .SC
+  00E9         1222: .SC                SET     .SC+1
+1754 E8        1223:                    ARGS
+1755 2C        1224:                    $2C
+1756 21        1225:                    $21
+               1226:                    FCC     ''
+1757 DD        1227:                    ']+$80
+1758 2C        1228:                    $2C
+  1759         1229: :141               EQU     *
+1759 4003      1230:                    ((:142-*)&$3FFF)+$4000
+175B 34        1231:                    $34
+  175C         1232: :142               EQU     *
+175C 2C        1233:                    $2C
+  175D         1234: :13B               EQU     *
+175D 2C        1235:                    $2C
+  175E         1236: :138               EQU     *
+175E 4082      1237:                    ((:143-*)&$3FFF)+$4000
+1760 09        1238:                    +STRING
+1761 8009      1239:                    ((:144-*)&$3FFF)+$8000
+  00E9         1240: MTEST              EQU     .SC
+  00EA         1241: .SC                SET     .SC+1
+
+
+
+
+ASM/6800 1.3H4: 1763                    
+08/16/82 00:00:00; Page 32; Form 1      
+META14C.ASM
+1763 E9        1242:                    MTEST
+1764 2F        1243:                    $2F
+  00EA         1244: OUTSTRING          EQU     .SC
+  00EB         1245: .SC                SET     .SC+1
+1765 EA        1246:                    OUTSTRING
+1766 38        1247:                    $38
+1767 01        1248:                    +:145-*-1
+1768 01        1249:                    +1
+  1769         1250: :145               EQU     *
+1769 2C        1251:                    $2C
+  176A         1252: :144               EQU     *
+176A 4076      1253:                    ((:143-*)&$3FFF)+$4000
+176C 21        1254:                    $21
+               1255:                    FCC     ''
+176D BA        1256:                    ':+$80
+176E 8010      1257:                    ((:146-*)&$3FFF)+$8000
+1770 07        1258:                    +HEXNUM
+1771 2C        1259:                    $2C
+1772 E9        1260:                    MTEST
+1773 2F        1261:                    $2F
+1774 C8        1262:                    BYTE
+1775 30        1263:                    $30
+1776 2438302B  1264:                    FCC     '$80+'
+177A A4        1265:                    '$+$80
+177B 3201      1266:                    $32,1
+177D 2F        1267:                    $2F
+  177E         1268: :146               EQU     *
+177E 4062      1269:                    ((:143-*)&$3FFF)+$4000
+1780 21        1270:                    $21
+               1271:                    FCC     ''
+1781 A8        1272:                    '(+$80
+1782 8009      1273:                    ((:147-*)&$3FFF)+$8000
+1784 C1        1274:                    BLANKS
+1785 2C        1275:                    $2C
+1786 DC        1276:                    CHOICE
+1787 2C        1277:                    $2C
+1788 21        1278:                    $21
+               1279:                    FCC     ''
+1789 A9        1280:                    ')+$80
+178A 2C        1281:                    $2C
+
+
+
+
+ASM/6800 1.3H4: 178A                    
+08/16/82 00:00:00; Page 33; Form 1      
+META14C.ASM
+  178B         1282: :147               EQU     *
+178B 4055      1283:                    ((:143-*)&$3FFF)+$4000
+178D 21        1284:                    $21
+               1285:                    FCC     ''
+178E BF        1286:                    '?+$80
+178F 800F      1287:                    ((:148-*)&$3FFF)+$8000
+1791 04        1288:                    +ID
+1792 8005      1289:                    ((:149-*)&$3FFF)+$8000
+1794 2700      1290:                    $27,ATTRIBUTE
+1796 2C        1291:                    $2C
+  1797         1292: :149               EQU     *
+1797 4003      1293:                    ((:14A-*)&$3FFF)+$4000
+1799 05        1294:                    +NUM
+  179A         1295: :14A               EQU     *
+179A 2C        1296:                    $2C
+  00EB         1297: MQUERY             EQU     .SC
+  00EC         1298: .SC                SET     .SC+1
+179B EB        1299:                    MQUERY
+179C 31        1300:                    $31
+179D 2F        1301:                    $2F
+  179E         1302: :148               EQU     *
+179E 4042      1303:                    ((:143-*)&$3FFF)+$4000
+17A0 E1        1304:                    NOTTST
+17A1 403F      1305:                    ((:143-*)&$3FFF)+$4000
+17A3 21        1306:                    $21
+               1307:                    FCC     ''
+17A4 AA        1308:                    '*+$80
+17A5 803B      1309:                    ((:14B-*)&$3FFF)+$8000
+17A7 05        1310:                    +NUM
+17A8 2C        1311:                    $2C
+17A9 21        1312:                    $21
+               1313:                    FCC     ''
+17AA BF        1314:                    '?+$80
+17AB 2C        1315:                    $2C
+17AC 21        1316:                    $21
+17AD 554E4445  1317:                    FCC     'UNDEFINE'
+17B5 C4        1318:                    'D+$80
+17B6 8009      1319:                    ((:14C-*)&$3FFF)+$8000
+  00EC         1320: MQUERYTYPEN        EQU     .SC
+  00ED         1321: .SC                SET     .SC+1
+
+
+
+
+ASM/6800 1.3H4: 17B8                    
+08/16/82 00:00:00; Page 34; Form 1      
+META14C.ASM
+17B8 EC        1322:                    MQUERYTYPEN
+17B9 3201      1323:                    $32,1
+17BB 30        1324:                    $30
+17BC 2C        1325:                    FCC     ','
+17BD B0        1326:                    '0+$80
+17BE 2F        1327:                    $2F
+  17BF         1328: :14C               EQU     *
+17BF 4020      1329:                    ((:14D-*)&$3FFF)+$4000
+17C1 04        1330:                    +ID
+17C2 801D      1331:                    ((:14E-*)&$3FFF)+$8000
+17C4 2700      1332:                    $27,ATTRIBUTE
+17C6 800A      1333:                    ((:14F-*)&$3FFF)+$8000
+  00ED         1334: MQUERYN            EQU     .SC
+  00EE         1335: .SC                SET     .SC+1
+17C8 ED        1336:                    MQUERYN
+17C9 3201      1337:                    $32,1
+17CB 30        1338:                    $30
+               1339:                    FCC     ''
+17CC AC        1340:                    ',+$80
+17CD 3202      1341:                    $32,2
+17CF 2F        1342:                    $2F
+  17D0         1343: :14F               EQU     *
+17D0 400E      1344:                    ((:150-*)&$3FFF)+$4000
+17D2 2707      1345:                    $27,TYPENAME
+17D4 800A      1346:                    ((:151-*)&$3FFF)+$8000
+17D6 EC        1347:                    MQUERYTYPEN
+17D7 3201      1348:                    $32,1
+17D9 30        1349:                    $30
+               1350:                    FCC     ''
+17DA AC        1351:                    ',+$80
+17DB 3202      1352:                    $32,2
+17DD 2F        1353:                    $2F
+  17DE         1354: :151               EQU     *
+  17DE         1355: :150               EQU     *
+17DE 2C        1356:                    $2C
+  17DF         1357: :14E               EQU     *
+  17DF         1358: :14D               EQU     *
+17DF 2C        1359:                    $2C
+  17E0         1360: :14B               EQU     *
+  17E0         1361: :143               EQU     *
+
+
+
+
+ASM/6800 1.3H4: 17E0                    
+08/16/82 00:00:00; Page 35; Form 1      
+META14C.ASM
+17E0 8004      1362:                    ((:152-*)&$3FFF)+$8000
+17E2 C1        1363:                    BLANKS
+17E3 2C        1364:                    $2C
+  17E4         1365: :152               EQU     *
+17E4 29        1366:                    $29
+  17E5         1367: .                  SET     *
+  0D19         1368:                    ORG     ARGS*2+.SA
+0D19 17E5      1369:                    #.
+  17E5         1370:                    ORG     .
+  00EE         1371: MPARAMS            EQU     .SC
+  00EF         1372: .SC                SET     .SC+1
+17E5 EE        1373:                    MPARAMS
+17E6 2F        1374:                    $2F
+17E7 21        1375:                    $21
+               1376:                    FCC     ''
+17E8 A3        1377:                    '#+$80
+17E9 8010      1378:                    ((:153-*)&$3FFF)+$8000
+17EB C8        1379:                    BYTE
+17EC C6        1380:                    LABEL
+17ED 3301      1381:                    $33,1
+17EF 30        1382:                    $30
+17F0 2D2A2D31  1383:                    FCC     '-*-1+$8'
+17F7 B0        1384:                    '0+$80
+17F8 2F        1385:                    $2F
+  17F9         1386: :153               EQU     *
+17F9 400D      1387:                    ((:154-*)&$3FFF)+$4000
+17FB 34        1388:                    $34
+17FC C8        1389:                    BYTE
+17FD C6        1390:                    LABEL
+17FE 3301      1391:                    $33,1
+1800 30        1392:                    $30
+1801 2D2A2D    1393:                    FCC     '-*-'
+1804 B1        1394:                    '1+$80
+1805 2F        1395:                    $2F
+  1806         1396: :154               EQU     *
+1806 2C        1397:                    $2C
+  1807         1398: :155               EQU     *
+  00EF         1399: ARG1               EQU     .SC
+  00F0         1400: .SC                SET     .SC+1
+1807 EF        1401:                    ARG1
+
+
+
+
+ASM/6800 1.3H4: 1808                    
+08/16/82 00:00:00; Page 36; Form 1      
+META14C.ASM
+1808 7FFF      1402:                    ((:155-*)&$3FFF)+$4000
+180A 34        1403:                    $34
+180B C6        1404:                    LABEL
+180C 3301      1405:                    $33,1
+180E C7        1406:                    EQUHERE
+180F 2F        1407:                    $2F
+1810 29        1408:                    $29
+  1811         1409: .                  SET     *
+  0D27         1410:                    ORG     ARG1*2+.SA
+0D27 1811      1411:                    #.
+  1811         1412:                    ORG     .
+1811 21        1413:                    $21
+               1414:                    FCC     ''
+1812 AA        1415:                    '*+$80
+1813 8012      1416:                    ((:156-*)&$3FFF)+$8000
+1815 05        1417:                    +NUM
+1816 8005      1418:                    ((:157-*)&$3FFF)+$8000
+1818 C8        1419:                    BYTE
+1819 31        1420:                    $31
+181A 2F        1421:                    $2F
+  181B         1422: :157               EQU     *
+181B 4007      1423:                    ((:158-*)&$3FFF)+$4000
+181D 34        1424:                    $34
+181E C8        1425:                    BYTE
+181F 30        1426:                    $30
+               1427:                    FCC     ''
+1820 B1        1428:                    '1+$80
+1821 2F        1429:                    $2F
+  1822         1430: :158               EQU     *
+1822 2C        1431:                    $2C
+1823 C1        1432:                    BLANKS
+1824 2C        1433:                    $2C
+  1825         1434: :156               EQU     *
+1825 29        1435:                    $29
+  1826         1436: .                  SET     *
+  0D1D         1437:                    ORG     OUTSTRING*2+.SA
+0D1D 1826      1438:                    #.
+  1826         1439:                    ORG     .
+1826 34        1440:                    $34
+1827 C9        1441:                    TEXT
+
+
+
+
+ASM/6800 1.3H4: 1828                    
+08/16/82 00:00:00; Page 37; Form 1      
+META14C.ASM
+1828 39        1442:                    $39
+1829 C601      1443:                    LDAB    #1              GO FIND THE FIRST STRIN
+182B BD0113    1444:                    JSR     FINDSTARN       RETURNS (X) POINTING TO STRING, (B) = STRIN
+182E C002      1445:                    SUBB    #2              OUTPUT N-1 BYTES
+1830 A600      1446: STRINGOUT1         LDAA    0,X             GET A CHARACTER
+1832 BD0116    1447:                    JSR     PUTCHAR         AND PUT IT OUT
+1835 08        1448:                    INX
+1836 5A        1449:                    DECB                    ARE WE ALMOST DONE ?
+1837 26F7      1450:                    BNE     STRINGOUT1      B/ NO, MORE TO DO
+1839 A601      1451:                    LDAA    1,X             GET THE CLOSING QUOTE
+183B BD0116    1452:                    JSR     PUTCHAR
+183E 860D      1453:                    LDAA    #$D
+1840 BD0116    1454:                    JSR     PUTCHAR         END THE LINE
+1843 8609      1455:                    LDAA    #$9
+1845 BD0116    1456:                    JSR     PUTCHAR
+1848 8627      1457:                    LDAA    #''
+184A BD0116    1458:                    JSR     PUTCHAR
+184D A600      1459:                    LDAA    0,X             GRAB THE LAST CHARACTER
+184F BD0116    1460:                    JSR     PUTCHAR         AND PUT IT OUT
+1852 BD0119    1461:                    JSR     ENTERMETA
+1855 30        1462:                    $30
+1856 2B2438    1463:                    FCC     '+$8'
+1859 B0        1464:                    '0+$80
+185A 2F        1465:                    $2F
+185B 29        1466:                    $29
+  185C         1467: .                  SET     *
+  0D0B         1468:                    ORG     NOTTST*2+.SA
+0D0B 185C      1469:                    #.
+  185C         1470:                    ORG     .
+185C 21        1471:                    $21
+               1472:                    FCC     ''
+185D AD        1473:                    '-+$80
+185E 804A      1474:                    ((:159-*)&$3FFF)+$8000
+1860 09        1475:                    +STRING
+1861 800B      1476:                    ((:15A-*)&$3FFF)+$8000
+1863 E9        1477:                    MTEST
+1864 2F        1478:                    $2F
+1865 EA        1479:                    OUTSTRING
+1866 38        1480:                    $38
+1867 01        1481:                    +:15B-*-1
+
+
+
+
+ASM/6800 1.3H4: 1868                    
+08/16/82 00:00:00; Page 38; Form 1      
+META14C.ASM
+1868 01        1482:                    +1
+  1869         1483: :15B               EQU     *
+1869 2C        1484:                    $2C
+  00F0         1485: MNOTTEST           EQU     .SC
+  00F1         1486: .SC                SET     .SC+1
+186A F0        1487:                    MNOTTEST
+186B 2F        1488:                    $2F
+  186C         1489: :15A               EQU     *
+186C 403B      1490:                    ((:15C-*)&$3FFF)+$4000
+186E 21        1491:                    $21
+               1492:                    FCC     ''
+186F BA        1493:                    ':+$80
+1870 8011      1494:                    ((:15D-*)&$3FFF)+$8000
+1872 07        1495:                    +HEXNUM
+1873 2C        1496:                    $2C
+1874 E9        1497:                    MTEST
+1875 2F        1498:                    $2F
+1876 C8        1499:                    BYTE
+1877 30        1500:                    $30
+1878 2438302B  1501:                    FCC     '$80+'
+187C A4        1502:                    '$+$80
+187D 31        1503:                    $31
+187E 2F        1504:                    $2F
+187F F0        1505:                    MNOTTEST
+1880 2F        1506:                    $2F
+  1881         1507: :15D               EQU     *
+1881 4026      1508:                    ((:15C-*)&$3FFF)+$4000
+1883 04        1509:                    +ID
+1884 8023      1510:                    ((:15E-*)&$3FFF)+$8000
+1886 2701      1511:                    $27,TOKEN
+1888 8009      1512:                    ((:15F-*)&$3FFF)+$8000
+188A E5        1513:                    TREF
+188B 38        1514:                    $38
+188C 01        1515:                    +:160-*-1
+188D 01        1516:                    +1
+  188E         1517: :160               EQU     *
+188E 2C        1518:                    $2C
+188F F0        1519:                    MNOTTEST
+1890 2F        1520:                    $2F
+  1891         1521: :15F               EQU     *
+
+
+
+
+ASM/6800 1.3H4: 1891                    
+08/16/82 00:00:00; Page 39; Form 1      
+META14C.ASM
+1891 4015      1522:                    ((:161-*)&$3FFF)+$4000
+1893 2706      1523:                    $27,KEYWORD
+1895 8008      1524:                    ((:162-*)&$3FFF)+$8000
+1897 E7        1525:                    MKEYWORDTEST
+1898 3201      1526:                    $32,1
+189A 2F        1527:                    $2F
+189B F0        1528:                    MNOTTEST
+189C 2F        1529:                    $2F
+  189D         1530: :162               EQU     *
+189D 4009      1531:                    ((:161-*)&$3FFF)+$4000
+189F 2700      1532:                    $27,ATTRIBUTE
+18A1 8005      1533:                    ((:163-*)&$3FFF)+$8000
+  00F1         1534: MUNTAG             EQU     .SC
+  00F2         1535: .SC                SET     .SC+1
+18A3 F1        1536:                    MUNTAG
+18A4 31        1537:                    $31
+18A5 2F        1538:                    $2F
+  18A6         1539: :163               EQU     *
+  18A6         1540: :161               EQU     *
+18A6 2C        1541:                    $2C
+  18A7         1542: :15E               EQU     *
+  18A7         1543: :15C               EQU     *
+18A7 2C        1544:                    $2C
+  18A8         1545: :159               EQU     *
+18A8 8004      1546:                    ((:164-*)&$3FFF)+$8000
+18AA C1        1547:                    BLANKS
+18AB 2C        1548:                    $2C
+  18AC         1549: :164               EQU     *
+18AC 29        1550:                    $29
+  18AD         1551: .                  SET     *
+  0D07         1552:                    ORG     ACTION*2+.SA
+0D07 18AD      1553:                    #.
+  18AD         1554:                    ORG     .
+18AD 21        1555:                    $21
+18AE 2E4F55    1556:                    FCC     '.OU'
+18B1 D4        1557:                    'T+$80
+18B2 801C      1558:                    ((:165-*)&$3FFF)+$8000
+18B4 C1        1559:                    BLANKS
+18B5 2C        1560:                    $2C
+18B6 21        1561:                    $21
+
+
+
+
+ASM/6800 1.3H4: 18B6                    
+08/16/82 00:00:00; Page 40; Form 1      
+META14C.ASM
+               1562:                    FCC     ''
+18B7 A8        1563:                    '(+$80
+18B8 2C        1564:                    $2C
+18B9 C1        1565:                    BLANKS
+18BA 2C        1566:                    $2C
+  18BB         1567: :166               EQU     *
+  00F2         1568: OUTOBJ             EQU     .SC
+  00F3         1569: .SC                SET     .SC+1
+18BB F2        1570:                    OUTOBJ
+18BC 7FFF      1571:                    ((:166-*)&$3FFF)+$4000
+18BE 34        1572:                    $34
+18BF 21        1573:                    $21
+               1574:                    FCC     ''
+18C0 BB        1575:                    ';+$80
+18C1 8004      1576:                    ((:167-*)&$3FFF)+$8000
+18C3 C1        1577:                    BLANKS
+18C4 2C        1578:                    $2C
+  18C5         1579: :167               EQU     *
+18C5 4005      1580:                    ((:168-*)&$3FFF)+$4000
+18C7 34        1581:                    $34
+  00F3         1582: MCR                EQU     .SC
+  00F4         1583: .SC                SET     .SC+1
+18C8 F3        1584:                    MCR
+18C9 2F        1585:                    $2F
+  18CA         1586: :168               EQU     *
+18CA 2C        1587:                    $2C
+18CB 21        1588:                    $21
+               1589:                    FCC     ''
+18CC A9        1590:                    ')+$80
+18CD 2C        1591:                    $2C
+  18CE         1592: :165               EQU     *
+18CE 4142      1593:                    ((:169-*)&$3FFF)+$4000
+18D0 21        1594:                    $21
+18D1 2E4153    1595:                    FCC     '.AS'
+18D4 CD        1596:                    'M+$80
+18D5 8024      1597:                    ((:16A-*)&$3FFF)+$8000
+18D7 C1        1598:                    BLANKS
+18D8 2C        1599:                    $2C
+18D9 21        1600:                    $21
+               1601:                    FCC     ''
+
+
+
+
+ASM/6800 1.3H4: 18DA                    
+08/16/82 00:00:00; Page 41; Form 1      
+META14C.ASM
+18DA A8        1602:                    '(+$80
+18DB 2C        1603:                    $2C
+18DC C1        1604:                    BLANKS
+18DD 2C        1605:                    $2C
+  00F4         1606: MASM               EQU     .SC
+  00F5         1607: .SC                SET     .SC+1
+18DE F4        1608:                    MASM
+18DF 2F        1609:                    $2F
+18E0 DA        1610:                    ASSEMBLY
+18E1 2C        1611:                    $2C
+  18E2         1612: :16B               EQU     *
+18E2 DA        1613:                    ASSEMBLY
+18E3 7FFF      1614:                    ((:16B-*)&$3FFF)+$4000
+18E5 34        1615:                    $34
+18E6 21        1616:                    $21
+               1617:                    FCC     ''
+18E7 A9        1618:                    ')+$80
+18E8 2C        1619:                    $2C
+18E9 30        1620:                    $30
+18EA 094A5352  1621:                    FCC     '   JSR            ENTERMET'
+18F7 C1        1622:                    'A+$80
+18F8 2F        1623:                    $2F
+  18F9         1624: :16A               EQU     *
+18F9 4117      1625:                    ((:169-*)&$3FFF)+$4000
+18FB 21        1626:                    $21
+18FC 2E454D50  1627:                    FCC     '.EMPT'
+1901 D9        1628:                    'Y+$80
+1902 8004      1629:                    ((:16C-*)&$3FFF)+$8000
+  00F5         1630: MSET               EQU     .SC
+  00F6         1631: .SC                SET     .SC+1
+1904 F5        1632:                    MSET
+1905 2F        1633:                    $2F
+  1906         1634: :16C               EQU     *
+1906 410A      1635:                    ((:169-*)&$3FFF)+$4000
+1908 21        1636:                    $21
+1909 24        1637:                    FCC     '$'
+190A A4        1638:                    '$+$80
+190B 8006      1639:                    ((:16D-*)&$3FFF)+$8000
+  00F6         1640: MDRULE             EQU     .SC
+  00F7         1641: .SC                SET     .SC+1
+
+
+
+
+ASM/6800 1.3H4: 190D                    
+08/16/82 00:00:00; Page 42; Form 1      
+META14C.ASM
+190D F6        1642:                    MDRULE
+190E 2F        1643:                    $2F
+  00F7         1644: DOLLARLOOP         EQU     .SC
+  00F8         1645: .SC                SET     .SC+1
+190F F7        1646:                    DOLLARLOOP
+1910 2C        1647:                    $2C
+  1911         1648: :16D               EQU     *
+1911 40FF      1649:                    ((:169-*)&$3FFF)+$4000
+1913 21        1650:                    $21
+               1651:                    FCC     ''
+1914 A4        1652:                    '$+$80
+1915 8004      1653:                    ((:16E-*)&$3FFF)+$8000
+1917 F7        1654:                    DOLLARLOOP
+1918 2C        1655:                    $2C
+  1919         1656: :16E               EQU     *
+1919 40F7      1657:                    ((:169-*)&$3FFF)+$4000
+191B 21        1658:                    $21
+               1659:                    FCC     ''
+191C AB        1660:                    '++$80
+191D 800F      1661:                    ((:16F-*)&$3FFF)+$8000
+191F 04        1662:                    +ID
+1920 8005      1663:                    ((:170-*)&$3FFF)+$8000
+1922 2700      1664:                    $27,ATTRIBUTE
+1924 2C        1665:                    $2C
+  1925         1666: :170               EQU     *
+1925 4003      1667:                    ((:171-*)&$3FFF)+$4000
+1927 05        1668:                    +NUM
+  1928         1669: :171               EQU     *
+1928 2C        1670:                    $2C
+  00F8         1671: MTAG               EQU     .SC
+  00F9         1672: .SC                SET     .SC+1
+1929 F8        1673:                    MTAG
+192A 31        1674:                    $31
+192B 2F        1675:                    $2F
+  192C         1676: :16F               EQU     *
+192C 40E4      1677:                    ((:169-*)&$3FFF)+$4000
+192E 21        1678:                    $21
+192F 3F        1679:                    FCC     '?'
+1930 BF        1680:                    '?+$80
+1931 800B      1681:                    ((:172-*)&$3FFF)+$8000
+
+
+
+
+ASM/6800 1.3H4: 1933                    
+08/16/82 00:00:00; Page 43; Form 1      
+META14C.ASM
+1933 09        1682:                    +STRING
+1934 2C        1683:                    $2C
+  00F9         1684: MERR               EQU     .SC
+  00FA         1685: .SC                SET     .SC+1
+1935 F9        1686:                    MERR
+1936 2F        1687:                    $2F
+1937 EA        1688:                    OUTSTRING
+1938 38        1689:                    $38
+1939 01        1690:                    +:173-*-1
+193A 01        1691:                    +1
+  193B         1692: :173               EQU     *
+193B 2C        1693:                    $2C
+  193C         1694: :172               EQU     *
+193C 40D4      1695:                    ((:169-*)&$3FFF)+$4000
+193E 21        1696:                    $21
+193F 2E5345    1697:                    FCC     '.SE'
+1942 D4        1698:                    'T+$80
+1943 805A      1699:                    ((:174-*)&$3FFF)+$8000
+1945 C1        1700:                    BLANKS
+1946 2C        1701:                    $2C
+1947 04        1702:                    +ID
+1948 2C        1703:                    $2C
+1949 2705      1704:                    $27,STATEVARIABLE
+194B 8031      1705:                    ((:175-*)&$3FFF)+$8000
+194D 21        1706:                    $21
+               1707:                    FCC     ''
+194E BD        1708:                    '=+$80
+194F 2C        1709:                    $2C
+1950 04        1710:                    +ID
+1951 2C        1711:                    $2C
+1952 2708      1712:                    $27,STATEVALUE
+1954 800A      1713:                    ((:176-*)&$3FFF)+$8000
+  00FA         1714: MSETSTATE          EQU     .SC
+  00FB         1715: .SC                SET     .SC+1
+1956 FA        1716:                    MSETSTATE
+1957 3201      1717:                    $32,1
+1959 30        1718:                    $30
+               1719:                    FCC     ''
+195A AC        1720:                    ',+$80
+195B 3202      1721:                    $32,2
+
+
+
+
+ASM/6800 1.3H4: 195D                    
+08/16/82 00:00:00; Page 44; Form 1      
+META14C.ASM
+195D 2F        1722:                    $2F
+  195E         1723: :176               EQU     *
+195E 401D      1724:                    ((:177-*)&$3FFF)+$4000
+1960 2D        1725:                    $2D
+1961 4E656564  1726:                    FCC     'Need State value name her'
+197A E5        1727:                    'e+$80
+  197B         1728: :177               EQU     *
+197B 2C        1729:                    $2C
+  197C         1730: :175               EQU     *
+197C 4020      1731:                    ((:178-*)&$3FFF)+$4000
+197E 2D        1732:                    $2D
+197F 4E656564  1733:                    FCC     'Need State variable name her'
+199B E5        1734:                    'e+$80
+  199C         1735: :178               EQU     *
+199C 2C        1736:                    $2C
+  199D         1737: :174               EQU     *
+199D 4073      1738:                    ((:169-*)&$3FFF)+$4000
+199F 06        1739:                    +STARQUERY
+19A0 22        1740:                    $22
+19A1 8060      1741:                    ((:179-*)&$3FFF)+$8000
+19A3 21        1742:                    $21
+               1743:                    FCC     ''
+19A4 AA        1744:                    '*+$80
+19A5 805C      1745:                    ((:179-*)&$3FFF)+$8000
+19A7 05        1746:                    +NUM
+19A8 2C        1747:                    $2C
+19A9 21        1748:                    $21
+               1749:                    FCC     ''
+19AA AB        1750:                    '++$80
+19AB 800F      1751:                    ((:17A-*)&$3FFF)+$8000
+19AD 04        1752:                    +ID
+19AE 2C        1753:                    $2C
+19AF 2700      1754:                    $27,ATTRIBUTE
+19B1 2C        1755:                    $2C
+  00FB         1756: MTAGN              EQU     .SC
+  00FC         1757: .SC                SET     .SC+1
+19B2 FB        1758:                    MTAGN
+19B3 3201      1759:                    $32,1
+19B5 30        1760:                    $30
+               1761:                    FCC     ''
+
+
+
+
+ASM/6800 1.3H4: 19B6                    
+08/16/82 00:00:00; Page 45; Form 1      
+META14C.ASM
+19B6 AC        1762:                    ',+$80
+19B7 3202      1763:                    $32,2
+19B9 2F        1764:                    $2F
+  19BA         1765: :17A               EQU     *
+19BA 4046      1766:                    ((:17B-*)&$3FFF)+$4000
+19BC 21        1767:                    $21
+               1768:                    FCC     ''
+19BD BD        1769:                    '=+$80
+19BE 8026      1770:                    ((:17C-*)&$3FFF)+$8000
+19C0 21        1771:                    $21
+19C1 554E4445  1772:                    FCC     'UNDEFINE'
+19C9 C4        1773:                    'D+$80
+19CA 8009      1774:                    ((:17D-*)&$3FFF)+$8000
+  00FC         1775: MSETTYPEN          EQU     .SC
+  00FD         1776: .SC                SET     .SC+1
+19CC FC        1777:                    MSETTYPEN
+19CD 3201      1778:                    $32,1
+19CF 30        1779:                    $30
+19D0 2C        1780:                    FCC     ','
+19D1 B0        1781:                    '0+$80
+19D2 2F        1782:                    $2F
+  19D3         1783: :17D               EQU     *
+19D3 4010      1784:                    ((:17E-*)&$3FFF)+$4000
+19D5 04        1785:                    +ID
+19D6 800D      1786:                    ((:17F-*)&$3FFF)+$8000
+19D8 2707      1787:                    $27,TYPENAME
+19DA 2C        1788:                    $2C
+19DB FC        1789:                    MSETTYPEN
+19DC 3201      1790:                    $32,1
+19DE 30        1791:                    $30
+               1792:                    FCC     ''
+19DF AC        1793:                    ',+$80
+19E0 3202      1794:                    $32,2
+19E2 2F        1795:                    $2F
+  19E3         1796: :17F               EQU     *
+  19E3         1797: :17E               EQU     *
+19E3 2C        1798:                    $2C
+  19E4         1799: :17C               EQU     *
+19E4 401C      1800:                    ((:17B-*)&$3FFF)+$4000
+19E6 21        1801:                    $21
+
+
+
+
+ASM/6800 1.3H4: 19E6                    
+08/16/82 00:00:00; Page 46; Form 1      
+META14C.ASM
+               1802:                    FCC     ''
+19E7 AD        1803:                    '-+$80
+19E8 800F      1804:                    ((:180-*)&$3FFF)+$8000
+19EA 04        1805:                    +ID
+19EB 2C        1806:                    $2C
+19EC 2700      1807:                    $27,ATTRIBUTE
+19EE 2C        1808:                    $2C
+  00FD         1809: MUNTAGN            EQU     .SC
+  00FE         1810: .SC                SET     .SC+1
+19EF FD        1811:                    MUNTAGN
+19F0 3201      1812:                    $32,1
+19F2 30        1813:                    $30
+               1814:                    FCC     ''
+19F3 AC        1815:                    ',+$80
+19F4 3202      1816:                    $32,2
+19F6 2F        1817:                    $2F
+  19F7         1818: :180               EQU     *
+19F7 4009      1819:                    ((:17B-*)&$3FFF)+$4000
+19F9 21        1820:                    $21
+               1821:                    FCC     ''
+19FA DE        1822:                    '^+$80
+19FB 8005      1823:                    ((:181-*)&$3FFF)+$8000
+  00FE         1824: MOVESTRINGUP       EQU     .SC
+  00FF         1825: .SC                SET     .SC+1
+19FD FE        1826:                    MOVESTRINGUP
+19FE 31        1827:                    $31
+19FF 2F        1828:                    $2F
+  1A00         1829: :181               EQU     *
+  1A00         1830: :17B               EQU     *
+1A00 2C        1831:                    $2C
+  1A01         1832: :179               EQU     *
+1A01 400F      1833:                    ((:169-*)&$3FFF)+$4000
+1A03 21        1834:                    $21
+1A04 2E494E43  1835:                    FCC     '.INCLUD'
+1A0B C5        1836:                    'E+$80
+1A0C 8004      1837:                    ((:182-*)&$3FFF)+$8000
+  00FF         1838: MINCLUDE           EQU     .SC
+  0100         1839: .SC                SET     .SC+1
+1A0E FF        1840:                    MINCLUDE
+1A0F 2F        1841:                    $2F
+
+
+
+
+ASM/6800 1.3H4: 1A0F                    
+08/16/82 00:00:00; Page 47; Form 1      
+META14C.ASM
+  1A10         1842: :182               EQU     *
+  1A10         1843: :169               EQU     *
+1A10 8004      1844:                    ((:183-*)&$3FFF)+$8000
+1A12 C1        1845:                    BLANKS
+1A13 2C        1846:                    $2C
+  1A14         1847: :183               EQU     *
+1A14 29        1848:                    $29
+  1A15         1849: .                  SET     *
+  0D37         1850:                    ORG     DOLLARLOOP*2+.SA
+0D37 1A15      1851:                    #.
+  1A15         1852:                    ORG     .
+1A15 C6        1853:                    LABEL
+1A16 3301      1854:                    $33,1
+1A18 C7        1855:                    EQUHERE
+1A19 2F        1856:                    $2F
+1A1A C1        1857:                    BLANKS
+1A1B 2C        1858:                    $2C
+1A1C E4        1859:                    TEST
+1A1D 2C        1860:                    $2C
+1A1E DD        1861:                    BRANCHTRUE
+1A1F 3301      1862:                    $33,1
+1A21 DE        1863:                    BTTAIL
+1A22 2F        1864:                    $2F
+1A23 F5        1865:                    MSET
+1A24 2F        1866:                    $2F
+1A25 29        1867:                    $29
+  1A26         1868: .                  SET     *
+  0D2D         1869:                    ORG     OUTOBJ*2+.SA
+0D2D 1A26      1870:                    #.
+  1A26         1871:                    ORG     .
+1A26 09        1872:                    +STRING
+1A27 800A      1873:                    ((:184-*)&$3FFF)+$8000
+  0100         1874: MCL                EQU     .SC
+  0101         1875: .SC                SET     .SC+1
+1A29 0100      1876:                    MCL
+1A2B 2F        1877:                    $2F
+1A2C EA        1878:                    OUTSTRING
+1A2D 38        1879:                    $38
+1A2E 01        1880:                    +:185-*-1
+1A2F 01        1881:                    +1
+
+
+
+
+ASM/6800 1.3H4: 1A2F                    
+08/16/82 00:00:00; Page 48; Form 1      
+META14C.ASM
+  1A30         1882: :185               EQU     *
+1A30 2C        1883:                    $2C
+  1A31         1884: :184               EQU     *
+1A31 4055      1885:                    ((:186-*)&$3FFF)+$4000
+1A33 04        1886:                    +ID
+1A34 8021      1887:                    ((:187-*)&$3FFF)+$8000
+1A36 2701      1888:                    $27,TOKEN
+1A38 8005      1889:                    ((:188-*)&$3FFF)+$8000
+  0101         1890: TKNNOTLEGAL        EQU     .SC
+  0102         1891: .SC                SET     .SC+1
+1A3A 0101      1892:                    TKNNOTLEGAL
+1A3C 2C        1893:                    $2C
+  1A3D         1894: :188               EQU     *
+1A3D 4017      1895:                    ((:189-*)&$3FFF)+$4000
+1A3F 34        1896:                    $34
+1A40 CA        1897:                    SREF
+1A41 38        1898:                    $38
+1A42 01        1899:                    +:18A-*-1
+1A43 01        1900:                    +1
+  1A44         1901: :18A               EQU     *
+1A44 2C        1902:                    $2C
+1A45 21        1903:                    $21
+               1904:                    FCC     ''
+1A46 DB        1905:                    '[+$80
+1A47 8009      1906:                    ((:18B-*)&$3FFF)+$8000
+1A49 C1        1907:                    BLANKS
+1A4A 2C        1908:                    $2C
+1A4B E8        1909:                    ARGS
+1A4C 2C        1910:                    $2C
+1A4D 21        1911:                    $21
+               1912:                    FCC     ''
+1A4E DD        1913:                    ']+$80
+1A4F 2C        1914:                    $2C
+  1A50         1915: :18B               EQU     *
+1A50 4003      1916:                    ((:18C-*)&$3FFF)+$4000
+1A52 34        1917:                    $34
+  1A53         1918: :18C               EQU     *
+1A53 2C        1919:                    $2C
+  1A54         1920: :189               EQU     *
+1A54 2C        1921:                    $2C
+
+
+
+
+ASM/6800 1.3H4: 1A54                    
+08/16/82 00:00:00; Page 49; Form 1      
+META14C.ASM
+  1A55         1922: :187               EQU     *
+1A55 4031      1923:                    ((:186-*)&$3FFF)+$4000
+1A57 21        1924:                    $21
+               1925:                    FCC     ''
+1A58 A3        1926:                    '#+$80
+1A59 8008      1927:                    ((:18D-*)&$3FFF)+$8000
+1A5B 05        1928:                    +NUM
+1A5C 2C        1929:                    $2C
+  0102         1930: MGENL              EQU     .SC
+  0103         1931: .SC                SET     .SC+1
+1A5D 0102      1932:                    MGENL
+1A5F 31        1933:                    $31
+1A60 2F        1934:                    $2F
+  1A61         1935: :18D               EQU     *
+1A61 4025      1936:                    ((:186-*)&$3FFF)+$4000
+1A63 21        1937:                    $21
+               1938:                    FCC     ''
+1A64 AA        1939:                    '*+$80
+1A65 8010      1940:                    ((:18E-*)&$3FFF)+$8000
+1A67 05        1941:                    +NUM
+1A68 8006      1942:                    ((:18F-*)&$3FFF)+$8000
+  0103         1943: MOUTN              EQU     .SC
+  0104         1944: .SC                SET     .SC+1
+1A6A 0103      1945:                    MOUTN
+1A6C 31        1946:                    $31
+1A6D 2F        1947:                    $2F
+  1A6E         1948: :18F               EQU     *
+1A6E 4006      1949:                    ((:190-*)&$3FFF)+$4000
+1A70 34        1950:                    $34
+  0104         1951: MOUT               EQU     .SC
+  0105         1952: .SC                SET     .SC+1
+1A71 0104      1953:                    MOUT
+1A73 2F        1954:                    $2F
+  1A74         1955: :190               EQU     *
+1A74 2C        1956:                    $2C
+  1A75         1957: :18E               EQU     *
+1A75 4011      1958:                    ((:186-*)&$3FFF)+$4000
+1A77 21        1959:                    $21
+               1960:                    FCC     ''
+1A78 AC        1961:                    ',+$80
+
+
+
+
+ASM/6800 1.3H4: 1A79                    
+08/16/82 00:00:00; Page 50; Form 1      
+META14C.ASM
+1A79 8005      1962:                    ((:191-*)&$3FFF)+$8000
+  0105         1963: MTAB               EQU     .SC
+  0106         1964: .SC                SET     .SC+1
+1A7B 0105      1965:                    MTAB
+1A7D 2F        1966:                    $2F
+  1A7E         1967: :191               EQU     *
+1A7E 4008      1968:                    ((:186-*)&$3FFF)+$4000
+1A80 21        1969:                    $21
+               1970:                    FCC     ''
+1A81 AF        1971:                    '/+$80
+1A82 8004      1972:                    ((:192-*)&$3FFF)+$8000
+1A84 F3        1973:                    MCR
+1A85 2F        1974:                    $2F
+  1A86         1975: :192               EQU     *
+  1A86         1976: :186               EQU     *
+1A86 8004      1977:                    ((:193-*)&$3FFF)+$8000
+1A88 C1        1978:                    BLANKS
+1A89 2C        1979:                    $2C
+  1A8A         1980: :193               EQU     *
+1A8A 29        1981:                    $29
+  1A8B         1982: .                  SET     *
+  0D4B         1983:                    ORG     TKNNOTLEGAL*2+.SA
+0D4B 1A8B      1984:                    #.
+  1A8B         1985:                    ORG     .
+1A8B 2D        1986:                    $2D
+1A8C 596F7520  1987:                    FCC     'You cannot look for a token in the middle of a .OU'
+1ABE D4        1988:                    'T+$80
+1ABF 29        1989:                    $29
+  1AC0         1990: .                  SET     *
+  0CF3         1991:                    ORG     SDEF*2+.SA
+0CF3 1AC0      1992:                    #.
+  1AC0         1993:                    ORG     .
+1AC0 280101    1994:                    $28,1,TOKEN
+1AC3 8005      1995:                    ((:194-*)&$3FFF)+$8000
+  0106         1996: ERRISTOKENALREADY  EQU     .SC
+  0107         1997: .SC                SET     .SC+1
+1AC5 0106      1998:                    ERRISTOKENALREADY
+1AC7 2C        1999:                    $2C
+  1AC8         2000: :194               EQU     *
+1AC8 4006      2001:                    ((:195-*)&$3FFF)+$4000
+
+
+
+
+ASM/6800 1.3H4: 1ACA                    
+08/16/82 00:00:00; Page 51; Form 1      
+META14C.ASM
+1ACA 34        2002:                    $34
+1ACB 240102    2003:                    $24,1,SUBR
+  1ACE         2004: :195               EQU     *
+1ACE 8036      2005:                    ((:196-*)&$3FFF)+$8000
+1AD0 280104    2006:                    $28,1,DEFINED
+1AD3 8005      2007:                    ((:197-*)&$3FFF)+$8000
+  0107         2008: ERRISALREADYDEFD   EQU     .SC
+  0108         2009: .SC                SET     .SC+1
+1AD5 0107      2010:                    ERRISALREADYDEFD
+1AD7 2C        2011:                    $2C
+  1AD8         2012: :197               EQU     *
+1AD8 4006      2013:                    ((:198-*)&$3FFF)+$4000
+1ADA 34        2014:                    $34
+1ADB 240104    2015:                    $24,1,DEFINED
+  1ADE         2016: :198               EQU     *
+1ADE 2C        2017:                    $2C
+1ADF 280103    2018:                    $28,1,REFERENCED
+1AE2 4008      2019:                    ((:199-*)&$3FFF)+$4000
+1AE4 34        2020:                    $34
+1AE5 3201      2021:                    $32,1
+  0108         2022: ASSIGNSUBRNUMBER   EQU     .SC
+  0109         2023: .SC                SET     .SC+1
+1AE7 0108      2024:                    ASSIGNSUBRNUMBER
+1AE9 2F        2025:                    $2F
+  1AEA         2026: :199               EQU     *
+1AEA 2C        2027:                    $2C
+1AEB 30        2028:                    $30
+               2029:                    FCC     ''
+1AEC AE        2030:                    '.+$80
+1AED CE        2031:                    SETEQU
+1AEE 30        2032:                    $30
+               2033:                    FCC     ''
+1AEF AA        2034:                    '*+$80
+1AF0 2F        2035:                    $2F
+1AF1 C2        2036:                    SETLOADADDRESS
+1AF2 3201      2037:                    $32,1
+1AF4 30        2038:                    $30
+1AF5 2A322B2E  2039:                    FCC     '*2+.S'
+1AFA C1        2040:                    'A+$80
+1AFB 2F        2041:                    $2F
+
+
+
+
+ASM/6800 1.3H4: 1AFC                    
+08/16/82 00:00:00; Page 52; Form 1      
+META14C.ASM
+1AFC C5        2042:                    ADDRESS
+1AFD 30        2043:                    $30
+               2044:                    FCC     ''
+1AFE AE        2045:                    '.+$80
+1AFF 2F        2046:                    $2F
+1B00 C2        2047:                    SETLOADADDRESS
+1B01 30        2048:                    $30
+               2049:                    FCC     ''
+1B02 AE        2050:                    '.+$80
+1B03 2F        2051:                    $2F
+  1B04         2052: :196               EQU     *
+1B04 29        2053:                    $29
+  1B05         2054: .                  SET     *
+  0D59         2055:                    ORG     ASSIGNSUBRNUMBER*2+.SA
+0D59 1B05      2056:                    #.
+  1B05         2057:                    ORG     .
+1B05 D0        2058:                    EQUATE
+1B06 30        2059:                    $30
+1B07 2E53      2060:                    FCC     '.S'
+1B09 C3        2061:                    'C+$80
+1B0A 2F        2062:                    $2F
+1B0B 30        2063:                    $30
+1B0C 2E53      2064:                    FCC     '.S'
+1B0E C3        2065:                    'C+$80
+1B0F CE        2066:                    SETEQU
+1B10 30        2067:                    $30
+1B11 2E53432B  2068:                    FCC     '.SC+'
+1B15 B1        2069:                    '1+$80
+1B16 29        2070:                    $29
+  1B17         2071: .                  SET     *
+  0D55         2072:                    ORG     ERRISTOKENALREADY*2+.SA
+0D55 1B17      2073:                    #.
+  1B17         2074:                    ORG     .
+1B17 2D        2075:                    $2D
+1B18 416C7265  2076:                    FCC     'Already defined as a toke'
+1B31 EE        2077:                    'n+$80
+1B32 29        2078:                    $29
+  1B33         2079: .                  SET     *
+  0D57         2080:                    ORG     ERRISALREADYDEFD*2+.SA
+0D57 1B33      2081:                    #.
+
+
+
+
+ASM/6800 1.3H4: 0D57                    
+08/16/82 00:00:00; Page 53; Form 1      
+META14C.ASM
+  1B33         2082:                    ORG     .
+1B33 2D        2083:                    $2D
+1B34 53756272  2084:                    FCC     'Subroutine already define'
+1B4D E4        2085:                    'd+$80
+1B4E 29        2086:                    $29
+  1B4F         2087: .                  SET     *
+  0CDD         2088:                    ORG     SREF*2+.SA
+0CDD 1B4F      2089:                    #.
+  1B4F         2090:                    ORG     .
+1B4F 280101    2091:                    $28,1,TOKEN
+1B52 8005      2092:                    ((:19A-*)&$3FFF)+$8000
+1B54 0106      2093:                    ERRISTOKENALREADY
+1B56 2C        2094:                    $2C
+  1B57         2095: :19A               EQU     *
+1B57 4006      2096:                    ((:19B-*)&$3FFF)+$4000
+1B59 34        2097:                    $34
+1B5A 240102    2098:                    $24,1,SUBR
+  1B5D         2099: :19B               EQU     *
+1B5D 801A      2100:                    ((:19C-*)&$3FFF)+$8000
+1B5F 280103    2101:                    $28,1,REFERENCED
+1B62 400D      2102:                    ((:19D-*)&$3FFF)+$4000
+1B64 280104    2103:                    $28,1,DEFINED
+1B67 4008      2104:                    ((:19E-*)&$3FFF)+$4000
+1B69 34        2105:                    $34
+1B6A 3201      2106:                    $32,1
+1B6C 0108      2107:                    ASSIGNSUBRNUMBER
+1B6E 2F        2108:                    $2F
+  1B6F         2109: :19E               EQU     *
+  1B6F         2110: :19D               EQU     *
+1B6F 2C        2111:                    $2C
+1B70 240103    2112:                    $24,1,REFERENCED
+1B73 2E        2113:                    $2E
+1B74 3201      2114:                    $32,1
+1B76 2F        2115:                    $2F
+  1B77         2116: :19C               EQU     *
+1B77 29        2117:                    $29
+  1B78         2118: .                  SET     *
+  0CFB         2119:                    ORG     TDEF*2+.SA
+0CFB 1B78      2120:                    #.
+  1B78         2121:                    ORG     .
+
+
+
+
+ASM/6800 1.3H4: 1B78                    
+08/16/82 00:00:00; Page 54; Form 1      
+META14C.ASM
+1B78 280102    2122:                    $28,1,SUBR
+1B7B 8005      2123:                    ((:19F-*)&$3FFF)+$8000
+  0109         2124: ERRALREADYISSUBR   EQU     .SC
+  010A         2125: .SC                SET     .SC+1
+1B7D 0109      2126:                    ERRALREADYISSUBR
+1B7F 2C        2127:                    $2C
+  1B80         2128: :19F               EQU     *
+1B80 4006      2129:                    ((:1A0-*)&$3FFF)+$4000
+1B82 34        2130:                    $34
+1B83 240101    2131:                    $24,1,TOKEN
+  1B86         2132: :1A0               EQU     *
+1B86 8036      2133:                    ((:1A1-*)&$3FFF)+$8000
+1B88 280104    2134:                    $28,1,DEFINED
+1B8B 8005      2135:                    ((:1A2-*)&$3FFF)+$8000
+  010A         2136: ERRTOKENALREADYDEFD        EQU             .SC
+  010B         2137: .SC                SET     .SC+1
+1B8D 010A      2138:                    ERRTOKENALREADYDEFD
+1B8F 2C        2139:                    $2C
+  1B90         2140: :1A2               EQU     *
+1B90 4006      2141:                    ((:1A3-*)&$3FFF)+$4000
+1B92 34        2142:                    $34
+1B93 240104    2143:                    $24,1,DEFINED
+  1B96         2144: :1A3               EQU     *
+1B96 2C        2145:                    $2C
+1B97 280103    2146:                    $28,1,REFERENCED
+1B9A 4008      2147:                    ((:1A4-*)&$3FFF)+$4000
+1B9C 34        2148:                    $34
+1B9D 3201      2149:                    $32,1
+  010B         2150: ASSIGNTOKENNUMBER  EQU     .SC
+  010C         2151: .SC                SET     .SC+1
+1B9F 010B      2152:                    ASSIGNTOKENNUMBER
+1BA1 2F        2153:                    $2F
+  1BA2         2154: :1A4               EQU     *
+1BA2 2C        2155:                    $2C
+1BA3 30        2156:                    $30
+               2157:                    FCC     ''
+1BA4 AE        2158:                    '.+$80
+1BA5 CE        2159:                    SETEQU
+1BA6 30        2160:                    $30
+               2161:                    FCC     ''
+
+
+
+
+ASM/6800 1.3H4: 1BA7                    
+08/16/82 00:00:00; Page 55; Form 1      
+META14C.ASM
+1BA7 AA        2162:                    '*+$80
+1BA8 2F        2163:                    $2F
+1BA9 C2        2164:                    SETLOADADDRESS
+1BAA 3201      2165:                    $32,1
+1BAC 30        2166:                    $30
+1BAD 2A322B2E  2167:                    FCC     '*2+.T'
+1BB2 C1        2168:                    'A+$80
+1BB3 2F        2169:                    $2F
+1BB4 C5        2170:                    ADDRESS
+1BB5 30        2171:                    $30
+               2172:                    FCC     ''
+1BB6 AE        2173:                    '.+$80
+1BB7 2F        2174:                    $2F
+1BB8 C2        2175:                    SETLOADADDRESS
+1BB9 30        2176:                    $30
+               2177:                    FCC     ''
+1BBA AE        2178:                    '.+$80
+1BBB 2F        2179:                    $2F
+  1BBC         2180: :1A1               EQU     *
+1BBC 29        2181:                    $29
+  1BBD         2182: .                  SET     *
+  0D5F         2183:                    ORG     ASSIGNTOKENNUMBER*2+.SA
+0D5F 1BBD      2184:                    #.
+  1BBD         2185:                    ORG     .
+1BBD D0        2186:                    EQUATE
+1BBE 30        2187:                    $30
+1BBF 2E54      2188:                    FCC     '.T'
+1BC1 C3        2189:                    'C+$80
+1BC2 2F        2190:                    $2F
+1BC3 30        2191:                    $30
+1BC4 2E54      2192:                    FCC     '.T'
+1BC6 C3        2193:                    'C+$80
+1BC7 CE        2194:                    SETEQU
+1BC8 30        2195:                    $30
+1BC9 2E54432B  2196:                    FCC     '.TC+'
+1BCD B1        2197:                    '1+$80
+1BCE 29        2198:                    $29
+  1BCF         2199: .                  SET     *
+  0D5B         2200:                    ORG     ERRALREADYISSUBR*2+.SA
+0D5B 1BCF      2201:                    #.
+
+
+
+
+ASM/6800 1.3H4: 0D5B                    
+08/16/82 00:00:00; Page 56; Form 1      
+META14C.ASM
+  1BCF         2202:                    ORG     .
+1BCF 2D        2203:                    $2D
+1BD0 416C7265  2204:                    FCC     'Already defined as a subroutin'
+1BEE E5        2205:                    'e+$80
+1BEF 29        2206:                    $29
+  1BF0         2207: .                  SET     *
+  0D5D         2208:                    ORG     ERRTOKENALREADYDEFD*2+.SA
+0D5D 1BF0      2209:                    #.
+  1BF0         2210:                    ORG     .
+1BF0 2D        2211:                    $2D
+1BF1 546F6B65  2212:                    FCC     'Token is already define'
+1C08 E4        2213:                    'd+$80
+1C09 29        2214:                    $29
+  1C0A         2215: .                  SET     *
+  0D13         2216:                    ORG     TREF*2+.SA
+0D13 1C0A      2217:                    #.
+  1C0A         2218:                    ORG     .
+1C0A 280102    2219:                    $28,1,SUBR
+1C0D 8005      2220:                    ((:1A5-*)&$3FFF)+$8000
+1C0F 0109      2221:                    ERRALREADYISSUBR
+1C11 2C        2222:                    $2C
+  1C12         2223: :1A5               EQU     *
+1C12 4006      2224:                    ((:1A6-*)&$3FFF)+$4000
+1C14 34        2225:                    $34
+1C15 240101    2226:                    $24,1,TOKEN
+  1C18         2227: :1A6               EQU     *
+1C18 801A      2228:                    ((:1A7-*)&$3FFF)+$8000
+1C1A 280103    2229:                    $28,1,REFERENCED
+1C1D 400D      2230:                    ((:1A8-*)&$3FFF)+$4000
+1C1F 280104    2231:                    $28,1,DEFINED
+1C22 4008      2232:                    ((:1A9-*)&$3FFF)+$4000
+1C24 34        2233:                    $34
+1C25 3201      2234:                    $32,1
+1C27 010B      2235:                    ASSIGNTOKENNUMBER
+1C29 2F        2236:                    $2F
+  1C2A         2237: :1A9               EQU     *
+  1C2A         2238: :1A8               EQU     *
+1C2A 2C        2239:                    $2C
+1C2B 240103    2240:                    $24,1,REFERENCED
+1C2E C8        2241:                    BYTE
+
+
+
+
+ASM/6800 1.3H4: 1C2F                    
+08/16/82 00:00:00; Page 57; Form 1      
+META14C.ASM
+1C2F 3201      2242:                    $32,1
+1C31 2F        2243:                    $2F
+  1C32         2244: :1A7               EQU     *
+1C32 29        2245:                    $29
+  1C33         2246: .                  SET     *
+  0CD7         2247:                    ORG     EQUHERE*2+.SA
+0CD7 1C33      2248:                    #.
+  1C33         2249:                    ORG     .
+1C33 D0        2250:                    EQUATE
+1C34 30        2251:                    $30
+               2252:                    FCC     ''
+1C35 AA        2253:                    '*+$80
+1C36 29        2254:                    $29
+  1C37         2255: .                  SET     *
+  0CE9         2256:                    ORG     EQUATE*2+.SA
+0CE9 1C37      2257:                    #.
+  1C37         2258:                    ORG     .
+1C37 30        2259:                    $30
+1C38 09455155  2260:                    FCC     '  EQU'
+1C3C 89        2261:                    ' +$80
+1C3D 29        2262:                    $29
+  1C3E         2263: .                  SET     *
+  0CE5         2264:                    ORG     SETEQU*2+.SA
+0CE5 1C3E      2265:                    #.
+  1C3E         2266:                    ORG     .
+1C3E 30        2267:                    $30
+1C3F 09534554  2268:                    FCC     '  SET'
+1C43 89        2269:                    '        +$80
+1C44 29        2270:                    $29
+  1C45         2271: .                  SET     *
+  0CCD         2272:                    ORG     SETLOADADDRESS*2+.SA
+0CCD 1C45      2273:                    #.
+  1C45         2274:                    ORG     .
+1C45 30        2275:                    $30
+1C46 094F5247  2276:                    FCC     '  ORG'
+1C4A 89        2277:                    ' +$80
+1C4B 29        2278:                    $29
+  1C4C         2279: .                  SET     *
+  0CD9         2280:                    ORG     BYTE*2+.SA
+0CD9 1C4C      2281:                    #.
+
+
+
+
+ASM/6800 1.3H4: 0CD9                    
+08/16/82 00:00:00; Page 58; Form 1      
+META14C.ASM
+  1C4C         2282:                    ORG     .
+1C4C 30        2283:                    $30
+1C4D 09        2284:                    FCC     '  '
+1C4E AB        2285:                    '++$80
+1C4F 29        2286:                    $29
+  1C50         2287: .                  SET     *
+  0CD3         2288:                    ORG     ADDRESS*2+.SA
+0CD3 1C50      2289:                    #.
+  1C50         2290:                    ORG     .
+1C50 30        2291:                    $30
+1C51 09        2292:                    FCC     '  '
+1C52 A3        2293:                    '#+$80
+1C53 29        2294:                    $29
+  1C54         2295: .                  SET     *
+  0CDB         2296:                    ORG     TEXT*2+.SA
+0CDB 1C54      2297:                    #.
+  1C54         2298:                    ORG     .
+1C54 30        2299:                    $30
+1C55 09464343  2300:                    FCC     '  FCC'
+1C59 89        2301:                    '        +$80
+1C5A 29        2302:                    $29
+  1C5B         2303: .                  SET     *
+  0CD5         2304:                    ORG     LABEL*2+.SA
+0CD5 1C5B      2305:                    #.
+  1C5B         2306:                    ORG     .
+1C5B 30        2307:                    $30
+               2308:                    FCC     ''
+1C5C BA        2309:                    ':+$80
+1C5D 29        2310:                    $29
+  1C5E         2311: .                  SET     *
+  0CEF         2312:                    ORG     RESERVE*2+.SA
+0CEF 1C5E      2313:                    #.
+  1C5E         2314:                    ORG     .
+1C5E 30        2315:                    $30
+1C5F 09524D42  2316:                    FCC     '  RMB'
+1C63 89        2317:                    '        +$80
+1C64 29        2318:                    $29
+  1C65         2319: .                  SET     *
+  0CE3         2320:                    ORG     PREVIOUSKEYWORD*2+.SA
+0CE3 1C65      2321:                    #.
+
+
+
+
+ASM/6800 1.3H4: 0CE3                    
+08/16/82 00:00:00; Page 59; Form 1      
+META14C.ASM
+  1C65         2322:                    ORG     .
+1C65 30        2323:                    $30
+1C66 2E50      2324:                    FCC     '.P'
+1C68 CB        2325:                    'K+$80
+1C69 29        2326:                    $29
+  1C6A         2327: .                  SET     *
+  0D03         2328:                    ORG     BRANCHTRUE*2+.SA
+0D03 1C6A      2329:                    #.
+  1C6A         2330:                    ORG     .
+1C6A 30        2331:                    $30
+1C6B 092828    2332:                    FCC     '   (('
+1C6E BA        2333:                    ':+$80
+1C6F 29        2334:                    $29
+  1C70         2335: .                  SET     *
+  0D05         2336:                    ORG     BTTAIL*2+.SA
+0D05 1C70      2337:                    #.
+  1C70         2338:                    ORG     .
+1C70 30        2339:                    $30
+1C71 2D2A2926  2340:                    FCC     '-*)&$3FFF)+$400'
+1C80 B0        2341:                    '0+$80
+1C81 29        2342:                    $29
+  1C82         2343: .                  SET     *
+  0D0D         2344:                    ORG     BRANCHFALSE*2+.SA
+0D0D 1C82      2345:                    #.
+  1C82         2346:                    ORG     .
+1C82 30        2347:                    $30
+1C83 092828    2348:                    FCC     '  (('
+1C86 BA        2349:                    ':+$80
+1C87 29        2350:                    $29
+  1C88         2351: .                  SET     *
+  0D0F         2352:                    ORG     BFTAIL*2+.SA
+0D0F 1C88      2353:                    #.
+  1C88         2354:                    ORG     .
+1C88 30        2355:                    $30
+1C89 2D2A2926  2356:                    FCC     '-*)&$3FFF)+$800'
+1C98 B0        2357:                    '0+$80
+1C99 29        2358:                    $29
+  1C9A         2359: .                  SET     *
+  0CE1         2360:                    ORG     MFIN*2+.SA
+0CE1 1C9A      2361:                    #.
+
+
+
+
+ASM/6800 1.3H4: 0CE1                    
+08/16/82 00:00:00; Page 60; Form 1      
+META14C.ASM
+  1C9A         2362:                    ORG     .
+1C9A 30        2363:                    $30
+1C9B 09        2364:                    FCC     '   '
+1C9C B0        2365:                    '0+$80
+1C9D 29        2366:                    $29
+  1C9E         2367: .                  SET     *
+  0D1B         2368:                    ORG     MTEST*2+.SA
+0D1B 1C9E      2369:                    #.
+  1C9E         2370:                    ORG     .
+1C9E 30        2371:                    $30
+1C9F 092432    2372:                    FCC     '  $2'
+1CA2 B1        2373:                    '1+$80
+1CA3 29        2374:                    $29
+  1CA4         2375: .                  SET     *
+  0D29         2376:                    ORG     MNOTTEST*2+.SA
+0D29 1CA4      2377:                    #.
+  1CA4         2378:                    ORG     .
+1CA4 30        2379:                    $30
+1CA5 092432    2380:                    FCC     '   $2'
+1CA8 B2        2381:                    '2+$80
+1CA9 29        2382:                    $29
+  1CAA         2383: .                  SET     *
+  0D39         2384:                    ORG     MTAG*2+.SA
+0D39 1CAA      2385:                    #.
+  1CAA         2386:                    ORG     .
+1CAA 30        2387:                    $30
+1CAB 09243233  2388:                    FCC     '    $23'
+1CAF AC        2389:                    ',+$80
+1CB0 29        2390:                    $29
+  1CB1         2391: .                  SET     *
+  0D3F         2392:                    ORG     MTAGN*2+.SA
+0D3F 1CB1      2393:                    #.
+  1CB1         2394:                    ORG     .
+1CB1 30        2395:                    $30
+1CB2 09243234  2396:                    FCC     '   $24'
+1CB6 AC        2397:                    ',+$80
+1CB7 29        2398:                    $29
+  1CB8         2399: .                  SET     *
+  0D2B         2400:                    ORG     MUNTAG*2+.SA
+0D2B 1CB8      2401:                    #.
+
+
+
+
+ASM/6800 1.3H4: 0D2B                    
+08/16/82 00:00:00; Page 61; Form 1      
+META14C.ASM
+  1CB8         2402:                    ORG     .
+1CB8 30        2403:                    $30
+1CB9 09243235  2404:                    FCC     '   $25'
+1CBD AC        2405:                    ',+$80
+1CBE 29        2406:                    $29
+  1CBF         2407: .                  SET     *
+  0D43         2408:                    ORG     MUNTAGN*2+.SA
+0D43 1CBF      2409:                    #.
+  1CBF         2410:                    ORG     .
+1CBF 30        2411:                    $30
+1CC0 09243236  2412:                    FCC     '   $26'
+1CC4 AC        2413:                    ',+$80
+1CC5 29        2414:                    $29
+  1CC6         2415: .                  SET     *
+  0D1F         2416:                    ORG     MQUERY*2+.SA
+0D1F 1CC6      2417:                    #.
+  1CC6         2418:                    ORG     .
+1CC6 30        2419:                    $30
+1CC7 09243237  2420:                    FCC     '   $27'
+1CCB AC        2421:                    ',+$80
+1CCC 29        2422:                    $29
+  1CCD         2423: .                  SET     *
+  0D23         2424:                    ORG     MQUERYN*2+.SA
+0D23 1CCD      2425:                    #.
+  1CCD         2426:                    ORG     .
+1CCD 30        2427:                    $30
+1CCE 09243238  2428:                    FCC     '   $28'
+1CD2 AC        2429:                    ',+$80
+1CD3 29        2430:                    $29
+  1CD4         2431: .                  SET     *
+  0CF9         2432:                    ORG     MR*2+.SA
+0CF9 1CD4      2433:                    #.
+  1CD4         2434:                    ORG     .
+1CD4 30        2435:                    $30
+1CD5 092432    2436:                    FCC     '  $2'
+1CD8 B9        2437:                    '9+$80
+1CD9 29        2438:                    $29
+  1CDA         2439: .                  SET     *
+  0CF7         2440:                    ORG     MRT*2+.SA
+0CF7 1CDA      2441:                    #.
+
+
+
+
+ASM/6800 1.3H4: 0CF7                    
+08/16/82 00:00:00; Page 62; Form 1      
+META14C.ASM
+  1CDA         2442:                    ORG     .
+1CDA 30        2443:                    $30
+1CDB 092432    2444:                    FCC     '   $2'
+1CDE C1        2445:                    'A+$80
+1CDF 29        2446:                    $29
+  010C         2447: MRF                EQU     .SC
+  010D         2448: .SC                SET     .SC+1
+  1CE0         2449: .                  SET     *
+  0D61         2450:                    ORG     MRF*2+.SA
+0D61 1CE0      2451:                    #.
+  1CE0         2452:                    ORG     .
+1CE0 30        2453:                    $30
+1CE1 092432    2454:                    FCC     '  $2'
+1CE4 C2        2455:                    'B+$80
+1CE5 29        2456:                    $29
+  1CE6         2457: .                  SET     *
+  0CDF         2458:                    ORG     MBE*2+.SA
+0CDF 1CE6      2459:                    #.
+  1CE6         2460:                    ORG     .
+1CE6 30        2461:                    $30
+1CE7 092432    2462:                    FCC     '  $2'
+1CEA C3        2463:                    'C+$80
+1CEB 29        2464:                    $29
+  1CEC         2465: .                  SET     *
+  0D3B         2466:                    ORG     MERR*2+.SA
+0D3B 1CEC      2467:                    #.
+  1CEC         2468:                    ORG     .
+1CEC 30        2469:                    $30
+1CED 092432    2470:                    FCC     '  $2'
+1CF0 C4        2471:                    'D+$80
+1CF1 29        2472:                    $29
+  1CF2         2473: .                  SET     *
+  0D53         2474:                    ORG     MTAB*2+.SA
+0D53 1CF2      2475:                    #.
+  1CF2         2476:                    ORG     .
+1CF2 30        2477:                    $30
+1CF3 092432    2478:                    FCC     '  $2'
+1CF6 C5        2479:                    'E+$80
+1CF7 29        2480:                    $29
+  1CF8         2481: .                  SET     *
+
+
+
+
+ASM/6800 1.3H4: 1CF7                    
+08/16/82 00:00:00; Page 63; Form 1      
+META14C.ASM
+  0D2F         2482:                    ORG     MCR*2+.SA
+0D2F 1CF8      2483:                    #.
+  1CF8         2484:                    ORG     .
+1CF8 30        2485:                    $30
+1CF9 092432    2486:                    FCC     '  $2'
+1CFC C6        2487:                    'F+$80
+1CFD 29        2488:                    $29
+  1CFE         2489: .                  SET     *
+  0D49         2490:                    ORG     MCL*2+.SA
+0D49 1CFE      2491:                    #.
+  1CFE         2492:                    ORG     .
+1CFE 30        2493:                    $30
+1CFF 092433    2494:                    FCC     '  $3'
+1D02 B0        2495:                    '0+$80
+1D03 29        2496:                    $29
+  1D04         2497: .                  SET     *
+  0D51         2498:                    ORG     MOUT*2+.SA
+0D51 1D04      2499:                    #.
+  1D04         2500:                    ORG     .
+1D04 30        2501:                    $30
+1D05 092433    2502:                    FCC     ' $3'
+1D08 B1        2503:                    '1+$80
+1D09 29        2504:                    $29
+  1D0A         2505: .                  SET     *
+  0D4F         2506:                    ORG     MOUTN*2+.SA
+0D4F 1D0A      2507:                    #.
+  1D0A         2508:                    ORG     .
+1D0A 30        2509:                    $30
+1D0B 09243332  2510:                    FCC     '  $32'
+1D0F AC        2511:                    ',+$80
+1D10 29        2512:                    $29
+  1D11         2513: .                  SET     *
+  0D4D         2514:                    ORG     MGENL*2+.SA
+0D4D 1D11      2515:                    #.
+  1D11         2516:                    ORG     .
+1D11 30        2517:                    $30
+1D12 09243333  2518:                    FCC     ' $33'
+1D16 AC        2519:                    ',+$80
+1D17 29        2520:                    $29
+  1D18         2521: .                  SET     *
+
+
+
+
+ASM/6800 1.3H4: 1D17                    
+08/16/82 00:00:00; Page 64; Form 1      
+META14C.ASM
+  0D33         2522:                    ORG     MSET*2+.SA
+0D33 1D18      2523:                    #.
+  1D18         2524:                    ORG     .
+1D18 30        2525:                    $30
+1D19 092433    2526:                    FCC     ' $3'
+1D1C B4        2527:                    '4+$80
+1D1D 29        2528:                    $29
+  1D1E         2529: .                  SET     *
+  0D35         2530:                    ORG     MDRULE*2+.SA
+0D35 1D1E      2531:                    #.
+  1D1E         2532:                    ORG     .
+1D1E 30        2533:                    $30
+1D1F 092433    2534:                    FCC     ' $3'
+1D22 B5        2535:                    '5+$80
+1D23 29        2536:                    $29
+  1D24         2537: .                  SET     *
+  0D47         2538:                    ORG     MINCLUDE*2+.SA
+0D47 1D24      2539:                    #.
+  1D24         2540:                    ORG     .
+1D24 30        2541:                    $30
+1D25 092433    2542:                    FCC     ' $3'
+1D28 B6        2543:                    '6+$80
+1D29 29        2544:                    $29
+  1D2A         2545: .                  SET     *
+  0D45         2546:                    ORG     MOVESTRINGUP*2+.SA
+0D45 1D2A      2547:                    #.
+  1D2A         2548:                    ORG     .
+1D2A 30        2549:                    $30
+1D2B 09243337  2550:                    FCC     '  $37'
+1D2F AC        2551:                    ',+$80
+1D30 29        2552:                    $29
+  1D31         2553: .                  SET     *
+  0D25         2554:                    ORG     MPARAMS*2+.SA
+0D25 1D31      2555:                    #.
+  1D31         2556:                    ORG     .
+1D31 30        2557:                    $30
+1D32 092433    2558:                    FCC     ' $3'
+1D35 B8        2559:                    '8+$80
+1D36 29        2560:                    $29
+  1D37         2561: .                  SET     *
+
+
+
+
+ASM/6800 1.3H4: 1D36                    
+08/16/82 00:00:00; Page 65; Form 1      
+META14C.ASM
+  0D31         2562:                    ORG     MASM*2+.SA
+0D31 1D37      2563:                    #.
+  1D37         2564:                    ORG     .
+1D37 30        2565:                    $30
+1D38 092433    2566:                    FCC     ' $3'
+1D3B B9        2567:                    '9+$80
+1D3C 29        2568:                    $29
+  1D3D         2569: .                  SET     *
+  0D3D         2570:                    ORG     MSETSTATE*2+.SA
+0D3D 1D3D      2571:                    #.
+  1D3D         2572:                    ORG     .
+1D3D 30        2573:                    $30
+1D3E 09243341  2574:                    FCC     ' $3A'
+1D42 AC        2575:                    ',+$80
+1D43 29        2576:                    $29
+  1D44         2577: .                  SET     *
+  0D15         2578:                    ORG     MQUERYSTATE*2+.SA
+0D15 1D44      2579:                    #.
+  1D44         2580:                    ORG     .
+1D44 30        2581:                    $30
+1D45 09243342  2582:                    FCC     ' $3B'
+1D49 AC        2583:                    ',+$80
+1D4A 29        2584:                    $29
+  1D4B         2585: .                  SET     *
+  0D41         2586:                    ORG     MSETTYPEN*2+.SA
+0D41 1D4B      2587:                    #.
+  1D4B         2588:                    ORG     .
+1D4B 30        2589:                    $30
+1D4C 09243343  2590:                    FCC     '  $3C'
+1D50 AC        2591:                    ',+$80
+1D51 29        2592:                    $29
+  1D52         2593: .                  SET     *
+  0D21         2594:                    ORG     MQUERYTYPEN*2+.SA
+0D21 1D52      2595:                    #.
+  1D52         2596:                    ORG     .
+1D52 30        2597:                    $30
+1D53 09243344  2598:                    FCC     ' $3D'
+1D57 AC        2599:                    ',+$80
+1D58 29        2600:                    $29
+  1D59         2601: .                  SET     *
+
+
+
+
+ASM/6800 1.3H4: 1D58                    
+08/16/82 00:00:00; Page 66; Form 1      
+META14C.ASM
+  0D17         2602:                    ORG     MKEYWORDTEST*2+.SA
+0D17 1D59      2603:                    #.
+  1D59         2604:                    ORG     .
+1D59 30        2605:                    $30
+1D5A 09243345  2606:                    FCC     '  $3E,'
+1D5F A3        2607:                    '#+$80
+1D60 29        2608:                    $29
+  1D61         2609: :21                EQU     *
+               2610:                    END
+
+
+
+
+ASM/6800 1.3H4: 1D60                    
+08/16/82 00:00:00; Page 67; Form 1      Symbols Sorted by Name
+META14C.ASM
+Symbols Sorted by Name:
+
+ ./1D59          .KEYWORDLIST/0000               .PK/0000        .SA/0B49        .SC/010D        .TA/0C89
+ .TC/000D       *.VC/0000        :11/1185        :110/1552       :111/155C       :112/1560       :113/1584
+ :114/1593       :115/15D3       :116/1605       :117/15FC       :118/1621       :119/165C       :11A/1643
+ :11B/1631       :11C/1634       :11D/163E       :11E/1656       :11F/1656       :12/1575        :120/164D
+ :121/1652       :122/1669       :123/1661       :124/166E       :125/1698       :126/1694       :127/167F
+ :128/168C       :129/1697       :12A/169E       :12B/16EA       :12C/16C6       :12D/16A8       :12E/16B0
+ :12F/16BB       :13/1368        :130/16BE       :131/16EA       :132/16E6       :133/16E9       :134/16EE
+ :135/16EF       :136/16F7       :137/16F7       :138/175E       :139/1707       :13A/1706       :13B/175D
+ :13C/173C       :13D/171E       :13E/173B       :13F/1746       :14/135C        :140/174D       :141/1759
+ :142/175C       :143/17E0       :144/176A       :145/1769       :146/177E       :147/178B       :148/179E
+ :149/1797       :14A/179A       :14B/17E0       :14C/17BF       :14D/17DF       :14E/17DF       :14F/17D0
+ :15/1362        :150/17DE       :151/17DE       :152/17E4       :153/17F9       :154/1806       :155/1807
+ :156/1825       :157/181B       :158/1822       :159/18A8       :15A/186C       :15B/1869       :15C/18A7
+ :15D/1881       :15E/18A7       :15F/1891       :16/136B        :160/188E       :161/18A6       :162/189D
+ :163/18A6       :164/18AC       :165/18CE       :166/18BB       :167/18C5       :168/18CA       :169/1A10
+ :16A/18F9       :16B/18E2       :16C/1906       :16D/1911       :16E/1919       :16F/192C       :17/138D
+ :170/1925       :171/1928       :172/193C       :173/193B       :174/199D       :175/197C       :176/195E
+ :177/197B       :178/199C       :179/1A01       :17A/19BA       :17B/1A00       :17C/19E4       :17D/19D3
+ :17E/19E3       :17F/19E3       :18/1381        :180/19F7       :181/1A00       :182/1A10       :183/1A14
+ :184/1A31       :185/1A30       :186/1A86       :187/1A55       :188/1A3D       :189/1A54       :18A/1A44
+ :18B/1A50       :18C/1A53       :18D/1A61       :18E/1A75       :18F/1A6E       :19/1387        :190/1A74
+ :191/1A7E       :192/1A86       :193/1A8A       :194/1AC8       :195/1ACE       :196/1B04       :197/1AD8
+ :198/1ADE       :199/1AEA       :19A/1B57       :19B/1B5D       :19C/1B77       :19D/1B6F       :19E/1B6F
+ :19F/1B80       :1A/1390        :1A0/1B86       :1A1/1BBC       :1A2/1B90       :1A3/1B96       :1A4/1BA2
+ :1A5/1C12       :1A6/1C18       :1A7/1C32       :1A8/1C2A       :1A9/1C2A       :1B/14F7        :1C/151C
+ :1D/1515        :1E/151F        :1F/1559        :21/1D61        :31/1149        ACTION/00DF
+ ADDRESS/00C5    ARG1/00EF       ARGS/00E8       ASSEMBLY/00DA   ASSEMBLYCHARACTER/00DB
+ ASSIGNSUBRNUMBER/0108           ASSIGNTOKENNUMBER/010B          ATTRIBUTE/0000  ATTRIBUTEDEFINITION/00C3
+ BACKUP/010A     BFTAIL/00E3     BLANKS/00C1     BRANCHFALSE/00E2                BRANCHTRUE/00DD
+ BTTAIL/00DE     BYTE/00C8       CHOICE/00DC     DEBLANK/000A    DEBLANKTOKEN/1291
+ DEFINED/0004    DOLLARLOOP/00F7                 EATBLANKS/000B  EATTOKEN/010D   ENTERMETA/0119
+ EQUATE/00D0     EQUHERE/00C7    ERRALREADYISSUBR/0109           ERRISALREADYDEFD/0107
+ ERRISTOKENALREADY/0106          ERROR/0003      ERRORTOKEN/1189                 ERRORTOKENDONE/119D
+ ERRTOKENALREADYDEFD/010A        FAILURE/0C39   *FINDSTAR/0110   FINDSTARN/0113  GETTOKENCHAR/0107
+ HEXNUM/0007     HEXNUM1/1210    HEXNUM2/121C    ID/0004         ID1/11A9        ID2/11BB        ID3/11BD
+ ISDIGIT/1202    ISDIGIT1/1208   ISHEXDIGIT/11FA                 ISLETTER/11F1   ISLETTER1/11F8
+ KEYWORD/0006    KEYWORDNAME/00CF                KEYWORDTOKEN/11A2               LABEL/00C6
+ LASTTIME/1188  *M6800/0001     *M6801/0000     *M6809/0000      MASM/00F4       MBE/00CB        MCL/0100
+
+
+
+
+ASM/6800 1.3H4: 1D60                    
+08/16/82 00:00:00; Page 68; Form 1      Symbols Sorted by Name
+META14C.ASM
+ MCR/00F3        MDRULE/00F6     MERR/00F9       METAPLUS/00C0   MFIN/00CC       MGENL/0102
+ MINCLUDE/00FF   MKEYWORDTEST/00E7               MNOTTEST/00F0   MOUT/0104       MOUTN/0103
+ MOVESTRINGUP/00FE               MPARAMS/00EE    MQUERY/00EB     MQUERYN/00ED    MQUERYSTATE/00E6
+ MQUERYTYPEN/00EC                MR/00D8         MRF/010C        MRT/00D7        MSET/00F5
+ MSETSTATE/00FA  MSETTYPEN/00FC  MTAB/0105       MTAG/00F8       MTAGN/00FB      MTEST/00E9
+ MUNTAG/00F1     MUNTAGN/00FD    NONBLANK/0008   NONBLANKACCEPT/126D             NONBLANKFAIL/1246
+ NONBLANKL/1248  NOTENDOFLINECHARACTER/000C      NOTENDOFLINES/12D8              NOTTST/00E1
+ NUM/0005        NUM1/11C6       NUM2/11D2       OUTOBJ/00F2     OUTSTRING/00EA  PHRASE/00D6
+ PHTAIL/00E0     PREVIOUSKEYWORD/00CD            PUTCHAR/0116    REFERENCED/0003
+ REMBLANK1/12B8  REMBLANK2/12BC  REMBLANK3/12CA  REMBLANKS/1297  RESERVE/00D3    SAYWEGOTIT/119B
+ SDEF/00D5       SETEQU/00CE     SETLOADADDRESS/00C2             SREF/00CA       STARQUERY/0006
+ STARQUERY1/11E2                 STARQUERY2/11EF                *STARTTOKEN/0104
+ STATENAMEDEFINITION/00D4        STATEVALUE/0008                 STATEVARDEFINITION/00D1
+ STATEVARIABLE/0005              STMT/00D2       STRING/0009     STRING1/1279    STRING2/1282
+ STRING3/1286    STRING5/128F    STRINGOUT1/1830                 SUBR/0002       SUCCESS/0D39
+ TDEF/00D9       TEST/00E4       TEXT/00C9       TKNNOTLEGAL/0101                TOKEN/0001      TREF/00E5
+ TYPEDEFINITION/00C4             TYPENAME/0007
+
+
+
+
+ASM/6800 1.3H4: 1D60                    
+08/16/82 00:00:00; Page 69; Form 1      Symbols Sorted by Value
+META14C.ASM
+Symbols Sorted by Value:
+
+ .KEYWORDLIST/0000               .PK/0000       *.VC/0000        ATTRIBUTE/0000 *M6801/0000     *M6809/0000
+*M6800/0001      TOKEN/0001      SUBR/0002       ERROR/0003      REFERENCED/0003
+ DEFINED/0004    ID/0004         NUM/0005        STATEVARIABLE/0005              KEYWORD/0006
+ STARQUERY/0006  HEXNUM/0007     TYPENAME/0007   NONBLANK/0008   STATEVALUE/0008
+ STRING/0009     DEBLANK/000A    EATBLANKS/000B  NOTENDOFLINECHARACTER/000C      .TC/000D
+ METAPLUS/00C0   BLANKS/00C1     SETLOADADDRESS/00C2             ATTRIBUTEDEFINITION/00C3
+ TYPEDEFINITION/00C4             ADDRESS/00C5    LABEL/00C6      EQUHERE/00C7    BYTE/00C8       TEXT/00C9
+ SREF/00CA       MBE/00CB        MFIN/00CC       PREVIOUSKEYWORD/00CD            SETEQU/00CE
+ KEYWORDNAME/00CF                EQUATE/00D0     STATEVARDEFINITION/00D1         STMT/00D2
+ RESERVE/00D3    STATENAMEDEFINITION/00D4        SDEF/00D5       PHRASE/00D6     MRT/00D7        MR/00D8
+ TDEF/00D9       ASSEMBLY/00DA   ASSEMBLYCHARACTER/00DB          CHOICE/00DC     BRANCHTRUE/00DD
+ BTTAIL/00DE     ACTION/00DF     PHTAIL/00E0     NOTTST/00E1     BRANCHFALSE/00E2
+ BFTAIL/00E3     TEST/00E4       TREF/00E5       MQUERYSTATE/00E6                MKEYWORDTEST/00E7
+ ARGS/00E8       MTEST/00E9      OUTSTRING/00EA  MQUERY/00EB     MQUERYTYPEN/00EC
+ MQUERYN/00ED    MPARAMS/00EE    ARG1/00EF       MNOTTEST/00F0   MUNTAG/00F1     OUTOBJ/00F2
+ MCR/00F3        MASM/00F4       MSET/00F5       MDRULE/00F6     DOLLARLOOP/00F7                 MTAG/00F8
+ MERR/00F9       MSETSTATE/00FA  MTAGN/00FB      MSETTYPEN/00FC  MUNTAGN/00FD    MOVESTRINGUP/00FE
+ MINCLUDE/00FF   MCL/0100        TKNNOTLEGAL/0101                MGENL/0102      MOUTN/0103      MOUT/0104
+*STARTTOKEN/0104                 MTAB/0105       ERRISTOKENALREADY/0106          ERRISALREADYDEFD/0107
+ GETTOKENCHAR/0107               ASSIGNSUBRNUMBER/0108           ERRALREADYISSUBR/0109
+ BACKUP/010A     ERRTOKENALREADYDEFD/010A        ASSIGNTOKENNUMBER/010B          MRF/010C        .SC/010D
+ EATTOKEN/010D  *FINDSTAR/0110   FINDSTARN/0113  PUTCHAR/0116    ENTERMETA/0119  .SA/0B49
+ FAILURE/0C39    .TA/0C89        SUCCESS/0D39    :31/1149        :11/1185        LASTTIME/1188
+ ERRORTOKEN/1189                 SAYWEGOTIT/119B                 ERRORTOKENDONE/119D
+ KEYWORDTOKEN/11A2               ID1/11A9        ID2/11BB        ID3/11BD        NUM1/11C6       NUM2/11D2
+ STARQUERY1/11E2                 STARQUERY2/11EF                 ISLETTER/11F1   ISLETTER1/11F8
+ ISHEXDIGIT/11FA                 ISDIGIT/1202    ISDIGIT1/1208   HEXNUM1/1210    HEXNUM2/121C
+ NONBLANKFAIL/1246               NONBLANKL/1248  NONBLANKACCEPT/126D             STRING1/1279
+ STRING2/1282    STRING3/1286    STRING5/128F    DEBLANKTOKEN/1291               REMBLANKS/1297
+ REMBLANK1/12B8  REMBLANK2/12BC  REMBLANK3/12CA  NOTENDOFLINES/12D8              :14/135C        :15/1362
+ :13/1368        :16/136B        :18/1381        :19/1387        :17/138D        :1A/1390        :1B/14F7
+ :1D/1515        :1C/151C        :1E/151F        :110/1552       :1F/1559        :111/155C       :112/1560
+ :12/1575        :113/1584       :114/1593       :115/15D3       :117/15FC       :116/1605       :118/1621
+ :11B/1631       :11C/1634       :11D/163E       :11A/1643       :120/164D       :121/1652       :11E/1656
+ :11F/1656       :119/165C       :123/1661       :122/1669       :124/166E       :127/167F       :128/168C
+ :126/1694       :129/1697       :125/1698       :12A/169E       :12D/16A8       :12E/16B0       :12F/16BB
+ :130/16BE       :12C/16C6       :132/16E6       :133/16E9       :12B/16EA       :131/16EA       :134/16EE
+ :135/16EF       :136/16F7       :137/16F7       :13A/1706       :139/1707       :13D/171E       :13E/173B
+
+
+
+
+ASM/6800 1.3H4: 1D60                    
+08/16/82 00:00:00; Page 70; Form 1      Symbols Sorted by Value
+META14C.ASM
+ :13C/173C       :13F/1746       :140/174D       :141/1759       :142/175C       :13B/175D       :138/175E
+ :145/1769       :144/176A       :146/177E       :147/178B       :149/1797       :14A/179A       :148/179E
+ :14C/17BF       :14F/17D0       :150/17DE       :151/17DE       :14D/17DF       :14E/17DF       :143/17E0
+ :14B/17E0       :152/17E4       :153/17F9       :154/1806       :155/1807       :157/181B       :158/1822
+ :156/1825       STRINGOUT1/1830                 :15B/1869       :15A/186C       :15D/1881       :160/188E
+ :15F/1891       :162/189D       :161/18A6       :163/18A6       :15C/18A7       :15E/18A7       :159/18A8
+ :164/18AC       :166/18BB       :167/18C5       :168/18CA       :165/18CE       :16B/18E2       :16A/18F9
+ :16C/1906       :16D/1911       :16E/1919       :170/1925       :171/1928       :16F/192C       :173/193B
+ :172/193C       :176/195E       :177/197B       :175/197C       :178/199C       :174/199D       :17A/19BA
+ :17D/19D3       :17E/19E3       :17F/19E3       :17C/19E4       :180/19F7       :17B/1A00       :181/1A00
+ :179/1A01       :169/1A10       :182/1A10       :183/1A14       :185/1A30       :184/1A31       :188/1A3D
+ :18A/1A44       :18B/1A50       :18C/1A53       :189/1A54       :187/1A55       :18D/1A61       :18F/1A6E
+ :190/1A74       :18E/1A75       :191/1A7E       :186/1A86       :192/1A86       :193/1A8A       :194/1AC8
+ :195/1ACE       :197/1AD8       :198/1ADE       :199/1AEA       :196/1B04       :19A/1B57       :19B/1B5D
+ :19D/1B6F       :19E/1B6F       :19C/1B77       :19F/1B80       :1A0/1B86       :1A2/1B90       :1A3/1B96
+ :1A4/1BA2       :1A1/1BBC       :1A5/1C12       :1A6/1C18       :1A8/1C2A       :1A9/1C2A       :1A7/1C32
+ ./1D59          :21/1D61
+
+321 Symbols.
+
+
+ *** No Assembly Errors.

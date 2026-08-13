@@ -12,7 +12,7 @@
 ; * Modified by Roberto Sancho Jul/2022
 ; * Relocated to assemble at $4000, ram at $4800, ACIA at $FF04
 ; * to be used in Swtpc 64k hack to load SDOS at BE00-F000
-; * (regular swtbuf resides at E000 and is overwritten)
+; * (regular swtbug resides at E000 and is overwritten)
 
    ORG $4800
  

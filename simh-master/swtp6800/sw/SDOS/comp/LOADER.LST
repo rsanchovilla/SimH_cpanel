@@ -1,0 +1,358 @@
+
+
+
+
+ASM/6800 1.4A0: 0000                    
+08/16/82 00:00:00; Page 1; Form 1       
+LOADER.ASM
+                  1: ;* 
+                  2: ;* Loader for Software Dynamics SDOS 1.1 Operating System
+                  3: ;* I/O Routines for MF68 Floppy Disk
+                  4: ;*
+                  5: ;* (C) Roberto Sancho, Jun/2022
+                  6: ;*
+                  7: 
+                  8: ;* Added fixes from MAY/2023 by Mike Douglas to work on real hardware
+                  9: ;* The MF68 does not support dosuble side operations, so it has been made to work
+                 10: ;* on Peripheral Technologies FD-2 Floppy controller (controller chip is WD2797)
+                 11: ;* which supports double side and is compatible with MF68
+                 12: ;*
+                 13: 
+                 14: ; this loader is implemented to work with D command from SWTBUG ROM
+                 15: ; D command loads sector zero into addr $2400, and branch to it
+                 16: ; Sector zero of disk is the boot sector of SDOS. It has 16 bytes of prog
+                 17: ; then 16 bytes for disk info, then 32 bytes for disk name (ascii)
+                 18: ; the rest of sector is prog. 
+                 19: 
+                 20: ; Comments by Mike Douglas on physical disk format:
+                 21: ; THE SWTBUG D COMMAND READS CONSECUTIVE SECTORS STARTING AT SECTOR 0
+                 22: ; INTO RAM AT $2400 UNTIL AN ERROR OCCURS. THIS LOADER IS 5 SECTORS
+                 23: ; LONG AND IS ON SECTORS 0-4 ON THE DISK. SECTOR 5 DOES NOT EXIST
+                 24: ; AND SECTORS RESUME WITH SECTOR 6. THE SWTBUG D COMMAND STOPS
+                 25: ; READING WHEN IT IS NOT ABLE TO READ SECTOR 5. ONLY TRACK 0
+                 26: ; SIDE 0 IS FORMATTED THIS WAY (0,1,2,3,4,6,7...). ALL OTHER TRACKS
+                 27: ; HAVE SECTORS 1-18.
+                 28: 
+                 29: 
+  2400           30:        org  $2400
+                 31: 
+2400 CE245F      32:        ldx  #base+5             ; 8 bytes to setup and branch
+2403 DF00        33:        stx  $00         
+2405 7E2440      34:        jmp  st0
+                 35:        
+2408 31323334    36:        fcc  "1234----"          ;  8 bytes      This space is reserved. will be overwritten
+2410 31323334    37:        fcc  "1234----5678----"  ; 16 bytes      with boot info. It is important that this
+2420 31323334    38:        fcc  "1234----5678----"  ; 16 bytes      occupies exactly 8+8+16*3=64 bytes. No one more
+2430 31323334    39:        fcc  "1234----5678----"  ; 16 bytes      no one less
+                 40: 
+                 41: 
+                 42:        ; the boot prog continues here
+                 43:         
+2440 DE00        44: st0    ldx  $00                 ; this prog places the loaded (starting at LoaderStart)
+2442 8C2598      45:        cpx  #base+5+LoaderLen   ; into its execution address 
+2445 2603        46:        bne  st1                 ; and the branch to it
+2447 7E5000      47:        jmp  LoaderStart
+244A A600        48: st1    ldaa 0,x       
+244C 08          49:        inx
+244D DF00        50:        stx $00
+244F FE245B      51:        ldx  base+1     ; dest
+2452 A700        52:        staa 0,x
+2454 08          53:        inx
+2455 FF245B      54:        stx  base+1     
+2458 20E6        55:        bra st0
+
+
+
+
+ASM/6800 1.4A0: 2458                    
+08/16/82 00:00:00; Page 2; Form 1       
+LOADER.ASM
+                 56: 
+  245A           57: base   equ  *
+                 58: 
+  5000           59:        org  $5000
+  5800           60: buf    equ  $5800       
+                 61: 
+  5000           62: LoaderStart  equ *
+                 63: 
+                 64:                         ; at last, we are at loader on the correct execution address. Go on ...
+                 65:                         ; this is the entry point when called from SWTBUG "D" command
+                 66:                         ; in this case, all the program is loaded at $2400 and onwards
+                 67:                         ; track zero on disk has sectors numbered a 0,1, 3,... (weird, isn't it?)
+                 68: 
+5000 B62411      69: boot   ldaa $2411       ; get num of sectors per cluster
+5003 4C          70:        inca             ; after the incr, a=first sector of Cluster 1
+5004 B750BF      71:        staa sect        ; the first sector to read (is the first sector of sdos.sys)      
+5007 CE5880      72:        ldx #buf+128
+500A FF50C1      73:        stx ddata
+500D 7F50BC      74:        clr goflag
+                 75:        
+5010 7D50BC      76: rdty   tst  goflag
+5013 262F        77:        bne  go
+5015 BD507A      78:        jsr  rdbyte      ; get load record type
+5018 8100        79:        cmpa #0          ; .*echo type:a
+501A 270C        80:        beq  rdty0       ; br if type 0 (fill record)
+501C 8101        81:        cmpa #1
+501E 261C        82:        bne rd0b
+5020 BD506D      83: rdty1  jsr  rdword      ; type 1 record: skip 4 bytes
+5023 BD506D      84:        jsr  rdword      
+5026 20E8        85:        bra rdty
+5028 BD506D      86: rdty0  jsr  rdword      ; type 0 record (fill record). get length
+502B FF50BA      87:        stx  plen        ; .*echo ..skip:x
+502E FE50BA      88: rd0a   ldx  plen
+5031 27DD        89:        beq  rdty        ; br if record done, to read next one
+5033 09          90:        dex
+5034 FF50BA      91:        stx  plen
+5037 BD507A      92:        jsr  rdbyte      ; read byte and discard it
+503A 20F2        93:        bra  rd0a       
+503C 8102        94: rd0b   cmpa #2
+503E 270A        95:        beq  rdty2       ; br if type 2 (load record)
+5040 8103        96:        cmpa #3
+5042 2703        97:        beq  rdty3       ; br if type 3 (last load record)
+5044 7E2000      98: go     jmp  $2000       ; start sdos.sys execution .*echo Start
+5047 7C50BC      99: rdty3  inc  goflag       
+504A BD506D     100: rdty2  jsr  rdword      ; type 2 start addr
+504D FF50B8     101:        stx  pdata       ; .*echo ..addr:x
+5050 BD506D     102:        jsr  rdword      ; type 2 length
+5053 FF50BA     103:        stx  plen        ; .*echo ..len:x
+5056 FE50BA     104: rd2    ldx  plen        ; copy type 2 record data
+5059 27B5       105:        beq  rdty        ; br if record done, to read next one
+505B 09         106:        dex
+505C FF50BA     107:        stx  plen
+505F BD507A     108:        jsr  rdbyte
+5062 FE50B8     109:        ldx  pdata
+5065 A700       110:        staa  0,x        ; .*echo ......addr:x
+
+
+
+
+ASM/6800 1.4A0: 5067                    
+08/16/82 00:00:00; Page 3; Form 1       
+LOADER.ASM
+5067 08         111:        inx              ; .*echo .........data:a
+5068 FF50B8     112:        stx  pdata
+506B 20E9       113:        bra  rd2
+                114: 
+506D BD507A     115: rdword jsr  rdbyte      
+5070 9700       116:        staa $00 
+5072 BD507A     117:        jsr  rdbyte
+5075 9701       118:        staa $01
+5077 DE00       119:        ldx $00
+5079 39         120:        rts
+                121: 
+507A FE50C1     122: rdbyte  ldx ddata       
+507D 8C5880     123:         cpx #buf+128
+5080 2608       124:         bne rdbyte1
+5082 8D0D       125:         bsr rdsk        ; read disk on disk buf empty
+5084 CE5800     126:         ldx #buf        ; point again to start of buf
+5087 FF50C1     127:         stx ddata
+508A A600       128: rdbyte1 ldaa 0,x
+508C 08         129:         inx
+508D FF50C1     130:         stx ddata
+5090 39         131:         rts             
+                132: 
+5091 CE5800     133: rdsk    ldx #buf        
+5094 FF50C1     134:         stx ddata
+5097 BD50C4     135:         jsr rdsec       ; **troff
+509A F650BF     136:         ldab sect       ; **tron
+509D C112       137:         cmpb #18        ; if just read sector 18 (last on on tracks)
+509F 2613       138:         bne rdsk1       ; then incr track number, reset sector num to 1
+50A1 7D50C0     139:         tst side
+50A4 2605       140:         bne rdsk0a
+50A6 7C50C0     141:         inc side
+50A9 2006       142:         bra rdsk0b
+50AB 7F50C0     143: rdsk0a  clr side
+50AE 7C50BE     144:         inc trk
+50B1 7F50BF     145: rdsk0b  clr sect
+50B4 7C50BF     146: rdsk1   inc sect
+50B7 39         147:         rts     
+                148: 
+50B8 0000       149: PDATA   fdb 0        
+50BA 0000       150: PLEN    fdb 0         
+50BC 00         151: GOFLAG  fcb 0
+                152: 
+                153: ; DISK DRIVERS FOR SOUTHWEST TECHNICAL PRODUCTS MF-68
+                154: ; (FD-2 CONTROLLER)
+                155: 
+                156: ; INPUT PARAMS
+                157: 
+50BD 00         158: DRV    fcb 0         ; DRIVE TO OPERATE ON
+50BE 00         159: TRK    fcb 0         ; TRACK TO READ/WRITE
+50BF 00         160: SECT   fcb 0         ; SECTOR TO READ/WRITE
+50C0 00         161: SIDE   fcb 0         ; SIDE TO READ/WRITE
+50C1 0000       162: DDATA  fdb 0         ; POINTER TO DATA BUFFER (MUST HAVE 128 BYTES)
+                163: 
+                164: ; COMMANDS FOR WD1771 CONTROLLER CHIP
+                165: ;
+
+
+
+
+ASM/6800 1.4A0: 50C1                    
+08/16/82 00:00:00; Page 4; Form 1       
+LOADER.ASM
+  0008          166: FDRSC  EQU $08       ; RESTORE
+  0018          167: FDSKI  EQU $18       ; SEEK
+  0088          168: FDRDC  EQU $88       ; READ A SECTOR
+  00A8          169: FDWRC  EQU $A8       ; WRITE A SECTOR
+                170: 
+                171: ; ADDR OF WD1771 CONTROLLER CHIP REGISTERS 
+                172: 
+  8014          173: DRVREG EQU $8014
+  8018          174: CMDREG EQU $8018
+  8019          175: TRKREG EQU $8019
+  801A          176: SECREG EQU $801A
+  801B          177: DATREG EQU $801B
+                178: 
+                179: ; DRIVER VARS
+                180: 
+50C3 00         181: RCNT   FCB  0         ; RETRY COUNT
+                182: 
+                183: ; READ A SECTOR
+                184: ;
+50C4 BD511F     185: RDSEC  JSR SELDRV     ; SELECT DRIVE AND SIDE
+50C7 BD50D3     186: RDSEC1 JSR READ       ; READ A SECTOR
+50CA 2706       187:        BEQ RDEXIT     ; OK
+50CC 7A50C3     188:        DEC RCNT       ; RETRY AGAIN?
+50CF 26F6       189:        BNE RDSEC1     ; YES
+50D1 4D         190:        TSTA           ; A=ERROR STATUS
+50D2 39         191: RDEXIT RTS
+                192: 
+                193: ; READ A SECTOR (A=TRK, B=SECTOR)
+                194: ;
+50D3 BD50F7     195: READ   JSR SEEK
+50D6 8688       196:        LDAA #FDRDC    ; READ COMMAND
+50D8 B78018     197:        STAA CMDREG     
+50DB BD5112     198:        JSR DEL56U     ; DELAY
+50DE FE50C1     199:        LDX DDATA      ; GET BUFFER ADDRESS
+                200: 
+50E1 B68018     201: READ1  LDAA CMDREG     
+50E4 8502       202:        BITA #$02      ; DATA REG FULL?
+50E6 2607       203:        BNE READ2      ; YES
+50E8 8501       204:        BITA #1        ; BUSY?
+50EA 26F5       205:        BNE READ1      ; LOOP IF BUSY, ELSE ERROR
+                206: 
+50EC 841C       207:        ANDA #$1C      ; MASK OFF STATUS BITS
+50EE 39         208:        RTS             
+                209: 
+50EF B6801B     210: READ2  LDAA DATREG    ; GET A BYTE
+50F2 A700       211:        STAA 0,X       ; STORE IN BUFFER
+50F4 08         212:        INX             
+50F5 26EA       213:        BNE READ1      ; LOOP TO READ NEXT BYTE
+                214:                        
+                215: ; SEEK A=TRACK, B=SECTOR
+                216: 
+50F7 F7801A     217: SEEK   STAB SECREG    ; SET SECTOR
+50FA B18019     218:        CMPA TRKREG    ; ON TRACK?
+50FD 2712       219:        BEQ CMDEX      ; YES
+                220: 
+
+
+
+
+ASM/6800 1.4A0: 50FF                    
+08/16/82 00:00:00; Page 5; Form 1       
+LOADER.ASM
+50FF B7801B     221:        STAA DATREG    ; NO, STORE TRACK#
+5102 8618       222:        LDAA #FDSKI    ; SEEK COMMAND
+5104 B78018     223: DOCMD  STAA CMDREG
+5107 BD5112     224:        JSR DEL56U
+                225: 
+510A B68018     226: WBUSY  LDAA CMDREG
+510D 8501       227:        BITA #1
+510F 26F9       228:        BNE WBUSY
+5111 39         229: CMDEX  RTS
+                230: 
+                231: ; DEL56U- DELAY 56us INCLUDING THE CALL TO DELAY56U
+                232: 
+5112 BD5115     233: DEL56U JSR DELAY2
+5115 BD5118     234: DELAY2 JSR DELAY3
+5118 39         235: DELAY3 RTS
+                236: 
+                237: ; RESTORE SEEK TRACK0
+                238: 
+5119 8D04       239: RESTOR BSR SELDRV     ; SELECT THE DRIVE
+511B 8608       240:        LDAA #FDRSC    ; RESTORE COMMAND
+511D 20E5       241:        BRA DOCMD      ; EXEC DISK CONTROLLER CMD
+                242: 
+                243: ; SELECT THE DRIVE
+                244: ; RETURN A=TRACK, B=SECTOR
+                245: 
+511F B650BD     246: SELDRV LDAA DRV       ; GET DRIVE 
+5122 7D50C0     247:        TST  SIDE
+5125 2702       248:        BEQ  DOSEL
+5127 8A40       249:        ORAA #$40
+5129 B78014     250: DOSEL  STAA DRVREG    ; SELECT THE DRIVR
+                251: 
+512C 8605       252:        LDAA #5        ; SET RETRY COUNT
+512E B750C3     253:        STAA RCNT       
+5131 B650BE     254:        LDAA TRK       ; GET TRACK#        
+5134 F650BF     255:        LDAB SECT      ; GET SECTOR#
+5137 39         256:        RTS            
+                257: 
+  0139          258: LoaderLen equ   *-LoaderStart+1
+                259:         
+  6000          260:        org $6000        ; this is the entry point when LOADER is bring to ram as S19 file using SWTBUG "L" comm
+                261:                         ; in this case, the program is loaded at its assembled address
+                262:                         ; track zero on disk has sectors numbered a 1,2,3,... (the expected SDOS numbering)
+                263:        
+6000 8601       264: boot2  ldaa #1
+6002 B750BF     265:        staa sect
+6005 7F50C0     266:        clr  side
+6008 7F50BE     267:        clr  trk
+600B BD5091     268:        jsr  rdsk
+600E B65811     269:        ldaa buf+$11     ; this is the number of sectors pre cluster
+6011 B72411     270:        staa $2411
+6014 7E5000     271:        jmp  boot
+                272: 
+                273:        ; to start the LOADER with SWTBUG "G" command
+  A048          274:        ORG $A048
+A048 6000       275:        FDB boot2       
+
+
+
+
+ASM/6800 1.4A0: A048                    
+08/16/82 00:00:00; Page 6; Form 1       
+LOADER.ASM
+                276: 
+                277:        END
+
+
+
+
+ASM/6800 1.4A0: A048                    
+08/16/82 00:00:00; Page 7; Form 1       Symbols Sorted by Name
+LOADER.ASM
+Symbols Sorted by Name:
+
+ BASE/245A       BOOT/5000       BOOT2/6000      BUF/5800        CMDEX/5111      CMDREG/8018     DATREG/801B     DDATA/50C1
+ DEL56U/5112     DELAY2/5115     DELAY3/5118     DOCMD/5104      DOSEL/5129      DRV/50BD        DRVREG/8014     FDRDC/0088
+ FDRSC/0008      FDSKI/0018     *FDWRC/00A8      GO/5044         GOFLAG/50BC     LOADERLEN/0139  LOADERSTART/5000
+*M6800/0001     *M6801/0000     *M6809/0000      PDATA/50B8      PLEN/50BA       RCNT/50C3       RD0A/502E       RD0B/503C
+ RD2/5056        RDBYTE/507A     RDBYTE1/508A    RDEXIT/50D2     RDSEC/50C4      RDSEC1/50C7     RDSK/5091       RDSK0A/50AB
+ RDSK0B/50B1     RDSK1/50B4      RDTY/5010       RDTY0/5028     *RDTY1/5020      RDTY2/504A      RDTY3/5047      RDWORD/506D
+ READ/50D3       READ1/50E1      READ2/50EF     *RESTOR/5119     SECREG/801A     SECT/50BF       SEEK/50F7       SELDRV/511F
+ SIDE/50C0       ST0/2440        ST1/244A        TRK/50BE        TRKREG/8019     WBUSY/510A
+
+
+
+
+ASM/6800 1.4A0: A048                    
+08/16/82 00:00:00; Page 8; Form 1       Symbols Sorted by Value
+LOADER.ASM
+Symbols Sorted by Value:
+
+*M6801/0000     *M6809/0000     *M6800/0001      FDRSC/0008      FDSKI/0018      FDRDC/0088     *FDWRC/00A8      LOADERLEN/0139
+ ST0/2440        ST1/244A        BASE/245A       BOOT/5000       LOADERSTART/5000                RDTY/5010      *RDTY1/5020
+ RDTY0/5028      RD0A/502E       RD0B/503C       GO/5044         RDTY3/5047      RDTY2/504A      RD2/5056        RDWORD/506D
+ RDBYTE/507A     RDBYTE1/508A    RDSK/5091       RDSK0A/50AB     RDSK0B/50B1     RDSK1/50B4      PDATA/50B8      PLEN/50BA
+ GOFLAG/50BC     DRV/50BD        TRK/50BE        SECT/50BF       SIDE/50C0       DDATA/50C1      RCNT/50C3       RDSEC/50C4
+ RDSEC1/50C7     RDEXIT/50D2     READ/50D3       READ1/50E1      READ2/50EF      SEEK/50F7       DOCMD/5104      WBUSY/510A
+ CMDEX/5111      DEL56U/5112     DELAY2/5115     DELAY3/5118    *RESTOR/5119     SELDRV/511F     DOSEL/5129      BUF/5800
+ BOOT2/6000      DRVREG/8014     CMDREG/8018     TRKREG/8019     SECREG/801A     DATREG/801B
+
+61 Symbols.
+
+
+ *** No Assembly Errors.

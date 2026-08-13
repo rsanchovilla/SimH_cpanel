@@ -1,0 +1,3300 @@
+
+
+
+
+
+
+          IRA---ALL  THIS  JUNK  WAS  LISTED ON AS "COMMENTS". HAS ALL THIS
+          BEEN ACCOMMODATED OR DO YOU STILL NEED IT? CAN IT BE DELETED?
+
+          ?? DOCUMENT SIMULATED FORM
+
+          ?? WHAT DOES HARDCOPY MEAN
+
+          need to accomodate hardcopy terminals in this document
+
+          VT devices, upon first OPEN or CREATE, copy the process ID of the
+          OPENing process.   Subsequent  OPENs or CREATEs are valid only if
+          the same process  performs  them.   CLOSEing the device causes an
+          "open counter" to be  decremented.   When  the  "open counter" is
+          zero, the device can be OPENed by a different process.
+
+          The input line buffer is  used  for assembling a message from the
+          type-ahead buffer.  Until the input line  buffer  is closed by an
+          activation character, the typist may edit that buffer.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  1                     Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VTDRIVER ERROR CODES
+
+
+          ERROR CODES
+
+
+
+          1230  err:sdosmtalreadyrunning     SDOS/MT already running
+          1231  err:statushaschanged         new status for SDOS/MT
+          1232  err:sdosmtprimsmissing       SDOS/MT primitives not installed
+                                             in I/O package
+
+          1905  err:ioinprogress             last request has not completed
+          1906  err:busyforanotherprocess    dcb open to another process
+          1907  err:activationnotinbuffer    RDBUF does not hold activation
+          1909  err:activationreceived       activation rec'd per cc:activationck
+          1910  err:timedinputexpired        timed input period expired
+          1911  err:profilenotfound          profile not found
+          1912  err:profilenotmalleable      profile not malleable
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  2                     Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          VIRTUAL TERMINAL DRIVER
+               (CONSOLE:, LPT: and Other ASCII-Oriented Serial Devices)
+
+          This document describes SDVT11C, known as the  "Virtual  Terminal
+          Driver".  The  Virtual  Terminal driver is intended to  allow  an
+          applications   program   to   operate   with   the   majority  of
+          display-oriented  display   units  (terminals),  without  knowing
+          physical terminal characteristics.   Inasmuch  as printer devices
+          and terminals have a  great  deal  in  common,  with  respect  to
+          output, the secondary intent of  the  VT  driver  is  to give the
+          application the same uniform view of printer devices.
+
+          This  is  accomplished  by  defining a  set  of  display-oriented
+          operations  for an imaginary (virtual) terminal.  The application
+          controls  the  terminal with this set of  operations,  giving  no
+          regard to the type of physical terminal which  may  be ultimately
+          used.  At time of program execution, the operations commanded  by
+          the  application  are mapped into equivalent operations which the
+          physical terminal can perform.
+
+          In  the   event   that  an  applications  programmer  desires  to
+          explicitly reference a feature peculiar to a particular terminal,
+          he may use installation-dependent CONTROL or STATUS calls, or the
+          binary operations READB  and  WRITEB to bypass the general nature
+          of the VT driver. In so doing, however, that program becomes tied
+          to  a particular terminal  and  is  no  longer  portable  to  all
+          terminals serviced by the VT driver.
+
+          The VT driver provides keyboard  entry,  line  input editing, and
+          text display functions.  For CRTs, the  VT driver also provides a
+          standard  method of dealing with cursor positioning,  data  entry
+          via fields, and various screen attributes (denoted as  "Coloring"
+          in  this  document)  thus  making  display-oriented  applications
+          portable over a wide variety of terminals.
+
+          For each  virtual  terminal  device,  the  VT  driver presents an
+          indefinitely long input or output byte stream to the application.
+          The path of  input,  from  typist to application, travels through
+          several territories, before reaching its destination.  Keystrokes
+          are first collected in  a  type-ahead buffer.  When a request for
+          data is made (via a READA or READB, for instance), characters are
+          removed from the type-ahead buffer,  in  the  order received, and
+          assembled in the input line buffer.   Characters  are  moved from
+          the  type-ahead  buffer  to  the input line  buffer,  up  to  and
+          including  the  character,  which  terminates  the buffer filling
+          process.  All  subsequent  data  requests are satisfied from this
+          line buffer, until  it  has  been exhausted; then, the type-ahead
+          buffer is again referenced.  If  the  type-ahead buffer is empty,
+          then input is taken from the keyboard, a keystroke at a time. The
+          type of the last data request (READA, READB, etc.) determines how
+          the type-ahead buffer is filled.   If  the  binary  mode has been
+          selected (the last request was a  READB), then all keystrokes are
+          faithfully stored in the type-ahead buffer.  On  the  other hand,
+          if the ASCII mode has been selected (the last request was a READA
+
+
+     Copyright (c) 1981                  3                     Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          or CC:ACTIVATIONCK control call), the parity bit is stripped from
+          all  characters;  certain control characters are assigned special
+          meaning (see  Control  Characters  in  this  section) and are not
+          stored in the  type-ahead  buffer.  Editing  of the input line is
+          performed at the time  of  character transfer from the type-ahead
+          buffer to the input line  buffer: if a READA or a CC:ACTIVATIONCK
+          control call initiated the transfer, then  the  input line buffer
+          is filled in ASCII mode and line editing is performed; otherwise,
+          the data is transparently copied through the input line buffer to
+          the RDBUF specified by the request. When  ASCII  mode  keystrokes
+          are being stored in the type-ahead buffer, switch  requests, such
+          as ^A, ^C, ^S, and ^P (to name a  few), are serviced immediately,
+          and are not retained in the type-ahead buffer.
+
+          A  terminal  may  be  OPENed  or  CREATEd, using the device  name
+          "CONSOLE:",  "PORT1:",  "PORT2:",  etc.;  a  printer  to  "LPT:",
+          "LINEPRINTER:", etc.  Doing  an  OPEN  or  CREATE  sets the ASCII
+          activation set to  <CR>  only, sets the tabs to 8, 16, 24 .... up
+          to 132, performs CC:ECHO  and  CC:KILLENABLE  control  calls, and
+          sets the background color to "black" (see CC:BACKGROUND). CREATEs
+          to non-ready devices are aborted  with  a  "Device  Not Ready" or
+          "Printer  Not  Ready",  depending on whether  the  device  was  a
+          console or printer, respectively; this prevents applications from
+          outputting data to un-ready devices in a  way which is convenient
+          to  test.  A  terminal/printer  may be open on  several  channels
+          provided  that  all  channels  belong  to  the same task;  output
+          display by the terminal is exactly what would be seen if the  I/O
+          requests had been all directed to one channel in the same order.
+
+          CLOSE   disassociates  the  I/O  channel  from  the  driver.  For
+          printers, if  part of a line has been printed, the VT driver will
+          complete the line by effectively WRITEAing ASCII:CR; if a partial
+          page has been  printed,  it  will  finish the page by effectively
+          WRITEAing ASCII:FF, thus assuring  that  each  use  of  a printer
+          leaves the paper aligned at  top of form for the next use.  CLOSE
+          finally does an implied CC:DUMPBUFFERS, and gives an error if the
+          device times out.
+
+          RENAME and DELETE operations are illegal.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  4                     Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          READA and WRITEA are the normal I/O modes used with the terminal,
+          and  match  the  SYSCALL  specification.   A   READA  causes  the
+          characters to be taken from an input  line  buffer  maintained by
+          the driver.  When the input line is exhausted,  and  a  READA  is
+          issued,  the  driver  processes  characters  from  the type-ahead
+          buffer, placing  regular  keystrokes  in  the  input line buffer,
+          performing editing as  directed  by  control keys, and performing
+          echoing for the typist's  benefit.  A ^Z read from the type-ahead
+          buffer will cause an End  of  File condition to occur.  Parity is
+          stripped,  leaving  only 7-bit ASCII codes.  Characters  are  not
+          taken  from  the  input  line buffer until  activation  has  been
+          signaled.   READA  terminates  when  an  activation  character is
+          encountered, or  RDBUF  has  no room for the next character.   In
+          the latter case, an "Activation Not in Buffer" error is returned,
+          along with as  much data as RDBUF can hold. READA must be done in
+          line mode: a non-line  mode request for more than zero bytes will
+          result in an Illegal Device  Operation error; READA non-line mode
+          for zero bytes is accepted for backwards compatibility reasons to
+          allow change of mode from Binary reads to Ascii reads.
+
+          When a READB is issued, keystrokes  are  accumulated in the input
+          line  buffer  (and  the  type-ahead buffer, as  necessary),  with
+          neither  echoing nor pre-processing of any kind.  The  exact  key
+          codes  generated by the terminal hardware are passed directly  to
+          the application, including the parity bit.
+
+          If  the  last  operation  upon the terminal was READA, then  most
+          control  keys, including ASCII:ESC and ASCII:RUBOUT cause various
+          actions to  be  taken  by the VT driver; these keystrokes are not
+          passed to the  application.  If READB was last issued, no special
+          interpretation  of any keystroke  is  made;  all  keystrokes  are
+          placed  in  the  type-ahead  buffer   for   processing   by   the
+          application. READA and READB permit a 0-byte read request for the
+          purpose  of  changing  input  modes.   See   section  on  Control
+          Characters  for a complete list of the  control  characters,  and
+          their actions, upon both input and output.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  5                     Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          WRITEA causes text to be output to the  terminal.  All characters
+          are  first  stripped  of  the  "parity"  bit  (bit 7),  and  then
+          inspected to determine their interpretation.  Printing characters
+          are sent to the device. Tab characters are expanded according  to
+          the  tab  table  assigned  to each terminal.  ASCII:CR characters
+          cause an  ASCII:LF and a variable number of idle characters to be
+          output after them.   ASCII:FF (form) characters cause CRT screens
+          to be cleared, and  cause  printers  to move to top-of-next-page.
+          Other control characters are generally  printed as ^c, where c is
+          the  keystroke  used  with the control  key.  See  below,  for  a
+          complete list of the control characters, and  their actions, upon
+          both input and output.
+
+          WRITEB causes the bytes to be sent to  the  terminal  exactly  as
+          specified  in  the  write buffer, including the "parity" bit.  No
+          linefeeds  or  idles  are  inserted.  The logical column count is
+          zeroed, and the VT driver assumes it no longer knows the location
+          of the  cursor  (the  application  must  issue  a  CC:POSITION or
+          perform an implied positioning call before the VT will know where
+          the cursor is again).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  6                     Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          The VT driver supports the following control operations:
+
+          CC:POSITION
+               The positioning information  is treated as a cursor position
+               of the form R*256+C,  where  R  is the desired row (0 is the
+               top row), and C is  the  desired  column  (0 is the leftmost
+               column).  Any value which would cause the cursor to position
+               off the display, will result in  an Illegal Device Operation
+               error,  and the cursor will not be  moved.  Positioning  the
+               cursor of a hardcopy terminal (display depth is  zero)  or a
+               printer  is  not  permitted,  and will result in an  Illegal
+               Device    Operation    error.   Note   that   SYSCALL:READA,
+               SYSCALL:READB, SYSCALL:WRITEA  and  SYSCALL:WRITEB all allow
+               implied positions in  SCBLK:EXTENSION, so that a single call
+               can both position the cursor and do I/O.
+
+          CC:DUMPBUFFERS
+               This is generally a no-op, since the driver dumps characters
+               to the console as fast as it can; it does check for a device
+               timeout.  No parameters are needed.
+
+          CC:ECHO
+               This enables echo on READA.  No parameters are needed.
+
+          CC:NOECHO
+               This shuts off echo on READA.  No parameters are needed.
+
+          CC:WRAP
+               This enables line wrapping  when  a line exceeds the display
+               width.
+
+          CC:NOWRAP
+               This disables line wrapping when  a line exceeds the display
+               width: the line is truncated, and  the cursor is left on the
+               same line, following the last character displayed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  7                     Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          CC:IDLES
+               This sets the number of idles to be transmitted after a <CR>
+               or <LF>. The first byte in WRBUF  is  the  idle  count (0 is
+               legal),  the  second byte  in WRBUF is the  character  after
+               which the idles are to follow.  If the second  byte  is  not
+               present,  that  character defaults to <LF>. This information
+               is not  changed  by  OPENs,  CREATEs, or CLOSEs. A character
+               other  than <CR>  or  <LF>  will  cause  an  Illegal  Device
+               Operation error.  Note that  the  current  profile  must  be
+               either  malleable  or  hardcopy (an  option  which  must  be
+               sysgenned into the I/O package); otherwise,  a  Profile  Not
+               Malleable error will be returned.
+
+               Caveat: Some  terminals will behave differently for <LF><CR>
+                       than for <CR><LF>.
+
+          CC:TABS
+               This sets tab stops for tab simulation.  The WRBUF must hold
+               a string  of  bytes, each byte specifying the next tab stop.
+               Each successive byte  must  contain  a  column number larger
+               than the previous one.   When  the terminal is first opened,
+               tab  columns are set at  every  eighth  column,  up  to  132
+               columns (0 is the first column).  Up  to 16 tab stops may be
+               set; if too many are supplied, an  "Illega Device Operation"
+               error  will  result.   If  the  order of the  tab  stops  is
+               incorrect,   an  Illegal  Device  Operation  error  will  be
+               returned, and  the  old  tab  settings  will be undisturbed.
+               Since CONSOLE: devices tend to stay open for long periods of
+               time, CONSOLE: tab  settings  have  a  tendency to remain in
+               effect long after needed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  8                     Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          CC:SETACTBLOCK
+               This specifies a non-standard  set of activation characters.
+               The non-standard set is specified  with a vector of 128 bits
+               (arranged in WRBUF as 16 bytes),  corresponding to the ASCII
+               character set.  The least significant bit in  the first byte
+               corresponds  to character code 00, and the most  significant
+               bit  of  the  16th  byte corresponds to character code  :7F.
+               When   a   bit   is  set,  the  corresponding  character  is
+               interpreted as a non-standard activation character; when the
+               bit is  reset,  the standard interpretation applies (see the
+               chart of Control Characters,  below).  The activation set is
+               restored to the  standard interpretation (all bits reset) by
+               OPEN  and  CREATE. When  marked  as  activation  characters,
+               control characters and ASCII:RUBOUT are  never echoed, while
+               printing characters echo only if echo  is enabled. Note that
+               <CR> is always an activation character -- marking  it  as  a
+               non-standard  activation  character only changes its echoing
+               characteristics (as  a  standard  activation  character,  it
+               echoes if echo  is  enabled;  as  not-standard,  it does not
+               echo).
+
+          CC:CLRINPUT
+               This clears the input  line  and type-ahead buffers. This is
+               useful  when  input,  following an  abnormal  condition,  is
+               required.
+
+          CC:CLROUTPUT
+               This clears the output buffer.  It  is generally useful only
+               when the output buffer for a device  is  very  big,  or  the
+               device  is  very  slow;  otherwise,  the  buffer will  empty
+               quickly anyway.
+
+          CC:SETREADTIMEOUT
+               This sets a timeout on a subsequent READA or CC:ACTIVATIONCK
+               control  call.   The timed period begins when the subsequent
+               input operation  is  issued.   When  the  timed  period  has
+               expired, the input  operation  is  terminated  with a "Timed
+               Input  Expired"  error, and  the  data  input  thus  far  is
+               returned in the RDBUF supplied  by  the input operation. The
+               length of the period is expressed in 60ths of a second, as a
+               16-bit  value.  Note  that  the  period   allowed   is  only
+               approximately  what  is specified, but is guaranteed  to  be
+               longer than the value given. The value is  found  in  WRBUF,
+               and WRLEN must be 2.
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  9                     Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          CC:SETPROFILE
+               This selects a new device profile, which includes a function
+               mapping  VT  operations  to  physical  terminal  operations.
+               Selection of  a profile sets default device width, depth and
+               output timeouts; it  specifies  how the device will position
+               the cursor, clear the  screen,  erase to end of line, and go
+               to new lines; it controls how "coloring" is to be displayed,
+               etc. Such a profile generally  represents a particular model
+               of CRT/printer.  The new profile replaces  the  old profile,
+               and is retained until changed or the  system  is  re-booted.
+               Some profiles are malleable and may be somewhat  altered  to
+               accomodate  devices  for  which there is no specific profile
+               (see below).  As  the  malleable  profile is a template, any
+               alterations are retained  with  the device, rather than with
+               the profile. Selection of  a new profile will cause previous
+               alterations to be lost. WRBUF  contains one number, which is
+               the profile "name". Specification of a profile not sysgenned
+               into the I/O package will result  in  a  "No  such  Profile"
+               error.  WRLEN must be 1. This call  is normally only used by
+               the SDOSSET program. Profiles defined at this time are:
+
+                    ???????/  this  list  needs updating, make symbol names
+                    match IOVTDPBS.ASM
+
+                    VTPROFILE.MALVT    (malleable terminal)
+                    VTPROFILE.ADM1     (Lear Siegler ADM-1)
+                    VTPROFILE.ADM3     (Lear Siegler ADM-3A)
+                    VTPROFILE.SOROC120 (SOROC IQ-120)
+                    VTPROFILE.H19      (Heath H-19, DEC VT52, Zenith Z-19,
+                                        WaveMate Series 2000)
+                    VTPROFILE.P480     (PACE 480, CONRAC 480)
+                    VTPROFILE.TVI912   (TeleVideo 912-C)
+                    VTPROFILE.BEE???   (Beehive ???)
+                    VTPROFILE.HAZ???   (Hazeltine ???)
+                    VTPROFILE.MALLPT   (malleable printer, RS-232C Interface)
+                    VTPROFILE.LPCEN    (printer, Centronics  Interface)
+                    VTPROFILE.LPSER    (printer, RS-232C Interface)
+                    VTPROFILE.VT100    (VT100/ANSII terminal)
+
+               Note that  adding  a new profile requires changes to the I/O
+               package.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  10                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          CC:ALTERPROFILE
+               This alters the  currently  selected profile (see above), if
+               it is malleable; if  it  is  not,  a "Profile Not Malleable"
+               error is returned.  The alterations are confined to defining
+               a  cursor-positioning  sequence, an erase  to  end  of  line
+               (EEOL)  sequence,  and  a  home  and  clear  screen  (CLEAR)
+               sequence.   An "Illegal Device Operation" will be  given  if
+               the  parameter  supplied  are  unreasonable.  Note  that the
+               cursor positioning  sequence  contains,  in place of the row
+               and column numbers,  the  offsets to be added to the row and
+               column numbers supplied by the application; thus, the cursor
+               positioning sequence could be  used,  by itself, to position
+               to  location  (0,0).   More  extensive  alteration  must  be
+               accomplished by defining a new profile  and incorporating it
+               into a newly-generated system.
+
+               WRBUF must contain the following data:
+
+                 ALTERPROFILE:CPLEN     significant    length   of   cursor
+                                        positioning sequence  following;  1
+                                        byte in range  3  to  4.   If  this
+                                        length is < 3,  then  the VT driver
+                                        will  output  '@@'  instead  of   a
+                                        cursor position.
+
+                 ALTERPROFILE:CPSEQ     cursor   position  sequence,  which
+                                        includes   the   row   and   column
+                                        offsets; 4 bytes
+
+                 ALTERPROFILE:CPIDLES   number of idles  to  follow  cursor
+                                        positioning sequence; 1 byte
+
+                 ALTERPROFILE:ROWDISP   displacement       into      cursor
+                                        positioning sequence of row number;
+                                        1 byte
+
+                 ALTERPROFILE:COLDISP   displacement      into       cursor
+                                        positioning   sequence  of   column
+                                        number; 1 byte
+
+                 ALTERPROFILE:CLLEN     significant    length    of   CLEAR
+                                        sequence following; 1 byte in range
+                                        0 to  4.   If  0,  a CLEAR sequence
+                                        will  be  simulated  by  generating
+                                        enough ASCII:LFs to move to the top
+                                        of  a  page if  a  printer  device.
+                                        This is a useful device if a system
+                                        has different size paper forms, and
+                                        no forms control tape.
+
+                 ALTERPROFILE:CLSEQ     CLEAR sequence; 4 bytes
+
+                 ALTERPROFILE:CLIDLES   number  of  idles  to follow  CLEAR
+                                        sequence; 1 byte
+
+
+     Copyright (c) 1981                  11                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+                 ALTERPROFILE:EEOLLEN   significant length of EEOL sequence
+                                        following; 1 byte in range 0  to 4.
+                                        If   0,   the   sequence   will  be
+                                        simulated.
+
+                 ALTERPROFILE:EEOLSEQ   EEOL sequence; 4 bytes
+
+                 ALTERPROFILE:EEOLIDLES number  of  idles  to  follow  EEOL
+                                        sequence; 1 byte.
+
+          CC:WRITEEDITLINE
+               This appends the  contents  of WRBUF to the end of the input
+               line buffer as if  the  typist  had  entered  that  data.  A
+               subsequent READA or CC:ACTIVATIONCK control  call will cause
+               the data to be displayed, in  the  usual  fashion,  and  the
+               typist may edit the data until an  activation  character  is
+               entered.  Note that using the CC:NOECHO control call,  prior
+               to  invoking  CC:WRITEEDITLINE,  will inhibit that data from
+               being displayed  at the time of the READA or CC:ACTIVATIONCK
+               control  call. An  activation  character  may  be present in
+               WRBUF, but will prevent  the  typist from editing characters
+               prior  to the activation character:  activation  will  occur
+               immediately. If WRLEN is greater than the space available in
+               the  input  line  buffer,  or  data  follows  an  activation
+               character  in  WRBUF, an Illegal Device Operation  error  is
+               returned  and  no  data  is  transferred to the  input  line
+               buffer.
+
+               If  present,  the  syscall block extension contains a cursor
+               position at  which the cursor should be left, after the data
+               has been echoed  by  the  input  operation;  otherwise,  the
+               cursor will be left  at  the  end  of  the  data supplied in
+               WRBUF.
+
+               When  a  field  has  been   explicitly   defined   (see  the
+               CC:SETFIELDSIZE  control  call,  below), the 1-byte  syscall
+               extension is the column number at which  the cursor is to be
+               placed, at the time of the READA or  CC:ACTIVATIONCK control
+               call; if that column is in the middle of  a  tab  expansion,
+               the cursor will be positioned following the expanded tab.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  12                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          CC:SETFIELDSIZE
+               This  defines  an  input  field  for  a  subsequent READA or
+               CC:ACTIVATIONCK control  call.   WRBUF  contains  the  field
+               width. The field  width  must  be  at least 1 and no greater
+               than the width of  the  display. If the field width is 0, or
+               exceeds the limits of the display, a "Bad Field Width" error
+               will be returned, and the field definition will not be made.
+
+               Unless  any of the cursor  control  keys  for  moving  left,
+               right,  up,  and  down  have  been   designated   activation
+               characters, they may be used to position  within the defined
+               field.   When  an  attempt  is made to position  the  cursor
+               beyond the boundary of the field, that character is  treated
+               as  an activation character and the operation is terminated;
+               the terminating  cursor control character is appended as the
+               activation character, and  the  cursor  is  not  moved.   An
+               SC:GETACTCOL status call may  be  issued  to  determine  the
+               exact  column  of  exit.   If  any  of  the  cursor  control
+               characters is designated an activation character,  then that
+               character  cannot  cause  a field exit condition,  and  will
+               activate immediately upon use.
+
+               The field definition terminates upon field exit, or entry of
+               an activation character.  If the field, at the  time  of the
+               input  operation,  is  not  contained  completely within the
+               display width,  that  input operation will terminate with an
+               "Bad Field Width"  error  and  the  field input mode will be
+               cancelled.   ^C^C   will  cancel   any   outstanding   field
+               definition.
+
+
+          CC:SETPARAMS
+               Sets the width (1 byte)  and  the  depth  (1  byte)  of  the
+               display; this overrides the default from  the device profile
+               chosen. Zero depth means that the terminal  is  not a paging
+               device and will print ^L when given a form feed character.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  13                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          CC:ACTIVATIONCK
+               This  is used to enable keyboard input without  causing  the
+               program  to  suspend  operation.  CC:ACTIVATIONCK returns an
+               "Activation Received" error if an activation character is in
+               either the input line buffer or the type-ahead buffer. If no
+               activation character  is present in either buffer, the input
+               line buffer is  filled  from  the  type-ahead buffer, unless
+               this  has  already  been   done   by   a  previous  call  of
+               CC:ACTIVATIONCK.  A  READA issued following  an  "Activation
+               Received" error will always return immediately with the data
+               requested and/or an error appropriate to  a  READA  (If ^C^C
+               has been seen while the SDOS/MT and KILLPROOF flags are set,
+               a "Program Killed" error will be returned;  otherwise,  ^C^C
+               will   result  in  the  program  being  killed.)*  Once  the
+               CC:ACTIVATIONCK control call has been issued, subsequent I/O
+               requests (with  the  exception  of  CC:ACTIVATIONCK,  status
+               requests, and SYSCALL:READA)  will  result  in  an  "I/O  In
+               Progress" error. This state  is  exited  by  issuing a READA
+               upon  receipt  of  an  "Activation   Received"   error.    A
+               CC:SETREADTIMEOUT control call issued prior to  the  initial
+               CC:ACTIVATIONCK can be used to limit the  time spent in this
+               state.    When   the   timed   period   expires,   the  next
+               CC:ACTIVATIONCK will  return an "Activation Received" error,
+               and the subsequent  READA  will  return  the expected "Timed
+               Input Expired" error, along  with any data received prior to
+               the expiration.
+
+
+               * See  the section on SDOS/MT  support  for  a  caveat  that
+                 applies to this note.
+
+          CC:SETBAUDRATE
+               This call is used to change  the  baud  rate  of  a  device.
+               WRBUF  contains a 16 bit unsigned integer  representing  the
+               exact  baud  rate  desired  (rounded  to  an  integer).   An
+               "Illegal  Device  Operation"  is  returned  if the baud rate
+               cannot be  changed,  or  cannot  be changed to the specified
+               value.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  14                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          CC:COLORING
+               For the purposes  of  this  control  call, a "color" is that
+               which changes the appearance  of  text  without changing its
+               meaning or size.  This call  supports  the  myriad available
+               features dealing with display appearance: these include, but
+               are  not  limited  to: color, intensity,  underscoring,  and
+               blinking.   It  explicitly does NOT handle characters  whose
+               size  is  non-standard (i.e., double-width or double-height)
+               for the device. 16 bits of data, found in WRBUF, specify the
+               desired display  mode  for  subsequent  output:  all display
+               characteristics must be  specified  by the same control call
+               at one time.
+
+               The mode change is  made  immediately, and the mode is saved
+               for later use by the  position control call.  All characters
+               output via WRITEA are "colored" according  to the last color
+               selected  by  this call.  When a position  control  call  is
+               made,  the  "zero"  coloring is selected (see CC:BACKGROUND,
+               below), the  positioning  is  performed,  and  the  coloring
+               selected by CC:COLORING is re-instated.
+
+               CC:COLORING  does  not   cause  the  cursor  to  move  (some
+               terminals violate this, due to their design deficiencies).
+
+               Two bytes in WRBUF  are  used  to specify the display modes.
+               The first byte is divided  as follows: 2 bits for intensity,
+               1 bit for blink, 1 bit  for  underscore,  1  bit for reverse
+               video,  3 bits for (inverted) color (1  bit  each  for  "not
+               red", "not green", and "not blue"). The second byte contains
+               3  bits  for  selecting alternate Roman character sets;  the
+               remaining bits are undefined and must be zero.  The  default
+               color  of  "zero"   (both  bytes  zero) selects the standard
+               Roman character  set,  standard intensity, no reverse video,
+               no underscore, no  blink,  and  the  color  white (i.e., the
+               display mode obtained for  virtually  all  "dumb" CRTs). The
+               "zero" color is automatically selected by OPEN.
+
+               Although this control call is recognized by all systems, its
+               actual implementation will vary according  to the particular
+               terminals being supported; in the simplest of cases, it will
+               be implemented as a NOP.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  15                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          CC:BACKGROUND
+               A "background" color is the color  displayed  in  all screen
+               locations which do not contain a character.
+
+               CC:BACKGROUND selects the default coloring to be  used  when
+               the display is cleared, or when cursor positioning  is to be
+               done (see CC:COLORING, above).  The required byte of data is
+               found in WRBUF and is of the same format  as  for  the first
+               byte  of CC:COLORING, above. A black background (hex :07) is
+               automatically selected by OPEN.
+
+               Although this control call is recognized by all systems, its
+               actual implementation  will vary according to the particular
+               terminals being supported; in the simplest of cases, it will
+               be implemented as a NOP.
+
+          CC:KILLPROOF
+               This is used  to KILLPROOF a specific VT input device.  What
+               that means is that  ^C^C and ^D will be rejected with a beep
+               when  they  are  entered.  ^C  while  killproof  clears  the
+               type-ahead buffer.
+
+          CC:KILLENABLE
+               This is used to cancel the  effect of a CC:KILLPROOF control
+               call  directed  at  the  same VT input  device.   Note  that
+               SYSCALL:KILLPROOF is not overridden by this control call.
+
+          CC:SETEXCEPTION
+               This  call  is  used  to  specify  exceptions to  VT  driver
+               processing. At this time, the only exception defined is  for
+               SEDIT;   and   specifies   that   fields  also  activate  on
+               ASCII:RUBOUT at  left end of field, and on ^U or ^L at right
+               end of field.
+
+          CC:SETOUTPUTTIMEOUT
+               This call is  used to specify a new value for output timeout
+               interval, and overrides the  default  selected by the Device
+               Profile Block last chosen. It  is especially useful with the
+               VT:MALLPT profile when the printer has a large buffer of its
+               own, and goes "BUSY" for long  periods while it prints.  The
+               interval is specified as a two byte number in WRBUF in 60ths
+               of a second.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  16                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          STATUS OBTAINABLE FROM THE VT DRIVER
+
+          Many  of the statuses available from the  VT  driver  are  simply
+          images of data specified by Control calls to the driver.  This is
+          for convenience of the SDOSSET program, and allows it to show the
+          operator the "current" settings of things before modification.
+
+          SC:GETPOS
+               Reads the cursor position in the same form as CC:POSITION.
+
+          SC:GETCOL
+               If the input line buffer is empty, this  returns  the output
+               column  number;  otherwise,  this  returns the column number
+               corresponding to  the  first  byte to satisfy the next read.
+               The column number  is  the  same  as used in CC:POSITION.  A
+               READB zeroes the column  number. Returning the column number
+               corresponding to the next input  character  when  there is a
+               partially-read input line makes it possible  to  distinguish
+               between  "TERSE" command lines and "VERBOSE" command  lines;
+               if  the column count is zero when a  program  gets  control,
+               there must be nothing in the line buffer and so VERBOSE mode
+               is  desired; otherwise, something is in the line buffer  and
+               so TERSE mode is desired.
+
+          SC:GETEOF
+               This returns a non-zero byte if ^Z was seen while  in  READA
+               mode,  and  the  input line buffer is empty; otherwise, this
+               returns a  zero byte.  End of File status is never set while
+               in READB mode  to  a  VT  device.  Note that the only way to
+               reset this status is to CLOSE and reOPEN the channel.
+
+          SC:GETTYPE
+               Returns DVTYP.CONSOLE or DVTYP.PRINTER, as appropriate.
+
+          SC:GETPARAMS
+               Returns the width (1  byte)  and  the  depth (1 byte) of the
+               display.  Zero depth means that  the  terminal is a hardcopy
+               device. Printers return paper width and depth.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  17                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          SC:GETPROFILE
+               Returns  the  current profile "name" (a  one  byte  number);
+               suitable for use by the CC:SETPROFILE control call, above.
+
+          SC:GETPROFILENAME
+               Returns   a   one   to  16  character  ASCII   text   string
+               corresponding   to  the  numeric  profile  "name"  (1  byte)
+               specified in  WRBUF.  This  call does NOT change the profile
+               currently selected on the device. Return a "No Such Profile"
+               error  if  the  profile  name  specified  in  WRBUF  is  not
+               sysgenned into the I/O  package.   This  call is used to all
+               SDOSSET  produce a human-readable list  of  DPBs  configured
+               into a system.
+
+          SC:GETPROFILEALTERATION
+               Returns  the  current  profile  alterations in  exactly  the
+               format  given  to  CC:ALTERPROFILE.   Gives  a "Profile  Not
+               Malleable"  error  if the profile currently selected is  not
+               malleable (and therefore has no alterations).
+
+          SC:GETFREECOUNT
+               Returns  a  16  bit  integer  specifying  how  much room  is
+               currently  available  in  the  output  buffer  for  a device
+               (memory-mapped video displays always return "1").
+
+          SC:GETDATACOUNT
+               Returns a  16  bit  integer  specifying  how  much  data  is
+               currently  available in  the  input  ring  buffer  for  this
+               device.  Can be used  to  prevent  hanging  the  system when
+               doing READB.
+
+          SC:GETOUTPUTTIMEOUT
+               Returns the current value of  the  Output  Timeout  for this
+               device, in a form suitable for use with CC:SETOUTPUTTIMEOUT.
+
+          SC:GETBAUDRATE
+               Returns the current baud rate for  this  device,  in exactly
+               the form required for CC:SETBAUDRATE.  Devices which  cannot
+               change baud rates usually return "0".
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  18                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          SC:GETTABS
+               Returns the current tab settings for this device, in exactly
+               the form required for CC:TABS.
+
+          SC:GETIDLES
+               Returns the count of idles to follow a Newline sequence, and
+               the Idle trigger character, in exactly the form required for
+               CC:IDLES.
+
+          SC:GETWRAP
+               Returns  a  non-zero  byte  if  Wrapping  (see  SC:WRAP)  is
+               enabled, else return a zero byte (wrapping is disabled).
+
+          SC:GETCOLORING
+               Returns 2 bytes of Coloring information in exactly the  form
+               required by CC:COLORING.
+
+          SC:GETBACKGROUND
+               Returns 1 byte of Background Coloring information in exactly
+               the form required by CC:COLORING.
+
+          SC:GETACTCOL
+               Returns  both  the  column  position  and  the  line  buffer
+               displacement at  which  the  last  activation  character was
+               entered (the activation  character, itself, is placed at the
+               end of the input  line  and is obtained via READA or READB).
+               Note  that  if  echoing is  disabled,  the  returned  column
+               position value will be meaningless.
+
+          SC:ATTENTIONCK
+               This checks for "Operator Requested Attention"  status.   If
+               found,  the  status  is cleared and an  "Operator  Requested
+               Attention" error is returned.
+
+          SC:STATUSCK
+               This returns a "Status Has Changed" error if  the  VT device
+               has  had  an  interesting  change  of  status, which include
+               receipt of  an  activation  character,  receipt  of  ^C^C, a
+               "Timed Input Expired"  error,  a  "Device  Timed Out" error,
+               etc.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  19                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          CONTROL CHARACTERS
+
+
+          This table describes how  control  characters are treated if they
+          are NOT marked as activation characters (see CC:SETACTIVATION).
+
+          :00    NUL     input:  ignored
+
+                         output: discarded
+
+          :01    ^A      input:  toggles  the  CAPS  LOCK  switch,   echoes
+                                 immediately at the end of the line
+
+                         output: prints ^A
+
+          :02    ^B      input:  requests BASIC breakpoint, does not echo
+
+                         output: prints ^B
+
+          :03    ^C      input:  clears   the  input  and  output  buffers,
+                                 resets  the   FREEZE  OUTPUT  and  DISCARD
+                                 OUTPUT switches (see  ^S,  ^O), resets the
+                                 PAGE   MODE  switch  (see   ^P),    echoes
+                                 immediately  at  the  end  of   the  line,
+                                 aborts   the  program  if  two  ^C's   are
+                                 received   in  succession;  ^C^C  will  be
+                                 rejected with a beep if KILLPROOF is set.
+
+                         output: prints ^C
+
+          :04    ^D      input:  invokes the debugger immediately, does not
+                                 echo; a  beep  is echoed if no debugger is
+                                 available (CNFG:VTDEBUG=0).  Illegal under
+                                 SDOS/MT.
+
+                         output: prints ^D
+
+          :05    ^E      input:  causes all input  at, and to the right of,
+                                 the cursor to be  erased  from the display
+                                 and deleted from the input buffer.
+
+                         output: erases the remainder of the  display  line
+                                 (erase to EOL)
+
+          :06    ^F      input:  positions  cursor at left side (front)  of
+                                 current  input field. Illegal for hardcopy
+                                 terminals.
+
+                         output: prints ^F
+
+
+
+
+
+
+
+     Copyright (c) 1981                  20                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          :07    ^G      input:  causes BASIC  to resume execution from the
+                                 current breakpoint, does not echo
+
+                         output: beeps
+
+          :08    ^H      input:  implements  the backspace  function,  does
+                                 not echo
+
+                         output: implements the backspace function
+
+          :09    ^I      input:  positions  the  cursor  at  the  next  tab
+                                 column, when read
+
+                         output: positions  the  cursor  at  the  next  tab
+                                 column
+
+          :0A    ^J      input:  rejected with beep; see CC:SETFIELDSIZE
+
+                         output: discarded
+
+          :0B    ^K      input:  rejected with beep; see CC:SETFIELDSIZE
+
+                         output: prints ^K
+
+          :0C    ^L      input:  implements  the  forespace  function, does
+                                 not echo
+
+                         output: causes a  PAGE  BREAK  if  the  PAGE  MODE
+                                 switch is set  (see ^P), homes the cursor,
+                                 selects the background color,  and  clears
+                                 the display if depth is  not  zero, prints
+                                 ^L if the the depth is zero; for a printer
+                                 device,  moves paper to the top  of  form,
+                                 such  that  the  next  character  will  be
+                                 printed in the first position of the line.
+
+          :0D    ^M      input:  echoes <CR><LF>, causes program activation
+
+                         output: prints <CR><LF>
+
+          :0E    ^N      input:  passed to  the  application,  echoed  when
+                                 read
+
+                         output: prints ^N
+
+          :0F    ^O      input:  toggles the DISCARD OUTPUT switch (see ^Q,
+                                 ^C),  echoes immediately;  not  functional
+                                 while a READA or  CC:ACTIVATIONCK  control
+                                 call is being satisfied
+
+                         output: prints ^O
+
+
+
+
+
+     Copyright (c) 1981                  21                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          :10    ^P      input:  toggles the PAGE MODE switch (see ^Q, ^C),
+                                 echoes immediately at the end of the line
+
+                         output: prints ^P
+
+          :11    ^Q      input:  resumes  output  suspended due to  a  PAGE
+                                 BREAK (see ^P), resets the DISCARD  OUTPUT
+                                 switch  (see ^Q), resets the FREEZE OUTPUT
+                                 switch (see ^S), does not echo
+
+                         output: prints ^Q
+
+          :12    ^R      input:  if CRT,  positions  cursor to Right end of
+                                 current input field;  for hardcopy devices
+                                 echoes  ^R<CR><LF>  followed by  all  data
+                                 entered since the last activation
+
+                         output: prints ^R
+
+          :13    ^S      input:  sets  the  FREEZE OUTPUT switch  (see  ^Q,
+                                 ^C), echoes immediately
+
+                         output: prints ^S
+
+          :14    ^T      input:  toggles the BASIC line trace switch,  does
+                                 not echo
+
+                         output: prints ^T
+
+          :15    ^U      input:  deletes   the  character  at  the  current
+                                 cursor location, deletes the corresponding
+                                 character from  the input buffer, does not
+                                 echo
+
+                         output: prints ^U
+
+          :16    ^V      input:  toggles the BASIC single step switch, does
+                                 not echo
+
+                         output: prints ^V
+
+          :17    ^W      input:  for CRTs, causes the last input line to be
+                                 retrieved as though the typist had entered
+                                 it explicitly, if  no other keys have been
+                                 typed since the last  input.   Illegal for
+                                 hardcopy devices.
+
+                         output: prints ^W
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  22                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          :18    ^X      input:  clears  the  input  buffer; for  hardcopy,
+                                 echoes  ^X<CR><LF>  and  positions  to the
+                                 column  at   which   input  began;  for  a
+                                 terminal, erases, from  the  display,  the
+                                 data  entered  since the  last  activation
+                                 character, and positions the cursor at the
+                                 location where input began; for a terminal
+                                 with fields defined, erases the  displayed
+                                 field  contents, and positions the  cursor
+                                 at the first location of the field
+
+                         output: prints ^X
+
+          :19    ^Y      input:  passed to  the  application,  echoed  when
+                                 read
+
+                         output: prints ^Y
+
+          :1A    ^Z      input:  causes  END OF  FILE  status  to  be  set,
+                                 causes program activation with  an  END OF
+                                 FILE error, echoes immediately at  the end
+                                 of the line
+
+                         output: prints ^Z
+
+          :1B    ESC     input:  causes cursor to be placed at right end of
+                                 current  input  field,  OPERATOR REQUESTED
+                                 ATTENTION status  to  be  set, and returns
+                                 "Operator Requested Attention" error.
+
+                         output: prints ^[
+
+          :1C    ^\      input:  passed  to the  application,  echoed  when
+                                 read
+
+                         output: prints ^\
+
+          :1D    ^]      input:  passed  to  the application,  echoed  when
+                                 read
+
+                         output: prints ^]
+
+          :1E    ^^      input:  passed  to  the  application, echoed  when
+                                 read
+
+                         output: prints ^^
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  23                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          :1F    ^_      input:  passed  to  the  application,  echoed when
+                                 read
+
+                         output: prints ^_
+
+          :7F    RUB     input:  deletes  the   character   preceeding  the
+                                 current  cursor  location,   deletes   the
+                                 corresponding  character  from  the  input
+                                 buffer, does not echo
+
+                         output: discarded
+
+
+
+          NOTE: No control character is passed  to  the application, unless
+                explicitly noted.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  24                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          SOFTWARE SWITCHES AFFECTED BY CONTROL CHARACTERS
+
+          CAPS LOCK
+               When set, READA will interpret the  lowercase letters a-z as
+               uppercase letters.  ^A toggles the switch.  If a terminal is
+               stuck  in  upper  case, and the alpha  lock  key  isn't  the
+               problem, someone probably typed ^A by accident.
+
+          FREEZE OUTPUT
+               When set, further output will be suspended until  the switch
+               is reset. On CRTs, ^S will be displayed to remind the typist
+               that the switch has been set. ^S sets the  switch, ^Q and ^C
+               reset the switch.
+
+          DISCARD OUTPUT
+               When  set,  all  output  will  be discarded until either the
+               switch is  reset  or  a  READA/READB  is issued.  ^O will be
+               displayed to remind the typist that the switch has been set.
+               A READA will reset the switch and overwrite the "^O" with "?
+               ".  A READB  will  simply  reset the switch.  ^O toggles the
+               switch, ^Q and ^C reset the switch.
+
+          PAGE MODE & PAGE BREAK
+               When set, subsequent WRITEA  lines will be counted, and when
+               <display  depth>  lines have been  output,  a  Clear  screen
+               request is output, or cursor positioning  is attempted, then
+               a PAGE BREAK will occur, and no more output will occur until
+               the typist has acknowledged the page break.  This  gives the
+               typist a chance to read what is displayed before more output
+               occurs. On a CRT, a page break will be signalled by ^P being
+               displayed in the lower right-hand corner of the  screen;  on
+               hardcopy    devices,   output   will   simply   cease.   The
+               acknowledgement can  be  ^P  (which  prevents  further  page
+               breaks), ^Q (which allows output until the next page break),
+               or ^C (which prevents further page breaks). On CRTs, a Clear
+               screen requests causes  a  page  break  BEFORE the screen is
+               cleared, so the text  may  be  read before it disappears; on
+               hardcopy terminals, the page break  occurs  AFTER  the  FORM
+               character  moves  the  paper to top-of-page,  so  individual
+               sheets  of  paper  may  be conveniently printed.  All  lines
+               output while in page mode will be truncated  to  fit  within
+               the  current display width, thus ensuring that line wrapping
+               does not occur so that all lines between page breaks will be
+               captured on the display.
+
+
+          NOTE: All reminders  are  displayed in the lower, right corner of
+                the  display.   Reminders  will  overwrite  any  characters
+                already in those locations.
+
+
+
+
+
+
+
+     Copyright (c) 1981                  25                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          SDOS/MT SUPPORT
+
+          The  following control and  status  functions  are  included  for
+          complete documentation only.  They are  subject to change without
+          notice.
+
+          Caveat Emptor!!
+
+
+          MULTIUSER CONTROL FUNCTIONS
+
+          CC:SETTIMESHARE
+               Sets the SDOS/MT flag, which results  in  different handling
+               of the line flags and ^C^C abort.   If  the flag has already
+               been  set,  an  "SDOS/MT Already Running" error is returned.
+               RDBUF is  filled  with  system-dependent linkage information
+               for use by SDOS/MT.
+
+          CC:STOPTIMESHARE
+               Turns off the  SDOS/MT flag.  SHOULD NOT BE EXECUTED BY USER
+               PROGRAMS, OR A SYSTEM CRASH WILL RESULT.
+
+          CC:WRITEANOWAIT
+               This defines, for the VT driver, WRBUF as the source of data
+               for an asynchronous WRITEA of WRLEN bytes.  RDBUF contains 3
+               bytes, the first of  which  the  VT  driver will set to zero
+               when the request is accepted, and set to non-zero when WRLEN
+               bytes  have  been  written; the  remaining  two  bytes  will
+               contain either an error code, or  zero  if the operation had
+               no errors. Note that WRBUF must not  be  modified  until the
+               request  is  complete  (the  first  byte  of  RDBUF  becomes
+               non-zero).
+
+          CC:WRITEBNOWAIT
+               This defines, for the VT driver, WRBUF as the source of data
+               for an asynchronous WRITEB of WRLEN bytes.  RDBUF contains 3
+               bytes,  the first of which the VT driver will  set  to  zero
+               when the request is accepted, and set to non-zero when WRLEN
+               bytes  have  been  written;  the  remaining  two  bytes will
+               contain either  an  error code, or zero if the operation had
+               no errors. Note  that  WRBUF  must not be modified until the
+               request  is  complete  (the  first  byte  of  RDBUF  becomes
+               non-zero).
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  26                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VIRTUAL TERMINAL DEVICE DRIVER
+
+
+          MULTIUSER STATUS FUNCTIONS
+
+          SC:GETLINEFLAGSHINT
+               Returns zero if no line flags have been collected since
+               the  last  call to SC:GETLINEFLAGS,  otherwise  returns
+               non-zero value.  The value returned is only intended as
+               a hint; the program must call  SC:GETLINEFLAGS  to  get
+               the  true  line  flags  and acknowledge their  receipt.
+               Don't ask why.
+
+          SC:GETLINEFLAGS
+               Exchanges a zero with the line flags, and  returns that
+               byte.  If  ^C^C  has  been  seen while the SDOS/MT  and
+               KILLPROOF flags are set,  a "Program Killed" error will
+               be returned; otherwise, ^C^C will result in the program
+               being killed.
+
+          SC:GETTIMESHARE
+               This checks to see if SDOS/MT is running.  If it is, an
+               "SDOS/MT Already Running"   error   will  be  returned;
+               otherwise, a normal return will be made.
+
+          SC:ALLSTATUS
+               This checks to see if an SC:STATUSCK status call issued
+               to any  VT  device  would return a "Status Has Changed"
+               error as a  response;  if  so,  a  "Status Has Changed"
+               error is returned.  Note that this status call supplies
+               only a hint.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  27                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          Everything You Always Wanted to Know About the VT Driver
+          (...but were afraid to ask)
+
+                    OR
+
+          Answers to Every Question
+          (...except the one you have)
+
+
+          The VT driver is  logically  separated into two parts.  One part,
+          while currently separate from SDOS,  may  be  considered  part of
+          SDOS.   This  part  is  responsible for  processing  the  SYSCALL
+          requests and providing the logic necessary to  implement  the  VT
+          driver  services.   The  other  part is incorporated in  the  I/O
+          package  and  serves  to  interface the VT driver to  the  myriad
+          terminals  in  existence.  The relationship between the two parts
+          is much  the  same  as  that  between the disk file driver within
+          SDOS, and the disk device drivers found in the I/O package.  Like
+          the disk device  drivers  in the I/O package, the actual terminal
+          device drivers are the  responsibility of the vendor, and are not
+          necessarily included in the SD Warranty.
+
+
+
+          VT DRIVER FLOW DISCUSSION
+
+          The VT driver is broken  into  several  modules. The flow between
+          these modules can better be understood by discussing the diagram,
+          below:
+
+               The application issues a VT related SYSCALL (1). SDOS routes
+               the request to the VT driver  (2).  If  the  VT  driver  can
+               satisfy the request without initiating device activity,  the
+               request  is  immediately  satisfied (9); otherwise, the edit
+               task, driving  the  terminal,  is  requested  to perform the
+               service (3). The  edit  task  transforms the service request
+               into a series of  logical  device orders, which are vectored
+               (4), to the appropriate device  drivers  in the I/O package,
+               for interpretation as real device orders  (5).  The routines
+               input,  output, and buffer data (6). Interrupts  occur  (7),
+               and are vectored to the VT driver (8).  Once  the  edit task
+               has performed the I/O, the user is re-awakened (9 and 10).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  28                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+                       VT Driver: Linkage and Flow of Control
+
+
+                       *----->Application request for VT services
+                       !  *---(i.e., READA, WRITEA, POSITION cursor)
+                       !  !
+                 (10)  !  V  (1)
+                       SDOS           SDOS interprets SYSCALL
+                       A  !           and routes request to VT Driver
+                  (9)  !  !  (2)
+                       !  V
+          *-->(VTDRIVER.ASM) VT Driver Within SDOS
+          !               !
+          !               !
+          !               !
+          !               !                    (IOVTCONFIG.ASM)
+          !               !                    DCBs and TCBs for each VT device
+          !               !       (3)
+          !               *--------------------*----------*-------//---------*
+          ! (8)                                V          !                  !
+          !                                   DCB1        !                  !
+          !                                    TCB1       V                  !
+          !                                     !        DCB2                !
+          !                                     !         TCB2               V
+          !                                     !          !                DCBN
+          !   (IOVTCONFIG.ASM)                  !          *---------------* TCBN
+          !   Interrupt detection and           *-----------------------*  !  !
+          !   VT interrupt handling setup                               !  !  !
+          !                                  VT Driver I/O Routine      !  !  !
+          !                                  Entry Points               !  !  !
+          !                                                             !  !  !
+          *---Output interrupt   *-----VT I/O Driver Routine Vector 1<--*  !  ! (4)
+          !   to VT Driver       !                                         !  !
+          !                      !                                         !  !
+          ! (7)                  *-----VT I/O Driver Routine Vector 2<-----*  !
+          !                      !                   .                        !
+          *---Input interrupt    !                   .                        !
+              to VT Driver       !                   .                        !
+                                 *-----VT I/O Driver Routine Vector N<--------*
+                                 !
+                                 !
+                             (5) !   (IOVTCONFIG.ASM) VT Driver I/O routines
+                                 !   perform device-related operations
+                                 !
+                                 V
+                             Input and Output buffering for task,
+                         (6) cursor positioning, ACIA & PIA handling,
+                             reset and initialization
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  29                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          VT DEVICE DRIVERS, DCBs, and TCBs
+
+          The terminal device drivers are the only part of  the  VT  driver
+          serviceable  by  a systems implementor; the VT driver, itself, is
+          part of  the "black box" called SDOS. The terminal device drivers
+          are broken into two sections, for ease of system configuration.
+
+          One  section is  named  IOVTDPBS.ASM,  and  contains  the  device
+          profile blocks (DPBs) required  to interface to the various types
+          of standard terminals/printers supported. Since  there  can  be a
+          large variety of these, conditional assembly  within IOVTDPBS.ASM
+          allows the system programmer to select just  those  DPBs which he
+          thinks will be commonly used in the desired  target configuration
+          (the  program  MAKEVTCONFIG will help him do this).  IOVTDPBS.ASM
+          is relatively static, and can be obtained from Software Dynamics.
+          New terminals  for  which  support is desired require the systems
+          implementor  to  construct   a  new  DPB  (using  other  DPBs  in
+          IOVTDPBS.ASM as models) and  append  it to the IOVTDPBS.ASM file.
+          New DPBs should also be  forwarded  to  Software Dynamics, so the
+          "official"  IOVTDPBS.ASM  file  can act as  a  library.  The  I/O
+          package  shell  must make references to this  file  via  suitable
+          INCLUDE statements.
+
+          The other section is a file named IOVTCONFIG.ASM,  which contains
+          configuration information regarding the target system, as well as
+          Device  Control  Blocks  (DCBs),  ring  buffers  for input/output
+          buffering and line editing, and other data structures required by
+          the VT  driver  to  support each DCB, such as Task Control Blocks
+          (TCBs) and Timeout  Blocks (TOBs). Such configuration information
+          includes actual code to  manipulate the hardware devices (such as
+          resetting  an output hardware device,  outputting  a  byte  to  a
+          hardware   register,  enabling  device  interrupts,  polling   to
+          determine which hardware device caused an interrupt,  etc.),  and
+          specialized   code   for  CC:xxx  and  SC:xxx  calls  which   are
+          non-standard.  IOVTCONFIG.ASM  is  typically  built  by a program
+          called MAKEVTCONFIG,  which queries the systems implementor as to
+          how   many   VT    devices,    their   hardware   addresses   and
+          characteristics, etc. MAKEVTCONFIG can  only manufacture code for
+          very standard hardware; code for  unusual  hardware  will require
+          hand-coding on the part of systems  implementor  for  the unusual
+          features (such as code for setting baud  rates);  he  can use the
+          defaults  generated by MAKEVTCONFIG for the rest. The  hand-coded
+          section  is placed in the I/O package shell, not  IOVTCONFIG.ASM,
+          so it only need be generated once. IOVTCONFIG must be  referenced
+          by an assembler INCLUDE command in the I/O package shell.
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  30                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          Some  naming conventions which are found throughout the VT driver
+          and associated mechanisms are:
+
+               VT            stands for "Virtual Terminal"
+               TO            stands for "Time Out"
+               TL            stands for  "Task  Level"  (i.e.,  executed by
+                             user/editor task)
+               IL            stands  for  "Interrupt  Level"  (executed  by
+                             interrupt code)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  31                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          VT DEVICE DRIVERS and THE DEVICE PROFILE BLOCK
+
+          Each device profile block  (DPB)  contains  information  allowing
+          standard operations to be realized  for  each  different  type of
+          device, as well as device characteristics  such  as display width
+          and depth, whether it is a printer  or  a  terminal,  and general
+          flags indicating such things as the malleability of  the profile.
+          The fields of the DPB are defined below:
+
+
+          DPB:PROFILENUMBER
+               This  one-byte  field  contains  the (numeric) "name" of the
+               profile; it  is  the  target  of  the  search  made  by  the
+               CC:SETPROFILE control call.  Profile numbers are assigned by
+               Software Dynamics.
+
+          DPB:PROFILENAME
+               This two-byte field  points  to  a  text  string of up to 16
+               characters  which  contain an  ASCII  name  for  the  device
+               profile  block  (i.e.,  "SOROC120").  It   is  used  by  the
+               CC:GETPROFILENAME  call  to allow programs like  SDOSSET  to
+               enumerate in a human-readable fashion exactly what  DPBs are
+               available  in  the  system.   The first byte of  the  string
+               contains  a  binary count from 1 to 16 which  specifies  the
+               number of characters which follow.
+
+          DPB:DVTYP
+               This  one-byte  field contains the "class" of the VT device:
+               normally it will be DVTYP.CONSOLE or DVTYP.PRINTER.
+
+          DPB:NEXT
+               This two-byte  field  contains a pointer to the next profile
+               in the configuration  profile  chain  (see CNFG:VTPROFILES);
+               this field contains zero  if this is the last profile in the
+               chain.
+
+          DPB:DEFWIDTH
+               This  one-byte  field  contains the  default  width  of  the
+               terminal;  the  width  may be subsequently  changed  by  the
+               CC:SETPARAMS control call.
+
+          DPB:DEFDEPTH
+               This  one-byte  field  contains  the  default depth  of  the
+               terminal;  the  depth  may  be  subsequently changed by  the
+               CC:SETPARAMS  control  call.  ??? does zero imply continuous
+               paper hardcopy (perhaps setting hcedit) ????
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  32                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          DPB:FLAGS
+               This  one-byte   field   contains  flags  noting  particular
+               characteristics of the  terminal;  the  flags  indicate: the
+               malleability  of the profile  (i.e.,  it  be  altered  by  a
+               CC:ALTERPROFILE  control  call),  whether  the  terminal  is
+               output only, whether an output line  exceeding  the  display
+               width should wrap to the next display  line or be truncated,
+               whether  the  terminal  will automatically wrap to the  next
+               display line when the display width is exceeded, and whether
+               special hardcopy editing should be performed.
+
+          DPB:OUTTO
+               This   two-byte   field   contains   a   default  fuse  (see
+               TIMEOUT:FUSE, in  the  SDOS  manual) for establishing a time
+               limit  on each  character  output;  if  the  time  limit  is
+               exceeded,  a Device Timed  Out  error  is  returned  to  the
+               caller.  A fuse of zero  indicates  that no timeout is to be
+               used. The timeout value may be  subsequently  changed by the
+               CC:SETOUTPUTTIMEOUT control call.
+
+          DPB:XLATEI
+               The I/O package must supply a routine  which  performs input
+               translation peculiar to the target terminal.  The routine is
+               referenced  with  a  JMP  instruction  in this field.   Each
+               character  input  from  the keyboard, subsequent to a READA,
+               will be  passed  to this routine in (A). Exit is made with a
+               RTS instruction.  If the routine returns with carry set, the
+               character will be  discarded;  otherwise, the character that
+               is  returned  in  (A)   will   be   retained.    The   byte,
+               DCB:XLATESTATE,  is  available  for  use   by  this  routine
+               (possible uses include, but are not  limited to, remembering
+               the   previous   character  typed  in  an  escape   sequence
+               automatically  generated  by  the  terminal keyboard, or the
+               terminal itself).   If  no  input translation is to be done,
+               then  a CLC,  RTS  instruction  sequence  should  be  coded.
+               Translation to multiple characters can be effected by having
+               DPB:XLATEI  make  multple  calls   to  SDOS:VTILPUTBUF,  and
+               exiting with carry set.
+
+          DPB:GPINIT
+               These 8 bytes contain values to be copied into DCB:GPUSE, to
+               be used for any general  purpose by the DPB:xxx routines.  A
+               typical  use is to zero the  state  of  DCB:XLATESTATE  (the
+               first byte DCB:GPUSE) when a DPB is  chosen,  to  reset  the
+               input    translation    state.    Other    uses   are   very
+               device-dependent.
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  33                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          DPB:NEWPAGE
+               The I/O  package  must supply a routine which implements the
+               New Page function  (erase screen, position cursor to 0,0 for
+               CRTs or goto top  of  form  for  printers).  The  routine is
+               referenced  with  a  JMP instruction  in  this  field.   The
+               routine typically implements this function by  outputting  a
+               sequence  of  control  characters  peculiar to the  terminal
+               handled  by  the  DPB;  SDOS:VTTLPUTBUF  is called for  each
+               character with the character in (A).  Two entry points  into
+               the   VT  driver  are  supplied  to  handle  special  cases:
+               SDOS:VTNEWPAGEFF, which  simply  outputs an Ascii Form (:0C)
+               character,   and   SDOS:VTMALNEWPAGE,    which   outputs   a
+               user-specified  character  sequence  which  can  be  set  by
+               CC:ALTERPROFILE  (used  only  if  DPB:FLAGS   is  marked  as
+               "malleable").   For   terminals   for   which   these    are
+               satisfactory, the DPB:NEWPAGE entry may jump directly to the
+               appropriate VT driver entry point.
+
+          DPB:NEWLINE
+               The I/O package must supply a routine  which  implements the
+               New  Line  function (move cursor one line further  down  the
+               screen  or  paper).  The  routine  is referenced with a  JMP
+               instruction  in this field. The routine typically implements
+               each this  function  by  outputting  a  sequence  of control
+               characters peculiar to  the  terminal  handled  by  the DPB;
+               SDOS:VTTLPUTBUF  is  called  for  each  character  with  the
+               character in (A).  Two entry  points  into the VT driver are
+               supplied to handle special cases: SDOS:VTNEWLINECRLF,  which
+               simply  outputs  an  Ascii  Carriage Return (:0D)  character
+               followed  by  Ascii  Line Feed (:0A), and SDOS:VTMALNEWLINE,
+               which outputs a user-specified character sequence (ASCII:CR,
+               ASCII:LF or  ASCII:LF,ASCII:CR, either followed by a variale
+               number of idles)  which  can be set by CC:ALTERPROFILE (used
+               only if DPB:FLAGS is  marked  as "malleable"). For terminals
+               for which these are satisfactory,  the DPB:NEWLINE entry may
+               jump directly to the appropriate VT driver entry point.
+
+          DPB:ERASETOEOL
+               The I/O package must supply a  routine  which implements the
+               Erase to End of Line function (place  blanks  from cursor to
+               right   margin,  without  moving  cursor).  The  routine  is
+               referenced with a JMP instruction in this field. The routine
+               typically implements  each  this  function  by  outputting a
+               sequence of control  characters  peculiar  to  the  terminal
+               handled  by the DPB;  SDOS:VTTLPUTBUF  is  called  for  each
+               character with the character in  (A).  Two entry points into
+               the  VT  driver  are  supplied  to   handle  special  cases:
+               SDOS:VTSIMEEOL,  which  simulates  the  desired  function by
+               literally outputting  blanks  until  the  right  side of the
+               screen/paper is reached, and then backspaces to the original
+               column  position,  and   SDOS:VTMALEEOL,   which  outputs  a
+               user-specified  character  sequence  which  can  be  set  by
+               CC:ALTERPROFILE  (used  only  if  DPB:FLAGS   is  marked  as
+               "malleable").   For   terminals   for   which   these    are
+
+
+     Copyright (c) 1981                  34                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+               satisfactory, the DPB:ERASETOEOL entry may jump directly  to
+               the appropriate VT driver entry point.
+
+          DPB:POSITION
+               The I/O package must supply a routine which  implements  the
+               Position function (move cursor to specified row and column).
+               The  routine  is  referenced with a JMP instruction in  this
+               field. It is entered with the row and column position in the
+               stack  at  2,S and 3,S respectively, with the return address
+               on top of the stack. The routine may exit simply by CLC\RTS;
+               the VT  driver  will  remove  the  cursor  position that was
+               passed in the  stack.  The routine typically implements each
+               this function by outputting a sequence of control characters
+               peculiar to the terminal handled by the DPB; SDOS:VTTLPUTBUF
+               is called for each  character with the character in (A).  An
+               entry  point  (SDOS:VTMALPOSITION)  into the  VT  driver  is
+               supplied  to  handle  the  special  case   of  outputting  a
+               user-specified  character  sequence  which  can  be  set  by
+               CC:ALTERPROFILE   (used  only  if  DPB:FLAGS  is  marked  as
+               "malleable"). For  terminals for which this is satisfactory,
+               the    DPB:POSITION   entry    may    jump    directly    to
+               SDOS:VTMALPOSITION. Devices for which  cursor positioning is
+               not  possible  must  return an  "Illegal  Device  Operation"
+               error;  the  entry point SDOS:ILLEGALDEVICEOPERATION can  be
+               referenced by the JMP to accomplish this.
+
+          DPB:SETCOLORING
+               The I/O package must supply a routine  which  implements the
+               coloring   function   indicated  in  (D).   The  routine  is
+               referenced with  a  JMP  instruction  in this field.  If the
+               coloring function is not desired, then implement the routine
+               with CLC followed by a RTS instruction.
+
+          DPB:SETBACKGROUND
+               The I/O package  must  supply a routine which implements the
+               background  function  indicated  in  (A).   The  routine  is
+               referenced with a JMP instruction  in  this  field.   If the
+               background  function  is  not  desired, then  implement  the
+               routine with CLC followed by a RTS instruction.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  35                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          VT DEVICE DRIVERS LINKAGE
+
+          All  VT  driver  entry points are made  available  in  a  special
+          linkage  table.   For  SDVT11C and SDOS 1.1, this  linkage  table
+          resides at SDOS-$63 and above the VT driver module.  The  linkage
+          table provides address, data and JMP vectors between the "virtual
+          terminal module" and the user I/O section of the VT driver.
+
+          All  entries in this table are named SDOS:xxx in the  definitions
+          file.  These entries are typically addressed via LDAA/JMP/JSR/LDX
+          SDOS+SDOS:xxx instructions, where SDOS is a symbol whose value is
+          the  base  of  SDOS.  Below are the linkage table entries in  the
+          order in which they appear in the linkage table definitions.
+
+          SDOS:ILLEGALDEVICEOPERATION
+               This  entry  point  generates  an "Illegal Device Operation"
+               error, and is supplied primarily as a target for DRIVER:xxx,
+               DCB:xxx and DPB:xxx entries that are not implemented.
+
+          SDOS:VTTLPUTBUF
+               This entry  point  is  supplied  by the VT driver to put the
+               character in (A) into the output ring buffer selected by the
+               DCB whose address  is  in  (X) and in DCBPOINTER. Characters
+               placed in the output  ring are sent to the device as quickly
+               as  possible.  It  is intended  for  use  by  DPB:SPECIALFN,
+               DPB:SETCOLORING  and DPB:SETBACKGROUND.  It is possible  for
+               this    routine    to    return    an    error   (especially
+               ERR:DEVICETIMEDOUT) to the caller.
+
+          SDOS:VTILPUTBUF
+               This entry  point  is  supplied  by the VT driver to put the
+               character in (A)  into  the input ring buffer.  This routine
+               is intended for use  only  by  DPB:XLATEI when it translates
+               some input sequence into multiple input characters.
+
+          SDOS:VTEDITTASK
+               The I/O package must point (P) of each edit task TCB at this
+               entry point at sysgen time; (X) must point to the associated
+               DCB (see the SDOS manual for details on building a TCB.)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  36                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          SDOS:VTNEWPAGEFF
+               This entry point is supplied by the VT driver to perform the
+               New  Page  function for the  large  class  of  devices  that
+               perform a New Page function when sent ASCII:FF.  DPB:NEWPAGE
+               should contain a JMP to this  entry  point for this class of
+               device. An ASCII:FF character will be sent to the device via
+               SDOS:VTTLSTORE.
+
+          SDOS:VTNEWLINECRLF
+               This entry point is supplied by the VT driver to perform the
+               New  Line  function  for  the large class  of  devices  that
+               perform a New Line function when sent ASCII:CR  followed  by
+               ASCII:LF.  DPB:NEWLINE  should  contain  a JMP to this entry
+               point for  this  class  of  device.  An ASCII:CR followed by
+               ASCII:LF will be sent to the device via SDOS:VTTLSTORE.
+
+          SDOS:VTSIMEEOL
+               This entry point  is  supplied  by the VT driver to simulate
+               the Erase To End  of  Line function for the class of devices
+               that cannot perform this function  directly.  DPB:ERASETOEOL
+               should contain a JMP to this  entry  point for this class of
+               device.   Enough  spaces  to move the cursor  to  the  right
+               margin, followed by an equal number of backspaces,  will  be
+               sent to the device via SDOS:VTTLSTORE.
+
+          SDOS:VTMALNEWPAGE
+               This entry point is supplied by the VT driver for DPBs whose
+               DPB:FLAGS is marked "malleable", and causes the VT driver to
+               send  a user-defined New Page sequence (see CC:ALTERPROFILE)
+               to a  device  via  SDOS:VTTLSTORE.   Such  DPBs  should have
+               DPB:NEWPAGE containing a JMP to this entry point.
+
+          SDOS:VTMALNEWLINE
+               This entry point is supplied by the VT driver for DPBs whose
+               DPB:FLAGS is marked "malleable", and causes the VT driver to
+               send a user-defined  New Line sequence (see CC:ALTERPROFILE)
+               to  a device via  SDOS:VTTLSTORE.   Such  DPBs  should  have
+               DPB:NEWLINE containing a JMP to this entry point.
+
+          SDOS:VTMALEEOL
+               This entry point is supplied by the VT driver for DPBs whose
+               DPB:FLAGS is marked "malleable", and causes the VT driver to
+               send  a user-defined Erase to  End  of  Line  sequence  (see
+               CC:ALTERPROFILE) to a device via SDOS:VTTLSTORE.   Such DPBs
+               should  have DPB:ERASETOEOL containing a JMP to  this  entry
+               point.
+
+          SDOS:VTMALPOSITION
+               This entry point is supplied by the VT driver for DPBs whose
+               DPB:FLAGS is marked "malleable", and causes the VT driver to
+               send   a   user-defined  cursor  positioning  sequence  (see
+               CC:ALTERPROFILE) to  a  device via SDOS:VTTLSTORE. Such DPBs
+               should have DPB:ERASETOEOL  containing  a  JMP to this entry
+               point.
+
+
+     Copyright (c) 1981                  37                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          SDOS:VTATTNCHECK
+               This entry point is supplied by the VT driver for use by the
+               CNFG:ATTNCHECK field of the  configuration  table in the I/O
+               package.
+
+          SDOS:VTINPUTTO
+               This  VT  driver entry point  is  referenced  by  the  input
+               timeout block associated with each DCB.   When  it  receives
+               control, interrupts must be disabled (which is the case when
+               a fuse expires), and (X) must point  at  the  DCB  (which is
+               easily  accomplished by suitable construction of the timeout
+               block).  Exit  will  be  made  through  either  SDOS:RTI  or
+               SDOS:RESCHEDULE.
+
+          SDOS:VTOUTPUTTO
+               This VT driver  entry  point  is  referenced  by  the output
+               timeout block associated with  each  DCB.   When it receives
+               control, interrupts must be disabled (which is the case when
+               a fuse expires), and (X)  must  point  at  the DCB (which is
+               easily accomplished by suitable construction of  the timeout
+               block).   Exit  will  be  made  through either  SDOS:RTI  or
+               SDOS:RESCHEDULE.
+
+          SDOS:VTINPUTINT
+               This  VT  driver  entry  point  is  referenced  with  a  JMP
+               instruction  by the interrupt poll chain upon receipt of  an
+               input  interrupt.  When it receives control, interrupts must
+               be disabled  (which  is  the case when an interrupt occurs),
+               and (X) must  point at the DCB; stacks must NOT be switched.
+               DCB:ILGETDEV will be called  to  collect  the input data and
+               acknowledge the interrupt. Exit will  eventually be made via
+               an RTI.  Stack switching is not  performed  so  tha the poll
+               chain  code for VT driver class devices  is  consistent  for
+               both input and output interrupts (see SDOS:VTOUTPUTINT).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  38                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          SDOS:VTOUTPUTINT
+               This  VT  driver  entry  point  is  referenced  with  a  JMP
+               instruction  by the interrupt poll chain upon receipt of  an
+               interrupt  indicating  that  a device has output a character
+               and is ready for more.  When it receives control, interrupts
+               must be  disabled  (which  is  the  case  when  an interrupt
+               occurs), and (X)  must  point at the DCB; stacks must NOT be
+               switched. Since DCB:ILPUTDEV will get control immediately if
+               there  is  another  character   in   the   output  ring,  or
+               DCB:ILDISOI will be called follwed  by  RTI if there is not,
+               interrupt poll chain code need not  clear  the  interrupt or
+               disable interrupts.  Since output to terminals can  occur at
+               very  high rates (38.4Kbaud), interrupt poll chain code  for
+               fast  output  terminals should be very near the top  of  the
+               interrupt  poll  chain,  and  should  check for output ready
+               interrupt as  quickly as possible (a few wasted instructions
+               can burn 1% of the CPU's capacity).  Conventional SDOS stack
+               switching (see SDOS:STACKSWITCHED)  is not performed because
+               of the overhead it entails, which is totally unnessary for a
+               routine as streamlined as SDOS:VTOUTPUTINT, which only takes
+               about 100 machine cycles and then exits via RTI.
+
+          SDOS:VTDISPATCH
+               This is the standard  I/O driver dispatch vector which every
+               VT device DCB must reference with the DCB:DRIVER field.
+
+          SDOS:VTINTDCB
+               This field points at the  DCB  currently  being serviced (or
+               last serviced), by an interrupt level  routine;  it is valid
+               only at the time of an interrupt.  This  field is set by the
+               VT  driver when it begins to process interrupt  level  code,
+               and  may  be referenced by interrupt level routines supplied
+               by the  I/O  package.   All  interrupt level code must leave
+               interrupts disabled.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  39                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          THE DEVICE CONTROL BLOCK
+
+          The VT driver  requires a Device Control Block for each device it
+          supports.  The DCB specifies  the device name, provides access to
+          procedures  to  manipulate  the  device   hardware,   and   holds
+          miscellaneous data appropriate for the driver of that device.
+
+          VT DCBs have three parts: a  part defined by SDOS, a part defined
+          by the VT driver, and a driver-specific part. Certain portions of
+          the  VT  driver  DCB  must  be  filled  in  by  the  I/O  package
+          (especially  those  which  are device-specific), and the rest  is
+          maintained by the VT driver, and are of little concern to the I/O
+          package  programmer. This section defines those DCB entries which
+          must be filled in by the I/O package.
+
+          Several DCB entries are used as linkages to device-specific code.
+          Since the  code  may  need  to  reference  the DCB (extension) to
+          perform the desired  function,  (X) points to the DCB on entry to
+          the  routine,  unless  otherwise  stated.   Routines  passed  (X)
+          pointing to the DCB MUST exit with (X) unchanged.
+
+          Several DCB entries are used  to specify the location and size of
+          input and output ring buffers managed by routines internal to the
+          VT driver. These ring buffering routines  act  as buffers between
+          the Task Level portion of the VT  driver  and  the Interrupt code
+          specific to the hardware.  Rings may start anywhere  and  be  any
+          size less than 65536 bytes, so any desired buffering capacity can
+          be  easily  specified. Sufficient interface to the ring-buffering
+          routines is  provided via SDOS:VTxxx entries; the VT performs all
+          the ring management  automatically  and  very quickly, to provide
+          high-performance I/O capabilities.
+
+          With each DCB for  a  VT  device,  there  must  be defined a task
+          control block for the Editor  Task  for  that  device.   The  I/O
+          package must supply a task control  block  (TCB) for each DCB for
+          this  purpose.  TCB:SCRATCHPAD+DCBPOINTER  must be initialized to
+          point at  the  DCB.  The I/O package must also supply a stack for
+          each TCB.  The  stack  must  contain a machine environment frame,
+          which addresses the entry  point  SDOS:VTEDITTASK  (see above) as
+          the first instruction to be  executed  by  that task. The size of
+          the stack must be ENV:MINSTACK*2-ENV:SIZE bytes.
+
+          The program MAKEVTCNFG will manufacture standard  DCBs  with  all
+          the  following  fields filled in correctly, along  with  suitably
+          constructed   TCBs   and   their  stack  areas.   DCBs  requiring
+          customization are  most easily obtained by allowing MAKEVTCNFG to
+          manufacture a standard  DCB,  and  using ORG statements to "drop"
+          customizations onto the standard DCB where needed.
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  40                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          DCB:PROFILE
+               The I/O package must  supply  the "name" of a profile, which
+               is valid for the configuration;  this  one-byte  field holds
+               the number (see DPB:PROFILENUMBER) for the  default  profile
+               for this device.
+
+          DCB:XLATESTATE
+               This  one-byte  field  is reserved for use  by  the  routine
+               referenced by the field DPB:XLATEI.  The intent is  that  it
+               will  contain a READA input translation state, primarily for
+               use in decoding escape sequences.  This field can be cleared
+               whenever the  CC:SETPROFILE  control  call  by  constructing
+               DPB:GPINIT so its first byte is zero.
+
+          DCB:GPUSE
+               This 8 byte  field  is  reserved for use only by the DPB:xxx
+               routines of the DPB  currently  selected  for  this DCB (the
+               first byte is named DCB:XLATESTATE),  and  is generally used
+               by a DPB to keep track  of  the  state  of  the  terminal it
+               represents.  These 8 bytes are initialized to  the  value in
+               DPB:GPINIT when CC:SETPROFILE is invoked.
+
+          DCB:LINEBUF
+               The I/O package must place the address of the line buffer in
+               this two-byte field.  The size of this buffer constrains the
+               number  of  characters  that  may  be  accepted  before   an
+               activation character must be entered.
+
+          DCB:LINEBUFLEN
+               The I/O package must place the length of the  line buffer in
+               this  one-byte  field; the length must be at least 20  bytes
+               and may not exceed 255 bytes.
+
+          DCB:OUTPUTTOBLK
+               The  I/O  package  must  construct  a  timeout block in this
+               field.  The timeout block must be initialized with a fuse of
+               zero, must  point to SDOS:VTOUTPUTTO as the timeout routine,
+               and must specify  this DCB as the value to place in (X) when
+               a timeout occurs.  This timeout block will have its fuse set
+               to the currently selected  output  timeout  each time the VT
+               driver calls DCB:ILPUTDEV.
+
+          DCB:INPUTTOBLK
+               The  I/O package must construct  a  timeout  block  in  this
+               field.  The timeout block must be initialized with a fuse of
+               zero, must point to SDOS:VTINPUTTO as  the  timeout routine,
+               and must specify this DCB as the  value to place in (X) when
+               a timeout occurs.  This timeout block will have its fuse set
+               to the value specified by CC:SETREADTIMEOUT.
+
+
+
+
+
+
+
+     Copyright (c) 1981                  41                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          DCB:RESET
+               The I/O package must supply a routine which  initializes the
+               hardware necessary to "talk" to the device.  The routine  is
+               referenced  with  a  JMP  instruction  in  this  field.  The
+               routine must  exit  with  a RTS instruction. This routine is
+               called once only,  at  SDOS  boot time, and may be placed in
+               the input line buffer  for  the  device  or  the disk buffer
+               pool.
+
+          DCB:TLCLOSEDEV
+               The I/O package must supply  a  routine  which "flushes" the
+               device, and reference that routine with a JMP instruction in
+               this field.  The routine receives control  due  to  either a
+               CC:DUMPBUFFERS control call or a CLOSE call;  and  must exit
+               with  carry reset, using a RTS instruction, or  through  the
+               SDOS:ERROR entry point, with an appropriate error code.  For
+               most  devices,  this  field  will  contain  a CLC, RTS  code
+               sequence.  To  ensure  that  output is complete on a device,
+               this routine  would  simply need to wait for the output ring
+               to become empty.
+
+          DCB:ILPUTDEV (Interrupt Level Put Device)
+               The I/O package must supply a routine that outputs a byte in
+               (A) to the device represented by this DCB. This routine will
+               be called only  if DCB:ILENBOI has been called more recently
+               than DCB:ILDISOI, and the  device  is  ready for more output
+               (i.e., DCB:ILENBOI returned with Z  bit  "nonzero")  or  the
+               interrupt system has recently signalled that this device has
+               caused an "output ready for more"  interupt.  Exits via RTI.
+               The routine can be referenced by a  JMP  instruction in this
+               feild.  For  most  serial  devices, the instruction sequence
+               "STAA >devaddr\RTI" is sufficient for this routine, and so 4
+               bytes (sufficient  for  the  sequence  just  described)  are
+               reserved for this  DCB  slot  so  the  code  can be directly
+               placed into the DCB (this saves execution time).
+
+          DCB:ILGETDEV
+               The I/O package must  supply  a routine which returns in (A)
+               the character which the device  currently has available, and
+               also acknowledges the input interrupt.  Since  this  routine
+               receives  control  subsequent  only  to  an  input-available
+               interrupt, the character is always presumed to be available.
+               If no  device  errors  are  outstanding,  the  character  is
+               returned in (A), carry is reset, and exit is made with a RTS
+               instruction. If device errors are outstanding, the reason(s)
+               for error are  returned  in  (A),  carry is set, and exit is
+               made with a RTS instruction.  The routine is referenced with
+               a JMP instruction in this field.  Standard device errors are
+               "framing error", bit 0;  "data  overrun", bit 1; and "parity
+               error", bit 2.
+
+
+
+
+
+
+     Copyright (c) 1981                  42                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          DCB:ISDEVICEREADY
+               The I/O package must supply a routine which checks to see if
+               the VT device is ready,  and  reference  that routine with a
+               JMP instruction in this field. The  routine is not permitted
+               to transfer data to or from the  device. The routine returns
+               with carry clear to indicate that the device is ready; carry
+               set to indicate that the device is not  ready.  It is called
+               from  task  level  with  interrupts enabled. Typically, this
+               routine checks Data Carrier Detect.
+
+          DCB:ILENBOI (Interrupt Level Enable Output Interrupts)
+               The I/O  package  must  supply a subroutine to enable device
+               specified by DCB  in  (X)  to cause an "output buffer empty"
+               interrupt when the device  is  ready  for  more output data.
+               The  routine is referenced by  a  JMP  instruction  in  this
+               field.  It  is  called with processor  interrupts  disabled;
+               returns with Z bit reset ("not zero")  if  device  is  ready
+               immediately  for more output data, else returns with  Z  bit
+               set.  Normally  called  by  VT  driver  once just before  it
+               outputs a stream of bytes via interrupts to the device.
+
+          DCB:ILDISOI (Interrupt Level Disable Output Interrupts)
+               The  I/O  package must supply a subroutine to disable device
+               specified by  DCB  in  (X)  from causing more "output buffer
+               empty"  interrupts. The  routine  is  referenced  by  a  JMP
+               instruction in this field.   It  is  called  with  processor
+               interrupts disabled. Normally called by VT driver once after
+               outputting a stream of bytes,  when  there are no more bytes
+               to output.
+
+          DCB:ILOTO (Interrupt Level Output Timeout)
+               The I/O package must supply a subroutine to reset the output
+               device specified by the DCB in  the  (X)  register  after an
+               output timeout (this routine must NOT reset  the  INPUT side
+               of  the  device).    The  routine  is  referenced by  a  JMP
+               instruction  in  this  field.   It  is called with processor
+               interrupts disabled.   Clears output activity on the device,
+               and leaves output interrupts disabled.
+
+          DCB:ILSETBAUDRATE (Interrupt Level Set Baud Rate)
+               The I/O package  must  supply  a  routine that sets the baud
+               rate to (D) bits-per-second  for  the  device represented by
+               the DCB in (X).  Returns  with carry set if baud rate is not
+               changeable to value in (D), and  baud  rate  is  not changed
+               (this  causes  VT  driver  is  issue  an   "ILLEGAL   DEVICE
+               OPERATION"  error).  The  routine  is  referenced  by a  JMP
+               instruction  in  this  field;  if  the  baud rate cannot  be
+               changed  by  the  software then an ERRORRTS can be place  in
+               this DCB slot.
+
+
+
+
+
+
+
+     Copyright (c) 1981                  43                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          DCB:TLPUTBUF
+               The  I/O  package  must  supply  a  routine  which accepts a
+               character to  be  output.   The routine is referenced with a
+               JMP instruction in this field, and receives control with the
+               character in (A),  and  (X)  pointing  at  the DCB (location
+               DCBPOINTER  also contains the  address  of  the  DCB).   The
+               routine will be called from  the  task  level and interrupts
+               will be enabled. I/O packages servicing  memory-mapped video
+               devices may implement this routine by storing  directly into
+               the video buffer and always returning with (X) preserved and
+               the   carry   clear   (note:  DCB:RINGOUTLEN  must  also  be
+               initialized to  -1).  For  devices  requiring  use  of  ring
+               buffers and interrupts,  this  field may be initialized with
+               "JMP >0"; the VT driver  will  use  its internal ring buffer
+               management and DCB:ILxxx to empty the rings.
+
+          DCB:OILQUIESCENT
+               This field tells the VT  driver  whether  an  "output buffer
+               empty" interrupt is expected from the  device  or not; it is
+               zero  if  an  interrupt  IS  expected. For  interrupt-driven
+               output   devices,  it  should  be  initialized  to  1;   for
+               memory-mapped  video  devices,  it  should be initialized to
+               zero.
+
+          DCB:BAUDRATE
+               The I/O package must fill this 16 bit field with the default
+               baudrate desired  for  this  DCB.   The VT driver reset code
+               will call DCB:ILSETBAUDRATE  with  this value at system boot
+               time.
+
+          DCB:RINGINBASE
+               The I/O package must  supply space for an input ring buffer.
+               This two-byte field points at  the base of the area reserved
+               for the input ring buffer.
+
+          DCB:RINGINLEN
+               This two-byte field defines the length  of the area reserved
+               for the input ring buffer, and contains the NEGATIVE of size
+               of the ring.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  44                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          DCB:RINGOUTBASE
+               The I/O package must supply space for an output ring buffer.
+               This two-byte field points at the base  of the area reserved
+               for   the  output  ring  buffer.   For  memory-mapped  video
+               devices, the  feild  may  be set to any value; the buffer so
+               allocated will never get used.
+
+          DCB:RINGOUTLEN
+               This two-byte field  defines the length of the area reserved
+               for a output ring  buffer,  and contains the NEGATIVE of the
+               size  of the ring. For  memory-mapped  video  devices,  this
+               field must contain -1.
+
+          DCB:RINGOUTTHRESHOLD
+               This one-byte field defines the number  of  characters  that
+               must be available in the output ring  before  the  VT driver
+               will wake up after blocking on output. It  thus  provides  a
+               hysteris, ensuring that the when the VT driver wakes, it can
+               place  many  characters  in  the output ring before it  must
+               block  again,  thus dividing the blocking overhead over many
+               characters.  This  field  is  typically  set  to  1/8th  the
+               magnitude of DCB:RINGOUTLEN.
+
+          DCB:CONTROL
+               The  I/O  package  must  supply  a  routine  which  services
+               unrecognized control calls.  The  routine is referenced with
+               a JMP instruction in this  field.  When the routine receives
+               control, (B) contains the control call  code, and (X) points
+               at  the  DCB.  Exit must be made  with  a  RTS  instruction.
+               Return is made with carry clear if the  control call code is
+               recognized  and  accepted; otherwise, return is made through
+               the SDOS:ERROR  entry point, with an appropriate error code.
+               This routine operates  at  the  task  level, with interrupts
+               enabled.
+
+          DCB:STATUS
+               The  I/O  package  must  supply  a  routine  which  services
+               unrecognized status calls.  The routine is referenced with a
+               JMP instruction in this field.  When  the  routine  receives
+               control, (B) contains the status call  code,  and (X) points
+               at  the  DCB.  Exit must be made  with  a  RTS  instruction.
+               Return is made with carry clear if the  status  call code is
+               recognized  and  accepted; otherwise, return is made through
+               the SDOS:ERROR  entry point, with an appropriate error code.
+               This routine operates  at  the  task  level, with interrupts
+               enabled.
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  45                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          VT DRIVER INTERNAL DCB VARIABLES
+
+          This section describes the  other  DCB  entries for documentation
+          purposes only.  The systems implementor  need not concern himself
+          with these fields.
+
+
+
+          DCB:TLROOM
+               The ring buffer routines maintain this two-byte field, which
+               is a count of free output  buffer  space.  A  value  of zero
+               means that no output buffer space is  available.  A non-zero
+               value means that room for at least one  byte  is  available.
+               DCB:TLROOM must be updated in an indivisible fashion.
+
+          DCB:ILDATA
+               The ring buffer routines maintain this two-byte field, which
+               is the negative of the count of available output data bytes,
+               minus one. A value of minus one means that  no  output  data
+               bytes  are  available.  DCB:ILDATA  must  be  updated  in an
+               indivisible fashion.
+
+          DCB:ILROOM
+               The ring buffer routines maintain this two-byte field, which
+               is the  negative  of  the  count of free input buffer space,
+               minus one. A  value  of minus one that no input buffer space
+               is available. DCB:ILROOM must  be  updated in an indivisible
+               fashion.
+
+          DCB:TLDATA
+               The  routines  referenced  by the  fields  DCB:ILPUTBUF  and
+               DCB:TLGETBUF must maintain this two-byte field,  which  is a
+               count of available input data bytes.  A  value of zero means
+               that  no input data bytes are available.  A  non-zero  value
+               means  that  at  least  one  input  data byte is  available.
+               DCB:ILROOM  and DCB:TLDATA must be updated in an indivisible
+               fashion.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  46                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          CONFIGURATION TABLE
+
+
+          CNFG:VTPROFILES
+               The I/O  package  must  supply  the address of the head of a
+               chain  of DPBs  profiling  this  configuration  (see  Device
+               Profile Block, above).
+
+          CNFG:VTDEBUG
+               The I/O package must supply a routine which calls the system
+               debugger.  The routine is  referenced  with an FDB directive
+               in this field.  The routine  should return with carry clear,
+               unless  the system debugger is unavailable,  in  which  case
+               return  should be made with carry set.   This  routine  will
+               receive  control  at  the  interrupt  level, with interrupts
+               disabled, and  a  machine environment frame on the stack, as
+               though an NMI had occurred.
+
+          CNFG:VTDCB
+               The I/O package  must  supply  the  address of the head of a
+               chain of VT device DCBs.  Each DCB points at the next DCB in
+               the chain with the  DCB:NEXTDCB  field;  the last DCB in the
+               chain contains zeroes in the  field.   (Note that this field
+               is not currently required of the  I/O  package,  but rather,
+               the  VT  device  device  DCBs are placed  on  the  chain  of
+               non-disk device DCBs.)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  47                    Software Dynamics
+
+
+
+
+
+          SDOS USER'S MANUAL
+          SECTION __: VT DRIVER SYSGEN INFORMATION
+
+
+          CNFG:VTDEBUG lie? value=0 --> no debug?? stacks switched  ??   We
+          need a Not Ready status somehow... perhaps on OPEN??
+
+          3 states of a DPB:
+               Hardcopy edit
+               zero depth
+               full edit
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  48                    Software Dynamics
+
+
+
+
+
+
+
+
+
+                                  TABLE OF CONTENTS
+
+
+
+          ERROR CODES . . . . . . . . . . . . . . . . . . . . . . 2
+          VIRTUAL TERMINAL DEVICE DRIVER  . . . . . . . . . . . . 3
+             OPEN & CREATE  . . . . . . . . . . . . . . . . . . . 4
+             CLOSE  . . . . . . . . . . . . . . . . . . . . . . . 4
+             RENAME & DELETE  . . . . . . . . . . . . . . . . . . 4
+             READA & WRITEA . . . . . . . . . . . . . . . . . . . 5
+             READB  . . . . . . . . . . . . . . . . . . . . . . . 5
+             CONTROL  . . . . . . . . . . . . . . . . . . . . . . 7
+                CC:POSITION . . . . . . . . . . . . . . . . . . . 7
+                CC:DUMPBUFFERS  . . . . . . . . . . . . . . . . . 7
+                CC:ECHO . . . . . . . . . . . . . . . . . . . . . 7
+                CC:NOECHO . . . . . . . . . . . . . . . . . . . . 7
+                CC:WRAP . . . . . . . . . . . . . . . . . . . . . 7
+                CC:NOWRAP . . . . . . . . . . . . . . . . . . . . 7
+                CC:IDLES  . . . . . . . . . . . . . . . . . . . . 8
+                CC:TABS . . . . . . . . . . . . . . . . . . . . . 8
+                CC:SETACTBLOCK  . . . . . . . . . . . . . . . . . 9
+                CC:CLRINPUT . . . . . . . . . . . . . . . . . . . 9
+                CC:CLROUTPUT  . . . . . . . . . . . . . . . . . . 9
+                CC:SETREADTIMEOUT . . . . . . . . . . . . . . . . 9
+                CC:SETPROFILE . . . . . . . . . . . . . . . . . . 10
+                CC:ALTERPROFILE . . . . . . . . . . . . . . . . . 11
+                CC:WRITEEDITLINE  . . . . . . . . . . . . . . . . 12
+                CC:SETFIELDSIZE . . . . . . . . . . . . . . . . . 13
+                CC:SETPARAMS  . . . . . . . . . . . . . . . . . . 13
+                CC:ACTIVATIONCK . . . . . . . . . . . . . . . . . 14
+                CC:SETBAUDRATE  . . . . . . . . . . . . . . . . . 14
+                CC:COLORING . . . . . . . . . . . . . . . . . . . 15
+                CC:BACKGROUND . . . . . . . . . . . . . . . . . . 16
+                CC:KILLPROOF  . . . . . . . . . . . . . . . . . . 16
+                CC:KILLENABLE . . . . . . . . . . . . . . . . . . 16
+                CC:SETEXCEPTIONS  . . . . . . . . . . . . . . . . 16
+                CC:SETOUTPUTTIMEOUT . . . . . . . . . . . . . . . 16
+             STATUS . . . . . . . . . . . . . . . . . . . . . . . 17
+                SC:GETPOS . . . . . . . . . . . . . . . . . . . . 17
+                SC:GETCOL . . . . . . . . . . . . . . . . . . . . 17
+                SC:GETEOF . . . . . . . . . . . . . . . . . . . . 17
+                SC:GETTYPE  . . . . . . . . . . . . . . . . . . . 17
+                SC:GETPARAMS  . . . . . . . . . . . . . . . . . . 17
+                SC:GETPROFILE . . . . . . . . . . . . . . . . . . 18
+                SC:GETPROFILENAME . . . . . . . . . . . . . . . . 18
+                SC:GETPROFILEALTERATION . . . . . . . . . . . . . 18
+                SC:GETFREECOUNT . . . . . . . . . . . . . . . . . 18
+                SC:GETDATACOUNT . . . . . . . . . . . . . . . . . 18
+                SC:GETOUTPUTTIMEOUT . . . . . . . . . . . . . . . 18
+                SC:GETBAUDRATE  . . . . . . . . . . . . . . . . . 18
+                SC:GETTABS  . . . . . . . . . . . . . . . . . . . 19
+                SC:GETIDLES . . . . . . . . . . . . . . . . . . . 19
+                SC:GETWRAP  . . . . . . . . . . . . . . . . . . . 19
+                SC:GETCOLORING  . . . . . . . . . . . . . . . . . 19
+
+
+     Copyright (c) 1981                  49                    Software Dynamics
+
+
+
+
+
+
+
+
+
+                SC:GETBACKGROUND  . . . . . . . . . . . . . . . . 19
+                SC:GETACTCOL  . . . . . . . . . . . . . . . . . . 19
+                SC:ATTENTIONCK  . . . . . . . . . . . . . . . . . 19
+                SC:STATUSCK . . . . . . . . . . . . . . . . . . . 19
+             CONTROL CHARACTERS . . . . . . . . . . . . . . . . . 20
+             SWITCHES . . . . . . . . . . . . . . . . . . . . . . 25
+             SDOS/MT SUPPORT  . . . . . . . . . . . . . . . . . . 26
+                CONTROL . . . . . . . . . . . . . . . . . . . . . 26
+                   CC:SETTIMESHARE  . . . . . . . . . . . . . . . 26
+                   CC:WRITEANOWAIT  . . . . . . . . . . . . . . . 26
+                   CC:WRITEBNOWAIT  . . . . . . . . . . . . . . . 26
+                STATUS  . . . . . . . . . . . . . . . . . . . . . 27
+                   SC:GETLINEGLAGSHINT  . . . . . . . . . . . . . 27
+                   SC:GETLINEFLAGS  . . . . . . . . . . . . . . . 27
+                   SC:CHECKTIMESHARE  . . . . . . . . . . . . . . 27
+                   SC:ALLSTATUS . . . . . . . . . . . . . . . . . 27
+          VT DRIVER SYSGEN INFORMATION  . . . . . . . . . . . . . 28
+             DEVICE PROFILE BLOCK (DPB) . . . . . . . . . . . . . 32
+             VT DRIVER LINKAGE  . . . . . . . . . . . . . . . . . 36
+             DEVICE CONTROL BLOCK (DCB) . . . . . . . . . . . . . 40
+             CONFIGURATION TABLE  . . . . . . . . . . . . . . . . 47
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     Copyright (c) 1981                  50                    Software Dynamics
+
+
+
