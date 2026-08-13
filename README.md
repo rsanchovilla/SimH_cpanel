@@ -4,7 +4,7 @@ Old computers were massive, noisy, power-hungry and very beautiful, with plenty 
 punched cards, and of course rows and rows of buttons and switches.
 
 The aim of this project is to add nice visuals to SimH simulators on an interactive GUI to recreate the hypnotic experience 
-of looking the computer _processing_ and pushing/toggling that buttons and switches.
+of looking the computer _processing_ and operating it by pushing/toggling that buttons and switches.
 
 The visuals covers interactive control panels (lights, switches, buttons toggles) but also
 other devices: tapes, card readers, disk, plotters, scopes, etc.
@@ -18,7 +18,7 @@ swtpc6800 work is based on Bill Beech SimH simulator.
 HP2100 work is based on David Bryan simulator. 
 i650, NORC, i701 and MarkI simulators are my own SimH simulators.
 
-***WHAT'S NEW!: Motorola EDOS-II and iCOM FDOS-II***
+***WHAT'S NEW!: Motorola EDOS-I and Motorola Assembler 1.0***
 
 <table>
 <thead>
@@ -93,9 +93,17 @@ Currently supports visuals emulation for:
 * SWTPC 6800 (MAY/2022)
   * SWTPC MF68 Floppy Disk
   * Percom LFD-400 Floppy 
+  * iCOM FD-360 Floppy 
   * SWTPC GT-6144 Graphics Terminal + PPG-J Analog Joystick
   * MP-T Timer Card
   * subLogic Graphics One Terminal
+  
+* Motorola Exorciser (JUL/2026)
+  * iCOM FD-360 Floppy (aka ExorDisk-I)
+
+* Motorola MEK6800-D1 (JUL/2026)
+  * with Serial Interface for Console
+  * MINIBUG ROM
 
 * IBM 360/370 (SEP/2022)
   * IBM 2401, 2415 and 3420 Tapes
@@ -290,6 +298,10 @@ Other
 * execute `run swtp6800 Space Voyage game (1976).bat` batch file to run Space Voyage text game
 * execute `run swtp6800 Editor (1977).bat` batch file to demo TSC Text Editor
 * execute `run swtp6800 Usurpator Chess (1980).bat` batch file to run USURPATOR I Chess program for 6800 (from book by H.G.MULLER)
+* execute `run Motorola Exorciser Assembler 1.0 (1975).bat` batch file to run 
+Motorola Paper Tape Assembler 1.0 on a Motorola Exorciser emulation
+* execute `run Motorla MEK6800 with MINIBUG (1975)` batch file to run 
+Motorola Paper Tape Assembler 1.0 on a Motorola MEK6800-D1 with MINIBUG ROM
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.zip) to download 
 Graphics programs test run.
@@ -344,13 +356,16 @@ Once uncompressed, you will find several ready to run .bat files:
 * execute `run swtp6800 SDOS 1.1G build.bat` to run build SDOS 1.1G Operating System floppy disk images from SDOS binary files in /build folder
 * execute `run swtp6800 SDOS 1.1G compile.bat` to run compile SDOS 1.1G Operating System binary files in /comp folder from sources in /build/src
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FDOS-II_EDOS_II.zip) to download 
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FDOS-II_EDOS-II_EDOS-I.zip) to download 
 FDOS-II and EDOS-II Operating Systems test run.
 
-* execute `run swtp6800 iCOM FDOS-II (1976).bat` or `run swtp6800 iCOM FDOS-II demo.bat` batch file to run 
-iCOM FDOS-II operating system for FD360 Floppy Disk Drive
-* execute `run swtp6800 Motorola EDOS-II (1976).bat` or `run swtp6800 Motorola EDOS-II demo.bat` batch file to run 
-Motorola EDOS-II operating system for Exorciser ExorDisk-I
+* execute `run Astral2000 iCOM FDOS-II (1976).bat` to run 
+iCOM FDOS-II operating system for FD360 Floppy Disk Drive on a (aproximate) Astral 2000 emulation
+* execute `run Motorola Exorciser EDOS-II (1976).bat`,  
+`run Motorola Exorciser EDOS-II demo.bat` or `run Motorola Exorciser EDOS-II build.bat` batch file to run 
+Motorola EDOS-II operating system on an Motorola Exorciser with ExorDisk-I
+* execute `run Motorola Exorciser EDOS-I (1975).bat` or `run Motorola Exorciser EDOS-I build.bat` batch file to run 
+Motorola EDOS-I operating system on an Motorola Exorciser with ExorDisk-I
 
 
 ## IBM 370

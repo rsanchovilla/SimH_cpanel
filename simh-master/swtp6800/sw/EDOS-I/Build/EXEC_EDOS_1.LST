@@ -1,0 +1,1121 @@
+ 
+10009                 DKDID   EQU     $EC00     iCOM floppy disk controller PIA ports
+10010                 DKDIC   EQU     $EC01 
+10011                 DKCOD   EQU     $EC02 
+10012                 DKCOC   EQU     $EC03 
+10013                 DKDOD   EQU     $EC06 
+10014                 DKDOC   EQU     $EC07 
+10015                 
+10016                                           EDOS PROM ROUTINES
+10017 
+10018                 INIIO   EQU     $E806     INITIALIZE I/O
+10019                 XRI     EQU     $E809     DISK READ VECTOR read a byte from disk in reg A, if EOF carry is set
+10020                 XWRT    EQU     $E80C     DISK WRITE VECTOR write a byte to disk from reg A
+10021                 PROG    EQU     $E815     LOAD PROGRAM
+10022                 ASSEM   EQU     $E81B     LOAD ASSEMBLER
+10023                 EDITOR  EQU     $E824     LOAD EDITOR
+10024                 INCDA   EQU     $E9EF     SUBROUTINE TO INCR DA TRACK & SECTOR
+10025                 XUS     EQU     $EA03     SUBROUTINE TO XMIT UNIT/SECTOR (LOGICAL) BYTE
+10026                 SEEK    EQU     $EA2B     SUBROUTINE TO SEEK TRACK IN A
+10027                 RFLAG   EQU     $EA38     SUBROUTINE TO RESET ERROR FLAG
+10028                 CHK     EQU     $EA4D     SUBROUTINE TO CHECK IF A DISK, ELSE ERROR 3
+10029                 CHK1    EQU     $EA57     ROUTINE TO PUT ERROR (A)
+
+10016                                           EXBUG ROUTINES
+10033 
+10034                 EXBUG   EQU     $F564     Monitor warm entry point
+                      CONIN   EQU     $F015     CONSOLE INPUT WITH ECHO
+                      CONOUT  EQU     $F018     CONSOLE OUTPUT WITH NULLS LOGIC
+                      OCHAR   EQU     $F9CF     CONSOLE OUTPUT WITHOUT NULLS
+                      LSTOUT  EQU     $EAB0     OUTPUT BYTE TO LIST DEVICE
+                      RDRIN   EQU     $EB02     PAPER TAPE READER IN 
+
+                      SPEED   EQU     $FF02    EXBUG SPEED FLAG 
+                      EXPUN   EQU     $FF62    EXBUG PUNCH FLAG
+
+10035 
+10036                                           VARIABLES IN ZERO PAGE USED BY ICOM FD360 PROM ENTRY POINTS
+10037 
+10038                 PASS    EQU     $00       ASSEMBLY PASS INFO
+10039                 OFILE   EQU     $01       OUTPUT FILE NUMBER
+10040                 OUNIT   EQU     $02       OUTPUT UNIT
+10041                 IUNIT   EQU     $03       INPUT UNIT
+10042                 ISIZE   EQU     $04       INPUT FILE SIZE
+10043                 ITRK    EQU     $06       INPUT FILE TRACK
+10044                 ISCTR   EQU     $07       INPUT FILE SECTOR
+10045                 ICNTR   EQU     $08       INPUT FILE BUFFER COUNTER
+10046                 OSIZE   EQU     $09       OUTPUT FILE SIZE
+10047                 OTRK    EQU     $0B       OUTPUT FILE TRACK
+10048                 OSCTR   EQU     $0C       OUTPUT FILE SECTOR
+10049                 OCNTR   EQU     $0D       OUTPUT FILE BUFFER COUNTER
+10050                 TITRK   EQU     $0E       TEMP LOC 1
+10051                 TISZE   EQU     $0F       TEMP LOC 2
+10052                 
+10053                 L0010
+10054 
+10055                         ORG     $0020
+10056 
+10057 0020 7E 0100            JMP     EXEC      EXEC Cold Start     
+10058 0023 7E 0284    L0023   JMP     L0284
+10059                 
+10060                 L0059   
+10061                 L005A
+10062                 L005B   
+10063                
+10064                 CH      EQU     $5D       CHAR TEMP VAR
+10065                 FNOTBL  EQU     $5E
+10066                 FNO1    EQU     $5F       1ST CMD PARAM FILE NO 
+10067                 FNO2H   EQU     $60
+10068                 FNO2    EQU     $61       2ND CMD PARAM FILE NO 
+10069                 FNO3H   EQU     $62
+10070                 FNO3    EQU     $63       3RD CMD PARAM FILE NO 
+10071                 NPARAM  EQU     $64       NUMBER OF PARAMS TO BE READ FROM COMMAND LINE
+10072 
+10073                 USECT   EQU     $65       = <UNIT 0..3 in bits 7-6><SECTOR 1..26 in bits 5-0>
+10074                 L0066
+10075                 DEVCH   EQU     $67       DEVICE TO USE: T, C, P / EOF FLAG
+10076 
+10077                 EXSTK   EQU     $6B       EXECUTIVE STACK BEGINS HERE
+10078 
+10079                         ORG     $0100
+10080                 
+10081 0100 01         EXEC    NOP               EXEC Cold Start     
+10082 0101 BD FC06            JSR     INTIO     PROM: INITIALIZE I/O
+10083 0104 8E 0058            LDS     #EXSTK    EXEC STACK (STARTS AT $0058 DOWNWARDS)
+10084 0107 BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10085 010A 86 21              LDAA    #'!       PRINT AN ASCII "!" 
+10086 010C BD 08AF            JSR     CO        console char out
+10087 010F BD 01A2            JSR     ECHOC     GET A CONSOLE INPUT CHARACTER WITH ECHO
+10088 0112 80 41              SUBA    #'A
+10089 0114 2B EA              BMI     EXEC      IF INPUT CHAR < 'A' RETURN TO EXEC PROMPT    
+10090 0116 81 18              CMPA    #$18
+10091 0118 2A 1E              BPL     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10092 011A 97 5D              STAA    CH        Multiply CH x 3
+10093 011C 9B 5D              ADDA    CH        to use the jump table
+10094 011E 9B 5D              ADDA    CH
+10095 0120 5F                 CLRB              (B,A) = typed ascii char * 3
+10096 0121 CE 0142            LDX     #CMDST    COMMAND SERVICE ADDRESS TABLE
+10097 0124 DF 59              STX     L0059     COMPUTE THE COMMAND ADDR
+10098 0126 9B 5A              ADDA    L005A
+10099 0128 D9 59              ADCB    L0059
+10100 012A D7 59              STAB    L0059
+10101 012C 97 5A              STAA    L005A
+10102 012E DE 59              LDX     L0059
+10103 0130 7F 0064            CLR     NPARAM    NUMBER OF PARAMS TO BE READ FROM COMMAND LINE
+10104 0133 7C 0064            INC     NPARAM    SET AN INITIAL VALUE OF 1
+10105 0136 6E 00              JMP     0,X       CALL THIS COMMAND SERVICE
+10106  ;
+10107 0138 BD 018A    ERRM    JSR     CRLF      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10108 013B 86 3F              LDAA    #'?
+10109 013D BD 08AF            JSR     CO        console char out
+10110 0140 20 BE              BRA     EXEC      Return to EXEC prompt
+10111                                           *
+10112                                           *THE COMMAND SERVICE ADDRESS FOR EACH COMMAND
+10113                                           *
+10114 0142 7E 06B0    CMDST   JMP     ASMB      'A ASSEMBLE 
+10115 0145 7E 0138            JMP     ERRM      'B' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10116 0148 7E 079A            JMP     L079A     'C'
+10117 014B 7E 02D5            JMP     DUMP      'D DUMP
+10118 014E 7E 03B9            JMP     L03B9     'E
+10119 0151 7E 0138            JMP     ERRM      'F' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10120 0154 7E 0138            JMP     ERRM      'G' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10121 0157 7E 0695            JMP     L0695     'H
+10122 015A 7E 047A            JMP     INIT      'I INIT DISK
+10123 015D 7E 0138            JMP     ERRM      'J' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10124 0160 7E 0138            JMP     ERRM      'K' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10125 0163 7E 04B7            JMP     L04B7     'L
+10126 0166 7E FEFC            JMP     EXBUG     'M' MON -> Monitor warm entry point
+10127 0169 7E 0439            JMP     L0439     'N
+10128 016C 7E 0138            JMP     ERRM      'O' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10129 016F 7E 039F            JMP     L039F     'P
+10130 0172 7E 0138            JMP     ERRM      'Q' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10131 0175 7E 02C6            JMP     L02C6     'R
+10132 0178 7E 055B            JMP     STORE     'S
+10133 017B 7E 0746            JMP     L0746     'T
+10134 017E 7E 0138            JMP     ERRM      'U' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10135 0181 7E 0138            JMP     ERRM      'V' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10136 0184 7E 0138            JMP     ERRM      'W' ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10137 0187 7E 059B            JMP     XGEN      'X  Update FDOS system area
+10138                                           *
+10139                                           *
+10140                                           *THIS ROUTINE PRODUCES <CR> <LF> ON THE CONSOLE
+10141                                           *(ESTABLISH A NEW LINE FOR THE NEXT FUNCTION)
+10142                                           *
+10143 018A 86 0D      CRLF    LDAA    #$0D      <CR>
+10144 018C BD 08AF            JSR     CO        console char out
+10145 018F 86 0A              LDAA    #$0A      <LF>
+10146 0191 7E 08AF            JMP     CO        console char out
+10147                                           *
+10148                                           *THIS ROUTINE OUTPUTS 100 DECIMAL NULLS 
+10149                                           *
+10150 0194 C6 64      NULOC   LDAB    #100      COUNT OF NULLS TO OUTPUT
+10151 0196 D7 5D              STAB    CH
+10152 0198 4F         NULO1   CLRA    
+10153 0199 BD 08B5            JSR     OCHR      paper tape char out, no nulls
+10154 019C 7A 005D            DEC     CH
+10155 019F 26 F7              BNE     NULO1  
+10156 01A1 39                 RTS     
+10157                                           *
+10158                                           *THIS ROUTINE ECHOS INPUT CHARACTERS, 
+10159                                           *THE PARITY BIT IS STRIPPED
+10160                                           *
+10161 01A2 BD 08B2    ECHOC   JSR     CI        console char in            
+10162 01A5 84 7F              ANDA    #$7F
+10163 01A7 36                 PSHA    
+10164 01A8 BD 08AF            JSR     CO        console char out
+10165 01AB 32                 PULA    
+10166 01AC 39                 RTS     
+10167                                           *
+10168                                           * SEND COMMAND TO DISK AND WAIT FOR COMPLETION. STATUS
+10169                                           * RETURNED IN B
+10170                                           *
+10171 01AD BD FFDF    DKCMD   LDAB    DKDID     iCOM floppy disk controller PIA ports     
+10172 01B0 BD FFD5            STAA    DKCOD     iCOM floppy disk controller PIA ports 
+10173 01B3 B6 F081    L01B3   LDAA    DKDIC     iCOM floppy disk controller PIA ports
+10174 01B6 2A FB              BPL     L01B3
+10175 01B8 BD FFDF            LDAB    DKDID     iCOM floppy disk controller PIA ports 
+10176 01BB 39                 RTS     
+10177                                           *
+10178                                           * GET FILE(S) NUMBER FROM COMMAND LINE
+10179                                           *
+10180 01BC CE 005E    FILENO  LDX     #FNOTBL   CMD LINE FILE NUMBERS GIVEN AS PARAM 
+10181 01BF 6F 00      FILEN1  CLR     0,X
+10182 01C1 6F 01              CLR     1,X
+10183 01C3 BD 01A2    FILNXC  JSR     ECHOC     GET A CONSOLE INPUT CHARACTER WITH ECHO
+10184 01C6 97 5D              STAA    CH
+10185 01C8 80 30              SUBA    #'0
+10186 01CA 25 29              BCS     FILNXT    CH < '0' -> JUMP TO GET NEXT FINE NUMBER PARAM
+10187 01CC 8B E9              ADDA    #$E9
+10188 01CE 25 25              BCS     FILNXT    CH > '9' -> JUMP TO GET NEXT FINE NUMBER PARAM
+10189 01D0 8B 06              ADDA    #6
+10190 01D2 2A 04              BPL     FILEOK
+10191 01D4 8B 07              ADDA    #7
+10192 01D6 25 1D              BCS     FILNXT    CH >= '7' -> JUMP TO GET NEXT FINE NUMBER PARAM
+10193 01D8 8B 0A      FILEOK  ADDA    #10
+10194 01DA 0C                 CLC     
+10195 01DB 25 18              BCS     FILNXT
+10196 01DD 36                 PSHA    
+10197 01DE E6 00              LDAB    0,X
+10198 01E0 A6 01              LDAA    1,X
+10199 01E2 48                 ASLA    
+10200 01E3 59                 ROLB    
+10201 01E4 48                 ASLA    
+10202 01E5 59                 ROLB    
+10203 01E6 48                 ASLA    
+10204 01E7 59                 ROLB    
+10205 01E8 48                 ASLA    
+10206 01E9 59                 ROLB    
+10207 01EA A7 01              STAA    1,X
+10208 01EC 32                 PULA    
+10209 01ED AA 01              ORAA    1,X
+10210 01EF E7 00              STAB    0,X
+10211 01F1 A7 01              STAA    1,X
+10212 01F3 20 CE              BRA     FILNXC    JUMP TO READ NEXT CHAR FROM COMMAND LINE
+10213 01F5 96 5D      FILNXT  LDAA    CH        GET CHAR 
+10214 01F7 BD 020A            JSR     FILSEP    CHECK IF VALID SEPARATOR
+10215 01FA 24 04              BCC     FILNX2    JUMP IF SO
+10216 01FC 7E 0138            JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10217 01FF 39         FILEEX  RTS     
+10218 0200 7A 0064    FILNX2  DEC     NPARAM    DECR NUMBER OF PARAMS TO BE READ FROM COMMAND LINE
+10219 0203 27 FA              BEQ     FILEEX    IF NONE LEFT TO BE READ -> JUMP TO EXIT
+10220 0205 08                 INX               INCR PARAM STORE ADDR
+10221 0206 08                 INX     
+10222 0207 7E 01BF            JMP     FILEN1    JUMO TO READ NEXT PARAM
+10223 020A 81 20      FILSEP  CMPA    #$20      IS <SPACE>?
+10224 020C 27 0A              BEQ     FILSE2    JUMP IF SO -> VALID SEPARATOR
+10225 020E 81 2C              CMPA    #',       IS ","
+10226 0210 27 06              BEQ     L0218     JUMP IF SO -> VALID SEPARATOR
+10227 0212 81 0D              CMPA    #$0D      IS <CR> ?
+10228 0214 27 02              BEQ     L0218     JUMP IF SO -> VALID SEPARATOR
+10229 0216 0D                 SEC               CARRY=1 -> NOT A VALID SEPARATOR
+10230 0217 39                 RTS     
+10231 0218 0C         FILSE2  CLC               CARRY=0 -> CH IS A VALID SEPARATOR
+10232 0219 39                 RTS     
+10233                                           *
+10234                                           *THIS ROUTINE PERFORMS BINARY TO HEX CONVERSION,
+10235                                           *AND PRINTS THE RESULT USING THE SWITCHED PRINT 
+10236                                           *VECTOR TO SELECT THE OUTPUT DEVICE.
+10237                                           *
+10238 021A 97 5D      PRBIN   STAA    CH        COPY THE BINARY DATA   
+10239 021C 44                 LSRA              SHIFT THE 4
+10240 021D 44                 LSRA              MOST SIGNIFICANT
+10241 021E 44                 LSRA              BITS INTO A
+10242 021F 44                 LSRA              BINARY VALUE
+10243 0220 BD 022A            JSR     PRBN1     PRINT THE VALUE(H)
+10244 0223 96 5D              LDAA    CH        GET THE BINARY DATA
+10245 0225 84 0F              ANDA    #$0F      STRIP OFF THE HIGH DIGIT
+10246 0227 7E 022A            JMP     PRBN1     PRINT THE VALUE(L) & RETURN
+10247 
+10248 022A 81 0A      PRBN1   CMPA    #$0A      IF .GE. 9
+10249 022C 2B 02              BMI     PRBN2     THEN
+10250 022E 8B 07              ADDA    #$07      SKIP OVER : TO @
+10251 0230 8B 30      PRBN2   ADDA    #$30      CONVERT TO ASCII (HEX)
+10252 0232 7E 08AF            JMP     CO        console char out
+10253                                           *
+10254                                           * A=A*9
+10255                                           *
+10256 0235 C6 08      MUL9    LDAB    #$08
+10257 0237 97 5D              STAA    CH
+10258 0239 9B 5D      MUL9B   ADDA    CH
+10259 023B 5A                 DECB    
+10260 023C 26 FB              BNE     MUL9B
+10261 023E 39                 RTS     
+10262  ; -----------------------------------------------
+10263 023F CE 005E    L023F   LDX     #FNOTBL   CMD LINE FILE NUMBERS GIVEN AS PARAM 
+10264 0242 A6 01              LDAA    1,X
+10265 0244 84 07              ANDA    #$07
+10266 0246 27 39              BEQ     ERRM3     IF=0 -> ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10267 0248 86 08              LDAA    #$08
+10268 024A 97 05              STAA    ISIZE+1   INPUT FILE SIZE
+10269 024C 7F 0004            CLR     ISIZE     INPUT FILE SIZE
+10270 024F 7F 0006            CLR     ITRK      INPUT FILE TRACK
+10271 0252 7F 0008            CLR     ICNTR     INPUT FILE BUFFER COUNTER
+10272 0255 A6 01              LDAA    1,X
+10273 0257 84 30              ANDA    #$30
+10274 0259 48                 ASLA    
+10275 025A 48                 ASLA    
+10276 025B E6 01              LDAB    1,X
+10277 025D C4 07              ANDB    #$07
+10278 025F CB 0D              ADDB    #$0D
+10279 0261 1B                 ABA     
+10280 0262 97 07              STAA    ISCTR     INPUT FILE SECTOR
+10281 0264 BD FC09            JSR     XRI       PROM: DISK READ a byte in reg A, if EOF carry is set
+10282 0267 97 05              STAA    ISIZE+1   INPUT FILE SIZE
+10283 0269 7F 0004            CLR     ISIZE     INPUT FILE SIZE
+10284 026C 96 07              LDAA    ISCTR     INPUT FILE SECTOR
+10285 026E 84 C0              ANDA    #$C0
+10286 0270 97 07              STAA    ISCTR     INPUT FILE SECTOR
+10287 0272 7F 0008            CLR     ICNTR     INPUT FILE BUFFER COUNTER
+10288 0275 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10289 0277 84 07              ANDA    #$07
+10290 0279 BD 0235            JSR     MUL9      A=A*9
+10291 027C 8B 05              ADDA    #$05
+10292 027E 97 06              STAA    ITRK      INPUT FILE TRACK
+10293 0280 39                 RTS     
+10295 0281 7E 0138    ERRM3   JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10296  ;
+10297 0284 0F         L0284   SEI     
+10298 0285 8E 0058            LDS     #EXSTK    EXEC STACK (STARTS AT $0058 DOWNWARDS)
+10299 0288 96 01              LDAA    OFILE     OUTPUT FILE NUMBER
+10300 028A 84 07              ANDA    #$07
+10301 028C 26 03              BNE     L0291     JUMP IF OUTPUT FILE IN USE
+10302 028E 7E 0100    WTCMD   JMP     EXEC      Return to EXEC prompt
+10303  ;
+10304 0291 7D 000D    L0291   TST     OCNTR     OUTPUT FILE BUFFER COUNTER
+10305 0294 27 06              BEQ     L029C     JUMP WHEN OUPUT FILE PADDED
+10306 0296 4F                 CLRA              FILL BUFFER USING NULL FILL CHARACTERS 
+10307 0297 BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10308 029A 20 F5              BRA     L0291
+10309  ;
+10310 029C 86 EB      L029C   LDAA    #$EB
+10311 029E 90 0A              SUBA    OSIZE+1   OUTPUT FILE SIZE
+10312 02A0 36                 PSHA    
+10313 02A1 86 EB              LDAA    #$EB
+10314 02A3 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10315 02A5 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10316 02A8 7F 000B            CLR     OTRK      OUTPUT FILE TRACK
+10317 02AB 7F 000D            CLR     OCNTR     OUTPUT FILE BUFFER COUNTER
+10318 02AE 96 02              LDAA    OUNIT     OUTPUT UNIT
+10319 02B0 0C                 CLC     
+10320 02B1 46                 RORA    
+10321 02B2 46                 RORA    
+10322 02B3 46                 RORA    
+10323 02B4 9A 01              ORAA    OFILE     OUTPUT FILE NUMBER
+10324 02B6 8B 0E              ADDA    #$0E
+10325 02B8 97 0C              STAA    OSCTR     OUTPUT FILE SECTOR
+10326 02BA 32                 PULA    
+00861                                           *
+00861                                           *THIS ROUTINE CLOSES OUTPUT OPEN FILE, AND RETURNS TO
+00861                                           *LOOK FOR THE NEXT USER INPUT COMMAND STRING
+00861                                           *
+10327 02BB BD FC0C    FLCL2   JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10328 02BE 7D 000D    FLCLS   TST     OCNTR     IS WRITE BUFFER EMPTY?
+10329 02C1 27 CB              BEQ     WTCMD     IF SO, JUMP TO PROMPT FOR NEW COMMAND
+10330 02C3 4F                 CLRA              FILL BUFFER USING NULL FILL CHARACTERS 
+10331 02C4 20 F5              BRA     FLCL2     PAD BUFFER
+10332  ;
+10333 02C6 BD 01BC    L02C6   JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10334 02C9 BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10335 02CC BD 023F            JSR     L023F
+10336 02CF 8E 1E00            LDS     #$1E00
+10337 02D2 7E FC15            JMP     PROG      PROM: LOAD PROGRAM
+                                                *
+10338                                           ***********************************************
+10339                                           *THIS FUNCTION WILL DUMP A FILE
+                                                *SYNTAX:
+10340                                           * DTn -> dumps file n to TTY Terminal console
+10341                                           * DCn -> dumps file n to High speed paper tape cassette
+10338                                           ***********************************************
+10342                                           *
+10343 
+10344 02D5 BD 01A2    DUMP    JSR     ECHOC     GET A CONSOLE INPUT CHARACTER WITH ECHO
+10345 02D8 97 67              STAA    DEVCH     SAVE DEVICE TO WRITE TO: T, C
+10346 02DA 81 54              CMPA    #'T
+10347 02DC 27 07              BEQ     DUMPT     DUMP TO CONSOLE TTY
+10348 02DE 81 43              CMPA    #'C
+10349 02E0 27 39              BEQ     DUMPC     DUMP TO PAPER TAPE
+10350 02E2 7E 0138            JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10351  ;
+10352 02E5 BD 01BC    DUMPT   JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10353 02E8 BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10354 02EB BD 023F            JSR     L023F
+10355 02EE BD 0194            JSR     NULOC     OUTPUT 100 NULLS 
+10356 02F1 BD 0194            JSR     NULOC     OUTPUT 100 NULLS 
+10357 02F4 BD FC09    DUMPT2  JSR     XRI       PROM: DISK READ a byte in reg A, if EOF carry is set
+10358 02F7 25 09              BCS     DUMPT3    JMUP IF EOF
+10359 02F9 81 0D              CMPA    #$0D      IS <CR>?
+10360 02FB 27 15              BEQ     DUMPT4
+10361 02FD BD 08B5            JSR     OCHR      paper tape char out, no nulls
+10362 0300 20 F2              BRA     DUMPT2
+10364 0302 86 1A      DUMPT3  LDAA    #$1A
+10365 0304 BD 08B5            JSR     OCHR      paper tape char out, no nulls
+10366 0307 86 0D              LDAA    #$0D
+10367 0309 BD 08B5            JSR     OCHR      paper tape char out, no nulls
+10368 030C BD 0194            JSR     NULOC     OUTPUT 100 NULLS 
+10369 030F 7E 0100            JMP     EXEC      Return to EXEC prompt
+10371 0312 BD 08B5    DUMPT4  JSR     OCHR      paper tape char out, no nulls
+10372 0315 4F                 CLRA    
+10373 0316 BD 08B5            JSR     OCHR      paper tape char out, no nulls
+10374 0319 20 D9              BRA     DUMPT2
+10375  ;
+10376 031B BD 01BC    DUMPC   JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10377 031E BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10378 0321 BD 023F            JSR     L023F
+10379 0324 7F 0067            CLR     DEVCH     CLEAR READ FILE EOF FLAG
+10380 0327 BD 033A    DUMPC2  JSR     DCRDLIN   READ A LINE FROM DISK
+10381 032A 7D 0067            TST     DEVCH     CHECK READ FILE EOF FLAG
+10382 032D 26 05              BNE     DUMPC3    JUMP IF EOF
+10383 032F BD 035F            JSR     L035F
+10384 0332 20 F3              BRA     DUMPC2    GO READ NEXT CHAR FROM DISK FILE
+10386 0334 BD 035F    DUMPC3  JSR     L035F
+10387 0337 7E 0100            JMP     EXEC      Return to EXEC prompt
+
+10389 033A CE 1000    DCRDLIN LDX     #$1000    READ A LINE FROM DISK
+10390 033D DF 59              STX     L0059
+10391 033F BD FC09    DCRDLI2 JSR     XRI       PROM: DISK READ a byte in reg A, if EOF carry is set
+10392 0342 25 0C              BCS     DCRDLI3   JUMP IF EOF
+10393 0344 DE 59              LDX     L0059
+10394 0346 A7 00              STAA    0,X       STORE BYTE READ FROM DISK
+10395 0348 08                 INX     
+10396 0349 DF 59              STX     L0059
+10397 034B 81 0D              CMPA    #$0D      IS <CR>?
+10398 034D 26 F0              BNE     DCRDLI2   JUMP TO READ NEXT CHAR IF NOT
+10399 034F 39                 RTS               RETURN. LINE IS READ
+10401 0350 86 1A      DCRDLI3 LDAA    #$1A      STORE EOF
+10402 0352 DE 59              LDX     L0059     AS LAST CHAR IN LINE BUFFER
+10403 0354 A7 00              STAA    0,X
+10404 0356 08                 INX     
+10405 0357 86 0D              LDAA    #$0D      AND ADD A <CR> AS TERMINATOR
+10406 0359 A7 00              STAA    0,X
+10407 035B 7C 0067            INC     DEVCH     SET EOF FLAG
+10408 035E 39                 RTS     
+
+10410 035F 0D         L035F   SEC               SET EXBUG PUNCH FLAG
+10411 0360 79 FF62            ROL     EXPUN     EXBUG PUNCH FLAG
+10412 0363 86 10              LDAA    #$10      SET CASSETTE PUNCH IN BLOCK MODE
+10413 0365 BD F9CF            JSR     OCHR      CALL OCHAR -> OUT BYTE NO NULL VIA PUNCH PORT
+10414 0368 86 30              LDAA    #$30
+10415 036A BD F9CF            JSR     OCHR      CALL OCHAR -> OUT BYTE NO NULL VIA PUNCH PORT
+10416 036D 86 FF              LDAA    #$FF
+10417 036F BD F9CF            JSR     OCHR      CALL OCHAR -> OUT BYTE NO NULL VIA PUNCH PORT
+10418 0372 86 12              LDAA    #$12      ^R -> PTP ON -> ACTIVE PAPER TAPE PUNCH
+10419 0374 BD F9CF            JSR     OCHR      CALL OCHAR -> OUT BYTE NO NULL VIA PUNCH PORT
+10420 0377 CE 1000            LDX     #$1000    PUNCH BUFFER UNTIL <CR>
+10421 037A A6 00      DCPU2   LDAA    0,X
+10422 037C BD 08AF            JSR     CO        console char out
+10423 037F A6 00              LDAA    0,X
+10424 0381 08                 INX     
+10425 0382 81 0D              CMPA    #$0D
+10426 0384 26 F4              BNE     DCPU2
+10427 0386 86 14              LDAA    #$14      ^T -> PTP OFF -> STOP PAPER TAPE PUNCH
+10428 0388 BD F9CF            JSR     OCHR      CALL OCHAR -> OUT BYTE NO NULL VIA PUNCH PORT
+10429 038B 86 10              LDAA    #$10      RESTORE NORMAL MODE
+10430 038D BD F9CF            JSR     OCHR      CALL OCHAR -> OUT BYTE NO NULL VIA PUNCH PORT
+10431 0390 86 39              LDAA    #$39
+10432 0392 BD F9CF            JSR     OCHR      CALL OCHAR -> OUT BYTE NO NULL VIA PUNCH PORT
+10433 0395 7F FF62            CLR     EXPUN     EXBUG PUNCH FLAG
+10434 0398 CE 5DC0            LDX     #$5DC0
+10435 039B 09         L039B   DEX     
+10436 039C 26 FD              BNE     L039B
+10437 039E 39                 RTS     
+
+10439 039F BD 01BC    L039F   JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10440 03A2 BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10441 03A5 BD 023F            JSR     L023F
+10442 03A8 BD FC09    L03A8   JSR     XRI       PROM: DISK READ a byte in reg A, if EOF carry is set
+10443 03AB 25 09              BCS     L03B6
+10444 03AD 84 7F              ANDA    #$7F
+10445 03AF 27 F7              BEQ     L03A8
+10446 03B1 BD 08B8            JSR     LPTOUT    Send char to printer
+10447 03B4 20 F2              BRA     L03A8
+10448  ;
+10449 03B6 7E 0100    L03B6   JMP     EXEC      Return to EXEC prompt
+10450  ;
+10451 03B9 7C 0064    L03B9   INC     NPARAM    NUMBER OF PARAMS TO BE READ FROM COMMAND LINE
+10452 03BC BD 01BC            JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10453 03BF BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10454 03C2 96 61              LDAA    FNO2      2ND CMD PARAM FILE NO 
+10455 03C4 84 07              ANDA    #$07
+10456 03C6 27 6E              BEQ     ERRM4     IF=0 -> ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10457 03C8 97 01              STAA    OFILE     OUTPUT FILE NUMBER
+10458 03CA 96 61              LDAA    FNO2      2ND CMD PARAM FILE NO 
+10459 03CC 84 30              ANDA    #$30
+10460 03CE 44                 LSRA    
+10461 03CF 44                 LSRA    
+10462 03D0 44                 LSRA    
+10463 03D1 44                 LSRA    
+10464 03D2 97 02              STAA    OUNIT     OUTPUT UNIT
+10465 03D4 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10466 03D6 84 30              ANDA    #$30
+10467 03D8 44                 LSRA    
+10468 03D9 44                 LSRA    
+10469 03DA 44                 LSRA    
+10470 03DB 44                 LSRA    
+10471 03DC 97 03              STAA    IUNIT     INPUT UNIT
+10472 03DE 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10473 03E0 84 07              ANDA    #$07
+10474 03E2 27 47              BEQ     L042B
+10475 03E4 BD 023F            JSR     L023F
+10476 03E7 96 06              LDAA    ITRK      INPUT FILE TRACK
+10477 03E9 97 0E              STAA    TITRK     TEMP LOC 1
+10478 03EB 96 05              LDAA    ISIZE+1   INPUT FILE SIZE
+10479 03ED 97 10              STAA    L0010
+10480 03EF 7F 000F            CLR     TISZE     TEMP LOC 2
+10481 03F2 86 4E      L03F2   LDAA    #$4E
+10482 03F4 97 05              STAA    ISIZE+1   INPUT FILE SIZE
+10483 03F6 7F 0004            CLR     ISIZE     INPUT FILE SIZE
+10484 03F9 86 04              LDAA    #$04
+10485 03FB 97 06              STAA    ITRK      INPUT FILE TRACK
+10486 03FD 7F 0007            CLR     ISCTR     INPUT FILE SECTOR
+10487 0400 7F 0008            CLR     ICNTR     INPUT FILE BUFFER COUNTER
+10488 0403 96 01              LDAA    OFILE     OUTPUT FILE NUMBER
+10489 0405 BD 0235            JSR     MUL9      A=A*9
+10490 0408 8B 05              ADDA    #$05
+10491 040A 97 0B              STAA    OTRK      OUTPUT FILE TRACK
+10492 040C 86 EA              LDAA    #$EA
+10493 040E 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10494 0410 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10495 0413 7F 000D            CLR     OCNTR     OUTPUT FILE BUFFER COUNTER
+10496 0416 96 02              LDAA    OUNIT     OUTPUT UNIT
+10497 0418 0C                 CLC     
+10498 0419 46                 RORA    
+10499 041A 46                 RORA    
+10500 041B 46                 RORA    
+10501 041C 4C                 INCA    
+10502 041D 97 0C              STAA    OSCTR     OUTPUT FILE SECTOR
+10503 041F 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10504 0421 91 61              CMPA    FNO2      2ND CMD PARAM FILE NO 
+10505 0423 27 11              BEQ     ERRM4     IF=0 -> ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10506 0425 8E 1E00            LDS     #$1E00
+10507 0428 7E FC24            JMP     EDITOR    PROM: LOAD EDITOR
+10508  ;
+10509 042B 86 01      L042B   LDAA    #$01
+10510 042D 97 0E              STAA    TITRK     TEMP LOC 1
+10511 042F 97 10              STAA    L0010
+10512 0431 7F 000F            CLR     TISZE     TEMP LOC 2
+10513 0434 20 BC              BRA     L03F2
+10514  ;
+10515 0436 7E 0138    ERRM4   JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10516  ;
+10517 0439 BD 01BC    L0439   JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10518 043C 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10519 043E 84 07              ANDA    #$07
+10520 0440 27 35              BEQ     ERRM5     IF=0 -> ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10521 0442 8B 07              ADDA    #$07
+10522 0444 D6 5F              LDAB    FNO1      1ST CMD PARAM FILE NO 
+10523 0446 C4 30              ANDB    #$30
+10524 0448 58                 ASLB    
+10525 0449 58                 ASLB    
+10526 044A 1B                 ABA     
+10527 044B 97 0C              STAA    OSCTR     OUTPUT FILE SECTOR
+10528 044D 86 EA              LDAA    #$EA
+10529 044F 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10530 0451 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10531 0454 7F 000D            CLR     OCNTR     OUTPUT FILE BUFFER COUNTER
+10532 0457 7F 000B            CLR     OTRK      OUTPUT FILE TRACK
+10533 045A BD 01A2    L045A   JSR     ECHOC     GET A CONSOLE INPUT CHARACTER WITH ECHO
+10534 045D 81 0D              CMPA    #$0D
+10535 045F 27 05              BEQ     L0466
+10536 0461 BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10537 0464 20 F4              BRA     L045A
+10538  ;
+10539 0466 86 0A      L0466   LDAA    #$0A
+10540 0468 97 5D              STAA    CH
+10541 046A 86 20      L046A   LDAA    #$20
+10542 046C BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10543 046F 7A 005D            DEC     CH
+10544 0472 26 F6              BNE     L046A
+10545 0474 7E 02BE            JMP     FLCLS     CLOSES OUTPUT FILE, AND RETURNS TO COMMAND PROMPT
+10546  ;
+10547 0477 7E 0138    ERRM5   JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+                                                *
+10338                                           ***********************************************
+10339                                           *INITIALIZE DISK: CLEAR DIR
+                                                *SYNTAX:
+10340                                           * In -> init disk n (0..3)
+10338                                           ***********************************************
+                                                *
+10549 047A BD 0521    INIT    JSR     GETUNIT   GET UNIT FROM COMMAND LINE IN USECT VAR
+10550 047D 86 07              LDAA    #$07
+10551 047F 97 66              STAA    L0066
+10552 0481 BD 053D    L0481   JSR     L053D
+10553 0484 86 64              LDAA    #$64
+10554 0486 97 5D              STAA    CH
+10555 0488 86 20      L0488   LDAA    #$20
+10556 048A BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10557 048D 7A 005D            DEC     CH
+10558 0490 26 F6              BNE     L0488
+10559 0492 BD 054F            JSR     L054F
+10560 0495 7C 0065            INC     USECT     dir =<UNIT><SECTOR = 8>
+10561 0498 7A 0066            DEC     L0066
+10562 049B 26 E4              BNE     L0481
+10563 049D 86 07              LDAA    #$07
+10564 049F 97 66              STAA    L0066
+10565 04A1 BD 053D    L04A1   JSR     L053D
+10566 04A4 86 01              LDAA    #$01
+10567 04A6 BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10568 04A9 BD 054F            JSR     L054F
+10569 04AC 7C 0065            INC     USECT     =<UNIT><SECTOR>
+10570 04AF 7A 0066            DEC     L0066
+10571 04B2 26 ED              BNE     L04A1
+10572 04B4 7E 0100            JMP     EXEC      Return to EXEC prompt
+10573  ;
+10574 04B7 BD 0521    L04B7   JSR     GETUNIT   GET UNIT FROM COMMAND LINE IN USECT VAR
+10575 04BA 86 01              LDAA    #$01
+10576 04BC 97 66              STAA    L0066
+10577 04BE BD 050E    L04BE   JSR     L050E
+10578 04C1 96 66              LDAA    L0066
+10579 04C3 BD 021A            JSR     PRBIN     PRINT (A) AS TWO-DIGIT HEX
+10580 04C6 86 20              LDAA    #$20
+10581 04C8 BD 08AF            JSR     CO        console char out
+10582 04CB 86 20              LDAA    #$20
+10583 04CD BD 08AF            JSR     CO        console char out
+10584 04D0 86 0A              LDAA    #$0A
+10585 04D2 97 5D              STAA    CH
+10586 04D4 BD FC09    L04D4   JSR     XRI       PROM: DISK READ a byte in reg A, if EOF carry is set
+10587 04D7 BD 08AF            JSR     CO        console char out
+10588 04DA 7A 005D            DEC     CH
+10589 04DD 26 F5              BNE     L04D4
+10590 04DF 86 20              LDAA    #$20
+10591 04E1 BD 08AF            JSR     CO        console char out
+10592 04E4 86 20              LDAA    #$20
+10593 04E6 BD 08AF            JSR     CO        console char out
+10594 04E9 96 65              LDAA    USECT     =<UNIT><SECTOR>
+10595 04EB 16                 TAB     
+10596 04EC 8B 07              ADDA    #$07
+10597 04EE 97 65              STAA    USECT     =<UNIT><SECTOR>
+10598 04F0 BD 050E            JSR     L050E
+10599 04F3 D7 65              STAB    USECT     =<UNIT><SECTOR>
+10600 04F5 BD FC09            JSR     XRI       PROM: DISK READ a byte in reg A, if EOF carry is set
+10601 04F8 4A                 DECA    
+10602 04F9 BD 021A            JSR     PRBIN     PRINT (A) AS TWO-DIGIT HEX
+10603 04FC BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10604 04FF 7C 0065            INC     USECT     =<UNIT><SECTOR>
+10605 0502 7C 0066            INC     L0066
+10606 0505 96 66              LDAA    L0066
+10607 0507 81 08              CMPA    #$08
+10608 0509 26 B3              BNE     L04BE
+10609 050B 7E 0100            JMP     EXEC      Return to EXEC prompt
+10610  ;
+10611 050E 86 08      L050E   LDAA    #$08
+10612 0510 97 05              STAA    ISIZE+1   INPUT FILE SIZE
+10613 0512 7F 0004            CLR     ISIZE     INPUT FILE SIZE
+10614 0515 7F 0006            CLR     ITRK      INPUT FILE TRACK
+10615 0518 7F 0008            CLR     ICNTR     INPUT FILE BUFFER COUNTER
+10616 051B 96 65              LDAA    USECT     =<UNIT><SECTOR>
+10617 051D 4A                 DECA    
+10618 051E 97 07              STAA    ISCTR     INPUT FILE SECTOR
+10619 0520 39                 RTS     
+
+
+                                                GET UNIT FROM COMMAND LINE IN USECT VAR
+
+10621 0521 BD 01BC    GETUNIT JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10622 0524 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10623 0526 84 FC              ANDA    #$FC
+10624 0528 26 10              BNE     ERRM6     IF>3 -> ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10625 052A 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10626 052C 84 03              ANDA    #$03
+10627 052E 0C                 CLC     
+10628 052F 46                 RORA    
+10629 0530 46                 RORA    
+10630 0531 46                 RORA    
+10631 0532 8B 08              ADDA    #$08      Set sector 8 in unit -> dir entry
+10632 0534 97 65              STAA    USECT     =<UNIT><SECTOR>
+10633 0536 BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10634 0539 39                 RTS     
+10636 053A 7E 0138    ERRM6   JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10637  ;
+10638 053D 96 65      L053D   LDAA    USECT     =<UNIT><SECTOR>
+10639 053F 97 0C              STAA    OSCTR     OUTPUT FILE SECTOR
+10640 0541 86 EA              LDAA    #$EA
+10641 0543 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10642 0545 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10643 0548 7F 000B            CLR     OTRK      OUTPUT FILE TRACK
+10644 054B 7F 000D            CLR     OCNTR     OUTPUT FILE BUFFER COUNTER
+10645 054E 39                 RTS     
+10646  ; -----------------------------------------------
+10647 054F 7D 000D    L054F   TST     OCNTR     OUTPUT FILE BUFFER COUNTER
+10648 0552 26 01              BNE     L0555
+10649 0554 39                 RTS     
+10650  ; -----------------------------------------------
+10651 0555 4F         L0555   CLRA    
+10652 0556 BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10653 0559 20 F4              BRA     L054F
+                                                *
+10338                                           ***********************************************
+10339                                           *LOAD FILE FROM DEVICE AND STORE IT IN DISK FILE
+                                                *SYNTAX:
+10340                                           * STn -> read from TTY Terminal console, store data in file n
+10341                                           * SCn -> read from High speed paper tape cassette
+10341                                           * SPn -> read from Paper Tape 
+10338                                           ***********************************************
+                                                *
+10655 055B BD 01A2    STORE   JSR     ECHOC     GET A CONSOLE INPUT CHARACTER WITH ECHO
+10656 055E 97 67              STAA    DEVCH     SAVE DEVICE: T, C, P
+10657 0560 81 50              CMPA    #'P
+10658 0562 27 06              BEQ     L056A
+10659 0564 81 54              CMPA    #'T
+10660 0566 27 02              BEQ     L056A
+10661 0568 81 43              CMPA    #'C
+10662 056A 26 2C      L056A   BNE     ERRM2     IF OTHER CHAR -> JUMP TO ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10663 056C BD 01BC            JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10664 056F BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10665 0572 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10666 0574 84 07              ANDA    #$07
+10667 0576 27 20              BEQ     ERRM2     IF FILE NUM = 0 -> JUMP TO ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10668 0578 97 01              STAA    OFILE     OUTPUT FILE NUMBER
+10669 057A BD 0235            JSR     MUL9      A=A*9
+10670 057D 8B 05              ADDA    #$05
+10671 057F 97 0B              STAA    OTRK      OUTPUT FILE TRACK
+10672 0581 86 EA              LDAA    #$EA
+10673 0583 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10674 0585 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10675 0588 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10676 058A 84 30              ANDA    #$30
+10677 058C 44                 LSRA    
+10678 058D 44                 LSRA    
+10679 058E 44                 LSRA    
+10680 058F 44                 LSRA    
+10681 0590 97 02              STAA    OUNIT     OUTPUT UNIT
+10682 0592 BD 05F9            JSR     GENDV
+10683 0595 7E 0284            JMP     L0284
+10685 0598 7E 0138    ERRM2   JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+                                                *
+10338                                           ***********************************************
+10339                                           *UPDATE SYSTEM AREA 
+                                                *SYNTAX:
+10340                                           * XTn -> read update data from TTY Terminal console
+10341                                           * XCn -> read from High speed paper tape cassette
+10341                                           * XPn -> read from Paper Tape 
+                                                *
+                                                * n=0 -> replace executive in disk
+                                                * n=1 -> replace editor in disk
+                                                * n=2 -> replace assembler in disk
+10338                                           ***********************************************
+                                                *
+10687 059B BD 01A2    XGEN    JSR     ECHOC     GET A CONSOLE INPUT CHARACTER WITH ECHO
+10688 059E 97 67              STAA    DEVCH     SAVE DEVICE TO READ: T, C, P
+10689 05A0 81 50              CMPA    #'P
+10690 05A2 27 06              BEQ     L05AA
+10691 05A4 81 54              CMPA    #'T
+10692 05A6 27 02              BEQ     L05AA
+10693 05A8 81 43              CMPA    #'C
+10694 05AA 26 EC      L05AA   BNE     ERRM2     IF OTHER CHAR -> JUMP TO ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10695 05AC BD 01BC            JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10696 05AF BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10697 05B2 7D 005F            TST     FNO1      1ST CMD PARAM FILE NO 
+10698 05B5 27 0E              BEQ     XGEXEC    IF FN01=0 -> JUMP TO UPDATE EXECUTIVE
+10699 05B7 86 01              LDAA    #$01
+10700 05B9 91 5F              CMPA    FNO1      
+10701 05BB 27 26              BEQ     XGEDIT    IF FN01=1 -> JUMP TO UPDATE EDITOR
+10702 05BD 4C                 INCA    
+10703 05BE 91 5F              CMPA    FNO1      1ST CMD PARAM FILE NO 
+10704 05C0 27 2C              BEQ     XGASM
+10705 05C2 7E 0138            JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10706  ;
+10707 05C5 86 4E      XGEXEC  LDAA    #78       MAX EXECUTIVE SIZE IN SECTORS
+10708 05C7 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10709 05C9 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10710 05CC 86 01              LDAA    #$01      SAVE IN DISK STARTING AT TRACK 1
+
+10711 05CE 97 0B      XGSAVE  STAA    OTRK      OUTPUT FILE TRACK
+10712 05D0 7F 0002            CLR     OUNIT     OUTPUT UNIT
+10713 05D3 BD 05F9            JSR     GENDV
+10714 05D6 86 53              LDAA    #'S       END DISK FILE WITH 'S', THEN <ESC>
+10715 05D8 BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10716 05DB 86 1B              LDAA    #$1B      <ESC>
+10717 05DD BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10718 05E0 7E 02BE            JMP     FLCLS     CLOSES OUTPUT FILE, AND RETURNS TO COMMAND PROMPT
+10719  ;
+10720 05E3 86 4E      XGEDIT  LDAA    #78       MAX EDITOR SIZE IN SECTORS
+10721 05E5 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10722 05E7 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10723 05EA 86 04              LDAA    #$04      SAVE IN DISK STARTING AT TRACK 4
+10724 05EC 20 E0              BRA     XGSAVE
+10725  ;
+10726 05EE 86 EA      XGASM   LDAA    #234      MAX ASSEBLER SIZE IN SECTORS
+10727 05F0 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10728 05F2 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10729 05F5 86 07              LDAA    #$07      SAVE IN DISK STARTING AT TRACK 7
+10730 05F7 20 D5              BRA     XGSAVE
+01729                                           *
+01729                                           *IDENTIFY INPUT DEVICE, & READ TO DISK
+01729                                           *UNTIL END OF MEDIA OCCURS.
+01729                                           *
+10732 05F9 96 02      GENDV   LDAA    OUNIT     PICK UP CURRENT UNIT ID
+10733 05FB 0C                 CLC               CLEAR THE C BIT FOR SHIFT
+10734 05FC 46                 RORA              SHIFT UID BITS 1,0
+10735 05FD 46                 RORA              INTO BITS 7,6 OF RESULT
+10736 05FE 46                 RORA              BIT 7 BECOMES OLD 1, 6 BECOME 
+10737 05FF 4C                 INCA              START AT SECTOR 4
+10738 0600 97 0C              STAA    OSCTR     OUTPUT FILE SECTOR =<UNIT><SECTOR>
+10739 0602 7F 000D            CLR     OCNTR     OUTPUT FILE BUFFER COUNTER
+10740 0605 96 67              LDAA    DEVCH     GET DEVICE TO LOAD FROM: T, C, P
+10741 0607 81 50              CMPA    #'P       P -> HIGH SPEED PAPER TAPE READER
+10742 0609 27 79              BEQ     L0684
+
+10743 060B 7D FF02    L060B   TST     SPEED     EXBUG SPEED FLAG 
+10744 060E 2A 0C              BPL     L061C     IF POSITIVE, USE CONSOLE TTY TO LOAD
+10745 0610 86 10              LDAA    #$10
+10746 0612 BD F9CF            JSR     OCHR      USE TAPE DRIVE - TAPE "ATTENTION" BYTE             
+10747 0615 86 37              LDAA    #$37
+10748 0617 BD F9CF            JSR     OCHR      "BLOCK FORWARD" MODE
+10749 061A 20 0D              BRA     L0629
+10750  ;
+10751 061C B6 FCFD    L061C   LDAA    SBITC     STOP BIT CONTROL FOR ACIA     
+10752 061F 84 55              ANDA    #$55
+10753 0621 B7 FCF4            STAA    SIOCSR    ACIA0 CONTROL/STATUS REGISTER
+10754 0624 86 11              LDAA    #$11      
+10755 0626 BD F9CF            JSR     OCHR      SEND PTR ON
+10756 0629 CE 1000    L0629   LDX     #$1000
+10757 062C DF 59      L062C   STX     L0059
+10758 062E CE FFFF            LDX     #$FFFF
+10759 0631 B6 FCF4    L0631   LDAA    SIOCSR    ACIA0 CONTROL/STATUS REGISTER
+10760 0634 47                 ASRA    
+10761 0635 25 09              BCS     L0640
+10762 0637 09                 DEX     
+10763 0638 26 F7              BNE     L0631
+10764 063A 86 1A              LDAA    #$1A
+10765 063C DE 59              LDX     L0059
+10766 063E 20 10              BRA     L0650
+10767  ;
+10768 0640 DE 59      L0640   LDX     L0059
+10769 0642 B6 FCF5            LDAA    SIODR     ACIA0 DATA REGISTER
+10770 0645 84 7F              ANDA    #$7F
+10771 0647 81 0D              CMPA    #$0D
+10772 0649 27 05              BEQ     L0650
+10773 064B A7 00              STAA    0,X
+10774 064D 08                 INX     
+10775 064E 20 DC              BRA     L062C
+10776  ;
+10777 0650 A7 00      L0650   STAA    0,X
+10778 0652 08                 INX     
+10779 0653 86 FF              LDAA    #$FF
+10780 0655 A7 00              STAA    0,X
+10781 0657 B6 FCFD            LDAA    SBITC     STOP BIT CONTROL FOR ACIA     
+10782 065A 84 35              ANDA    #$35
+10783 065C B7 FCF4            STAA    SIOCSR    ACIA0 CONTROL/STATUS REGISTER
+10784 065F 86 13              LDAA    #$13      SEND PTR OFF 
+10785 0661 BD F9CF            JSR     OCHR
+10786 0664 B6 FCF5            LDAA    SIODR     ACIA0 DATA REGISTER
+10787 0667 B6 FCF5            LDAA    SIODR     ACIA0 DATA REGISTER
+10788 066A CE 1000            LDX     #$1000
+10789 066D DF 59              STX     L0059
+10790 066F DE 59      L066F   LDX     L0059
+10791 0671 A6 00              LDAA    0,X
+10792 0673 08                 INX     
+10793 0674 DF 59              STX     L0059
+10794 0676 81 FF              CMPA    #$FF
+10795 0678 27 91              BEQ     L060B
+10796 067A 81 1A              CMPA    #$1A
+10797 067C 27 05              BEQ     L0683
+10798 067E BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10799 0681 20 EC              BRA     L066F
+10800  ;
+10801 0683 39         L0683   RTS     
+10802  ; -----------------------------------------------
+10803 0684 BD EB04    L0684   JSR     INITR     INIT HS READER
+10804 0687 BD 08BB    L0687   JSR     RDRI      PAPER TAPE READER IN 
+10805 068A 25 F7              BCS     L0683
+10806 068C 81 1A              CMPA    #$1A
+10807 068E 27 F3              BEQ     L0683
+10808 0690 BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10809 0693 20 F2              BRA     L0687
+10810  ;
+10811 0695 BD 0521    L0695   JSR     GETUNIT   GET UNIT FROM COMMAND LINE IN USECT VAR
+10812 0698 96 65              LDAA    USECT     =<UNIT><SECTOR>
+10813 069A 84 C0              ANDA    #$C0
+10814 069C 4C                 INCA    
+10815 069D BD FFDA            STAA    DKDOD     iCOM floppy disk controller PIA ports 
+10816 06A0 86 20              LDAA    #$20
+10817 06A2 BD FFD5            STAA    DKCOD     iCOM floppy disk controller PIA ports 
+10818 06A5 86 0C              LDAA    #$0C
+10819 06A7 BD 01AD            JSR     DKCMD     SEND COMMAND TO DISK AND WAIT FOR COMPLETION. STATUS IN B
+10820 06AA 7E 0100            JMP     EXEC      Return to EXEC prompt
+10822 06AD 7E 0138    L06AD   JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+                                                *
+10338                                           ***********************************************
+10339                                           *ASSEMBLE
+                                                *SYNTAX:
+10340                                           * An,m,p
+                                                *
+                                                * n -> input file number
+                                                * m -> output file number
+                                                * p=2 -> generate both listing and object output
+                                                * p=3 -> only listing
+                                                * p=4 -> only object output
+10338                                           ***********************************************
+                                                *
+10824 06B0 7C 0064    ASMB    INC     NPARAM    NUMBER OF PARAMS TO BE READ FROM COMMAND LINE
+10825 06B3 7C 0064            INC     NPARAM    NUMBER OF PARAMS TO BE READ FROM COMMAND LINE
+10826 06B6 BD 01BC            JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10827 06B9 BD 018A            JSR     CRLF      ESTABLISH NEW LINE ON CONSOLE 
+10828 06BC 96 61              LDAA    FNO2      2ND CMD PARAM FILE NO 
+10829 06BE 84 07              ANDA    #$07
+10830 06C0 27 EB              BEQ     L06AD
+10831 06C2 97 01              STAA    OFILE     OUTPUT FILE NUMBER
+10832 06C4 96 61              LDAA    FNO2      2ND CMD PARAM FILE NO 
+10833 06C6 84 30              ANDA    #$30
+10834 06C8 44                 LSRA    
+10835 06C9 44                 LSRA    
+10836 06CA 44                 LSRA    
+10837 06CB 44                 LSRA    
+10838 06CC 97 02              STAA    OUNIT     OUTPUT UNIT
+10839 06CE 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10840 06D0 84 30              ANDA    #$30
+10841 06D2 44                 LSRA    
+10842 06D3 44                 LSRA    
+10843 06D4 44                 LSRA    
+10844 06D5 44                 LSRA    
+10845 06D6 97 03              STAA    IUNIT     INPUT UNIT
+10846 06D8 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10847 06DA 84 07              ANDA    #$07
+10848 06DC 27 65              BEQ     ERRM7     IF=0 -> ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10849 06DE 96 63              LDAA    FNO3      3RD CMD PARAM FILE NO 
+10850 06E0 80 05              SUBA    #$05
+10851 06E2 2A 5F              BPL     ERRM7     IF>4 -> ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10852 06E4 96 63              LDAA    FNO3      3RD CMD PARAM FILE NO 
+10853 06E6 80 02              SUBA    #$02
+10854 06E8 2B 59              BMI     ERRM7     IF<2 -> ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10855 06EA 96 63              LDAA    FNO3      3RD CMD PARAM FILE NO 
+10856 06EC 48                 ASLA    
+10857 06ED 4C                 INCA    
+10858 06EE 97 00              STAA    PASS      ASSEMBLY PASS INFO
+10859 06F0 BD 023F            JSR     L023F
+10860 06F3 96 06              LDAA    ITRK      INPUT FILE TRACK
+10861 06F5 97 0E              STAA    TITRK     TEMP LOC 1
+10862 06F7 96 05              LDAA    ISIZE+1   INPUT FILE SIZE
+10863 06F9 97 10              STAA    L0010
+10864 06FB 7F 000F            CLR     TISZE     TEMP LOC 2
+10865 06FE 96 63              LDAA    FNO3      3RD CMD PARAM FILE NO 
+10866 0700 81 03              CMPA    #$03
+10867 0702 26 03              BNE     L0707
+10868 0704 7F 0001            CLR     OFILE     OUTPUT FILE NUMBER
+10869 0707 86 EA      L0707   LDAA    #$EA
+10870 0709 97 05              STAA    ISIZE+1   INPUT FILE SIZE
+10871 070B 7F 0004            CLR     ISIZE     INPUT FILE SIZE
+10872 070E 86 07              LDAA    #$07
+10873 0710 97 06              STAA    ITRK      INPUT FILE TRACK
+10874 0712 7F 0007            CLR     ISCTR     INPUT FILE SECTOR
+10875 0715 7F 0008            CLR     ICNTR     INPUT FILE BUFFER COUNTER
+10876 0718 96 01              LDAA    OFILE     OUTPUT FILE NUMBER
+10877 071A 26 04              BNE     L0720
+10878 071C 86 0C              LDAA    #$0C
+10879 071E 20 05              BRA     L0725
+10881 0720 BD 0235    L0720   JSR     MUL9      A=A*9
+10882 0723 8B 05              ADDA    #$05
+10883 0725 97 0B      L0725   STAA    OTRK      OUTPUT FILE TRACK
+10884 0727 86 EA              LDAA    #$EA
+10885 0729 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10886 072B 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10887 072E 7F 000D            CLR     OCNTR     OUTPUT FILE BUFFER COUNTER
+10888 0731 96 02              LDAA    OUNIT     OUTPUT UNIT
+10889 0733 0C                 CLC     
+10890 0734 46                 RORA    
+10891 0735 46                 RORA    
+10892 0736 46                 RORA    
+10893 0737 4C                 INCA    
+10894 0738 97 0C              STAA    OSCTR     OUTPUT FILE SECTOR
+10895 073A 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10896 073C 91 61              CMPA    FNO2      2ND CMD PARAM FILE NO 
+10897 073E 27 03              BEQ     ERRM7     IF INPUT FILE IS SAME AS OUTPUT FILE -> ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10898 0740 7E FC1B            JMP     ASSEM     PROM: LOAD ASSEMBLER
+10899  ;
+10900 0743 7E 0138    ERRM7   JMP     ERRM      ERROR -> PRINT '?' AND RETURN TO EXEC PROMPT
+10901  ;
+10902 0746 7C 0064    L0746   INC     NPARAM    NUMBER OF PARAMS TO BE READ FROM COMMAND LINE
+10903 0749 BD 01BC            JSR     FILENO    GET FILE NUMBER FROM COMMAND LINE
+10904 074C 96 5F              LDAA    FNO1      1ST CMD PARAM FILE NO 
+10905 074E 97 63              STAA    FNO3      3RD CMD PARAM FILE NO 
+10906 0750 96 61              LDAA    FNO2      2ND CMD PARAM FILE NO 
+10907 0752 97 5F              STAA    FNO1      1ST CMD PARAM FILE NO 
+10908 0754 BD 023F            JSR     L023F
+10909 0757 86 EB              LDAA    #$EB
+10910 0759 90 05              SUBA    ISIZE+1   INPUT FILE SIZE
+10911 075B 97 0A              STAA    OSIZE+1   OUTPUT FILE SIZE
+10912 075D 7F 0009            CLR     OSIZE     OUTPUT FILE SIZE
+10913 0760 96 06              LDAA    ITRK      INPUT FILE TRACK
+10914 0762 97 0B              STAA    OTRK      OUTPUT FILE TRACK
+10915 0764 96 07              LDAA    ISCTR     INPUT FILE SECTOR
+10916 0766 97 0C              STAA    OSCTR     OUTPUT FILE SECTOR
+10917 0768 7F 000D            CLR     OCNTR     OUTPUT FILE BUFFER COUNTER
+10918 076B D6 05              LDAB    ISIZE+1   INPUT FILE SIZE
+10919 076D CE 000B    L076D   LDX     #$000B
+10920 0770 BD FDEF            JSR     INCDA     PROM: SUBROUTINE TO INCR SECTOR AND MAYBE TRACK
+10921 0773 5A                 DECB    
+10922 0774 26 F7              BNE     L076D
+10923 0776 96 63              LDAA    FNO3      3RD CMD PARAM FILE NO 
+10924 0778 97 5F              STAA    FNO1      1ST CMD PARAM FILE NO 
+10925 077A BD 023F            JSR     L023F
+10926 077D 96 61              LDAA    FNO2      2ND CMD PARAM FILE NO 
+10927 077F 84 07              ANDA    #$07
+10928 0781 97 01              STAA    OFILE     OUTPUT FILE NUMBER
+10929 0783 96 0C              LDAA    OSCTR     OUTPUT FILE SECTOR
+10930 0785 84 C0              ANDA    #$C0
+10931 0787 0C                 CLC     
+10932 0788 49                 ROLA    
+10933 0789 49                 ROLA    
+10934 078A 49                 ROLA    
+10935 078B 97 02              STAA    OUNIT     OUTPUT UNIT
+10936 078D BD FC09    L078D   JSR     XRI       PROM: DISK READ a byte in reg A, if EOF carry is set
+10937 0790 25 05              BCS     L0797
+10938 0792 BD FC0C            JSR     XWRT      PROM: DISK WRITE a byte from reg A
+10939 0795 20 F6              BRA     L078D
+10940  ;
+10941 0797 7E 0023    L0797   JMP     L0023
+10942  ;
+10943 079A 86 01      L079A   LDAA    #$01
+10944 079C 97 07              STAA    ISCTR     INPUT FILE SECTOR
+10945 079E 7F 0006            CLR     ITRK      INPUT FILE TRACK
+10946 07A1 86 41              LDAA    #$41
+10947 07A3 97 0C              STAA    OSCTR     OUTPUT FILE SECTOR
+10948 07A5 7F 000B            CLR     OTRK      OUTPUT FILE TRACK
+10949 07A8 96 07      L07A8   LDAA    ISCTR     INPUT FILE SECTOR
+10950 07AA BD FE03            JSR     XUS       PROM: SUBROUTINE TO XMIT UNIT/SECTOR (LOGICAL) BYTE
+10951 07AD BD FE4D            JSR     CHK       PROM: SUBROUTINE TO CHECK IF A DISK, ELSE ERROR 3
+10952 07B0 96 06              LDAA    ITRK      INPUT FILE TRACK
+10953 07B2 BD FE2B            JSR     SEEK      PROM: SUBROUTINE TO SEEK TRACK IN A
+10954 07B5 CE 1000            LDX     #$1000
+10955 07B8 DF 5B              STX     L005B
+10956 07BA 96 07      L07BA   LDAA    ISCTR     INPUT FILE SECTOR
+10957 07BC BD FE03            JSR     XUS       PROM: SUBROUTINE TO XMIT UNIT/SECTOR (LOGICAL) BYTE
+10958 07BF DE 5B              LDX     L005B
+10959 07C1 BD 0822            JSR     L0822
+10960 07C4 DF 5B              STX     L005B
+10961 07C6 CE 0006            LDX     #$0006
+10962 07C9 BD FDEF            JSR     INCDA     PROM: SUBROUTINE TO INCR SECTOR AND MAYBE TRACK
+10963 07CC 96 07              LDAA    ISCTR     INPUT FILE SECTOR
+10964 07CE 81 01              CMPA    #$01
+10965 07D0 26 E8              BNE     L07BA
+10966 07D2 86 05              LDAA    #$05
+10967 07D4 97 5D              STAA    CH
+10968 07D6 CE 1000    L07D6   LDX     #$1000
+10969 07D9 DF 5B              STX     L005B
+10970 07DB 96 0C              LDAA    OSCTR     OUTPUT FILE SECTOR
+10971 07DD BD FE03            JSR     XUS       PROM: SUBROUTINE TO XMIT UNIT/SECTOR (LOGICAL) BYTE
+10972 07E0 BD FE4D            JSR     CHK       PROM: SUBROUTINE TO CHECK IF A DISK, ELSE ERROR 3
+10973 07E3 96 0B              LDAA    OTRK      OUTPUT FILE TRACK
+10974 07E5 BD FE2B            JSR     SEEK      PROM: SUBROUTINE TO SEEK TRACK IN A
+10975 07E8 96 0C      L07E8   LDAA    OSCTR     OUTPUT FILE SECTOR
+10976 07EA BD FE03            JSR     XUS       PROM: SUBROUTINE TO XMIT UNIT/SECTOR (LOGICAL) BYTE
+10977 07ED DE 5B              LDX     L005B
+10978 07EF BD 0875            JSR     L0875
+10979 07F2 DF 5B              STX     L005B
+10980 07F4 CE 000B            LDX     #$000B
+10981 07F7 BD FDEF            JSR     INCDA     PROM: SUBROUTINE TO INCR SECTOR AND MAYBE TRACK
+10982 07FA 96 0C              LDAA    OSCTR     OUTPUT FILE SECTOR
+10983 07FC 81 41              CMPA    #$41
+10984 07FE 26 E8              BNE     L07E8
+10985 0800 7A 000B            DEC     OTRK      OUTPUT FILE TRACK
+10986 0803 BD 0891            JSR     L0891
+10987 0806 27 11              BEQ     L0819
+10988 0808 86 41              LDAA    #$41
+10989 080A 97 0C              STAA    OSCTR     OUTPUT FILE SECTOR
+10990 080C BD FE38            JSR     RFLAG     PROM: SUBROUTINE TO RESET ERROR FLAG
+10991 080F 7A 005D            DEC     CH
+10992 0812 26 C2              BNE     L07D6
+10993 0814 86 01              LDAA    #$01
+10994 0816 7E FE57            JMP     CHK1      PROM: ROUTINE TO PUT ERROR (A)
+10995  ;
+10996 0819 96 0B      L0819   LDAA    OTRK      OUTPUT FILE TRACK
+10997 081B 81 4D              CMPA    #$4D
+10998 081D 26 89              BNE     L07A8
+10999 081F 7E 0100            JMP     EXEC      Return to EXEC prompt
+11000  ;
+11001 0822 86 05      L0822   LDAA    #$05
+11002 0824 97 65              STAA    USECT     =<UNIT><SECTOR>
+11003 0826 86 02      L0826   LDAA    #$02
+11004 0828 BD 01AD            JSR     DKCMD     SEND COMMAND TO DISK AND WAIT FOR COMPLETION. STATUS IN B
+11005 082B BD FFD0            LDAA    DKDID     iCOM floppy disk controller PIA ports
+11006 082E 84 08              ANDA    #$08
+11007 0830 27 0B              BEQ     L083D
+11008 0832 BD FE38            JSR     RFLAG     PROM: SUBROUTINE TO RESET ERROR FLAG
+11009 0835 7A 0065            DEC     USECT     =<UNIT><SECTOR>
+11010 0838 26 EC              BNE     L0826
+11011 083A 01                 NOP     
+11012 083B 01                 NOP     
+11013 083C 01                 NOP     
+11014 083D 86 04      L083D   LDAA    #$04
+11015 083F A7 00              STAA    0,X
+11016 0841 BD FFD0            LDAA    DKDID     iCOM floppy disk controller PIA ports
+11017 0844 84 80              ANDA    #$80
+11018 0846 27 04              BEQ     L084C
+11019 0848 86 0E              LDAA    #$0E
+11020 084A A7 00              STAA    0,X
+11021 084C 08         L084C   INX     
+11022 084D 86 80              LDAA    #$80
+11023 084F 97 65              STAA    USECT     =<UNIT><SECTOR>
+11024 0851 C6 BF              LDAB    #$BF
+11025 0853 86 3C      L0853   LDAA    #$3C
+11026 0855 B7 F083            STAA    DKCOC     iCOM floppy disk controller PIA ports
+11027 0858 F7 F082            STAB    DKCOD     iCOM floppy disk controller PIA ports
+11028 085B BD FFD0            LDAA    DKDID     iCOM floppy disk controller PIA ports    
+11029 085E A7 00              STAA    0,X
+11030 0860 08                 INX     
+11031 0861 86 2C              LDAA    #$2C
+11032 0863 B7 F083            STAA    DKCOC     iCOM floppy disk controller PIA ports
+11033 0866 F7 F082            STAB    DKCOD     iCOM floppy disk controller PIA ports
+11034 0869 B7 F082            CLR     DKCOD     
+11035 086C 7A 0065            DEC     USECT     =<UNIT><SECTOR>
+11036 086F 26 E2              BNE     L0853
+11037 0871 BD FE38            JSR     RFLAG     PROM: SUBROUTINE TO RESET ERROR FLAG
+11038 0874 39                 RTS     
+11039 
+11040 0875 A6 00      L0875   LDAA    0,X
+11041 0877 36                 PSHA    
+11042 0878 08                 INX     
+11043 0879 86 80              LDAA    #$80
+11044 087B 97 65              STAA    USECT     =<UNIT><SECTOR>
+11045 087D C6 CF              LDAB    #$CF
+11046 087F A6 00      L087F   LDAA    0,X
+11047 0881 BD FFDA            STAA    DKDOD     iCOM floppy disk controller PIA ports 
+11048 0884 F7 F082            STAB    DKCOD     iCOM floppy disk controller PIA ports
+11049 0887 08                 INX     
+11050 0888 7A 0065            DEC     USECT     =<UNIT><SECTOR>
+11051 088B 26 F2              BNE     L087F
+11052 088D 32                 PULA    
+11053 088E 7E 01AD            JMP     DKCMD     SEND COMMAND TO DISK AND WAIT FOR COMPLETION. STATUS IN B
+11054  ;
+11055 0891 96 0C      L0891   LDAA    OSCTR     OUTPUT FILE SECTOR
+11056 0893 BD FE03            JSR     XUS       PROM: SUBROUTINE TO XMIT UNIT/SECTOR (LOGICAL) BYTE
+11057 0896 86 06              LDAA    #$06
+11058 0898 BD 01AD            JSR     DKCMD     SEND COMMAND TO DISK AND WAIT FOR COMPLETION. STATUS IN B
+11059 089B BD FFD0            LDAA    DKDID     iCOM floppy disk controller PIA ports
+11060 089E 84 08              ANDA    #$08
+11061 08A0 26 0C              BNE     L08AE
+11062 08A2 CE 000B            LDX     #$0B
+11063 08A5 BD FDEF            JSR     INCDA     PROM: SUBROUTINE TO INCR SECTOR AND MAYBE TRACK
+11064 08A8 96 0C              LDAA    OSCTR     OUTPUT FILE SECTOR
+11065 08AA 81 41              CMPA    #$41
+11066 08AC 26 E3              BNE     L0891
+11067 08AE 39         L08AE   RTS     
+11068 
+11069 
+11070 
+11071 
+11073 08AF 7E 08C6    CO      JMP     CONOUT    console char out (preserves X)
+11075 08B2 7E 08BE    CI      JMP     CONIN     console char in (preserves X)
+11077 08B5 7E 08C6    OCHR    JMP     OCHAR     console/paper tape char out no nulls (preserves X)
+11079 08B8 7E 08C6    LPTOUT  JMP     LSTOUT    send char to printer
+11081 08BB 7E EB02    RDRI    JMP     RDRIN     EDOS ROM PAPER TAPE READER IN 
