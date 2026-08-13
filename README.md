@@ -278,6 +278,10 @@ Machine code programming
 * execute `run swtp6800 Assembler (1977).bat` batch file to demo TSC Assembler 
 * execute `run swtp6800 CoRes Assembler (1977).bat` batch file to demo SWTPC CoResident Assembler 
 * execute `run swtp6800 Debug Package (1978).bat` batch file to demo TSC Debug Package
+* execute `run Motorola Exorciser Assembler 1.0 (1975).bat` batch file to run 
+Motorola Paper Tape Assembler 1.0 on a Motorola Exorciser emulation
+* execute `run Motorla MEK6800 with MINIBUG (1975)` batch file to run 
+Motorola Paper Tape Assembler 1.0 on a Motorola MEK6800-D1 with MINIBUG ROM
 
 Basic programming
 
@@ -298,10 +302,6 @@ Other
 * execute `run swtp6800 Space Voyage game (1976).bat` batch file to run Space Voyage text game
 * execute `run swtp6800 Editor (1977).bat` batch file to demo TSC Text Editor
 * execute `run swtp6800 Usurpator Chess (1980).bat` batch file to run USURPATOR I Chess program for 6800 (from book by H.G.MULLER)
-* execute `run Motorola Exorciser Assembler 1.0 (1975).bat` batch file to run 
-Motorola Paper Tape Assembler 1.0 on a Motorola Exorciser emulation
-* execute `run Motorla MEK6800 with MINIBUG (1975)` batch file to run 
-Motorola Paper Tape Assembler 1.0 on a Motorola MEK6800-D1 with MINIBUG ROM
 
 Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_Graphics.zip) to download 
 Graphics programs test run.
@@ -356,11 +356,11 @@ Once uncompressed, you will find several ready to run .bat files:
 * execute `run swtp6800 SDOS 1.1G build.bat` to run build SDOS 1.1G Operating System floppy disk images from SDOS binary files in /build folder
 * execute `run swtp6800 SDOS 1.1G compile.bat` to run compile SDOS 1.1G Operating System binary files in /comp folder from sources in /build/src
 
-Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FDOS-II_EDOS-II_EDOS-I.zip) to download 
-FDOS-II and EDOS-II Operating Systems test run.
+Click [here](https://github.com/rsanchovilla/SimH_cpanel/blob/master/test_run/swtp6800/swtpc6800_FDOS-II_EDOS-II_EDOS-I.zip) 
+to download FDOS-II, EDOS-II and EDOS-I Operating Systems test run.
 
 * execute `run Astral2000 iCOM FDOS-II (1976).bat` to run 
-iCOM FDOS-II operating system for FD360 Floppy Disk Drive on a (aproximate) Astral 2000 emulation
+iCOM FDOS-II operating system for FD360 Floppy Disk Drive on a (approximate) Astral 2000 emulation
 * execute `run Motorola Exorciser EDOS-II (1976).bat`,  
 `run Motorola Exorciser EDOS-II demo.bat` or `run Motorola Exorciser EDOS-II build.bat` batch file to run 
 Motorola EDOS-II operating system on an Motorola Exorciser with ExorDisk-I
