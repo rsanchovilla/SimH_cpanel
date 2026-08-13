@@ -6,6 +6,20 @@
                   * pages 206-208
                   *
 
+                  * ZERO PAGE SETTING
+                                                                                                     DEFAULT VALUE
+                  BS        EQU   $39  BACKSPACE CHAR (USED IN INLIN ROUTINE)                                  $08
+                  DL        EQU   $3A  DELETE LINE CHAR (USED IN INLIN ROUTINE)                                $15 
+                  DP        EQU   $3B  CONSOLE LINES (USED IN OTLIN ROUTINE)                                    00
+                  WD        EQU   $3D  CONSOLE COLUMNS (USED IN OTLIN ROUTINE)                                  00
+                  NL        EQU   $3E  NULL COUNT (USED IN OTLIN ROUTINE)                                       00
+                  DX        EQU   $40  HALF-DUPLEX (=0->ECHO, <>0->NO ECHO)(USED IN INLIN ROUTINE)              00
+                  EJ        EQU   $41  EJECT COUNT (NUM OF BLANK LINES BETWEEN PAGES) (USED IN OTLIN ROUTINE)   00
+                  PS        EQU   $42  PAUSE (00=YES, PRESS ESCAPE CHAR WHEN PAUSE) (USED IN OTLIN ROUTINE)    $FF
+                  ES        EQU   $43  ESCAPE CHAR (USED IN OTLIN ROUTINE)                                     $1B
+                  LDP       EQU   $44  DEPTH LINES/PAGE (USED IN OTLPT ROUTINE)                                $3C
+                  LWD       EQU   $46  WIDTH CHARS/LINE (USED IN OTLPT ROUTINE)
+
                   * COLDSTART ENTRY TO THIS LOCATION
 
 0100:	7E 07C1         JMP  CLDST   JUMP TO CP/68 COLD START 
@@ -731,6 +745,9 @@
 0574:	A7 05           STAA RCBSTA,X
 0576:	39              RTS 
                                        DEVICE MATCH - FOUND ENTRY
+                                       (note: this is at addr 0477 instead of 0577
+                                              in PDF CP68 listing in p116)
+
 0577:	3F 06    PDSRCB SWI PULX       GET POINTER TO EQT   
 0579:	EE 00           LDX  0,X       GET ADDRESS OF EQT
 057B:	3F 02           SWI TXAB       SAVE IN A,B
@@ -750,94 +767,101 @@
 0597:	0C              CLC            SET RETURN FLAG
 0598:	39              RTS 
 
-0599:	3F 04           SWI XABX
+                                       NULL IE BIT BUCKET
+0599:	3F 04    NULL   SWI XABX       DO NOTHING
 059B:	39              RTS 
-059C:	3F 03           SWI TABX
-059E:	3F 05           SWI PSHX
-05A0:	EE 07           LDX  7,X
-05A2:	86 2E           LDAA #$2E
-05A4:	BD 067D         JSR  $067D
-05A7:	BD 0668         JSR  $0668
-05AA:	81 0A           CMPA #$0A
-05AC:	27 F9           BEQ  $05A7
-05AE:	7D 0040         TST  $0040
-05B1:	26 03           BNE  $05B6
-05B3:	BD 067D         JSR  $067D
-05B6:	91 3A           CMPA $3A
-05B8:	26 04           BNE  $05BE
-05BA:	3F 06           SWI PULX
-05BC:	20 E0           BRA  $059E
-05BE:	91 39           CMPA $39
-05C0:	26 16           BNE  $05D8
-05C2:	3F 02           SWI TXAB
-05C4:	3F 06           SWI PULX
-05C6:	A1 07           CMPA 7,X
-05C8:	26 04           BNE  $05CE
+
+                                       INPUT A LINE FROM CONSOLE
+                                       A,B=RCBADR
+                                       OBEYS TTYSET PARAMETERS
+
+059C:	3F 03    INLIN  SWI TABX       SAVE RCBADR
+059E:	3F 05    INLIN1 SWI PSHX 
+05A0:	EE 07           LDX  7,X       GET BUFFER ADDRESS 
+05A2:	86 2E           LDAA #$2E      ISSUE '.' PROMPT
+05A4:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
+05A7:	BD 0668  INLIN2 JSR  INCON     GET A CHAR FROM CONSOLE 
+05AA:	81 0A           CMPA #$0A      IS <LF>?
+05AC:	27 F9           BEQ  INLIN2    YES, IGNORE IT
+05AE:	7D 0040         TST  DX        HALF-DUPLEX?
+05B1:	26 03           BNE  $05B6     IF NOT ZERO THE DO NOT ECHO CHAR FROM CONSOLE
+05B3:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
+05B6:	91 3A           CMPA DL        IS DELETE LINE CHAR?
+05B8:	26 04           BNE  $05BE     JUMP IF NOT
+05BA:	3F 06           SWI PULX       YES, GET RCBADR
+05BC:	20 E0           BRA  INLIN1
+05BE:	91 39    INLIN3 CMPA BS        IS BACKSPACE?
+05C0:	26 16           BNE  INLIN4    JMP IF NOT
+05C2:	3F 02           SWI TXAB       YES, SAVE BUFFER PTR
+05C4:	3F 06           SWI PULX       GET RCBADR
+05C6:	A1 07           CMPA 7,X       AT START OF BUFFER?
+05C8:	26 04           BNE  $05CE     NO
 05CA:	E1 08           CMPB 8,X
-05CC:	27 04           BEQ  $05D2
-05CE:	C0 01           SUBB #$01
+05CC:	27 04           BEQ  INLIN5    YES
+05CE:	C0 01           SUBB #$01      DECTR POINTER
 05D0:	82 00           SBCA #$00
-05D2:	3F 05           SWI PSHX
-05D4:	3F 03           SWI TABX
-05D6:	20 CF           BRA  $05A7
-05D8:	A7 00           STAA 0,X
-05DA:	08              INX 
-05DB:	81 0D           CMPA #$0D
-05DD:	26 C8           BNE  $05A7
-05DF:	86 0A           LDAA #$0A
-05E1:	BD 067D         JSR  $067D
-05E4:	3F 06           SWI PULX
+05D2:	3F 05    INLIN5 SWI PSHX       SAVE RCBADR
+05D4:	3F 03           SWI TABX       X POINT TO BUFFER
+05D6:	20 CF           BRA  INLIN2
+05D8:	A7 00    INLIN4 STAA 0,X       STORE CHAR FROM CONSOLE
+05DA:	08              INX            BUMP BUFFER POINTER
+05DB:	81 0D           CMPA #$0D      IS <CR>?
+05DD:	26 C8           BNE  INLIN2    NO
+05DF:	86 0A    INLIN6 LDAA #$0A      <LF>
+05E1:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
+05E4:	3F 06           SWI PULX       GET RCBADR
 05E6:	39              RTS 
-05E7:	3F 03           SWI TABX
+                                       
+05E7:	3F 03    OTLIN  SWI TABX       OUTPUT A LINE TO CONSOLE
 05E9:	3F 05           SWI PSHX
 05EB:	EE 07           LDX  7,X
-05ED:	D6 3D           LDAB $3D
+05ED:	D6 3D           LDAB WD        NUMBER OF CONSOLE COLUMNS
 05EF:	A6 00           LDAA 0,X
 05F1:	81 04           CMPA #$04
 05F3:	27 70           BEQ  $0665
-05F5:	BD 067D         JSR  $067D
+05F5:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
 05F8:	08              INX 
 05F9:	5A              DECB
 05FA:	26 18           BNE  $0614
 05FC:	86 0D           LDAA #$0D
-05FE:	BD 067D         JSR  $067D
+05FE:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
 0601:	86 0A           LDAA #$0A
-0603:	BD 067D         JSR  $067D
+0603:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
 0606:	86 00           LDAA #$00
-0608:	D6 3E           LDAB $3E
+0608:	D6 3E           LDAB NL        NULL COUNT
 060A:	27 06           BEQ  $0612
-060C:	BD 067D         JSR  $067D
+060C:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
 060F:	5A              DECB
 0610:	26 FA           BNE  $060C
-0612:	D6 3D           LDAB $3D
+0612:	D6 3D           LDAB WD        NUMBER OF CONSOLE COLUMNS
 0614:	09              DEX 
 0615:	A6 00           LDAA 0,X
 0617:	08              INX 
 0618:	81 0D           CMPA #$0D
 061A:	26 D3           BNE  $05EF
 061C:	86 0A           LDAA #$0A
-061E:	BD 067D         JSR  $067D
+061E:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
 0621:	86 00           LDAA #$00
-0623:	D6 3E           LDAB $3E
+0623:	D6 3E           LDAB NL        NULL COUNT
 0625:	27 06           BEQ  $062D
-0627:	BD 067D         JSR  $067D
+0627:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
 062A:	5A              DECB
 062B:	26 FA           BNE  $0627
-062D:	7D 003B         TST  $003B
+062D:	7D 003B         TST  DP        CONSOLE LINES 
 0630:	27 21           BEQ  $0653
 0632:	7A 003C         DEC  $003C
 0635:	26 1C           BNE  $0653
-0637:	96 3B           LDAA $3B
+0637:	96 3B           LDAA DP        CONSOLE LINES 
 0639:	97 3C           STAA $3C
-063B:	7D 0042         TST  $0042
+063B:	7D 0042         TST  PS        PAUSE (00=YES)
 063E:	26 07           BNE  $0647
-0640:	BD 0668         JSR  $0668
-0643:	91 43           CMPA $43
+0640:	BD 0668         JSR  INCON     GET A CHAR FROM CONSOLE 
+0643:	91 43           CMPA ES        ESCAPE CHAR
 0645:	26 F9           BNE  $0640
-0647:	D6 41           LDAB $41
+0647:	D6 41           LDAB EJ        EJECT COUNT (NUM OF BLANK LINES BETWEEN PAGES) 
 0649:	27 08           BEQ  $0653
 064B:	86 0A           LDAA #$0A
-064D:	BD 067D         JSR  $067D
+064D:	BD 067D         JSR  OUTCON    SEND CHAR TO CONSOLE
 0650:	5A              DECB
 0651:	26 F8           BNE  $064B
 0653:	3F 06           SWI PULX
@@ -848,35 +872,38 @@
 065D:	47              ASRA
 065E:	24 05           BCC  $0665
 0660:	A6 01           LDAA 1,X
-0662:	BD 0668         JSR  $0668
+0662:	BD 0668         JSR  INCON     GET A CHAR FROM CONSOLE 
 0665:	3F 06           SWI PULX
 0667:	39              RTS 
-0668:	3F 05           SWI PSHX
+                                       GET A CHAR FROM CONSOLE 
+0668:	3F 05    INCON  SWI PSHX       SAVE BUFFER PTR
 066A:	30              TSX 
-066B:	EE 04           LDX  4,X
-066D:	EE 00           LDX  0,X
-066F:	EE 04           LDX  4,X
-0671:	A6 00           LDAA 0,X
+066B:	EE 04           LDX  4,X       GET RCBADR
+066D:	EE 00           LDX  0,X       GET EQT ADDRESS
+066F:	EE 04           LDX  4,X       GET PHYSICAL ADDR
+0671:	A6 00    INCON1 LDAA 0,X       GET ACIA STATUS
 0673:	47              ASRA
-0674:	24 FB           BCC  $0671
-0676:	A6 01           LDAA 1,X
-0678:	84 7F           ANDA #$7F
-067A:	3F 06           SWI PULX
+0674:	24 FB           BCC  INCON1    NOT READY
+0676:	A6 01           LDAA 1,X       GET CHAR FROM ACIA
+0678:	84 7F           ANDA #$7F      REMOVE PARITY BIT
+067A:	3F 06           SWI PULX       GET BACK BUFFER ADDR
 067C:	39              RTS 
-067D:	3F 05           SWI PSHX
+                                       SEND CHAR TO CONSOLE
+067D:	3F 05    OUTCON SWI PSHX       SAVE BUFFER PTR
 067F:	30              TSX 
-0680:	EE 04           LDX  4,X
-0682:	EE 00           LDX  0,X
-0684:	EE 04           LDX  4,X
+0680:	EE 04           LDX  4,X       GET RCBADR
+0682:	EE 00           LDX  0,X       GET EQT ADDRESS
+0684:	EE 04           LDX  4,X       GET PHYSICAL ADDR
 0686:	37              PSHB
-0687:	E6 00           LDAB 0,X
+0687:	E6 00    OUTCO1 LDAB 0,X       GET ACIA STATUS
 0689:	57              ASRB
 068A:	57              ASRB
-068B:	24 FA           BCC  $0687
-068D:	A7 01           STAA 1,X
+068B:	24 FA           BCC  OUTCO1    NOT READY
+068D:	A7 01           STAA 1,X       SEND CHAR TO ACIA
 068F:	33              PULB
-0690:	3F 06           SWI PULX
+0690:	3F 06           SWI PULX       GET BACK BUFFER ADDR
 0692:	39              RTS 
+
 0693:	3F 03           SWI TABX
 0695:	3F 05           SWI PSHX
 0697:	EE 07           LDX  7,X
@@ -937,10 +964,11 @@
 06FF:	33              PULB
 0700:	3F 06           SWI PULX
 0702:	39              RTS 
-0703:	3F 03           SWI TABX
+
+0703:	3F 03    OTLPT  SWI TABX     OUTPUT A LINE TO PRINTER
 0705:	3F 05           SWI PSHX
 0707:	EE 07           LDX  7,X
-0709:	D6 46           LDAB $46
+0709:	D6 46           LDAB LWD      WIDTH CHARS/LINE
 070B:	A6 00           LDAA 0,X
 070D:	08              INX 
 070E:	BD 0748         JSR  $0748
@@ -950,14 +978,14 @@
 0716:	BD 0748         JSR  $0748
 0719:	86 0A           LDAA #$0A
 071B:	BD 0748         JSR  $0748
-071E:	D6 46           LDAB $46
+071E:	D6 46           LDAB LWD      WIDTH CHARS/LINE
 0720:	09              DEX 
 0721:	A6 00           LDAA 0,X
 0723:	08              INX 
 0724:	81 0C           CMPA #$0C
 0726:	26 06           BNE  $072E
 0728:	37              PSHB
-0729:	D6 44           LDAB $44
+0729:	D6 44           LDAB LDP      DEPTH LINES/PAGE (USED IN OTLPT ROUTINE)
 072B:	D7 45           STAB $45
 072D:	33              PULB
 072E:	81 0D           CMPA #$0D
@@ -966,7 +994,7 @@
 0734:	BD 0748         JSR  $0748
 0737:	7A 0045         DEC  $0045
 073A:	26 09           BNE  $0745
-073C:	D6 44           LDAB $44
+073C:	D6 44           LDAB LDP      DEPTH LINES/PAGE (USED IN OTLPT ROUTINE)
 073E:	D7 45           STAB $45
 0740:	86 0C           LDAA #$0C
 0742:	BD 0748         JSR  $0748
