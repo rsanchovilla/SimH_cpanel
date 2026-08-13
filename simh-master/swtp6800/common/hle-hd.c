@@ -57,13 +57,12 @@
 #define UNIT_V_ENABLE   (UNIT_V_UF + 0) /* Write Enable */
 #define UNIT_ENABLE     (1 << UNIT_V_ENABLE)
 
-#define NUM_DISK        1               
+#define NUM_DISKS       1               
 #define SECT_SIZE       128
-#define NUM_SECT        64              /* sectors per track */
-#define TRACK_SIZE      (SECT_SIZE * NUM_SECT) /* trk size (bytes) */
+#define NUM_SECTS       64               /* sectors per track */
 #define HEADS           4                /* number of surfaces */
-#define NUM_CYL         153              /* maximum tracks */
-#define DSK_SIZE        (NUM_SECT * HEADS * NUM_CYL * SECT_SIZE) /* dsk size (bytes) */
+#define NUM_TRACKS        153              /* maximum tracks */
+#define DSK_SIZE        (NUM_SECTS * HEADS * NUM_TRACKS * SECT_SIZE) /* dsk size (bytes) */
 
 
 /* function prototypes */
@@ -130,16 +129,16 @@ void CheckSeek(void)
     int loc, n; 
 
     hd.data=0; // status of operation
-    if (hd.sector >= NUM_SECT) {
+    if (hd.sector >= NUM_SECTS) {
         hd.data=1; // error: sector invalid
         sim_debug (DEBUG_flow, &hd_dev, "ERROR: Sector invalid. Set to %d, should be less than %d \n", 
-            hd.sector, NUM_SECT);
+            hd.sector, NUM_SECTS);
         return;
     }
-    if (hd.track >= NUM_CYL) {
+    if (hd.track >= NUM_TRACKS) {
         hd.data=2; // error: track invalid
         sim_debug (DEBUG_flow, &hd_dev, "ERROR: Track invalid. Set to %d, should be less than %d \n", 
-            hd.track, NUM_CYL);
+            hd.track, NUM_TRACKS);
         return;
     }
     if (hd.surface >= HEADS) {
@@ -154,7 +153,7 @@ void CheckSeek(void)
         return;
     }
     loc=(hd.sector + 
-         NUM_SECT * (hd.track * 4 + hd.surface)) * SECT_SIZE; 
+         NUM_SECTS * (hd.track * 4 + hd.surface)) * SECT_SIZE; 
     n=sim_fseek(hd_unit.fileref, loc, SEEK_SET);
     if (n != 0) {
         hd.data=5; // error: seek error

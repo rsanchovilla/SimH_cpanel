@@ -141,15 +141,13 @@
 #define UNIT_V_ENABLE   (UNIT_V_UF + 0) /* Write Enable */
 #define UNIT_ENABLE     (1 << UNIT_V_ENABLE)
 
-/* emulate a Disk disk with 10 sectors and 40 tracks */
+/* emulate a single-sided disk disk with 10 sectors and 40 tracks */
 
-#define NUM_DISK        4               
+#define NUM_DISKS       4               
 #define SECT_SIZE       (8+4+256)  /* sector size=header (10 bytes) + data (256 bytes) + CRC (2 bytes)  */
-#define NUM_SECT        10              /* sectors/track */
-#define TRACK_SIZE      (SECT_SIZE * NUM_SECT) /* trk size (bytes) */
-#define HEADS           1               /* handle as SS */
-#define NUM_CYL         40              /* maximum tracks */
-#define DSK_SIZE        (NUM_SECT * HEADS * NUM_CYL * SECT_SIZE) /* dsk size (bytes) */
+#define NUM_SECTS       10              /* sectors/track */
+#define NUM_TRACKS      40              /* maximum tracks */
+#define DSK_SIZE        (NUM_SECTS * NUM_TRACKS * SECT_SIZE) /* dsk size (bytes) */
 
 #define TRK             fd400_dsk_unit[fd400.cur_dsk].u4   // current disk track and sector
 #define SECT            fd400_dsk_unit[fd400.cur_dsk].u5
@@ -217,7 +215,7 @@ DEVICE fd400_dsk_dev = {
     fd400_dsk_unit,                     //units
     fd400_dsk_reg,                      //registers
     fd400_mod,                          //modifiers
-    NUM_DISK,                           //numunits
+    NUM_DISKS,                          //numunits
     16,                                 //aradix
     16,                                 //awidth
     1,                                  //aincr
@@ -243,7 +241,7 @@ t_stat fd400_dsk_reset (DEVICE *dptr)
 {
     int i;
 
-    for (i=0; i<NUM_DISK; i++) {
+    for (i=0; i<NUM_DISKS; i++) {
         fd400_dsk_unit[i].u3 = 0;             /* clear current flags */
         fd400_dsk_unit[i].u4 = 0;             /* clear current cylinder # */
         fd400_dsk_unit[i].u5 = 0;             /* clear current sector # */
@@ -289,7 +287,7 @@ int32 fd400_fdcstatus(int32 io, int32 data)
                 // set sector pulse and incr current sector
                 // Simulates somewhat disk rotation whitout having to set up _svr and sim_activate
                 fd400.SectorPulse=2; 
-                SECT++; if (SECT >= NUM_SECT) SECT = 0;
+                SECT++; if (SECT >= NUM_SECTS) SECT = 0;
                 uptr->pos=0; // init sector read
             }
             if (SECT==0)  val |= 32;  // index pulse: head is positioned in sector zero
@@ -312,9 +310,9 @@ int32 fd400_fdcstatus(int32 io, int32 data)
             // step track depending on direction bit
             if (data & 16) TRK++; else TRK--;
             if (TRK < 0) TRK=0; 
-            if (TRK >= NUM_CYL) TRK = NUM_CYL-1; 
+            if (TRK >= NUM_TRACKS) TRK = NUM_TRACKS-1; 
             // on changing track also incr sect num, but not issue sector pulse (landed on middle of sector)
-            SECT++; if (SECT >= NUM_SECT) SECT = 0; 
+            SECT++; if (SECT >= NUM_SECTS) SECT = 0; 
             uptr->pos=0; // init sector read
         }
     }
@@ -351,7 +349,7 @@ int32 fd400_data(int32 io, int32 data)
             // init buffer to zero
             memset(uptr->filebuf, 0, SECT_SIZE);
             // calculate location of current sector in disk image file
-            loc=(TRK * NUM_SECT + SECT) * SECT_SIZE; 
+            loc=(TRK * NUM_SECTS + SECT) * SECT_SIZE; 
             if (loc >= uptr->u6) {
                 // reading past image file current size -> read as zeroes
             } else {
@@ -422,7 +420,7 @@ int32 fd400_data(int32 io, int32 data)
     p[uptr->pos]=data; 
     uptr->pos++;
     // calculate location of current sector in disk image file
-    loc=(TRK * NUM_SECT + SECT) * SECT_SIZE; 
+    loc=(TRK * NUM_SECTS + SECT) * SECT_SIZE; 
     if (loc >= uptr->u6) {
        // writing past image file current size -> extend disk image size
        uint8 buf[SECT_SIZE];
@@ -519,10 +517,10 @@ t_stat fd400_attach (UNIT * uptr, CONST char * file)
     if ((r = attach_unit(uptr, file)) != SCPE_OK) return r;
     if (sim_switches & SWMASK ('N')) {            // new disk
         // create a 40*10*268=107200 bytes blank disk
-        uint8 sector[SECT_SIZE*NUM_SECT];
+        uint8 sector[SECT_SIZE*NUM_SECTS];
         int i; 
         memset(sector,0,sizeof(sector));
-        for (i=0; i<NUM_CYL*HEADS; i++) sim_fwrite(sector,sizeof(sector),1,uptr->fileref);
+        for (i=0; i<NUM_TRACKS; i++) sim_fwrite(sector,sizeof(sector),1,uptr->fileref);
     }
 
     uptr->u4 = uptr->u5 = 0;

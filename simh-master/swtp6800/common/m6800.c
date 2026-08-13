@@ -1211,7 +1211,7 @@ t_stat sim_instr (void)
                 lo = fetch_word();
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
-                COND_SET_FLAG_N( (IX>>8)-(lo>>8) ); // CPX sets N flag only on MSB compare
+                COND_SET_FLAG_N( (op1>>8) ); // CPX sets N flag only on MSB compare 
                 condevalVs(IX >> 8, lo >> 8, op1 >> 8);
                 break;
             case 0x8D:                  /* BSR rel */
@@ -1320,7 +1320,7 @@ t_stat sim_instr (void)
                 lo = CPU_BD_get_mword(fetch_byte() & BYTEMASK); 
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
-                COND_SET_FLAG_N( (IX>>8)-(lo>>8) ); // CPX sets N flag only on MSB compare
+                COND_SET_FLAG_N( (op1>>8) ); // CPX sets N flag only on MSB compare 
                 condevalVs(IX >> 8, lo >> 8, op1 >> 8);
                 break;
             case 0x9E:                  /* LDS dir */
@@ -1426,7 +1426,7 @@ t_stat sim_instr (void)
                 lo = CPU_BD_get_mword((fetch_byte() + IX) & ADDRMASK);
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
-                COND_SET_FLAG_N( (IX>>8)-(lo>>8) ); // CPX sets N flag only on MSB compare
+                COND_SET_FLAG_N( (op1>>8) ); // CPX sets N flag only on MSB compare 
                 condevalVs(IX >> 8, lo >> 8, op1 >> 8);
                 break;
             case 0xAD:                  /* JSR ind */
@@ -1539,7 +1539,7 @@ t_stat sim_instr (void)
                 lo = CPU_BD_get_mword(EA); 
                 op1 = IX - lo;
                 COND_SET_FLAG_Z(op1);
-                COND_SET_FLAG_N( (IX>>8)-(lo>>8) ); // CPX sets N flag only on MSB compare
+                COND_SET_FLAG_N( (op1>>8) ); // CPX sets N flag only on MSB compare 
                 condevalVs(IX >> 8, lo >> 8, op1 >> 8);
                 break;
             case 0xBD:                  /* JSR ext */
@@ -2244,7 +2244,7 @@ void sim_load_S19(FILE *fileref, CONST char *fnam)
 {
     char slin[1024];
     char c;
-    int i,iStart,nlin,nlen,b,bH,bL,addr,addr0,chksum,cnt;
+    int i,iStart,nlin,nlen,b,bH,bL,addr,addr0,chksum,cnt,clen;
 
     nlin=0;
     cnt=0; addr=addr0=-1; 
@@ -2279,11 +2279,11 @@ void sim_load_S19(FILE *fileref, CONST char *fnam)
             bH=bL; bL=b; // remember last two bytes
             if (i<nlen-2) chksum += b;
             if (i-iStart==3) { // S19 Count decoded
-                // b holds count bytes in line. Calc in c the expected line line length
-                c=2 /* 'S1' */ +2 /* count 2-hex-chars value */ +b*2; /* count bytes as 2-hex chars */ 
-                if (c!=nlen-iStart) {
+                // b holds count bytes in line. Calc in clen the expected line line length
+                clen=2 /* 'S1' */ +2 /* count 2-hex-chars value */ +b*2; /* count bytes as 2-hex chars */ 
+                if (clen!=nlen-iStart) {
                     sim_printf("S19 file: line %d: length is %d, but should have %d for %d encoded bytes of data \n", 
-                                nlin, nlen, c, b);
+                                nlin, nlen, clen, b);
                     break; 
                 }
             } else if (i-iStart==7) { // S19 16-bits addr decoded 

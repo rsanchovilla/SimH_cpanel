@@ -51,6 +51,7 @@
 t_stat set_64k (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
 t_stat set_64k_iobase (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
 t_stat set_64k_rombase (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
+t_stat set_64k_io_sbitc (UNIT *uptr, int32 value, CONST char *cptr, void *desc);
 t_stat show_64k(FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
 /* function prototypes */
@@ -222,6 +223,7 @@ MTAB MB_mod[] = {
     { MTAB_XTD | MTAB_VDV, 1,       NULL,     "64K"  , &set_64k, NULL, NULL},
     { MTAB_XTD | MTAB_VDV, 1,       NULL,     "IOBASE"  , &set_64k_iobase, NULL, NULL},
     { MTAB_XTD | MTAB_VDV, 1,       NULL,     "ROMBASE"  , &set_64k_rombase, NULL, NULL},
+    { MTAB_XTD | MTAB_VDV, 1,       NULL,     "SBITC"  , &set_64k_io_sbitc, NULL, NULL},
     { 0 }
 };
 
@@ -268,6 +270,7 @@ DEVICE MB_dev = {
 int Mode64kRAM=0; 
 int Mode64k_iobase=0xFF00; // I/O base address for I/O when 64k RAM active
 int Mode64k_rombase=0;     // lowest ROM address to cope with destructive RAM scanning routines (=0 -> not set=
+int Mode64k_io_sbitc=0;    // SBITC constant, used by EXBUG to configure control port for TTY/PTP/PTR I/O
 
 int RAM64k[65536]; 
 
@@ -275,7 +278,8 @@ t_stat show_64k(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
     if (Mode64kRAM == 0) return SCPE_OK;
     fprintf (st, "iobase=%04x", Mode64k_iobase);
-    if (Mode64k_rombase) fprintf (st, ", rombase=%04x", Mode64k_rombase);
+    if (Mode64k_rombase)  fprintf (st, ", rombase=%04x", Mode64k_rombase);
+    if (Mode64k_io_sbitc) fprintf (st, ", sbitc=%02x", Mode64k_rombase);
     return SCPE_OK;
 }
 
@@ -303,6 +307,21 @@ t_stat set_64k_iobase (UNIT *uptr, int32 value, CONST char *cptr, void *desc)
     num = (int32) get_uint (cptr, 16, 65536, &r); // value is given as hex value
     if (r != SCPE_OK) return r;
     Mode64k_iobase=num; 
+    return SCPE_OK; 
+}
+
+t_stat set_64k_io_sbitc (UNIT *uptr, int32 value, CONST char *cptr, void *desc)
+{
+    int num; 
+    t_stat r; 
+
+    if (Mode64kRAM==0) {
+        sim_printf("SBITC can be set only if 64K mode is active\n");
+        return SCPE_ARG;
+    }
+    num = (int32) get_uint (cptr, 16, 255, &r); // value is given as hex value
+    if (r != SCPE_OK) return r;
+    Mode64k_io_sbitc=num; 
     return SCPE_OK; 
 }
 
@@ -353,7 +372,12 @@ int32 MB_get_mbyte(int32 addr)
             }
         }
         if ((addr >= Mode64k_iobase) && (addr < Mode64k_iobase + 32)) {
-            val = (dev_table[addr - Mode64k_iobase].routine(0, 0)) & 0xFF;
+            if ((Mode64k_io_sbitc) && (addr - Mode64k_iobase == 13)) {
+                // reading from Exorciser SBITC addr (mapped to RS232-C speed selection switch)
+                val = Mode64k_io_sbitc; 
+            } else {
+                val = (dev_table[addr - Mode64k_iobase].routine(0, 0)) & 0xFF;
+            }
         } else {
             val = RAM64k[addr]; 
         }

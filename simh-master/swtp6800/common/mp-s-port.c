@@ -32,46 +32,6 @@
         audio cassette as AC-30. 
         
         Works as a second MP-S card in system
-        A read of the status port gets the port status:
-
-        +---+---+---+---+---+---+---+---+
-        | I | P | O | F |CTS|DCD|TXE|RXF|
-        +---+---+---+---+---+---+---+---+
-
-        RXF - Receive register Full: A 1 in this bit position means a 
-              character has been received on the data port and is ready to be read.
-        TXE - Transmit register Empty: A 1 in this bit means the port is ready to 
-              receive a character on the data port and transmit it out over the serial line.
-     
-        A read to the data port gets the buffered character, a write
-        to the data port writes the character to the device.
-
-        DCD - Modem Carrier Detect line (not simulated in SimH)
-        CTS - Modem Clear to Send line (not simulated in SimH)
-        F - A 1 indicates Framming error (not simulated in SimH)
-        O - A 1 indicates Receiver overrun error (not simulated in SimH)
-        P - A 1 Parity overrun error (not simulated in SimH)
-        I - A 1 indicates IRQ requested by ACIA (not simulated in SimH)
-
-        Control port:
-
-        +---+---+---+---+---+---+---+---+
-        | I |  TC   |  Word Sel |  CDS  |
-        +---+---+---+---+---+---+---+---+
-
-        CDS - Counter Divide Select. Set clock divider
-              00 div by 1, 01 div by 16, 10 div by 64
-              writing 11 to CDS bits resets the ACIA
-
-        Word Select - Indicates 7/8 bits, Odd/even parity
-              And 1/2 stop bits. (not simulated in SimH)
-
-        TC - Sets RTS line state, enable/disables ACIA
-             generating IRQ on byte transmission 
-             (not simulated in SimH)
-
-        I -  enable/disable ACIA generating IRQ on byte receive
-             (not simulated in SimH)
 */
 
 #include    <stdio.h>
@@ -82,6 +42,7 @@
 
 int32 odata;
 int32 status;
+int32 RTS;
 int32 InstrCount0;                  // to regulate the rate rx chars are returned to prog
 int32 sio_port_iobase = 0x8000;     // default addr for ACIAs, when in 64k mode (on SWTPC mode set at $8000)
 int ac30_mode = 0;                  // 0=off, 1=play, 2=rec, -1=stopped, 
@@ -124,6 +85,9 @@ REG sio_port_reg[] = {
         { NULL }
 };
 
+#define UNIT_V_PTR_USE_RTS     (UNIT_V_UF+2)   /* ACIA can use RTS to start/stop chars being read on data register */
+#define UNIT_PTR_USE_RTS       (1 << UNIT_V_PTR_USE_RTS)   
+
 // debug for character based i/o devices
 DEBTAB port_io_debug[] = {
     { "ALL", DEBUG_all, "All debug bits" },
@@ -139,6 +103,8 @@ MTAB sio_port_mod[] = {
     { MTAB_XTD | MTAB_VDV, 0, "IOBASE", "IOBASE", &sio_port_set_iobase, &sio_show, NULL, NULL},
     { MTAB_XTD | MTAB_VDV, 1, NULL,  "ON",        &sio_port_set, NULL, &sio_port_dev, "Activates the sio port"},
     { MTAB_XTD | MTAB_VDV, 0, NULL,  "OFF",       &sio_port_set, NULL, &sio_port_dev, "Deactivates sio port"},
+    { UNIT_PTR_USE_RTS, UNIT_PTR_USE_RTS, "USERTS",  "USERTS", NULL }, // set sio UseRTS -> ACIA can use RTS to start/stop chars being read on data register from PTR
+    { UNIT_PTR_USE_RTS, 0,                "NORTS",   "NORTS",  NULL }, // set sio NoRTS  -> ignores RTS state. Allways reads any available char from PTR (default)
     { 0 }
 };
 
@@ -222,6 +188,12 @@ int GetPortChar(void)
 
     if ((uptr->flags & UNIT_ATT) == 0) { // attached?
         return -1;               // no, no data
+    }    
+    if ((sio_port_mode) && (uptr->flags & UNIT_PTR_USE_RTS)) {
+        // check RTS state
+        if (RTS==0) {
+           return -1;               // sender is asked to not send data to ACIA -> return no data
+        }
     }
     if (feof(uptr->fileref)) {
         byte = EOF; 
@@ -242,7 +214,8 @@ int GetPortChar(void)
 // at 0x8000
 int32 sio0s_port(int32 io, int32 data)
 {
-    int byte; 
+    int byte,tc; 
+    DEVICE * dptr;  
 
     if ((sio_port_mode == 0) && (ac30_mode ==0 )) {
         // if not active, act as non connected mem
@@ -268,9 +241,25 @@ int32 sio0s_port(int32 io, int32 data)
         return (status); // return acia status
     }                       
     // control register write
+    dptr = (sio_port_mode ? &sio_port_dev : &ac30_dev); 
     if ((data & 0x03) == 3) {       // reset port!
         status = 0x02;              // transmit data reg empty, receive flag clear
         odata = 0;
+        sim_debug (DEBUG_flow, dptr, "Reset port\n");
+    }
+    tc = (data >> 5) & 3;
+    if (tc == 2) {       
+        // RTS=0 (-> Active state -> external device can send bytes to be received by SIO data port)
+        if (RTS==1) {
+           sim_debug (DEBUG_flow, dptr, "RTS set to 0 \n");
+           RTS=0; 
+        }
+    } else {
+        // RTS=1 ( -> external devide instructed to stop sending chars to SIO data port) 
+        if (RTS==0) {
+           sim_debug (DEBUG_flow, dptr, "RTS set to 1 \n");
+           RTS=1; 
+        }
     }
     InstrCount0=0; // when control reg is written, reset count for delay on rx chars into GetPtrConsoleChar
     return 0; 

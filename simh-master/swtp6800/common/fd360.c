@@ -129,15 +129,13 @@
 #define UNIT_V_ENABLE   (UNIT_V_UF + 0) /* Write Enable */
 #define UNIT_ENABLE     (1 << UNIT_V_ENABLE)
 
-/* emulate a Disk disk with 26 sectors and 77 tracks */
+/* emulate a single-sided disk disk with 26 sectors and 77 tracks */
 
-#define NUM_DISK        4               
+#define NUM_DISKS       4               
 #define SECT_SIZE       128             /* sector data size */
-#define NUM_SECT        26              /* sectors/track */
-#define TRACK_SIZE      (SECT_SIZE * NUM_SECT) /* trk size (bytes) */
-#define HEADS           1               /* handle as SS */
-#define NUM_CYL         77              /* maximum tracks */
-#define DSK_SIZE        (NUM_SECT * HEADS * NUM_CYL * SECT_SIZE) /* dsk size (bytes) */
+#define NUM_SECTS       26              /* sectors/track */
+#define NUM_TRACKS      77              /* maximum tracks */
+#define DSK_SIZE        (NUM_SECTS * NUM_TRACKS * SECT_SIZE) /* dsk size (bytes) */
 
 /* function prototypes */
 
@@ -216,7 +214,7 @@ DEVICE fd360_dsk_dev = {
     fd360_dsk_unit,                     //units
     fd360_dsk_reg,                      //registers
     fd360_mod,                          //modifiers
-    NUM_DISK,                           //numunits
+    NUM_DISKS,                          //numunits
     16,                                 //aradix
     16,                                 //awidth
     1,                                  //aincr
@@ -383,7 +381,7 @@ int32 fd360_dkcod(int32 io, int32 data)
                 return 0; 
              } 
              // calculate location of current sector in disk image file
-             loc=(fd360.track * NUM_SECT + (fd360.sector-1) ) * SECT_SIZE; 
+             loc=(fd360.track * NUM_SECTS + (fd360.sector-1) ) * SECT_SIZE; 
              if (loc >= uptr->u6) {
                 // reading past disk image file current size -> error
                 sim_debug (DEBUG_flow, &fd360_dsk_dev, "ERROR: Sector outside disk image file \n");
@@ -391,6 +389,7 @@ int32 fd360_dkcod(int32 io, int32 data)
                 return 0; 
              }
              // seek sector in disk image
+             sim_debug (DEBUG_flow, &fd360_dsk_dev, "Pos in disk image: %d ($%x) \n", loc, loc); 
              r=sim_fseek(uptr->fileref, loc, SEEK_SET);
              if (r) {
                  sim_debug (DEBUG_flow, &fd360_dsk_dev, "ERROR: in sim_fseek: r=%d \n", r);
@@ -432,7 +431,7 @@ int32 fd360_dkcod(int32 io, int32 data)
              if ((uptr->flags & UNIT_ATT) == 0) {  
                 sim_debug (DEBUG_flow, &fd360_dsk_dev, "ERROR: Current unit %d has no file attached \n", fd360.unit);
                 fd360.Error |=1;
-             } else if ((fd360.sector == 0) || (fd360.sector > NUM_SECT) || (fd360.track >= NUM_CYL)) {
+             } else if ((fd360.sector == 0) || (fd360.sector > NUM_SECTS) || (fd360.track >= NUM_TRACKS)) {
                 sim_debug (DEBUG_flow, &fd360_dsk_dev, "ERROR: Invalid track/sector \n", fd360.unit);
                 fd360.Error |=1;
              }
@@ -571,10 +570,10 @@ t_stat fd360_attach (UNIT * uptr, CONST char * file)
 
     if (sim_switches & SWMASK ('N')) {            // new disk
         // create a 77*26*128=256256 bytes blank disk
-        uint8 track[SECT_SIZE*NUM_SECT];
+        uint8 track[SECT_SIZE*NUM_SECTS];
         int i; 
         memset(track,0,sizeof(track));
-        for (i=0; i<NUM_CYL*HEADS; i++) sim_fwrite(track,sizeof(track),1,uptr->fileref);
+        for (i=0; i<NUM_TRACKS; i++) sim_fwrite(track,sizeof(track),1,uptr->fileref);
     }
 
     uptr->u6 = sim_fsize(uptr->fileref);

@@ -62,7 +62,7 @@
         F - A 1 indicates Framming error (not simulated in SimH)
         O - A 1 indicates Receiver overrun error (not simulated in SimH)
         P - A 1 Parity overrun error (not simulated in SimH)
-        I - A 1 indicates IRQ requested by ACIA (not simulated in SimH)
+        I - A 1 indicates IRQ reques    ted by ACIA (not simulated in SimH)
 
         Control port:
 
@@ -97,6 +97,16 @@
 
         I -  enable/disable ACIA generating IRQ on byte receive
              (not simulated in SimH)
+
+
+        Usage of SIO in different ROMS
+
+        - SWTBUG:  Before any OUTCH, Control Port = $11 -> 8N1, RTS=1 
+                   Before any INCH, Control Port = $15 -> 8N1, RTS=1 
+        - EXBUG:   Init Control Port to $11 -> 8N1, RTS=1  (based on SBITC = $51)
+                   During PTR read, Control Port set to $51 -> 8N1, RTS=0
+        - MINIBUG: Init Control Port to $B1 -> 8N1, RTS=1  
+                   During PTR read, Control Port set to $D1 -> 8N1, RTS=0
 */
 
 #include    <stdio.h>
@@ -107,10 +117,11 @@
 
 int32 odata;
 int32 status;
+int32 RTS = 0;
 int32 InstrCount0 = 0; // to regulate the rate rx chars are returned to prog
 
-int32 ptp_flag = 0;
-int32 ptr_flag = 0;
+int32 ptp_flag = 0;        // 1=Paper Tape Punch is ON (PTP ON)
+int32 ptr_flag = 0;        // 1=Paper Tape Reader is ON (PTR ON)
 int32 ptr_send_bin = 0;
 int32 ptr_send_bin_byte; 
 int32 ptp_send_bin = 0;
@@ -135,8 +146,14 @@ int32 sio1d(int32 io, int32 data);
    sio_reg        SIO register list
    sio_mod        SIO modifiers list */
 
-#define UNIT_V_SIO7BIT   (UNIT_V_UF)     /* SIO outputs only 7bits? */
-#define UNIT_SIO7BIT     (1 << UNIT_V_SIO7BIT)
+#define UNIT_V_SIO7BIT         (UNIT_V_UF)     /* SIO outputs only 7bits? */
+#define UNIT_SIO7BIT           (1 << UNIT_V_SIO7BIT)
+#define UNIT_V_PTP_NOECHO      (UNIT_V_UF+1)   /* disable echoing Punched chars to SimH console? */
+#define UNIT_PTP_NOECHO        (1 << UNIT_V_PTP_NOECHO)
+#define UNIT_V_PTR_USE_RTS     (UNIT_V_UF+2)   /* ACIA can use RTS to start/stop chars being read on data register from PTR */
+#define UNIT_PTR_USE_RTS       (1 << UNIT_V_PTR_USE_RTS)   
+#define UNIT_V_BINMODE         (UNIT_V_UF+3)   /* Hack to allow sending binary files as as stream of hexdigits pairs */
+#define UNIT_BINMODE           (1 << UNIT_V_PTR_USE_RTS)   
 
 // debug for character based i/o devices
 DEBTAB char_io_debug[] = {
@@ -167,8 +184,8 @@ REG sio_reg[] = {
 };
 
 MTAB sio_mod[] = {
-    { UNIT_SIO7BIT, UNIT_SIO7BIT, "7BITS", "7BITS", NULL }, // set mp-s 7bits --> to out only 7bit ascii to console
-    { UNIT_SIO7BIT, 0,            "8BITS", "8BITS", NULL },
+    { UNIT_SIO7BIT, UNIT_SIO7BIT,       "7BITS", "7BITS", NULL }, // set mp-s 7bits --> to out only 7bit ascii to console
+    { UNIT_SIO7BIT, 0,                  "8BITS", "8BITS", NULL },
     { 0 }  };
 
 DEVICE sio_dev = {
@@ -193,8 +210,15 @@ DEVICE sio_dev = {
 UNIT ptr_unit = { UDATA (NULL, UNIT_SEQ + UNIT_ATTABLE, 0), KBD_POLL_WAIT
 };
 
+MTAB ptr_mod[] = {
+    { UNIT_PTR_USE_RTS, UNIT_PTR_USE_RTS, "USERTS",  "USERTS", NULL }, // set ptr UseRTS -> ACIA can use RTS to start/stop chars being read on data register from PTR
+    { UNIT_PTR_USE_RTS, 0,                "NORTS",   "NORTS",  NULL }, // set ptr NoRTS  -> ignores RTS state. Allways reads any available char from PTR (default)
+    { UNIT_BINMODE, UNIT_BINMODE,         "BINMODE", "BINMODE", NULL }, // set ptr binmode -> hack for SDOS: allows sending and receiving 8-bit binary files thru paper tape
+    { UNIT_BINMODE, 0,                    "NORMAL",  "NORMAL", NULL },  // set ptr normal  -> hack disabled (default)
+    { 0 }  };
+
 DEVICE ptr_dev = {
-    "PTR", &ptr_unit, NULL, NULL, 
+    "PTR", &ptr_unit, NULL, ptr_mod,
     1, 10, 31, 1, 8, 8,
     NULL, NULL, &ptr_reset,
     NULL, NULL, NULL,
@@ -215,8 +239,14 @@ DEVICE ptr_dev = {
 
 UNIT ptp_unit = { UDATA (NULL, UNIT_SEQ + UNIT_ATTABLE, 0), KBD_POLL_WAIT
 };
+
+MTAB ptp_mod[] = {
+    { UNIT_PTP_NOECHO, UNIT_PTP_NOECHO, "NOECHO",  "NOECHO", NULL },  // set ptp noecho -> disables echoing Punched chars to SimH console 
+    { UNIT_PTP_NOECHO, 0,               "ECHO",    "ECHO", NULL },    // set ptp echo -> enable echoing Punched chars to SimH console (default)
+    { 0 }  };
+
 DEVICE ptp_dev = {
-    "PTP", &ptp_unit, NULL, NULL,
+    "PTP", &ptp_unit, NULL, ptp_mod,
     1, 10, 31, 1, 8, 8,
     NULL, NULL, &ptp_reset,
     NULL, NULL, NULL,
@@ -279,56 +309,13 @@ t_stat ptp_reset (DEVICE *dptr)
     return SCPE_OK;
 }
 
-/*  I/O instruction handlers, called from the MP-B2 module when a
-    read or write occur to addresses 0x8000-0x801F. */
 
-// return <0 if no char received (on ptr or on keyb polling)
-//        0..255 char read
-int GetPtrConsoleChar(void)
+// binary mode used by SDOS PORT: driver        
+// read attached file to ptr as two hexdigits per byte, until eof (signaled as ^Z)
+int bin_get_byte_from_ptr(void) 
 {
-    extern int32 InstrCount;                   // intructions executed count 
-    int32  m; 
-    int byte; 
+    int byte;
 
-    if (InstrCount0 == 0) InstrCount0=InstrCount; 
-    m = (InstrCount - InstrCount0) ; // number of instr executed elapsed from last time this routine was called
-    if ((m>=0) && (m<150)) return -1; // too few instr exec -> no time to receive anything new -> return no data received
-    InstrCount0=InstrCount;
-
-    if (ptr_flag==0) {                 
-        // PTR disabled, new reading from console
-        byte=sio_unit.buf;
-        sio_unit.buf=0; // mark polled char as processed, so next polled char can be read
-        if (byte==0) return -1; // char zero is no char read
-        sim_debug (DEBUG_read, &sio_dev, "Console In Char: %d $%02X (%s) \n", 
-             byte, byte, strData(byte)); 
-        return byte; // return next char
-    }
-    // RDR is enabled
-    if ((ptr_unit.flags & UNIT_ATT) == 0) { // attached?
-        ptr_flag = 0;           // clear reader flag
-        return -1;               // no, no data
-    }
-    if (ptr_send_bin == 0) {
-        // normal ascii PTR read
-        if (feof(ptr_unit.fileref)) {
-            byte = EOF; 
-        } else {
-            byte = getc(ptr_unit.fileref);
-        }
-        if (byte == EOF) { // end of file?
-            ptr_flag = 0;           // clear reader flag
-            byte = 0;               // and return byte zero
-            sim_debug (DEBUG_read, &sio_dev, "PTR In Char: EOF: End of input Tape file (read 0 <NUL>), turn PTR OFF\n"); 
-        } else {
-            sim_debug (DEBUG_read, &sio_dev, "PTR In Char: %d $%02X (%s) \n", 
-                byte, byte, strData(byte)); 
-        }
-        ptr_unit.pos++;             // step character count
-        return byte; 
-    }
-    // binary mode used by SDOS PORT: driver
-    // read attached file to ptr as two hexdigits per byte, until eof (signaed as ^Z)
     if (ptr_send_bin<10) { 
         // start sending 10 0x55 chars to sync
         byte = 0x55; ptr_send_bin++; 
@@ -353,58 +340,10 @@ int GetPtrConsoleChar(void)
     return byte; 
 }
 
-
-// at 0x8004
-int32 sio0s(int32 io, int32 data)
+// binary mode used by SDOS PORT: driver        
+// write to file attached to ptp an 8-bit byte as two hexdigits 
+int bin_send_byte_to_ptp(int data) 
 {
-    int byte; 
-
-    if (io == 0) {                      
-        // status register read
-        if (status & 0x01) {
-            // RXF flag set, not yet cleared -> prev byte has not yet read from data reg -> do not read a new one
-            return status; 
-        }
-        // RXF flag cleared -> data reg can be overwritten
-        byte = GetPtrConsoleChar(); 
-        if (byte < 0) {             
-            status &= 0xFE;  // no data received
-        } else {
-            status |= 0x01;  // Set RXF flag
-            odata=byte; 
-        }
-        return (status); // return acia status
-    }                       
-    // control register write
-    if ((data & 0x03) == 3) {       // reset port!
-        status = 0x02;              // transmit data reg empty, receive flag clear
-        sio_unit.buf = 0;
-        sio_unit.pos = 0;
-        odata = 0;
-    }
-    InstrCount0=0; // when control reg is written, reset count for delay on rx chars into GetPtrConsoleChar
-    return 0; 
-}
-
-// at 0x8005
-int32 sio0d(int32 io, int32 data)
-{
-    extern int32 InstrCount;                   // intructions executed count 
-
-    if (io == 0) {                      
-        // data register read
-        status &= 0xFE;  // clear RXF bit
-        return odata; 
-    } else {                            
-        // data register write
-        if ((ptr_flag) && (data == 0x81)) {
-            // send char 129 dec with ptr active -> hack to receive bin file from ptr
-            // this is non-realistic, but very handly to implement SDOS PORT: device over PTP and PTR
-            ptr_send_bin = 1; 
-        } else {
-            ptr_send_bin = 0; 
-        }
-        if (ptp_flag) {
             if (data == 0x82) {
                 // send char 130 dec with ptp active -> hack to send ascii file to ptp without echo on console.
                 // this is non-realistic, but very handly to implement SDOS PORT: device over PTP and PTR
@@ -442,6 +381,150 @@ int32 sio0d(int32 io, int32 data)
                 }
                 if (data >= 32) data =0x80; // data should not be printed
             }
+            return data; 
+}
+
+
+/*  I/O instruction handlers, called from the MP-B2 module when a
+    read or write occur to addresses 0x8000-0x801F. */
+
+// return <0 if no char received (on ptr or on keyb polling)
+//        0..255 char read
+int GetPtrConsoleChar(void)
+{
+    extern int32 InstrCount;                   // intructions executed count 
+    int32  m; 
+    int byte; 
+
+    if (InstrCount0 == 0) InstrCount0=InstrCount; 
+    m = (InstrCount - InstrCount0) ; // number of instr executed elapsed from last time this routine was called
+    if ((m>=0) && (m<150)) return -1; // too few instr exec -> no time to receive anything new -> return no data received
+    InstrCount0=InstrCount;
+
+    if (ptr_flag==0) {                 
+        // PTR disabled, new reading from console (RTS state is ignored)
+        byte=sio_unit.buf;
+        sio_unit.buf=0; // mark polled char as processed, so next polled char can be read
+        if (byte==0) return -1; // char zero is no char read
+        sim_debug (DEBUG_read, &sio_dev, "Console In Char: %d $%02X (%s) \n", 
+             byte, byte, strData(byte)); 
+        return byte; // return next char
+    }
+    // RDR is enabled
+    if ((ptr_unit.flags & UNIT_ATT) == 0) { // attached?
+        ptr_flag = 0;           // clear reader flag
+        return -1;               // no, no data
+    }
+    if (ptr_send_bin) {
+        // binary mode used by SDOS PORT: driver
+        // read attached file to ptr as two hexdigits per byte, until eof (signaled as ^Z)
+        byte = bin_get_byte_from_ptr(); 
+        return byte; 
+    } else {
+        // normal ascii PTR read
+        if (ptr_unit.flags & UNIT_PTR_USE_RTS) {
+           // check RTS state
+           if (RTS==0) {
+              return -1;               // PTR is asked to not send data to ACIA -> return no data
+           }
+        }
+        if (feof(ptr_unit.fileref)) {
+            byte = EOF; 
+        } else {
+            byte = getc(ptr_unit.fileref);
+        }
+        if (byte == EOF) { // end of file?
+            ptr_flag = 0;           // clear reader flag
+            byte = 0;               // and return byte zero
+            sim_debug (DEBUG_read, &sio_dev, "PTR In Char: EOF: End of input Tape file (read 0 <NUL>), turn PTR OFF\n"); 
+        } else {
+            sim_debug (DEBUG_read, &sio_dev, "PTR In Char: %d $%02X (%s) \n", 
+                byte, byte, strData(byte)); 
+        }
+        ptr_unit.pos++;             // step character count
+        return byte; 
+    }
+}
+
+
+// at 0x8004
+int32 sio0s(int32 io, int32 data)
+{
+    int byte, tc; 
+
+    if (io == 0) {                      
+        // status register read
+        if (status & 0x01) {
+            // RXF flag set, not yet cleared -> prev byte has not yet read from data reg -> do not read a new one
+            return status; 
+        }
+        // RXF flag cleared -> data reg can be overwritten
+        byte = GetPtrConsoleChar(); 
+        if (byte < 0) {             
+            status &= 0xFE;  // no data received
+        } else {
+            status |= 0x01;  // Set RXF flag
+            odata=byte; 
+        }
+        return (status); // return acia status
+    }                       
+    // control register write
+    sim_debug (DEBUG_flow, &sio_dev, "Configure port: $%02X \n", data);
+    if ((data & 0x03) == 3) {       // reset port!
+        status = 0x02;              // transmit data reg empty, receive flag clear
+        sio_unit.buf = 0;
+        sio_unit.pos = 0;
+        odata = 0;
+        sim_debug (DEBUG_flow, &sio_dev, "Reset port\n");
+    }
+    // get TC bits to Sets RTS line state, enable/disables ACIA
+    // 00 RTS=1, Tx interrupt Disabled
+    // 01 RTS=1, Tx interrupt Enabled
+    // 10 RTS=0, Tx interrupt Disabled
+    // 11 RTS=1, (tx break level), Tx interrupt Enabled
+    tc = (data >> 5) & 3;
+    if (tc == 2) {       
+        // RTS=0 (-> Active state -> external device can send bytes to be received by SIO data port)
+        if (RTS==1) {
+           sim_debug (DEBUG_flow, &sio_dev, "RTS set to 0 \n");
+           RTS=0; 
+        }
+    } else {
+        // RTS=1 ( -> external devide instructed to stop sending chars to SIO data port) 
+        if (RTS==0) {
+           sim_debug (DEBUG_flow, &sio_dev, "RTS set to 1 \n");
+           RTS=1; 
+        }
+    }
+
+    InstrCount0=0; // when control reg is written, reset count for delay on rx chars into GetPtrConsoleChar
+    return 0; 
+}
+
+// at 0x8005
+int32 sio0d(int32 io, int32 data)
+{
+    extern int32 InstrCount;                   // intructions executed count 
+
+    if (io == 0) {                      
+        // data register read
+        status &= 0xFE;  // clear RXF bit
+        return odata; 
+    } else {                            
+        // data register write
+        if ((ptr_flag) &&       // if PTR ON
+            (data == 0x81) &&   // and $81 written on data register 
+            (ptr_unit.flags & UNIT_BINMODE)) { // and "set ptr binmode" SCP command has been issued            
+            // send char 129 dec with ptr active -> hack to receive bin file from ptr
+            // this is non-realistic, but very handly to implement SDOS PORT: device over PTP and PTR
+            ptr_send_bin = 1; 
+        } else {
+            ptr_send_bin = 0; 
+        }
+        if ((ptp_flag) &&       // if PTP ON
+            (ptr_unit.flags & UNIT_BINMODE)) { // and "set ptr binmode" SCP command has been issued            
+            // write to file attached to ptp an 8-bit byte as two hexdigits 
+            data = bin_send_byte_to_ptp(data);
         }
         if (sio_unit.flags & UNIT_SIO7BIT) {
             data &= 127;    // use only plain 7bit ascii
@@ -450,8 +533,12 @@ int32 sio0d(int32 io, int32 data)
              data, data, strData(data)); 
         if (isprint(data) || data == '\r' || data == '\n' || data == 8 || data == 26) { // printable?
             if (data != 26) {
-                sim_putchar(data);          // print character on console (except ^Z)
-                sim_debug (DEBUG_write, &sio_dev, "Show in console \n");
+                if ((ptp_flag) && (ptp_unit.flags & UNIT_PTP_NOECHO)) {
+                    // do not echo punch characters on console 
+                } else {
+                    sim_putchar(data);          // echo character on console (except ^Z)
+                    sim_debug (DEBUG_write, &sio_dev, "Show in console \n");
+                }
             }
             if (ptp_flag && ptp_unit.flags & UNIT_ATT) { // PTP enabled & attached?
                 putc(data, ptp_unit.fileref);
