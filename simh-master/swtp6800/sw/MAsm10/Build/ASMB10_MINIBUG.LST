@@ -1,0 +1,158 @@
+Logging to file "Build/ASMB10_MINIBUG.LST"
+ASMB,S:1,O:1,2
+
+M6800 ASSEMBLER VERSION 1.2
+
+
+
+
+
+---
+
+
+PAGE  001   MINIBUGI          
+
+
+
+00001                     NAM    MINIBUGIO 
+00002                     OPT    O,NOM,NOP  
+00003              *
+00004              * Motorola Assembler 1.0 I/O Patch
+00005              * Jun/2026 by Roberto Sancho 
+00006              * to run on MEK 6800 with MINIBUG ROM, 
+00007              * 
+00008              *
+00009              * MINIBUG ROM ROUTINES
+00010              *
+00011      FED6    EXBUG  EQU    $FED6    Monitor warm entry point
+00012      FE00    CONIN  EQU    $FE00    CONSOLE INPUT WITH ECHO
+00013      FEAE    CONOUT EQU    $FEAE    CONSOLE OUTPUT WITH NULLS LOG 
+00014              *
+00015              * VARS
+00016              *
+00017      A00C    AECHO  EQU    $A00C    =0 -> ECHO input chars, <>0 - 
+00018              *
+00019              *
+00020              * Patch ASMB I/O vectors
+00021              *
+00022 022D                ORG    $022D 
+00023 022D 7E 032D        JMP    PRTSTR   Send string to printer 
+00024              *
+00025 0250                ORG    $0250 
+00026 0250 7E FE00        JMP    CONIN    Console In
+00027              *
+00028 025A                ORG    $025A 
+00029 025A 7E FEAE        JMP    CONOUT   Console Out
+00030              *
+00031 0268                ORG    $0268 
+00032 0268 7E 0300        JMP    CHKHEX   check hex char
+00033              *
+00034              * From here up $3FF can be used for additional routi
+00035              *
+00036 0300                ORG    $0300 
+00037              *
+00038 0300 36      CHKHEX PSH A           
+00039 0301 BD 030D        JSR    CHEX 
+00040 0304 24 05          BCC    L0273 
+00041 0306 86 18          LDA A  #$18 
+00042 0308 06             TAP             
+00043 0309 32             PUL A           
+00044 030A 39             RTS             
+00045 030B 31      L0273  INS             
+00046 030C 39             RTS             
+00047 030D 80 30   CHEX   SUB A  #$30     
+00048 030F 25 0F          BCS    CHEX2    
+00049 0311 8B E9          ADD A  #$E9     
+00050 0313 25 0B          BCS    CHEX2    
+00051 0315 8B 06          ADD A  #6       
+00052 0317 2A 04          BPL    CHEX1    
+00053 0319 8B 07          ADD A  #7       
+00054 031B 25 03          BCS    CHEX2    
+00055 031D 8B 0A   CHEX1  ADD A  #10      
+00056 031F 0C             CLC             
+00057 0320 39      CHEX2  RTS             
+00058              *
+00059 0321 CE 032A START0 LDX    #MASMB   PRINT CR LF ON 1ST START
+00060 0324 BD 032D        JSR    PRTSTR   
+00061 0327 7E 0AA8        JMP    $0AA8    GO TO ASMB TRUE START
+00062 032A 0D      MASMB  FCB    13,10,4 
+      032B 0A      
+      032C 04      
+00063              *       
+00064 032D FF 0340 PRTSTR STX    XSAV     Send string to printer 
+00065 0330 A6 00          LDA A  0,X      (rerouted to console)
+00066 0332 81 04          CMP A  #4 
+00067 0334 26 01          BNE    PRTST2 
+00068 0336 39             RTS             
+00069 0337 BD FEAE PRTST2 JSR    CONOUT   Can be replaced by LPTOUT
+00070 033A FE 0340        LDX    XSAV 
+00071 033D 08             INX             
+00072 033E 20 ED          BRA    PRTSTR 
+00073 0340 0002    XSAV   RMB    2        
+00074              *
+00075 0342 7F A00C CMDLIN CLR    AECHO    Enable Input chars echo. (=0  
+00076 0345 BD FE00        JSR    CONIN    READ COMMAND CHAR FROM CONSOL 
+00077 0348 36             PSH A           
+00078 0349 86 0D          LDA A  #13      PRINT <CR><LF>
+00079 034B BD FEAE        JSR    CONOUT 
+00080 034E 86 0A          LDA A  #10 
+00081 0350 BD FEAE        JSR    CONOUT 
+00082 0353 32             PUL A           
+00083 0354 39             RTS             
+00084              *
+00085 0355 8C 01BD PATCH1 CPX    #$01BD 
+00086 0358 27 03          BEQ    L0208 
+00087 035A 7E 15FD        JMP    $15FD 
+00088 035D 7E 1691 L0208  JMP    $1691 
+00089              *
+00090 0360 01             NOP             Should be at addr <= $03FF
+00091              *
+00092              * Patch ASMB main code
+00093              *
+00094 0400                ORG    $0400    patch ASMB entry point
+00095 0400 7E 0321        JMP    START0 
+00096              *       
+00097 06C3                ORG    $06C3    
+00098 06C3 79 A00C        ROL    AECHO    =0 -> ECHO input chars, <>0 - 
+00099              *
+00100 0697                ORG    $0697    Patch to use for input Paper  
+00101 0697 7E 06A1        JMP    $06A1    (with control chars $11 PTR O 
+00102 06DA                ORG    $06DA    instead of High Speed Cassett 
+00103 06DA 7E 06E6        JMP    $06E6    
+00104 06B7                ORG    $06B7 
+00105 06B7 39             RTS             
+00106 070E                ORG    $070E 
+00107 070E 01             NOP             allows sending PTR OFF char
+00108              *
+00109 072D                ORG    $072D 
+00110 072D 31             FCC    "1.0"     fix the version number
+      072E 2E      
+      072F 30      
+00111              *
+00112 0AA8                ORG    $0AA8    
+00113 0AA8 CE 1FFF        LDX    #$1FFF   START OF SYMBOL TABLE
+00114              *       
+00115 0ABC                ORG    $0ABC    patch to read command line ch 
+00116 0ABC BD 0342        JSR    CMDLIN 
+00117              *
+00118 0ADB                ORG    $0ADB    enable options '3 - START PAS 
+00119 0ADB 01             NOP             and            '4 - START PAS 
+00120 0ADC 01             NOP             
+00121              *
+00122 0AF5                ORG    $0AF5    
+00123 0AF5 7E FED6        JMP    EXBUG    JUMP TO MONITOR
+00124              *
+00125 0F3F                ORG    $0F3F 
+00126 0F3F 27             FCB    $27      REPLACE BNE WITH BEQ. THIS FI 
+00127              *                       WITHOUT THIS FIX, "OPT O" AN
+00128              *
+00129 168C                ORG    $168C 
+00130 168C 7E 0355        JMP    PATCH1 
+00131              *
+00132              *
+00133              *
+00134                     END             
+
+TOTAL ERRORS 00000
+
+!Log file closed

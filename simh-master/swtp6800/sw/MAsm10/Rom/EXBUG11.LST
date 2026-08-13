@@ -1,0 +1,1385 @@
+
+
+ EXBUG EQU $F564 EXBUG NORMAL ENTRY POINT
+
+ ACIAS EQU $FCF4 ACIA STATUS/CONTROL REGISTER
+ ACIAR EQU $FCF5 ACIA RX/TX DATA REGISTER
+           $FCF6 ACIA2
+           $FCF7 ACIA2
+ PIA1D     $FCF8 PIA 1 Data register              
+ PIA1C     $FCF9 PIA 1 Control register
+ PIA2D     $FCFA PIA 2 Data register              
+ PIA2C     $FCFB PIA 2 Control register
+            
+ SBITC EQU $FCFD STOP BIT CONTROL FOR ACIA
+
+
+10000 F000 7E F558 START   JMP     PWRUP          Cold start
+10000 F003 7E F789 XBEGEN  JMP     BEGEN          Prompt for address
+10000 F006 7E FAA7 XCBCDH  JMP     CBCDH          Convert hex to binary
+10000 F009 7E F9C0 XCHEXL  JMP     CHEXL          Convert upper half to ascii
+10000 F00C 7E F9C4 XCHEXR  JMP     CHEXR          Convert lower half to ascii
+10000 F00F 7E FA65 XINADD  JMP     INADD          Get 4 hex digits from user into x
+10000 F012 7E FA8B XINCH   JMP     INCH           Input byte with echo
+10000 F015 7E FAA0 XINCHN  JMP     INCHN          Input char with echo (strip bit 7)
+10000 F018 7E F9DC XOUTCH  JMP     OUTCH          Output character
+10000 F01B 7E FA24 XOUT2H  JMP     OUT2H          Output byte in hex then space,X+
+10000 F01E 7E FA22 XOUT4H  JMP     OUT4H          Output 2 bytes in hex then space,X++
+10000 F021 7E FA41 XPCRLF  JMP     PCRLF          Print CR-LF
+10000 F024 7E FA33 XPDATA  JMP     PDATA          Print CR-LF then string
+10000 F027 7E FA35 XPDAT1  JMP     PDAT1          Print string
+10000 F02A 7E FA26 XPSPAC  JMP     PSPACE         Print space
+
+10000 F02D 27 10           
+10000 F02F 03              
+10000 F030 E8 00           
+10000 F032 64 00           
+10000 F034 0A              
+10000 F035 00              
+10000 F036 01              
+
+10000 F037 BD FAA7 LF037   JSR     CBCDH          Convert hex to binary
+10000 F03A 2B 6C           BMI     LF0A8
+10000 F03C 68 01           ASL     $0001,X
+10000 F03E 69 00           ROL     $0000,X
+10000 F040 8D 3C           BSR     LF07E
+10000 F042 AB 01           ADDA    $0001,X
+10000 F044 A7 01           STAA    $0001,X
+10000 F046 BD FAA0 LF046   JSR     INCHN          Input char with echo (strip bit 7)
+10000 F049 81 3D           CMPA    #$3D           '='
+10000 F04B 26 EA           BNE     LF037
+10000 F04D 86 20           LDAA    #$20           space
+10000 F04F BD F9DC         JSR     OUTCH          Output character
+10000 F052 CE F02D         LDX     #$F02D
+10000 F055 B6 FF08         LDAA    LFF08
+10000 F058 F6 FF09         LDAB    LFF09
+10000 F05B 7F FF5A LF05B   CLR     LFF5A
+10000 F05E 7C FF5A LF05E   INC     LFF5A
+10000 F061 E0 01           SUBB    $0001,X
+10000 F063 A2 00           SBCA    $0000,X
+10000 F065 24 F7           BCC     LF05E
+10000 F067 EB 01           ADDB    $0001,X
+10000 F069 A9 00           ADCA    $0000,X
+10000 F06B 36              PSHA    
+10000 F06C B6 FF5A         LDAA    LFF5A
+10000 F06F 8B 2F           ADDA    #$2F
+10000 F071 BD F9DC         JSR     OUTCH          Output character
+10000 F074 32              PULA    
+10000 F075 08              INX     
+10000 F076 08              INX     
+10000 F077 8C F037         CPX     #$F037
+10000 F07A 26 DF           BNE     LF05B
+10000 F07C 20 7B           BRA     LF0F9
+10000  ;
+10000 F07E 68 01   LF07E   ASL     $0001,X
+10000 F080 69 00           ROL     $0000,X
+10000 F082 68 01           ASL     $0001,X
+10000 F084 69 00           ROL     $0000,X
+10000 F086 68 01           ASL     $0001,X
+10000 F088 69 00           ROL     $0000,X
+10000 F08A 39              RTS     
+
+10000 F08B CE FF08 LF08B   LDX     #$FF08
+10000 F08E 7F FF07         CLR     LFF07
+10000 F091 6F 00           CLR     $0000,X
+10000 F093 6F 01           CLR     $0001,X
+10000 F095 BD FAA0         JSR     INCHN          Input char with echo (strip bit 7)
+10000 F098 81 24           CMPA    #$24           '$'
+10000 F09A 27 AA           BEQ     LF046
+10000 F09C 81 40           CMPA    #$40           '@'
+10000 F09E 27 4A           BEQ     LF0EA
+10000 F0A0 81 30   LF0A0   CMPA    #$30           '0' 
+10000 F0A2 2B 04           BMI     LF0A8
+10000 F0A4 81 39           CMPA    #$39           '9'
+10000 F0A6 2F 03           BLE     LF0AB
+10000 F0A8 7E F128 LF0A8   JMP     LF128
+
+10000 F0AB 84 0F   LF0AB   ANDA    #$0F
+10000 F0AD B7 FF5A         STAA    LFF5A
+10000 F0B0 A6 00           LDAA    $0000,X
+10000 F0B2 E6 01           LDAB    $0001,X
+10000 F0B4 58              ASLB    
+10000 F0B5 49              ROLA    
+10000 F0B6 BD F07E         JSR     LF07E
+10000 F0B9 EB 01           ADDB    $0001,X
+10000 F0BB A9 00           ADCA    $0000,X
+10000 F0BD FB FF5A         ADDB    LFF5A
+10000 F0C0 89 00           ADCA    #$00
+10000 F0C2 A7 00           STAA    $0000,X
+10000 F0C4 E7 01           STAB    $0001,X
+10000 F0C6 BD FAA0         JSR     INCHN          Input char with echo (strip bit 7)
+10000 F0C9 81 3D           CMPA    #$3D           '='
+10000 F0CB 26 D3           BNE     LF0A0
+10000 F0CD 86 20   LF0CD   LDAA    #$20           space
+10000 F0CF BD F9DC         JSR     OUTCH          Output character
+10000 F0D2 CE FF08         LDX     #$FF08
+10000 F0D5 BD FA22         JSR     OUT4H          Output 2 bytes in hex ,X++
+10000 F0D8 20 1F           BRA     LF0F9
+
+10000 F0DA 81 30   LF0DA   CMPA    #$30           '0'
+10000 F0DC 2B CA           BMI     LF0A8
+10000 F0DE 81 38           CMPA    #$38           '8'
+10000 F0E0 2A C6           BPL     LF0A8
+10000 F0E2 8D 9A           BSR     LF07E
+10000 F0E4 84 07           ANDA    #$07
+10000 F0E6 AB 01           ADDA    $0001,X
+10000 F0E8 A7 01           STAA    $0001,X
+10000 F0EA BD FAA0 LF0EA   JSR     INCHN          Input char with echo (strip bit 7)
+10000 F0ED 81 3D           CMPA    #$3D           '='
+10000 F0EF 26 E9           BNE     LF0DA
+10000 F0F1 20 DA           BRA     LF0CD
+10000  ;
+10000 F0F3 7F FF60 C.MAID  CLR     LFF60          MAID COMMAND
+10000 F0F6 7F FF54         CLR     LFF54
+10000 F0F9 8E FF8A LF0F9   LDS     #XSTACK
+10000 F0FC CE FBC2         LDX     #MSTAR         Msg "*"
+10000 F0FF BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F102 BD FA62         JSR     LFA62
+10000 F105 5D              TSTB    
+10000 F106 26 28           BNE     LF130
+10000 F108 81 58           CMPA    #$58           'X'
+10000 F10A 26 03           BNE     LF10F
+10000 F10C 7E F5DC         JMP     PROMPT         print msg and prompt for command
+10000 F10F 81 24   LF10F   CMPA    #$24           '$'
+10000 F111 26 03           BNE     LF116
+10000 F113 7E F33D         JMP     LF33D
+10000 F116 81 3B   LF116   CMPA    #$3B           ';'
+10000 F118 26 03           BNE     LF11D
+10000 F11A 7E F27F         JMP     LF27F
+10000 F11D 81 4E   LF11D   CMPA    #$4E           'N'
+10000 F11F 27 34           BEQ     LF155
+10000 F121 81 23           CMPA    #$23           '#'
+10000 F123 26 03           BNE     LF128
+10000 F125 7E F08B         JMP     LF08B
+10000 F128 CE FBBE LF128   LDX     #MERR          " ?"
+10000 F12B BD FA35         JSR     PDAT1          Print string
+10000 F12E 20 C9   LF12E   BRA     LF0F9
+
+10000 F130 81 3B   LF130   CMPA    #$3B           ';'
+10000 F132 27 6F           BEQ     MAIDCMD
+10000 F134 FE FF08         LDX     LFF08
+10000 F137 81 2F           CMPA    #$2F           '/'
+10000 F139 26 ED           BNE     LF128
+10000 F13B 7E F1D6         JMP     LF1D6
+10000  ;
+10000 F13E FE FF08 LF13E   LDX     LFF08
+10000 F141 27 01           BEQ     LF144
+10000 F143 09              DEX     
+10000 F144 FF FF51 LF144   STX     LFF51
+10000 F147 86 FF           LDAA    #$FF
+10000 F149 B7 FF60         STAA    LFF60
+10000 F14C B7 FF50         STAA    LFF50
+10000 F14F B7 FF54         STAA    LFF54
+10000 F152 7E F431         JMP     LF431
+10000  
+10000 F155 CE 0000 LF155   LDX     #$0000
+10000 F158 20 EA           BRA     LF144
+10000  
+10000 F15A B6 FF08 LF15A   LDAA    LFF08
+10000 F15D F6 FF09         LDAB    LFF09
+10000 F160 BD F2BA         JSR     LF2BA
+10000 F163 27 94           BEQ     LF0F9
+10000 F165 CE FF1F         LDX     #$FF1F
+10000 F168 A6 00   LF168   LDAA    $0000,X
+10000 F16A AB 01           ADDA    $0001,X
+10000 F16C 26 0B           BNE     LF179
+10000 F16E BE FF08         LDS     LFF08
+10000 F171 AF 00           STS     $0000,X
+10000 F173 6F 20           CLR     $0020,X
+10000 F175 6F 21           CLR     $0021,X
+10000 F177 20 B5           BRA     LF12E
+10000  ;
+10000 F179 08      LF179   INX     
+10000 F17A 08              INX     
+10000 F17B 8C FF2F         CPX     #$FF2F
+10000 F17E 26 E8           BNE     LF168
+10000 F180 7E F128 LF180   JMP     LF128
+10000  ;
+10000 F183 CE FF1F LF183   LDX     #$FF1F
+10000 F186 A6 00   LF186   LDAA    $0000,X
+10000 F188 B1 FF08         CMPA    LFF08
+10000 F18B 26 0D           BNE     LF19A
+10000 F18D A6 01           LDAA    $0001,X
+10000 F18F B1 FF09         CMPA    LFF09
+10000 F192 26 06           BNE     LF19A
+10000 F194 6F 00           CLR     $0000,X
+10000 F196 6F 01           CLR     $0001,X
+10000 F198 20 94   LF198   BRA     LF12E
+10000  ;
+10000 F19A 08      LF19A   INX     
+10000 F19B 08              INX     
+10000 F19C 8C FF2F         CPX     #$FF2F
+10000 F19F 26 E5           BNE     LF186
+10000 F1A1 20 DD           BRA     LF180
+10000  ;
+10000 F1A3 BD FAA0 MAIDCMD JSR     INCHN          Input char with echo (strip bit 7)
+10000 F1A6 81 47           CMPA    #$47           'G'
+10000 F1A8 26 03           BNE     LF1AD
+10000 F1AA 7E F41C         JMP     MAID.G
+10000 F1AD 81 4E   LF1AD   CMPA    #$4E           'N'
+10000 F1AF 27 8D           BEQ     LF13E
+10000 F1B1 81 50           CMPA    #$50           'P'
+10000 F1B3 26 03           BNE     LF1B8
+10000 F1B5 7E F3FC         JMP     LF3FC
+10000 F1B8 81 55   LF1B8   CMPA    #$55           'U'
+10000 F1BA 27 C7           BEQ     LF183
+10000 F1BC 81 56           CMPA    #$56           'V'
+10000 F1BE 27 9A           BEQ     LF15A
+10000 F1C0 81 57           CMPA    #$57           'W'
+10000 F1C2 26 BC           BNE     LF180
+10000 F1C4 20 77           BRA     LF23D
+10000 F1C6 08      LF1C6   INX     
+10000 F1C7 BD FA45         JSR     PRTCR          Print <CR>
+10000 F1CA FF FF56 LF1CA   STX     LFF56
+10000 F1CD CE FF56 LF1CD   LDX     #$FF56
+10000 F1D0 BD FA2B         JSR     LFA2B
+10000 F1D3 FE FF56         LDX     LFF56
+10000 F1D6 BD F971 LF1D6   JSR     LF971
+10000 F1D9 2B 0E           BMI     LF1E9
+10000 F1DB 81 0D           CMPA    #$0D           <CR>
+10000 F1DD 27 B9           BEQ     LF198
+10000 F1DF 81 0A           CMPA    #$0A           <LF>
+10000 F1E1 27 E3           BEQ     LF1C6
+10000 F1E3 09              DEX     
+10000 F1E4 BD FA41         JSR     PCRLF          Print CR-LF
+10000 F1E7 20 E1           BRA     LF1CA
+10000  ;
+10000 F1E9 81 3B   LF1E9   CMPA    #$3B           ';'
+10000 F1EB 26 93           BNE     LF180
+10000 F1ED BD FAA0         JSR     INCHN          Input char with echo (strip bit 7)
+10000 F1F0 81 4F           CMPA    #$4F           'O'
+10000 F1F2 26 8C           BNE     LF180
+10000 F1F4 FE FF56         LDX     LFF56
+10000 F1F7 08              INX     
+10000 F1F8 FF FF5A         STX     LFF5A
+10000 F1FB B6 FF5A         LDAA    LFF5A
+10000 F1FE F6 FF5B         LDAB    LFF5B
+10000 F201 F0 FF09         SUBB    LFF09
+10000 F204 B2 FF08         SBCA    LFF08
+10000 F207 25 20           BCS     LF229
+10000 F209 26 16           BNE     LF221
+10000 F20B C1 81           CMPB    #$81
+10000 F20D 24 12           BCC     LF221
+10000 F20F 50              NEGB    
+10000 F210 F7 FF07 LF210   STAB    LFF07
+10000 F213 BD FA26         JSR     PSPACE         Print space
+10000 F216 CE FF07         LDX     #$FF07
+10000 F219 BD FA24         JSR     OUT2H          Output byte in hex ,X+
+10000 F21C BD FA41 LF21C   JSR     PCRLF          Print CR-LF
+10000 F21F 20 AC           BRA     LF1CD
+10000  ;
+10000 F221 CE FB79 LF221   LDX     #MINVEX        Msg " INVLEXEC ""
+10000 F224 BD FA35         JSR     PDAT1          Print string
+10000 F227 20 F3           BRA     LF21C
+10000  ;
+10000 F229 B6 FF08 LF229   LDAA    LFF08
+10000 F22C F6 FF09         LDAB    LFF09
+10000 F22F F0 FF5B         SUBB    LFF5B
+10000 F232 B2 FF5A         SBCA    LFF5A
+10000 F235 26 EA           BNE     LF221
+10000 F237 58              ASLB    
+10000 F238 25 E7           BCS     LF221
+10000 F23A 54              LSRB    
+10000 F23B 20 D3           BRA     LF210
+10000  ;
+10000 F23D B6 FF08 LF23D   LDAA    LFF08
+10000 F240 26 61           BNE     LF2A3
+10000 F242 B6 FF09         LDAA    LFF09
+10000 F245 B7 FF13         STAA    LFF13
+10000 F248 FE FF0E         LDX     LFF0E
+10000 F24B FF FF56 LF24B   STX     LFF56
+10000 F24E A6 00           LDAA    $0000,X
+10000 F250 B8 FF13         EORA    LFF13
+10000 F253 B4 FF12         ANDA    LFF12
+10000 F256 26 0F           BNE     LF267
+10000 F258 BD FA41         JSR     PCRLF          Print CR-LF
+10000 F25B CE FF56         LDX     #$FF56
+10000 F25E BD FA22         JSR     OUT4H          Output 2 bytes in hex ,X++
+10000 F261 FE FF56         LDX     LFF56
+10000 F264 BD FA24         JSR     OUT2H          Output byte in hex ,X+
+10000 F267 FE FF56 LF267   LDX     LFF56
+10000 F26A BC FF10         CPX     LFF10
+10000 F26D 27 42           BEQ     LF2B1
+10000 F26F 08              INX     
+10000 F270 20 D9           BRA     LF24B
+10000  ;
+10000 F272 7F FF60 LF272   CLR     LFF60
+10000 F275 7F FF54         CLR     LFF54
+10000 F278 20 37           BRA     LF2B1
+10000  ;
+10000 F27A 7F FF5D LF27A   CLR     LFF5D
+10000 F27D 20 32           BRA     LF2B1
+10000  ;
+10000 F27F BD FAA0 LF27F   JSR     INCHN          Input char with echo (strip bit 7)
+10000 F282 81 47           CMPA    #$47           'G'
+10000 F284 26 03           BNE     LF289
+10000 F286 7E F414         JMP     LF414
+10000 F289 81 4E   LF289   CMPA    #$4E           'N'
+10000 F28B 26 03           BNE     LF290
+10000 F28D 7E F155         JMP     LF155
+10000 F290 81 50   LF290   CMPA    #$50           'P'
+10000 F292 26 03           BNE     LF297
+10000 F294 7E F3F0         JMP     LF3F0
+10000 F297 81 53   LF297   CMPA    #$53           'S'
+10000 F299 27 DF           BEQ     LF27A
+10000 F29B 81 54           CMPA    #$54           'T'
+10000 F29D 27 D3           BEQ     LF272
+10000 F29F 81 55           CMPA    #$55           'U'
+10000 F2A1 27 03           BEQ     LF2A6
+10000 F2A3 7E F128 LF2A3   JMP     LF128
+10000  ;
+10000 F2A6 CE FF1F LF2A6   LDX     #$FF1F
+10000 F2A9 6F 00   LF2A9   CLR     $0000,X
+10000 F2AB 08              INX     
+10000 F2AC 8C FF4F         CPX     #$FF4F
+10000 F2AF 26 F8           BNE     LF2A9
+10000 F2B1 7E F0F9 LF2B1   JMP     LF0F9
+10000  ;
+10000 F2B4 B6 FF16 LF2B4   LDAA    LFF16
+10000 F2B7 F6 FF17         LDAB    LFF17
+10000 F2BA CE FF1F LF2BA   LDX     #$FF1F
+10000 F2BD A1 00   LF2BD   CMPA    $0000,X
+10000 F2BF 26 05           BNE     LF2C6
+10000 F2C1 E1 01           CMPB    $0001,X
+10000 F2C3 26 01           BNE     LF2C6
+10000 F2C5 39              RTS     
+
+10000 F2C6 08      LF2C6   INX     
+10000 F2C7 08              INX     
+10000 F2C8 8C FF2F         CPX     #$FF2F
+10000 F2CB 26 F0           BNE     LF2BD
+10000 F2CD 86 FF           LDAA    #$FF
+10000 F2CF 39              RTS     
+
+10000 F2D0 BD FAC0 LF2D0   JSR     OUTCH2         Output character, then "-"
+10000 F2D3 BD F964         JSR     LF964
+10000 F2D6 08              INX     
+10000 F2D7 20 06           BRA     LF2DF
+10000  ;
+10000 F2D9 BD FAC0 LF2D9   JSR     OUTCH2         Output character, then "-"
+10000 F2DC BD F971         JSR     LF971
+10000 F2DF 81 0D   LF2DF   CMPA    #$0D           <CR>
+10000 F2E1 27 57           BEQ     LF33A
+10000 F2E3 08              INX     
+10000 F2E4 81 0A           CMPA    #$0A           <LF>
+10000 F2E6 27 04           BEQ     LF2EC
+10000 F2E8 BD FA41         JSR     PCRLF          Print CR-LF
+10000 F2EB 39              RTS     
+
+10000 F2EC BD FA45 LF2EC   JSR     PRTCR          Print <CR>
+10000 F2EF 39              RTS     
+
+10000 F2F0 BD FAC9 LF2F0   JSR     PRTRECR        Print register contents <CR><LF> P-hhhh X-hhhh A-hh B-hh C-hh S-hhhh
+10000 F2F3 BD FA41         JSR     PCRLF          Print CR-LF
+10000 F2F6 CE FF16         LDX     #$FF16
+10000 F2F9 86 50           LDAA    #$50           'P'
+10000 F2FB 8D D3           BSR     LF2D0
+10000 F2FD 86 58           LDAA    #$58           'X'
+10000 F2FF 8D CF           BSR     LF2D0
+10000 F301 86 41           LDAA    #$41           'A'
+10000 F303 8D D4           BSR     LF2D9
+10000 F305 86 42           LDAA    #$42           'B'
+10000 F307 8D D0           BSR     LF2D9
+10000 F309 86 43           LDAA    #$43           'C'
+10000 F30B 8D CC           BSR     LF2D9
+10000 F30D 86 53           LDAA    #$53           'S'
+10000 F30F 8D BF           BSR     LF2D0
+10000 F311 20 27           BRA     LF33A
+10000  ;
+10000 F313 BD FA26 LF313   JSR     PSPACE         Print space
+10000 F316 CE FF12         LDX     #$FF12
+10000 F319 BD F971         JSR     LF971
+10000 F31C 2B 37           BMI     LF355
+10000 F31E CE FB36 LF31E   LDX     #MBEGAD        Msg "BEG ADDR "
+10000 F321 BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F324 CE FF0E         LDX     #$FF0E
+10000 F327 BD F964         JSR     LF964
+10000 F32A 2B F2           BMI     LF31E
+10000 F32C CE FB40 LF32C   LDX     #MENDAD        Msg "END ADDR "
+10000 F32F BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F332 CE FF10         LDX     #$FF10
+10000 F335 BD F964         JSR     LF964
+10000 F338 2B F2           BMI     LF32C
+10000 F33A 7E F0F9 LF33A   JMP     LF0F9
+10000  ;
+10000 F33D BD FAA0 LF33D   JSR     INCHN          Input char with echo (strip bit 7)
+10000 F340 16              TAB     
+10000 F341 C1 52           CMPB    #$52           'R'
+10000 F343 27 AB           BEQ     LF2F0
+10000 F345 C1 56           CMPB    #$56           'V'
+10000 F347 27 0F           BEQ     LF358
+10000 F349 C1 4D           CMPB    #$4D           'M'
+10000 F34B 27 C6           BEQ     LF313
+10000 F34D C1 54           CMPB    #$54           'T'
+10000 F34F 27 2C           BEQ     LF37D
+10000 F351 C1 53           CMPB    #$53           'S'
+10000 F353 27 13   LF353   BEQ     LF368
+10000 F355 7E F128 LF355   JMP     LF128
+10000  ;
+10000 F358 BD FA41 LF358   JSR     PCRLF          Print CR-LF
+10000 F35B CE FF1F         LDX     #$FF1F
+10000 F35E C6 08           LDAB    #$08
+10000 F360 BD FA22 LF360   JSR     OUT4H          Output 2 bytes in hex ,X++
+10000 F363 5A              DECB    
+10000 F364 26 FA           BNE     LF360
+10000 F366 20 D2           BRA     LF33A
+10000  ;
+10000 F368 CE FBA0 LF368   LDX     #MSTOPAD       Msg "STOP ADDR "
+10000 F36B BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F36E CE FF5E         LDX     #$FF5E
+10000 F371 BD F964         JSR     LF964
+10000 F374 2B DF           BMI     LF355
+10000 F376 86 FF           LDAA    #$FF
+10000 F378 B7 FF5D         STAA    LFF5D
+10000 F37B 20 BD           BRA     LF33A
+10000  ;
+10000 F37D CE FB40 LF37D   LDX     #MENDAD        Msg "END ADDR "
+10000 F380 BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F383 CE FF14         LDX     #$FF14
+10000 F386 BD F964         JSR     LF964
+10000 F389 2B CA           BMI     LF355
+10000 F38B 86 FF           LDAA    #$FF
+10000 F38D B7 FF60         STAA    LFF60
+10000 F390 7F FF50         CLR     LFF50
+10000 F393 20 A5           BRA     LF33A
+10000  ;
+10000 F395 7D FF4F LF395   TST     LFF4F
+10000 F398 26 2E           BNE     LF3C8
+10000 F39A CE FF1F         LDX     #$FF1F
+10000 F39D FF FF56 LF39D   STX     LFF56
+10000 F3A0 A6 00           LDAA    $0000,X
+10000 F3A2 26 04           BNE     LF3A8
+10000 F3A4 A6 01           LDAA    $0001,X
+10000 F3A6 27 14           BEQ     LF3BC
+10000 F3A8 EE 00   LF3A8   LDX     $0000,X
+10000 F3AA A6 00           LDAA    $0000,X
+10000 F3AC C6 3F           LDAB    #$3F
+10000 F3AE E7 00           STAB    $0000,X
+10000 F3B0 E1 00           CMPB    $0000,X
+10000 F3B2 27 03           BEQ     LF3B7
+10000 F3B4 7E F9A4         JMP     LF9A4
+10000  ;
+10000 F3B7 FE FF56 LF3B7   LDX     LFF56
+10000 F3BA A7 10           STAA    $0010,X
+10000 F3BC 08      LF3BC   INX     
+10000 F3BD 08              INX     
+10000 F3BE 8C FF2F         CPX     #$FF2F
+10000 F3C1 26 DA           BNE     LF39D
+10000 F3C3 86 FF           LDAA    #$FF
+10000 F3C5 B7 FF4F         STAA    LFF4F
+10000 F3C8 39      LF3C8   RTS     
+
+10000 F3C9 7D FF4F LF3C9   TST     LFF4F
+10000 F3CC 27 1E           BEQ     LF3EC
+10000 F3CE CE FF1F         LDX     #$FF1F
+10000 F3D1 FF FF56 LF3D1   STX     LFF56
+10000 F3D4 A6 00           LDAA    $0000,X
+10000 F3D6 26 04           BNE     LF3DC
+10000 F3D8 E6 01           LDAB    $0001,X
+10000 F3DA 27 06           BEQ     LF3E2
+10000 F3DC A6 10   LF3DC   LDAA    $0010,X
+10000 F3DE EE 00           LDX     $0000,X
+10000 F3E0 A7 00           STAA    $0000,X
+10000 F3E2 FE FF56 LF3E2   LDX     LFF56
+10000 F3E5 08              INX     
+10000 F3E6 08              INX     
+10000 F3E7 8C FF2F         CPX     #$FF2F
+10000 F3EA 26 E5           BNE     LF3D1
+10000 F3EC 7F FF4F LF3EC   CLR     LFF4F
+10000 F3EF 39              RTS     
+
+10000 F3F0 7D FF60 LF3F0   TST     LFF60
+10000 F3F3 26 37           BNE     LF42C
+10000 F3F5 BD F2B4         JSR     LF2B4
+10000 F3F8 27 32           BEQ     LF42C
+10000 F3FA 20 2B           BRA     LF427
+10000  ;
+10000 F3FC 7D FF60 LF3FC   TST     LFF60
+10000 F3FF 26 05           BNE     LF406
+10000 F401 BD F2B4         JSR     LF2B4
+10000 F404 27 03           BEQ     LF409
+10000 F406 7E F128 LF406   JMP     LF128
+10000  ;
+10000 F409 BE FF08 LF409   LDS     LFF08
+10000 F40C 34              DES     
+10000 F40D AF 20           STS     $0020,X
+10000 F40F 8E FF8A         LDS     #XSTACK
+10000 F412 20 18           BRA     LF42C
+10000  ;
+10000 F414 FE FF00 LF414   LDX     HIRAM          =last valid RAM addr
+10000 F417 09              DEX     
+10000 F418 EE 00           LDX     $0000,X
+10000 F41A 20 03           BRA     LF41F
+10000  ;
+10000 F41C FE FF08 MAID.G  LDX     LFF08          MAID command G (goto)
+10000 F41F FF FF16 LF41F   STX     LFF16
+10000 F422 7D FF60         TST     LFF60
+10000 F425 2B 05           BMI     LF42C
+10000 F427 BD F395 LF427   JSR     LF395
+10000 F42A 20 05           BRA     LF431
+10000 F42C 86 FF   LF42C   LDAA    #$FF
+10000 F42E B7 FF54         STAA    LFF54
+10000 F431 C6 07   LF431   LDAB    #$07
+10000 F433 BE FF1D         LDS     LFF1D
+10000 F436 CE FF16         LDX     #$FF16
+10000 F439 A6 00   LF439   LDAA    $0000,X
+10000 F43B 36              PSHA    
+10000 F43C 08              INX     
+10000 F43D 5A              DECB    
+10000 F43E 26 F9           BNE     LF439
+10000 F440 30              TSX     
+10000 F441 A6 03           LDAA    $0003,X
+10000 F443 E6 04           LDAB    $0004,X
+10000 F445 A7 04           STAA    $0004,X
+10000 F447 E7 03           STAB    $0003,X
+10000 F449 A6 05           LDAA    $0005,X
+10000 F44B E6 06           LDAB    $0006,X
+10000 F44D A7 06           STAA    $0006,X
+10000 F44F E7 05           STAB    $0005,X
+10000 F451 7D FF5D         TST     LFF5D
+10000 F454 27 11           BEQ     LF467
+10000 F456 B6 FF5F         LDAA    LFF5F
+10000 F459 B7 FCF8         STAA    PIA1D          PIA 1 Data register              
+10000 F45C B6 FF5E         LDAA    LFF5E
+10000 F45F B7 FCFA         STAA    PIA2D          PIA 2 Data register              
+10000 F462 86 34           LDAA    #$34
+10000 F464 B7 FCF9         STAA    PIA1C          PIA 1 Control register
+10000 F467 7D FF54 LF467   TST     LFF54
+10000 F46A 27 0A           BEQ     LF476
+10000 F46C 86 34           LDAA    #$34
+10000 F46E B7 FCFB         STAA    PIA2C          PIA 2 Control register
+10000 F471 86 3C           LDAA    #$3C
+10000 F473 B7 FCFB         STAA    PIA2C          PIA 2 Control register
+10000 F476 3B      LF476   RTI                    jump to user program
+
+10000 F477 C6 07   .SWI    LDAB    #$07           SWI Service Routine
+10000 F479 CE FF1C         LDX     #$FF1C
+10000 F47C 32      LF47C   PULA    
+10000 F47D A7 00           STAA    $0000,X
+10000 F47F 09              DEX     
+10000 F480 5A              DECB    
+10000 F481 26 F9           BNE     LF47C
+10000 F483 BF FF1D         STS     LFF1D
+10000 F486 8E FF8A         LDS     #XSTACK
+10000 F489 8D 34           BSR     LF4BF
+10000 F48B FE FF16         LDX     LFF16
+10000 F48E 09              DEX     
+10000 F48F FF FF16         STX     LFF16
+10000 F492 7D FF4F         TST     LFF4F
+10000 F495 27 14           BEQ     LF4AB
+10000 F497 BD F3C9         JSR     LF3C9
+10000 F49A BD F2B4         JSR     LF2B4
+10000 F49D 26 0C           BNE     LF4AB
+10000 F49F AE 20           LDS     $0020,X
+10000 F4A1 27 14           BEQ     LF4B7
+10000 F4A3 34              DES     
+10000 F4A4 AF 20           STS     $0020,X
+10000 F4A6 8E FF8A         LDS     #XSTACK
+10000 F4A9 20 81           BRA     LF42C
+10000  ;
+10000 F4AB CE FBC4 LF4AB   LDX     #MBRKER        Msg "BKPT ERROR "
+10000 F4AE BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F4B1 7F FF60         CLR     LFF60
+10000 F4B4 7F FF54         CLR     LFF54
+10000 F4B7 8E FF8A LF4B7   LDS     #XSTACK
+10000 F4BA BD FAC9         JSR     PRTRECR        Print register contents <CR><LF> P-hhhh X-hhhh A-hh B-hh C-hh S-hhhh
+10000 F4BD 20 77           BRA     LF536
+10000  ;
+10000 F4BF CE FF16 LF4BF   LDX     #$FF16
+10000 F4C2 A6 00           LDAA    $0000,X
+10000 F4C4 E6 01           LDAB    $0001,X
+10000 F4C6 A7 01           STAA    $0001,X
+10000 F4C8 E7 00           STAB    $0000,X
+10000 F4CA A6 02           LDAA    $0002,X
+10000 F4CC E6 03           LDAB    $0003,X
+10000 F4CE A7 03           STAA    $0003,X
+10000 F4D0 E7 02           STAB    $0002,X
+10000 F4D2 39              RTS     
+
+10000 F4D3 BF FF1D         STS     LFF1D
+10000 F4D6 20 FE   LF4D6   BRA     LF4D6
+10000  ;
+10000 F4D8 86 3C   .RESET  LDAA    #$3C           RESET Service Routine
+10000 F4DA B7 FCF9         STAA    PIA1C          PIA 1 Control register
+10000 F4DD 86 34           LDAA    #$34
+10000 F4DF B7 FCFB         STAA    PIA2C          PIA 2 Control register
+10000 F4E2 C6 07           LDAB    #$07
+10000 F4E4 CE FF1C         LDX     #$FF1C
+10000 F4E7 32      LF4E7   PULA    
+10000 F4E8 A7 00           STAA    $0000,X
+10000 F4EA 09              DEX     
+10000 F4EB 5A              DECB    
+10000 F4EC 26 F9           BNE     LF4E7
+10000 F4EE BF FF1D         STS     LFF1D
+10000 F4F1 8E FF8A         LDS     #XSTACK
+10000 F4F4 8D C9           BSR     LF4BF
+10000 F4F6 BD F3C9         JSR     LF3C9
+10000 F4F9 B6 FCF9         LDAA    PIA1C          PIA 1 Control register
+10000 F4FC F6 FCF8         LDAB    PIA1D          PIA 1 Data register              
+10000 F4FF 85 80           BITA    #$80
+10000 F501 26 4A           BNE     LF54D
+10000 F503 B6 FCFB         LDAA    PIA2C          PIA 2 Control register
+10000 F506 F6 FCFA         LDAB    PIA2D          PIA 2 Data register              
+10000 F509 85 80           BITA    #$80
+10000 F50B 26 2C           BNE     LF539
+10000 F50D 7D FF60         TST     LFF60
+10000 F510 27 32           BEQ     LF544
+10000 F512 BD FAC9         JSR     PRTRECR        Print register contents <CR><LF> P-hhhh X-hhhh A-hh B-hh C-hh S-hhhh
+10000 F515 7D FF50         TST     LFF50
+10000 F518 27 0B           BEQ     LF525
+10000 F51A FE FF51         LDX     LFF51
+10000 F51D 27 0E           BEQ     LF52D
+10000 F51F 09              DEX     
+10000 F520 FF FF51         STX     LFF51
+10000 F523 20 25           BRA     LF54A
+10000  ;
+10000 F525 FE FF16 LF525   LDX     LFF16
+10000 F528 BC FF14         CPX     LFF14
+10000 F52B 26 1D           BNE     LF54A
+10000 F52D 7F FF60 LF52D   CLR     LFF60
+10000 F530 7F FF50         CLR     LFF50
+10000 F533 7F FF54         CLR     LFF54
+10000 F536 7E F0F9 LF536   JMP     LF0F9
+10000  ;
+10000 F539 CE FB8F LF539   LDX     #MSTONAD       Msg "STOP-ON-ADDRESS "
+10000 F53C BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F53F BD FACC         JSR     PRTREGS        Print register contents P-hhhh X-hhhh A-hh B-hh C-hh S-hhhh
+10000 F542 20 F2           BRA     LF536
+10000  ;
+10000 F544 BD F395 LF544   JSR     LF395
+10000 F547 7F FF54         CLR     LFF54
+10000 F54A 7E F431 LF54A   JMP     LF431
+10000  ;
+10000 F54D CE FBAB LF54D   LDX     #MABTAT        Msg "ABORTED AT "
+10000 F550 BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F553 BD FACC         JSR     PRTREGS        Print register contents P-hhhh X-hhhh A-hh B-hh C-hh S-hhhh
+10000 F556 20 0F           BRA     LF567
+
+10000 F558 0F      PWRUP   SEI                    Cold Start
+10000 F559 CE 83FF         LDX     #$83FF         init last valid RAM addr
+10000 F55C FF FF00         STX     HIRAM          =last valid RAM addr
+10000 F55F 86 00           LDAA    #$00           init TTY speed
+10000 F561 B7 FF02         STAA    SPEED          TTY paper tape speed: 0 = 10cps, 1 = 30cps, FF = 120cps
+
+10000 F564 8E FF8A EXBUG   LDS     #XSTACK        Warm Start - EXBUG NORMAL ENTRY POINT
+10000 F567 BF FF1D LF567   STS     LFF1D
+10000 F56A CE F4D8         LDX     #.RESET        RESET Service Routine
+10000 F56D FF FFFC         STX     LFFFC          CPU NMI vector in ram 
+10000 F570 CE F4D8         LDX     #.RESET        RESET Service Routine
+10000 F573 FF FFFE         STX     $FFFE          CPU Reset vector in ram 
+10000 F576 CE F477         LDX     #.SWI          SWI Service Routine
+10000 F579 FF FFFA         STX     $FFFA          CPU SWI vector in ram 
+10000 F57C FE FF00         LDX     HIRAM          =last valid RAM addr
+10000 F57F 09              DEX     
+10000 F580 09              DEX     
+10000 F581 09              DEX     
+10000 F582 09              DEX     
+10000 F583 09              DEX     
+10000 F584 09              DEX     
+10000 F585 09              DEX     
+10000 F586 EE 00           LDX     $0000,X
+10000 F588 FF FFF8         STX     $FFF8          CPU IRQ vector in ram 
+10000 F58B CE FF1F         LDX     #$FF1F
+10000 F58E 6F 00   LF58E   CLR     $0000,X
+10000 F590 08              INX     
+10000 F591 8C FF63         CPX     #$FF63
+10000 F594 26 F8           BNE     LF58E
+10000 F596 8E FF8A         LDS     #XSTACK
+10000 F599 86 38           LDAA    #$38
+10000 F59B B7 FCF9         STAA    PIA1C          PIA 1 Control register
+10000 F59E 86 30           LDAA    #$30
+10000 F5A0 B7 FCFB         STAA    PIA2C          PIA 2 Control register
+10000 F5A3 86 FF           LDAA    #$FF
+10000 F5A5 B7 FCF8         STAA    PIA1D          PIA 1 Data register              
+10000 F5A8 B7 FCFA         STAA    PIA2D          PIA 2 Data register              
+10000 F5AB 86 34           LDAA    #$34
+10000 F5AD B7 FCFB         STAA    PIA2C          PIA 2 Control register
+10000 F5B0 86 3C           LDAA    #$3C
+10000 F5B2 B7 FCF9         STAA    PIA1C          PIA 1 Control register
+10000 F5B5 86 03           LDAA    #$03
+10000 F5B7 B7 FCF4         STAA    ACIAS          ACIA STATUS/CONTROL REGISTER
+10000 F5BA B6 FCFD         LDAA    SBITC          STOP BIT CONTROL FOR ACIA
+10000 F5BD 84 35           ANDA    #$35
+10000 F5BF B7 FCF4         STAA    ACIAS          ACIA STATUS/CONTROL REGISTER
+10000 F5C2 86 10           LDAA    #$10         
+10000 F5C4 BD F9CF         JSR     OCHAR          OUTPUT CHARACTER (NO NULLS)
+10000 F5C7 86 3A           LDAA    #$3A           ':'
+10000 F5C9 BD F9CF         JSR     OCHAR          OUTPUT CHARACTER (NO NULLS)
+10000 F5CC 86 10           LDAA    #$10
+10000 F5CE BD F9CF         JSR     OCHAR          OUTPUT CHARACTER (NO NULLS)
+10000 F5D1 86 39           LDAA    #$39           '9'
+10000 F5D3 BD F9CF         JSR     OCHAR          OUTPUT CHARACTER (NO NULLS)
+10000 F5D6 CE FBB7         LDX     #MPTOFF        Msg <PTR OFF><PTP OFF>
+10000 F5D9 BD FA35         JSR     PDAT1          Print string
+10000 F5DC CE FB2B PROMPT  LDX     #MEXBUG        Msg "EXBUG 1.1 "
+10000 F5DF BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F5E2 B6 FCF5         LDAA    ACIAR          ACIA TX/RX DATA BUFFER
+10000 F5E5 CE FF03         LDX     #$FF03
+10000 F5E8 BD FA4E LF5E8   JSR     GETCH          Input char for exbug command line
+10000 F5EB A7 00           STAA    $0000,X
+10000 F5ED 08              INX     
+10000 F5EE 8C FF07         CPX     #$FF07         get 4 chars
+10000 F5F1 26 F5           BNE     LF5E8
+10000 F5F3 CE FAF5         LDX     #CMDTBL        command table LOAD/MAID/PNCH/...
+10000 F5F6 B6 FF03 LF5F6   LDAA    LFF03
+10000 F5F9 A1 00           CMPA    $0000,X
+10000 F5FB 26 19           BNE     LF616
+10000 F5FD B6 FF04         LDAA    LFF04
+10000 F600 A1 01           CMPA    $0001,X
+10000 F602 26 12           BNE     LF616
+10000 F604 B6 FF05         LDAA    LFF05
+10000 F607 A1 02           CMPA    $0002,X
+10000 F609 26 0B           BNE     LF616
+10000 F60B B6 FF06         LDAA    LFF06
+10000 F60E A1 03           CMPA    $0003,X
+10000 F610 26 04           BNE     LF616
+10000 F612 EE 04           LDX     $0004,X        get command entry point
+10000 F614 6E 00           JMP     $0000,X        jump to it
+10000 F616 08      LF616   INX                    not this command, try next
+10000 F617 08              INX     
+10000 F618 08              INX     
+10000 F619 08              INX     
+10000 F61A 08              INX     
+10000 F61B 08              INX     
+10000 F61C 8C FB2B         CPX     #MEXBUG
+10000 F61F 26 D5           BNE     LF5F6
+10000 F621 20 B9           BRA     PROMPT         print msg and prompt for command
+10000  ;
+10000 F623 4F              CLRA    
+10000 F624 20 02           BRA     LF628
+10000  ;
+10000 F626 86 01           LDAA    #$01
+10000 F628 B7 FF02 LF628   STAA    SPEED          TTY paper tape speed: 0 = 10cps, 1 = 30cps, FF = 120cps
+10000 F62B 20 AF           BRA     PROMPT         print msg and prompt for command
+10000  ;
+10000 F62D 86 FF           LDAA    #$FF
+10000 F62F 20 F7           BRA     LF628
+10000  ;
+10000 F631 CE FBF5 LF631   LDX     #MHDR          Msg "HDR=X "
+10000 F634 BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F637 CE FF8D         LDX     #$FF8D
+10000 F63A BD FAA0 LF63A   JSR     INCHN          Input char with echo (strip bit 7)
+10000 F63D 81 20           CMPA    #$20           <space>
+10000 F63F 2D 04           BLT     LF645
+10000 F641 81 61           CMPA    #$61           'a'
+10000 F643 2D 02           BLT     LF647
+10000 F645 86 20   LF645   LDAA    #$20
+10000 F647 A7 00   LF647   STAA    $0000,X
+10000 F649 08              INX     
+10000 F64A 8C FF93         CPX     #$FF93
+10000 F64D 26 EB           BNE     LF63A
+10000 F64F BD F70B         JSR     LF70B
+10000 F652 0D              SEC                    set punch flag
+10000 F653 79 FF62         ROL     EXPUN          PUNCH FLAG bit0=1 -> puching output chars
+10000 F656 7D FF02         TST     SPEED          TTY paper tape speed: 0 = 10cps, 1 = 30cps, FF = 120cps
+10000 F659 2A 0A           BPL     LF665
+10000 F65B 86 10           LDAA    #$10           
+10000 F65D BD F9DC         JSR     OUTCH          Output character
+10000 F660 86 30           LDAA    #$30
+10000 F662 BD F9DC         JSR     OUTCH          Output character
+10000 F665 86 12   LF665   LDAA    #$12           Punch On
+10000 F667 BD F9DC         JSR     OUTCH          Output character
+10000 F66A BD F700         JSR     LF700
+10000 F66D C6 83           LDAB    #$83
+10000 F66F CE FBE5         LDX     #MS0           Msg <CR><LF>"S00B00005820"
+10000 F672 BD FA35         JSR     PDAT1          Print string
+10000 F675 CE FF8D         LDX     #$FF8D
+10000 F678 BD F6FA LF678   JSR     LF6FA
+10000 F67B 8C FF93         CPX     #$FF93
+10000 F67E 26 F8           BNE     LF678
+10000 F680 53              COMB    
+10000 F681 37              PSHB    
+10000 F682 30              TSX     
+10000 F683 8D 75           BSR     LF6FA
+10000 F685 33              PULB    
+10000 F686 FE FF0A         LDX     LFF0A
+10000 F689 FF FF5A         STX     LFF5A
+10000 F68C B6 FF0D LF68C   LDAA    LFF0D
+10000 F68F B0 FF5B         SUBA    LFF5B
+10000 F692 F6 FF0C         LDAB    LFF0C
+10000 F695 F2 FF5A         SBCB    LFF5A
+10000 F698 26 04           BNE     LF69E
+10000 F69A 81 10           CMPA    #$10
+10000 F69C 25 02           BCS     LF6A0
+10000 F69E 86 0F   LF69E   LDAA    #$0F
+10000 F6A0 8B 04   LF6A0   ADDA    #$04
+10000 F6A2 B7 FF58         STAA    LFF58
+10000 F6A5 80 03           SUBA    #$03
+10000 F6A7 B7 FF07         STAA    LFF07
+10000 F6AA CE FBD0         LDX     #MS1           Msg <CR><LF>,0,"S1"
+10000 F6AD BD FA35         JSR     PDAT1          Print string
+10000 F6B0 5F              CLRB    
+10000 F6B1 CE FF58         LDX     #$FF58
+10000 F6B4 8D 44           BSR     LF6FA
+10000 F6B6 CE FF5A         LDX     #$FF5A
+10000 F6B9 8D 3F           BSR     LF6FA
+10000 F6BB 8D 3D           BSR     LF6FA
+10000 F6BD FE FF5A         LDX     LFF5A
+10000 F6C0 8D 38   LF6C0   BSR     LF6FA
+10000 F6C2 7A FF07         DEC     LFF07
+10000 F6C5 26 F9           BNE     LF6C0
+10000 F6C7 FF FF5A         STX     LFF5A
+10000 F6CA 53              COMB    
+10000 F6CB 37              PSHB    
+10000 F6CC 30              TSX     
+10000 F6CD 8D 2B           BSR     LF6FA
+10000 F6CF 33              PULB    
+10000 F6D0 FE FF5A         LDX     LFF5A
+10000 F6D3 09              DEX     
+10000 F6D4 BC FF0C         CPX     LFF0C
+10000 F6D7 26 B3           BNE     LF68C
+10000 F6D9 CE FBD6         LDX     #MS9           Msg <CR><LF>"S9030000FC"<CR>
+10000 F6DC BD FA35         JSR     PDAT1          Print string
+10000 F6DF 8D 1F           BSR     LF700
+10000 F6E1 86 14           LDAA    #$14           Punch Off
+10000 F6E3 BD F9DC         JSR     OUTCH          Output character
+10000 F6E6 7D FF02         TST     SPEED          TTY paper tape speed: 0 = 10cps, 1 = 30cps, FF = 120cps
+10000 F6E9 2A 0A           BPL     LF6F5
+10000 F6EB 86 10           LDAA    #$10
+10000 F6ED BD F9DC         JSR     OUTCH          Output character
+10000 F6F0 86 39           LDAA    #$39           
+10000 F6F2 BD F9DC         JSR     OUTCH          Output character
+10000 F6F5 7F FF62 LF6F5   CLR     EXPUN          PUNCH FLAG bit0=1 -> puching output chars
+10000 F6F8 20 1F           BRA     C.PRT          PRINT COMMAND
+10000  ;
+10000 F6FA EB 00   LF6FA   ADDB    $0000,X
+10000 F6FC BD FA14         JSR     OUTHH          Output byte as HH two-chars hex value
+10000 F6FF 39              RTS     
+
+10000 F700 C6 28   LF700   LDAB    #$28
+10000 F702 86 00   LF702   LDAA    #$00
+10000 F704 BD F9DC         JSR     OUTCH          Output character
+10000 F707 5A              DECB    
+10000 F708 26 F8           BNE     LF702
+10000 F70A 39              RTS     
+
+10000 F70B CE FB7F LF70B   LDX     #MEXEC         Msg "EXEC "
+10000 F70E BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F711 BD FA4E         JSR     GETCH          Input char for exbug command line
+10000 F714 81 59           CMPA    #$59           'Y'
+10000 F716 26 F3           BNE     LF70B
+10000 F718 39              RTS     
+
+10000 F719 BD F789 C.PRT   JSR     BEGEN          PRINT COMMAND
+10000 F71C B6 FF04         LDAA    LFF04
+10000 F71F 81 52           CMPA    #$52           'R'
+10000 F721 27 03           BEQ     LF726
+10000 F723 7E F631         JMP     LF631
+10000  ;
+10000 F726 8D E3   LF726   BSR     LF70B
+10000 F728 FE FF0A         LDX     LFF0A
+10000 F72B FF FF08         STX     LFF08
+10000 F72E B6 FF09         LDAA    LFF09
+10000 F731 84 F0           ANDA    #$F0
+10000 F733 B7 FF09         STAA    LFF09
+10000 F736 BD FA41 LF736   JSR     PCRLF          Print CR-LF
+10000 F739 BD FA41 LF739   JSR     PCRLF          Print CR-LF
+10000 F73C CE FF08         LDX     #$FF08
+10000 F73F BD FA22         JSR     OUT4H          Output 2 bytes in hex ,X++
+10000 F742 FE FF08         LDX     LFF08
+10000 F745 C6 10           LDAB    #$10
+10000 F747 BD FA24 LF747   JSR     OUT2H          Output byte in hex ,X+
+10000 F74A 5A              DECB    
+10000 F74B 26 FA           BNE     LF747
+10000 F74D 86 20           LDAA    #$20
+10000 F74F BD F9DC         JSR     OUTCH          Output character
+10000 F752 C6 10           LDAB    #$10
+10000 F754 FE FF08         LDX     LFF08
+10000 F757 A6 00   LF757   LDAA    $0000,X
+10000 F759 84 7F           ANDA    #$7F
+10000 F75B 81 20           CMPA    #$20
+10000 F75D 2D 04           BLT     LF763
+10000 F75F 81 61           CMPA    #$61           'a'
+10000 F761 2D 02           BLT     LF765
+10000 F763 86 2E   LF763   LDAA    #$2E           '.'
+10000 F765 BD F9DC LF765   JSR     OUTCH          Output character
+10000 F768 08              INX     
+10000 F769 5A              DECB    
+10000 F76A 26 EB           BNE     LF757
+10000 F76C FF FF08         STX     LFF08
+10000 F76F 8C 0000         CPX     #$00
+10000 F772 27 A5           BEQ     C.PRT          PRINT COMMAND
+10000 F774 B6 FF0C         LDAA    LFF0C
+10000 F777 F6 FF0D         LDAB    LFF0D
+10000 F77A F0 FF09         SUBB    LFF09
+10000 F77D B2 FF08         SBCA    LFF08
+10000 F780 25 97           BCS     C.PRT          PRINT COMMAND
+10000 F782 7D FF09         TST     LFF09
+10000 F785 26 B2           BNE     LF739
+10000 F787 20 AD           BRA     LF736
+10000  ;
+10000 F789 CE FB36 BEGEN   LDX     #MBEGAD        Prompt for address, X=Msg "BEG ADDR "
+10000 F78C BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F78F CE FF0A         LDX     #$FF0A
+10000 F792 BD F964         JSR     LF964
+10000 F795 2B F2           BMI     BEGEN 
+10000 F797 CE FB40 LF797   LDX     #MENDAD        Msg "END ADDR "
+10000 F79A BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F79D CE FF0C         LDX     #$FF0C
+10000 F7A0 BD F964         JSR     LF964
+10000 F7A3 2B F2           BMI     LF797
+10000 F7A5 B6 FF0C         LDAA    LFF0C
+10000 F7A8 F6 FF0D         LDAB    LFF0D
+10000 F7AB F0 FF0B         SUBB    LFF0B
+10000 F7AE B2 FF0A         SBCA    LFF0A
+10000 F7B1 25 D6           BCS     BEGEN 
+10000 F7B3 39              RTS     
+
+10000 F7B4 86 FF   C.SRCH  LDAA    #$FF           SEARCH COMMAND
+10000 F7B6 B7 FF5A         STAA    LFF5A
+10000 F7B9 20 24           BRA     LF7DF
+10000 F7BB 7F FF5A C.LOAD  CLR     LFF5A          LOAD COMMAND
+10000 F7BE 20 08           BRA     LF7C8
+10000 F7C0 86 01   C.VERF  LDAA    #$01           VERIFY COMMAND
+10000 F7C2 B7 FF5A         STAA    LFF5A
+10000 F7C5 7F FF61         CLR     LFF61
+10000 F7C8 CE FB85 LF7C8   LDX     #MSGLC         Msg "SGL/CONT "
+10000 F7CB BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F7CE BD FA4E         JSR     GETCH          Input char for exbug command line
+10000 F7D1 B7 FF58         STAA    LFF58
+10000 F7D4 81 53           CMPA    #$53           'S'
+10000 F7D6 27 07           BEQ     LF7DF
+10000 F7D8 81 43           CMPA    #$43           'C'
+10000 F7DA 26 EC           BNE     LF7C8
+10000 F7DC BD FA41         JSR     PCRLF          Print CR-LF
+10000 F7DF BD F8A4 LF7DF   JSR     LOAD           Load one S-Rec from paper tape
+10000 F7E2 B6 FF8C         LDAA    SREC           Get S-Rec type
+10000 F7E5 81 30           CMPA    #$30           is '0' header?
+10000 F7E7 26 33           BNE     LF81C          jump if not
+10000 F7E9 B6 FF8D         LDAA    LFF8D          Add a 04 (end of line) at end of header
+10000 F7EC CE FF8D         LDX     #$FF8D         (header has the prog name)
+10000 F7EF 08      LF7EF   INX     
+10000 F7F0 4A              DECA    
+10000 F7F1 26 FC           BNE     LF7EF
+10000 F7F3 86 04           LDAA    #$04
+10000 F7F5 A7 00           STAA    $0000,X
+10000 F7F7 CE FF90         LDX     #$FF90         print the prog name
+10000 F7FA BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F7FD BD F91D         JSR     LF91D
+10000 F800 7D FF5A         TST     LFF5A
+10000 F803 2A DA           BPL     LF7DF
+10000 F805 CE FB4A LF805   LDX     #MCLV          Msg "CONT/LOAD/VERF "
+10000 F808 BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F80B BD FA4E         JSR     GETCH          Input char for exbug command line
+10000 F80E 81 43           CMPA    #$43           'C'
+10000 F810 27 CD           BEQ     LF7DF
+10000 F812 81 4C           CMPA    #$4C           'L'
+10000 F814 27 A5           BEQ     C.LOAD         LOAD COMMAND
+10000 F816 81 56           CMPA    #$56           'V'
+10000 F818 27 A6           BEQ     C.VERF         VERF COMMAND
+10000 F81A 20 E9           BRA     LF805
+10000  ;
+10000 F81C 7D FF5A LF81C   TST     LFF5A
+10000 F81F 2B BE           BMI     LF7DF
+10000 F821 BD F91D         JSR     LF91D
+10000 F824 B6 FF8C         LDAA    SREC           Get S-Rec type
+10000 F827 81 31           CMPA    #$31           '1'
+10000 F829 27 0E           BEQ     LF839
+10000 F82B 81 39           CMPA    #$39           '9'
+10000 F82D 26 B0           BNE     LF7DF
+10000 F82F B6 FF58         LDAA    LFF58
+10000 F832 81 43           CMPA    #$43           'C'
+10000 F834 27 A9           BEQ     LF7DF
+10000 F836 7E F5DC         JMP     PROMPT         print msg and prompt for command
+10000  ;
+10000 F839 B6 FF8D LF839   LDAA    LFF8D
+10000 F83C 80 03           SUBA    #$03
+10000 F83E B7 FF8D         STAA    LFF8D
+10000 F841 CE FF90         LDX     #$FF90
+10000 F844 FF FF08         STX     LFF08
+10000 F847 FE FF8E         LDX     LFF8E
+10000 F84A FF FF56 LF84A   STX     LFF56
+10000 F84D FE FF08         LDX     LFF08
+10000 F850 A6 00           LDAA    $0000,X
+10000 F852 08              INX     
+10000 F853 FF FF08         STX     LFF08
+10000 F856 FE FF56         LDX     LFF56
+10000 F859 7D FF5A         TST     LFF5A
+10000 F85C 27 37           BEQ     LF895
+10000 F85E A1 00           CMPA    $0000,X
+10000 F860 27 2A           BEQ     LF88C
+10000 F862 36              PSHA    
+10000 F863 FF FF56         STX     LFF56
+10000 F866 7D FF61         TST     LFF61
+10000 F869 26 0A           BNE     LF875
+10000 F86B 0D              SEC     
+10000 F86C 79 FF61         ROL     LFF61
+10000 F86F CE FB6B         LDX     #MADMTAP       Msg "ADDR/MEM/TAPE"
+10000 F872 BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F875 CE FF56 LF875   LDX     #$FF56
+10000 F878 BD FA41         JSR     PCRLF          Print CR-LF
+10000 F87B BD FA22         JSR     OUT4H          Output 2 bytes in hex ,X++
+10000 F87E FE FF56         LDX     LFF56
+10000 F881 BD FA24         JSR     OUT2H          Output byte in hex ,X+
+10000 F884 30              TSX     
+10000 F885 BD FA24         JSR     OUT2H          Output byte in hex ,X+
+10000 F888 32              PULA    
+10000 F889 FE FF56         LDX     LFF56
+10000 F88C 08      LF88C   INX     
+10000 F88D 7A FF8D         DEC     LFF8D
+10000 F890 26 B8           BNE     LF84A
+10000 F892 7E F7DF         JMP     LF7DF
+10000  ;
+10000 F895 A7 00   LF895   STAA    $0000,X
+10000 F897 A1 00           CMPA    $0000,X
+10000 F899 27 F1           BEQ     LF88C
+10000 F89B CE FB5A         LDX     #MNOCHG        Mg "NO CHANGE"
+10000 F89E BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F8A1 7E F5DC         JMP     PROMPT         print msg and prompt for command
+10000  ;
+10000 F8A4 7F FF8C LOAD    CLR     SREC           Init S-Rec type
+10000 F8A7 7D FF02         TST     SPEED          TTY paper tape speed: 0 = 10cps, 1 = 30cps, FF = 120cps
+10000 F8AA 2A 0C           BPL     LF8B8
+10000 F8AC 86 10   LF8AC   LDAA    #$10
+10000 F8AE BD F9CF         JSR     OCHAR          OUTPUT CHARACTER (NO NULLS)
+10000 F8B1 86 37           LDAA    #$37           '7'
+10000 F8B3 BD F9CF         JSR     OCHAR          OUTPUT CHARACTER (NO NULLS)
+10000 F8B6 20 0D           BRA     LDSREC
+10000 F8B8 B6 FCFD LF8B8   LDAA    SBITC          STOP BIT CONTROL FOR ACIA
+10000 F8BB 84 55           ANDA    #$55
+10000 F8BD B7 FCF4         STAA    ACIAS          ACIA STATUS/CONTROL REGISTER
+10000 F8C0 86 11           LDAA    #$11           Paper Tape Reader On
+10000 F8C2 BD F9DC         JSR     OUTCH          Output character
+10000 F8C5 0D      LDSREC  SEC                    Load New S-Record
+10000 F8C6 79 FF53         ROL     AECHO          =1 -> Do not ECHO input chars 
+10000 F8C9 BD FAA0         JSR     INCHN          Input char with echo (strip bit 7)
+10000 F8CC 81 0D           CMPA    #$0D
+10000 F8CE 26 05           BNE     LF8D5
+10000 F8D0 7D FF02         TST     SPEED          TTY paper tape speed: 0 = 10cps, 1 = 30cps, FF = 120cps
+10000 F8D3 2B D7           BMI     LF8AC
+10000 F8D5 81 53   LF8D5   CMPA    #$53           'S'
+10000 F8D7 26 EC           BNE     LDSREC
+10000 F8D9 CE FF8D         LDX     #$FF8D
+10000 F8DC 0D      LF8DC   SEC     
+10000 F8DD 79 FF53         ROL     AECHO          =1 -> Do not ECHO input chars 
+10000 F8E0 BD FAA0         JSR     INCHN          Input char with echo (strip bit 7)
+10000 F8E3 81 7F           CMPA    #$7F
+10000 F8E5 27 F5           BEQ     LF8DC
+10000 F8E7 81 30           CMPA    #$30           '0'
+10000 F8E9 27 08           BEQ     LF8F3
+10000 F8EB 81 31           CMPA    #$31           '1'
+10000 F8ED 27 04           BEQ     LF8F3
+10000 F8EF 81 39           CMPA    #$39           '9'
+10000 F8F1 26 D2           BNE     LDSREC
+10000 F8F3 B7 FF8C LF8F3   STAA    SREC           Save S-Rec type
+10000 F8F6 7F FF8B         CLR     LFF8B
+10000 F8F9 8D 50           BSR     INHH           set echo off, Input two hex char '0'..'F', store them at [X]
+10000 F8FB B7 FF07         STAA    LFF07          Save S-Rec len  
+10000 F8FE 8D 4B   LF8FE   BSR     INHH           Get the whole S-record at [X]
+10000 F900 7A FF07         DEC     LFF07          dec S-Rec len  
+10000 F903 26 F9           BNE     LF8FE          cont until S-rec len is zero
+10000 F905 7C FF8B         INC     LFF8B
+10000 F908 B6 FCFD         LDAA    SBITC          STOP BIT CONTROL FOR ACIA
+10000 F90B 84 35           ANDA    #$35
+10000 F90D B7 FCF4         STAA    ACIAS          ACIA STATUS/CONTROL REGISTER
+10000 F910 CE FBB8         LDX     #MPTOFF+1      String $13,0,0,0,0,4  ($13 = <PTP OFF>)      
+10000 F913 BD FA35         JSR     PDAT1          Print string
+10000 F916 B6 FCF5         LDAA    ACIAR          ACIA TX/RX DATA BUFFER
+10000 F919 B6 FCF5         LDAA    ACIAR          ACIA TX/RX DATA BUFFER
+10000 F91C 39              RTS     
+
+10000 F91D 7D FF8B LF91D   TST     LFF8B
+10000 F920 27 1C           BEQ     LF93E
+10000 F922 CE FB65 LF922   LDX     #MCKSM         Print "CKSM "
+10000 F925 BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F928 CE FF8E         LDX     #$FF8E
+10000 F92B BD FA22         JSR     OUT4H          Output 2 bytes in hex ,X++
+10000 F92E BD FA4E         JSR     GETCH          Input char for exbug command line
+10000 F931 81 52           CMPA    #$52           'R'
+10000 F933 26 03           BNE     LF938
+10000 F935 7E F7DF         JMP     LF7DF
+10000  ;
+10000 F938 81 43   LF938   CMPA    #$43           'C'
+10000 F93A 26 E6           BNE     LF922
+10000 F93C 86 FF           LDAA    #$FF
+10000 F93E 39      LF93E   RTS     
+
+10000 F93F 0D      INH     SEC                    set echo off, Input hex char '0'..'F' 
+10000 F940 79 FF53         ROL     AECHO          =1 -> Do not ECHO input chars 
+10000 F943 BD FAA5         JSR     INHEX          Input hex char '0'..'F' with echo (strip bit 7)
+10000 F946 81 7F           CMPA    #$7F
+10000 F948 27 F5           BEQ     INH            if <DEL> -> read again
+10000 F94A 39              RTS     
+
+10000 F94B 8D F2   INHH    BSR     INH            set echo off, Input two hex char '0'..'F', store them at [X], X++
+10000 F94D 48              ASLA    
+10000 F94E 48              ASLA    
+10000 F94F 48              ASLA    
+10000 F950 48              ASLA    
+10000 F951 16              TAB     
+10000 F952 8D EB           BSR     INH            set echo off, Input hex char '0'..'F' 
+10000 F954 1B              ABA     
+10000 F955 A7 00           STAA    $0000,X
+10000 F957 BB FF8B         ADDA    LFF8B
+10000 F95A B7 FF8B         STAA    LFF8B
+10000 F95D 8C FFD5         CPX     #$FFD5
+10000 F960 27 01           BEQ     LF963
+10000 F962 08              INX     
+10000 F963 39      LF963   RTS     
+
+10000 F964 FF FF56 LF964   STX     LFF56
+10000 F967 86 04           LDAA    #$04
+10000 F969 B7 FF5C         STAA    LFF5C
+10000 F96C BD FA22         JSR     OUT4H          Output 2 bytes in hex ,X++
+10000 F96F 20 0B           BRA     LF97C
+10000  ;
+10000 F971 FF FF56 LF971   STX     LFF56
+10000 F974 86 02           LDAA    #$02
+10000 F976 B7 FF5C         STAA    LFF5C
+10000 F979 BD FA24         JSR     OUT2H          Output byte in hex ,X+
+10000 F97C BD FA62 LF97C   JSR     LFA62
+10000 F97F FE FF56         LDX     LFF56
+10000 F982 BD FA50         JSR     LFA50
+10000 F985 26 36           BNE     LF9BD
+10000 F987 5D              TSTB    
+10000 F988 27 2D           BEQ     LF9B7
+10000 F98A F1 FF5C         CMPB    LFF5C
+10000 F98D 22 2E           BHI     LF9BD
+10000 F98F F1 FF07         CMPB    LFF07
+10000 F992 22 29           BHI     LF9BD
+10000 F994 F6 FF5C         LDAB    LFF5C
+10000 F997 C1 02           CMPB    #$02
+10000 F999 27 13           BEQ     LF9AE
+10000 F99B F6 FF08         LDAB    LFF08
+10000 F99E E7 00           STAB    $0000,X
+10000 F9A0 E1 00           CMPB    $0000,X
+10000 F9A2 27 09           BEQ     LF9AD
+10000 F9A4 CE FB5A LF9A4   LDX     #MNOCHG        Mg "NO CHANGE"
+10000 F9A7 BD FA33         JSR     PDATA          Print CR-LF then string
+10000 F9AA 7E F0F9         JMP     LF0F9
+10000 F9AD 08      LF9AD   INX     
+10000 F9AE F6 FF09 LF9AE   LDAB    LFF09
+10000 F9B1 E7 00           STAB    $0000,X
+10000 F9B3 E1 00           CMPB    $0000,X
+10000 F9B5 26 ED           BNE     LF9A4
+10000 F9B7 5F      LF9B7   CLRB    
+10000 F9B8 FE FF56         LDX     LFF56
+10000 F9BB 5D              TSTB    
+10000 F9BC 39              RTS     
+10000 F9BD C6 FF   LF9BD   LDAB    #$FF
+10000 F9BF 39              RTS     
+
+10000 F9C0 44      CHEXL   LSRA                   Convert upper half to ascii
+10000 F9C1 44              LSRA    
+10000 F9C2 44              LSRA    
+10000 F9C3 44              LSRA    
+10000 F9C4 84 0F   CHEXR   ANDA    #$0F           Convert lower half to ascii
+10000 F9C6 8B 30           ADDA    #$30
+10000 F9C8 81 39           CMPA    #$39           '9'
+10000 F9CA 23 02           BLS     LF9CE
+10000 F9CC 8B 07           ADDA    #$07
+10000 F9CE 39      LF9CE   RTS     
+
+10000 F9CF 37      OCHAR   PSHB                   OUTPUT CHARACTER (NO NULLS)
+10000 F9D0 F6 FCF4 LF9D0   LDAB    ACIAS          ACIA STATUS/CONTROL REGISTER
+10000 F9D3 C5 02           BITB    #$02
+10000 F9D5 27 F9           BEQ     LF9D0
+10000 F9D7 B7 FCF5         STAA    ACIAR          ACIA TX/RX DATA BUFFER
+10000 F9DA 33              PULB    
+10000 F9DB 39              RTS     
+
+10000 F9DC 37      OUTCH   PSHB                   Output character (also send <NUL> chars according to TTY speed)
+10000 F9DD F6 FCF4 LF9DD   LDAB    ACIAS          ACIA STATUS/CONTROL REGISTER
+10000 F9E0 C5 02           BITB    #$02
+10000 F9E2 27 F9           BEQ     LF9DD
+10000 F9E4 B7 FCF5         STAA    ACIAR          ACIA TX/RX DATA BUFFER
+10000 F9E7 81 0D           CMPA    #$0D           is <CR> ?
+10000 F9E9 26 1B           BNE     LFA06          
+10000 F9EB 7D FF62         TST     EXPUN          PUNCH FLAG bit0=1 -> puching output chars
+10000 F9EE 26 09           BNE     OUTNUL4        if punching -> jump to Output 4 <NUL> chars
+10000 F9F0 C6 17           LDAB    #$17           else, send <NUL> depending on TTY speed
+10000 F9F2 7D FF02         TST     SPEED          TTY speed: 0 = 10cps, 1 = 30cps, FF = 120cps
+10000 F9F5 27 0D           BEQ     LFA04
+10000 F9F7 2B 02           BMI     OUTNUL         
+10000 F9F9 C6 04   OUTNUL4 LDAB    #$04
+10000 F9FB 36      OUTNUL  PSHA                   Output <NUL> chars (count in Reg B)
+10000 F9FC 86 00           LDAA    #$00
+10000 F9FE 8D CF           BSR     OCHAR          OUTPUT CHARACTER (NO NULLS)
+10000 FA00 32              PULA    
+10000 FA01 5A              DECB    
+10000 FA02 26 F7           BNE     OUTNUL         
+10000 FA04 33      LFA04   PULB    
+10000 FA05 39              RTS     
+10000 FA06 7D FF02 LFA06   TST     SPEED          TTY speed: 0 = 10cps, 1 = 30cps, FF = 120cps
+10000 FA09 2A F9           BPL     LFA04
+10000 FA0B 7D FF62         TST     EXPUN          PUNCH FLAG bit0=1 -> puching output chars
+10000 FA0E 26 F4           BNE     LFA04
+10000 FA10 C6 03           LDAB    #$03
+10000 FA12 20 E7           BRA     OUTNUL         Output <NUL> chars (count in Reg B)
+
+10000 FA14 A6 00   OUTHH   LDAA    $00,X          Output byte as HH two-chars hex value
+10000 FA16 8D A8           BSR     CHEXL          Convert upper half to ascii
+10000 FA18 8D C2           BSR     OUTCH          Output character
+10000 FA1A A6 00           LDAA    $00,X
+10000 FA1C 8D A6           BSR     CHEXR          Convert lower half to ascii
+10000 FA1E 8D BC           BSR     OUTCH          Output character
+10000 FA20 08              INX     
+10000 FA21 39              RTS     
+
+10000 FA22 8D F0   OUT4H   BSR     OUTHH          Output 2 bytes in hex ,X++
+10000 FA24 8D EE   OUT2H   BSR     OUTHH          Output byte in hex ,X+
+10000 FA26 86 20   PSPACE  LDAA    #$20           Print space
+10000 FA28 8D B2   LFA28   BSR     OUTCH          Output character
+10000 FA2A 39              RTS     
+
+10000 FA2B 8D E7   LFA2B   BSR     OUTHH          Output byte as HH two-chars hex value
+10000 FA2D 8D E5           BSR     OUTHH          Output byte as HH two-chars hex value
+10000 FA2F 86 2F           LDAA    #$2F
+10000 FA31 20 F5           BRA     LFA28
+10000  ;
+10000 FA33 8D 0C   PDATA   BSR     PCRLF          Print CR-LF then string
+10000 FA35 A6 00   PDAT1   LDAA    $0000,X        Print string Pointed by X until char $04
+10000 FA37 81 04           CMPA    #$04
+10000 FA39 27 05           BEQ     LFA40
+10000 FA3B 8D 9F           BSR     OUTCH          Output character
+10000 FA3D 08              INX     
+10000 FA3E 20 F5           BRA     PDAT1 	  
+10000 FA40 39      LFA40   RTS     
+
+10000 FA41 86 0A   PCRLF   LDAA    #$0A           Print CR-LF
+10000 FA43 8D 97           BSR     OUTCH          Output character
+10000 FA45 86 0D   PRTCR   LDAA    #$0D
+10000 FA47 8D 93           BSR     OUTCH          Output character
+10000 FA49 86 00           LDAA    #$00
+10000 FA4B 8D 8F           BSR     OUTCH          Output character
+10000 FA4D 39              RTS     
+
+10000 FA4E 8D 50   GETCH   BSR     INCHN          Input char for exbug command line
+10000 FA50 81 58   LFA50   CMPA    #$58           'X'
+10000 FA52 26 03           BNE     LFA57
+10000 FA54 7E F5DC         JMP     PROMPT         print msg and prompt for command
+10000 FA57 81 5E   LFA57   CMPA    #$5E           '^'    
+10000 FA59 27 06           BEQ     LFA61
+10000 FA5B 81 0D           CMPA    #$0D
+10000 FA5D 27 02           BEQ     LFA61
+10000 FA5F 81 0A           CMPA    #$0A
+10000 FA61 39      LFA61   RTS     
+
+10000 FA62 CE FF08 LFA62   LDX     #$FF08
+10000 FA65 7F FF07 INADD   CLR     LFF07          Get 4 hex digits from user into x
+10000 FA68 6F 00           CLR     $0000,X
+10000 FA6A 6F 01           CLR     $0001,X
+10000 FA6C 8D 37   LFA6C   BSR     INHEX          Input hex char '0'..'F' with echo (strip bit 7)
+10000 FA6E 2B 17           BMI     LFA87
+10000 FA70 C6 04           LDAB    #$04
+10000 FA72 68 01   LFA72   ASL     $0001,X
+10000 FA74 69 00           ROL     $0000,X
+10000 FA76 5A              DECB    
+10000 FA77 26 F9           BNE     LFA72
+10000 FA79 AA 01           ORAA    $0001,X
+10000 FA7B A7 01           STAA    $0001,X
+10000 FA7D 7C FF07         INC     LFF07
+10000 FA80 F6 FF07         LDAB    LFF07
+10000 FA83 C1 05           CMPB    #$05
+10000 FA85 26 E5           BNE     LFA6C
+10000 FA87 F6 FF07 LFA87   LDAB    LFF07
+10000 FA8A 39              RTS     
+
+10000 FA8B B6 FCF4 INCH    LDAA    ACIAS          Input byte with echo
+10000 FA8E 47              ASRA    
+10000 FA8F 24 FA           BCC     INCH           
+10000 FA91 B6 FCF5         LDAA    ACIAR          ACIA TX/RX DATA BUFFER
+10000 FA94 7D FF53         TST     AECHO          =0 -> ECHO input chars, <>0 -> Do not ECHO 
+10000 FA97 26 03           BNE     LFA9C
+10000 FA99 7E F9DC         JMP     OUTCH          Output character
+10000 FA9C 7F FF53 LFA9C   CLR     AECHO          =0 -> ECHO input chars 
+10000 FA9F 39              RTS     
+
+10000 FAA0 8D E9   INCHN   BSR     INCH           Input char with echo (strip bit 7)
+10000 FAA2 84 7F           ANDA    #$7F
+10000 FAA4 39              RTS     
+
+10000 FAA5 8D F9   INHEX   BSR     INCHN          Input hex char '0'..'F' with echo (strip bit 7)
+10000 FAA7 81 30   CBCDH   CMPA    #$30           Convert hex to binary
+10000 FAA9 2B 11           BMI     LFABC          
+10000 FAAB 81 39           CMPA    #$39           '9'
+10000 FAAD 2F 0A           BLE     LFAB9
+10000 FAAF 81 41           CMPA    #$41           'A'
+10000 FAB1 2B 09           BMI     LFABC
+10000 FAB3 81 46           CMPA    #$46           'F'
+10000 FAB5 2E 05           BGT     LFABC
+10000 FAB7 80 07           SUBA    #$07
+10000 FAB9 84 0F   LFAB9   ANDA    #$0F
+10000 FABB 39              RTS     
+10000 FABC 7D FAF4 LFABC   TST     LFAF4          Set MI flag if error
+10000 FABF 39              RTS     
+
+10000 FAC0 BD F9DC OUTCH2  JSR     OUTCH          Output character, then "-"
+10000 FAC3 86 2D           LDAA    #$2D           '-'
+10000 FAC5 BD F9DC         JSR     OUTCH          Output character
+10000 FAC8 39              RTS     
+
+10000 FAC9 BD FA41 PRTRECR JSR     PCRLF          Print register contents <CR><LF> P-hhhh X-hhhh A-hh B-hh C-hh S-hhhh
+10000 FACC CE FF16 PRTREGS LDX     #$FF16         Print register contents P-hhhh X-hhhh A-hh B-hh C-hh S-hhhh
+10000 FACF 86 50           LDAA    #$50           'P'
+10000 FAD1 8D 1B           BSR     OUTX4H         Output char, then "-", then X as HHHH, X++
+10000 FAD3 86 58           LDAA    #$58           'X'
+10000 FAD5 8D 17           BSR     OUTX4H         Output char, then "-", then X as HHHH, X++
+10000 FAD7 86 41           LDAA    #$41           'A'
+10000 FAD9 8D 0D           BSR     OUTX2H         Output char, then "-", then X as HH, X+
+10000 FADB 86 42           LDAA    #$42           'B'
+10000 FADD 8D 09           BSR     OUTX2H         Output char, then "-", then X as HH, X+
+10000 FADF 86 43           LDAA    #$43           'C'
+10000 FAE1 8D 05           BSR     OUTX2H         Output char, then "-", then X as HH, X+
+10000 FAE3 86 53           LDAA    #$53           'S'
+10000 FAE5 8D 07           BSR     OUTX4H         Output char, then "-", then X as HHHH, X++
+10000 FAE7 39              RTS     
+
+10000 FAE8 8D D6   OUTX2H  BSR     OUTCH2         Output character, then "-", then X as HH, X+
+10000 FAEA BD FA24         JSR     OUT2H          Output byte in hex ,X+
+10000 FAED 39              RTS     
+
+10000 FAEE 8D D0   OUTX4H  BSR     OUTCH2         Output character, then "-", then X as HHHH, X++
+10000 FAF0 BD FA22         JSR     OUT4H          Output 2 bytes in hex ,X++
+10000 FAF3 39              RTS     
+10000 FAF4 FF 
+
+10000 FAF5 4C      CMDTBL  FCC     "LOAD"
+10000 FAF9 F7BB            FDB     C.LOAD
+10000 FAFB 56              FCC     "VERF"
+10000 FAFF F7C0            FDB     C.VERF         
+10000 FB01 53              FCC     "SRCH"
+10000 FB05 F7B4            FDB     C.SRCH
+10000 FB07 50              FCC     "PRNT"
+10000 FB0B F719            FDB     C.PRT
+10000 FB0D 50              FCC     "PNCH"
+10000 FB11 F719            FDB     C.PRT 
+10000 FB13 4D              FCC     "MAID"
+10000 FB17 F0F3            FDB     C.MAID
+10000 FB19 53              FCC     "S10."
+10000 FB1D F623
+10000 FB1F 53              FCC     "S30."
+10000 FB23 F623
+10000 FB25 53              FCC     "S120"
+10000 FB29 F62D
+10000 FB2B 45      MEXBUG  FCC     "EXBUG 1.1 ",4
+10000 FB36 20      MBEGAD  FCC     "BEG ADDR ",4
+10000 FB40 45      MENDAD  FCC     "END ADDR ",4
+10000 FB4A 43      MCLV    FCC     "CONT/LOAD/VERF ",4
+10000 FB5A 4E      MNOCHG  FCC     "NO CHANGE",7,4
+10000 FB65 43      MCKSM   FCC     "CKSM ",4
+10000 FB6B 41      MADMTAP FCC     "ADDR/MEM/TAPE",4
+10000 FB79 20      MINVEX  FCC     " INVL",4
+10000 FB7F 45      MEXEC   FCC     "EXEC ",4
+10000 FB85 53      MSGLC   FCC     "SGL/CONT ",4
+10000 FB8F 53      MSTONAD FCC     "STOP-ON-ADDRESS ",4
+10000 FBA0 53      MSTOPAD FCC     "STOP ADDR ",4
+10000 FBAB 41      MABTAT  FCC     "ABORTED AT ",4
+10000 FBB7 14      MPTOFF  FCC     $14,$13,0,0,0,0,4      <PTR OFF><PTP OFF>
+10000 FBBE 07      MERR    FCC     7," ?",4
+10000 FBC2 2A      MSTAR   FCC     "*",4
+10000 FBC4 42      MBRKER  FCC     "BKPT ERROR ",4
+10000 FBD0 0D      MS1     FCC     13,10,0,"S1",4
+10000 FBD6 0D      MS9     FCC     13,10,0,"S9030000FC",13,4
+10000 FBE5 0D      MS0     FCC     13,10,0,"S00B00005820",4 
+10000 FBF5 48      MHDR    FCC     "HDR=X ",4
+
+10000 FBFC 04      
+10000 FBFD 04      
+10000 FBFE F6 EA00 
+
+10000 FF00         HIRAM   RMB  2                 =last valid RAM addr
+10000 FF02         SPEED   RMB  1                 TTY speed: 0 = 10cps, 1 = 30cps, FF = 120cps
+10000 FF53         AECHO   RMB  1                 =0 -> ECHO input chars, <>0 -> Do not ECHO
+10000 FF62         EXPUN   RMB  1                 PUNCH FLAG bit0=1 -> puching output chars      LFF62   *****
+10000 FF8A         XSTACK                         EXBUG Stack
