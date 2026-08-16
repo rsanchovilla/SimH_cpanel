@@ -3536,7 +3536,7 @@ void mt_TapeMediumToReelDynamicState(uint32 * surface, int pitch, int ireel, int
     x1=xyreelcentre[base][ireel*2]  +x1 * ( (ireel == 0) ? 1:-1);
     y1=xyreelcentre[base][ireel*2+1]+y1;
 
-    yH=max(y0, y1); 
+    yH=MAX(y0, y1); 
     // colors to not overdraw
     col_reel= surface_rgb_color(55, 55, 55) ;  // color for tape medium winded on reel 
     if (bTapeIs == 3420) {

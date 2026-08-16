@@ -131,7 +131,7 @@ typedef struct {
 } mtinforec;
 
 // extended info for tapes. Holds detailed info of tape command operation
-mtinforec mt_info[9];
+extern mtinforec mt_info[9];
 extern int LastTapeCheck;    
 
 // read words from tape

@@ -37,6 +37,8 @@
 #include "ibm360_defs.h"
 #include "sim_tape.h"
 
+mtinforec mt_info[8];
+
 #ifdef NUM_DEVS_MT
 #define BUFFSIZE       (64 * 1024)
 #define MTUF_9TR       (1 << MTUF_V_UF)

@@ -424,7 +424,7 @@ typedef struct {
     int cmd_tm0;                            // signal tape cmd animation pending to be done
 } mtinforec;
 // extended info for tapes. Holds detailed info of tape command operation
-mtinforec mt_info[8];
+extern mtinforec mt_info[8];
 
 // addr compare info
 typedef struct {
